@@ -1,6 +1,6 @@
 # Console Design
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-16
 How a figure on the operator console is worded, coloured, ranked and drawn. It is
 the operator half of [design-system.md](design-system.md), which keeps the
 vocabulary the whole site resolves - the tokens, the colour ramps, the motion set
@@ -629,6 +629,94 @@ Five rules hold under that table.
 **And a retry names its own subject.** `Try again` is shorter and it is what the shape asks for, but a button read out of the sentence above it then names nothing. `Try August 2026 again` is three words longer and true on its own. It re-fetches only the months that failed: a retry that re-fetched the whole window would spend an operator's connection on months already in hand, and would blank panels that are answering correctly.
 
 Authority: Susan and Fowler, plan row #12.
+
+## A run's time is drawn one bar an item, on a real clock
+
+> **The shape of the run is legible before a single number is.** A wide staircase is a run that queued; a solid block is a run that worked in parallel.
+
+The run timeline on `/console/machine/` draws
+[`run-timeline/<YYYY-MM>.csv`](../architecture/publishing/run-timeline.md). The
+shape it reads was settled first and left every drawing question open; those
+questions are settled here, because a drawing is not a contract.
+
+- **A row is one item and the y axis is items, in start order.** Not one stage
+  and not one shard: the panel above it already folds the same seconds per shard,
+  and this is the only surface on the site that can say WHICH article was being
+  read. Sorted by start rather than by cost, because the queue is the thing a
+  reader cannot get anywhere else.
+- **The x axis is elapsed milliseconds from the run's start, and the wait is
+  position rather than length.** An item that queued forty seconds sits forty
+  seconds to the right; nothing is drawn in front of its bar. A category axis -
+  one evenly spaced column an item - would hide the queue entirely, which is the
+  one thing the panel exists to show. The zero is the first item's own start and
+  not the manifest's: the process start covers collecting and planning, work no
+  item is charged for, so a zero there would push every bar right by one constant
+  and make x=0 a moment the chart never draws.
+- **Eight steps, eight chart-ramp stops, fixed by position.** `--chart-1` to
+  `--chart-8` against the eight steps in pipeline order is an exact fit. A step
+  keeps its stop whether or not a given run timed it, so two runs drawn a day
+  apart compare by eye. The ramp deliberately holds none of the confidence hues
+  ([design-system.md](design-system.md)), so no step of a pipeline is ever told by
+  its colour that it is the failing one.
+- **Which steps appear in the legend comes from the rows, never from a list in
+  the panel.** A step with a number on at least one bar is drawn; a step with none
+  is named in words underneath, and the two silences are separated: `plan` and
+  `publish` are timed by nothing in the pipeline at all, and any other absence is
+  a gap in what THIS run wrote down. An operator acts on only one of those.
+- **The residual is drawn hollow and never tinted**, the ruling
+  [`SpanPanel`](../architecture/publishing/console.md) made for the shard. Nobody
+  has agreed how much overhead is too much, so a colour would publish an alarm
+  that does not exist.
+- **The residual is signed, and the sign changes the drawing rather than the
+  colour.** Positive, it is a hollow slice extending the bar to the item's full
+  clock, and the steps plus that slice are the item's own time exactly. Negative,
+  the steps have already outrun the clock - the visual plan is decoded inside the
+  summary call, so it is apportioned out of it rather than timed beside it - and
+  the overrun is drawn as a **hatched hollow notch laid over the last stretch of
+  the bar**, starting where the item really ended. Laid over and not appended,
+  because the stretch it covers is time some step has already drawn once; an
+  appended notch would make the bar longer than either reading of it. Hatched and
+  not tinted, so an overrun and an overhead are told apart by texture rather than
+  by a hue that would rank one of them as worse.
+- **A bar names its shard, in a gutter, always.** Two bars overlapping on the
+  clock is correct exactly when they sit on different shards, and without the
+  shard beside them a reader cannot tell an overlap from a contradiction.
+- **Under 24 bars each carries its item id; above that the gutter keeps the
+  shard alone.** Density is the service here: a run of four hundred items is a
+  wall of thin bars on purpose, because the wall IS the answer, and four hundred
+  labels would be four hundred things to read instead.
+- **`console.timeline_bars` caps the drawing and never the arithmetic.** Every
+  figure above the bars - the span, the work, the items at once - counts the whole
+  run, and the panel says how many of how many it drew. A panel that reported the
+  run it drew rather than the run that ran would be a quieter kind of wrong.
+- **Three figures land before any bar**: what the run took end to end, what its
+  items cost added up, and the second divided by the first. That third number is
+  the one that says staircase or block - one means a queue however many shards
+  were running, and four means four shards genuinely busy together.
+
+**A column the panel reads has to carry a value somewhere on the canary day, or
+the panel does not ship.**
+[../../frontend/tests/console-run-timeline.spec.ts](../../frontend/tests/console-run-timeline.spec.ts)
+takes the declared list off `run-timeline.ts`, reads `backend/var/canary/`, and
+fails on any column empty across every row - then checks on the page that every
+step in the legend has a slice behind it and that all eight are accounted for as
+drawn, unproduced or unrecorded. The canary is the right fixture because it is
+fixed in size (`CLAUDE.md` Guardrail #12) and because it is built, so it carries
+a case the archive has never produced: not one committed census row records an
+item clock, so nothing but a built day can place an item on one.
+
+**Three panels would fail that gate today** and are left for a later row. Measured
+2026-09-16 over the canary's own published payloads, by counting non-empty cells
+per column across every row of each file: the one `day-metrics` record the canary
+holds carries `extraction` null, `throughput` null and `stage_timing` empty, so
+the extraction census, the throughput figures and the stage-timing panel each
+fall back to a "nothing was measured" sentence on the fixture the browser suite
+runs against. Two more columns are empty on every canary row without a panel
+behind them - `day-metrics.addresses_considered` and
+`machine.cgroup_peak_bytes` - which is a different defect and a cheaper one. The
+`run-days` and `span-rollup` payloads are clean.
+
+Authority: Susan, plan 32 row #14.
 
 ## Design rationale
 

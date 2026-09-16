@@ -1,6 +1,6 @@
 # Published Console
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-16
 The operator's surface: which panel is on which route, the question each one
 answers, and the ruling behind its shape. `/console/` tells the owner what
 happened to the pipeline, where the digest tells a reader what happened in the
@@ -333,15 +333,19 @@ cannot report a day count.
 
 ## What the Hardware route draws
 
-Twelve panels. Eleven read `state/runtime-counters.csv` and `state/item-health/`;
-one - where a shard's clock went - reads `state/span-rollup/`. All three are read
-at build time under `$lib/server/` and none is published: the route added no
-telemetry column and no reader sees a cell of any of them.
+Thirteen panels. Eleven read `state/runtime-counters.csv` and
+`state/item-health/`; one - where a shard's clock went - reads
+`state/span-rollup/`; one - where the run's time went, item by item - reads the
+published mirror `frontend/public/run-timeline/`. All four are read at build time
+under `$lib/server/` and nothing on the route is fetched: the three `state/`
+ledgers add no telemetry column and no reader sees a cell of any of them, and the
+published mirror carries no address, no title and no fetched text.
 
 | Panel | Grain | The sentence it is for |
 | --- | --- | --- |
 | Shards of the newest run | one row a shard | Was the day slow because of the work or because of the machine. |
 | Where a shard's clock went | one bar a shard | How much of a shard's time went to items, and how much to overhead nobody named. |
+| Where the run's time went, item by item | one bar an item | Which item queued, which one ran long, and where in a run the time actually went. |
 | Peak memory, and how near the runner's ceiling it got | one bar a shard | How much of the runner's 16 GB one run needed. |
 | Reading against writing | the newest run | What a written token costs against a read one. |
 | Prompt cache | one column a day | Whether a bigger cache would save wall clock. |
@@ -382,6 +386,23 @@ truncated to its header. The reader is
 [../../../frontend/src/lib/server/span-rollup.ts](../../../frontend/src/lib/server/span-rollup.ts),
 and the fixture rollup the canary draws is written in
 [../../../frontend/scripts/build-canary.mjs](../../../frontend/scripts/build-canary.mjs).
+
+**The run timeline answers a different question with the same seconds, and the
+difference is the grain.** The span breakdown folds a run per shard, so it knows
+how long fetching took and never which article was being fetched. This one is one
+bar an item, placed where that item's own work began on the run's clock, so it is
+the only surface on the site that can say which item queued and which one ran
+long. It is a snapshot for the same reason: a window is a span and a span cannot
+narrow one run, so the panel names the run it drew. Its reader is
+[../../../frontend/src/lib/server/run-timeline.ts](../../../frontend/src/lib/server/run-timeline.ts),
+its producer is
+[../../../backend/idhazh/telemetry/publish/run_timeline.py](../../../backend/idhazh/telemetry/publish/run_timeline.py),
+the shape is [run-timeline.md](run-timeline.md) and every drawing rule is
+[../../concepts/console-design.md](../../concepts/console-design.md). It reads
+one published directory and nothing else, so with that directory gone the panel
+is empty by construction and the route still renders whole - measured 2026-09-16
+by rebuilding the canary console with the series moved aside: 123,122 bytes of
+HTML, all thirteen panels present, the written empty state in place of the bars.
 
 **The board is five columns on a desktop and one card a shard at 1024px and
 under.** The column head is the only thing naming a value, so when the columns

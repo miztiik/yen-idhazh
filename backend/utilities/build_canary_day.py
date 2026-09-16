@@ -84,6 +84,7 @@ from idhazh.telemetry.publish import (
     day_metrics,
     machine,
     run_days,
+    run_timeline,
     source_health,
     span_rollup,
 )
@@ -1137,6 +1138,7 @@ def console_payloads(*, state_root: Path, digest_root: Path) -> int:
     for producer in (
         machine,
         span_rollup,
+        run_timeline,
     ):
         written += len(
             producer.publish(
