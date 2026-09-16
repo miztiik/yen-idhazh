@@ -173,12 +173,12 @@ What each call sent, reused and wrote, how fast, under which budget, and why it 
 | `visual_plan_ms_is_estimate` | bool | `backend/idhazh/stages/two_calls.py` | - | no |
 | `model_wait_ms` | int | `backend/idhazh/stages/work.py` | - | no |
 | `visual_plan_tokens_written` | int | `backend/idhazh/stages/two_calls.py` | - | no |
-| `label_cache_pct` | float | `backend/idhazh/stages/two_calls.py` | - | no |
-| `summary_cache_pct` | float | `backend/idhazh/stages/two_calls.py` | - | no |
-| `label_prefill_tokens_per_s` | float | `backend/idhazh/stages/two_calls.py` | - | no |
-| `label_decode_tokens_per_s` | float | `backend/idhazh/stages/two_calls.py` | - | no |
-| `summary_prefill_tokens_per_s` | float | `backend/idhazh/stages/two_calls.py` | - | no |
-| `summary_decode_tokens_per_s` | float | `backend/idhazh/stages/two_calls.py` | - | no |
+| `label_cache_pct` | float | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | no |
+| `summary_cache_pct` | float | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | no |
+| `label_prefill_tokens_per_s` | float | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | no |
+| `label_decode_tokens_per_s` | float | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | no |
+| `summary_prefill_tokens_per_s` | float | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | no |
+| `summary_decode_tokens_per_s` | float | `backend/idhazh/stages/two_calls.py`, `backend/idhazh/telemetry/census.py` | `backend/idhazh/telemetry/census.py` | no |
 | `label_finish_reason` | str | `backend/idhazh/stages/two_calls.py` | - | no |
 | `summary_finish_reason` | str | `backend/idhazh/stages/two_calls.py` | - | no |
 | `label_budget_tokens` | int | `backend/idhazh/stages/work.py` | - | no |
