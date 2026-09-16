@@ -21,7 +21,7 @@ import { dayKey, toDay } from '../charts/viewport';
 import { deskOf, orderByTime } from '../day-shape';
 import { settled } from '../feed-health';
 import { publishedVisual, refusedDrawing } from '../payload/drawing';
-import { dropVectors } from '../payload/project';
+import { dropVectors, coverageOf } from '../payload/project';
 import type { DigestDay, DigestItem, SeededVisual } from '$lib/payload/types';
 
 /** The build runs from `frontend/`, so the repo root is one level up. */
@@ -223,6 +223,14 @@ function dirsIn(path: string): string[] {
  * `$lib/payload/project` owns that drop, alongside the allow-list the staging
  * step projects with, so both copies that leave `frontend/public/` are ruled by
  * one module.
+ *
+ * **The publisher names are derived here for the same reason**, and here rather
+ * than at the seam below. They are not on the committed day; the projector puts
+ * them on every served day, so a build that read the committed tree without them
+ * would seed a document one field short of the day the browser then fetches, and
+ * fold a group behind a card with no way out of it until that fetch landed.
+ * Deriving them once, where the day is read, is what keeps the two halves of a
+ * reading route the same shape (`frontend/tests/day-seam.spec.ts`).
  */
 export function loadDay(date: string, root: string = DIGEST_ROOT): DigestDay | null {
 	const [year, month, day] = date.split('-');
@@ -238,7 +246,17 @@ export function loadDay(date: string, root: string = DIGEST_ROOT): DigestDay | n
 		if (!parsed || typeof parsed !== 'object' || !Array.isArray((parsed as DigestDay).items)) {
 			throw new TypeError('the payload holds no item list');
 		}
-		return dropVectors(parsed as DigestDay);
+		const loaded = dropVectors(parsed as DigestDay);
+		// Over the whole day, because a group is a fact about the day rather than
+		// about one story.
+		const stacks = coverageOf(loaded.items);
+		return {
+			...loaded,
+			items: loaded.items.map((item) => ({
+				...item,
+				covered_by: stacks.get(item.item_id) ?? []
+			}))
+		};
 	} catch (cause) {
 		// Degrade, do not fail (`CLAUDE.md` section 1a). A payload we cannot read
 		// is one day; throwing here takes the build down for every other day too,
@@ -367,6 +385,10 @@ export function dayShell(
 	// published order would put the day's highest-scoring stories in the document
 	// and then shuffle them the moment the rest of the day arrived - a first
 	// screen that rewrites itself while the reader is on it.
+	//
+	// The publisher names a card prints for a group are already on the day:
+	// `loadDay` derives them, so this is a re-order of what it read and never a
+	// different shape from it.
 	const ordered = orderByTime(day.items);
 	// `deskOf` and not `item.vertical`: the route is a topic, and the topic a
 	// story is read under is where the day published it. Filtering on the feed's

@@ -23,7 +23,12 @@ from idhazh.contracts.digest_day import (
     DigestVerticalRef,
     DigestVisual,
 )
-from idhazh.contracts.digest_view import DigestView, DigestViewItem, DigestViewVisual
+from idhazh.contracts.digest_view import (
+    DigestCoverage,
+    DigestView,
+    DigestViewItem,
+    DigestViewVisual,
+)
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.run_manifest import (
@@ -59,6 +64,7 @@ __all__ = [
     "ConfidenceBand",
     "ConfigDigest",
     "Contract",
+    "DigestCoverage",
     "DigestDay",
     "DigestItem",
     "DigestRunRef",
