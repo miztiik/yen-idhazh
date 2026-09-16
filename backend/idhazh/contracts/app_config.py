@@ -83,6 +83,11 @@ class AppConfig(Contract):
             why="A story planned at 02:20 held its morning freshness against the evening.",
         ),
         ChangelogEntry(
+            version="2026-09-16T14:00",
+            change="run.safety_ceiling_per_day, additive, default 400.",
+            why="The per-run cap bounds a worker's timeout; it never bounded the day.",
+        ),
+        ChangelogEntry(
             version="2026-09-16T13:00",
             change="ui.draw_same_story, additive, default true.",
             why="The page folds a group into one card, and this is the one-edit revert.",
@@ -91,11 +96,6 @@ class AppConfig(Contract):
             version="2026-09-16T12:00",
             change="assemble.duplicate_similarity_min is now assemble.same_story, three knobs.",
             why="One cosine cannot be reweighted; a composite with a floor on it can.",
-        ),
-        ChangelogEntry(
-            version="2026-09-16",
-            change="observability lost the two published ages for scores and feed-health.",
-            why="The mirrors they pruned are gone; no console route ever fetched either.",
         ),
         ChangelogEntry(
             version="2026-08-21",
