@@ -225,6 +225,46 @@ class ConsoleConfig(Model):
             "use."
         ),
     )
+    fleet_min_rows: int = Field(
+        default=160,
+        ge=1,
+        description=(
+            "How many recorded job placements the console needs before it draws the "
+            "machines as bars. Under it the panel lists the counts in words, because "
+            "bars over a handful of placements read as a distribution and it is not "
+            "one. A DECLARED ESTIMATE and not a measurement (CLAUDE.md Guardrail "
+            "#10): the rarest of the six machine kinds on record held 11 of 356 "
+            "counter rows on 2026-09-17, 3.1 percent, and 5 of those - the floor "
+            "min_attempts_for_rate already sets - needs about 162 rows. A seventh "
+            "machine kind lowers every share and raises the bar, so re-derive it "
+            "rather than argue with it."
+        ),
+    )
+    bandwidth_min_kinds: int = Field(
+        default=3,
+        ge=2,
+        description=(
+            "How many distinct machine kinds must carry a memory-bandwidth reading "
+            "before bandwidth may be plotted against decode speed. Two points define "
+            "a line, so a scatter of two is a claim rather than a measurement. "
+            "Nothing plots it today - the panel was refused on 2026-09-17 and this "
+            "is half of the trigger that would bring it back, the other half being "
+            "fleet_min_rows."
+        ),
+    )
+    machine_colour_stops: int = Field(
+        default=7,
+        ge=1,
+        le=7,
+        description=(
+            "How many machines get a colour of their own before the rest fold into "
+            "one row named in words. Seven, because the chart ramp holds eight stops "
+            "and the eighth is reserved for shards that recorded no machine at all - "
+            "an absence is not a machine and must not take a machine's hue. Folding "
+            "is what keeps the assignment bounded: without it a seventh kind would "
+            "either collide with a sixth or need a ninth stop nobody has drawn."
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod
