@@ -70,6 +70,14 @@ git grep -n -E '"(id|file|sha256)"' -- config/models/
 The first names the active file; the second prints the configuration id, the
 weight file and the SHA-256 the runtime checks the downloaded bytes against.
 
+**One model can have more than one file, and Gemma does.**
+`gemma-4-e4b-qat.json` runs its multi-token draft head;
+`gemma-4-e4b-qat-no-draft.json` is the same weights with `draft` null. The two
+carry one `sha256`, so the second command above prints the same digest twice -
+that is the pair working, not a duplicate. Which one is in force is the
+`models_file` line, and nothing else has to change to move between them
+([../architecture/summarize/model-boundary.md](../architecture/summarize/model-boundary.md#a-second-smaller-model-that-guesses-ahead)).
+
 ## A dossier is not a benchmark record
 
 The two classes sit next to each other in `docs/reference/` and answer different

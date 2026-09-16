@@ -337,6 +337,40 @@ def test_every_committed_model_entry_declares_the_weights_its_settings_are_for()
         assert entry["inference"]["declared_for"] == entry["sha256"], role
 
 
+def test_every_model_file_loads_and_not_only_the_one_the_pointer_names() -> None:
+    """A file `models_file` does not currently name is still a file it can name.
+
+    Only the active entry was ever validated, so an alternative sat unchecked
+    until the day somebody switched to it - and that day is a pipeline run, not
+    a test. The directory is hand-authored and bounded by how many models this
+    project supports, so reading all of it costs what the code costs rather than
+    what the archive has piled up (`CLAUDE.md` Guardrail #12).
+    """
+    files = sorted((CONFIG_DIR / "models").glob("*.json"))
+    assert len(files) >= 2, "the swap has nothing to swap between"
+
+    for path in files:
+        entry = ModelsConfig.from_json(read_text(path)).summarize
+        assert entry.inference.declared_for == entry.sha256, path.name
+        assert entry.turns.declared_for == entry.sha256, path.name
+
+
+def test_the_same_weights_are_offered_with_the_draft_head_and_without() -> None:
+    """Turning speculation off is a pointer change, never an edit to an entry.
+
+    Editing `draft` in place is a change somebody has to remember to undo, and
+    a run that publishes is not where that is discovered.
+    """
+    drafted = ModelsConfig.from_json(read_text(CONFIG_DIR / "models/gemma-4-e4b-qat.json"))
+    plain = ModelsConfig.from_json(read_text(CONFIG_DIR / "models/gemma-4-e4b-qat-no-draft.json"))
+
+    assert drafted.summarize.draft is not None
+    assert plain.summarize.draft is None
+    assert plain.summarize.sha256 == drafted.summarize.sha256, "a different model, not a switch"
+    assert plain.summarize.inference == drafted.summarize.inference, "the settings must not drift"
+    assert plain.summarize.turns == drafted.summarize.turns
+
+
 def test_a_run_manifest_written_before_the_settings_moved_still_reads() -> None:
     """The read side: a `model_ref` with no settings block opens on the defaults.
 
