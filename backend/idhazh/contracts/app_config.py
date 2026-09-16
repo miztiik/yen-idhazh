@@ -78,6 +78,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-16T12:00",
+            change="assemble.duplicate_similarity_min is now assemble.same_story, three knobs.",
+            why="One cosine cannot be reweighted; a composite with a floor on it can.",
+        ),
+        ChangelogEntry(
             version="2026-09-16",
             change="observability lost the two published ages for scores and feed-health.",
             why="The mirrors they pruned are gone; no console route ever fetched either.",
@@ -91,11 +96,6 @@ class AppConfig(Contract):
             version="2026-09-15T22:10",
             change="run.shard_wrap_up_minutes, an integer defaulting to 12 minutes.",
             why="A worker killed at its timeout uploads nothing, so the items are lost.",
-        ),
-        ChangelogEntry(
-            version="2026-09-15T22:00",
-            change="run.trial_state_dirname and retention.trial_state_days, both additive.",
-            why="A trial run needs its own state tree, and that tree needs an expiry.",
         ),
         ChangelogEntry(
             version="2026-08-21",

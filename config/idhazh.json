@@ -1,6 +1,10 @@
 {
   "assemble": {
-    "duplicate_similarity_min": 0.94
+    "same_story": {
+      "cosine_weight": 1.0,
+      "floor_min": 0.94,
+      "key_point_weight": 0.0
+    }
   },
   "assist": {
     "eval_corpus_through": "2026-08-26",
