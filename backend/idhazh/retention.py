@@ -792,20 +792,6 @@ def _expired_public_copies(public_root: Path | None, boundary: str) -> tuple[str
     return tuple(copy.stem for copy in month_shards(public_root) if copy.stem < boundary)
 
 
-def _drop_empty_day_dirs(day: Path) -> None:
-    """Remove the month and year directory a deleted day file leaves behind.
-
-    Not tidiness: `day_partition.day_files` walks every year and month directory
-    it finds, so a prune that left them would make the walk cost more each year
-    while deleting the rows that walk exists to read.
-    """
-    for directory in (day.parent, day.parent.parent):
-        try:
-            directory.rmdir()
-        except OSError:
-            return
-
-
 def prune_telemetry(
     state_dir: Path,
     config: ObservabilityConfig,
@@ -871,7 +857,7 @@ def prune_telemetry(
             )
         for day in days:
             day.unlink()
-            _drop_empty_day_dirs(day)
+            day_partition.drop_empty_day_dirs(day)
         # Only a copy below its own configured age, so the set deleted is exactly
         # the set named above and never a month the published tree still owes a
         # reader.
@@ -1107,7 +1093,7 @@ def prune_feed_health(
             freed += day.stat().st_size
             if not dry_run:
                 day.unlink()
-                _drop_empty_day_dirs(day)
+                day_partition.drop_empty_day_dirs(day)
 
     return FeedHealthPruneResult(
         deleted=tuple(deleted),
@@ -1205,7 +1191,7 @@ def prune_seen(
         freed += day.stat().st_size
         if not dry_run:
             day.unlink()
-            _drop_empty_day_dirs(day)
+            day_partition.drop_empty_day_dirs(day)
 
     return SeenPruneResult(
         deleted=tuple(deleted),
@@ -1282,7 +1268,7 @@ def prune_counterfactual_scores(
         freed += day.stat().st_size
         if not dry_run:
             day.unlink()
-            _drop_empty_day_dirs(day)
+            day_partition.drop_empty_day_dirs(day)
 
     return CounterfactualPruneResult(
         deleted=tuple(deleted),
@@ -1540,7 +1526,7 @@ def prune_scores(
         )
         for day in days:
             day.unlink()
-            _drop_empty_day_dirs(day)
+            day_partition.drop_empty_day_dirs(day)
 
     hard_deleted: list[str] = []
     if config.score_archive_keep_months is not None:

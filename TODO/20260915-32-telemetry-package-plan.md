@@ -467,8 +467,27 @@ are deleted by row 15.
 - **Scope:** `idhazh telemetry prune --target <store> --since <date> --until <date>`, atomic per store, reusing the retention machinery `stages/prune_state.py` already holds.
 - **Files touched:**
   - `backend/idhazh/telemetry/prune.py` (new)
-  - `backend/idhazh/stages/prune_state.py`
+  - `backend/idhazh/telemetry/cli.py`
+  - `backend/idhazh/day_partition.py`
+  - `backend/idhazh/retention.py`
+  - `backend/idhazh/evals/writer.py`
+  - `backend/tests/retention/test_prune_range.py` (new)
+  - `backend/tests/workflows/test_telemetry_cli.py`
   - `docs/architecture/publishing/retention.md`
+  - `docs/concepts/telemetry.md`
+  - `docs/how-to/run-the-pipeline.md`
+
+  **`backend/idhazh/stages/prune_state.py` was listed here and is not touched.**
+  It is the scheduled prune's entry point and the machinery this row reuses is
+  underneath it, not in it: `day_partition.day_files` for the walk and
+  `day_partition.date_of` for the selection. The one piece that was NOT shared
+  is now: `_drop_empty_day_dirs` existed in two private copies, in `retention`
+  and in `evals.writer`, and the second one said in its own docstring that it
+  was a twin forced by the import direction. It is one function on
+  `day_partition` from 2026-09-16 and both copies are deleted, which is why
+  those three modules appear above. `retention` cannot be imported from the
+  telemetry package at all - it imports `idhazh.telemetry` and
+  `idhazh.telemetry.publish` - so a shared helper had to move below both.
 - **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests/retention`. CI runs the full suite.
 - **Oracle:** a prune over a built tree deletes exactly the day files inside the range and leaves every sibling byte-identical, and a prune that fails part way leaves the tree as it found it. It cannot settle what the scheduled prune should delete - that stays a config decision.
 - **Decisions:**

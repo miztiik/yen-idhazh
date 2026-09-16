@@ -126,6 +126,27 @@ def date_of(day_file: Path) -> str:
     return f"{month_of(day_file)}-{day_file.stem}"
 
 
+def drop_empty_day_dirs(day: Path) -> None:
+    """Remove the month and year directory a deleted day file leaves behind.
+
+    Not tidiness: `day_files` above walks every year and month directory it
+    finds, so a deletion that left them would make the walk cost more each year
+    while removing the rows that walk exists to read.
+
+    Here rather than beside any one caller, because every store that deletes a
+    day file owes the same thing to the same walk. It was spelled twice until
+    2026-09-16 - once in `retention` and once in `evals.writer`, whose copy said
+    in its own docstring that it existed because `retention` imports that module
+    rather than the other way round. A shape's rule belongs with the shape, and
+    both of those modules already import this one.
+    """
+    for directory in (day.parent, day.parent.parent):
+        try:
+            directory.rmdir()
+        except OSError:
+            return
+
+
 def days_by_month(root: Path) -> dict[str, list[Path]]:
     """Every day file under `root`, grouped by its month, oldest month first.
 
