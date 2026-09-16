@@ -78,6 +78,18 @@ export const SOURCE_HEALTH_PATH = process.env.DIGEST_ROOT
 	? resolve(process.env.DIGEST_ROOT, '..', 'source-health.json')
 	: join(process.cwd(), 'public', 'source-health.json');
 
+/** Where the published month series are read from at build time.
+ *
+ * Derived from the digest root for the reason `INDEX_ROOT` and
+ * `SOURCE_HEALTH_PATH` are: a canary build writes its series beside its own
+ * digest, and a switch of its own would let a fixture build draw the real
+ * archive's runs. `frontend/public/` in an ordinary build, and the canary tree
+ * in a canary one.
+ */
+export const PUBLIC_ROOT = process.env.DIGEST_ROOT
+	? resolve(process.env.DIGEST_ROOT, '..')
+	: join(process.cwd(), 'public');
+
 const DATE_PART = /^\d{2,4}$/;
 
 const DAY_MS = 86_400_000;

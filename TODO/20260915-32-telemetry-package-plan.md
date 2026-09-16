@@ -34,22 +34,34 @@ decision about current behaviour; that belongs in `docs/` (Guardrail #4).
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The shape the timeline reads, settled first | - | A | PENDING | - | - | - |
-| 2 | Where every one of the 113 columns comes from | - | A | PENDING | - | - | - |
-| 3 | The package exists and re-exports | - | A | PENDING | - | - | - |
+| 1 | The shape the timeline reads, settled first | - | A | DONE | - | - | - |
+| 2 | Where every one of the 113 columns comes from | - | A | DONE | - | - | - |
+| 3 | The package exists and re-exports | - | A | DONE | - | - | - |
 | 4 | The recorder moves in and returns a validated row | 3 | B | DONE | p32r4 | - | - |
 | 5 | The work stage persists what it recorded | 1, 4 | C | DONE | p32r5 | - | - |
 | 6 | The census prefers the persisted row | 5 | D | DONE | p32r6 | - | - |
-| 7 | Six columns that are arithmetic over filled ones | 6 | E | PENDING | - | - | - |
+| 7 | Six columns that are arithmetic over filled ones | 6 | E | DONE | - | - | - |
 | 8 | The label call's own clock and both finish reasons | 6 | E | DONE | p32r8 | - | - |
 | 9 | The host sampler moves in | 3 | B | DONE | p32r9 | - | - |
-| 10 | Nine publishers become one dispatcher | 3 | B | PENDING | - | - | - |
-| 11 | `idhazh telemetry` and its subcommands | 3, 10 | F | PENDING | - | - | - |
-| 12 | `telemetry prune` takes a target and a range | 11 | G | PENDING | - | - | - |
-| 13 | A closed vocabulary is an enum | 2 | B | PENDING | - | - | - |
-| 14 | The run timeline draws | 1, 7, 8 | H | PENDING | - | - | - |
+| 10 | Nine publishers become one dispatcher | 3 | B | DONE | - | - | - |
+| 11 | `idhazh telemetry` and its subcommands | 3, 10 | F | DONE | - | - | - |
+| 12 | `telemetry prune` takes a target and a range | 11 | G | DONE | - | - | - |
+| 13 | A closed vocabulary is an enum | 2 | B | DONE | - | - | - |
+| 14 | The run timeline draws | 1, 7, 8 | H | DONE | p32r14 | - | - |
 | 15 | The two published mirrors nothing reads are deleted | 10 | F | DONE | p32r15 | - | - |
 | 16 | Does the server answer `/slots`, and the ordinal encoding priced | - | A | DONE | p32r16 | - | - |
+
+**Every row has landed.** Rows 1, 2, 3, 7, 10, 11, 12 and 13 still read PENDING
+here on 2026-09-16 while their work was merged; row 14 was the last one open and
+re-checked the table against the tree rather than against the queue. What it
+checked, row by row: `contracts/run_timeline.py` and its schema (1), the 113-column
+provenance in `docs/architecture/sources/item-health.md` (2), the
+`backend/idhazh/telemetry/` package (3), an `UNFILLED` ratchet naming exactly
+three columns, which is the 110-of-113 count row 7 was written to reach (7),
+`publish/dispatch.py` and its `PROJECTIONS` tuple (10), `telemetry/cli.py` (11),
+`telemetry/prune.py` (12), and five `StrEnum` vocabularies on `ItemHealthRow`
+(13). A reckoner that lags the tree is a cache that went stale, not a queue of
+work.
 
 **Column arithmetic.** 43 of 113 carry a value in the committed archive, which is history and moves a day at a time. Row 6 is the one that changes what a new day carries: the census reads the row the shard sealed instead of rebuilding it, which takes the committed fixture day from 40 to 71 of 113. The 18 the fixture cannot reach - a real host sampler, a real ranker score - fill on a production run. Row 7 fills 6 more. **Row 8 filled none: measured on 2026-09-16, all three of its columns already had a producer, and what it fixed is that two of them were the wrong number and the third was a coercion** (section 9). The count stands at 110 of 113 with row 7, the last three are row 16's question, and `UNFILLED` in `backend/tests/test_telemetry.py` is the ratchet that names them.
 
@@ -92,10 +104,10 @@ flowchart TB
         inventory["inventory.py<br/>what one day recorded"]
         republish["republish.py<br/>one published day, again"]
         cli_m["cli.py<br/>idhazh telemetry ..."]
-        subgraph pub["publish/ - one dispatcher, eight projections"]
+        subgraph pub["publish/ - one dispatcher, nine projections"]
             dispatch["dispatch.py<br/>PROJECTIONS, in order"]
             rule["series.py<br/>path, write-if-changed, prune"]
-            proj["public_telemetry, day_metrics,<br/>machine, run_days,<br/>span_rollup, console_band,<br/>source_health"]
+            proj["public_telemetry, day_metrics,<br/>machine, run_days, run_timeline,<br/>span_rollup, console_band,<br/>source_health"]
         end
     end
 
@@ -141,7 +153,7 @@ flowchart TB
     ih --> dispatch
     sr --> dispatch
     rc --> dispatch
-    rtr --> dispatch
+    rtr -.->|"the shape run_timeline<br/>writes through"| proj
     dispatch --> proj
     proj --> rule
     proj --> ptel & pspan & pcon & ptime
@@ -157,6 +169,16 @@ flowchart TB
 ```
 
 Green is new in this plan. Everything else is a move, not a rewrite.
+
+**One edge moved when row 14 landed, and the correction is worth stating.** The
+diagram used to draw `RunTimelineRow` feeding the dispatcher, as if the contract
+were an input beside the three ledgers. It is not: `run-timeline/` is projected
+from `state/item-health/` - the `ih` edge that was already there - one month at a
+time, and the contract is the shape the projection validates each row through.
+There is no `state/run-timeline/` and the plan never drew one, which turned out
+to be right for a reason nobody had written down: every cell is a census column
+or arithmetic over one, so a committed ledger would be a third copy of numbers
+git already carries.
 
 **What the command line reaches, and what it does not.** `cli.py` routes and
 nothing else: `show`, `census` and `rollup` read one day through `inventory.py`,

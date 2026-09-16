@@ -38,6 +38,7 @@ import {
 	type RunCounters
 } from '$lib/server/runtime-counters';
 import { loadSpanRollup, spanBreakdown } from '$lib/server/span-rollup';
+import { loadRunTimeline, runTimelineView } from '$lib/server/run-timeline';
 
 export const prerender = true;
 
@@ -254,6 +255,13 @@ export async function load() {
 	// real rollup holds nothing.
 	const spanView = spanBreakdown(loadSpanRollup(shards)[0] ?? null);
 
+	// The newest run the published item timeline holds, and where each of its
+	// items sat on the run's clock. A snapshot for the same reason the two above
+	// are: a bar's position is measured from its own run's start, and a window
+	// cannot narrow one run. It reads its own published mirror, so it is often a
+	// different run again and carries its own empty state.
+	const timeline = runTimelineView(loadRunTimeline()[0] ?? null, console_.timeline_bars);
+
 	// The newest run the item ledger timed enough items on, which is not always
 	// the newest run the counters reached: a run can publish before its shards
 	// scrape. It is the last entry of the same array the multiples draw, so
@@ -313,6 +321,7 @@ export async function load() {
 		modelChanges: pipelineChanges(evalRows(days).rows, loadManifests(undefined, widest)),
 		board,
 		spanBreakdown: spanView,
+		runTimeline: timeline,
 		memory,
 		newestRunId: newest?.runId ?? null,
 		split,
