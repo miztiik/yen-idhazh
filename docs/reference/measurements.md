@@ -893,14 +893,13 @@ is why the probe asks it after a completion and not before.
 
 **Two of the three are worth less than they look, and that is the finding.**
 `n_parallel` is 1 in every committed model entry, so there is one slot and
-`id_slot` read `0` on all six calls: `slot_id` would be a constant column, 12,277
+`id_slot` read `0` on all six calls: `slot_id` is a constant column, 12,277
 copies of one digit. And `timings.cache_n` is already recorded, as
 `cached_tokens` - so `prefix_shared_with_previous` is a boolean restating a
-number the ledger holds, which is the shape Guardrail #10 calls a reading
-written twice. `kv_tokens_at_start` is the one that says something new: it is
-what the slot held *before* this item, where `cached_tokens` is what this item
-reused, and the two differ exactly when the cache held something and the prompt
-could not use it.
+number the ledger holds. `kv_tokens_at_start` is the one that says something
+new: it is what the slot held *before* this item, where `cached_tokens` is what
+this item reused, and the two differ exactly when the cache held something and
+the prompt could not use it.
 
 **What this did not settle: the platform.** CI installs the Linux asset and this
 was read from the same tag's Windows CPU asset, because the pinned Linux binary
@@ -910,9 +909,12 @@ for line. Running `slot_probe.py` inside a job that already stands a server up -
 `validate.yml` or `idhazh-pipeline-tests.yaml` - closes the gap for the price of
 one step.
 
-**Nothing here is a decision to fill the columns.** Whether a constant column
-and a restated one earn their bytes is the next question, and this reading is
-what lets it be asked with numbers.
+**All three were filled on 2026-09-16, by owner decision.** The reading above
+said a constant column and a restated one buy little; whether they are wanted is
+a product question rather than a measurement, and the owner answered it. The
+row carries the item's FIRST call for all three -
+[model-boundary.md](../architecture/summarize/model-boundary.md#the-outward-shim)
+owns what each one means and why the second call is excluded.
 
 ## How much of a day is the same story twice, 2026-09-06
 
