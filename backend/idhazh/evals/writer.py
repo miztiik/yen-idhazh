@@ -82,9 +82,8 @@ def ledger_path(state_dir: Path, date: str) -> Path:
     A day rather than a month, for the reason `ledger.published_path` gives: a
     run writes one day, two runs collide on a file only when they are the same
     day, and taking a day back is one `rm` rather than an edit inside a shared
-    shard, which `merge=union` cannot express. The mirror under
-    `frontend/public/scores/` stays monthly, because its grain follows what a
-    browser fetches - see `docs/concepts/partitions.md`.
+    shard, which `merge=union` cannot express. Nothing mirrors this store into
+    `frontend/public/`.
 
     A caller passes the directory and the date and never the file name, so a
     second writer - the canary fixture builder is one - cannot spell the layout

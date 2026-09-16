@@ -240,9 +240,13 @@ def test_every_path_the_day_stages_exists_in_a_fresh_checkout() -> None:
 
     Every path the step names is asked of the working tree, so a root added to
     the list without a committed file in it fails here rather than on the runner.
-    The console payload roots are the seven that gained a producer on
-    2026-09-09: each ships with the shard the producer wrote, which is the same
-    pattern `state/feed-retirements.csv` takes.
+    The console payload roots are the five that still have a producer: each ships
+    with the shard the producer wrote, which is the same pattern
+    `state/feed-retirements.csv` takes. `scores` and `feed-health` were two more
+    until 2026-09-16, and they are why the list is derived from
+    `series.PUBLISHED_ROOTS` rather than written out here - a root deleted in one
+    place has to leave the staging call in the same commit, or the next run's
+    `git add` aborts and takes every sibling ledger with it.
     """
     for relative in CORPUS_SEED:
         assert (REPO_ROOT / relative).is_file(), f"{relative} must be committed, even when empty"

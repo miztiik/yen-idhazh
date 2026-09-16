@@ -14,15 +14,11 @@ from pydantic import ValidationError
 from idhazh.contracts.base import Contract, StalePayloadError
 from idhazh.contracts.console_band import ConsoleBand, ConsoleRoute, RouteId
 from idhazh.contracts.console_payloads import CONSOLE_PAYLOADS, payloads_by_stem
-from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.export import CONTRACTS
-from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
-from idhazh.contracts.public_eval import PublicEvalRow
-from idhazh.contracts.public_feed_health import PublicFeedRow
 from idhazh.contracts.public_run_day import PublicRunDay
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
 from idhazh.contracts.visual_decision import VisualDecision
@@ -139,7 +135,7 @@ def test_every_console_read_resolves_to_exactly_one_committed_schema() -> None:
         assert entry.contract in CONTRACTS, f"{stem} is not exported"
 
     stems = payloads_by_stem()
-    assert len(stems) == 9, "twelve console reads answer off nine shapes"
+    assert len(stems) == 7, "ten console reads answer off seven shapes"
     assert set(stems) == {entry.contract.__schema_stem__ for entry in CONSOLE_PAYLOADS}
 
 
@@ -162,8 +158,6 @@ def test_a_console_payload_says_where_it_is_written_and_why_it_crosses() -> None
     ("projection", "source", "expected"),
     [
         (PublicTelemetryRow, ItemHealthRow, {"canonical_url", "url_key", "detail"}),
-        (PublicEvalRow, EvalRow, {"url_key", "source_url", "title"}),
-        (PublicFeedRow, FeedHealthRow, {"endpoint_key"}),
     ],
 )
 def test_a_forbidden_cell_is_on_the_ledger_and_off_the_projection(
@@ -269,8 +263,6 @@ def test_every_published_month_payload_has_a_non_null_retention_knob() -> None:
     }
     assert monthly == {
         "telemetry",
-        "scores",
-        "feed-health",
         "run-days",
         "day-metrics",
         "machine",

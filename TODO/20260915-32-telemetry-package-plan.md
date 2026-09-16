@@ -48,7 +48,7 @@ decision about current behaviour; that belongs in `docs/` (Guardrail #4).
 | 12 | `telemetry prune` takes a target and a range | 11 | G | PENDING | - | - | - |
 | 13 | A closed vocabulary is an enum | 2 | B | PENDING | - | - | - |
 | 14 | The run timeline draws | 1, 7, 8 | H | PENDING | - | - | - |
-| 15 | The two published mirrors nothing reads are deleted | 10 | F | PENDING | - | - | - |
+| 15 | The two published mirrors nothing reads are deleted | 10 | F | DONE | p32r15 | - | - |
 | 16 | Does the server answer `/slots`, and the ordinal encoding priced | - | A | DONE | p32r16 | - | - |
 
 **Column arithmetic.** 43 of 113 carry a value today; `telemetry._row` names 31 fields and `_flatten_calls` adds the call cells, 44 written of which one is always empty. Row 6 fills 58, row 7 fills 6, row 8 fills 3. **110 of 113 after row 8.** The last three are row 16's question.
@@ -92,10 +92,10 @@ flowchart TB
         inventory["inventory.py<br/>what one day recorded"]
         republish["republish.py<br/>one published day, again"]
         cli_m["cli.py<br/>idhazh telemetry ..."]
-        subgraph pub["publish/ - one dispatcher, ten projections"]
+        subgraph pub["publish/ - one dispatcher, eight projections"]
             dispatch["dispatch.py<br/>PROJECTIONS, in order"]
             rule["series.py<br/>path, write-if-changed, prune"]
-            proj["public_telemetry, scores, feed_health,<br/>day_metrics, machine, run_days,<br/>span_rollup, console_band,<br/>source_health"]
+            proj["public_telemetry, day_metrics,<br/>machine, run_days,<br/>span_rollup, console_band,<br/>source_health"]
         end
     end
 
@@ -567,12 +567,21 @@ are deleted by row 15. `machine.py` and `stages/counters.py` went on 2026-09-16.
 ## Section 16 - Row #15 - The two published mirrors nothing reads are deleted
 
 - **Scope:** `frontend/public/scores/` and `frontend/public/feed-health/` are removed, with their projections.
+- **What the row did, 2026-09-16.** The premise held. The built bundle was searched rather than the source - 357 emitted files, of which 70 are the client chunks a browser downloads - and **no client chunk names either path**. Every hit was `join(STATE_ROOT, "scores")` or `join(STATE_ROOT, "feed-health")` in a server chunk, which is the build-time read of the ledgers that stay, plus SvelteKit's static-asset manifest listing the files because they had been staged. **6,455,733 bytes went, not the 6.3 MB measured on 2026-09-15** - the two trees had grown a day. **The removal reached further than the four files this row listed.** `PublicEvalRow` and `PublicFeedRow` existed only to shape these two projections, so both contracts, both generated schemas and both contract fixtures went with them; `console_band.FETCHED_SERIES` and `validate_days._console_payload_faults` each lost two rows; `build_canary_day` lost two producers; and **two retention knobs went**, `public_scores_keep_months` and `public_feed_health_keep_months`, refused by name from now on with no successor named, because the ledgers their partners govern are still there.
 - **Files touched:**
-  - `backend/idhazh/telemetry/publish/`
-  - `.github/workflows/digest.yml`
-  - `backend/tests/workflows/test_staged_paths.py`
-  - `docs/concepts/telemetry.md`
-- **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests/workflows`. CI runs `site` and `browser`.
+  - `backend/idhazh/telemetry/publish/{scores,feed_health}.py` (**deleted**)
+  - `backend/idhazh/telemetry/publish/{dispatch,console_band}.py`
+  - `backend/idhazh/contracts/{public_eval,public_feed_health}.py` (**deleted**)
+  - `schemas/{public-eval,public-feed-health}.schema.json` (**deleted**)
+  - `tests/fixtures/contracts/{public-eval,public-feed-health}/` (**deleted**)
+  - `frontend/public/{scores,feed-health}/` (**deleted**)
+  - `backend/idhazh/contracts/{console_payloads,export,app_config,base}.py`, `backend/idhazh/contracts/knobs/observability.py`, `schemas/app-config.schema.json`
+  - `backend/idhazh/stages/validate_days.py`, `backend/idhazh/{ledger,evals/writer}.py`
+  - `backend/utilities/build_canary_day.py`
+  - `config/idhazh.json`, `.github/workflows/digest.yml`, `frontend/scripts/copy-visuals.mjs`, `frontend/src/lib/server/payload.ts`
+  - `backend/tests/workflows/_harness.py`, `backend/tests/test_console_payloads_producer.py`, `backend/tests/contracts/{_config,test_app_config,test_retired_knobs,test_stamped_boundary}.py`
+  - `docs/concepts/{telemetry,config,adaptive-pruning,partitions}.md`, `docs/architecture/publishing/{console-payloads,console-charts}.md`
+- **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests`. CI runs `site` and `browser`.
 - **Oracle:** no route under `frontend/src/` fetches either path, asserted by search over the built bundle rather than over the source. It cannot settle whether something outside this repository fetches them.
 - **Decisions:**
 

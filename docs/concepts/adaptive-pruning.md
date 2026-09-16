@@ -205,8 +205,6 @@ project and what it costs is stated there.
 | `frontend/public/digest/<Y>/<M>/<D>/digest.json`, `run.json` | **Keep, always** | never | the record that a day happened. The archive is the product, so age is not a reason to remove any of it |
 | `frontend/public/digest/<Y>/<M>/<D>/*.svg` | Delete (asset) | `retention.image_months`, **13** | the item survives without its picture, which is what makes a visual the one published thing safe to remove. Not because it is the bigger half - it is not: 491 visuals weighing 6,244,624 bytes against 24,543,254 bytes of day payload in the same tree on 2026-09-13 |
 | `frontend/public/telemetry/` | Delete (projection) | `observability.public_telemetry_keep_months` | the browser's copy of `state/item-health/`, refused at any value but its source's |
-| `frontend/public/scores/` | Delete (projection) | `observability.public_scores_keep_months` | the browser's copy of `state/scores/`, refused at any value but its source's |
-| `frontend/public/feed-health/` | Delete (projection) | `observability.public_feed_health_keep_months` | the browser's copy of `state/feed-health/`, refused at any value but its source's |
 | `frontend/public/run-days/` | Delete | `observability.public_run_days_keep_months` | a reduction of the day payloads to counts. It has no state ledger to be paired with |
 | `frontend/public/day-metrics/` | Delete | `observability.public_day_metrics_keep_months` | bounds the published copy without claiming to bound the ledger, which has no age of its own |
 | `frontend/public/machine/` | Delete | `observability.public_machine_keep_months` | the source is one appended CSV, so the copy is where a month boundary first exists |
