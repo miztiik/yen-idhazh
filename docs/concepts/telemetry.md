@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-09-16T12:00
+**Last Updated**: 2026-09-16
 
 The structured-event vocabulary: the envelope every event carries, the event names that are emitted, the two shapes those names take, the span tree a developer can switch on, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, which is a project non-goal ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 0a).
 
@@ -50,7 +50,7 @@ flowchart TD
   record --> census
 
   census --> ih["state/item-health/ (day)"]
-  rollup --> sr["state/span-rollup/ (day)"]
+  rollup --> sr["state/span-rollup/ (month)"]
   traces --> tr["state/traces/ (day)"]
   health --> fh["state/feed-health/ (day)"]
 
@@ -327,7 +327,7 @@ instrument, not about the job. What one sample costs is in
 
 `cpu_model` on the two rows above says which processor, in one string. It does
 not say what that processor can do, and **the thing that moves throughput most is
-what it can do**: the same weights read 3.7 times faster on a machine with
+what it can do**: the same weights read 3.6 times faster on a machine with
 AVX-512 than on one without, which is a far larger gap than anything separating
 our candidate models ([the processor
 lottery](../reference/benchmarks/the-processor-lottery.md)).
@@ -504,6 +504,10 @@ Treating the Actions run log as the log store, rather than shipping logs anywher
 **The flip is a discontinuity, and every panel that plots a span number must name it.** A committed rollup row exists only from 2026-09-06 forward, because no run before that day wrote one. A sub-step series that begins on the flip date is the instrument switching on, not the pipeline slowing down, and a chart that reads the gap as a regression is reading an artefact of the switch. The date is recorded as a discontinuity in [`../reference/measurements.md`](../reference/measurements.md), for the same reason a hardware change is.
 
 **The rollup measured nothing for nine days, and the cause was a path nobody named.** From 2026-09-06 every shard folded its spans and appended `state/span-rollup/<YYYY-MM>.csv` into its own checkout. No commit step staged that path, so each fold died with its runner; assemble, on another machine, projected a directory that had never existed and published a header row. Nothing failed and no test was red - the instrument ran, cost what it cost, and reported nothing. `state/traces/` was missed the same way and by the same list: `stage_work` opens a file sink onto it whenever tracing is on, and nothing staged it either, so the raw evidence the fold is taken from never survived its runner. The fix is both paths in the work job's commit step, a seed in each so `git add` under `set -euo pipefail` cannot abort the step on a fresh clone, and both in assemble's refresh set so a lost race does not let the union merge double the rows. The lasting part is the test: the stores a stage writes are now read out of the stage and compared against the paths the job stages, so the two lists cannot drift again. Authority: Carmack found the rollup, 2026-09-15.
+
+**The host fingerprint was the same failure and it had run longer, because the guard above could not see it.** The probe writes one row a job into `state/host-fingerprint/<YYYY>/<MM>/<DD>.csv` before the model server starts, and no commit step had ever named that path - `git ls-files state/host-fingerprint*` returned nothing, so every fingerprint this project had taken was deleted with its runner. The test that caught the rollup reads `ledger.append_*` calls out of `stages/work.py`, and this probe is not in `stages/work.py`: it runs from `cli.py` as its own subcommand, early on purpose, because the bandwidth reading wants an idle host. **A guard scoped to one source file cannot see a second writer**, which is the part worth remembering rather than the path. The fix is the same three moves - the path in the work job's commit step, a header-only day file seeded so `git add` cannot abort the step on a fresh clone, and the path in assemble's refresh set - plus a second guard that reads the probe's own source the way the first reads the stage's. Authority: Carmack's rule applied to a second writer, 2026-09-16.
+
+**Two ledgers declared what makes two of their rows one record and nothing applied it.** `ledger.keyed_paths` is the registry the post-merge settlement walks, and neither `state/host-fingerprint/` nor `state/span-rollup/` was in it. For the fingerprint that cost nothing yet, because nothing was committed for a repeat to be in. For the fold it was live: the work job stages it, passes `DROP_REPEATED_ROWS_COMMAND`, and `state/**/*.csv` is `merge=union` - so a second attempt at one shard would have left two rows folding the same spans, and `SPAN_ROLLUP_KEY`'s own comment says a second row adds a count to itself rather than recording a new fact. **A key written down is not a rule applied.** Both joined the registry on 2026-09-16, and the registry's one deliberate absence is still `state/seen/`, which declares no key at all. The registry now settles nine files on a run's own pass, fixed however many days the archive holds. Authority: Fowler on the registry, 2026-09-16.
 
 **One ledger for everything was proposed on 2026-09-15 and narrowed to one write path.** The owner's case was that the sprawl is real and that item-grain, day-filed data is the right shape for this project - which is correct, and is why `item-health` is the census. What the measurement refused was folding the other stores into it: three of them key on something that was never an item, and three more carry a different retention, so a single store would have to keep one window and lose the questions the others answer. The part of the intent that survives whole is the part that was costing something - one constructor per grain instead of two, one publisher instead of seven, and the ladder written down so a later rung is a decision rather than a discovery. Authority: owner set the intent; Fowler ruled the grains; Carmack priced the windows. 2026-09-15.
 

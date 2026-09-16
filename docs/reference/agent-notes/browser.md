@@ -1,6 +1,6 @@
 # Agent Notes - Browser
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-16
 Traps in Playwright, the integrated browser, the service worker, and the Svelte
 components a spec drives. Index and scope:
 [../agent-notes.md](../agent-notes.md).
@@ -53,6 +53,16 @@ The helper exists because seven specs already waited longhand and the eighth, wr
 **A vacuity guard built on a pixel threshold is a cross-platform time bomb.** A spec kept "every panel with `top < 900`" and asserted the set was non-empty; the first panel sits at 894 on Windows, the runner's taller fonts pushed it past 900, the set emptied and the guard fired - green locally every time, red on `main` every time. Cut the set on something the page itself draws (the first panel's own top), never on a number you chose, and print the margin rather than the verdict when it fires: the failure said the set was empty and did not say the nearest item missed by six pixels, which is the difference between a minute and an hour. Any pixel out of a browser moves between platforms: fonts, scrollbar width, form-control metrics, fractional rounding. Measured 2026-09-09 at 1280x900 on a developer machine against the canary build.
 
 **A polled `page.evaluate` straight after `page.goto` fails on a page that is fine**, with `Execution context was destroyed, most likely because of a navigation` - the client router does its own first navigation under the poll. Two tests failed out of 625 that way on 2026-08-31 with nothing wrong with the page. A locator assertion retries against the live document and does not race: `await expect(page.locator('html')).toHaveAttribute('data-theme', theme)`.
+
+**A "two readings that agree" wait is satisfied by the very state it exists to wait out.** Primed with a reading taken before the change, its first comparison asks "has nothing happened yet", which is true exactly when the page has not answered - so the loop returns fastest in the one case it was written to catch. `item-visual.spec.ts` resized the viewport and then waited for two equal readings of each chart's laid-out width. On a widening step nothing but the redraw moves that width: the card is CSS and grows with the viewport, while the svg carries its own `width` attribute and `max-width: 100%` clamps a drawing too wide for its card but never stretches one too narrow. So the wait returned on its first reading and the case measured a card that had grown against a drawing that had not. Red once on pull request #784 with zero frontend files changed and green on a re-run - at 390 px the card gave 282 and the drawing was still the 252 it drew at 360. **Take both readings inside the page a rendering frame apart, and make the viewport part of the reading**, so a pair taken before the resize reached the renderer cannot settle either:
+
+```typescript
+const before = geometry();
+await new Promise((wake) => requestAnimationFrame(() => requestAnimationFrame(wake)));
+return window.innerWidth === asked && geometry() === before;
+```
+
+Ask what moves the number you are watching. A `ResizeObserver` delivers in the rendering update that follows the layout change, so a frame is the separation that can see it and a round trip is not - the old wait spent a poll interval and still read the stale frame. Keep the comparison to the geometry and never to the property under test, or the oracle's own message becomes a timeout.
 
 **A page carrying a meta refresh makes three Playwright calls lie.** On 2026-09-02, in order: `page.goto('/evals/')` rejected with `net::ERR_ABORTED; maybe frame was detached?` because the document retired the navigation that delivered it; a locator reading that document timed out having logged the new address; and a multi-route walk reported a `requestfailed` on the destination from every case, which reads exactly like a dead link in the footer. Poll `page.url`, which is a property rather than an evaluate, and ignore a DOCUMENT request whose failure is `net::ERR_ABORTED`.
 
