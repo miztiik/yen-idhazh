@@ -92,6 +92,7 @@ from idhazh.telemetry import (
 )
 from idhazh.telemetry import (
     host,
+    silicon,
 )
 
 
@@ -110,6 +111,7 @@ STAGES: Final[tuple[str, ...]] = (
     "work",
     "record",
     "counters",
+    "fingerprint",
     "assemble",
     "harvest",
     "dedupe-ledgers",
@@ -705,6 +707,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             rss_samples_path=args.rss_samples_file,
             server_log_path=args.server_log,
             memory_peak_path=args.memory_peak_file,
+        )
+        return 0
+
+    if args.stage == "fingerprint":
+        silicon.stage_fingerprint(
+            common._load_plan(date),
+            settings=settings,
+            state_root=common.STATE_ROOT,
+            shard=args.shard,
+            job=args.job,
         )
         return 0
 

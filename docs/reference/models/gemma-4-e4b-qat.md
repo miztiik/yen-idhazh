@@ -1,6 +1,6 @@
 # Gemma-4-E4B-it-qat-UD-Q4_K_XL
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-16T12:00
 **Status: evaluated.** It has been benched and it has never served a published
 item. `evaluated` is one of three words a dossier's status line may hold -
 `evaluated`, `incumbent`, `superseded` - and this line is the only place this
@@ -152,8 +152,15 @@ correctly forbids is reading them against another run's.
 
 **The head is 6.3 percent faster, and it changes every summary.** Both halves of
 that sentence come from one paired dispatch, run `35011578538` on 2026-09-15, on
-an AMD EPYC 7763. The two configurations alternated inside that one job, so the
-machine is cancelled and the comparison holds.
+an **AMD EPYC 9V74**. The two configurations alternated inside that one job, so
+the machine is cancelled and the comparison holds.
+
+**That machine is not the one in the table above.** The prefill and decode rows
+come from the `llm` job and this comes from the `runtime` job, and the platform
+places each job separately - nine of twelve dispatches split across two different
+processors ([the processor
+lottery](../benchmarks/the-processor-lottery.md)). Which is exactly why the
+comparison had to be paired inside one job to mean anything.
 
 | Case | A whole repeat over five articles, median | Spread over 2 repeats |
 | --- | --- | --- |
