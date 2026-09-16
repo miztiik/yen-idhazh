@@ -75,9 +75,8 @@ class UiConfig(Model):
         default=True, description="The monogram beside a source name. A scanning aid, not the id."
     )
     # REMOVE THIS FLAG when the grouping's false-merge rate has been measured on a
-    # published day and the Editor has accepted it - the same measurement row 1 of
-    # TODO/20260914-29-found-once-plan.md waits on. Until then it is the revert
-    # path: one config edit puts every story back on its own card.
+    # published day and the Editor has accepted it. The condition is in the
+    # description too, because an operator reads the generated schema and not this.
     draw_same_story: bool = Field(
         default=True,
         description=(
@@ -87,7 +86,10 @@ class UiConfig(Model):
             "story is drawn on its own card and the stack is not drawn - which is exactly "
             "the page as it was before 2026-09-16. Nothing is unpublished either way: a "
             "folded story keeps its address, its archive entry and its month search entry "
-            "(docs/architecture/publishing/layout.md)."
+            "(docs/architecture/publishing/layout.md). Retire it when the grouping's "
+            "false-merge rate has been measured on a published day and the Editor has "
+            "accepted it; until then it is the revert path, and one config edit puts "
+            "every story back on its own card."
         ),
     )
     show_filter: bool = Field(

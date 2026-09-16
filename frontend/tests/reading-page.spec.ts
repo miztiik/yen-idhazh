@@ -807,9 +807,9 @@ test.describe('one card, and every publisher on it is a way in', () => {
 			watchlist_hit: false,
 			on_front_page: false,
 			rank_score,
-			// Three outlets ran it, so two of them are other outlets from the
-			// anchor's point of view. The count and the names have to agree.
-			also_covered_by: same_story_as === null ? 2 : 2,
+			// Three outlets ran it, so two of them are other outlets whichever member
+			// you stand on. The count and the names have to agree.
+			also_covered_by: 2,
 			same_story_as,
 			introduced_by_run: 1,
 			lenses: []
