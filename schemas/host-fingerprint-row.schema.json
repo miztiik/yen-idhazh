@@ -1,10 +1,13 @@
 {
   "$defs": {
     "ServerJob": {
-      "description": "Which workflow job produced a row.\n\nOurs to name, so it is a closed set. Every other identifier on a host row is\na string the machine chose and cannot be one - see\n`docs/reference/host-metrics.md`. Both values here already sit in the\ncommitted ledger; refusing anything else is what stops a typo becoming a\nthird job nobody can group by.",
+      "description": "Which workflow job produced a row.\n\nOurs to name, so it is a closed set. Every other identifier on a host row is\na string the machine chose and cannot be one - see\n`docs/reference/host-metrics.md`. Refusing anything else is what stops a typo\nbecoming a job nobody can group by.\n\nEvery value is a job's own id in its workflow file, lowercase, so a reader\ngoes from a row to the steps that wrote it with no lookup table in between.\nA display name would drift from the thing it identifies.\n\n**`visuals` is here for the rows and not for a job.** `digest.yml` ran one\nuntil 2026-09-13, when the small model, its job and its flag were retired\ntogether. Six committed counters rows still carry the value, and a member\nwith no producer left is the only thing that can read them back.",
       "enum": [
+        "plan",
         "work",
-        "visuals"
+        "assemble",
+        "visuals",
+        "runtime"
       ],
       "title": "ServerJob",
       "type": "string"
@@ -14,6 +17,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Widened `job` to every workflow job that draws its own machine.",
+      "version": "2026-09-17",
+      "why": "A run whose slowest job is unmeasured is a run whose cost nobody can attribute."
+    },
     {
       "change": "Initial shape: the silicon a job drew, its instruction set and its bandwidth.",
       "version": "2026-09-16",
@@ -135,7 +143,7 @@
     "job": {
       "$ref": "#/$defs/ServerJob",
       "default": "work",
-      "description": "The workflow job that drew this machine."
+      "description": "The workflow job that drew this machine. Every job that draws its own runner writes one row, because a run is only as fast as its slowest job."
     },
     "l3_cache_bytes": {
       "anyOf": [
@@ -264,7 +272,7 @@
       "title": "Threads"
     },
     "version": {
-      "default": "2026-09-16",
+      "default": "2026-09-17",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -331,5 +339,5 @@
   ],
   "title": "HostFingerprintRow",
   "type": "object",
-  "version": "2026-09-16"
+  "version": "2026-09-17"
 }
