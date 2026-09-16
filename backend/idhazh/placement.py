@@ -33,10 +33,22 @@ day stays the blocks in the order the runs published them, and inside a block it
 is the order this file computes. The day's best story reaching the top of the
 page is `assemble.leading_stories`' job, and it is chosen across the whole day -
 a second order over the same list, which costs a reader's memory nothing.
+
+**`freshness_multiplier` is read when the page is drawn, and the leading block
+is the only order that may read it.** A story planned at 02:20 carries the
+freshness it earned at 02:20 for the rest of the day, so by the evening run it
+holds a full bonus against something that broke an hour ago. That comparison
+only ever happens in the leading block, because that is the only order taken
+across the whole day - two blocks never compete in the stream. And the stream
+may not read a clock at all: the same day placed again at a later hour would
+come back in a different order inside a block a reader has already read, which
+is the rule above. So the curve lives here, beside the config that owns it, and
+`assemble.leading_stories` is what calls it.
 """
 
 from __future__ import annotations
 
+import math
 from collections import Counter
 from collections.abc import Container, Mapping, Sequence
 from dataclasses import dataclass
@@ -44,6 +56,45 @@ from dataclasses import dataclass
 from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.knobs.placement import PlacementConfig
 from idhazh.contracts.taxonomy import Taxonomy
+from idhazh.rank import hours_between
+
+
+def freshness_multiplier(
+    published_at: str | None, *, now: str, config: PlacementConfig
+) -> float:
+    """What a story's age does to its score, read at the moment the page is drawn.
+
+    A bell curve with a flat shoulder on the front of it. Nothing inside
+    `freshness_offset_hours` is marked down at all, and past the shoulder the
+    fall is smooth and it ends. The value runs from 1.0 down towards 0.0.
+
+    **It multiplies and it never adds.** A multiplier keeps the shape of how
+    good a story is and moves where that sits in time. A term added to the score
+    would let a fresh but worthless story outrank a strong one, which is the one
+    thing this ordering exists to refuse.
+
+    The width is derived from two numbers a person can read - at
+    `freshness_scale_hours` past the shoulder a story is worth
+    `freshness_decay_at_scale` of what it was - rather than from a variance
+    nobody can picture. Sigma squared is `-scale^2 / (2 * ln(decay))`, which is
+    the value that makes the curve pass through exactly that point.
+
+    A story we could not date scores 1.0. A multiplier is a mark-down, and
+    marking a story down for an age the payload never claimed would be a claim
+    the payload never made - the same rule `stream_order` follows for a story
+    with no score.
+    """
+    if config.freshness_decay_at_scale >= 1.0 or published_at is None:
+        return 1.0
+    past_the_shoulder = (
+        max(0.0, hours_between(now, published_at)) - config.freshness_offset_hours
+    )
+    if past_the_shoulder <= 0.0:
+        return 1.0
+    sigma_squared = -(config.freshness_scale_hours**2) / (
+        2.0 * math.log(config.freshness_decay_at_scale)
+    )
+    return math.exp(-(past_the_shoulder**2) / (2.0 * sigma_squared))
 
 
 def stream_order(items: Sequence[DigestItem]) -> list[DigestItem]:
