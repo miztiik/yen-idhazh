@@ -289,8 +289,10 @@ def stage_fingerprint(
     """Record what machine this job drew, before anything else competes for it.
 
     Runs early on purpose. The bandwidth probe needs a gigabyte and an idle
-    machine, and by the time the model server is up it has neither - so a probe
-    taken at the end of a job would measure the server rather than the host.
+    machine, and a job that has already started its heaviest step has neither -
+    the model server in `work`, the embeddings and the site build in `assemble`.
+    A probe taken at the end of a job would measure that step rather than the
+    host.
     """
     knobs = settings.app.observability
     if not knobs.host_fingerprint:

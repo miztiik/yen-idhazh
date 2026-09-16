@@ -1,9 +1,9 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-17
 
 Every column of the host fingerprint, what it means, and what it is for. One row
-a job, written once at job start.
+a job, written once at job start, by every job that draws its own runner.
 
 Read this when a number surprises you and you want to know which machine
 produced it. Why the record exists at all, and what the fleet does to a reading,
@@ -15,12 +15,22 @@ is [the processor lottery](benchmarks/the-processor-lottery.md).
 | --- | --- |
 | Contract | [`backend/idhazh/contracts/host_fingerprint.py`](../../backend/idhazh/contracts/host_fingerprint.py) |
 | Generated schema | [`schemas/host-fingerprint-row.schema.json`](../../schemas/host-fingerprint-row.schema.json) |
-| Store | `state/host-fingerprint/<YYYY>/<MM>/<DD>.csv` |
+| Store | `state/host-fingerprint/<YYYY>/<MM>/<DD>.csv` for the daily run; `state/pipeline-tests/host-fingerprint/<YYYY>/<MM>/<DD>.csv` for a bench dispatch |
 | Producer | `idhazh fingerprint`, through `backend/idhazh/telemetry/silicon.py` |
 | Key | `date`, `run_id`, `job`, `shard` - one row a job |
 | Switch | `observability.host_fingerprint` |
-| Committed | **from 2026-09-16.** The work job's commit step stages `state/host-fingerprint`; every row taken before that date was deleted with its runner |
+| Committed | **from 2026-09-16.** Each job's own commit step stages its ledger; every row taken before that date was deleted with its runner |
 | Published to a reader | **no.** Operator surface only |
+
+**Every job of `digest.yml` writes a row, from 2026-09-17.** `plan`, `work` and
+`assemble` each draw their own runner, so a run that measured one of them could
+not say what the other two cost. The `work` shards had the record from the start
+because they hold the model server; the two jobs either side of them spent time
+nobody could attribute to a processor.
+
+**A bench dispatch writes into a tree of its own.** `measure.yml` redirects its
+whole state root with `run.trial_state_dirname`, so its rows land under
+`state/pipeline-tests/`. The reason is in the design rationale below.
 
 **It is finer grained than `state/runtime-counters.csv` and it is partitioned
 differently on purpose.** The counters file is one flat file the console reads
@@ -41,7 +51,7 @@ already holds, and a second copy is a thing that can disagree.
 | `version` | date stamp | The schema generation this row was written under |
 | `date` | `YYYY-MM-DD` | The run's date |
 | `run_id` | run id | The run |
-| `job` | **enum**: `work`, `visuals` | Which workflow job drew this machine |
+| `job` | **enum**: `plan`, `work`, `assemble`, `visuals`, `runtime` | Which workflow job drew this machine |
 | `shard` | int, 0+ | The shard inside that job. A single-shard job writes 0 |
 | `fingerprint` | 16 hex characters | A digest over the cells that cannot change inside a job |
 
@@ -52,6 +62,13 @@ machines, so including them would give every job its own value and the column
 would count nothing. Two draws of one kind of machine carry one id, which is what
 lets a query ask "how often do we get this machine" without matching model-name
 strings by hand.
+
+**Every value of `job` is that job's own id in its workflow file, lowercase.** A
+reader goes from a row to the steps that wrote it with nothing in between, and a
+display name would drift from the thing it identifies. `visuals` is the one value
+with no producer left: `digest.yml` ran that job until 2026-09-13, and the member
+stays so the rows it wrote still read back. `runtime` is `measure.yml`'s bench
+job, and its rows are in the other store.
 
 ## What the processor is
 
@@ -96,7 +113,7 @@ vocabulary lives in the contract rather than in the schema.
 | Column | Type | What it is | What it is for |
 | --- | --- | --- | --- |
 | `mhz_max` | float? | `CPU max MHz` | The ceiling the host publishes, where it publishes one |
-| `mhz_at_probe` | float? | Mean `cpu MHz` across processors at probe time | **Not a reading under load.** The probe runs before the model server, so this says what the machine idles at |
+| `mhz_at_probe` | float? | Mean `cpu MHz` across processors at probe time | **Not a reading under load.** The probe runs before the job's heaviest step, so this says what the machine idles at |
 | `boot_seconds` | float? | Uptime when the probe ran | A small number is a freshly started machine; a large one was pooled and handed to us |
 | `memcpy_gib_s` | float? | Large-block copy rate, bytes read plus written | **Decode is bandwidth bound and this is the only bandwidth reading anywhere** |
 | `memcpy_probe_mib` | int? | The buffer each side of the copy used | Says whether `memcpy_gib_s` measured memory or cache |
@@ -157,6 +174,31 @@ closed set and has to open the contract.
 
 ## Design rationale
 
+**Record every job, not a subset.** A run is only as fast as its slowest job, so
+a run whose slowest job is unmeasured is a run whose cost nobody can attribute.
+Until 2026-09-17 only the `work` shards wrote a row, because the probe was built
+for the model server - and the two jobs either side of them, one of which builds
+the whole site, spent time no processor could be named for. Every job that does
+real work now runs the probe, and each job's own commit step stages the row it
+wrote. Owner ruling, 2026-09-16.
+
+The placement rule travels with it. The probe wants about a gigabyte and an idle
+machine, so it runs before the job's heaviest step - ahead of the model server in
+`work`, ahead of the embeddings and the site build in `assemble` - and after the
+plan file exists in every job, because the row is filed under the run's own id.
+
+**A bench dispatch writes under `state/pipeline-tests/`, not beside the
+production rows.** A bench is dispatched ad hoc, many times a day, against
+branches nobody merged. Mixing those rows into the ledger the console reads would
+mean every panel filtering by job for ever - a cost paid on every read, by every
+reader, to keep a few dispatches apart. The split pays it once instead. What it
+costs is a join whenever somebody asks what machines GitHub has given us across
+both, and that is a question asked rarely and by an operator. The mechanism is
+the one that already existed: `run.trial_state_dirname` moves the whole state
+root for a run, so one input on the candidate-config action puts every ledger
+that run writes under the trial tree, and no second way of doing the same thing
+was minted. Owner decision, 2026-09-16.
+
 **Nothing staged this ledger until 2026-09-16, so there is no history to query
 before that date.** The probe ran on every work shard, wrote its row into the
 runner's own checkout, and no commit step named the path - so the file went with
@@ -174,10 +216,12 @@ already compares the ledgers a stage writes against the paths its job stages, an
 it reads `stages/work.py`. The probe is not there - it runs from `cli.py` as its
 own subcommand, early, because the bandwidth reading wants an idle host. So the
 guard was correct and blind at the same time. A second guard now reads
-`telemetry/silicon.py` the same way. **Scoping a drift guard to a file rather
-than to a question is what let a second writer through**, and the two guards are
-kept as two rather than merged, because each names the source it protects in the
-message it fails with.
+`telemetry/silicon.py` the same way, and since 2026-09-17 it reads the workflow
+too: it asks which jobs run the probe and checks each one's staged list, so a
+fourth job that records a machine and commits nothing fails there. **Scoping a
+drift guard to a file rather than to a question is what let a second writer
+through**, and the two guards are kept as two rather than merged, because each
+names the source it protects in the message it fails with.
 
 **A repeated row now settles, and it could not have before.** `ledger.keyed_paths`
 is the registry the post-merge pass walks, and this ledger was not in it - which
