@@ -55,7 +55,7 @@ what the story is about. Null is unknown, never "no second desk".
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Literal, Self
+from typing import Any, ClassVar, Final, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -247,6 +247,32 @@ class DigestLead(Model):
     )
 
 
+#: How many earlier tellings one story may name. A shape rather than a tuning,
+#: for the same reason `COVERAGE_NAMES_MAX` is: the names ride to every reader on
+#: every matched story, so the number decides what the payload weighs, and a file
+#: written under one cap has to stay readable under another. Three is what the
+#: card's stack can print beside the same-day names it already carries.
+EARLIER_OUTLETS_MAX: Final = 3
+
+
+class EarlierStory(Model):
+    """One outlet that ran this same story on an earlier published day.
+
+    It is a way in and never a fold. The card prints the masthead as one more
+    name in its `Also covered by` stack, and the link goes to our page for that
+    day - our summary of that telling, and its own way out to the original.
+
+    Its three fields are what a pill needs and nothing else. The masthead is
+    carried rather than looked up because the projector that writes a day's file
+    can only see that day, so a name it would have to fetch from another day is
+    a name it would silently drop.
+    """
+
+    date: DateStamp = Field(description="The published day that holds it, always before this one.")
+    item_id: ItemId = Field(description="That day's story, which still has its own address.")
+    source_name: str = Field(min_length=1, description="The masthead, as the card prints it.")
+
+
 class DigestItem(Model):
     """One item as a reader consumes it. The link is a first-class element, not a footnote."""
 
@@ -368,7 +394,22 @@ class DigestItem(Model):
             "The item the default view keeps for this story. Null on the item that is "
             "kept and on an item nothing grouped with. Nothing is unpublished: a "
             "collapsed item keeps its place in this list, its anchor and its archive "
-            "entry."
+            "entry. **This day's own items only** - a story that also ran on an "
+            "earlier day is in `also_ran_earlier`, because folding today's page onto "
+            "a card that is not on it would leave a reader with nothing to open."
+        ),
+    )
+    also_ran_earlier: tuple[EarlierStory, ...] = Field(
+        default=(),
+        max_length=EARLIER_OUTLETS_MAX,
+        description=(
+            "The outlets that ran this same story on an earlier published day, "
+            "strongest first. Empty on every payload written before 2026-09-16 and on "
+            "every story nothing earlier matched, and the two read the same: no "
+            "earlier telling was found. It is ADDITIVE and folds nothing - today's "
+            "story keeps its card and its place, and each entry becomes one more name "
+            "in the card's `Also covered by` stack, linking to that day's page. "
+            "Recorded on the NEWER story only, so a published day is never rewritten."
         ),
     )
     introduced_by_run: int = Field(
@@ -434,6 +475,11 @@ class DigestItem(Model):
             raise ValueError("an item cannot be the same story as itself")
         if self.same_story_as is not None and self.also_covered_by is None:
             raise ValueError("an item the view collapses knows how many sources covered it")
+        seen = {entry.item_id for entry in self.also_ran_earlier}
+        if self.item_id in seen:
+            raise ValueError("an item cannot have run earlier as itself")
+        if len(seen) != len(self.also_ran_earlier):
+            raise ValueError("an earlier telling is named once")
         return self
 
 
@@ -467,6 +513,11 @@ class DigestDay(Contract):
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-16T17:00",
+            change="Added DigestItem.same_story_on - which day holds the item it collapses onto.",
+            why="A story can now be the same story as one from yesterday; absent means today.",
+        ),
+        ChangelogEntry(
             version="2026-09-13T22:30",
             change="Retired DigestVisual.path, which named the committed drawing.",
             why="The reader's browser draws the chart now, so no SVG is written.",
@@ -480,11 +531,6 @@ class DigestDay(Contract):
             version="2026-09-13",
             change="Added DigestItem.secondary_desk - the one other desk a story has a claim to.",
             why="The desk ceiling sends an over-ceiling story to a second desk, unnamed.",
-        ),
-        ChangelogEntry(
-            version="2026-09-12T18:40",
-            change="item_id accepts a second shape: sixteen Crockford base32 symbols.",
-            why="Ten decimal digits is 33 bits of an address, which collides on a busy day.",
         ),
         ChangelogEntry(
             version="2026-08-21",
@@ -593,9 +639,20 @@ class DigestDay(Contract):
         the strongest of the three drawing a count that came from somewhere
         else, and the reader with no way back to either. The pass builds a
         keeper and its members; this is the shape that says so.
+
+        An earlier telling is not a collapse and is not checked here. It names a
+        day this payload cannot see, so what this rule can still say about one is
+        the part that is checkable: the day it names is genuinely earlier, so a
+        day can never point forward at one that has not been published.
         """
         kept = {item.item_id for item in self.items if item.same_story_as is None}
         for item in self.items:
+            for entry in item.also_ran_earlier:
+                if entry.date >= self.date:
+                    raise ValueError(
+                        f"item {item.item_id} says it also ran on {entry.date}, "
+                        "which is not an earlier day than this one"
+                    )
             target = item.same_story_as
             if target is None:
                 continue

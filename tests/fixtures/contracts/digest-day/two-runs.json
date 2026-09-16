@@ -5,6 +5,7 @@
   "items": [
     {
       "also_covered_by": null,
+      "also_ran_earlier": [],
       "band": "high",
       "band_reason": null,
       "carried_by": null,
@@ -53,6 +54,7 @@
     },
     {
       "also_covered_by": null,
+      "also_ran_earlier": [],
       "band": "medium",
       "band_reason": null,
       "carried_by": null,
@@ -95,6 +97,7 @@
     },
     {
       "also_covered_by": null,
+      "also_ran_earlier": [],
       "band": "high",
       "band_reason": null,
       "carried_by": null,
