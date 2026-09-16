@@ -486,11 +486,25 @@ def stage_work(
             )
             summarize_ms = int((time.monotonic() - model_started) * 1000)
             # What the stage spent NOT being served: the window check, the
-            # prompt render, the parse, the element anchoring and the draw. The
-            # two calls report their own prefill and decode, so anything left is
-            # this process rather than the server, and a regression in one looks
-            # nothing like a regression in the other.
-            served = _ms(recorder.get("label_ms")) + _ms(recorder.get("summary_ms"))
+            # prompt render, the parse, the element anchoring and the draw,
+            # plus the transport around each request. The server's own two
+            # clocks are what it claims for itself, so anything left is not the
+            # decoder, and a regression in one looks nothing like a regression
+            # in the other.
+            #
+            # The four slot cells and not `label_ms` plus `summary_ms`: those
+            # two became our stopwatch around each request on 2026-09-16, and
+            # subtracting them would leave this cell holding local work alone
+            # under a name that says model wait.
+            served = sum(
+                _ms(recorder.get(cell))
+                for cell in (
+                    "label_prefill_ms",
+                    "label_decode_ms",
+                    "summary_prefill_ms",
+                    "summary_decode_ms",
+                )
+            )
             recorder.note(
                 summarize_ms=summarize_ms, model_wait_ms=max(summarize_ms - served, 0)
             )

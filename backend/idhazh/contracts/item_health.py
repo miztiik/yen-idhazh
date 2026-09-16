@@ -337,6 +337,11 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-16",
+            change="label_ms and summary_ms are a stopwatch; both finish reasons may be null.",
+            why="A clock that was its two neighbours summed could not see a wait.",
+        ),
+        ChangelogEntry(
             version="2026-09-15T22:50",
             change="time_source is typed TimeSource rather than a lowercase token.",
             why="A closed set the pipeline mints is one a producer selects from, never spells.",
@@ -350,11 +355,6 @@ class ItemHealthRow(Contract):
             version="2026-09-15T20:00",
             change="failure_code may now carry model_refused.",
             why="model_unreachable was doing two jobs.",
-        ),
-        ChangelogEntry(
-            version="2026-09-15T19:40",
-            change="Three columns keep their names and change what they mean.",
-            why="Queue wait now sits outside the item total rather than inside it.",
         ),
         ChangelogEntry(
             version="2026-08-23",
@@ -619,12 +619,18 @@ class ItemHealthRow(Contract):
         default=None, ge=0, description="Total wall time spent inside retries and their backoff."
     )
     label_ms: int | None = Field(
-        default=None, ge=0, description="Wall time of the label call, prefill and decode together."
+        default=None,
+        ge=0,
+        description=(
+            "Wall time of the label call: our own stopwatch around the request, so the "
+            "wait is inside it. Subtract label_prefill_ms and label_decode_ms to get "
+            "what the server did not claim for itself - transport, and any queue."
+        ),
     )
     summary_ms: int | None = Field(
         default=None,
         ge=0,
-        description="Wall time of the summarize-and-plan call, prefill and decode together.",
+        description="Wall time of the summarize-and-plan call, on the same stopwatch.",
     )
     visual_plan_ms: int | None = Field(
         default=None,
@@ -747,11 +753,12 @@ class ItemHealthRow(Contract):
             "and whatever else the runtime mints. A token and not an enum: the "
             "vocabulary belongs to llama-server rather than to this project, and a "
             "row that could not be written because the runtime added a reason would "
-            "lose the whole item over a label."
+            "lose the whole item over a label. Null where the reply named no reason "
+            "at all, which is not the same fact as a clean stop."
         ),
     )
     summary_finish_reason: Token | None = Field(
-        default=None, description="Why the summarize-and-plan decode stopped."
+        default=None, description="Why the summarize-and-plan decode stopped, on the same terms."
     )
     recovered: bool | None = Field(
         default=None,
