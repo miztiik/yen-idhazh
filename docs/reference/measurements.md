@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-16
 Every number this project's design rests on, with the date it was taken and the
 spread. Guardrail #10 in one page: **an unmeasured number is labelled an estimate and
 may not be used to justify a design.**
@@ -1141,6 +1141,39 @@ for every row for ever. The reasoning sits beside `migrate_header` in
 A first pass without warm-up read the same operation at 107.66 us and 74.81 us
 inside one process, 44 percent apart. That spread was the shared box and cold
 caches, not the code. Quote 42.85.
+
+## What one host sample costs an item, 2026-09-16
+
+Taken to settle whether reading the machine around every item is affordable at
+80 items a run on a 4 vCPU runner. **12th Gen Intel Core i7-1265U, Windows,
+NTFS, Python 3.14.2**, 2,000 repeats after 200 warm-up discarded, three passes.
+A developer machine is an order-of-magnitude check and never a runner reading -
+and here it is the pessimistic side, because an NTFS `open()` does real file
+system work where a `/proc` read is a kernel-generated pseudo-file.
+
+| Call | Opens | Median | p95 | Spread |
+| --- | ---: | ---: | ---: | ---: |
+| `read_now` - one instant | 4 | 0.66 to 0.82 ms | 0.95 to 2.31 ms | 0.22 to 0.59 |
+| `host_facts` - what the machine is | 2 | 0.49 to 0.62 ms | 0.74 to 0.99 ms | 0.19 to 0.33 |
+| one item, watch open to close | 9 | 2.84 to 3.27 ms | 4.38 to 4.64 ms | 0.82 to 1.12 |
+
+**One sample is 0.7 ms and a whole item is 3.0 ms, against a median 475,890 ms
+item - six ten-thousandths of one percent.** At 80 items that is 0.24 seconds of
+a work job bounded at 330 minutes. Nothing here binds, and the row that added the
+readings did not need a cheaper shape.
+
+**One thing measured here did change the design.** A first cut had
+`Watch.close()` take a whole `host_facts` reading per item, which re-read
+`/proc/cpuinfo` for a processor name that cannot change inside a shard. Dropping
+that one open took the per-item median from 3.27 to 3.00 ms and the p95 from
+6.07 to 4.54 ms - a 25 percent cut at the tail for a cell nobody lost. The watch
+now reads only the kernel peak, which is the one reading that does move.
+
+What this cannot settle: the cost on a GitHub-hosted runner, which has not been
+measured. The sign of the difference is knowable without measuring it - `/proc`
+and `/sys` reads do no disk work - so the runner figure is bounded above by this
+one, and a reading three orders of magnitude under the thing it measures does
+not need a second instrument.
 
 ## What compressing the telemetry takes, against re-encoding it, 2026-09-15
 

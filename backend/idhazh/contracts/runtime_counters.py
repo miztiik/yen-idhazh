@@ -184,11 +184,6 @@ _RSS_PEAK_COLUMN: Final = "llama_vmhwm_kb"
 #: the figure was a LOWER bound on what python held.
 _PYTHON_RSS_PEAK_COLUMN: Final = "python_vmhwm_kb"
 
-#: How the shard job writes the kernel's own peak, and the word it writes instead
-#: of a number when the file is not there - which is what a GitHub-hosted runner
-#: has measured every time this project has looked.
-_CGROUP_PEAK_KEY: Final = "cgroup_memory_peak_bytes"
-
 #: The two lines llama-server brackets its own model load with, on llama.cpp
 #: `b10598`. Read from a real capture. A rename leaves the cell empty, which
 #: reads as unknown - never as a load that took no time.
@@ -461,7 +456,7 @@ class RuntimeCountersRow(Contract):
         cpu_stat_at_end: str | None = None,
         rss_samples: str | None = None,
         server_log: str | None = None,
-        memory_peak: str | None = None,
+        cgroup_peak_bytes: int | None = None,
     ) -> Self:
         """Read one row out of a `GET /metrics` body and the host readings beside it.
 
@@ -481,12 +476,16 @@ class RuntimeCountersRow(Contract):
         cell existed, so a caller written against the older signature still
         produces the row it always produced.
 
-        The last four arguments are raw text the host printed, not numbers a
+        The last three arguments are raw text the host printed, not numbers a
         caller worked out: the `cpu` line of `/proc/stat` at each end of the job,
-        the memory sampler's whole file, llama-server's own log, and the one line
-        the job wrote out of the kernel's peak file. Every derivation happens
-        here, so the arithmetic behind six cells is in one testable place rather
-        than spread across a shell script.
+        the memory sampler's whole file, and llama-server's own log. Every
+        derivation happens here, so the arithmetic behind five cells is in one
+        testable place rather than spread across a shell script.
+
+        `cgroup_peak_bytes` arrives as a number instead, because the kernel's
+        peak file has two readers - this row and the item row - and one of them
+        has to be the only one that parses it. `telemetry.host` is that reader
+        (plan 32 row 9).
         """
         values: dict[str, Any] = {}
         for line in text.splitlines():
@@ -513,7 +512,7 @@ class RuntimeCountersRow(Contract):
                 "model_load_ms": _model_load_ms(server_log),
                 "n_ctx_configured": _n_ctx_configured(server_log),
                 "python_peak_rss_bytes": _peak_bytes(rss_samples, _PYTHON_RSS_PEAK_COLUMN),
-                "cgroup_peak_bytes": _cgroup_peak_bytes(memory_peak),
+                "cgroup_peak_bytes": cgroup_peak_bytes,
                 **values,
             }
         )
@@ -528,11 +527,11 @@ def cpu_ticks(text: str | None) -> dict[str, int] | None:
     is absent rather than a zero reading.
 
     **Public because the work stage reads the same file per item.** The shard
-    grain cannot attribute a slow item to a noisy neighbour, so `idhazh.machine`
-    takes the same two readings around one item - and a second copy of this
-    parsing would be a second thing to keep in step (Guardrail #5). Nothing
-    below `contracts/` is imported to do it: this stays a pure function over
-    text the caller opened.
+    grain cannot attribute a slow item to a noisy neighbour, so
+    `idhazh.telemetry.host` takes the same two readings around one item - and a
+    second copy of this parsing would be a second thing to keep in step
+    (Guardrail #5). Nothing below `contracts/` is imported to do it: this stays a
+    pure function over text the caller opened.
     """
     if not text:
         return None
@@ -599,23 +598,6 @@ def _peak_bytes(text: str | None, column: str) -> int | None:
         if len(cells) > index and cells[index].strip().isdigit()
     ]
     return max(peaks) * 1024 if peaks else None
-
-
-def _cgroup_peak_bytes(text: str | None) -> int | None:
-    """The number the shard job read out of the kernel's own peak file.
-
-    The job writes one `<key>=<value>` line and writes the word `unavailable`
-    when the kernel file is not there, which is what a GitHub-hosted runner has
-    measured every time. Any value that is not a plain count leaves the cell
-    empty, and empty reads as unknown.
-    """
-    if not text:
-        return None
-    for line in text.splitlines():
-        key, found, raw = line.strip().partition("=")
-        if found and key.strip() == _CGROUP_PEAK_KEY and raw.strip().isdigit():
-            return int(raw.strip())
-    return None
 
 
 def _log_microseconds(line: str) -> int | None:

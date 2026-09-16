@@ -1,6 +1,6 @@
 # Item Health Columns
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-16
 
 Where each of item health's 113 columns comes from: which module puts a value
 under the name, whether that value reaches the ledger row, and whether any
@@ -212,16 +212,16 @@ Whether a slower row was a slower runner. A throughput with no machine beside it
 
 | Column | Type | Computed in | Reaches the row | In the archive |
 | --- | --- | --- | --- | --- |
-| `cpu_model` | str | `backend/idhazh/stages/work.py` | - | no |
-| `runner_name` | str | `backend/idhazh/stages/work.py` | - | no |
-| `cpu_busy_pct` | float | `backend/idhazh/machine.py` | - | no |
-| `cpu_busy_max` | float | `backend/idhazh/machine.py` | - | no |
-| `cpu_busy_min` | float | `backend/idhazh/machine.py` | - | no |
-| `load_1m` | float | `backend/idhazh/machine.py` | - | no |
-| `llama_rss_bytes` | int | `backend/idhazh/machine.py` | - | no |
-| `llama_rss_peak_bytes` | int | `backend/idhazh/machine.py` | - | no |
-| `python_rss_bytes` | int | `backend/idhazh/machine.py` | - | no |
-| `cgroup_peak_bytes` | int | `backend/idhazh/machine.py` | - | no |
+| `cpu_model` | str | `backend/idhazh/telemetry/host.py`, `backend/idhazh/stages/work.py` | - | no |
+| `runner_name` | str | `backend/idhazh/telemetry/host.py`, `backend/idhazh/stages/work.py` | - | no |
+| `cpu_busy_pct` | float | `backend/idhazh/telemetry/host.py` | - | no |
+| `cpu_busy_max` | float | `backend/idhazh/telemetry/host.py` | - | no |
+| `cpu_busy_min` | float | `backend/idhazh/telemetry/host.py` | - | no |
+| `load_1m` | float | `backend/idhazh/telemetry/host.py` | - | no |
+| `llama_rss_bytes` | int | `backend/idhazh/telemetry/host.py` | - | no |
+| `llama_rss_peak_bytes` | int | `backend/idhazh/telemetry/host.py` | - | no |
+| `python_rss_bytes` | int | `backend/idhazh/telemetry/host.py` | - | no |
+| `cgroup_peak_bytes` | int | `backend/idhazh/telemetry/host.py` | - | no |
 | `slot_id` | int | - | - | no |
 | `kv_tokens_at_start` | int | - | - | no |
 | `prefix_shared_with_previous` | bool | - | - | no |

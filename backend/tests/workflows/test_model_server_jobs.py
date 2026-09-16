@@ -15,6 +15,7 @@ from pydantic import ValidationError
 from idhazh import ledger
 from idhazh.contracts import runtime_counters
 from idhazh.llm.server import DEFAULT_ENDPOINT, DEFAULT_PORT
+from idhazh.telemetry import host
 
 from ._harness import (
     ARGV_MODULE_CALL,
@@ -274,7 +275,7 @@ def test_the_kernel_peak_is_written_before_the_row_that_reads_it() -> None:
     # Guarded, because no GitHub-hosted runner this project has measured has the
     # file. An unguarded read fails the step and costs the shard its whole row.
     assert f"[ -f {CGROUP_PEAK_PATH} ]" in counters, f"{COUNTERS_STEP} must guard the cgroup read"
-    assert runtime_counters._CGROUP_PEAK_KEY in counters, "the row parses the key this step writes"
+    assert host.CGROUP_PEAK_KEY in counters, "the sampler parses the key this step writes"
 
     # The other two files the row reads are ones this job wrote.
     assert f"--rss-samples-file {RSS_SAMPLE_FILE}" in counters

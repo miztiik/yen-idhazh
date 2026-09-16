@@ -69,7 +69,6 @@ from idhazh.stages import (
 from idhazh.stages import (
     backfill_vectors,
     common,
-    counters,
     decide,
     dedupe_ledgers,
     harvest,
@@ -90,6 +89,9 @@ from idhazh.stages import (
 )
 from idhazh.telemetry import (
     cli as telemetry_cli,
+)
+from idhazh.telemetry import (
+    host,
 )
 
 
@@ -352,9 +354,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--cpu-model",
         default="",
         help=(
-            "The host's /proc/cpuinfo `model name` line. `ubuntu-latest` names the "
-            "runner image, not the processor, and this project has measured a 3.1x "
-            "throughput swing between hosts."
+            "The host's /proc/cpuinfo `model name` line, read before the checkout exists. "
+            "`ubuntu-latest` names the runner image, not the processor, and this project "
+            "has measured a 3.1x throughput swing between hosts. Empty and the stage reads "
+            "the same file itself."
         ),
     )
     parser.add_argument(
@@ -688,14 +691,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.stage == "counters":
-        counters.stage_counters(
+        host.stage_counters(
             common._load_plan(date),
+            state_root=common.STATE_ROOT,
             metrics_path=args.counters_file,
             shard=args.shard,
             shards=args.shards,
             job=args.job,
             job_started_at=int(args.job_started_at) if args.job_started_at else None,
-            cpu_model=args.cpu_model,
+            cpu_model_reported=args.cpu_model,
             cpu_stat_at_start=args.cpu_stat_at_start,
             cpu_stat_at_end=args.cpu_stat_at_end,
             rss_samples_path=args.rss_samples_file,

@@ -27,10 +27,10 @@ from idhazh.fetch import FetchResult
 from idhazh.stages import common
 from idhazh.stages.assemble import _published_rows, stage_assemble
 from idhazh.stages.common import _item_payloads, _load_manifest, shard_of
-from idhazh.stages.counters import stage_counters
 from idhazh.stages.plan import _next_run_n, stage_plan
 from idhazh.stages.record import stage_record
 from idhazh.stages.work import stage_work
+from idhazh.telemetry.host import stage_counters
 
 from ._builders import (
     FULL_TEXT,
@@ -653,7 +653,9 @@ def test_a_shard_commits_what_its_model_server_counted(
     isolate_ledgers(tmp_path, monkeypatch)
     capture = FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-3.prom"
 
-    row = stage_counters(run_plan, metrics_path=capture, shard=0, shards=1)
+    row = stage_counters(
+        run_plan, state_root=common.STATE_ROOT, metrics_path=capture, shard=0, shards=1
+    )
 
     assert row.prompt_tokens_total == 23411
     assert row.prompt_seconds_total == 2128.08
@@ -676,7 +678,9 @@ def test_a_shard_whose_server_died_still_files_a_row(
     run_plan = plan()
     isolate_ledgers(tmp_path, monkeypatch)
 
-    row = stage_counters(run_plan, metrics_path=tmp_path / "never-written.prom")
+    row = stage_counters(
+        run_plan, state_root=common.STATE_ROOT, metrics_path=tmp_path / "never-written.prom"
+    )
 
     assert row.prompt_tokens_total is None
     assert row.run_id == run_plan.run_id
@@ -711,7 +715,9 @@ def test_the_two_ledgers_agree_about_which_shards_ran(
             model_endpoint=closed_loopback_endpoint(),
         )
         stage_record(run_plan, settings=settings, shard=shard, shards=2)
-        stage_counters(run_plan, metrics_path=capture, shard=shard, shards=2)
+        stage_counters(
+            run_plan, state_root=common.STATE_ROOT, metrics_path=capture, shard=shard, shards=2
+        )
 
     rows = health_rows(state, run_plan.date)
     counted = ledger.load_runtime_counters(state, run_id=run_plan.run_id)
