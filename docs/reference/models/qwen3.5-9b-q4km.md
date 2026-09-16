@@ -1,6 +1,6 @@
 # Qwen3.5-9B-Q4_K_M
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-16
 **Status: incumbent.** It has summarized every published item since 2026-08-27.
 `incumbent` is one of three words a dossier's status line may hold - `evaluated`,
 `incumbent`, `superseded` - and this line is the only place this model's
@@ -10,6 +10,13 @@ One model, one page. Every figure below is a reading of **these weights**, it is
 the only reading of that quantity in force, and it carries the hardware that took
 it, the date and the spread. Nothing here was re-derived and nothing was rounded:
 each figure is the one the instrument log recorded, moved rather than restated.
+
+**Where a quantity depends on which runner GitHub gave the job, the reading in
+force is the spread across machines rather than one number.** That is still one
+reading of one quantity - the quantity is what these weights do on the fleet we
+actually get, and a single figure would answer a question nobody can ask, since
+nothing selects the machine ([the processor
+lottery](../benchmarks/the-processor-lottery.md), owner ruling 2026-09-15).
 
 **A reading taken against other weights is not on this page at all.** A token
 count, a prefill rate and a decode rate all belong to a tokenizer and an
@@ -118,22 +125,34 @@ to replace.
 
 ## Prefill and decode
 
-**Measured 2026-08-23** on a GitHub-hosted `ubuntu-latest`, AMD EPYC 9V74
-80-Core, 4 threads, llama.cpp `b10598` (`56db501e7`), 3 repeats, with
-`llama-bench -m <model> -p 730,1800,4850 -n 250 -t 4`. The three prompt lengths
-are what a short, a medium and a long article produce.
+llama.cpp `b10598` (`56db501e7`), 4 threads, 3 repeats, with `llama-bench -m
+<model> -p 730,1800,4850 -n 250 -t 4`. The three prompt lengths are what a short,
+a medium and a long article produce.
 
-| Quantity | Reading, tokens a second |
-| --- | --- |
-| Prefill, 730-token prompt | 10.14 +/- 0.01 |
-| Prefill, 1,800-token prompt | 10.06 +/- 0.01 |
-| Prefill, 4,850-token prompt | 9.84 +/- 0.01 |
-| Decode, 250 tokens | **6.01 +/- 0.11** |
+**The reading is the spread across machines, not one number.** These weights have
+landed on three processors; every draw is below with the machine that took it
+(owner ruling, 2026-09-15). What the fleet does to a number is [the processor
+lottery](../benchmarks/the-processor-lottery.md).
 
-**Prefill fell 3.0 percent from 730 to 4,850 tokens** inside that one run, so the
-rate barely moves with prompt length - a long article costs about as much a token
-to read as a short one. Reading is faster than writing on these weights at every
-measured length.
+| Processor | Draw | Prefill, 730 | Prefill, 1,800 | Prefill, 4,850 | Decode, 250 |
+| --- | --- | --- | --- | --- | --- |
+| AMD EPYC 7763 64-Core | `35011568497`, 2026-09-15 | 10.047 +/- 0.006 | 9.974 +/- 0.001 | 9.789 +/- 0.002 | 5.985 +/- 0.028 |
+| AMD EPYC 9V74 80-Core | 2026-08-23 | 10.14 +/- 0.01 | 10.06 +/- 0.01 | 9.84 +/- 0.01 | 6.01 +/- 0.11 |
+| Intel Xeon Platinum 8573C | `34812096911`, 2026-09-14 | 39.653 +/- 0.371 | 38.648 +/- 0.266 | 36.279 +/- 0.299 | 3.906 +/- 0.019 |
+
+All figures are tokens a second.
+
+**The Xeon reads this model 3.9 times faster than the EPYC 7763 and writes it 35
+percent slower.** That is the single most useful row on this page, because it
+kills the idea of a fast runner: prefill is limited by how fast the cores
+multiply and decode by how fast the machine streams weights out of memory, and a
+machine can be good at one and poor at the other. **Our pipeline spends most of
+its time in decode**, so a dispatch that lands on the Xeon finishes a day's
+digest later despite reading four times faster.
+
+**Prefill fell 3.0 percent from 730 to 4,850 tokens** inside the 2026-08-23 run,
+so the rate barely moves with prompt length - a long article costs about as much
+a token to read as a short one.
 
 **The live digest path corroborates the 4,850-token row** over 4,117 real items
 across nine days, which is the strongest corroboration on this page
@@ -262,11 +281,11 @@ weights, is on the instrument log
 
 ## The records behind this page
 
-Three benchmark records were taken against these weights. Each is one question
-with one answer, and a re-run replaces its page rather than adding a second one.
-
+Four benchmark records touch these weights. Each is one question with one answer,
+and a re-run replaces its page rather than adding a second one.
 | Record | What it settles |
 | --- | --- |
+| [What processor a run draws, and what it does to a reading](../benchmarks/the-processor-lottery.md) | every prefill and decode draw across the fleet, and why two models may not be compared across two runs |
 | [Moving the instructions in front of the article](../benchmarks/instructions-in-front.md) | what a prefix cache can reach once the summarize-and-plan call's question sits ahead of the article |
 | [Where the summarize-and-plan call's re-read tokens go](../benchmarks/two-call-re-read.md) | how much of the summarize-and-plan call's prompt the server answers from cache |
 | [What the two calls cost at the truncation cap](../benchmarks/two-call-window-sizing.md) | what both calls cost at a cap-length article, and the memory reading at three windows |
