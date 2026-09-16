@@ -8,9 +8,10 @@ from pathlib import Path
 import pytest
 from conftest import CONFIG_DIR
 
-from idhazh import config, itemrecord
+from idhazh import config
 from idhazh.contracts.article import Article
 from idhazh.stages.work import _FetchedWorkItem, _summarize_band_sort_key
+from idhazh.telemetry.record import Flags, ItemRecorder
 
 from ._builders import (
     article,
@@ -29,11 +30,11 @@ def test_work_items_sort_by_summarize_band_and_keep_in_band_order() -> None:
         # has to agree with the prompt it is grouping.
         return base.model_copy(update={"word_count": words, "source_word_count": words})
 
-    def quiet() -> itemrecord.ItemRecorder:
+    def quiet() -> ItemRecorder:
         """A recorder the sort never reads. It travels with the item, so it has to exist."""
-        return itemrecord.ItemRecorder(
+        return ItemRecorder(
             run_id="r",
-            flags=itemrecord.Flags(item_lines=False, stage_lines=False),
+            flags=Flags(item_lines=False, stage_lines=False),
             now=lambda: "2026-09-15T00:00:00Z",
             log=logging.getLogger("test"),
         )

@@ -37,7 +37,7 @@ from typing import Annotated, Final, NamedTuple, get_args, get_origin
 
 from idhazh import day_partition
 from idhazh.contracts.item_health import RETIRED_CELLS, ItemHealthRow
-from idhazh.itemrecord import ItemRecorder
+from idhazh.telemetry.record import ItemRecorder
 
 #: The tree a column's value can be computed in. `backend/utilities/` is not on
 #: it: a script that prints a number is not a producer of a census row.
