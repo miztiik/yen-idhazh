@@ -287,6 +287,74 @@ Two passes read the finished day inside `assemble.build_day`, and both were writ
 
 **What is still not a rule.** Nothing forbids a lead being a story the grouping folded, or two members of one group both leading - the source cap does not catch that, because a group is always across outlets. The first no longer leaves a dead link: the block is resolved against the list the page holds, which is the list after the fold, so a folded lead is not in the block at all. The block is one entry shorter and the story is still behind the anchor's pill, which is the trade the fold makes everywhere else. The second would print one story twice at the top of the page, which is what the block exists to avoid, and it has never fired on a committed day. Both are rules to write when the first day produces one.
 
+## Where the page order comes from
+
+Two orders run over one day and they answer different questions. The stream is
+every story the day carries, in the order each run added them. The leading block
+is the day's best few, chosen across the whole day and drawn above the stream.
+**Neither removes anything**: every story is in the stream whether or not it
+leads and whether or not a group folded it.
+
+```mermaid
+flowchart TD
+  subgraph plan["plan - before the article is read"]
+    signals["source tier, feed weight, feed reliability,<br/>carriage, watchlist, lens, age"] --> rank["rank.score<br/>writes rank_score, once, and never again"]
+  end
+  subgraph assemble["assemble - after the read, five times a day"]
+    rank --> fold["collapse_same_story<br/>the veto, the headline joiner,<br/>then the weighted score over the floor"]
+    fold --> stream["placement.place<br/>orders inside what each run added,<br/>then the desk rules and the head frame"]
+    fold --> lead["leading_stories<br/>a weighted score across the WHOLE day"]
+    subject["a subject several sources named"] --> lead
+    covered["how many other sources<br/>carried the story"] --> lead
+    age["how old the story is NOW"] --> lead
+  end
+  stream --> page["the published day"]
+  lead --> page
+```
+
+**Three things the picture is deliberate about.** The fold runs before both
+orders, because it decides which story of a group a reader meets at all. The
+stream reads no clock - the same day placed again at a later hour would
+re-order a block somebody has already read. And the block reads one, because it
+is the only order taken across the whole day and so the only place a story found
+at 02:20 is ever weighed against one found at 18:20.
+
+### The weighted score that chooses the leading block
+
+`assemble.LeadCandidate.score` is the whole of it: a weighted sum of what the
+story is worth, multiplied by what its age has done to that.
+
+| Term | Knob | Ships at | What it is |
+| --- | --- | ---: | --- |
+| Plan-time score | `ui.lead_rank_weight` | 1.0 | `rank_score`, the number every story in the day carries |
+| A shared subject | `ui.lead_shared_subject_weight` | 0.2 | A flat step where `ui.lead_cluster_floor` sources named one entity in their published titles |
+| Other sources carrying it | `ui.lead_also_covered_weight` | 0.0 | `also_covered_by`, per other source. Null scores 0 |
+| Age, at the hour it was chosen | `placement.freshness_offset_hours`, `placement.freshness_scale_hours`, `placement.freshness_decay_at_scale` | 6.0, 24.0, 0.5 | A multiplier from 1.0 down. [placement.md](../../concepts/placement.md) owns the curve |
+
+**The weights do not have to sum to anything, unlike `same_story`'s.** That
+score is compared against a floor, so its scale has to be protected. This one is
+only ever compared against another candidate's, so a sum rule would be
+ceremony.
+
+**Age multiplies and is never one more term in the sum.** Written as a weighted
+term, a fresh but worthless story would outrank a strong one at some age, which
+is the single failure this ordering exists to refuse. As a multiplier it keeps
+the shape of how good a story is and moves only where that sits in time.
+
+**`ui.lead_also_covered_weight` ships at zero, and that is the honest reading of
+what the pass can support.** At today's recall the count is 0 on most genuinely
+multi-source stories, so a weight on it would reward the pass for having found a
+group rather than the story for having been carried. The term is computed and
+logged from the day it lands; what turns it on is a measured recall for the
+same-story pass that the owner accepts, and that measurement is the labelling
+study. Until then there is no number here a person could defend.
+
+**It landed changing no published block, and that is what the shipped weights
+are for.** All the weight is on `rank_score` and the shared-subject step keeps
+the value it already had, so the sum is arithmetically what the block scored
+before it was a sum. A test sets the two new weights to zero and asserts the
+order is the plan-time order.
+
 ## A topic says why it ran what it ran
 
 Each entry of `verticals` on the committed day carries three more fields since

@@ -162,7 +162,7 @@ which is the same family.
 | 8 | A ceiling on the day, beside the ceiling on a run | - | B | DONE | - | - | p29-r8 |
 | 9 | The same story is one story for 36 hours, not one day | - | C | PENDING | - | - | - |
 | 10 | A story that has been running ranks below one that broke today | - | C | DONE | - | - | p29-r10 |
-| 11 | The lead is a weighted score, and the page says how | 10 | C | PENDING | - | - | - |
+| 11 | The lead is a weighted score, and the page says how | 10 | C | DONE | - | - | p29-r11 |
 | 12 | Label the sheet, then set the weights | - | C | PENDING | - | - | - |
 | 13 | A source's quality decides its own future | - | C | PENDING | - | - | - |
 | 14 | The composite score, proving it changed nothing | - | C | DONE | - | #799 | p29-r14 |

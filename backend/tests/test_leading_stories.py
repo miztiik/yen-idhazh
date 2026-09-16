@@ -347,8 +347,62 @@ def test_the_evening_run_of_a_day_does_not_lead_on_the_morning_story() -> None:
     assert choose(items, now="2026-08-31T19:00:00Z")[0] == "energy-0000000002"
 
 
-# --- eligibility ------------------------------------------------------------
+# --- the weighted score -----------------------------------------------------
 
+
+def test_the_weights_bind_and_the_top_story_is_not_the_top_rank_score() -> None:
+    """The whole point of a composite: another signal can change the answer.
+
+    The weaker story was carried by four other sources. At the shipped weight
+    of zero that buys it nothing; at a weight a person could set it takes the
+    first slot off a story that scored higher at plan time.
+    """
+    items = five_desks()
+    items[1] = items[1].model_copy(update={"also_covered_by": 4})
+    assert choose(items)[0] == items[0].item_id
+    assert choose(items, lead_also_covered_weight=0.1)[0] == items[1].item_id
+
+
+def test_every_weight_but_the_rank_score_at_zero_is_todays_order() -> None:
+    """The revert arm, and it is what makes the composite safe to land.
+
+    With the two other terms weighted zero the score is the plan-time number,
+    which is exactly what this block sorted on before it was a sum.
+    """
+    items = five_desks()
+    items[1] = items[1].model_copy(update={"also_covered_by": 4})
+    plain = choose(items, lead_also_covered_weight=0.0, lead_shared_subject_weight=0.0)
+    assert plain == [item.item_id for item in items[: UiConfig().leading_stories]]
+
+
+def test_the_rank_weight_is_a_knob_and_not_a_literal() -> None:
+    """Guardrail #6, as a check: change the config and the order changes.
+
+    At a rank weight of zero the plan-time score stops speaking, and the story
+    several sources carried leads a block it came fourth in.
+    """
+    items = five_desks()
+    items[3] = items[3].model_copy(update={"also_covered_by": 4})
+    assert choose(items, lead_rank_weight=0.0, lead_also_covered_weight=0.1)[0] == (
+        items[3].item_id
+    )
+
+
+def test_a_story_the_pass_could_not_read_scores_no_corroboration() -> None:
+    """Null is not zero anywhere else in the payload, and it is not a count here.
+
+    Null says the pass could not tell - the day carries no vectors, or this item
+    has none. Weighting it as a count would credit a story for corroboration
+    nobody found.
+    """
+    items = five_desks()
+    items[1] = items[1].model_copy(update={"also_covered_by": None})
+    items[2] = items[2].model_copy(update={"also_covered_by": 0})
+    weighted = choose(items, lead_also_covered_weight=0.1)
+    assert weighted == [item.item_id for item in items[: UiConfig().leading_stories]]
+
+
+# --- eligibility ------------------------------------------------------------
 
 @pytest.mark.parametrize(
     ("field", "value"),

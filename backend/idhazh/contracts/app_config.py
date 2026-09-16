@@ -78,6 +78,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-16T16:00",
+            change="ui.lead_rank_weight and ui.lead_also_covered_weight, additive.",
+            why="The leading block is a weighted score now, so every term needs a knob.",
+        ),
+        ChangelogEntry(
             version="2026-09-16T15:00",
             change="placement gained three freshness knobs, additive, the curve on.",
             why="A story planned at 02:20 held its morning freshness against the evening.",
@@ -91,11 +96,6 @@ class AppConfig(Contract):
             version="2026-09-16T13:00",
             change="ui.draw_same_story, additive, default true.",
             why="The page folds a group into one card, and this is the one-edit revert.",
-        ),
-        ChangelogEntry(
-            version="2026-09-16T12:00",
-            change="assemble.duplicate_similarity_min is now assemble.same_story, three knobs.",
-            why="One cosine cannot be reweighted; a composite with a floor on it can.",
         ),
         ChangelogEntry(
             version="2026-08-21",
