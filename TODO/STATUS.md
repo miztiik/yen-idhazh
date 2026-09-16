@@ -35,14 +35,14 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 16 | 12 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 11 |
-| [20260914-29-found-once-plan.md](20260914-29-found-once-plan.md) | 17 | 10 | 7 | 5 |
+| [20260914-29-found-once-plan.md](20260914-29-found-once-plan.md) | 17 | 11 | 6 | 4 |
 
 ## In flight - 0
 
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 36
+## Ready now - 35
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -82,7 +82,6 @@ section 3 is where it is answered.
 | #10 | 27 | D | A killed shard keeps the work it finished | - |
 | #11 | 27 | E | Two articles, three arms, one runner | 4 |
 | #9 | 29 | - | The same story is one story for 36 hours, not one day | - |
-| #11 | 29 | - | The lead is a weighted score, and the page says how | 10 |
 | #12 | 29 | - | Label the sheet, then set the weights | - |
 | #13 | 29 | - | A source's quality decides its own future | - |
 | #17 | 29 | - | Does a short extraction publish at all | - |
