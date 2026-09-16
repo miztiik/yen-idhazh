@@ -17,6 +17,11 @@ mapping let about 53 of these cells be computed on every item and thrown away
 with nothing raising, because the row the ledger keeps was built somewhere else
 out of two payloads that cannot carry them.
 
+**`persist` is what stops the row dying with the shard.** A validated row that
+reaches only a log line reaches only a CI artifact, so the value is written
+beside the article and the summary the same item produced, under the name every
+other per-item payload is filed under.
+
 **A recorder is opened per item and nothing here outlives the article it was
 opened for.** It is mutable for that reason: the work stage learns these cells
 in the order the pipeline produces them, and a frozen shape would mean
@@ -30,11 +35,19 @@ import time
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Final
 
+from idhazh.assemble import write_atomic
 from idhazh.contracts.item_health import ItemHealthRow, ItemStage
 from idhazh.contracts.knobs.observability import LoggingConfig
 from idhazh.telemetry import events
+
+#: What one item's recorded row is filed as, beside the article and the summary
+#: it describes, under `backend/var/run/<date>/items/`. The payload is
+#: `ItemHealthRow` itself, so nothing new is declared and nothing is migrated -
+#: the file is the row the recorder already validated (CLAUDE.md section 11).
+HEALTH_SUFFIX: Final = ".health.json"
 
 #: The stages `stage_gap_ms` subtracts from the item's own wall clock. Four, and
 #: they tile the item without overlapping: `label_ms` and `summary_ms` are a
@@ -271,6 +284,31 @@ class ItemRecorder:
                 {**self.cells(), "detail": why},
             )
         return row
+
+
+def persist(items_dir: Path, row: ItemHealthRow) -> Path:
+    """Leave one item's recorded row where it outlives the process that recorded it.
+
+    **The row was validated and then dropped.** `close` hands back every cell the
+    work stage learned, the log line carries them, and the log is a CI artifact
+    kept for days - so the census the ledger keeps was rebuilt somewhere else out
+    of the article and the summary payloads, which between them cannot carry 70
+    of the 113 columns. This is the file that makes the value survive the shard.
+
+    **The payload is `ItemHealthRow` and nothing else**, so there is no second
+    shape to version, to migrate or to keep in step (CLAUDE.md section 11).
+
+    It lands beside `<item_id>.article.json` and `<item_id>.summary.json` because
+    that directory is what a work shard uploads and what assemble downloads: a
+    store of its own would need a second artifact, and a commit of its own would
+    be one commit an item.
+
+    Temp-file-plus-rename, like every other per-item payload (CLAUDE.md section
+    1a), so a shard killed mid-write leaves a whole file or no file.
+    """
+    path = items_dir / f"{row.item_id}{HEALTH_SUFFIX}"
+    write_atomic(path, row.to_json())
+    return path
 
 
 def shard_done(

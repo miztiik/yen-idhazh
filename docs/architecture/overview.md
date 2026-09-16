@@ -56,7 +56,7 @@ and the pipeline replayable.
 | Stage | Input | Output | Owns |
 | --- | --- | --- | --- |
 | `plan` | feed list | `run-plan.json` | Which URLs get worked today, and their order. Loads no model. |
-| `work` | one shard of the plan | `*.article.json`, `*.summary.json`, `*.eval.json` | Fetching, sanitising, summarizing, scoring. |
+| `work` | one shard of the plan | `*.article.json`, `*.summary.json`, `*.eval.json`, `*.health.json` | Fetching, sanitising, summarizing, scoring. |
 | `visuals` | article + summary | `*.visual.json` + an SVG | Whether an item gets a picture, and drawing it. |
 | `assemble` | everything above | `digest.json`, `run.json`, ledger rows | The published day. |
 

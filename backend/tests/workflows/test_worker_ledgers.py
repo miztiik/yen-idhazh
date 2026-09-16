@@ -23,6 +23,7 @@ from ._harness import (
     RECORD_COMMAND,
     RECORD_STEP,
     REVIEW_STEP,
+    RUN_ARTIFACTS,
     SUBSTITUTED_DATE,
     SUBSTITUTED_SHARD,
     SUBSTITUTED_SHARDS,
@@ -143,6 +144,46 @@ def test_a_killed_shard_still_hands_assemble_the_items_it_finished() -> None:
         assert steps.index(step) > last_ledger, (
             f"the {artifact} upload must not spend the grace period the ledger steps need"
         )
+
+
+def test_a_shard_hands_over_every_payload_it_wrote_beside_an_item() -> None:
+    """The hand-off is the directory, so a payload a stage adds travels without a YAML change.
+
+    A work shard writes four files an item and no step names any of them: the
+    upload is rooted at the items directory and the download unpacks the whole
+    thing back into the same place. `<item_id>.health.json` - the census row the
+    recorder validated, added on 2026-09-15 - reached assemble on the strength of
+    that alone.
+
+    Narrowing either side to a list of suffixes is what this refuses, and it
+    would fail silently: the stage would still write the payload, the shard would
+    still report success, and assemble would compose a day without it.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    items_dir = f"{RUN_ARTIFACTS}/{SUBSTITUTED_DATE}/items/"
+
+    upload = _mapping(
+        _artifact_upload(workflow, "work", "items-${{ matrix.shard }}").get("with"), "upload"
+    )
+    assert _substitute(str(upload.get("path")).strip()) == items_dir, (
+        "the whole items directory and nothing narrower, or the next per-item "
+        "payload stays on the runner that wrote it"
+    )
+
+    collected = [
+        asked
+        for step in _steps(workflow, "assemble")
+        if str(step.get("uses", "")).startswith("actions/download-artifact")
+        and str((asked := _mapping(step.get("with"), "assemble download")).get("pattern", ""))
+        == "items-*"
+    ]
+    assert len(collected) == 1, "assemble must collect the shards' items exactly once"
+    assert str(collected[0].get("merge-multiple")).lower() == "true", (
+        "eight shards unpack into one items directory"
+    )
+    assert _substitute(str(collected[0].get("path")).strip()) == items_dir, (
+        "the artifact is rooted at the items directory, so it unpacks back into it"
+    )
 
 
 def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:

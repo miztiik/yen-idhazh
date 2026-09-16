@@ -61,7 +61,7 @@ from idhazh.stages.common import (
 )
 from idhazh.stages.two_calls import two_calls_one_item
 from idhazh.telemetry import census
-from idhazh.telemetry.record import Flags, ItemRecorder, shard_done
+from idhazh.telemetry.record import Flags, ItemRecorder, persist, shard_done
 
 
 def _evidence_dir(date: str) -> Path:
@@ -397,7 +397,9 @@ def stage_work(
                 if article.failure_detail
                 else untyped,
             )
-            finished.append(recorder.done())
+            recorded = recorder.done()
+            persist(items_dir, recorded)
+            finished.append(recorded)
             failures[code.value] = failures.get(code.value, 0) + 1
             continue
         ready.append(
@@ -531,7 +533,9 @@ def stage_work(
                 )
             if summary.status is not SummaryStatus.OK or scorer is None:
                 recorder.note(**watch.close().cells())
-                finished.append(recorder.done())
+                recorded = recorder.done()
+                persist(items_dir, recorded)
+                finished.append(recorded)
                 tally = str(recorder.get("code") or FailureCode.UNKNOWN.value)
                 failures[tally] = failures.get(tally, 0) + 1
                 continue
@@ -581,7 +585,9 @@ def stage_work(
                 score_ms,
             )
             recorder.note(**watch.close().cells())
-            finished.append(recorder.done())
+            recorded = recorder.done()
+            persist(items_dir, recorded)
+            finished.append(recorded)
         slowest_item_s = max(slowest_item_s, time.monotonic() - item_started)
     # Every item that was fetched and never reached by the loop above, because
     # the worker's clock ran out before it could start work it could finish.
@@ -619,7 +625,12 @@ def stage_work(
                 if abandoned.failure_detail
                 else None,
             )
-            work.recorder.abandoned("the shard ran out of its own clock before this item ran")
+            persist(
+                items_dir,
+                work.recorder.abandoned(
+                    "the shard ran out of its own clock before this item ran"
+                ),
+            )
             failures["abandoned"] = failures.get("abandoned", 0) + 1
     shard_done(
         run_id=plan.run_id,

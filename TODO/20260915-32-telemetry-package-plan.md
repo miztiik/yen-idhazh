@@ -1,6 +1,6 @@
 # Plan 32 - one telemetry package, and the 113 columns land
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-16
 **Level**: 5 (persisted contracts, a package boundary, and the published operator surface)
 
 Non-authoritative working material (CLAUDE.md section 3). Nothing here is a
@@ -38,7 +38,7 @@ decision about current behaviour; that belongs in `docs/` (Guardrail #4).
 | 2 | Where every one of the 113 columns comes from | - | A | PENDING | - | - | - |
 | 3 | The package exists and re-exports | - | A | PENDING | - | - | - |
 | 4 | The recorder moves in and returns a validated row | 3 | B | DONE | p32r4 | - | - |
-| 5 | The work stage persists what it recorded | 1, 4 | C | PENDING | - | - | - |
+| 5 | The work stage persists what it recorded | 1, 4 | C | DONE | p32r5 | - | - |
 | 6 | The census prefers the persisted row | 5 | D | PENDING | - | - | - |
 | 7 | Six columns that are arithmetic over filled ones | 6 | E | PENDING | - | - | - |
 | 8 | The label call's own clock and both finish reasons | 6 | E | PENDING | - | - | - |
@@ -290,8 +290,9 @@ are deleted by row 15.
 - **Files touched:**
   - `backend/idhazh/stages/work.py`
   - `backend/idhazh/telemetry/record.py`
-  - `.github/workflows/digest.yml` (the artifact the shard uploads)
+  - `backend/tests/pipeline/test_work_health_payload.py`
   - `backend/tests/workflows/test_worker_ledgers.py`
+  - `.github/workflows/digest.yml` - **checked and left alone.** The `items-<shard>` upload is rooted at the whole items directory and assemble downloads `items-*` back into the same place, so the payload travels with no YAML edit. A test now holds both sides to the directory, because narrowing either one to a list of suffixes would strand the next payload silently.
 - **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests/workflows backend/tests/pipeline`. CI runs the full suite plus `whole-day`.
 - **Oracle:** one item driven through the work stage leaves a `.health.json` whose every non-null cell equals the recorder's, and the ratchet from PR #777 confirms every store the stage writes is staged by the job. It cannot settle what assemble does with the file - that is row 6.
 - **Decisions:**

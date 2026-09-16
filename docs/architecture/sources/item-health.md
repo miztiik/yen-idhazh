@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-16
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -20,7 +20,9 @@ growing its own store.
 `state/item-health/<YYYY>/<MM>/<DD>.csv`. One row is written for each planned
 item on each run, whether the item succeeds or fails. Two stages write it: a
 worker commits the rows for its own items as each one settles, and Assemble
-writes the whole day's census afterwards.
+writes the whole day's census afterwards. A worker also leaves its own copy of
+the row beside the item's other payloads, which is
+[the file below](#the-row-on-the-shard-before-the-ledger-has-it).
 
 The row carries 113 columns. `ItemHealthRow.csv_columns` in
 `backend/idhazh/contracts/item_health.py` is the list, and this page does not
@@ -234,6 +236,41 @@ The cell is empty on every row a run wrote before 2026-08-28, and empty again on
 any row whose article payload predates `Article.source_word_count` (2026-08-26).
 Empty means the run never measured it. Nothing recomputes it later, because the
 body it would have to count is gone.
+
+## The row on the shard, before the ledger has it
+
+`backend/var/run/<date>/items/<item_id>.health.json`. The work stage writes it
+the moment the recorder seals an item, through `telemetry.record.persist`, with
+the same temp-file-then-rename every per-item payload uses. The payload is
+`ItemHealthRow` and nothing else, so there is no second shape to version.
+
+**It exists because the row used to die with the shard.** The recorder validates
+all 113 cells an item at a time, and until 2026-09-15 the only place they went
+was a log line - a CI artifact with its own expiry. The durable row was rebuilt
+afterwards from the article and the summary payloads, which between them cannot
+carry most of those cells, so a cell the shard measured correctly still reached
+this ledger empty.
+
+**It travels on the artifact the other payloads already travel on.** A shard
+uploads `items-<shard>` rooted at the whole items directory and assemble
+downloads `items-*` back into the same place, so no workflow step names this
+file and none had to change for it to arrive.
+`tests/workflows/test_worker_ledgers.py` holds both sides to the directory,
+because narrowing either one to a list of suffixes would strand the next payload
+on the runner that wrote it without failing anything.
+
+**What it costs**: 3,103 to 3,119 bytes an item, mean 3,111 over the five items
+of the committed fixture plan (Windows 11, Python 3.14.2, 2026-09-16). One shard
+is `run.shard_size` items, five today, so a shard carries about 15.6 KB of it -
+0.003 percent of the 500 MB artifact ceiling - and a run at the 80-item
+`run.safety_ceiling_per_run` carries about 249 KB. None of it is committed and
+none of it is published: `backend/var/` is run scratch, and this ledger under
+`state/` is still the durable copy.
+
+**Nothing reads it yet.** The census is still built the way it was, and making
+`stages.record` and `stages.assemble` prefer this file is the next change rather
+than this one. Until then the file is the evidence a reader can open when a
+committed row and a shard's log disagree.
 
 ## Which worker wrote the row
 
