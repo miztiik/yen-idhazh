@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Final
@@ -231,9 +232,14 @@ class RecordedEndpoint:
     cannot tell a caller that ran the label call three times from one that alternated,
     because both read the same bytes back; the requests can, which is what makes
     the item-major rule assertable rather than readable.
+
+    `hold_s` makes the server take its time before answering a POST. It is the
+    only way to drive a call that waited without a network: the recorded bytes
+    carry whatever the real server said it spent, and nothing in them can say
+    how long the caller stood there.
     """
 
-    def __init__(self, status: int, *bodies: bytes) -> None:
+    def __init__(self, status: int, *bodies: bytes, hold_s: float = 0.0) -> None:
         if not bodies:
             raise ValueError("a recorded endpoint replays at least one body")
         served: list[int] = []
@@ -259,6 +265,8 @@ class RecordedEndpoint:
                 sent.append(json.loads(raw))
                 body = replies[len(served) % len(replies)]
                 served.append(1)
+                if hold_s > 0:
+                    time.sleep(hold_s)
                 self.send_response(status)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(body)))

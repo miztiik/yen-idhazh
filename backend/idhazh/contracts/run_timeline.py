@@ -134,6 +134,11 @@ class RunTimelineRow(Contract):
     __schema_stem__: ClassVar[str] = "run-timeline-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-16",
+            change="Steps 4 and 5 are a stopwatch around each request, not the server's sum.",
+            why="It follows item-health-row, where both columns are written.",
+        ),
+        ChangelogEntry(
             version="2026-09-15",
             change="Initial shape: one row an item, an offset, eight steps and the residual.",
             why="Contracts before logic - the writers and the chart need one fixed shape first.",
@@ -194,14 +199,14 @@ class RunTimelineRow(Contract):
     label_ms: int | None = Field(
         default=None,
         ge=0,
-        description="Step 4. The label call, prefill and decode together, as the census spells it.",
+        description="Step 4. The label call, on the stopwatch the census spells `label_ms`.",
     )
     summary_ms: int | None = Field(
         default=None,
         ge=0,
         description=(
-            "Step 5. The summarize-and-plan call, prefill and decode together, as the "
-            "census spells it."
+            "Step 5. The summarize-and-plan call, on the stopwatch the census spells "
+            "`summary_ms`."
         ),
     )
     visual_plan_ms: int | None = Field(

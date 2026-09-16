@@ -1,6 +1,6 @@
 # The model boundary
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-16
 
 How the summarizer stays generic while the model behind it changes. This page
 owns the shape of the boundary - what crosses it, which side each fact lives
@@ -227,6 +227,19 @@ reply into our schema, and a grammar is a runtime control that behaves
 identically on any model. So only two things on the way out are model-shaped:
 which envelope the runtime wrapped the reply in, and whether a reasoning block
 is present and has to be dropped before anything reads it.
+
+The envelope is also where the runtime says why the decode stopped, and the two
+routes spell that differently: the chat route writes `finish_reason`, the
+rendered-completion route writes `stop_type`. Three of `stop_type`'s words
+translate - `limit` is `length`, and `eos` and `word` are both a decode that
+ended itself, which is `stop`. **A word not in that set is carried through as
+the server wrote it, and a reply that named no reason at all carries none.**
+Both used to arrive as `stop`, so a novel ending and an unreported one reached
+the census as an ordinary clean stop, with nothing left in the row to tell them
+apart by (Guardrail #10). It is not an enum for the reason
+`ItemHealthRow.label_finish_reason` gives: the vocabulary belongs to
+llama-server, and a row that would not validate because the runtime minted a
+word would lose the whole item over a label.
 
 Everything after that is the app's own validation.
 

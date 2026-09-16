@@ -77,9 +77,15 @@ _APPLY_TEMPLATE_PATH: Final = "/apply-template"
 _TOKENIZE_PATH: Final = "/tokenize"
 _MODELS_PATH: Final = "/v1/models"
 
-#: The reply stopped because it ran out of budget. llama-server's own word for
-#: it on the rendered-completion route, where the chat route says `length`.
-_STOPPED_AT_THE_BUDGET: Final = "limit"
+#: llama-server's own stop vocabulary on the rendered-completion route, in the
+#: words the chat route would have used for the same ending. `limit` is the one
+#: the rest of the pipeline keys on, because it is the budget stop; `eos` and
+#: `word` are both a decode that ended itself.
+#:
+#: **A value not listed here is carried through as the server wrote it.** A
+#: reason nobody has seen before is the one worth seeing, and folding it into
+#: `stop` would report a novel ending as an ordinary one.
+_STOP_TYPES: Final[dict[str, str]] = {"limit": "length", "eos": "stop", "word": "stop"}
 
 # llama.cpp maps ERROR_TYPE_EXCEED_CONTEXT_SIZE to HTTP 400 and names it here.
 # The message beside it states the token counts and its wording moves between
@@ -341,7 +347,10 @@ class Completion:
     reasoning: str = ""
     prompt_tokens: int = 0
     completion_tokens: int = 0
-    finish_reason: str = "stop"
+    #: Why the decode stopped, as the server said it. None where the reply named
+    #: no reason at all - a default of `stop` is a belief, and this class holds
+    #: nothing that has been believed yet.
+    finish_reason: str | None = None
     prefill_ms: int = 0
     decode_ms: int = 0
     cached_tokens: int = 0
@@ -717,6 +726,11 @@ def parse_completion(body: str) -> Completion:
     is the chat template moving a think block into `reasoning_content`, and a
     route with no template applies none. Anything the model writes inline
     arrives in `content`, where each caller's own cleaner already removes it.
+
+    **A reply that named no reason for stopping carries none.** Both routes used
+    to read an absence as `stop`, which is the one reading that cannot be told
+    from a real clean stop afterwards - so an unreported ending reached the
+    census as a reported one, on every row, for ever.
     """
     payload = json.loads(body)
     # llama.cpp reports prefill and decode separately; a runtime that does not
@@ -736,18 +750,19 @@ def parse_completion(body: str) -> Completion:
             reasoning=message.get("reasoning_content") or "",
             prompt_tokens=int(usage.get("prompt_tokens", 0)),
             completion_tokens=int(usage.get("completion_tokens", 0)),
-            finish_reason=choices[0].get("finish_reason") or "stop",
+            finish_reason=choices[0].get("finish_reason"),
             prefill_ms=prefill_ms,
             decode_ms=decode_ms,
             cached_tokens=cached_tokens,
         )
     if "content" not in payload:
         raise ValueError("the runtime returned neither a choice nor a completion")
+    stop_type = payload.get("stop_type")
     return Completion(
         content=payload.get("content") or "",
         prompt_tokens=int(payload.get("tokens_evaluated", 0)),
         completion_tokens=int(payload.get("tokens_predicted", 0)),
-        finish_reason="length" if payload.get("stop_type") == _STOPPED_AT_THE_BUDGET else "stop",
+        finish_reason=None if stop_type is None else _STOP_TYPES.get(stop_type, str(stop_type)),
         prefill_ms=prefill_ms,
         decode_ms=decode_ms,
         cached_tokens=cached_tokens,

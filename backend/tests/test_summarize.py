@@ -544,6 +544,38 @@ class TestTheRenderedCompletionEnvelope:
         """A property rather than a gap: there is no template here to split one."""
         assert not parse_completion(read_text(RENDERED_REPLY)).reasoned
 
+    def test_a_reply_that_named_no_stop_type_carries_no_reason_at_all(self) -> None:
+        """An absence is recorded as one. It used to be read as a clean stop.
+
+        Those are two different facts about a decode, and folding them meant the
+        census reported the first every time the second happened - with nothing
+        left in the row for a later reader to tell them apart by.
+        """
+        unreported = json.loads(read_text(RENDERED_REPLY))
+        del unreported["stop_type"]
+
+        completion = parse_completion(json.dumps(unreported))
+
+        assert completion.finish_reason is None
+        assert not completion.hit_the_budget
+
+    def test_a_stop_type_this_build_does_not_know_is_carried_through(self) -> None:
+        """Two of them translate; anything else is passed on as the server wrote it.
+
+        `eos` and `word` are both a decode that ended itself, which is what the
+        chat route calls `stop`. A word neither this map nor that route knows is
+        a reason nobody has seen before, and that is the one worth seeing rather
+        than the one to fold away (Guardrail #10).
+        """
+        recorded = json.loads(read_text(RENDERED_REPLY))
+
+        def reason(stop_type: str) -> str | None:
+            return parse_completion(json.dumps(recorded | {"stop_type": stop_type})).finish_reason
+
+        assert reason("eos") == "stop"
+        assert reason("word") == "stop"
+        assert reason("interrupted") == "interrupted"
+
     def test_an_envelope_that_is_neither_shape_is_refused(self) -> None:
         with pytest.raises(ValueError, match="neither a choice nor a completion"):
             parse_completion('{"timings": {}}')

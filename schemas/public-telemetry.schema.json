@@ -73,6 +73,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "label_ms and summary_ms keep their names and change what they measure.",
+      "version": "2026-09-16",
+      "why": "Each is now a stopwatch around its own request rather than the server's sum."
+    },
+    {
       "change": "FailureCode gained model_timed_out and shard_out_of_time.",
       "version": "2026-09-15T22:10",
       "why": "Both were being reported under a name that sends an operator to the wrong place."
@@ -86,11 +91,6 @@
       "change": "Four columns keep their names and change what they mean.",
       "version": "2026-09-15T19:40",
       "why": "Queue wait now sits outside the item total rather than inside it."
-    },
-    {
-      "change": "Appended seventeen nullable cells.",
-      "version": "2026-09-15T08:20",
-      "why": "The census records far more columns than this projection was publishing."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -328,7 +328,7 @@
         }
       ],
       "default": null,
-      "description": "Wall time of the label call, prefill and decode together. It is a slice of summarize_ms, never an addition to it.",
+      "description": "Wall time of the label call, on our own stopwatch around the request. It is a slice of summarize_ms, never an addition to it, and label_prefill_ms plus label_decode_ms taken off it is the part the server did not claim.",
       "title": "Label Ms"
     },
     "label_output_tokens": {
@@ -602,7 +602,7 @@
         }
       ],
       "default": null,
-      "description": "Wall time of the summarize-and-plan call, prefill and decode together. The other slice of summarize_ms.",
+      "description": "Wall time of the summarize-and-plan call, on the same stopwatch. The other slice of summarize_ms.",
       "title": "Summary Ms"
     },
     "summary_output_tokens": {
@@ -660,7 +660,7 @@
       "title": "Summary Words"
     },
     "version": {
-      "default": "2026-09-15T22:10",
+      "default": "2026-09-16",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -723,5 +723,5 @@
   ],
   "title": "PublicTelemetryRow",
   "type": "object",
-  "version": "2026-09-15T22:10"
+  "version": "2026-09-16"
 }

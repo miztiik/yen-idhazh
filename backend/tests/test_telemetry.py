@@ -1006,7 +1006,7 @@ def test_both_writers_of_the_six_reach_the_same_arithmetic() -> None:
         output_tokens=reply.completion_tokens,
         cached_tokens=reply.cached_tokens,
     )
-    written = _call_cells("summary", CallKind.SUMMARIZE_AND_PLAN, reply)
+    written = _call_cells("summary", CallKind.SUMMARIZE_AND_PLAN, reply, wall_ms=9_700)
 
     assert {field: written[f"summary_{field}"] for field in DERIVED_FIELDS} == {
         field: getattr(same, field) for field in DERIVED_FIELDS

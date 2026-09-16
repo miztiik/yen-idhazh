@@ -180,11 +180,14 @@ class ItemObservation(Model):
     repeat: int = Field(ge=1)
     ok: bool
     failure_code: str | None = None
-    finish_reason: str = Field(
+    finish_reason: str | None = Field(
+        default=None,
         min_length=1,
         description=(
             "How the decode ended. Over a pair, `length` where either call met its "
-            "budget, because an item cut anywhere is a cut item."
+            "budget, because an item cut anywhere is a cut item. Null where the "
+            "server named no reason at all, which the gate reads as not-clean for "
+            "the same arithmetic that reads `length` that way - it is not `stop`."
         ),
     )
     reasoning_channel_used: bool = Field(
@@ -274,6 +277,11 @@ class QualificationShard(Contract):
     __schema_stem__: ClassVar[str] = "qualification-shard"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-16",
+            change="An observation's finish_reason is nullable.",
+            why="A reply that named no reason no longer reaches this row as a clean stop.",
+        ),
+        ChangelogEntry(
             version="2026-09-15T23:30",
             change="Added calls_per_item, defaulting to 1.",
             why="Qualification can now run the call path the digest runs, which calls twice.",
@@ -287,11 +295,6 @@ class QualificationShard(Contract):
             version="2026-09-13T22:00",
             change="Removed pipeline_fingerprint.",
             why="`inputs` beside it records the same controls by name.",
-        ),
-        ChangelogEntry(
-            version="2026-09-12T21:00",
-            change="A shard and a report carry `inputs`, the recorded input manifest.",
-            why="Two candidates are only comparable when the run records what it held still.",
         ),
         ChangelogEntry(
             version="2026-08-26",

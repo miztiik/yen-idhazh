@@ -39,6 +39,17 @@ SUMMARIZE_AND_PLAN_REPLY: Final = (
     FIXTURES_DIR / "completions" / "summarize-and-plan" / "summary-and-plan.json"
 )
 
+#: The recorded reply the output budget really cut, part-way through the plan.
+#: `length` is what the server wrote, so nothing is edited in to drive it.
+CUT_IN_THE_PLAN_REPLY: Final = (
+    FIXTURES_DIR / "completions" / "summarize-and-plan" / "cut-in-the-plan.json"
+)
+
+#: How long the recorded server is held before it answers a request. Long enough
+#: that a millisecond clock cannot round it away, short enough that ten held
+#: requests cost two seconds.
+HELD_S: Final = 0.2
+
 
 def records(caplog: LogCaptureFixture) -> list[dict[str, Any]]:
     """Every flat record the run emitted, parsed.
@@ -253,6 +264,71 @@ def test_every_record_is_one_line_and_parses_as_one_object(
     assert emitted
     for line in caplog.messages:
         assert "\n" not in line
+
+
+def served_calls(caplog: LogCaptureFixture) -> list[dict[str, Any]]:
+    """Every item record whose label call answered.
+
+    An item that died before the first request carries empty call slots, and a
+    test about what a call recorded has nothing to say about one.
+    """
+    made = [record for record in named(caplog, "item.done") if record["label_kind"] is not None]
+    assert made, "no item in the shard got a reply, so there is no call to read"
+    return made
+
+
+def test_a_reply_that_named_no_reason_leaves_the_column_empty_and_a_cut_one_says_length(
+    tmp_path: Path, monkeypatch: MonkeyPatch, caplog: LogCaptureFixture
+) -> None:
+    """Plan 32 row #8's oracle, over a real run and two recorded replies.
+
+    The label reply is the recorded one with its `finish_reason` deleted, which
+    is what a runtime that reports none looks like on the wire. Until this row
+    that absence was read as `stop` - so the census said the decode ended
+    cleanly on the strength of a field nobody had sent, and no reader could ever
+    tell the two apart afterwards.
+
+    The summarize-and-plan reply is the recorded one the output budget really
+    cut, so `length` is what the server wrote rather than what a test edited in.
+    """
+    caplog.set_level(logging.INFO, logger="idhazh")
+    unreported = json.loads(LABEL_REPLY.read_text(encoding="utf-8"))
+    del unreported["choices"][0]["finish_reason"]
+    _work_stage(
+        tmp_path,
+        monkeypatch,
+        replies=(json.dumps(unreported).encode("utf-8"), CUT_IN_THE_PLAN_REPLY.read_bytes()),
+    )
+
+    for record in served_calls(caplog):
+        assert record["label_finish_reason"] is None
+        if record["summary_kind"] is not None:
+            assert record["summary_finish_reason"] == "length"
+
+
+def test_a_call_that_waited_is_clocked_at_more_than_the_server_claimed(
+    tmp_path: Path, monkeypatch: MonkeyPatch, caplog: LogCaptureFixture
+) -> None:
+    """The other half of row #8's oracle: `label_ms` is a stopwatch, not a sum.
+
+    The server is held for `HELD_S` before it answers, which is a wait no field
+    of the reply can report. The recorded replies carry no `timings` block at
+    all, so the server claims nothing and the sum of the two cells beside this
+    one is zero - which is exactly what the column used to hold, and is why a
+    queue in front of the model was invisible in the census.
+    """
+    caplog.set_level(logging.INFO, logger="idhazh")
+    _work_stage(
+        tmp_path,
+        monkeypatch,
+        replies=(LABEL_REPLY.read_bytes(), SUMMARIZE_AND_PLAN_REPLY.read_bytes()),
+        hold_s=HELD_S,
+    )
+
+    for record in served_calls(caplog):
+        claimed = record["label_prefill_ms"] + record["label_decode_ms"]
+        assert record["label_ms"] > claimed
+        assert record["label_ms"] >= int(HELD_S * 1000)
 
 
 def test_the_captures_land_beside_the_items_and_never_inside_them(

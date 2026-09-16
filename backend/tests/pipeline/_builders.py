@@ -228,6 +228,7 @@ def _work_stage(
     replies: tuple[bytes, ...],
     fetcher: Callable[[str], FetchResult] = captured_article_fetch,
     run_plan: RunPlan | None = None,
+    hold_s: float = 0.0,
 ) -> tuple[RunPlan, Path, RecordedEndpoint]:
     """One real work stage over captured pages and recorded replies.
 
@@ -239,11 +240,15 @@ def _work_stage(
     `run_plan` is how a caller asks for a shape the committed fixture does not
     carry - an item the day's feeds never produced. Default is the fixture, so
     every existing caller reads the same plan it always did.
+
+    `hold_s` makes the server take its time answering, which is the only way to
+    drive a call that waited: the recorded bytes say what the real server spent
+    and cannot say how long the caller stood there.
     """
     run_plan = run_plan if run_plan is not None else plan()
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
     monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
-    with RecordedEndpoint(200, *replies) as server:
+    with RecordedEndpoint(200, *replies, hold_s=hold_s) as server:
         stage_work(
             run_plan,
             settings=config.load(CONFIG_DIR),
