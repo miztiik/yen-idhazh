@@ -1202,7 +1202,12 @@ def subject_clusters(items: Sequence[DigestItem], watchlist: Watchlist) -> list[
 
 @dataclass(frozen=True, slots=True)
 class LeadCandidate:
-    """One story after the eligibility rules, before any cap has spoken."""
+    """One story after the eligibility rules, before any cap has spoken.
+
+    Four numbers decide where it sits: three weighted signals that add up to
+    what the story is worth, and one multiplier for what its age has done to
+    that. Every weight is config (Guardrail #6) and nothing here reads a model.
+    """
 
     item: DigestItem
     subjects: tuple[str, ...]
@@ -1212,15 +1217,39 @@ class LeadCandidate:
     #: What this story's age is worth at the hour the block was chosen, 1.0 down
     #: towards 0.0. `placement.freshness_multiplier` owns the curve.
     freshness: float
+    #: The weights this block was scored with, so `score` is arithmetic over the
+    #: candidate rather than a function of whatever config is in scope.
+    weights: UiConfig
+
+    @property
+    def covered(self) -> float:
+        """How many OTHER sources carried this story, as a number to weight.
+
+        Null is 0 rather than a guess. Null means the pass could not tell - the
+        day carries no vectors, or this item has none - and reading it as a
+        count would credit a story for corroboration nobody found.
+        """
+        return float(self.item.also_covered_by or 0)
 
     @property
     def score(self) -> float:
-        """How good the story is, times what its age has done to it.
+        """A weighted sum of what the story is worth, times what its age did to it.
 
-        Age multiplies rather than adding, so it moves where a story sits in
-        time and never outvotes how good the story is.
+        The sum is the plan-time score, a shared subject several sources named,
+        and how many other sources carried the story. **The weights do not have
+        to sum to anything**: unlike `same_story`, this score is never compared
+        against a floor, so there is no scale for a sum rule to protect.
+
+        Age multiplies rather than sitting inside the sum. A fresh but worthless
+        story would outrank a strong one if age were one more weighted term, and
+        that is the single failure this ordering exists to refuse.
         """
-        return ((self.item.rank_score or 0.0) + self.term) * self.freshness
+        worth = (
+            self.weights.lead_rank_weight * (self.item.rank_score or 0.0)
+            + self.term
+            + self.weights.lead_also_covered_weight * self.covered
+        )
+        return worth * self.freshness
 
 
 def _ordered(candidates: Sequence[LeadCandidate]) -> list[LeadCandidate]:
@@ -1333,10 +1362,12 @@ def leading_stories(
 ) -> list[DigestLead]:
     """The day's leading stories, strongest first, or nothing at all.
 
-    Selection is `rank_score` plus a shared-subject term, across the whole day,
-    times what the story's age is worth at `now`. Not the head of the published
-    order: that head is grouped by run and then by desk, so it opens on
-    whichever desk sorted first in run 1.
+    Selection is a weighted sum of three signals the payload already carries -
+    the plan-time `rank_score`, a subject several of our sources named, and how
+    many other sources carried the story - times what the story's age is worth
+    at `now`. `LeadCandidate.score` is the whole of it and every weight is
+    config. Not the head of the published order: that head is grouped by run and
+    then by desk, so it opens on whichever desk sorted first in run 1.
 
     **This is the only order in the day that reads a clock.** `rank_score` is
     fixed at the run that planned the item, so a story planned at 02:20 holds
@@ -1399,6 +1430,7 @@ def leading_stories(
                         freshness=freshness_multiplier(
                             item.published_at, now=now, config=placement
                         ),
+                        weights=ui,
                     )
                 )
         if refusal is not None and _notable(item, clusters, floor):

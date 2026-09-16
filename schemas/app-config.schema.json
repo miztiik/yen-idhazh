@@ -1753,6 +1753,13 @@
           "title": "Items Per Topic",
           "type": "integer"
         },
+        "lead_also_covered_weight": {
+          "default": 0.0,
+          "description": "What each OTHER source that carried the same story adds to a lead's score. 0.0 ships, so the term is computed and logged and carries no weight yet: at today's recall the count is 0 on most genuinely multi-source stories, so a weight on it would reward the pass for finding a group rather than the story for being carried. Turn it on when the same-story pass has a measured recall the owner accepts - that measurement is the labelling study, and until it exists this knob has no number a person could defend. Removal condition (Guardrail #6): it stops being a placeholder the day that study sets it above zero.",
+          "minimum": 0.0,
+          "title": "Lead Also Covered Weight",
+          "type": "number"
+        },
         "lead_cluster_floor": {
           "default": 3,
           "description": "How many distinct sources must name one entity in their published titles before that shared subject counts for anything. Under it the term is zero. Three rather than two is the stronger claim, and it costs a small number of stories their cluster.",
@@ -1766,6 +1773,13 @@
           "minimum": 0,
           "title": "Lead Max Yesterday",
           "type": "integer"
+        },
+        "lead_rank_weight": {
+          "default": 1.0,
+          "description": "How much of a lead's score is the number the planning step gave the story. 1.0 ships, which is what the block scored before it was a weighted sum at all, so the composite landed changing no published block. It is the only term measured over every story the day carries: every other signal here fires on a minority of them, so a weight on this is what stops the block being chosen by whichever minority signal happened to fire.",
+          "minimum": 0.0,
+          "title": "Lead Rank Weight",
+          "type": "number"
         },
         "lead_shared_subject_weight": {
           "default": 0.2,
@@ -2029,6 +2043,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "ui.lead_rank_weight and ui.lead_also_covered_weight, additive.",
+      "version": "2026-09-16T16:00",
+      "why": "The leading block is a weighted score now, so every term needs a knob."
+    },
+    {
       "change": "placement gained three freshness knobs, additive, the curve on.",
       "version": "2026-09-16T15:00",
       "why": "A story planned at 02:20 held its morning freshness against the evening."
@@ -2042,11 +2061,6 @@
       "change": "ui.draw_same_story, additive, default true.",
       "version": "2026-09-16T13:00",
       "why": "The page folds a group into one card, and this is the one-edit revert."
-    },
-    {
-      "change": "assemble.duplicate_similarity_min is now assemble.same_story, three knobs.",
-      "version": "2026-09-16T12:00",
-      "why": "One cosine cannot be reweighted; a composite with a floor on it can."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2121,7 +2135,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-16T15:00",
+      "default": "2026-09-16T16:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2132,5 +2146,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-16T15:00"
+  "version": "2026-09-16T16:00"
 }
