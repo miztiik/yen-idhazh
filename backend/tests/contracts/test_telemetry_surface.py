@@ -111,10 +111,19 @@ CUT_BY_THE_DISPATCHER_ROW: Final[frozenset[str]] = frozenset(
     }
 )
 
+#: Names added since the split, each with the row that added it and the caller
+#: that needs it. A public name is a promise, so one arrives here deliberately
+#: rather than by being noticed failing this test.
+#:
+#: `census_row` is plan 32 row 6. `stages.record` and `stages.assemble` both
+#: build the day's census row, and both reach it as `telemetry.census_row` -
+#: which is how they already reached `classify_item`, the function it now wraps.
+ADDED_AFTER_THE_SPLIT: Final[frozenset[str]] = frozenset({"census_row"})
+
 #: What the package re-exports today: the pre-split surface, less the five the
-#: dispatcher row cut and the one a submodule took.
+#: dispatcher row cut and the one a submodule took, plus what later rows added.
 RE_EXPORTED: Final[frozenset[str]] = (
-    BEFORE_THE_SPLIT - CUT_BY_THE_DISPATCHER_ROW - TAKEN_BY_A_MODULE
+    BEFORE_THE_SPLIT - CUT_BY_THE_DISPATCHER_ROW - TAKEN_BY_A_MODULE | ADDED_AFTER_THE_SPLIT
 )
 
 
