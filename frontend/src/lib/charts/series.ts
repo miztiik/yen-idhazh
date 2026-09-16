@@ -4,7 +4,9 @@ import { daysBetween, daysInWindow, type TimeWindow } from './viewport';
 /** The published projection's header, in `PUBLIC_COLUMNS` order.
  *
  * `backend/idhazh/telemetry/publish/public_telemetry.py` owns the list. This is the reader's
- * copy of it, and `parseTelemetryCsv` refuses a file whose header disagrees.
+ * copy of it, and it names every cell `parseTelemetryCsv` looks up. The order is
+ * the writer's order and is what `telemetryCsv` writes back; no cell is read by
+ * its position in it.
  */
 export const TELEMETRY_COLUMNS = [
 	'date',
@@ -735,65 +737,129 @@ function numberCell(value: string): number | null {
 	return Number.isFinite(parsed) ? parsed : null;
 }
 
+/** The cells without which a row cannot be placed on anything this file draws.
+ *
+ * Every panel filters by `date` and counts by `run_id` or `item_id`, so a header
+ * carrying none of them is not this projection: a 200 that served an error page,
+ * or a shard of some other series. Reading it would hand the console a month of
+ * blank rows in place of the gap it already draws. These three refuse; every
+ * other column degrades.
+ */
+const TELEMETRY_IDENTITY = ['date', 'run_id', 'item_id'] as const;
+
+/** Where each contract column sits in a header, and which are not in it at all.
+ *
+ * Resolving a name against the file's own header is what lets the writer insert
+ * or reorder a column without moving a cell this file draws. `missing` is the
+ * degrade path made visible, so a caller can say which cells it did not get
+ * rather than having to infer it from empty values.
+ */
+export function telemetryColumnIndex(header: readonly string[]): {
+	at: ReadonlyMap<TelemetryColumn, number>;
+	missing: TelemetryColumn[];
+} {
+	const seen = new Map<string, number>();
+	// First wins. A repeated name is the writer's defect either way, and the first
+	// copy is the one `csv.DictWriter` filled.
+	header.forEach((name, index) => {
+		if (!seen.has(name)) seen.set(name, index);
+	});
+	const at = new Map<TelemetryColumn, number>();
+	const missing: TelemetryColumn[] = [];
+	for (const name of TELEMETRY_COLUMNS) {
+		const index = seen.get(name);
+		if (index === undefined) missing.push(name);
+		else at.set(name, index);
+	}
+	return { at, missing };
+}
+
+/** One published shard as rows, every cell found by its column name.
+ *
+ * **A name, never a position.** A column that moved does not throw - it draws
+ * the neighbouring column's value, which is worse than a gap because it reads
+ * like a measurement. So the header says where each cell is on every parse.
+ *
+ * **A column the header does not carry degrades to absent** (`CLAUDE.md`
+ * section 1a): null for a figure, empty for a word. That is already what every
+ * panel draws for a cell nothing measured, and the names go to the browser
+ * console once per shard rather than once per row.
+ *
+ * What that gives up, stated rather than implied: a column the writer renamed
+ * now draws as absence instead of stopping the parse. The rename still fails,
+ * in `backend/tests/contracts/test_taxonomy_and_prompts.py`, before either side
+ * ships.
+ *
+ * **A header with no identity cell is refused**, because that file is not this
+ * projection. `loadVisibleMonths` catches it, marks the month refused and draws
+ * the gap it draws for a failed fetch; the page stays up.
+ */
 export function parseTelemetryCsv(text: string): TelemetryRow[] {
 	const rows = parseCsv(text);
-	const header = rows[0] ?? [];
-	// A prefix, not an equality, on purpose: a cached bundle must keep reading a
-	// shard that grew a column. `backend/tests/contracts/` holds the
-	// prefix against the writer, so tightening this buys nothing and breaks that.
-	if (TELEMETRY_COLUMNS.some((name, index) => header[index] !== name)) {
-		throw new Error('telemetry projection header did not match the contract');
+	const { at, missing } = telemetryColumnIndex(rows[0] ?? []);
+	const lost = TELEMETRY_IDENTITY.filter((name) => !at.has(name));
+	if (lost.length > 0) {
+		throw new Error(`telemetry projection header carries no ${lost.join(', ')}`);
 	}
+	if (missing.length > 0) {
+		console.warn(`telemetry projection has no ${missing.join(', ')}; drawing them as absent`);
+	}
+	const cell = (cells: readonly string[], name: TelemetryColumn): string => {
+		const index = at.get(name);
+		return index === undefined ? '' : (cells[index] ?? '');
+	};
+	const figure = (cells: readonly string[], name: TelemetryColumn): number | null =>
+		numberCell(cell(cells, name));
 	return rows.slice(1).map((cells) => ({
-		date: cells[0] ?? '',
-		run_id: cells[1] ?? '',
-		item_id: cells[2] ?? '',
-		vertical: cells[3] ?? '',
-		source_id: cells[4] ?? '',
-		stage: cells[5] ?? '',
-		outcome: cells[6] ?? '',
-		code: cells[7] ?? '',
-		source_words: numberCell(cells[8] ?? ''),
-		summary_words: numberCell(cells[9] ?? ''),
-		source_words_before_cap: numberCell(cells[10] ?? ''),
-		fetch_ms: numberCell(cells[11] ?? ''),
-		extract_ms: numberCell(cells[12] ?? ''),
-		summarize_ms: numberCell(cells[13] ?? ''),
-		prefill_ms: numberCell(cells[14] ?? ''),
-		decode_ms: numberCell(cells[15] ?? ''),
-		input_tokens: numberCell(cells[16] ?? ''),
-		output_tokens: numberCell(cells[17] ?? ''),
-		cached_tokens: numberCell(cells[18] ?? ''),
-		model_calls: numberCell(cells[19] ?? ''),
-		label_kind: cells[20] ?? '',
-		label_prefill_ms: numberCell(cells[21] ?? ''),
-		label_decode_ms: numberCell(cells[22] ?? ''),
-		label_input_tokens: numberCell(cells[23] ?? ''),
-		label_output_tokens: numberCell(cells[24] ?? ''),
-		label_cached_tokens: numberCell(cells[25] ?? ''),
-		summary_kind: cells[26] ?? '',
-		summary_prefill_ms: numberCell(cells[27] ?? ''),
-		summary_decode_ms: numberCell(cells[28] ?? ''),
-		summary_input_tokens: numberCell(cells[29] ?? ''),
-		summary_output_tokens: numberCell(cells[30] ?? ''),
-		summary_cached_tokens: numberCell(cells[31] ?? ''),
-		queue_wait_ms: numberCell(cells[32] ?? ''),
-		label_ms: numberCell(cells[33] ?? ''),
-		summary_ms: numberCell(cells[34] ?? ''),
-		visual_plan_ms: numberCell(cells[35] ?? ''),
-		visual_plan_ms_is_estimate: cells[36] ?? '',
-		faithfulness_ms: numberCell(cells[37] ?? ''),
-		model_wait_ms: numberCell(cells[38] ?? ''),
-		item_total_ms: numberCell(cells[39] ?? ''),
-		stage_gap_ms: numberCell(cells[40] ?? ''),
-		visual_plan_tokens_written: numberCell(cells[41] ?? ''),
-		label_prefill_tokens_per_s: numberCell(cells[42] ?? ''),
-		label_decode_tokens_per_s: numberCell(cells[43] ?? ''),
-		summary_prefill_tokens_per_s: numberCell(cells[44] ?? ''),
-		summary_decode_tokens_per_s: numberCell(cells[45] ?? ''),
-		cpu_model: cells[46] ?? '',
-		cpu_busy_pct: numberCell(cells[47] ?? ''),
-		load_1m: numberCell(cells[48] ?? '')
+		date: cell(cells, 'date'),
+		run_id: cell(cells, 'run_id'),
+		item_id: cell(cells, 'item_id'),
+		vertical: cell(cells, 'vertical'),
+		source_id: cell(cells, 'source_id'),
+		stage: cell(cells, 'stage'),
+		outcome: cell(cells, 'outcome'),
+		code: cell(cells, 'code'),
+		source_words: figure(cells, 'source_words'),
+		summary_words: figure(cells, 'summary_words'),
+		source_words_before_cap: figure(cells, 'source_words_before_cap'),
+		fetch_ms: figure(cells, 'fetch_ms'),
+		extract_ms: figure(cells, 'extract_ms'),
+		summarize_ms: figure(cells, 'summarize_ms'),
+		prefill_ms: figure(cells, 'prefill_ms'),
+		decode_ms: figure(cells, 'decode_ms'),
+		input_tokens: figure(cells, 'input_tokens'),
+		output_tokens: figure(cells, 'output_tokens'),
+		cached_tokens: figure(cells, 'cached_tokens'),
+		model_calls: figure(cells, 'model_calls'),
+		label_kind: cell(cells, 'label_kind'),
+		label_prefill_ms: figure(cells, 'label_prefill_ms'),
+		label_decode_ms: figure(cells, 'label_decode_ms'),
+		label_input_tokens: figure(cells, 'label_input_tokens'),
+		label_output_tokens: figure(cells, 'label_output_tokens'),
+		label_cached_tokens: figure(cells, 'label_cached_tokens'),
+		summary_kind: cell(cells, 'summary_kind'),
+		summary_prefill_ms: figure(cells, 'summary_prefill_ms'),
+		summary_decode_ms: figure(cells, 'summary_decode_ms'),
+		summary_input_tokens: figure(cells, 'summary_input_tokens'),
+		summary_output_tokens: figure(cells, 'summary_output_tokens'),
+		summary_cached_tokens: figure(cells, 'summary_cached_tokens'),
+		queue_wait_ms: figure(cells, 'queue_wait_ms'),
+		label_ms: figure(cells, 'label_ms'),
+		summary_ms: figure(cells, 'summary_ms'),
+		visual_plan_ms: figure(cells, 'visual_plan_ms'),
+		visual_plan_ms_is_estimate: cell(cells, 'visual_plan_ms_is_estimate'),
+		faithfulness_ms: figure(cells, 'faithfulness_ms'),
+		model_wait_ms: figure(cells, 'model_wait_ms'),
+		item_total_ms: figure(cells, 'item_total_ms'),
+		stage_gap_ms: figure(cells, 'stage_gap_ms'),
+		visual_plan_tokens_written: figure(cells, 'visual_plan_tokens_written'),
+		label_prefill_tokens_per_s: figure(cells, 'label_prefill_tokens_per_s'),
+		label_decode_tokens_per_s: figure(cells, 'label_decode_tokens_per_s'),
+		summary_prefill_tokens_per_s: figure(cells, 'summary_prefill_tokens_per_s'),
+		summary_decode_tokens_per_s: figure(cells, 'summary_decode_tokens_per_s'),
+		cpu_model: cell(cells, 'cpu_model'),
+		cpu_busy_pct: figure(cells, 'cpu_busy_pct'),
+		load_1m: figure(cells, 'load_1m')
 	}));
 }
 
