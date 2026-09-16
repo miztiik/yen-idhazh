@@ -272,6 +272,8 @@ holding a `bench-raw` artifact with the `llama-bench` output and the
 ## See also
 
 - [../models.md](../models.md) - one row a model, and what each dossier holds.
+- [what-the-draft-head-is-worth.md](what-the-draft-head-is-worth.md) - the worked example of a difference two dispatches could not establish and one paired job settled.
+- [../host-metrics.md](../host-metrics.md) - what every job now records about the machine it drew.
 - [../models/gemma-4-e4b-qat.md](../models/gemma-4-e4b-qat.md) - Gemma's draws and what its draft head is worth.
 - [../models/ornith-1.5-9b-q5km.md](../models/ornith-1.5-9b-q5km.md) - Ornith's draws.
 - [../models/qwen3.5-9b-q4km.md](../models/qwen3.5-9b-q4km.md) - the incumbent's draws.
