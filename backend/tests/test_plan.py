@@ -248,6 +248,7 @@ def plan(
     run_n: int = 1,
     state: Path | None = None,
     safety_ceiling: int | None = None,
+    day_ceiling: int | None = None,
     max_age_hours: float | None = None,
     source_share: float | None = None,
     cap: int | None = None,
@@ -260,6 +261,17 @@ def plan(
                 update={
                     "run": settings.app.run.model_copy(
                         update={"safety_ceiling_per_run": safety_ceiling}
+                    )
+                }
+            ),
+        )
+    if day_ceiling is not None:
+        settings = dataclasses.replace(
+            settings,
+            app=settings.app.model_copy(
+                update={
+                    "run": settings.app.run.model_copy(
+                        update={"safety_ceiling_per_day": day_ceiling}
                     )
                 }
             ),
@@ -572,6 +584,69 @@ def test_an_outlet_running_two_different_stories_keeps_both() -> None:
 def test_the_committed_ceiling_is_far_above_any_real_day() -> None:
     built = plan([LAB, TRADE, COMMUNITY])
     assert len(built.items) < config.load().app.run.safety_ceiling_per_run
+
+
+def test_the_day_ceiling_binds_with_every_run_still_under_its_own(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The second run of a day stops short, and its own run ceiling never fires.
+
+    This is the case one knob could not answer. Each run is well inside
+    `safety_ceiling_per_run`; what stops the second one is what the first one
+    already put in front of a reader.
+    """
+    caplog.set_level("INFO", logger="idhazh")
+    state = Path(tempfile.mkdtemp())
+    desk = [LAB, TRADE, COMMUNITY]
+
+    first = plan(desk, state=state, day_ceiling=99)
+    ledger.append_item_health(state, DATE, [_carried(item) for item in first.items])
+    room = 2
+
+    again = plan(desk, state=state, run_n=2, day_ceiling=len(first.items) + room)
+
+    assert len(again.items) == room
+    assert len(again.items) < config.load().app.run.safety_ceiling_per_run, (
+        "the run ceiling is nowhere near, so the day ceiling is what bound"
+    )
+    assert f"day ceiling reached published={len(first.items)}" in caplog.text
+
+
+def test_a_full_day_refuses_the_next_run_outright() -> None:
+    """No room left is not a negative number of slots. It is nothing planned."""
+    state = Path(tempfile.mkdtemp())
+    desk = [LAB, TRADE, COMMUNITY]
+
+    first = plan(desk, state=state, day_ceiling=99)
+    ledger.append_item_health(state, DATE, [_carried(item) for item in first.items])
+
+    again = plan(desk, state=state, run_n=2, day_ceiling=len(first.items))
+
+    assert again.items == []
+
+
+def test_a_day_under_its_ceiling_is_untouched() -> None:
+    """A guardrail that refuses nothing has changed nothing."""
+    state = Path(tempfile.mkdtemp())
+    desk = [LAB, TRADE, COMMUNITY]
+
+    first = plan(desk, state=state, day_ceiling=99)
+    ledger.append_item_health(state, DATE, [_carried(item) for item in first.items])
+
+    again = plan(desk, state=state, run_n=2, day_ceiling=99)
+    loose = plan(desk, state=state, run_n=3, day_ceiling=10_000)
+
+    assert [item.item_id for item in again.items] == [item.item_id for item in loose.items]
+
+
+def test_the_committed_day_ceiling_is_the_run_ceiling_five_times_over() -> None:
+    """The day runs five times, so the two numbers have to agree on that.
+
+    The committed pair changes no day that has ever been published: it is what
+    the design already allowed, written down where a person can read it.
+    """
+    run = config.load().app.run
+    assert run.safety_ceiling_per_day == run.safety_ceiling_per_run * 5
 
 
 def test_a_cap_takes_the_best_of_each_vertical_and_leaves_the_ceiling_alone() -> None:
