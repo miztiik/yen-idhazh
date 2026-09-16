@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-16
 
 The console's interactive charts read a published projection of item health. They
 never read `state/item-health/` directly.
@@ -256,58 +256,78 @@ in six groups.
 A column nobody reads is weight on every browser fetch, so each group above is a
 decision to revisit when a question needs it rather than a permanent refusal.
 
-### A new column is appended at the end, and the reader checks a prefix
+### The reader finds a cell by its name, so a column can move
 
-**The browser's header check is a prefix match, not an equality.**
-`parseTelemetryCsv` in `frontend/src/lib/charts/series.ts` holds
-`TELEMETRY_COLUMNS`, and compares it position by position against the header it
-read - so it asserts that the first `n` published columns are the `n` names it
-knows, and says nothing about anything after them.
+**`parseTelemetryCsv` in `frontend/src/lib/charts/series.ts` resolves every cell
+against the header of the file it just read.** `TELEMETRY_COLUMNS` names the
+cells it wants; the header says where each one sits. Nothing is read by a
+position, so the writer can append, insert or reorder without moving a cell the
+console draws.
 
-Both lists carry the same 49 names since 2026-09-15, so the check covers the
-whole header today. It is written for the day it does not, and that day is
-normal rather than exceptional: **append at the end is a rule rather than
-tidiness**.
+Until 2026-09-16 it took each cell by index - `cpu_model` from `cells[46]` - and
+guarded that with a prefix match on the header. The guard is what made the
+indices survivable, and it only ever protected one direction. Reading by name
+removes the question rather than guarding it, and the three cases collapse to
+one answer.
 
-- **Appending** a column keeps every earlier position where the reader expects
- it, so an old browser build reads a new shard and ignores the new cell.
-- **Inserting or reordering** shifts a position the prefix covers, and the check
- throws `telemetry projection header did not match the contract` - loudly,
- which is correct.
-- **Removing** one does the same, one position earlier.
+| Change on the writer's side | What the console does |
+| --- | --- |
+| **Appending** a column | Reads every cell it knows. Ignores the new one until `TELEMETRY_COLUMNS` and `TelemetryRow` name it. |
+| **Inserting or reordering** | The same. Position is not what it looks a cell up by. |
+| **Removing** one, or renaming it | That cell reads as absent - null for a figure, empty for a word - and the names go to the browser console once per shard. Every other cell is unaffected. |
 
-**The prefix protects one direction, and widening the reader is the other one.**
-An old bundle reading a new shard is safe, which is what the check is for. A new
-bundle reading an **old** shard is not: it knows more names than the file has, so
-the check throws. That is a stale cached shard against a fresh bundle, and it
-degrades rather than breaking - `loadVisibleMonths` in
-`frontend/src/routes/console/+page.svelte` wraps the fetch and the parse in one
-`try`, logs `telemetry <month> could not be read; showing a gap`, and the charts
-draw the gap they already know how to draw.
+**An absent column degrades and does not fail** (`CLAUDE.md` section 1a). The
+absent value is the one every panel already draws for a cell nothing measured,
+so a shard that lost `cpu_model` draws the processor as unknown and keeps every
+other figure. `telemetryColumnIndex` is the detectable half: it hands back which
+contract columns the header did not carry, so nothing has to infer a gap from an
+empty string.
 
-**On today's data that direction cannot be reached at all**, and the reason is
-worth knowing before someone tries to test it. The prerendered seed covers
+What that gives up, stated rather than implied: a renamed column now draws as
+absence where the old prefix check stopped the parse. The rename fails earlier
+instead, in the contract test below, before either side ships.
+
+**A header with no `date`, `run_id` or `item_id` is refused**, and those three
+are the only refusal left. Every panel filters by `date` and counts by one of
+the other two, so a file carrying none of them is not this projection - a 200
+that served an error page, or a shard of some other series. Parsing it would
+hand the console a month of blank rows instead of a gap. A refusal is not a
+broken page: `loadVisibleMonths` in `frontend/src/routes/console/+page.svelte`
+wraps the fetch and the parse in one `try`, logs `telemetry <month> could not be
+read; showing a gap`, and the charts draw the gap they already know how to draw.
+
+**A new bundle against an old cached shard is the case this was measured on, and
+today it cannot be reached at all.** The prerendered seed covers
 `console.default_window_days`, which at 30 days reaches back across both
 published months, so `monthsToFetch` returns nothing at every preset and the
 console makes no runtime shard request. Measured 2026-09-05 by serving an
 11-column shard from a route interceptor at the 7, 14, 30 and 90-day presets: the
 interceptor fired **zero** times, which proves the path is unreachable and proves
-nothing about the degrade. It becomes reachable when a third month is published
-and the operator widens past the seeded span.
+nothing about what happens on it. It becomes reachable when a third month is
+published and the operator widens past the seeded span. What it will do then is
+draw whatever cells that shard does carry and report the rest absent - for the
+11-column shard above, eleven cells drawn and the other thirty-eight reported
+absent against the 49 the reader knows - which is the row above rather than a
+special case.
+
+`frontend/tests/telemetry-header.spec.ts` holds all of it on built shards: a
+reversed header, a header with a column inserted at the front, a header with
+`cpu_model` gone, and a header that is not this projection. Every one is written
+in the test. Reading `frontend/public/telemetry/` instead would cost more every
+published month (Guardrail #12) and could not produce any of the four.
 
 **Nothing in the frontend can see the writer, so a contract test holds the two
 lists together.**
-`backend/tests/contracts/test_taxonomy_and_prompts.py::test_the_console_reads_a_prefix_of_the_published_telemetry_columns`
-pulls `TELEMETRY_COLUMNS` out of `series.ts` with a regex and asserts it is a
-prefix of `PUBLIC_COLUMNS`. It passes an append on the writer's side, fails an
-insert, a rename or a reorder at any position the browser reads, and fails a
-frontend name the writer never writes. It fails first when the regex stops
+`backend/tests/contracts/test_taxonomy_and_prompts.py::test_the_console_reads_only_telemetry_columns_the_writer_writes`
+pulls `TELEMETRY_COLUMNS` out of `series.ts` with a regex and asserts every name
+in it is a name `PUBLIC_COLUMNS` writes. It fails a typo and a rename, which is
+the drift the reader degrades on and therefore cannot report. It says nothing
+about order, because the reader reads none. It fails first when the regex stops
 matching, because a guard that quietly finds nothing is worse than no guard.
 The two lists had already drifted once with nothing to notice: from 2026-08-28
 to 2026-08-29 the shard carried `source_words_before_cap` and the reader did
-not. **Do not tighten the check to an equality.** Equality is what the test
-deliberately does not assert - it would break every cached bundle on the next
-append, which is the one case the prefix exists for.
+not. **Do not tighten it to an equality.** A writer-only column is the normal
+state between the commit that publishes a cell and the commit that draws it.
 
 **How long a shard is kept is a knob of its own, and it is now spent.**
 `observability.public_telemetry_keep_months` is 14, and the contract refuses any
@@ -342,10 +362,10 @@ on the pruner's:
 **The sharp edge is the round trip, not the parse.** `telemetryCsv`
 re-serializes from `TELEMETRY_COLUMNS` as well, so a column the parser ignored
 is dropped rather than carried through. Any code that reads a shard and writes
-one back narrows it to the names the reader knows. The test permits a
-writer-only append, so it cannot catch that; whoever adds column twelve adds it
+one back narrows it to the names the reader knows. The contract test permits a
+writer-only column, so it cannot catch that; whoever adds column fifty adds it
 to `TELEMETRY_COLUMNS` and to `TelemetryRow` in the same commit, or the client
-keeps reading a projection it cannot see the end of.
+keeps reading a projection it cannot see all of.
 
 ## What the model did - read at build time, never published
 

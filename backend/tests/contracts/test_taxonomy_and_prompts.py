@@ -163,15 +163,20 @@ def test_the_frontend_names_every_committed_lens_including_a_tombstone() -> None
     assert named == committed, "the page and config/taxonomy.json disagree about the lens names"
 
 
-def test_the_console_reads_a_prefix_of_the_published_telemetry_columns() -> None:
+def test_the_console_reads_only_telemetry_columns_the_writer_writes() -> None:
     """The browser's copy of the projection header, held against the writer.
 
     `frontend/src/lib/charts/series.ts` restates `PUBLIC_COLUMNS` because it is
-    TypeScript and the writer is Python, and its header check reads a prefix on
-    purpose - a browser holding a cached bundle keeps working when a column is
-    appended. So this test allows an append and refuses an insert, a rename or a
-    reorder at any position the browser reads, and refuses a name the writer
-    never writes. Nothing else ties the two lists together.
+    TypeScript and the writer is Python. It resolves every cell by name against
+    the header of the file it read, so an insert, a reorder and an append all
+    move nothing it draws, and none of the three is this test's business.
+
+    What is this test's business is a name the writer never writes. The reader
+    degrades such a cell to absent rather than refusing the file, which is right
+    for a stale shard and useless as a guard against a typo or a rename - both
+    would draw a blank column on a page that has no way to know. So the rule is
+    containment: every name the console reads is a name the writer writes.
+    Nothing else ties the two lists together.
     """
     source = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "charts" / "series.ts")
     declared = re.search(
@@ -180,10 +185,10 @@ def test_the_console_reads_a_prefix_of_the_published_telemetry_columns() -> None
     assert declared is not None, "series.ts no longer declares a TELEMETRY_COLUMNS array"
     names = tuple(re.findall(r"'([^']+)'", declared.group(1)))
     assert names, "TELEMETRY_COLUMNS matched but held no column names"
-    assert names == PUBLIC_COLUMNS[: len(names)], (
-        "series.ts and public_telemetry.py disagree about the telemetry header: "
-        f"the console reads {list(names)}, the writer writes "
-        f"{list(PUBLIC_COLUMNS[: len(names)])} in those positions"
+    unwritten = [name for name in names if name not in PUBLIC_COLUMNS]
+    assert not unwritten, (
+        "series.ts reads telemetry columns public_telemetry.py never writes: "
+        f"{unwritten}"
     )
 
 
