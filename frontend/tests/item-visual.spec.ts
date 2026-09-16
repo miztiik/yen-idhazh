@@ -655,9 +655,51 @@ test.describe('THE ORACLE: the drawing takes the width it is given', () => {
 	/** How far from one pixel a unit may resolve, as a share. */
 	const SCALE_TOLERANCE = 0.005;
 
-	/** Every chart's drawn width, as one string, so a redraw can be spotted. */
-	async function placed(page: Page): Promise<string> {
-		return (await plots(page)).map((plot) => plot.drawn).join(',');
+	/**
+	 * Whether the page has finished answering a viewport change.
+	 *
+	 * **Both readings are taken inside the page, a rendering frame apart**, and
+	 * that is the whole of the fix for a wait that used to pass over a drawing
+	 * which had not moved yet. The width reaches the drawing through a resize
+	 * watcher, which the browser delivers in the rendering update that follows
+	 * the layout change - so a reading taken before that frame and a reading
+	 * taken after it cannot agree, and two that do agree are both past it.
+	 *
+	 * **A reading pair separated by a round trip instead cannot see a widening
+	 * resize at all.** The card is CSS and grows the moment the viewport does;
+	 * the svg carries its own `width` and `max-width: 100%` clamps a drawing too
+	 * wide for its card but never stretches one too narrow. So when the viewport
+	 * grows, nothing but the redraw moves the drawn width - and a loop whose
+	 * condition is "this reading equals the one before the resize" is satisfied
+	 * by exactly the state it exists to wait out. That is the defect CI caught on
+	 * pull request #784: at 390 px the card had grown to 282 and the drawing was
+	 * still the 252 it drew at 360.
+	 *
+	 * **The viewport is part of the reading**, so a pair taken before the resize
+	 * reached the renderer cannot settle either.
+	 *
+	 * **It compares the geometry rather than judging it, so it is not the oracle
+	 * wearing a timeout.** A drawing that never answers its card settles at once
+	 * on the wrong numbers and fails below with its own message, which is what a
+	 * fixed box stretched to fit has to do here.
+	 */
+	function quiet(page: Page, width: number): Promise<boolean> {
+		return page.evaluate(async (asked) => {
+			const geometry = () =>
+				[...document.querySelectorAll('main article figure')]
+					.map((figure) => {
+						const svg = figure.querySelector('svg');
+						return [
+							figure.getBoundingClientRect().width,
+							svg?.getBoundingClientRect().width ?? '',
+							svg?.viewBox.baseVal.width ?? ''
+						].join(':');
+					})
+					.join(',');
+			const before = geometry();
+			await new Promise((wake) => requestAnimationFrame(() => requestAnimationFrame(wake)));
+			return window.innerWidth === asked && geometry() === before;
+		}, width);
 	}
 
 	test('at three widths the plot is as wide as the card lets it be', async ({ page }) => {
@@ -665,23 +707,8 @@ test.describe('THE ORACLE: the drawing takes the width it is given', () => {
 
 		const widest: number[] = [];
 		for (const width of WIDTHS) {
-			// **Waited out rather than asserted here.** The width reaches the drawing
-			// through a resize watcher, so the page needs a frame to redraw, and the
-			// wait is for the redraw to SETTLE rather than for the property below to
-			// hold. A wait that asserts the oracle replaces the oracle's own failure
-			// message with a timeout, which is how a broken drawing gets reported as
-			// a slow one. Primed with the widths from before the resize, so settling
-			// means two reads that agree after the viewport moved.
-			let settled = await placed(page);
 			await page.setViewportSize({ width, height: 900 });
-			await expect
-				.poll(async () => {
-					const now = await placed(page);
-					const same = now === settled;
-					settled = now;
-					return same;
-				})
-				.toBe(true);
+			await expect.poll(() => quiet(page, width)).toBe(true);
 
 			const drawn = await plots(page);
 			expect(drawn.length, `${width}: the page drew no chart to measure`).toBeGreaterThan(0);
