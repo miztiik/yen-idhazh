@@ -180,6 +180,45 @@ A worker records only items that have settled. An item whose summary payload is
 simply not written yet was interrupted, not failed, and assemble classifies it
 later once the difference no longer matters.
 
+## What the machine was doing
+
+A throughput number with no machine beside it is not a measurement (Guardrail
+#10), so ten cells of the census row are about the host rather than the item:
+the processor, the runner label, how busy that processor was across the item,
+the one-minute load, three memory readings and what the kernel counted against
+the job's memory limit.
+
+`backend/idhazh/telemetry/host.py` is the only thing that reads them, and it
+reads them for two consumers at two grains.
+
+| Consumer | Grain | The question it answers |
+| --- | --- | --- |
+| the item row | one item | did this item meet a noisy neighbour? |
+| `state/runtime-counters.csv` | one shard | what did the whole job cost, and does the census's own clock agree with the server's? |
+
+**They stay two stores on purpose.** The counters row is the independent check on
+the census's own timings, and a check folded into the thing it checks stops
+being a check.
+
+**The item row records the sample taken while that item ran, never the shard's
+average.** An average says nothing about the item that was slow, which is the
+whole question these cells exist to answer.
+
+Three column names appear on both rows, and **two of the three are supposed to
+differ**. `cpu_busy_pct` is one item's window on the item row and the whole
+job's - cache restore and weight load included - on the shard row.
+`cgroup_peak_bytes` is a high-water mark read at two different instants.
+`cpu_model` is the third and it is not like the others: a processor does not
+change inside a job, so two different answers would mean the host had been read
+twice. Both rows take it from one `host_facts` call.
+
+Every source is one local file read, and a reading that cannot be taken records
+empty rather than failing the item. `/sys/fs/cgroup/memory.peak` has measured
+absent on every GitHub-hosted runner this project has probed, so that cell is
+usually empty in CI and always empty on a developer machine - a fact about the
+instrument, not about the job. What one sample costs is in
+[measurements.md](../reference/measurements.md).
+
 ## The visual ledger, and the eight terms that outlive it
 
 `state/visuals/<YYYY-MM>.csv` is the third committed record here: one row per

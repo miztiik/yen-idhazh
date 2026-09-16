@@ -42,7 +42,7 @@ decision about current behaviour; that belongs in `docs/` (Guardrail #4).
 | 6 | The census prefers the persisted row | 5 | D | PENDING | - | - | - |
 | 7 | Six columns that are arithmetic over filled ones | 6 | E | PENDING | - | - | - |
 | 8 | The label call's own clock and both finish reasons | 6 | E | PENDING | - | - | - |
-| 9 | The host sampler moves in | 3 | B | PENDING | - | - | - |
+| 9 | The host sampler moves in | 3 | B | DONE | p32r9 | - | - |
 | 10 | Nine publishers become one dispatcher | 3 | B | PENDING | - | - | - |
 | 11 | `idhazh telemetry` and its subcommands | 3, 10 | F | PENDING | - | - | - |
 | 12 | `telemetry prune` takes a target and a range | 11 | G | PENDING | - | - | - |
@@ -86,7 +86,7 @@ flowchart TB
         sinks["sinks.py<br/>null, file, fan-out, host"]
         traces_m["traces.py<br/>where a committed trace lands"]
         rollup["rollup.py<br/>roll_up_spans"]
-        host["host.py<br/>cpu, memory, runner"]
+        host["host.py<br/>cpu, memory, runner<br/>+ the counters stage"]
         feeds["source_health.py<br/>is this feed worth asking"]
         prune_m["prune.py<br/>target + range, atomic"]
         inventory["inventory.py<br/>what one day recorded"]
@@ -123,7 +123,7 @@ flowchart TB
 
     work_s -->|"cells"| record_m
     work_s --> spans
-    work_s --> host
+    work_s -->|"one host_facts a shard,<br/>one Watch an item"| host
     plan_s --> events
     record_m -->|"validated row"| ihr
     record_m -->|"items/*.health.json"| record_s
@@ -136,7 +136,8 @@ flowchart TB
     sinks --> tr
     spans --> rollup
     rollup --> srr --> sr
-    host --> rc
+    host -->|"ten cells"| ihr
+    host -->|"one row a shard"| rc
     ih --> dispatch
     sr --> dispatch
     rc --> dispatch
@@ -170,7 +171,7 @@ dispatcher is what `stages/assemble.py` is too.
 `stages/counters.py` and the ten modules row 10 moved - nine `publish_*.py` and
 `source_health.py` - are deleted by the row that moves them, not left beside
 their replacement. `frontend/public/scores/` and `frontend/public/feed-health/`
-are deleted by row 15.
+are deleted by row 15. `machine.py` and `stages/counters.py` went on 2026-09-16.
 
 
 ---
@@ -389,10 +390,12 @@ are deleted by row 15.
 ## Section 10 - Row #9 - The host sampler moves in
 
 - **Scope:** `machine.py` and `stages/counters.py` become `telemetry/host.py`, and the six host columns plus `cpu_busy_pct` and `cgroup_peak_bytes` reach the item row.
+- **What the row did, 2026-09-16.** All ten host columns reach the item row a shard leaves on disk, and a test drives a real work stage against a built `/proc` to prove it rather than waiting for CI to fill the cells. Three names changed on the way in, each against a collision inside one package: `machine.Span` is `HostCells`, because `telemetry.Span` is a node of the trace tree two modules away; `machine.Reading` is `HostReading`; and the sampler is `host.py` rather than `machine.py`, which leaves `telemetry/publish/machine.py` the only `machine` in the tree. **One duplicate reader went as well**: `contracts.runtime_counters._cgroup_peak_bytes` parsed the kernel peak file that `host` also opens, so `from_metrics_text` now takes the number instead of the text and the contract stops parsing a host file. `stage_counters` takes its `state_root` as an argument rather than importing `stages.common`, so the instrument does not import the producers. **Measured, 2026-09-16**: one sample is 0.7 ms and a whole item is 3.0 ms against a median 475,890 ms item - and dropping a `/proc/cpuinfo` read the first cut took per item cut the tail 25 percent ([measurements.md](../docs/reference/measurements.md)).
 - **Files touched:**
   - `backend/idhazh/telemetry/host.py` (moved from `backend/idhazh/machine.py` and `backend/idhazh/stages/counters.py`)
   - `backend/idhazh/stages/work.py`
-  - `backend/idhazh/publish_machine.py`
+  - `backend/idhazh/cli.py`
+  - `backend/idhazh/contracts/runtime_counters.py`
 - **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests/workflows backend/tests/test_telemetry.py`. CI runs the full suite.
 - **Oracle:** the host columns on an item row and the same-named columns on that shard's `runtime-counters` row are read from one sampler call, so they cannot disagree. It cannot settle whether the sample is representative of the item's whole run.
 - **Decisions:**
@@ -401,6 +404,7 @@ are deleted by row 15.
 | --- | --- | --- |
 | 1 | One sampler, two consumers. `runtime-counters` stays a separate store at shard grain because it is the independent check on the census's timings | Carmack |
 | 2 | The item row records the sample taken while that item ran, not the shard's average. An average tells you nothing about the item that was slow | Carmack |
+| 3 | Equality holds for `cpu_model` and never for `cpu_busy_pct`. A processor does not change inside a job, so two answers means the host was read twice; a busy share over one item and a busy share over a whole job are different windows and are meant to disagree. Shipped 2026-09-16 | Carmack |
 
 - **Rejected alternatives:**
 

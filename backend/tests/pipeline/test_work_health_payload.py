@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import replace
+from itertools import count
 from pathlib import Path
 from typing import Any, Final
 
@@ -32,6 +33,7 @@ from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.stages import common
 from idhazh.stages.work import stage_work
+from idhazh.telemetry import host
 from idhazh.telemetry.record import HEALTH_SUFFIX
 
 from ._builders import _work_stage, captured_article_fetch, closed_loopback_endpoint, plan
@@ -129,6 +131,99 @@ def test_the_file_is_the_row_the_shard_reported_cell_for_cell(
             {column: record[column] for column in ItemHealthRow.csv_columns()}
         )
         assert json.loads(written[said.item_id].to_json()) == json.loads(said.to_json())
+
+
+#: Every host cell the sampler names, in the order the item-health doc lists
+#: them. Named once so a column added to the sampler moves one line here.
+HOST_COLUMNS: Final = (
+    "cpu_model",
+    "runner_name",
+    "cpu_busy_pct",
+    "cpu_busy_max",
+    "cpu_busy_min",
+    "load_1m",
+    "llama_rss_bytes",
+    "llama_rss_peak_bytes",
+    "python_rss_bytes",
+    "cgroup_peak_bytes",
+)
+
+
+def a_machine_that_answers(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+    """A `/proc` and a kernel peak this test writes, so every host cell fills.
+
+    Nothing here reads the box the suite runs on. None of these paths exists on a
+    developer machine, so a test that asked the real host would record ten empty
+    cells locally and ten full ones in CI - which is a test that passes or fails
+    on the weather (CLAUDE.md section 13).
+
+    The processor counters climb between reads, because a busy share is the
+    difference of two of them and two identical reads are no window at all.
+    """
+    table = tmp_path / "proc"
+    for pid, comm in (("1", "systemd"), ("742", "llama-server")):
+        (table / pid).mkdir(parents=True)
+        (table / pid / "comm").write_text(f"{comm}\n", encoding="utf-8")
+    ticks = count(start=100, step=200)
+
+    def built(path: Path) -> str | None:
+        if path == host.PROC_STAT:
+            moment = next(ticks)
+            return f"cpu  {moment} 0 {moment} {moment * 4} 0 0 0 0 0 0\n"
+        if path == host.LOADAVG:
+            return "1.53 1.20 0.91 2/312 9931\n"
+        if path == host.CGROUP_PEAK:
+            return "15032385536\n"
+        if path.name == "status":
+            return "VmRSS:\t 4194304 kB\nVmHWM:\t 5242880 kB\n"
+        if path.name == "comm":
+            return path.read_text(encoding="utf-8")
+        return None
+
+    monkeypatch.setattr(host, "PROC", table)
+    monkeypatch.setattr(host, "_text", built)
+    monkeypatch.setenv("RUNNER_NAME", "ubuntu-4core-3")
+
+
+def test_every_host_column_reaches_the_row_the_shard_left_behind(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """Ten columns that were computed and discarded now outlive the process.
+
+    A throughput number with no machine beside it is not a measurement
+    (Guardrail #10), and until the work stage recorded these, whether a slow item
+    met a noisy neighbour was unanswerable. The assertion is per item rather than
+    per shard, because the shard's average says nothing about the item that was
+    slow - which is the entire question these columns exist to answer.
+    """
+    a_machine_that_answers(monkeypatch, tmp_path / "host")
+    _, items_dir = worked(tmp_path, monkeypatch)
+
+    written = rows(items_dir)
+
+    assert written, "no rows means the loop below asserts nothing"
+    for item_id, row in written.items():
+        filled = {column for column in HOST_COLUMNS if getattr(row, column) is not None}
+        assert filled == set(HOST_COLUMNS), f"{item_id} lost {set(HOST_COLUMNS) - filled}"
+
+
+def test_the_shard_names_one_machine_on_every_row_it_records(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """One `host_facts` call a shard, so two items cannot name two processors.
+
+    The item row and `state/runtime-counters.csv` both carry `cpu_model`. They
+    are separate stores on purpose - the counters row is the independent check on
+    the census's own timings - so what has to hold is that the machine they name
+    came from one reading.
+    """
+    a_machine_that_answers(monkeypatch, tmp_path / "host")
+    _, items_dir = worked(tmp_path, monkeypatch)
+
+    written = rows(items_dir)
+
+    assert len({row.cpu_model for row in written.values()}) == 1
+    assert {row.runner_name for row in written.values()} == {"ubuntu-4core-3"}
 
 
 def test_an_item_that_failed_extraction_still_leaves_a_row(
