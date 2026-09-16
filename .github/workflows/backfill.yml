@@ -65,19 +65,7 @@ jobs:
         run: |
           set -euo pipefail
           git diff --stat -- frontend/public/digest/
-          python - <<'PY'
-          import json, pathlib
-          root = pathlib.Path("frontend/public/digest")
-          total_items = total_vectors = 0
-          for path in sorted(root.glob("*/*/*/digest.json")):
-              day = json.loads(path.read_text(encoding="utf-8"))
-              vectors = len((day.get("embeddings") or {}).get("vectors", {}))
-              items = len(day["items"])
-              total_items += items
-              total_vectors += vectors
-              print(f"{day['date']}  items={items:>5}  vectors={vectors:>5}")
-          print(f"corpus: {total_vectors} vectors over {total_items} items")
-          PY
+          python3 backend/utilities/backfill_report.py
 
       - uses: actions/setup-node@v7
         with:

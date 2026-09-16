@@ -1,16 +1,7 @@
-"""Which model files will a shell see, and is every field it republishes one bare word?
+"""Which model files will a shell see, and is every field one bare word?
 
-Three workflows asked this and each carried its own copy of the answer inside a
-YAML heredoc: `digest.yml` for the configured entry, `measure.yml` and
-`validate.yml` for a dispatched candidate. The copies were never quite the same
-- one of them let a draft head declare a file with no digest and fetch it
-unchecked, and that survived because ruff never reads a heredoc, mypy never
-sees it and no unit test can import it.
-
-**Every value here becomes a shell argument or a download URL downstream.** A
-job output is pasted into a command, so this is the one point where a value
-carrying a space, a quote or a newline has to stop (`CLAUDE.md` Guardrail #11).
-Nothing between here and those commands looks again.
+Every value here becomes a shell argument or a download URL, so this is where a
+value carrying a space, a quote or a newline stops (Guardrail #11).
 """
 
 from __future__ import annotations

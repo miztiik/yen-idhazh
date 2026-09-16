@@ -87,42 +87,16 @@ jobs:
           PICK_SEED: ${{ github.run_id }}
         run: |
           set -euo pipefail
-          python - <<'PY' | tee -a "$GITHUB_OUTPUT"
-          import os
-          from pathlib import Path
+          python3 backend/utilities/pipeline_draw.py pick --seed "$PICK_SEED" \
+            | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
-          from idhazh.contracts.pipeline_tests import PipelineTestsConfig
-
-          settings = PipelineTestsConfig.from_json(
-              Path("config/pipeline-tests.json").read_text(encoding="utf-8")
-          )
-          seed = os.environ["PICK_SEED"]
-          drawn = settings.draw(seed)
-          print(f"seed={seed}")
-          print("addresses=" + " ".join(candidate.url for candidate in drawn))
-          print("feeds=" + " ".join(candidate.source_id for candidate in drawn))
-          PY
-
-      # Read from config once, here, so the fetch and the cache key below cannot
-      # open it a second time and disagree. Each value is asserted to be one
-      # bare word at the point that writes it, because each one is substituted
-      # into a shell command further down.
+      # Read once, here, so the fetch and the cache key below cannot open config
+      # a second time and disagree.
       - id: models
         run: |
           set -euo pipefail
-          python - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-          import pathlib
-
-          config = json.load(open("config/idhazh.json", encoding="utf-8"))
-          models_file = pathlib.Path("config") / config["models_file"]
-          models = json.load(open(models_file, encoding="utf-8"))
-          for field in ("repo", "revision", "file"):
-              value = models["summarize"].get(field) or ""
-              if value.split() != [value]:
-                  raise SystemExit(f"models.summarize.{field} is empty or not one word")
-              print(f"summarize_{field}={value}")
-          PY
+          python3 backend/utilities/model_refs.py configured \
+            | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
       # The same key the daily run uses, so a dispatch on a warm runner pays
       # nothing for the weights. The key names every part of what it holds: the
@@ -192,54 +166,7 @@ jobs:
       - name: Write each case's config
         run: |
           set -euo pipefail
-          python - <<'PY'
-          import json
-          import shutil
-          from pathlib import Path
-
-          from idhazh.contracts.pipeline_tests import PipelineTestsConfig
-
-          settings = PipelineTestsConfig.from_json(
-              Path("config/pipeline-tests.json").read_text(encoding="utf-8")
-          )
-          for case in settings.cases:
-              root = Path("backend/var/cases") / case.id / "config"
-              if root.exists():
-                  shutil.rmtree(root)
-              root.parent.mkdir(parents=True, exist_ok=True)
-              shutil.copytree("config", root)
-
-              app_path = root / "idhazh.json"
-              app = json.loads(app_path.read_text(encoding="utf-8"))
-              # Through `.get`, because the committed config carries only what
-              # differs from a default - so a block this case moves may not be
-              # in the file at all.
-              summarize = dict(app.get("summarize") or {})
-              summarize["asks_for_a_visual_plan"] = case.asks_for_a_visual_plan
-              app["summarize"] = summarize
-              if not case.asks_for_a_visual_plan:
-                  visuals = dict(app.get("visuals") or {})
-                  visuals["enabled_kinds"] = []
-                  app["visuals"] = visuals
-              app_path.write_text(
-                  json.dumps(app, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-              )
-
-              models_path = root / app["models_file"]
-              models = json.loads(models_path.read_text(encoding="utf-8"))
-              entry = dict(models["summarize"])
-              inference = dict(entry["inference"])
-              if case.n_parallel is not None:
-                  inference["n_parallel"] = case.n_parallel
-              if case.n_ctx is not None:
-                  inference["n_ctx"] = case.n_ctx
-              entry["inference"] = inference
-              models["summarize"] = entry
-              models_path.write_text(
-                  json.dumps(models, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-              )
-              print(f"{case.id}={root.as_posix()}")
-          PY
+          python3 backend/utilities/pipeline_case_config.py
 
       # One plan, written once, from the addresses the draw chose. The cases all
       # run it, so the two item ids are fixed before the first request and the
@@ -258,75 +185,10 @@ jobs:
           RUN_EXECUTION: ${{ github.run_id }}
         run: |
           set -euo pipefail
-          python - <<'PY' | tee -a "$GITHUB_OUTPUT"
-          import os
-          from datetime import UTC, datetime
-          from pathlib import Path
-
-          from idhazh import assemble, config, discover, rank
-          from idhazh.contracts.base import derive_url_key
-          from idhazh.contracts.pipeline_tests import PipelineTestsConfig
-          from idhazh.contracts.run_plan import PlannedItem, RunPlan, VerticalPlan
-
-          settings = config.load(Path("config"))
-          feeds = {feed.id: feed for feed in settings.sources.feeds}
-          tests = PipelineTestsConfig.from_json(
-              Path("config/pipeline-tests.json").read_text(encoding="utf-8")
-          )
-          # The headline a daily run reads off the feed entry. These addresses
-          # fell out of their feeds' windows long ago, so the list is where it
-          # comes from - and a missing one is a KeyError here rather than a
-          # degraded item four steps later.
-          headlines = {candidate.url: candidate.title for candidate in tests.candidates}
-          addresses = os.environ["PICKED_ADDRESSES"].split()
-          chosen = os.environ["PICKED_FEEDS"].split()
-          date = datetime.now(UTC).strftime("%Y-%m-%d")
-
-          items = []
-          for address, source_id in zip(addresses, chosen, strict=True):
-              feed = feeds[source_id]
-              canonical = discover.canonicalise(address)
-              url_key = derive_url_key(canonical)
-              items.append(
-                  PlannedItem(
-                      item_id=rank.item_id(feed.vertical, url_key),
-                      url_key=url_key,
-                      source_url=address,
-                      canonical_url=canonical,
-                      source_id=feed.id,
-                      tier=feed.tier,
-                      source_form=feed.form,
-                      vertical=feed.vertical,
-                      title=headlines[address],
-                      rank_score=0.0,
-                  )
-              )
-
-          # A desk row per vertical the draw landed on, because the payload
-          # refuses a list whose items and counts disagree. `feeds_read` stays
-          # zero and that is the honest reading: this plan came off a config
-          # list, so no feed was asked anything.
-          counts: dict[str, int] = {}
-          for item in items:
-              counts[item.vertical] = counts.get(item.vertical, 0) + 1
-          verticals = [
-              VerticalPlan(id=name, considered=drawn, planned=drawn, eligible_feeds=drawn)
-              for name, drawn in sorted(counts.items())
-          ]
-
-          plan = RunPlan(
-              date=date,
-              run_id=f"{date}-{os.environ['RUN_EXECUTION']}",
-              generated_at=assemble.utc_now(),
-              verticals=verticals,
-              items=items,
-          )
-          written = Path("backend/var/pipeline-tests/plan.json")
-          written.parent.mkdir(parents=True, exist_ok=True)
-          assemble.write_atomic(written, plan.to_json())
-          print(f"date={date}")
-          print("item_ids=" + " ".join(item.item_id for item in plan.items))
-          PY
+          python3 backend/utilities/pipeline_draw.py plan \
+            --addresses "$PICKED_ADDRESSES" \
+            --feeds "$PICKED_FEEDS" \
+            --execution "$RUN_EXECUTION" | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
       - name: Start the model
         env:
@@ -486,51 +348,8 @@ jobs:
           EXPECTED_ITEM_IDS: ${{ steps.plan.outputs.item_ids }}
         run: |
           set -euo pipefail
-          python - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
-          import json
-          import os
-          from pathlib import Path
-
-          from idhazh.contracts.pipeline_tests import PipelineTestsConfig
-
-          settings = PipelineTestsConfig.from_json(
-              Path("config/pipeline-tests.json").read_text(encoding="utf-8")
-          )
-          expected = os.environ["EXPECTED_ITEM_IDS"].split()
-          print("| case | items | summaries | model ms | failed |")
-          print("| --- | --- | --- | --- | --- |")
-          silent = []
-          disagreed = []
-          for case in settings.cases:
-              items = Path("backend/var/cases") / case.id / "run" / "items"
-              landed = sorted(path.name.split(".")[0] for path in items.glob("*.article.json"))
-              summaries = sorted(items.glob("*.summary.json"))
-              spent = 0
-              failed = []
-              for path in summaries:
-                  summary = json.loads(path.read_text(encoding="utf-8"))
-                  spent += summary.get("summarize_ms") or 0
-                  if summary.get("status") != "ok":
-                      failed.append(f"{path.name.split('.')[0]}:{summary.get('failure_code')}")
-              note = ", ".join(failed) or "-"
-              if not landed:
-                  silent.append(case.id)
-                  note = "nothing recorded"
-              elif landed != sorted(expected):
-                  disagreed.append(f"{case.id} recorded {landed}")
-              print(
-                  f"| {case.id} | {len(landed)} | {len(summaries)} | {spent} | {note} |"
-              )
-          print("")
-          print(f"the draw asked every case for {' and '.join(expected)}")
-          if silent:
-              print(f"these cases produced nothing: {', '.join(silent)}")
-          if disagreed:
-              raise SystemExit(
-                  "the cases did not all read the same two articles, so nothing here "
-                  "compares: " + "; ".join(disagreed)
-              )
-          PY
+          python3 backend/utilities/pipeline_case_report.py \
+            --expected "$EXPECTED_ITEM_IDS" | tee -a "$GITHUB_STEP_SUMMARY"
 
       # Ninety days, because a change is often argued about weeks after the
       # dispatch that measured it, and re-running is 45 minutes.

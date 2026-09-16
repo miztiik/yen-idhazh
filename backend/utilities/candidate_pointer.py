@@ -1,15 +1,7 @@
 """Point a scratch config at the candidate, by moving one line and nothing else.
 
-The scratch copy differs from the committed config in `models_file` alone, so
-every control a measurement holds fixed - prompt, schema, sampler, context,
-threads, truncation cap - is the committed one by construction, and a candidate
-is measured through the exact line a swap would later move.
-
-**Nothing is transplanted onto the entry.** The bench once overwrote the
-incumbent's `inference` and `turns` digests with the candidate's, which asserts
-that numbers measured for one model hold for another, and then reported a
-throughput taken on a window nobody had sized for those weights. The candidate's
-own file carries its own blocks.
+Nothing is transplanted onto the entry: the candidate's own file carries its
+own blocks.
 """
 
 from __future__ import annotations

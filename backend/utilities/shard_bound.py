@@ -1,12 +1,7 @@
 """How long may one work shard take, read from the one file that says so?
 
-It travels as a job output because `timeout-minutes` resolves from `needs`
-before a job's first step, where `steps` is not readable.
-
-Asserted to be a bare positive whole number here, at the one point that writes
-it: `timeout-minutes` takes whatever it is handed, so a value Actions cannot
-read as a number leaves the worker with no bound at all and the run finds out
-six hours later.
+A value Actions cannot read as a number leaves the worker with no bound at all,
+so it is held to a whole positive count here.
 """
 
 from __future__ import annotations

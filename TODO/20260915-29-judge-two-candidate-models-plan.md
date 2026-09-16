@@ -22,7 +22,7 @@ So nothing raised in the session that produced this plan falls off the end.
 | C8 | Qualify persists no summary text and no title - quality cannot be judged | task T4 | **shipped, #764.** `samples-{shard}.json`, worst faithfulness first, its own artifact |
 | C9 | **Fixing the measurement pipeline: qualify does not call what production calls** | task T5 | **shipped, #765 #769 #773.** All three steps |
 | C10 | Telemetry from a measurement run should not ship - a `state/dev/` redirect | task T5, step 2 | **shipped, #769** as `run.trial_state_dirname`, a named directory rather than a fixed one |
-| C11 | The CPU lottery - owner ruled to keep drawing | task T6 | **unblocked, not started.** The harness is ready; what it needs is a decision to spend runner time |
+| C11 | The CPU lottery - owner ruled to keep drawing | task T6 | **drawing.** Four solo runs dispatched on 2026-09-15: Gemma `35011547415`, Ornith `35011557915`, incumbent `35011568497`, Gemma `no_draft` `35011578538` |
 | C12 | **Two real defects in `measure.yml`, one of them a Guardrail #10 failure** | task T7 | **shipped, #760.** The oracle found a third workflow, so six server starts assert the served alias where two did |
 | C13 | Whether `measure.yml` and `validate.yml` should share their setup | task T8 | **shipped, #762.** The scratch-config block only, as the smallest first step |
 | C14 | Merge the two ready pull requests | task T9 | shipped |
@@ -33,7 +33,7 @@ So nothing raised in the session that produced this plan falls off the end.
 | C19 | The GitHub cache is GitHub's to manage, not ours | task T8 | owner ruled 2026-09-15 |
 | C20 | **The bench refetches article text on every repeat, so any long run can be refused** | task T1, and it blocked T6 | **shipped, #778.** The agreeing repeats are timed and named; a `no_draft` case and a dispatchable repeat count came with it |
 
-**Every row has landed except C11, and C11 is not code.** T6 is the one open item: the harness is ready and what remains is a decision to spend runner time on the draws.
+**Every row has landed except C11, and C11 is not code.** T6 is the one open item, and it is drawing: four solo runs are in flight and the finding is the distribution they land in.
 
 ## 0. What this project is, and the five minutes of reading you owe
 

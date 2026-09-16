@@ -1,9 +1,4 @@
-"""Does the server the run is about to use agree with the entry that describes it?
-
-Five facts have to match before a day is worth summarizing, and the check runs
-against a server that is already up. `idhazh.llm.server.prove_the_entry` holds
-them; this is the command line that points it at a config root.
-"""
+"""Does the server the run is about to use agree with the entry describing it?"""
 
 from __future__ import annotations
 
