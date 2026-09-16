@@ -1,6 +1,6 @@
 # What processor a run draws, and what it does to a reading
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-16T12:00
 
 GitHub gives a job whatever machine is free. This page is the record of what that
 choice is worth, measured over thirteen bench dispatches between 2026-08-23 and
@@ -11,6 +11,12 @@ models.** The same weights, the same llama.cpp build and the same synthetic
 prompt read 3.7 times faster on one machine than on another. So a throughput
 number quoted without its processor is not a reading, and two models compared
 across two runs have not been compared at all.
+
+**And it is a lottery per JOB, not per run.** Twelve dispatches gave 24 job
+placements, and **nine of the twelve split across two different processors
+inside one run** - same commit, same dispatch, seconds apart. On 2026-09-15 four
+dispatches inside 18 seconds produced eight placements across four machine types.
+Nothing we control reaches that decision.
 
 ## What was measured
 
@@ -27,16 +33,36 @@ weights and the machine.
 be added to it.** Each of those ran over five articles drawn from that day's
 feeds, so two of them differ by their articles as well as their machine.
 
-## The four machines GitHub has given us
+## The six machines GitHub has given us
 
-| Processor | Draws | What it is |
-| --- | --- | --- |
-| AMD EPYC 7763 64-Core | 7 | Milan, the one we draw most |
-| AMD EPYC 9V45 96-Core | 2 | Genoa, the fastest at reading |
-| AMD EPYC 9V74 80-Core | 2 | Genoa, and it reads like the Milan |
-| Intel Xeon Platinum 8573C | 2 | Emerald Rapids, fast at reading and slow at writing |
+Every column here is the host's own report, from `lscpu` and `/proc/cpuinfo`. No
+row carries a marketing codename, because no machine reports one and a codename
+somebody remembered is not a reading (Guardrail #10).
 
-Nothing selects between them and nothing ever will. `ubuntu-latest` is one label
+| Processor | family/model/step | AVX-512 | AMX | L3 | BogoMIPS |
+| --- | --- | --- | --- | --- | --- |
+| AMD EPYC 7763 64-Core | 25/1/1 | **none** | no | 32 MiB | 4,891 |
+| AMD EPYC 9V74 80-Core | 25/17/1 | yes, with bf16 | no | 32 MiB | 5,192 |
+| AMD EPYC 9V45 96-Core | **26**/2/1 | yes, with bf16 and `avx_vnni` | no | 32 MiB | 5,192 |
+| Intel Xeon Platinum 8370C | 6/106/6 | partial, no bf16 | no | 48 MiB | 5,587 |
+| Intel Xeon Platinum 8573C | 6/207/2 | yes, with bf16 and fp16 | **yes** | 260 MiB | 4,600 |
+| Intel Xeon 6973P-C | 6/173/1 | yes, with bf16 and fp16 | **yes** | 480 MiB | 5,200 |
+
+Three facts worth pulling out of that table.
+
+**The machine we draw most has no AVX-512 at all.** The EPYC 7763 took 13 of 24
+placements and is the slowest at prefill. It is the machine most of our numbers
+were taken on.
+
+**Every one is two physical cores with two threads.** Core count is a constant
+across the fleet. Only the instruction set and the cache change, which is why
+those are the columns.
+
+**BogoMIPS predicts nothing.** The highest number in the table belongs to a
+machine that is not fast. It is recorded because it is the figure people reach
+for first, and it is worth knowing that it is useless here.
+
+Nothing selects between these and nothing ever will. `ubuntu-latest` is one label
 over a fleet, and a job takes what is free.
 
 ## Every draw
@@ -119,7 +145,99 @@ other.** It has never met a 9V45 or a Xeon.
 This is the trap the whole page exists to name: a narrow range over an unlucky
 sample looks exactly like a narrow range over a representative one.
 
-## What it does not settle
+## The hypotheses, and what would settle each
+
+Everything in this section is a guess with a measurement attached. None of it is
+established, and a row here may not be quoted as a finding. It is written down so
+the next person spends their runner time on the question that is still open
+rather than on one somebody already closed.
+
+### H1. The instruction set is what moves prefill
+
+The EPYC 7763 has no AVX-512 and reads Gemma at 20.5 tokens a second. The EPYC
+9V45 has AVX-512 with bf16 and reads it at 75.0. That is the biggest single
+correlation in the table and it has an obvious mechanism: llama.cpp picks a
+different kernel when the wider instructions are there.
+
+**What would settle it:** the same weights on one machine with the wider kernels
+switched off at build time. llama.cpp can be compiled without them, so this is
+one bench dispatch against two binaries on one host - a paired case, which is the
+only shape that cancels the machine.
+
+**What already argues against a simple version of it:** H2.
+
+### H2. The flag says the instruction exists, not how fast it runs
+
+The 9V74 and the 9V45 both report `avx512f` and `avx512_bf16`. Qwen reads at 10.1
+on the 9V74 and Gemma reads at 75.0 on the 9V45. If the flag alone decided it,
+those two machines would behave alike and they do not.
+
+The only difference either host reports is the family number, 25 against 26. A
+processor can implement a wide instruction on a narrower datapath and run it in
+two passes - the flag is still true and the throughput is half.
+
+**What would settle it:** one model, benched on a 9V74 and a 9V45. We have never
+run the same weights on both, so the comparison does not exist yet. Until it
+does, H1 and H2 are indistinguishable from our data.
+
+### H3. Decode is bandwidth bound and nothing we recorded measured bandwidth
+
+Prefill swings by 3.7 times across the fleet; decode swings by 1.6. Prefill works
+on a whole prompt at once and is limited by arithmetic. Decode produces one token
+at a time and is limited by how fast weights stream out of memory. That would
+explain why the Xeon 8573C reads Qwen 3.9 times faster and writes it 35 percent
+slower.
+
+**What would settle it:** a memory-bandwidth figure beside every throughput
+figure. **This one is now instrumented**: every job records a large-block copy
+rate, so the next several runs build the scatter this needs
+([telemetry.md](../../concepts/telemetry.md)).
+
+### H4. L3 size is why the two Intel parts read fast
+
+The Xeon 8573C reports 260 MiB of L3 and the 6973P-C reports 480 MiB, against 32
+MiB on every AMD part. A prompt's weights working set may fit in the larger cache
+and not in the smaller.
+
+**What would settle it:** the bandwidth probe at two sizes, one below the
+reported L3 and one above. The gap between them is the cache effect, measured on
+the machine rather than argued from a datasheet. The probe already records the
+buffer size it used, so this is a config change and no code.
+
+### H5. A pooled machine is slower than a fresh one
+
+A runner handed to us after other work may have a cold page cache, a warm one, or
+a noisy neighbour. Nothing we have recorded could tell those apart.
+
+**What would settle it:** uptime at the moment the job starts, against the
+throughput that job produced. **Now instrumented** - every fingerprint row
+carries how long the machine had been up.
+
+### H6. Placement follows something we could read
+
+The placement is per job and resolves in seconds, which rules out anything we
+control. But the platform names its own decision - a machine size, a region, a
+zone, a fault domain - and we have never asked for any of it.
+
+**What would settle it:** the instance metadata service, which every job now
+queries. If the pools turn out to be separable by size or region, "a lottery"
+becomes "which pools we draw from", and that is a different conversation.
+
+## What could be done about it, and what each costs
+
+| Approach | Cost | What it buys |
+| --- | --- | --- |
+| Probe in one job, gate the expensive job on the result | one short job a dispatch | **nothing** - the expensive job is a different job and draws again. Nine of twelve is the measurement that refuses this |
+| Self-probe: the working job reads its own processor first and exits early on a slow one | about a minute a rejected dispatch | the same machine it probed, so this one works |
+| `ubuntu-24.04-arm` | one bench dispatch to find out | the only label that genuinely selects hardware, and free on public repositories |
+| Larger runners | billed, including on a public repository | pins a machine family, against this project's constraints (Guardrail #2) |
+| Accept it, and pair every comparison inside one job | nothing | comparison is already solved this way; only the wall clock still pays |
+
+**The self-probe is the only one of these that works, and it is not recommended
+for the daily run.** Burning dispatches to chase a machine is reasonable for a
+bench somebody runs twice. As a standing part of the publishing path it is a
+retry loop that makes a run non-deterministic and hides a capacity problem behind
+a retry.
 
 - **Which machine we will draw next.** Thirteen draws over four machine types is
   not a distribution anybody should quote a probability from. The counts in the
@@ -144,6 +262,13 @@ sample looks exactly like a narrow range over a representative one.
 4. **Read a distribution, not an average.** The owner ruled on 2026-09-15 that
    every draw is recorded with its processor, because the spread is the finding.
    A median over four machine types answers no question anybody has.
+5. **A dossier names a machine per section, not per page.** `llama-bench` and the
+   server case are separate jobs and the platform places each one on its own,
+   so a single processor stamped at the top is wrong for half the numbers under
+   it. The sweep records the processor it drew into `runtime-summary.json`, and
+   the emitter prints it beside the memory and per-item figures. This is fixed
+   in the tool rather than in prose: the Gemma page said EPYC 7763 for readings
+   taken on a 9V74, and a person had to catch it.
 
 ## The records behind this page
 
@@ -154,6 +279,8 @@ holding a `bench-raw` artifact with the `llama-bench` output and the
 ## See also
 
 - [../models.md](../models.md) - one row a model, and what each dossier holds.
+- [what-the-draft-head-is-worth.md](what-the-draft-head-is-worth.md) - the worked example of a difference two dispatches could not establish and one paired job settled.
+- [../host-metrics.md](../host-metrics.md) - what every job now records about the machine it drew.
 - [../models/gemma-4-e4b-qat.md](../models/gemma-4-e4b-qat.md) - Gemma's draws and what its draft head is worth.
 - [../models/ornith-1.5-9b-q5km.md](../models/ornith-1.5-9b-q5km.md) - Ornith's draws.
 - [../models/qwen3.5-9b-q4km.md](../models/qwen3.5-9b-q4km.md) - the incumbent's draws.

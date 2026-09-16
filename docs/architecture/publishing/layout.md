@@ -143,12 +143,12 @@ flowchart TD
   src -- yes --> apart["Two stories.<br/>One outlet twice is a different problem,<br/>bounded by collect.max_source_share_per_day"]
   src -- no --> vec{"Do both carry a vector?"}
   vec -- no --> unknown["No answer. also_covered_by stays null,<br/>which reads as unknown and not as zero"]
-  vec -- yes --> shape{"Do the headlines reduce<br/>to the same words?"}
-  shape -- yes --> nums{"Do their numbers agree at the<br/>coarser of the two precisions?"}
-  shape -- no --> cos["cosine over the stored int8 vectors"]
-  nums -- no --> cos
-  nums -- yes --> fits["Reads as one story"]
-  cos --> floor{"At or above<br/>assemble.duplicate_similarity_min?"}
+  vec -- yes --> veto{"Same words, same count of figures,<br/>and a figure that disagrees?"}
+  veto -- yes --> apart
+  veto -- no --> shape{"Do the headlines reduce to the same<br/>words AND do their figures agree?"}
+  shape -- yes --> fits["Reads as one story"]
+  shape -- no --> comp["Weighted score:<br/>same_story.cosine_weight x cosine<br/>+ same_story.key_point_weight x key-point overlap"]
+  comp --> floor{"At or above<br/>assemble.same_story.floor_min?"}
   floor -- yes --> fits
   floor -- no --> apart
   fits --> all{"Does it clear against<br/>EVERY member of the group?"}
@@ -159,7 +159,7 @@ flowchart TD
   draw -- yes --> fold["The anchor draws one card carrying the other<br/>outlets by name. Every name links to that<br/>outlet's own story, which still has its address"]
 ```
 
-Two things the diagram is deliberate about. The headline branch and the vector branch are **two ways to clear one bar**, not two passes - which is why the all-pairs check at the bottom is shared. And nothing on it deletes: every item keeps its place, its address and its search entry whichever way it exits.
+Three things the diagram is deliberate about. **The veto is first and nothing below it can overturn it** - a pair of headlines one digit apart is where the score is highest, so a rule that had to outvote the score would lose the case it exists for. **The headline branch sits above the score rather than beside it**: it joins outright, and every other pair is scored. And **every term in the score runs 0 to 1 and the weights sum to 1.0**, so the floor is a number on the terms' own scale and a reader of `config/idhazh.json` can compare the two without arithmetic. Nothing on the diagram deletes: every item keeps its place, its address and its search entry whichever way it exits.
 
 **`also_covered_by` is what a reader sees where no name can be linked.** The item's footer, under the summary, reads `Also covered by N other sources today.` It is a fact about our feed set and never a claim about the world - we know who we read, not who else covered a story. Null prints nothing at all, which is what every day published before 2026-09-01 does. Where the page has names - a folding card on a reading route - the stack prints instead and this sentence does not, because the names are the more useful answer and printing both would say one thing twice.
 
@@ -193,9 +193,29 @@ Two things the diagram is deliberate about. The headline branch and the vector b
 
 **The keeper is the strongest by `rank_score`**, and where two items tie the earlier run wins - a returning reader keeps the item they already saw rather than watching the day swap it for a copy. An item published before `rank_score` existed has none, so it ranks below any scored item.
 
-### What chose 0.94
+### One score, not one number
 
-`assemble.duplicate_similarity_min` is set by hand labels, not by taste. Every group the pass forms over the eleven committed days was read from the published titles and summaries and marked same-story or not. Measured 2026-09-01 on a developer machine / / Python 3.14.2, 3,978 items:
+**The bar is a weighted sum of terms rather than a single cosine**, and it lives in `assemble.same_story`. Every term runs 0 to 1, the weights sum to 1.0 - refused by a validator if they do not - and `floor_min` is on that same scale. The sum-to-one rule is what keeps the floor meaning something: let the weights add up to 1.3 and the floor gets easier to clear every time a weight moves, silently, and the day publishes a merge nobody chose.
+
+| Knob | Ships at | What it scores |
+| --- | ---: | --- |
+| `same_story.cosine_weight` | 1.0 | Cosine between the two stored int8 vectors. |
+| `same_story.key_point_weight` | 0.0 | Shared words over the words the two items' key points have between them, reduced exactly the way a headline is. |
+| `same_story.floor_min` | 0.94 | What the weighted score has to reach, for **every** pair inside a group. |
+
+**It shipped changing nothing, and that is measured rather than asserted.** All the weight is on the cosine, so the score is arithmetically what the single floor was. Replayed through `collapse_same_story` over every committed day, before and after, on one box: **26 days, 9,552 items carrying a vector, 99 of them in a group - and not one item's `also_covered_by` or `same_story_as` differs.** Measured 2026-09-16 on a developer machine / Python 3.14.2; the pass is deterministic and the counts have no spread. The weights move against hand labels in a later change, so a retune can be read on its own and not as part of a rewrite.
+
+**The second term is the only other one measured that separates the two populations.** Key-point overlap has a different-story 99th percentile of 0.0962 against a same-story median of 0.2419, so the two barely touch. It ships computed, logged and weighted zero: the row that fits the weights is what turns it on.
+
+**A clash of figures is a veto rather than a negative weight.** Two headlines that reduce to the same words, carry the same count of figures, and disagree about one of them are two stories - `Budget 2025` against `Budget 2026`, `25 percent` against `50 percent` - and no similarity anywhere else makes them one. Written as a weight it would sit in a sum, where a high enough score outvotes it, and a pair of headlines differing in one digit is exactly where the score is highest. Over the twenty-six committed days it fires on **1** of 2,317,545 cross-outlet pairs, and that pair scored below the floor anyway, which is why the replay above is identical.
+
+**One headline carrying a figure the other leaves out is not a clash.** That is two desks choosing differently about a headline, not two desks reporting different facts. On 2026-09-06 the BBC ran `Anak Krakatau eruption suspends flights at Jakarta airport` and Mint ran the same words with `300 flights` in them; a veto on any unmatched figure refuses that pair, and it is one story. It is the only group over the committed days that the broader rule breaks - 3 such pairs exist and 1 of them clears the floor - so the veto asks for a matching count of figures first. The pair still cannot join at 1.0, because `story_key` refuses an unmatched figure before any value is compared; it is scored like any other pair, which is what it was before the veto existed.
+
+**The veto is read off the same reduced headline the joiner is**, so turning `assemble.group_identical_titles` off takes the veto with it and restores the score-only rule exactly. A revert path that quietly keeps half of what it reverts would be worse than none, so a test asserts both halves.
+
+### What chose 0.94, measured on the cosine alone
+
+`assemble.same_story.floor_min` is set by hand labels, not by taste. Every group the pass forms over the eleven committed days was read from the published titles and summaries and marked same-story or not. The shipped weights put the whole score on the cosine, so this is a measurement of the floor as it is applied today. Measured 2026-09-01 on a developer machine / / Python 3.14.2, 3,978 items:
 
 | Threshold | Groups | Items grouped | Largest group | False merges |
 | ---: | ---: | ---: | ---: | ---: |
@@ -210,7 +230,7 @@ The one false merge at 0.93 is on 2026-08-30: Ontario's pushback against the lak
 
 **The two errors are not equal, which is why the number leans high.** A missed group costs a reader the same story twice, on a page they can see. A false merge costs them a story that never ran, and they cannot see what is not there ([../../../.github/agents/editor.agent.md](../../../.github/agents/editor.agent.md)).
 
-**`assemble.duplicate_similarity_min` is not comparable to `assist.similarity_floor`.** That one scores a reader's query against an item and this one scores two items against each other; the two distributions are different shapes, and reading one number against the other is how a threshold gets set from the wrong evidence.
+**`assemble.same_story.floor_min` is not comparable to `assist.similarity_floor`.** That one scores a reader's query against an item and this one scores two items against each other; the two distributions are different shapes, and reading one number against the other is how a threshold gets set from the wrong evidence.
 
 ### One headline, two outlets, and why 0.94 was not what changed
 
@@ -230,7 +250,7 @@ The vector pass alone left the same story on the page several times. `dolly part
 
 **A matching headline does not lift the vector gate.** It decides that two items are the same story; it does not decide that an item with no vector may be grouped. That item stays out, as it always did.
 
-**The two rules are combined all-pairs, and that is load-bearing.** Equality is transitive on its own and a cosine is not, so their union is not either. Scoring each candidate only against the item it joined would chain a group through whichever of the two rules happened to fire - A and B share a headline, B and C clear the cosine, A and C share neither, and single-link would publish all three as one story. Every pair inside a group clears one of the two rules against every other pair.
+**The headline rule and the score are combined all-pairs, and that is load-bearing.** Equality is transitive on its own and a score is not, so their union is not either. Scoring each candidate only against the item it joined would chain a group through whichever of the two happened to fire - A and B share a headline, B and C clear the floor, A and C share neither, and single-link would publish all three as one story. Every pair inside a group clears one of the two against every other pair, and one vetoed pair refuses the whole group for the same reason.
 
 **Two classes of headline would break this, and neither fires on today's evidence.** The first is a headline that names no event - a round-up, a live blog, a branded column - where two outlets can share a title and carry different stories. All 42 cross-source same-headline groups on the committed days were read by hand and every one is a genuine same story; the shortest headline that groups is seven words. The second is a headline that repeats on a schedule. Of 9,333 distinct source-and-headline pairs, **12** repeat across days, and none of them is an editorial slot: they are extraction failures such as `article fails to load due to technical issues`, all within one source, which the across-sources rule already refuses, and empty titles, which the reduction already refuses. Both counts are of the archive as it stood on 2026-09-14 and are re-measurable rather than permanent.
 
@@ -256,6 +276,8 @@ The pass is one pass over the day's vectors and it is quadratic in the day's ite
 It compares int8 vectors directly rather than decoding them. `embed.dequantise` divides by the quantisation scale and then normalises, so the scale cancels and the angle between two stored vectors is the angle between the unit vectors they decode to - a test asserts that rather than leaving it as a claim.
 
 **The headline rule added 0.5 percent and the readings above stand.** It costs one reduction per item before the pass, which is linear, and inside the pass it is a dictionary lookup and a string comparison that runs *instead of* the cosine whenever it matches. Measured 2026-09-14 on a developer machine / Python 3.14.2 as seven alternating rounds inside one process on 2026-08-24, the largest day: **11.601 s with the vector rule alone, 11.664 s with both, a difference of 0.064 s**. Alternating the cases is what makes that number readable - this box's own run-to-run spread on the same day is 10.8 to 17.5 s, so a between-run comparison could not have seen a difference this size, and an A-against-B inside one process cancels the box instead.
+
+**The composite added 1.7 s on the largest day, which is 18 percent, and it was accepted.** The second term is one set intersection per pair, over the few million pairs a 731-item day asks about; the union is counted as `left + right - shared` rather than built, which took the cost from 4.1 s to 1.7 s before it landed. Measured 2026-09-16 on a developer machine / Python 3.14.2, five rounds each on the 2026-08-24 day, median of five: **9.38 s before, 11.09 s after**. The assemble job's timeout is 20 minutes and the stage runs five times a day, so 1.7 s a run is under one percent of the budget it spends; the term it buys is what the weights are fitted on. The alternative - skipping the term whenever its weight is zero - was refused because it makes the log line stop reporting a term a person is about to weight.
 
 ### The grouping runs before the lead block, and that order is fixed
 

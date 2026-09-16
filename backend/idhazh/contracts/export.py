@@ -27,6 +27,7 @@ from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.evidence import EvidenceItem
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.icon_manifest import IconManifest
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.models import ModelsConfig
@@ -88,6 +89,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     FeedHealthRow,
     FeedRetirementRow,
     IconManifest,
+    HostFingerprintRow,
     ItemHealthRow,
     LabelRow,
     ModelsConfig,

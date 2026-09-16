@@ -526,15 +526,13 @@ _BY_PATTERN: Final[Mapping[str, str]] = {
 _BY_TYPE: Final[Mapping[type, object]] = {bool: True, int: 1, float: 1.0, str: "fixture"}
 
 #: Every column no production writer fills today, and the reason each one is
-#: empty. A column leaves this map in the commit that starts filling it; a
-#: column that arrives with no writer has to be argued for here rather than
-#: landing empty and unread. The ratchet below asserts this map exactly, so it
-#: cannot drift in either direction.
-UNFILLED: Final[Mapping[str, str]] = {
-    "slot_id": "the server's own prefix-cache slot, which llama-server does not report per call",
-    "kv_tokens_at_start": "the cache depth a call began at, which no response field carries",
-    "prefix_shared_with_previous": "whether two calls shared a prefix, inferred from the two above",
-}
+#: empty. **It is empty, and that is the ratchet at its tightest**: all 113
+#: columns have a producer, so the assertion below reads "no column of this row
+#: is None on the way through" with no exceptions to read past. The last three
+#: left on 2026-09-16, when the slot columns started carrying the item's first
+#: call. A column that arrives with no writer is added here with its reason,
+#: which is the one way to land empty and still pass.
+UNFILLED: Final[Mapping[str, str]] = {}
 
 
 def _a_cell(name: str, annotation: Any) -> Any:
@@ -615,6 +613,13 @@ def test_no_census_column_is_silently_unowned() -> None:
     defect this row closes, when the census rebuilt from two payloads that
     between them could say 43 of 113 things. A column nothing writes and nobody
     declared fails on the right, naming itself.
+
+    **`UNFILLED` is empty, so the right side is the empty set** and this is one
+    assertion rather than three. The two that checked the map's contents - that
+    every key is a real column, and that none of them is an extraction cell -
+    went with the last entry on 2026-09-16: a guard on an empty map passes for a
+    reason unrelated to what it checks, and they come back with the entry that
+    needs them.
     """
     recorded = a_recorded_row()
 
@@ -632,8 +637,6 @@ def test_no_census_column_is_silently_unowned() -> None:
 
     empty = {name for name in ItemHealthRow.csv_columns() if getattr(carried, name) is None}
     assert empty == set(UNFILLED)
-    assert set(UNFILLED) <= set(ItemHealthRow.csv_columns())
-    assert set(UNFILLED).isdisjoint(EXTRACTION_CELLS)
 
 
 def test_the_census_prefers_the_recorded_row_and_overlays_only_the_extraction_cells() -> None:

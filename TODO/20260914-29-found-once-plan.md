@@ -5,6 +5,83 @@
 Non-authoritative working material (CLAUDE.md section 3). Nothing here is a
 decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 
+## Start here - the handoff
+
+**You are picking this plan up. Read this section first, then the Status
+Reckoner, then the one row you are about to build. Nothing else in this file is
+required reading until a row sends you to it.**
+
+**What to read, in this order.**
+
+1. [`../CLAUDE.md`](../CLAUDE.md) - the engineering contract, and it binds you.
+   Section 0b is the voice, 0c is how to ask the owner anything, 0d is what to
+   do when a limitation blocks the intent, section 9 is done, 11 is schema
+   stamping, 12 is the browser smoke, 13 is the test tiers.
+2. [`../docs/agents/bootstrap.md`](../docs/agents/bootstrap.md) - it routes you
+   to the page that owns whatever you are changing.
+3. [`../docs/how-to/run-the-gates.md`](../docs/how-to/run-the-gates.md) - every
+   gate command, and the three traps that make the browser smoke lie.
+4. [`../docs/how-to/ship-a-pr.md`](../docs/how-to/ship-a-pr.md) - worktree,
+   branch, PR, cleanup.
+5. The `## Owner decisions` block below. Those are rulings, not suggestions, and
+   **a settled one is never re-asked** (section 0).
+
+**Where this plan's subsystems live.**
+
+| What you are changing | Where it is | The page that owns it |
+| --- | --- | --- |
+| Whether two published items are one story | `backend/idhazh/assemble.py` - `story_key`, `headlines_match`, `_numbers_clash`, `_pair_terms`, `collapse_same_story` | `docs/architecture/publishing/layout.md` |
+| What gets planned, and what gets refused before it is fetched | `backend/idhazh/stages/plan.py` - `_dedupe_planned_items`, `_one_piece_per_outlet`, `_within_ceiling`, `_within_day_ceiling` | `docs/architecture/sources/freshness.md` |
+| How a candidate is scored before the day is cut | `backend/idhazh/rank.py` - `recency_bonus`, `authority`, `plan_vertical` | `docs/architecture/sources/freshness.md` |
+| The order the published page draws | `backend/idhazh/assemble.py` - `_strength_order`, `leading_stories` | `docs/architecture/publishing/layout.md` |
+| Every knob | `backend/idhazh/contracts/knobs/` then `config/idhazh.json` | `docs/concepts/config.md` |
+| A feed's record, its rest and its retirement | `backend/idhazh/telemetry/source_health.py`, `backend/idhazh/ledger.py`, `backend/idhazh/contracts/feed_retirement.py` | `docs/architecture/sources/i-feed.md` |
+| The operator console | `frontend/src/routes/console/` - `voices/` owns sources, `machine/` the runner, `judgement/` the evals | `docs/architecture/publishing/console.md`, `docs/concepts/console-design.md` |
+| The reader's card | `frontend/src/lib/components/DigestItem.svelte`, `ItemMeta.svelte` | `docs/architecture/publishing/layout.md` |
+
+**Four environment traps, each of which costs about an hour.**
+
+- The interpreter is the repository's own `.venv`. It has `idhazh` installed
+  **editable against the shared checkout**, so any direct `python -m idhazh.*`
+  run from a worktree needs `PYTHONPATH` pointed at that worktree's `backend`
+  first, or you silently exercise the wrong code. `pytest` does not need it.
+- **Other agents work in this repository at the same time.** A foreground gate
+  is killed by a sibling's interrupt about one time in three. Run every long
+  command detached, writing its exit codes to a file, and read the file.
+- Files are **LF and ASCII only** (section 5). Write LF before the first test
+  run; git normalises at `git add`, which is too late.
+- **Never force-push and never rebase a pushed branch** (section 8). When main
+  moves under you, merge it in. `gh pr create` and `gh pr merge` can exit 1
+  having succeeded - check the state, not the exit code.
+
+**How to leave the plan for the next agent.** Set your row's `Status` to `DONE`
+in the Status Reckoner and fill its `Worktree`. **Leave `PR` as `-`** - a pull
+request number cannot appear in its own diff. If a row's premise turns out to be
+wrong, say so in the row, set it `BLOCKED`, and hand the decision back with
+options and costs (section 0c). Row #13 is the worked example of that.
+
+## Owner decisions, 2026-09-16
+
+Rulings from the owner under section 0. They supersede anything else in this
+file, and none of them is a question any more.
+
+**The day ceiling is 400 and that is settled.** `run.safety_ceiling_per_day` is
+five runs at `run.safety_ceiling_per_run`, it changes no day that has ever
+published, and it is not to be re-opened. Re-litigating a config value the owner
+has already set is the failure this line exists to stop.
+
+**A source's own quality decides its own future, and we only build the
+guardrail.** Row #13 stops being a chrome ledger that reports to nobody. It
+becomes one loop: measure, publish the measurement to the operator console, and
+let a source that stays bad for a declared dwell retire itself. The reason is
+supply - a template host or a dead feed will be added again every time the source
+list grows, so a rule that needs a person each time is a rule that needs a person
+for ever.
+
+**Freshness decays at read time, on a Gaussian with an offset.** Row #10 as
+written asked for a decay term that already exists. The defect is one layer
+along and the curve is named in that row.
+
 ## Why this plan exists
 
 Defect 22 closed on 2026-09-14 and fixed the visible tip of the problem, not the
@@ -79,16 +156,16 @@ which is the same family.
 | 2 | Two feeds of one outlet are one source | - | A | DONE | - | #782 | - |
 | 3 | Measure: title signal against the committed days | - | A | DONE | - | #782 | - |
 | 4 | Correct the token-share number defect 22 shipped | - | A | DONE | - | #785 | - |
-| 5 | Draw the collapse, with a publisher stack that links | - | B | DONE | r5 | - | p29-r5 |
-| 6 | Retire the four hosts that serve one page | - | B | DONE | - | - | - |
-| 7 | One outlet never runs the identical piece twice | - | B | PENDING | - | - | - |
-| 8 | A ceiling on the day, beside the ceiling on a run | - | B | PENDING | - | - | - |
+| 5 | Draw the collapse, with a publisher stack that links | - | B | DONE | - | - | p29-r5 |
+| 6 | Retire the four hosts that serve one page | - | B | DONE | - | #794 | p29-r6b |
+| 7 | One outlet never runs the identical piece twice | - | B | DONE | - | - | p29-r7 |
+| 8 | A ceiling on the day, beside the ceiling on a run | - | B | DONE | - | - | p29-r8 |
 | 9 | The same story is one story for 36 hours, not one day | - | C | PENDING | - | - | - |
 | 10 | A story that has been running ranks below one that broke today | - | C | PENDING | - | - | - |
 | 11 | The lead is a weighted score, and the page says how | 10 | C | PENDING | - | - | - |
 | 12 | Label the sheet, then set the weights | - | C | PENDING | - | - | - |
-| 13 | The chrome ledger: a host that repeats itself is caught | - | C | PENDING | - | - | - |
-| 14 | The composite score, proving it changed nothing | - | C | PENDING | - | - | - |
+| 13 | A source's quality decides its own future | - | C | PENDING | - | - | - |
+| 14 | The composite score, proving it changed nothing | - | C | DONE | - | #799 | p29-r14 |
 | 15 | The weights and the 0.88 floor | 12, 14 | D | PENDING | - | - | - |
 | 16 | Refuse boilerplate, on a week of evidence | 13 | D | PENDING | - | - | - |
 | 17 | Does a short extraction publish at all | - | D | PENDING | - | - | - |
@@ -440,18 +517,77 @@ earlier day is byte-identical before and after the later run.
 **Intent.** Freshness is a ranking signal we already have the data for and do
 not use.
 
-**Contract.**
+**Rewritten 2026-09-16 after the row's own premise was checked and failed.**
 
-- A derived decay term over `published_at`, which every item already carries.
-  No model, no new persisted field, no fetch.
-- It feeds **ranking**, never grouping. A story's age changes where it sits, not
-  whether it is the same story as another.
-- The shape and its constant are config, with a sane default, so the behaviour
-  changes without a source edit.
+**What was wrong with the row as written.** It asked for "a derived decay term
+over `published_at`, feeding ranking, config-driven". **That already exists.**
+`rank.recency_bonus` halves every `collect.recency_half_life_hours` and is
+scaled by `collect.recency_weight`. Building it again is a no-op.
 
-**Oracle.** Two items alike in every other signal, one published today and one
-two days ago, rank in that order; with the knob at zero they rank as they do
-today.
+**The defect is one layer along, and it is real.** `rank_score` is computed once,
+at the run that planned the item, and the published day sorts on that stored
+number - `assemble._strength_order` reads `item.rank_score` and nothing else.
+So an item planned at 02:20 carries its 02:20 freshness all day. At 18:20 it is
+sixteen hours old, it still holds the full bonus it earned that morning, and it
+outranks something that broke an hour ago. **The decay has to be evaluated when
+the page is drawn, not when the item was planned.**
+
+**Contract.** Owner ruling, 2026-09-16.
+
+- A **Gaussian decay with an offset**, evaluated at read time, over
+  `published_at`. The offset is a flat shoulder so a brand-new story does not
+  fall off a cliff before anything else about it is known.
+
+$$
+S(t) = \begin{cases}
+1.0 & t \le \text{offset} \\[4pt]
+\exp\left(-\dfrac{(t - \text{offset})^2}{2\sigma^2}\right) & t > \text{offset}
+\end{cases}
+$$
+
+- **It multiplies, it does not add.** The page order is
+  `rank_score * S(t)`. A multiplier keeps the quality signal's shape and moves
+  where it sits in time; an added term would let age outvote quality on its own.
+- **Three knobs on `PlacementConfig`, none of them a literal**
+  (Guardrail #6): `freshness_offset_hours`, `freshness_scale_hours` and
+  `freshness_decay_at_scale`. `sigma` is derived rather than typed, so a person
+  sets a sentence they can read - "at `scale` hours a story is worth `decay` of
+  what it was" - instead of a variance:
+  $\sigma^2 = -\text{scale}^2 / (2\ln(\text{decay}))$.
+- **`freshness_decay_at_scale` of 1.0 turns the whole thing off**, exactly,
+  and that is the revert path. It ships on, and the row's second oracle arm is
+  that off reproduces today's order byte for byte.
+- It feeds **ranking**, never grouping. A story's age changes where it sits,
+  never whether it is the same story as another.
+- **No new persisted field and nothing re-derived.** `published_at` is already
+  on the item and `S(t)` is computed from it and the clock. A published day is
+  never rewritten (`Limits nobody trades`): the number changes because the
+  clock moved, not because we edited a finished day.
+
+**Why this curve and not the other two.** A power law of the Hacker News shape,
+`(points - 1) / (t + 2)^1.8`, has the same shoulder idea in its `+2` and is
+simpler, but its tail never really ends - a week-old story keeps a visible
+share of its score, and this digest publishes a day at a time. The plain
+exponential half-life we already have at plan time has no shoulder at all, so
+the first hour is where it cuts hardest, which is the opposite of what a digest
+wants. The Gaussian-with-offset is what Elasticsearch recommends for exactly
+this problem and it is the one that says both things: nothing inside the
+shoulder is penalised, and past the shoulder the fall is smooth and finite.
+
+**The interaction with the plan-time bonus is named, not hidden.** After this
+lands, age appears twice: `collect.recency_weight` inside the stored
+`rank_score`, and `S(t)` over it. That is not double-counting, because the two
+answer different questions. **The plan-time bonus decides which items get a slot
+at all** - it orders the pool the safety ceilings cut. **`S(t)` decides where a
+story that already has a slot sits on the page.** Row #11 owns saying this in
+`docs/`, in one picture.
+
+**Oracle.** Two items alike in every other signal, one published an hour ago and
+one two days ago, draw in that order. The same pair with
+`freshness_decay_at_scale` at 1.0 draws in today's order exactly. An item inside
+the offset scores `1.0` and an item at `scale` hours past the offset scores
+`freshness_decay_at_scale`, both to floating-point tolerance - which is the test
+that the derived sigma is derived correctly.
 
 ## Row #11 - the lead is a weighted score, and the page says how
 
@@ -464,6 +600,11 @@ to find out what those are.
 - A composite score over signals the payload already carries. At minimum: the
   existing `rank_score`, how many outlets ran it (`also_covered_by`), and the
   freshness term from row #10.
+- **Row #10's term multiplies the composite, it does not sit inside the sum.**
+  The weighted sum is what the story is worth; `S(t)` is what its age does to
+  that. Written as one more weighted term, a fresh but worthless story would
+  outrank a strong one, which is the single failure mode this ordering exists to
+  refuse.
 - **Every weight is config with a sane default.** Change the config and the lead
   order changes with no source edit (Guardrail #6). No weight is a literal.
 - The composite is **deterministic and model-free**. It reads numbers the
@@ -517,16 +658,129 @@ labels at no extra cost: the summary alone, the title alone, and the item's
 `key_points` joined. If one separates better than what ships, that is a free
 improvement and the measurement is already paid for.
 
-## Row #13 - the chrome ledger: a host that repeats itself is caught
+## Row #13 - a source's quality decides its own future
 
-**Ruled by Fowler, 2026-09-15. Correction level 4.** The scope expansions below
-are his, under the owner's standing instruction that structure fixes matter.
+**Ruled by Fowler, 2026-09-15. Correction level 4.** The chrome-ledger contract
+in the table below is his, under the owner's standing instruction that structure
+fixes matter.
+
+**Amends `backend/idhazh/contracts/feed_retirement.py`.** That file states in
+writing that a second `RetirementCause` is a design change. It is now one, and
+the same commit updates that docstring - the clause is not deleted, it gains the
+dwell and the evidence floors as the answer to the risk it named (section 0).
+
+**Unblocked and widened by the owner, 2026-09-16.** The row was BLOCKED for a
+day because the measurement that sold it had been falsified - see
+`The example this row was sold on is gone` at the end. The owner's answer was
+neither to drop it nor to build it as it stood. It was to close the loop:
+**measure, show the measurement, and let a source that stays bad retire
+itself.** The chrome ledger becomes one measurement inside that loop rather than
+the whole row. Read `The loop` first; the table after it is the store the loop
+reads.
 
 **Intent.** A publisher that serves one template for every article is caught the
 third time, not the 166th. No length rule can see a 400-word template; only
 comparing a host's pages against each other can.
 
-**The defect.** `boilerplate_ratio(lines, seen_elsewhere)` in
+### The loop
+
+**Owner's words, 2026-09-16: "content quality decides its own future. We only
+build the guardrails."**
+
+The reason is supply. A template host, a dead feed and a 35-word abstract feed
+will arrive again every time the source list grows - row #6 found four of them
+in one pass and three had already gone quiet before anybody looked. **A rule that
+needs a person each time is a rule that needs a person for ever.** So the row
+ships three parts and no part is optional.
+
+| Part | What it does | Where it lives |
+| --- | --- | --- |
+| **Measure** | The chrome ledger below, plus the yield and body-length evidence `state/item-health/**` already carries. Deterministic, no model | `backend/idhazh/` - the store table below |
+| **Show** | One panel on `/console/voices/`, which already owns `Sources we may ask, and what they yield`, retirement, rest and the yield alarm. **Susan owns this panel** - see `What Susan owns` | `frontend/src/routes/console/voices/` |
+| **Retire** | A source whose measurement stays under its alarm point for a declared dwell files its own retirement row, through the machinery that already exists | `backend/idhazh/telemetry/source_health.py` |
+
+**The retirement machinery is already built and this row reuses it, not a second
+copy of it.** `source_health.retirements` reads a feed's record, compares it to a
+`collect.*_before_*` count, and appends a `FeedRetirementRow` to
+`state/feed-retirements.csv`. `stage_plan` then stops asking that endpoint. What
+is new is a second cause and a dwell, not a second mechanism.
+
+**This amends `RetirementCause`, and that is a deliberate owner decision.** The
+enum has one member, `http_410`, and
+`backend/idhazh/contracts/feed_retirement.py` says in writing that a second one
+is a design change, because "retiring on anything softer than `410 Gone`
+eventually removes unique primary or regional reporting over a bad week". The
+owner has ruled that it is worth it, and the row carries the safeguard that
+answers the objection rather than deleting it:
+
+- **The dwell is long and it is config.** `collect.source_quality_dwell_days`,
+  default **14**. A bad week cannot retire anything, which is precisely the
+  failure the original clause named.
+- **Retirement is filed against the endpoint, never the feed** - unchanged.
+  Editing the URL in `config/sources.json` is a new address with no inherited
+  retirement, so un-retiring is one curated line.
+- **Nothing edits `config/sources.json`.** That stays the registry a person
+  curates, exactly as it does today.
+- **The evidence floors already exist and they bind here too.**
+  `collect.source_yield_min_complete_days` (30) and
+  `source_yield_alarm_min_decisions` (30) mean no source is judged on thin
+  record. A weekly publisher may never clear them, and that is the correct
+  answer for a weekly publisher.
+- **The console panel is what makes it reversible.** A retirement a person can
+  see coming for fourteen days is a retirement they can stop.
+
+### What to align the new knob with, and the recommendation
+
+The repository already has four families of automatic judgement about a source.
+The new dwell joins them and must read like one of them, not like a fifth idiom.
+
+| Knob | Today | What it does when it fires |
+| --- | --- | --- |
+| `collect.availability_strikes_before_rest` | a count of consecutive failures | Rests the feed. **Lifts on its own** |
+| `collect.feed_http_410_runs_before_retirement` | distinct runs reading `410 Gone` | Retires the endpoint. Permanent until a person edits the URL |
+| `collect.reliability_window_days` (30), `reliability_floor` (0.5) | a trailing ratio | **Scales** the feed's authority. Never removes it |
+| `collect.source_yield_alarm_point` (0.5), `source_yield_min_complete_days` (30), `source_yield_alarm_min_decisions` (30) | a trailing ratio with two evidence floors | **Names the source on the run summary and moves nothing** |
+
+**The fourth family is the one to extend, and the recommendation is to extend it
+rather than invent beside it.** It already measures the right thing - the share
+of what a source decided that became a story - already has both evidence floors,
+and already refuses to act. All this row adds is: *and if it is still under the
+alarm point `source_quality_dwell_days` later, retire it.* Three knobs become
+four, the alarm keeps its meaning, and nobody has to learn a new vocabulary.
+
+**One knob is worth proposing beyond that, and it is the owner's call.**
+`collect.source_quality_auto_retire`, default **false** for the first release.
+The loop measures and draws from the day it lands; the retirement arm switches on
+once a person has watched the panel for a cycle and agrees with what it is
+pointing at. It carries its removal condition on the declaring line
+(Guardrail #6): delete the flag once one real retirement has been reviewed and
+accepted.
+
+### What Susan owns
+
+**Susan's mandate on this row is the chart, and it is a real mandate, not a
+review.** The question she answers is `signal from noise` - a panel that cannot
+separate a template host from a quiet week has not earned its bytes, and a panel
+that is merely correct has not either (`CLAUDE.md` section 14).
+
+- **Which chart type.** The candidates are the ones the console already speaks:
+  the reliability strip `/console/voices/` uses for feeds near a rest, a
+  distribution with the alarm point marked on it, and a small-multiple per
+  source over the dwell window. **Susan picks one and says what the other two
+  lose.** Jony rules whether it survives on the page at all; Susan rules whether
+  what survived is good enough to ship.
+- **The dwell has to be visible as a dwell.** A source fourteen days into a
+  countdown and a source that dipped yesterday are different facts, and a chart
+  that renders them the same has failed.
+- **The empty and degraded states are part of the panel**, not a follow-up: a
+  source under its evidence floors, a source with no record at all, and the day
+  the ledger is missing.
+- The sufficiency checks in [`../docs/concepts/design-system.md`](../docs/concepts/design-system.md)
+  apply, and a surface can fail by being too little.
+
+### The store the loop reads
+
+**The defect it closes.** `boilerplate_ratio(lines, seen_elsewhere)` in
 `backend/idhazh/extract.py` has existed, with an enum value, two config knobs,
 tests and documentation on three pages, and **has never fired**: nothing in
 production passes `seen_elsewhere`, so it divides by an empty set and returns
@@ -582,9 +836,41 @@ committed days.
 
 **The number this row does NOT claim.** The 5.2 hours of summarize time those
 four hosts consumed are **not** this row's to save - row #6 retires them, and
-three of the four already carry a length signal. What this row uniquely catches
-is the Energy Monitor shape: a host whose template is long enough that no length
-rule will ever see it.
+three of the four already carry a length signal.
+
+**The example this row was sold on is gone, and that is why the row changed
+shape.** The row said it uniquely catches "the Energy Monitor shape: a host whose
+template is long enough that no length rule will ever see it". Row #6's count of
+2026-09-16 falsified that: Energy Monitor served an article on 28 of its 34
+recorded rows, 286 to 1,025 words, over 10 separate days. It is not a template
+host and never was. The row's own reading had looked only at its 6 failure rows,
+and a feed's failures always look like a template host, because that is what a
+failure is.
+
+**What is still true, and what it is worth, were two different questions.**
+`boilerplate_ratio` has never fired once in 12,277 committed item-health rows,
+so a signal with an enum value, two config knobs, tests and documentation on
+three pages is dead code either way. That is a real defect. What the row lost was
+a measured host it would have caught - so the size of the prize was unknown, and
+the row was asking for a new contract file, a new store, a new pruner, three
+knobs and a Guardrail #12 declaration to chase it.
+
+**The owner's answer, 2026-09-16, was to stop asking what one measurement is
+worth and close the loop instead.** Read `The loop` at the top of this row. The
+store below is still built exactly as Fowler ruled it; what changed is that its
+output now reaches a console panel and, after a declared dwell, a retirement -
+so the row stops being a measurement nobody acts on. The prize is no longer "how
+many hosts would this have caught in the past". It is "no host of this shape ever
+needs a person again".
+
+**Two things this row must do because the loop asks for them, and neither was in
+Fowler's table.** The measure part now publishes to `/console/voices/` (Susan's
+panel), and the retire part adds a second `RetirementCause` behind
+`collect.source_quality_dwell_days` and `collect.source_quality_auto_retire`.
+Both are recorded above, with the safeguard for each.
+
+**Row #16 cannot start until this one does**, because it reads the cells this
+row writes.
 
 ## Row #14 - the composite score, proving it changed nothing
 
@@ -691,6 +977,7 @@ cost of roughly **386 genuine short items** dropped.
 **This row is a decision request, not an implementation.** It does not start
 until the Editor and the owner rule.
 
+## Rejected
 
 Recorded so nobody proposes them again. Each is a dated decision, not a law
 (section 0a) - what would reopen it is named.
@@ -699,7 +986,6 @@ Recorded so nobody proposes them again. Each is a dated decision, not a law
 | --- | --- | --- |
 | Cut the day to 90-120 items | The digest is a self-curating feed of digests, not a fixed-size bulletin. Content chooses its position and its relevance; we do not choose content, and more desks are coming rather than fewer | Nothing on the present design. The day is bounded by row #8's ceilings, which refuse without choosing |
 | Per-day TF-IDF over headline words | Refused as a dependency, and that reason was wrong - it is about twenty lines of `collections.Counter` and `math.log`, no install and no shipped bytes. It stands refused because the comparison this project bets on is semantic and over the summary, and a word-overlap score is neither | Row #12 measuring it beating the shipped scorer on the same labels |
-
 | A canonical "what happened" line from the summariser | Cannot be backfilled, so no committed day can measure it | A measured failure that only a rewritten summary could reach |
 | Encode the article's lede and compare that | Proposed on 2026-09-15 and refused the same day. It serves no purpose the summary does not already serve, and the premise of this project is that the summariser did its job - so the comparison is over what the summariser wrote. The encoder's 256-token window meant it was never the whole article either | A measurement showing our summaries of one story diverge in a way the articles do not |
 | Shared rare title tokens as a term in the composite | Its different-pair p99 is 1.0000 - about one different pair in a hundred scores a perfect match, which over 9,055 pairs is roughly 90 wrong pairs each handed a full weight. Separation 35.8 percent, the weakest of the three | The same distribution measured conditioned on the cosine already being near the floor, rather than over random pairs 99.9 percent of which are nowhere near the decision |
@@ -724,6 +1010,9 @@ end up holding two gets a split rather than a section.
 | What do the three new knobs do? | `docs/concepts/config.md` | Existing |
 | What does a `boilerplate` cell in item-health mean now? | `docs/architecture/sources/item-health.md` | Existing |
 | What ages out of `state/`, and on what age? | `docs/architecture/publishing/retention.md` | Existing - the chrome prune joins the inventory |
+| **Why did a source retire itself, and what did it have to fail for how long?** | `docs/architecture/sources/i-feed.md`, beside the rest and the `410 Gone` retirement it already owns | **Existing.** A second cause on the same page, not a second page - a reader arriving with "why did we stop asking this feed" wants one answer, not two |
+| **What does the source-quality panel show, and how do I read it?** | `docs/concepts/console-design.md` | Existing. The panel's own vocabulary joins the console's |
+| **Where does the page order come from once age decays at read time?** | `docs/architecture/publishing/layout.md`, the section row #11 adds with its mermaid diagram | Existing |
 
 **The chrome rule does not go in `item-health.md` or `trust-boundary.md`.** Both
 already answer their own question, and a chrome subsystem inside either makes a
@@ -748,21 +1037,11 @@ one. Each is a rule a grouping change has to honour, not a preference.
 - ~~Grouping never crosses days.~~ **Overruled by the owner, 2026-09-15.** A
   story that breaks at 23:00 and is picked up at 07:00 is one story, and the
   window is `assemble.same_story_window_hours`, default 36.
-
-From the Editor's ruling, 2026-09-14. Each is a rule a grouping change has to
-honour, not a preference.
-
-- **A reaction is never merged into its event.** The reaction is the newer news.
-  This is the 0.9317 pair.
-- **An analysis piece is never merged into a reporting piece.** `source_kind`
-  already records which is which. It is 5 percent of the day and the most
-  distinctive 5 percent.
-- **A round-up or live blog is never grouped, in either direction.**
-- **Two feeds of one outlet are one source.** Row #2.
-- **No sentence on a card may state as fact something the same page
-  contradicts.** Silence is always available.
-- **Grouping never crosses days.**
-- **Nothing is removed from the page until recall is measured.**
+- ~~Nothing is removed from the page until recall is measured.~~ **Overruled by
+  the owner, 2026-09-14** - a duplicate is worse than a miss. Row #5 folds a
+  group's members behind publisher pills before recall is measured, and every
+  member keeps its own page, its archive entry and its search entry, so nothing
+  is removed. That reachability is what the ruling bought the line back with.
 
 ## Out of scope
 

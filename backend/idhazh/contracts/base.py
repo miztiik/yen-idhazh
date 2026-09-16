@@ -64,6 +64,10 @@ ITEM_ID_PATTERN: Final = r"^[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-t
 RUN_ID_PATTERN: Final = r"^\d{4}-\d{2}-\d{2}-[0-9]+$"
 URL_PATTERN: Final = r"^https?://[^\s\"'<>\\]+$"
 SHA256_PATTERN: Final = r"^[0-9a-f]{64}$"
+# A digest truncated to sixteen characters. Long enough that two machine kinds
+# will not collide, short enough to read in a log line. An identity rather than
+# a bounded string, so a hostile value is refused rather than folded into one.
+FINGERPRINT_PATTERN: Final = r"^[0-9a-f]{16}$"
 # A full git commit. Nothing shorter is a pin: an abbreviation can become
 # ambiguous as a repository grows, and a branch or a tag is re-pointed.
 COMMIT_SHA_PATTERN: Final = r"^[0-9a-f]{40}$"
@@ -108,6 +112,7 @@ Sha256 = Annotated[str, StringConstraints(pattern=SHA256_PATTERN)]
 CommitSha = Annotated[str, StringConstraints(pattern=COMMIT_SHA_PATTERN)]
 RelPath = Annotated[str, StringConstraints(pattern=REL_PATH_PATTERN, max_length=512)]
 UrlKey = Annotated[str, StringConstraints(pattern=SHA256_PATTERN)]
+FingerprintId = Annotated[str, StringConstraints(pattern=FINGERPRINT_PATTERN)]
 
 _STEM_PATTERN: Final = re.compile(SLUG_PATTERN)
 
