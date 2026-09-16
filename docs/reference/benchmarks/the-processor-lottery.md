@@ -262,6 +262,13 @@ a retry.
 4. **Read a distribution, not an average.** The owner ruled on 2026-09-15 that
    every draw is recorded with its processor, because the spread is the finding.
    A median over four machine types answers no question anybody has.
+5. **A dossier names a machine per section, not per page.** `llama-bench` and the
+   server case are separate jobs and the platform places each one on its own,
+   so a single processor stamped at the top is wrong for half the numbers under
+   it. The sweep records the processor it drew into `runtime-summary.json`, and
+   the emitter prints it beside the memory and per-item figures. This is fixed
+   in the tool rather than in prose: the Gemma page said EPYC 7763 for readings
+   taken on a 9V74, and a person had to catch it.
 
 ## The records behind this page
 

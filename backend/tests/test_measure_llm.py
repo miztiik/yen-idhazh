@@ -310,6 +310,7 @@ def _page(
             "llama_commit": "56db501e7",
             "bench_repeats": str(repeats),
             "server_repeats": str(repeats),
+            "server_cpu": "Intel(R) Xeon(R) Platinum 8573C",
             "corpus": "Five articles",
         },
         readings={
@@ -364,6 +365,20 @@ def test_the_emitted_body_is_the_shape_of_the_page_it_fills() -> None:
     assert MEMORY_SECTION not in body, "a section with no reading prints no empty table"
     assert "n = 1, spread unavailable" in body, "a reading taken once says so"
     assert "56db501e7" in body and "AMD EPYC 9V74 80-Core Processor" in body
+
+
+def test_each_half_of_the_page_names_the_machine_that_half_drew() -> None:
+    """`llama-bench` and the server case are separate jobs, placed separately.
+
+    One processor stamped on the whole page reads as one machine, so a
+    per-item figure would carry the label of hardware that never ran it.
+    """
+    body = render_dossier(_page())
+    item = body.split(ITEM_SECTION)[1]
+
+    assert "Intel(R) Xeon(R) Platinum 8573C" in item
+    assert "AMD EPYC 9V74 80-Core Processor" not in item
+    assert "AMD EPYC 9V74 80-Core Processor" in body.split(THROUGHPUT_SECTION)[1].split(ITEM_SECTION)[0]
 
 
 def test_the_emitter_invents_no_number() -> None:
