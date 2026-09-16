@@ -6,6 +6,7 @@ import datetime
 import json
 import re
 import subprocess
+import sys
 from typing import cast
 
 import pytest
@@ -36,7 +37,6 @@ from ._harness import (
     _load_workflows,
     _mapping,
     _normalize_condition,
-    _run_the_inline_program,
     _script,
     _step,
     _steps,
@@ -355,7 +355,16 @@ def test_the_prune_reads_both_its_numbers_from_config() -> None:
     """
     workflow = _load_workflows()["prune.yml"]
     step = _step(workflow, "prune", "id", "due")
-    outputs = _run_the_inline_program(_script(step, "prune due step"), REPO_ROOT)
+    assert "backend/utilities/prune_due.py" in _script(step, "prune due step")
+    done = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "backend" / "utilities" / "prune_due.py")],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert done.returncode == 0, done.stderr
+    outputs = dict(line.split("=", 1) for line in done.stdout.splitlines() if "=" in line)
     finetune = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["finetune"]
 
     assert outputs["due"] in {"true", "false"}

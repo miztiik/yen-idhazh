@@ -1,12 +1,7 @@
 """Does a second sequence buy anything on four cores, and by how much?
 
-`llama-batched-bench` writes a table per repeat. This reads them, pairs the
-levels INSIDE each repeat before comparing across repeats, and says whether
-parallel decode clears the gate.
-
-**A verdict of "dead" is a successful measurement.** It is reported and the
-command exits zero; it fails only when the instrument did - a missing repeat,
-or a table with no row for a level that was asked for.
+A verdict of "dead" is a successful measurement and exits zero; this fails only
+when the instrument did.
 """
 
 from __future__ import annotations
