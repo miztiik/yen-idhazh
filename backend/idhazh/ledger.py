@@ -1375,6 +1375,15 @@ def load_item_health_shard(path: Path) -> list[ItemHealthRow]:
     return [ItemHealthRow.from_csv_row(row) for row in _read_rows(path)]
 
 
+def load_span_rollup_shard(path: Path) -> list[SpanRollupRow]:
+    """Every row of one month's span rollup. Empty for a month never written.
+
+    A month rather than a day, because that is the grain the rollup is sharded
+    at. A caller asking about one date filters on `date` after reading.
+    """
+    return [SpanRollupRow.from_csv_row(row) for row in _read_rows(path)]
+
+
 def load_item_health(state_dir: Path, *, today: str, within_days: int) -> list[ItemHealthRow]:
     """Every item-health row in the window, oldest day first.
 
