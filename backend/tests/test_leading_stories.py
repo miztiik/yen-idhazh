@@ -21,9 +21,16 @@ from idhazh.assemble import leading_stories, subject_clusters
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.item_health import TimeSource
+from idhazh.contracts.knobs.placement import PlacementConfig
 from idhazh.contracts.knobs.ui import UiConfig
 from idhazh.contracts.taxonomy import SourceKind
 from idhazh.contracts.watchlist import EntityDef, Watchlist
+
+#: The hour the block is chosen at. An hour after the default story appeared,
+#: so every story a test does not date itself sits inside the freshness
+#: shoulder and scores 1.0 - the age curve moves nothing a test did not ask it
+#: to move.
+NOW = "2026-08-31T10:00:00Z"
 
 DESKS = {
     "ai": "AI",
@@ -107,12 +114,21 @@ def five_desks(**overrides: object) -> list[DigestItem]:
     ]
 
 
-def choose(items: list[DigestItem], *, wl: Watchlist = EMPTY, **knobs: object) -> list[str]:
+def choose(
+    items: list[DigestItem],
+    *,
+    wl: Watchlist = EMPTY,
+    now: str = NOW,
+    placement: PlacementConfig | None = None,
+    **knobs: object,
+) -> list[str]:
     leads = leading_stories(
         items,
         date="2026-08-31",
         watchlist=wl,
         ui=UiConfig(**knobs),  # type: ignore[arg-type]
+        placement=placement or PlacementConfig(),
+        now=now,
         desk_names=DESKS,
     )
     return [lead.item_id for lead in leads]
@@ -124,6 +140,8 @@ def reasons(items: list[DigestItem], *, wl: Watchlist = EMPTY, **knobs: object) 
         date="2026-08-31",
         watchlist=wl,
         ui=UiConfig(**knobs),  # type: ignore[arg-type]
+        placement=PlacementConfig(),
+        now=NOW,
         desk_names=DESKS,
     )
     return {lead.item_id: lead.reason for lead in leads}
@@ -244,6 +262,91 @@ def test_two_builds_of_one_day_choose_the_same_five() -> None:
     assert choose(items) == choose(list(reversed(items)))
 
 
+# --- age, read at the hour the block is chosen ------------------------------
+
+
+def one_running_one_fresh() -> list[DigestItem]:
+    """Two stories alike in every signal but when they appeared.
+
+    The older one scores slightly higher, which is what makes the pair worth
+    testing: with no clock the block takes it every time, whatever the hour.
+    Three more desks come with them because the block does not render below its
+    minimum.
+    """
+    return [
+        story(
+            "ai-0000000001",
+            source_id="feed-running",
+            title="A story that has been running",
+            rank_score=2.05,
+            published_at="2026-08-29T10:00:00Z",
+        ),
+        story(
+            "energy-0000000002",
+            vertical="energy",
+            source_id="feed-fresh",
+            title="A story that broke this morning",
+            rank_score=2.0,
+            published_at="2026-08-31T09:00:00Z",
+        ),
+        *five_desks()[2:],
+    ]
+
+
+def test_a_story_that_has_been_running_ranks_below_one_that_broke_today() -> None:
+    """Two days old against an hour old, and the older one scores higher.
+
+    `rank_score` is fixed at the run that planned the item, so the two-day-old
+    story still carries the freshness bonus it earned two days ago. Reading the
+    clock here is what takes it back.
+    """
+    chosen = choose(one_running_one_fresh())
+    assert chosen.index("energy-0000000002") < chosen.index("ai-0000000001")
+
+
+def test_the_same_pair_with_the_decay_switched_off_is_ordered_as_it_was() -> None:
+    """The revert arm: `freshness_decay_at_scale` of 1.0 restores the old order.
+
+    One edit to one line puts the higher stored score back on top, which is
+    what this block did before the curve existed.
+    """
+    off = PlacementConfig(freshness_decay_at_scale=1.0)
+    chosen = choose(one_running_one_fresh(), placement=off)
+    assert chosen.index("ai-0000000001") < chosen.index("energy-0000000002")
+
+
+def test_two_stories_of_one_age_keep_their_order_whatever_that_age_is() -> None:
+    """Why the curve multiplies rather than adding, as a check and not a comment.
+
+    Two stories of the same age are multiplied by the same number, so their
+    order cannot change however old they both are. A freshness term that added
+    would close the gap between a strong story and a weak one instead, and at
+    some age it would close it entirely.
+    """
+    for when in ("2026-08-31T09:00:00Z", "2026-08-29T10:00:00Z"):
+        items = one_running_one_fresh()
+        items[0] = items[0].model_copy(update={"published_at": when})
+        items[1] = items[1].model_copy(update={"published_at": when})
+        chosen = choose(items)
+        assert chosen.index("ai-0000000001") < chosen.index("energy-0000000002")
+
+
+def test_the_evening_run_of_a_day_does_not_lead_on_the_morning_story() -> None:
+    """The defect this closes, in the shape the row described it.
+
+    A story planned at 02:20 held the freshness it earned at 02:20 for the rest
+    of the day, so at the evening run it still outranked something that broke an
+    hour before. Same day, same stories, chosen twice: the early run opens on
+    the story that was fresh then, and the evening run opens on the one that is
+    fresh now.
+    """
+    items = one_running_one_fresh()
+    items[0] = items[0].model_copy(update={"published_at": "2026-08-31T02:20:00Z"})
+    items[1] = items[1].model_copy(update={"published_at": "2026-08-31T18:30:00Z"})
+    assert choose(items, now="2026-08-31T03:00:00Z")[0] == "ai-0000000001"
+    assert choose(items, now="2026-08-31T19:00:00Z")[0] == "energy-0000000002"
+
+
 # --- eligibility ------------------------------------------------------------
 
 
@@ -300,7 +403,13 @@ def test_an_excluded_story_is_still_in_the_day() -> None:
     items = five_desks()
     items[0] = items[0].model_copy(update={"band": ConfidenceBand.LOW})
     leads = leading_stories(
-        items, date="2026-08-31", watchlist=EMPTY, ui=UiConfig(), desk_names=DESKS
+        items,
+        date="2026-08-31",
+        watchlist=EMPTY,
+        ui=UiConfig(),
+        placement=PlacementConfig(),
+        now=NOW,
+        desk_names=DESKS,
     )
     day = DigestDay(
         version=DigestDay.schema_version(),
