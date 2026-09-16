@@ -41,7 +41,7 @@ decision about current behaviour; that belongs in `docs/` (Guardrail #4).
 | 5 | The work stage persists what it recorded | 1, 4 | C | DONE | p32r5 | - | - |
 | 6 | The census prefers the persisted row | 5 | D | DONE | p32r6 | - | - |
 | 7 | Six columns that are arithmetic over filled ones | 6 | E | PENDING | - | - | - |
-| 8 | The label call's own clock and both finish reasons | 6 | E | PENDING | - | - | - |
+| 8 | The label call's own clock and both finish reasons | 6 | E | DONE | p32r8 | - | - |
 | 9 | The host sampler moves in | 3 | B | DONE | p32r9 | - | - |
 | 10 | Nine publishers become one dispatcher | 3 | B | PENDING | - | - | - |
 | 11 | `idhazh telemetry` and its subcommands | 3, 10 | F | PENDING | - | - | - |
@@ -51,7 +51,7 @@ decision about current behaviour; that belongs in `docs/` (Guardrail #4).
 | 15 | The two published mirrors nothing reads are deleted | 10 | F | DONE | p32r15 | - | - |
 | 16 | Does the server answer `/slots`, and the ordinal encoding priced | - | A | DONE | p32r16 | - | - |
 
-**Column arithmetic.** 43 of 113 carry a value in the committed archive, which is history and moves a day at a time. Row 6 is the one that changes what a new day carries: the census reads the row the shard sealed instead of rebuilding it, which takes the committed fixture day from 40 to 71 of 113. The 18 the fixture cannot reach - a real host sampler, a real ranker score - fill on a production run. Row 7 fills 6 more and row 8 fills 3. **110 of 113 after row 8.** The last three are row 16's question, and `UNFILLED` in `backend/tests/test_telemetry.py` is the ratchet that names them.
+**Column arithmetic.** 43 of 113 carry a value in the committed archive, which is history and moves a day at a time. Row 6 is the one that changes what a new day carries: the census reads the row the shard sealed instead of rebuilding it, which takes the committed fixture day from 40 to 71 of 113. The 18 the fixture cannot reach - a real host sampler, a real ranker score - fill on a production run. Row 7 fills 6 more. **Row 8 filled none: measured on 2026-09-16, all three of its columns already had a producer, and what it fixed is that two of them were the wrong number and the third was a coercion** (section 9). The count stands at 110 of 113 with row 7, the last three are row 16's question, and `UNFILLED` in `backend/tests/test_telemetry.py` is the ratchet that names them.
 
 ## Section 1a - What every row delivers, without being asked
 
@@ -370,6 +370,7 @@ are deleted by row 15. `machine.py` and `stages/counters.py` went on 2026-09-16.
 ## Section 9 - Row #8 - The label call's own clock and both finish reasons
 
 - **Scope:** `label_ms`, `label_finish_reason` and `summary_finish_reason` are recorded at the call site. `summary_ms` already has a producer and is wired in row 6.
+- **What the row did, 2026-09-16.** **None of the three columns was empty**, so the row filled nothing and corrected everything. `_call_cells` in `stages/two_calls.py` has written all three since the pair landed, which is why the ratchet named three columns and not six. Two of the three were the wrong number: `label_ms` and `summary_ms` were `prefill_ms + decode_ms` for their own slot, which is rejected alternative 1 below, shipped. A column that agrees with its two neighbours by construction gives zero when they are subtracted from it, on every row ever written, so a server that made an item queue read exactly like one that answered at once. Both are now a stopwatch opened before the request and stopped when the reply is in hand, and the wait is `label_ms - label_prefill_ms - label_decode_ms`. The third was coerced a layer upstream: `parse_completion` read an absent `finish_reason` as `stop` on the chat route, and folded every `stop_type` that was not `limit` into `stop` on the rendered-completion route. An absence is now null, `eos` and `word` still translate to `stop`, and a word this build does not know is carried through as the server wrote it. **`model_wait_ms` keeps its meaning**: it subtracts the four per-call prefill and decode cells rather than the two stopwatches, because it is named for the wait and the other subtraction would leave it holding this process's own render, parse and draw.
 - **Files touched:**
   - `backend/idhazh/classify/calls.py`
   - `backend/idhazh/stages/two_calls.py`

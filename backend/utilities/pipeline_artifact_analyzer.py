@@ -81,8 +81,15 @@ class Cost:
     cached_tokens: int
 
     @property
-    def total_ms(self) -> int:
-        """The server's own clock for this call: prefill and decode together."""
+    def served_ms(self) -> int:
+        """The server's own clock for this call: prefill and decode together.
+
+        Not the call's duration, which is `label_ms` or `summary_ms` on the item
+        row and includes the wait. A capture carries the five numbers the server
+        reported and no stopwatch, so this is all a capture can answer - and the
+        name says so rather than leaving a reader to add a wait that is not in
+        here (Guardrail #10).
+        """
         return self.prefill_ms + self.decode_ms
 
     @property
@@ -605,7 +612,7 @@ def cost_section(pair: Mapping[str, Capture], number: int) -> list[str]:
         [
             str(index),
             call if money.kind in {"", call} else f"{call} ({money.kind})",
-            clock(money.total_ms),
+            clock(money.served_ms),
             quantity(money.prefill_ms),
             quantity(money.decode_ms),
             quantity(money.input_tokens),
@@ -622,7 +629,7 @@ def cost_section(pair: Mapping[str, Capture], number: int) -> list[str]:
         [
             "",
             f"**{counted(len(spent), 'call', 'calls')}**",
-            f"**{clock(sum(money.total_ms for money in spent))}**",
+            f"**{clock(sum(money.served_ms for money in spent))}**",
             f"**{quantity(sum(money.prefill_ms for money in spent))}**",
             f"**{quantity(sum(money.decode_ms for money in spent))}**",
             f"**{quantity(sum(money.input_tokens for money in spent))}**",
@@ -964,7 +971,7 @@ def summarise(found: Mapping[str, Mapping[str, Capture]]) -> str:
             f"{label.reply_chars if label else 0:>11,} "
             f"{summary.prompt_chars if summary else 0:>10,} "
             f"{summary.reply_chars if summary else 0:>10,} "
-            f"{clock(sum(money.total_ms for money in spent)) if spent else '-':>10} "
+            f"{clock(sum(money.served_ms for money in spent)) if spent else '-':>10} "
             f"{sum(money.output_tokens for money in spent):>8,}"
         )
     return "\n".join(rows)
