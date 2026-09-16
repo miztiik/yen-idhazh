@@ -37,7 +37,7 @@ from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.feed_health import (
     RobotsOutcome,
 )
-from idhazh.contracts.item_health import FailureCode, ItemStage
+from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemStage
 from idhazh.contracts.knobs.extract import ExtractConfig
 from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.qualification import (
@@ -47,7 +47,7 @@ from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import SourceTier
-from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, NoneReason, VisualDecision
+from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX
 from idhazh.evals import evidence
 from idhazh.fingerprint import (
     text_digest,
@@ -61,6 +61,7 @@ from idhazh.llm.server import (
     thinking_span,
 )
 from idhazh.sanitize import SANITIZER_VERSION, sanitize
+from idhazh.telemetry.record import recorded_row
 
 LOG: Final = logging.getLogger("idhazh")
 
@@ -598,6 +599,7 @@ class _ItemPayload(NamedTuple):
     planned: PlannedItem
     article: Article | None
     summary: Summary | None
+    recorded: ItemHealthRow | None
     eval_path: Path
     decision_path: Path
 
@@ -624,35 +626,14 @@ def _item_payloads(
                 if summary_exists
                 else None
             ),
+            # The row the shard sealed for this item, which the census prefers to
+            # rebuilding one (`telemetry.census_row`). Read here rather than at
+            # each census call site so one place knows where an item's payloads
+            # live, which is the same reason the three paths above are here.
+            recorded=recorded_row(items_dir, item.item_id),
             eval_path=items_dir / f"{item.item_id}.eval.json",
             decision_path=items_dir / f"{item.item_id}{PAYLOAD_SUFFIX}",
         )
-
-
-def _recovered(decision_path: Path) -> bool | None:
-    """Did this item's summary have to be salvaged from a reply that was cut?
-
-    The decision payload already knows. `recovered_completion` runs exactly when
-    the summarize-and-plan reply hit its ceiling and the summary object behind
-    the cut was still closed, and that is the same condition that makes the
-    picture's `none_reason` one of the two cut reasons - the budget's, or the
-    window's.
-
-    **Read from the payload rather than recomputed**, because recomputing means
-    re-deriving the budget the run used from the config the ledger is being
-    written under, and those are two different days the moment a bound moves.
-
-    Nothing comes back where there is no payload: an item that never reached the
-    second call has no picture decision, so the question was never asked and an
-    empty cell is the honest answer rather than `false`.
-    """
-    if not decision_path.exists():
-        return None
-    try:
-        decision = VisualDecision.read(decision_path)
-    except (OSError, ValueError):
-        return None
-    return decision.none_reason in {NoneReason.OUTPUT_BUDGET_CUT, NoneReason.WINDOW_EXHAUSTED}
 
 
 def _extraction_health(

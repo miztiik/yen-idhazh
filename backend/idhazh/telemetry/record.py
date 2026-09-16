@@ -20,7 +20,9 @@ out of two payloads that cannot carry them.
 **`persist` is what stops the row dying with the shard.** A validated row that
 reaches only a log line reaches only a CI artifact, so the value is written
 beside the article and the summary the same item produced, under the name every
-other per-item payload is filed under.
+other per-item payload is filed under. `recorded_row` is the other half: the
+census reads that file back and prefers it to rebuilding the row from two
+payloads that between them cannot carry most of these cells.
 
 **A recorder is opened per item and nothing here outlives the article it was
 opened for.** It is mutable for that reason: the work stage learns these cells
@@ -42,6 +44,11 @@ from idhazh.assemble import write_atomic
 from idhazh.contracts.item_health import ItemHealthRow, ItemStage
 from idhazh.contracts.knobs.observability import LoggingConfig
 from idhazh.telemetry import events
+
+#: This module's own logger, for the one thing it says on its own account: a
+#: recorded payload it could not read. Every other line here is emitted through
+#: the logger its caller handed the recorder.
+LOG: Final = logging.getLogger("idhazh")
 
 #: What one item's recorded row is filed as, beside the article and the summary
 #: it describes, under `backend/var/run/<date>/items/`. The payload is
@@ -309,6 +316,36 @@ def persist(items_dir: Path, row: ItemHealthRow) -> Path:
     path = items_dir / f"{row.item_id}{HEALTH_SUFFIX}"
     write_atomic(path, row.to_json())
     return path
+
+
+def recorded_row(items_dir: Path, item_id: str) -> ItemHealthRow | None:
+    """The row this item's shard sealed, or nothing where no shard sealed one.
+
+    The read side of `persist`, and it lives beside it so one module knows the
+    filename. A caller asks for an item and gets the row or nothing; where it
+    gets nothing it rebuilds the row from the payloads instead
+    (`census.census_row`).
+
+    **Nothing here is the file's absence.** A shard writes this the moment it
+    seals an item, so an item with no file is an item no shard reached - which
+    is most of the plan on a run that died, and is exactly what the census's
+    fallback exists to record.
+
+    **A file that will not open is nothing too, and that is a degrade rather
+    than a raise** (CLAUDE.md section 1a). A half-written or unreadable payload
+    costs the run the 58 cells only the shard could know; letting it raise would
+    cost the run the whole day's census. The stage counts what it rebuilt and
+    logs the count, so a shard whose rows all came back unreadable is a number
+    an operator can see rather than a silence.
+    """
+    path = items_dir / f"{item_id}{HEALTH_SUFFIX}"
+    if not path.exists():
+        return None
+    try:
+        return ItemHealthRow.read(path)
+    except (OSError, ValueError):
+        LOG.warning("a recorded item-health payload would not read path=%s", path)
+        return None
 
 
 def shard_done(

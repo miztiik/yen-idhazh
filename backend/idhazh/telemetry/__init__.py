@@ -29,6 +29,7 @@ from __future__ import annotations
 # meanings decided by import order. The function is `telemetry.events.record`,
 # which is where it has always been defined.
 from idhazh.telemetry.census import (
+    census_row,
     classify_item,
     detail_cell,
     is_final,
@@ -91,6 +92,7 @@ __all__ = [
     "Tracer",
     "article_attributes",
     "attribute",
+    "census_row",
     "classify_item",
     "committed_trace_path",
     "committed_trace_relpath",

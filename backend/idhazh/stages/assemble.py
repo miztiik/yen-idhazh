@@ -32,7 +32,6 @@ from idhazh.stages.common import (
     _item_payloads,
     _load_day,
     _load_manifest,
-    _recovered,
     _run_dir,
 )
 from idhazh.telemetry.publish import day_metrics, dispatch, source_health
@@ -145,15 +144,20 @@ def stage_assemble(
     summaries: list[Summary] = []
     rows = []
     decisions: list[VisualDecision] = []
+    # Every planned item's census row. A shard that reached the item sealed the
+    # row itself and left it beside the payloads, so this prefers that row: it
+    # carries 113 cells where the article and the summary between them carry 40,
+    # and it names the worker that ran the item. The rebuild is what an item no
+    # shard reached gets, which is what keeps the denominator in this file.
     item_health_rows = [
-        telemetry.classify_item(
+        telemetry.census_row(
+            recorded=payload.recorded,
             planned=payload.planned,
             article=payload.article,
             summary=payload.summary,
             date=plan.date,
             run_id=run_id,
             extraction=_extraction_health(payload.article, settings),
-            recovered=_recovered(payload.decision_path),
         )
         for payload in _item_payloads(plan, items_dir)
     ]

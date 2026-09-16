@@ -39,7 +39,7 @@ decision about current behaviour; that belongs in `docs/` (Guardrail #4).
 | 3 | The package exists and re-exports | - | A | PENDING | - | - | - |
 | 4 | The recorder moves in and returns a validated row | 3 | B | DONE | p32r4 | - | - |
 | 5 | The work stage persists what it recorded | 1, 4 | C | DONE | p32r5 | - | - |
-| 6 | The census prefers the persisted row | 5 | D | PENDING | - | - | - |
+| 6 | The census prefers the persisted row | 5 | D | DONE | p32r6 | - | - |
 | 7 | Six columns that are arithmetic over filled ones | 6 | E | PENDING | - | - | - |
 | 8 | The label call's own clock and both finish reasons | 6 | E | PENDING | - | - | - |
 | 9 | The host sampler moves in | 3 | B | DONE | p32r9 | - | - |
@@ -51,7 +51,7 @@ decision about current behaviour; that belongs in `docs/` (Guardrail #4).
 | 15 | The two published mirrors nothing reads are deleted | 10 | F | DONE | p32r15 | - | - |
 | 16 | Does the server answer `/slots`, and the ordinal encoding priced | - | A | DONE | p32r16 | - | - |
 
-**Column arithmetic.** 43 of 113 carry a value today; `telemetry._row` names 31 fields and `_flatten_calls` adds the call cells, 44 written of which one is always empty. Row 6 fills 58, row 7 fills 6, row 8 fills 3. **110 of 113 after row 8.** The last three are row 16's question.
+**Column arithmetic.** 43 of 113 carry a value in the committed archive, which is history and moves a day at a time. Row 6 is the one that changes what a new day carries: the census reads the row the shard sealed instead of rebuilding it, which takes the committed fixture day from 40 to 71 of 113. The 18 the fixture cannot reach - a real host sampler, a real ranker score - fill on a production run. Row 7 fills 6 more and row 8 fills 3. **110 of 113 after row 8.** The last three are row 16's question, and `UNFILLED` in `backend/tests/test_telemetry.py` is the ratchet that names them.
 
 ## Section 1a - What every row delivers, without being asked
 
@@ -81,7 +81,7 @@ flowchart TB
     subgraph tel["backend/idhazh/telemetry/ - the instrument"]
         events["events.py<br/>one envelope, one log line"]
         record_m["record.py<br/>ItemRecorder -> ItemHealthRow"]
-        census["census.py<br/>classify_item, the fallback"]
+        census["census.py<br/>census_row the door,<br/>classify_item the fallback"]
         spans["spans.py<br/>the span tree"]
         sinks["sinks.py<br/>null, file, fan-out, host"]
         traces_m["traces.py<br/>where a committed trace lands"]
@@ -315,12 +315,16 @@ are deleted by row 15. `machine.py` and `stages/counters.py` went on 2026-09-16.
 
 ## Section 7 - Row #6 - The census prefers the persisted row
 
-- **Scope:** `stage_record` and `stage_assemble` read `<item_id>.health.json` and prefer it over rebuilding from the two payloads, with `classify_item` as the fallback for an item that has none. 58 columns start carrying values.
+- **Scope:** `stage_record` and `stage_assemble` read `<item_id>.health.json` and prefer it over rebuilding from the two payloads, with `classify_item` as the fallback for an item that has none. 31 columns start carrying values on the fixture day, 40 to 71 of 113; the estimate of 58 was taken before the payloads were counted.
 - **Files touched:**
   - `backend/idhazh/telemetry/census.py`
+  - `backend/idhazh/telemetry/record.py`
+  - `backend/idhazh/telemetry/__init__.py`
   - `backend/idhazh/stages/record.py`
   - `backend/idhazh/stages/assemble.py`
+  - `backend/idhazh/stages/common.py`
   - `backend/tests/test_telemetry.py`
+  - `backend/tests/pipeline/test_census_prefers_the_record.py`
 - **Acceptance gates:** local `ruff check .`, `mypy backend`, `pytest backend/tests` in full - this row changes the row every later gate reads. CI runs the full suite plus `whole-day`.
 - **Oracle:** a unit ratchet asserting every column of `ItemHealthRow.csv_columns()` is either named by a production writer or listed in a declared frozen set with a written reason. Pure code, no fixture, cannot age out. It cannot settle that a written value is the right value.
 - **Decisions:**
@@ -329,7 +333,7 @@ are deleted by row 15. `machine.py` and `stages/counters.py` went on 2026-09-16.
 | --- | --- | --- |
 | 1 | `ledger.append_item_health` keeps the FIRST row for a key, so the write order is asserted rather than assumed | Fowler |
 | 2 | The fallback stays. An item whose worker died has no persisted row and still needs a census line | Fowler |
-| 3 | `state/` growing about 3.2 percent on a published day is accepted. Measured: +70.5 bytes a row, +37.5 KB a day against a 1.19 MB daily commit | Carmack |
+| 3 | `state/` growing on a published day is accepted. Priced at 3.2 percent before the columns were counted; measured at +206.8 bytes a row, 8.1 percent of a published day's `state/` on the fixture day and an estimated 15 to 17 percent in production. Under the 25 percent escalate trigger | Carmack |
 
 - **Rejected alternatives:**
 

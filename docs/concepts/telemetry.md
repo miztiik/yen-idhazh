@@ -150,7 +150,9 @@ planned item as `ok` or `failed`, with a closed `FailureCode` vocabulary. A log
 line is evidence that the event happened; the ledger row is the record a later
 run or dashboard reads.
 
-Two stages write that census, and one row identity keeps them from disagreeing.
+Two stages write that census. One row identity keeps them from writing it
+twice, and since 2026-09-16 both build the row from the same file, so they
+cannot disagree about what it says.
 
 A worker commits the rows for its own items as soon as each one settles. Until
 it did, a shard's verdicts left the runner only inside a run artifact that
@@ -161,6 +163,17 @@ the day worth measuring.
 Assemble then writes the whole day's census, including a `not_attempted` row for
 every planned item no article payload arrived for. That keeps the denominator in
 the same file as the failure count.
+
+**The row comes off the shard that did the work.** A worker validates 113 cells
+an item at a time and seals them beside the article and the summary, so both
+writers read that file and prefer it. What a rebuild can say is only what those
+two payloads carry: on the committed fixture day, 40 of the 113 columns against
+71. The 31 columns in the gap are the ones nothing downstream could ever recover
+- which machine ran the item, what its two model calls cost, how long it waited
+for the server - because the only process that could see them ended when the
+shard did. The rebuild stays for the item no shard sealed a row for: a worker
+that died mid-item still owes the day a census line, and that line says what the
+payloads can say and no more.
 
 **A row is one planned item on one run**: `(date, run_id, item_id)`. The ledger
 filters on that identity before it writes, so assemble's copy of a row the worker
