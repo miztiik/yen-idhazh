@@ -152,6 +152,12 @@ export interface DigestItem {
 	 * so it is never the whole of `also_covered_by` - the card prints the
 	 * difference as a remainder. */
 	covered_by?: DigestCoverage[] | null;
+	/** The newsrooms that ran this same story on an earlier published day.
+	 *
+	 * Absent and empty both mean nothing earlier matched. It folds nothing: the
+	 * story keeps its own card, and each entry is one more name in the stack,
+	 * dated, pointing at that day's page. */
+	also_ran_earlier?: EarlierStory[] | null;
 	/** The topic the day publishes this story under, absent on every day published
 	 * before 2026-09-12. `vertical` is the word the carrying feed declares about
 	 * itself and is what `item_id` is addressed from; this is where the story is
@@ -180,6 +186,17 @@ export interface DigestItem {
 export interface DigestCoverage {
 	source_name: string;
 	item_id: string;
+}
+
+/** One newsroom that ran this same story on an EARLIER published day.
+ *
+ * Carried by the committed item rather than derived by the projector, because a
+ * projector sees one day and cannot look a name up on another. The card prints
+ * it as one more name in the stack, saying which day, and links to that day. */
+export interface EarlierStory {
+	date: string;
+	item_id: string;
+	source_name: string;
 }
 
 export interface DigestRunRef {

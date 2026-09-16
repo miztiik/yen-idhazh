@@ -76,6 +76,16 @@
           "description": "How many OTHER sources carried the same story today, counted over the day's own items. Not `carried_by`, which counts syndication of one address and reads 1 when two outlets write their own piece. 0 says only one of our sources carried it. Null says the pass could not tell - the day carries no vectors, or this item has none - and is never read as 0.",
           "title": "Also Covered By"
         },
+        "also_ran_earlier": {
+          "default": [],
+          "description": "The outlets that ran this same story on an earlier published day, strongest first. Empty on every payload written before 2026-09-16 and on every story nothing earlier matched, and the two read the same: no earlier telling was found. It is ADDITIVE and folds nothing - today's story keeps its card and its place, and each entry becomes one more name in the card's `Also covered by` stack, linking to that day's page. Recorded on the NEWER story only, so a published day is never rewritten.",
+          "items": {
+            "$ref": "#/$defs/EarlierStory"
+          },
+          "maxItems": 3,
+          "title": "Also Ran Earlier",
+          "type": "array"
+        },
         "band": {
           "$ref": "#/$defs/ConfidenceBand"
         },
@@ -226,7 +236,7 @@
             }
           ],
           "default": null,
-          "description": "The item the default view keeps for this story. Null on the item that is kept and on an item nothing grouped with. Nothing is unpublished: a collapsed item keeps its place in this list, its anchor and its archive entry.",
+          "description": "The item the default view keeps for this story. Null on the item that is kept and on an item nothing grouped with. Nothing is unpublished: a collapsed item keeps its place in this list, its anchor and its archive entry. **This day's own items only** - a story that also ran on an earlier day is in `also_ran_earlier`, because folding today's page onto a card that is not on it would leave a reader with nothing to open.",
           "title": "Same Story As"
         },
         "secondary_desk": {
@@ -554,6 +564,37 @@
       "title": "DigestVisual",
       "type": "object"
     },
+    "EarlierStory": {
+      "additionalProperties": false,
+      "description": "One outlet that ran this same story on an earlier published day.\n\nIt is a way in and never a fold. The card prints the masthead as one more\nname in its `Also covered by` stack, and the link goes to our page for that\nday - our summary of that telling, and its own way out to the original.\n\nIts three fields are what a pill needs and nothing else. The masthead is\ncarried rather than looked up because the projector that writes a day's file\ncan only see that day, so a name it would have to fetch from another day is\na name it would silently drop.",
+      "properties": {
+        "date": {
+          "description": "The published day that holds it, always before this one.",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "Date",
+          "type": "string"
+        },
+        "item_id": {
+          "description": "That day's story, which still has its own address.",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-(?:[0-9]{2,}|[0-9a-hjkmnp-tv-z]{16})$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "source_name": {
+          "description": "The masthead, as the card prints it.",
+          "minLength": 1,
+          "title": "Source Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "date",
+        "item_id",
+        "source_name"
+      ],
+      "title": "EarlierStory",
+      "type": "object"
+    },
     "SourceForm": {
       "enum": [
         "article",
@@ -609,6 +650,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added DigestItem.same_story_on - which day holds the item it collapses onto.",
+      "version": "2026-09-16T17:00",
+      "why": "A story can now be the same story as one from yesterday; absent means today."
+    },
+    {
       "change": "Retired DigestVisual.path, which named the committed drawing.",
       "version": "2026-09-13T22:30",
       "why": "The reader's browser draws the chart now, so no SVG is written."
@@ -622,11 +668,6 @@
       "change": "Added DigestItem.secondary_desk - the one other desk a story has a claim to.",
       "version": "2026-09-13",
       "why": "The desk ceiling sends an over-ceiling story to a second desk, unnamed."
-    },
-    {
-      "change": "item_id accepts a second shape: sixteen Crockford base32 symbols.",
-      "version": "2026-09-12T18:40",
-      "why": "Ten decimal digits is 33 bits of an address, which collides on a busy day."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -703,7 +744,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-13T22:30",
+      "default": "2026-09-16T17:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -728,5 +769,5 @@
   ],
   "title": "DigestDay",
   "type": "object",
-  "version": "2026-09-13T22:30"
+  "version": "2026-09-16T17:00"
 }

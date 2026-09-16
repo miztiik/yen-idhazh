@@ -152,7 +152,8 @@ export const ITEM_FIELDS: readonly string[] = [
 	'lenses',
 	'key_points',
 	'same_story_as',
-	'covered_by'
+	'covered_by',
+	'also_ran_earlier'
 ];
 
 // The three `ItemVisual` reads. `kind` is read at build time off the committed
@@ -280,6 +281,11 @@ export function projectItem(item: Json, stack: readonly DigestCoverage[] = []): 
 	const projected = pick(item, ITEM_FIELDS);
 	projected.visual = item.visual ? pick(item.visual as Json, VISUAL_FIELDS) : null;
 	projected.covered_by = stack;
+	// Absent on every day published before 2026-09-16, and an absent list is an
+	// empty one rather than a null - the field is a list of names and null is not
+	// one. Unlike `covered_by` it is copied and never derived: this projector can
+	// only see one day, so a name from another day is one it cannot look up.
+	projected.also_ran_earlier = item.also_ran_earlier ?? [];
 	return projected;
 }
 

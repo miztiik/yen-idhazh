@@ -78,6 +78,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-16T18:00",
+            change="assemble.same_story_window_hours, additive, default 36.",
+            why="A story that breaks at 23:00 and is picked up at 07:00 is one story.",
+        ),
+        ChangelogEntry(
             version="2026-09-16T16:00",
             change="ui.lead_rank_weight and ui.lead_also_covered_weight, additive.",
             why="The leading block is a weighted score now, so every term needs a knob.",
@@ -91,11 +96,6 @@ class AppConfig(Contract):
             version="2026-09-16T14:00",
             change="run.safety_ceiling_per_day, additive, default 400.",
             why="The per-run cap bounds a worker's timeout; it never bounded the day.",
-        ),
-        ChangelogEntry(
-            version="2026-09-16T13:00",
-            change="ui.draw_same_story, additive, default true.",
-            why="The page folds a group into one card, and this is the one-edit revert.",
         ),
         ChangelogEntry(
             version="2026-08-21",

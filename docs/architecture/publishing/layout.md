@@ -131,9 +131,10 @@ A day runs the same story from more than one of our feeds, and until 2026-09-01 
 
 | Field | What it says | What it is not |
 | --- | --- | --- |
-| `also_covered_by` | How many **other outlets** carried the same story today. | Not `carried_by`, which counts syndication of one address and reads 1 when two outlets write their own piece. |
-| `same_story_as` | The item the page draws for this story. | Not a deletion. The story keeps its address, its archive entry and its month search entry. |
+| `also_covered_by` | How many **other outlets** carried the same story today. | Not `carried_by`, which counts syndication of one address and reads 1 when two outlets write their own piece. Not a count across days - an earlier telling is a name, never a number here. |
+| `same_story_as` | The item the page draws for this story. | Not a deletion. The story keeps its address, its archive entry and its month search entry. **Not a link to another day**: a fold onto a card this page does not hold is a fold onto nothing. |
 | `covered_by` | Which other outlets ran it, **by name**, strongest first, capped at three. | Not on the committed day. The projector derives it, so a day published before the names existed still serves them. |
+| `also_ran_earlier` | Which outlets ran the same story on an **earlier published day**, with the day and the address. | Not derived and not a fold. It is on the committed item, because a projector sees one day and could not look the name up. |
 
 **Two items become one story down this path, and nowhere else.** `collapse_same_story` in [../../../backend/idhazh/assemble.py](../../../backend/idhazh/assemble.py) is the only thing that writes either field. Every rule below the diagram is one of its boxes.
 
@@ -278,6 +279,24 @@ It compares int8 vectors directly rather than decoding them. `embed.dequantise` 
 **The headline rule added 0.5 percent and the readings above stand.** It costs one reduction per item before the pass, which is linear, and inside the pass it is a dictionary lookup and a string comparison that runs *instead of* the cosine whenever it matches. Measured 2026-09-14 on a developer machine / Python 3.14.2 as seven alternating rounds inside one process on 2026-08-24, the largest day: **11.601 s with the vector rule alone, 11.664 s with both, a difference of 0.064 s**. Alternating the cases is what makes that number readable - this box's own run-to-run spread on the same day is 10.8 to 17.5 s, so a between-run comparison could not have seen a difference this size, and an A-against-B inside one process cancels the box instead.
 
 **The composite added 1.7 s on the largest day, which is 18 percent, and it was accepted.** The second term is one set intersection per pair, over the few million pairs a 731-item day asks about; the union is counted as `left + right - shared` rather than built, which took the cost from 4.1 s to 1.7 s before it landed. Measured 2026-09-16 on a developer machine / Python 3.14.2, five rounds each on the 2026-08-24 day, median of five: **9.38 s before, 11.09 s after**. The assemble job's timeout is 20 minutes and the stage runs five times a day, so 1.7 s a run is under one percent of the budget it spends; the term it buys is what the weights are fitted on. The alternative - skipping the term whenever its weight is zero - was refused because it makes the log line stop reporting a term a person is about to weight.
+
+**The 36-hour window added 8.1 s on the largest day, which is 55 percent, and the row's own arithmetic had said fourfold.** Measured 2026-09-16 on a developer machine / Python 3.14.2, five alternating rounds inside one process on 2026-08-24 - 731 items, plus the 147 of 2026-08-23: **median 14.8 s closed against 22.9 s open**, the closed case spanning 12.7 to 18.0 s and the open case 22.4 to 34.2 s. Alternating the two cases is what makes that readable: this box's own run-to-run spread on one day is wider than the difference, so a between-run comparison could not have seen it. The prediction of four times the pairs read the window as squaring the whole population; what it actually adds is today's items times the earlier day's, and the earlier day was a fifth the size. The assemble job's timeout is 20 minutes, so 23 s is **1.9 percent of the budget the stage spends**, and the number to watch is a pair of large days back to back rather than this one.
+
+### The window past midnight
+
+A story that breaks at 23:00 and is picked up at 07:00 is one story, and a day boundary is an accident of the calendar. `assemble.same_story_window_hours`, committed at 36, is how far apart two stories may have appeared and still be one.
+
+| What the window does | What it does not do |
+| --- | --- |
+| Lets a story on this day pair with one on an earlier published day, on the hours between the two stories' own times. | Group two earlier days with each other. A published day is finished; the pass reads it and never re-decides it. |
+| Bound the read. `stages.assemble._earlier_days` opens `ceil(hours / 24)` days by date arithmetic - one at 36 - so the cost is the same on the thousandth day as the third ([growing-reads.md](../../concepts/growing-reads.md)). | Bind a pair inside one published day. Those are scored exactly as they were, which is what makes `0` an exact revert rather than an approximate one. |
+| Record the match on the NEWER story, as `also_ran_earlier`. | Fold anything. Today's story keeps its card, its place in the order and its anchor. |
+
+**A cross-day match is a name in the stack and never a fold.** `same_story_as` still means this day's own anchor, because folding today's page onto a card it does not hold would leave the reader with nothing to open. What today's story gains is `also_ran_earlier` - up to `EARLIER_OUTLETS_MAX` mastheads, each with the day it ran and the address on that day - and the card prints them as more names in the same `Also covered by` stack, each saying which day and linking to that day's page.
+
+**The masthead is carried on the item rather than looked up.** `covered_by` is derived at projection time because a day's own grouping is in its own payload; an earlier day's is not, and a projector that can see one day would silently drop a name it had to fetch from another. So the three fields a pill needs - the day, the address and the masthead - are on the committed item.
+
+**`also_covered_by` still counts this day's outlets and nothing else.** It is what the card's `and N more` remainder is worked out from, so a count that grew across days would make the remainder lie. The earlier outlet is a name, not a number.
 
 ### The grouping runs before the lead block, and that order is fixed
 

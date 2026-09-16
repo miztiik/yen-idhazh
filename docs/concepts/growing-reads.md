@@ -216,7 +216,7 @@ of nineteen and looked finished, and its own upkeep grew with the other
 seventeen. Read the rows below to see the three answers in service. Do not read
 them as the set of places the rule applies.
 
-**Twenty-five reads over a collection a run appends to**, each with the cover or
+**Twenty-six reads over a collection a run appends to**, each with the cover or
 the bound its own code declares. A helper that opens one named file is not
 listed: its cover is its argument. These are `backend/`'s;
 [the site's are below](#the-site-reads-the-same-collections-2026-09-09).
@@ -232,6 +232,7 @@ listed: its cover is its argument. These are `backend/`'s;
 | `ledger.reliability` | the feed-health day files in range | `collect.reliability_window_days` |
 | `ledger.load_published` | day files of `state/published/` | `collect.published_window_days`, **committed at `-1`** |
 | `retention.prune_counterfactual_scores` | day files of `state/counterfactual-scores/` | `lens_weights.window_days`, committed at 30. It walks the tree to find what to delete, so its cost falls as it works - a day it deletes is a day no later run opens. The walk is what bounds the collection: the ledger gains rows on every run and nothing else takes any away |
+| `stages.assemble._earlier_days` | `digest.json` of the published days the same-story window can still reach | `assemble.same_story_window_hours`, committed at 36, which is `ceil(hours / 24)` days - one. The dates are named by date arithmetic, never by a directory walk, so it is one file open on the thousandth day and on the third. A bounded fixture cannot answer its question: whether this morning's story is one an earlier PUBLISHED day already carried, which only that day's own payload holds the vectors for. 0 reads nothing |
 
 ### A cover that is not a clock
 

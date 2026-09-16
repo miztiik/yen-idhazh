@@ -60,9 +60,16 @@ const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'digest'
  * `same_story_as` and `covered_by` joined on 2026-09-16 and joined together.
  * The page folds a group into one card now: the first is what it folds on, the
  * second is the other newsrooms by name, and the names are what make the fold
- * recoverable. Either one alone ships a card with no way out of it. */
+ * recoverable. Either one alone ships a card with no way out of it.
+ *
+ * `also_ran_earlier` joined the same day and is the other half of one question.
+ * The same-story pass reaches 36 hours back, so a story picked up this morning
+ * names the newsroom that ran it last night - a name in the same stack, dated,
+ * pointing at that day. It folds nothing, which is why it is a third field and
+ * not a change to the first two. */
 const RENDERED_FIELDS = [
 	'also_covered_by',
+	'also_ran_earlier',
 	'band',
 	'band_reason',
 	'carried_by',
@@ -157,7 +164,7 @@ function items(day: Day): Record<string, unknown>[] {
 	return day.payload.items as Record<string, unknown>[];
 }
 
-test('the allow-list is the twenty-six fields this file promises', () => {
+test('the allow-list is the twenty-seven fields this file promises', () => {
 	// The staging step and the build-time reader share one module now, so a
 	// widening is one edit in one place. This is the test that makes that edit
 	// visible: it names the field that arrived, where the shape checks below
@@ -186,7 +193,7 @@ test('a staged day carries its items, its own facts, and the stamp that says wha
 	}
 });
 
-test('a staged item carries the twenty-six fields a page renders, and no twenty-seventh', () => {
+test('a staged item carries the twenty-seven fields a page renders, and no twenty-eighth', () => {
 	const wrong: string[] = [];
 	let counted = 0;
 	for (const day of staged()) {

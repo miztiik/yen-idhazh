@@ -33,6 +33,7 @@ from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 
 from idhazh import config
 from idhazh.assemble import (
+    EarlierDay,
     collapse_same_story,
     cosine_int8,
     key_point_overlap,
@@ -154,6 +155,7 @@ def item(
     title: str | None = None,
     outlet: str | None = None,
     points: list[str] | None = None,
+    when: str | None = None,
 ) -> DigestItem:
     return DigestItem(
         item_id=item_id,
@@ -167,7 +169,189 @@ def item(
         band=ConfidenceBand.HIGH,
         rank_score=score,
         introduced_by_run=run,
+        published_at=when,
     )
+
+
+# --- the window past midnight ----------------------------------------------
+
+
+def one_story_two_days(
+    *, broke: str, picked_up: str
+) -> tuple[list[DigestItem], DigestEmbeddings, list[EarlierDay]]:
+    """One story, two outlets, two published days, at two times a test chooses.
+
+    Built rather than read off the archive: the pair this row exists for is a
+    story that broke late and was picked up the next morning, and the committed
+    days cannot be made to hold one at a chosen number of hours apart.
+    """
+    yesterday = item("world-01", source="wire", score=9.0, when=broke)
+    today = item("world-02", source="paper", score=1.0, when=picked_up)
+    return (
+        [today],
+        block({"world-02": unit(0)}),
+        [
+            EarlierDay(
+                date="2026-08-30",
+                items=[yesterday],
+                embeddings=block({"world-01": unit(0)}),
+            )
+        ],
+    )
+
+
+def test_a_story_picked_up_inside_the_window_names_the_outlet_that_broke_it() -> None:
+    """Thirty hours apart, so an evening break and the next morning's pick-up."""
+    items, vectors, earlier = one_story_two_days(
+        broke="2026-08-30T22:00:00Z", picked_up="2026-08-31T04:00:00Z"
+    )
+    stamped = collapse_same_story(
+        items, vectors, same_story=at(0.9), window_hours=36.0, earlier=earlier
+    )
+
+    assert [one.item_id for one in stamped] == ["world-02"], "nothing is dropped or added"
+    assert stamped[0].same_story_as is None, "today's story keeps its own card"
+    ran = stamped[0].also_ran_earlier
+    assert [(one.date, one.item_id, one.source_name) for one in ran] == [
+        ("2026-08-30", "world-01", "Wire")
+    ]
+
+
+def test_a_story_outside_the_window_is_its_own_story() -> None:
+    """Forty hours apart, which is a follow-up rather than a pick-up."""
+    items, vectors, earlier = one_story_two_days(
+        broke="2026-08-29T12:00:00Z", picked_up="2026-08-31T04:00:00Z"
+    )
+    stamped = collapse_same_story(
+        items, vectors, same_story=at(0.9), window_hours=36.0, earlier=earlier
+    )
+
+    assert stamped[0].also_ran_earlier == ()
+    assert stamped[0].also_covered_by == 0, "no other source of THIS day carried it"
+
+
+def test_a_window_of_zero_reads_no_earlier_day_at_all() -> None:
+    """The revert, and it has to be exact rather than approximate.
+
+    The earlier day is handed in and still reaches nothing, so an operator who
+    sets the window to 0 gets the same-day pass this had before the window
+    existed - whatever the caller passes.
+    """
+    items, vectors, earlier = one_story_two_days(
+        broke="2026-08-30T22:00:00Z", picked_up="2026-08-31T04:00:00Z"
+    )
+    stamped = collapse_same_story(
+        items, vectors, same_story=at(0.9), window_hours=0.0, earlier=earlier
+    )
+
+    assert stamped[0].also_ran_earlier == ()
+    assert stamped[0].also_covered_by == 0
+
+
+def test_the_earlier_day_comes_back_exactly_as_it_went_in() -> None:
+    """A published day is finished, so the pass may read it and never write it."""
+    items, vectors, earlier = one_story_two_days(
+        broke="2026-08-30T22:00:00Z", picked_up="2026-08-31T04:00:00Z"
+    )
+    before = [one.model_dump_json() for one in earlier[0].items]
+    collapse_same_story(items, vectors, same_story=at(0.9), window_hours=36.0, earlier=earlier)
+
+    assert [one.model_dump_json() for one in earlier[0].items] == before
+
+
+def test_one_outlet_picking_up_its_own_story_is_not_a_group() -> None:
+    """The across-outlets rule holds across days too, and it has to.
+
+    One desk running one story on two days is a follow-up slot, which is the
+    shape this pass is least able to tell from a recurrence.
+    """
+    yesterday = item("world-01", source="wire", score=9.0, when="2026-08-30T22:00:00Z")
+    today = item("world-02", source="wire", score=1.0, when="2026-08-31T04:00:00Z")
+    stamped = collapse_same_story(
+        [today],
+        block({"world-02": unit(0)}),
+        same_story=at(0.9),
+        window_hours=36.0,
+        earlier=[
+            EarlierDay(
+                date="2026-08-30", items=[yesterday], embeddings=block({"world-01": unit(0)})
+            )
+        ],
+    )
+
+    assert stamped[0].also_ran_earlier == ()
+
+
+def test_a_story_nothing_dated_never_reaches_across_a_day() -> None:
+    """An undated story cannot be placed in time, so it is refused rather than guessed."""
+    yesterday = item("world-01", source="wire", score=9.0, when="2026-08-30T22:00:00Z")
+    today = item("world-02", source="paper", score=1.0)
+    stamped = collapse_same_story(
+        [today],
+        block({"world-02": unit(0)}),
+        same_story=at(0.9),
+        window_hours=36.0,
+        earlier=[
+            EarlierDay(
+                date="2026-08-30", items=[yesterday], embeddings=block({"world-01": unit(0)})
+            )
+        ],
+    )
+
+    assert stamped[0].also_ran_earlier == ()
+
+
+def test_today_still_groups_with_today_while_the_window_is_open() -> None:
+    """The window adds a way in and takes none away."""
+    items = [
+        item("world-02", source="paper", score=1.0, when="2026-08-31T04:00:00Z"),
+        item("world-03", source="desk", score=5.0, when="2026-08-31T05:00:00Z"),
+    ]
+    stamped = collapse_same_story(
+        items,
+        block({"world-02": unit(0), "world-03": unit(0)}),
+        same_story=at(0.9),
+        window_hours=36.0,
+        earlier=[
+            EarlierDay(
+                date="2026-08-30",
+                items=[item("world-01", source="wire", score=9.0, when="2026-08-30T22:00:00Z")],
+                embeddings=block({"world-01": unit(0)}),
+            )
+        ],
+    )
+
+    assert groups_of(stamped) == {"world-03": ["world-02"]}, "the day's own anchor still wins"
+    assert [one.source_name for one in stamped[0].also_ran_earlier] == ["Wire"]
+    assert [one.source_name for one in stamped[1].also_ran_earlier] == ["Wire"]
+
+
+def test_the_count_stays_a_count_of_this_days_sources() -> None:
+    """`also_covered_by` is what the card's remainder is worked out from.
+
+    It counts this day's other outlets and nothing else, so the sentence beside
+    the names stays true. The earlier outlet is a name in the stack rather than
+    a number in the count.
+    """
+    items = [
+        item("world-02", source="paper", score=1.0, when="2026-08-31T04:00:00Z"),
+        item("world-03", source="desk", score=5.0, when="2026-08-31T05:00:00Z"),
+    ]
+    stamped = collapse_same_story(
+        items,
+        block({"world-02": unit(0), "world-03": unit(0)}),
+        same_story=at(0.9),
+        window_hours=36.0,
+        earlier=[
+            EarlierDay(
+                date="2026-08-30",
+                items=[item("world-01", source="wire", score=9.0, when="2026-08-30T22:00:00Z")],
+                embeddings=block({"world-01": unit(0)}),
+            )
+        ],
+    )
+
+    assert [one.also_covered_by for one in stamped] == [1, 1]
 
 
 # --- the arithmetic --------------------------------------------------------
