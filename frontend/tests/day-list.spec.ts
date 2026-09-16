@@ -26,7 +26,14 @@
 
 import { expect, test } from '@playwright/test';
 
-import { indexDay, leadingStories, orderByTime, revealed, shortlist } from '../src/lib/day-shape';
+import {
+	foldedMembers,
+	indexDay,
+	leadingStories,
+	orderByTime,
+	revealed,
+	shortlist
+} from '../src/lib/day-shape';
 import type { DigestItem, DigestLead } from '../src/lib/payload/types';
 
 /** What `DigestList` reveals before a reader asks for more. Mirrors `PAGE`
@@ -413,5 +420,56 @@ test.describe('what the day list costs', () => {
 		expect(counts[0], 'the pager read past the prefix it draws').toBeLessThanOrEqual(PAGE + 5);
 		expect(counts[1], 'a four-times longer day cost the pager more').toBe(counts[0]);
 		expect(scanned, 'the day being paged did not actually grow').toBe(480);
+	});
+});
+
+/**
+ * The fold, which is the other thing `DigestList` computes before a reader sees a
+ * page: a story that names another as its story is drawn behind that story's card
+ * rather than on one of its own.
+ *
+ * Three stories are never folded, and each exclusion is the difference between a
+ * fold and the bug that pulled this feature the first time - an item filtered out
+ * of the list is not merely undrawn, it becomes unreachable through every reading
+ * route while its address still exists.
+ */
+test.describe('the fold', () => {
+	/** A day of ids and the story each one names, and nothing else: `foldedMembers`
+	 * reads two fields, so a fixture carrying twenty would hide which two. */
+	const day = (...pairs: [string, string | null][]): DigestItem[] =>
+		pairs.map(([item_id, same_story_as]) => ({ item_id, same_story_as }) as DigestItem);
+
+	const GROUP: [string, string | null][] = [
+		['ai-01', null],
+		['ai-02', 'ai-01'],
+		['ai-03', 'ai-01'],
+		['world-01', null]
+	];
+
+	test('a story that names another is folded, and the story it names is not', () => {
+		expect([...foldedMembers(day(...GROUP), true, '')].sort()).toEqual(['ai-02', 'ai-03']);
+	});
+
+	test('the story the reader asked for is never folded', () => {
+		// `/<date>/#<item id>` is a published reader address, and a publisher name on
+		// the anchor's card is one of them. Folded, it would resolve to nothing and
+		// the page would say the story is not on it - which it is.
+		expect([...foldedMembers(day(...GROUP), true, 'ai-02')]).toEqual(['ai-03']);
+	});
+
+	test('a story whose anchor is not on this page is never folded', () => {
+		// A group can straddle two desks, so on a topic route the anchor can be on
+		// another page. Folding behind a card this page does not draw takes the story
+		// off the page with nothing to find it by.
+		const straddling: [string, string | null][] = [
+			['ai-02', 'ai-99'],
+			['ai-03', 'ai-99']
+		];
+		expect([...foldedMembers(day(...straddling), true, '')]).toEqual([]);
+	});
+
+	test('nothing is folded with the knob off, which is the revert path', () => {
+		expect([...foldedMembers(day(...GROUP), false, '')]).toEqual([]);
+		expect([...foldedMembers(day(...GROUP), false, 'ai-02')]).toEqual([]);
 	});
 });

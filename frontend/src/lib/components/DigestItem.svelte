@@ -30,7 +30,7 @@
 	import { deskOf } from '$lib/day-shape';
 	import { itemTime, shortDate } from '$lib/format';
 	import Icon from '$lib/icons/Icon.svelte';
-	import type { DigestItem } from '$lib/payload/types';
+	import type { DigestCoverage, DigestItem } from '$lib/payload/types';
 	import { shownLenses } from '$lib/payload/lenses';
 	import ItemMeta from './ItemMeta.svelte';
 	import ItemVisual from './ItemVisual.svelte';
@@ -43,6 +43,7 @@
 		level = 2,
 		showVertical = true,
 		showMark = true,
+		stack = [],
 		read = false,
 		day,
 		onDate = '',
@@ -56,6 +57,10 @@
 		/** False under a topic heading, which already says the topic. */
 		showVertical?: boolean;
 		showMark?: boolean;
+		/** The other newsrooms that ran this story, as links this page can reach.
+		 * Empty everywhere a card stands alone - a search result, an archive row -
+		 * because a name there would be an anchor to a story that page never drew. */
+		stack?: DigestCoverage[];
 		read?: boolean;
 		/** Set on a search result: the day it was found on, and the link back.
 		 * It takes the time slot rather than adding to the line - the two dates
@@ -184,7 +189,7 @@
 	</div>
 
 	<div class="item-rail">
-		<ItemMeta {item} {onRead} />
+		<ItemMeta {item} {stack} {onRead} />
 	</div>
 </article>
 
