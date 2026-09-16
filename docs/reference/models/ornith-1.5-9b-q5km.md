@@ -65,14 +65,14 @@ lottery](../benchmarks/the-processor-lottery.md).
 
 | Processor | Draws | Prefill, 730 | Prefill, 1,800 | Prefill, 4,850 | Decode, 250 |
 | --- | --- | --- | --- | --- | --- |
-| AMD EPYC 7763 64-Core | 2 | 6.195 to 6.226 | 6.165 to 6.192 | 6.083 to 6.116 | 4.412 to 4.538 |
+| AMD EPYC 7763 64-Core | 3 | 6.195 to 6.226 | 6.165 to 6.196 | 6.083 to 6.122 | 4.412 to 4.640 |
 | AMD EPYC 9V74 80-Core | 1 | 6.374 +/- 0.008 | 6.355 +/- 0.010 | 6.293 +/- 0.013 | 4.696 +/- 0.004 |
 
-All figures are tokens a second. The two-draw row shows the range across them;
+All figures are tokens a second. The three-draw row shows the range across them;
 the one-draw row shows that draw's own spread.
 
 **Do not read the narrow range as a model that does not care what machine it
-gets.** These three draws span 2.6 percent because **this model has only ever
+gets.** These four draws span 2.9 percent because **this model has only ever
 drawn the two machines that read at the same speed as each other.** It has never
 landed on a 9V45 or a Xeon, and both of those read other models three to four
 times faster than the 7763 does. The range above is a gap in the sample.

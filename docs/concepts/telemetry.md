@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-09-16T12:00
+**Last Updated**: 2026-09-16
 
 The structured-event vocabulary: the envelope every event carries, the event names that are emitted, the two shapes those names take, the span tree a developer can switch on, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, which is a project non-goal ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 0a).
 
@@ -327,7 +327,7 @@ instrument, not about the job. What one sample costs is in
 
 `cpu_model` on the two rows above says which processor, in one string. It does
 not say what that processor can do, and **the thing that moves throughput most is
-what it can do**: the same weights read 3.7 times faster on a machine with
+what it can do**: the same weights read 3.6 times faster on a machine with
 AVX-512 than on one without, which is a far larger gap than anything separating
 our candidate models ([the processor
 lottery](../reference/benchmarks/the-processor-lottery.md)).
