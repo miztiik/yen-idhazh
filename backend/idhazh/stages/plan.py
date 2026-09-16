@@ -276,6 +276,10 @@ def stage_plan(
     for candidate in candidates:
         if candidate.lead is not None and candidate.url_key not in leads:
             leads[candidate.url_key] = candidate.lead
+    # Which masthead a feed belongs to, so one newsroom's second copy of its own
+    # piece is caught before anything fetches it. `source_id` is a feed and four
+    # of ours are CGTN, so the feed id is the wrong key for that question.
+    outlets = assemble.source_names(settings.sources)
     verticals, items, pools = _plan_desks(
         settings,
         candidates,
@@ -294,6 +298,7 @@ def stage_plan(
     )
 
     items = _dedupe_planned_items(items)
+    items = _one_piece_per_outlet(items, outlets=outlets)
     items = _record_plan_duplicates(items, embedder=embedder, leads=leads, collect=collect)
     items = _within_ceiling(items, ceiling=settings.app.run.safety_ceiling_per_run)
 
@@ -338,6 +343,7 @@ def stage_plan(
             reliability=reliability_by_feed,
         )
         capped = _dedupe_planned_items(capped)
+        capped = _one_piece_per_outlet(capped, outlets=outlets)
         capped = _record_plan_duplicates(capped, embedder=embedder, leads=leads, collect=collect)
         capped = _within_ceiling(capped, ceiling=settings.app.run.safety_ceiling_per_run)
         if len(capped) < len(items):
@@ -745,6 +751,72 @@ def _dedupe_planned_items(items: list[PlannedItem]) -> list[PlannedItem]:
         ",".join(sorted({item.source_id for item in dropped})),
     )
     return [item for item in items if winners[item.url_key] is item]
+
+
+def _one_piece_per_outlet(
+    items: list[PlannedItem], *, outlets: Mapping[str, str]
+) -> list[PlannedItem]:
+    """Drop an outlet's second copy of its own piece, before anything reads it.
+
+    The address collapse above joins two feeds carrying the identical URL. One
+    outlet republishing its own piece at a second address is a different shape
+    and that pass cannot see it: two addresses, two `url_key`s, one newsroom
+    saying one thing twice.
+
+    Two items are the same piece when they come from one outlet AND their
+    headlines reduce to the same key, which is `assemble.headlines_match` - the
+    same rule and the same spelling the published-day pass uses. Deterministic,
+    no encoder, no threshold. The strongest survives, on the order the address
+    collapse already sorts on.
+
+    **It is here and not in `collapse_same_story`.** That pass refuses
+    same-outlet pairs by design, so it can never catch this, and teaching it to
+    would undo the repair that stopped one newsroom on two of its own feeds
+    printing a corroboration the reader did not have. Here, the second copy is
+    never fetched, never summarised and never costs a slot.
+
+    An outlet we cannot name falls back to the feed id, which is the narrower
+    key: two feeds of one unnamed outlet keep both copies rather than one of
+    them being dropped on a guess.
+    """
+    keyed: dict[tuple[str, str], list[tuple[PlannedItem, assemble.StoryKey]]] = {}
+    for item in items:
+        key = assemble.story_key(item.title) if item.title else None
+        if key is None:
+            continue
+        outlet = outlets.get(item.source_id, item.source_id)
+        keyed.setdefault((outlet, key.shape), []).append((item, key))
+
+    dropped: list[PlannedItem] = []
+    for carried in keyed.values():
+        if len(carried) < 2:
+            continue
+        survivors: list[assemble.StoryKey] = []
+        for item, key in sorted(
+            carried,
+            key=lambda pair: (
+                -pair[0].rank_score,
+                pair[0].vertical,
+                pair[0].item_id,
+                pair[0].source_id,
+            ),
+        ):
+            if any(assemble.headlines_match(key, held) for held in survivors):
+                dropped.append(item)
+                continue
+            survivors.append(key)
+
+    if not dropped:
+        return items
+
+    cut = {item.item_id for item in dropped}
+    LOG.info(
+        "plan same-outlet repeats dropped count=%s outlets=%s item_ids=%s",
+        len(dropped),
+        ",".join(sorted({outlets.get(item.source_id, item.source_id) for item in dropped})),
+        ",".join(sorted(cut)),
+    )
+    return [item for item in items if item.item_id not in cut]
 
 
 def _next_run_n(date: str) -> int:
