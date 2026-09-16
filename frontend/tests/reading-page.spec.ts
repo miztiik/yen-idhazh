@@ -53,6 +53,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { deskCount, deskShortfall, leadingStories, orderByTime } from '../src/lib/day-shape';
+import { projectDay } from '../src/lib/payload/project';
 import { shellSeedItems, uiConfig } from '../src/lib/server/config';
 import { loadDay, publishedDates } from '../src/lib/server/payload';
 import { dayReady } from './support/day-ready';
@@ -734,5 +735,256 @@ test.describe('with the offline reader installed', () => {
 		await expect(story, 'the lead the link named is not on the page').toHaveCount(1);
 		await expect(story, 'the deep link scrolled to a story nobody can see').toBeInViewport();
 		await expect(story, 'the story was scrolled to but not focused').toBeFocused();
+	});
+});
+
+/**
+ * Plan 29 row #5's oracle: one card per story, and every publisher on it is a
+ * way in.
+ *
+ * The day's grouping has been computed, persisted and deliberately withheld from
+ * the page since it was written, because the first attempt at drawing it took a
+ * grouped story off the list while its address still existed - so the story was
+ * unreachable through every reading route and the page said it was not here.
+ * This is the answer to that, and it is what the cases below are about:
+ *
+ * - The anchor draws one card, and the stories it folds do not draw cards.
+ * - The card names the other newsrooms, and every name is a link.
+ * - **Every folded address still lands**: drawn, scrolled to, and focused.
+ * - Nothing is removed. The payload the page was handed still carries every
+ *   story, so the archive and the month index - both built from that payload and
+ *   never from this page - cannot have lost one.
+ *
+ * **The day is routed rather than read off `build/`.** A dated URL is answered by
+ * one shell that fetches its day, so a spec can hand the real page any day it
+ * likes. It has to: the committed archive's groups are whatever the sources ran
+ * that morning, and none of them is three outlets on one story with a fourth
+ * story beside it, which is the shape every case here needs (`CLAUDE.md`
+ * section 13). The payload is built by `projectDay` - the projector that writes
+ * every served day - so the publisher names are derived here exactly as they are
+ * in a build.
+ *
+ * **The knob-off arm is in `day-list.spec.ts` and not here.** `ui.draw_same_story`
+ * is read at build time and inlined into the one shell, so a browser arm would
+ * need a second build of the whole site; what it would prove past the logic arm
+ * is that one `$derived` reads the knob. The logic arm drives `foldedMembers`
+ * with the knob off and gets an empty set, which is one card per story.
+ */
+test.describe('one card, and every publisher on it is a way in', () => {
+	const FOLD_DAY = '2026-01-03';
+	const FOLD_PATH = `/digest/${FOLD_DAY.split('-').join('/')}/digest.json`;
+	/** The anchor, then the two stories folded behind it, then a story on its own.
+	 * `rank_score` decides the order the names are printed in. */
+	const ANCHOR = 'ai-01';
+	const MEMBERS = ['ai-02', 'ai-03'];
+	const ALONE = 'world-01';
+
+	/** One committed story, carrying what the card and the projector read. */
+	function story(
+		item_id: string,
+		source_name: string,
+		rank_score: number,
+		same_story_as: string | null
+	): Record<string, unknown> {
+		return {
+			item_id,
+			vertical: item_id.split('-')[0],
+			title: `Story ${item_id} from ${source_name}`,
+			summary: `What ${source_name} reported about ${item_id}.`,
+			key_points: [`${item_id} happened.`],
+			reader_note: null,
+			band: 'high',
+			band_reason: null,
+			truncated: false,
+			visual: null,
+			source_name,
+			source_id: source_name.toLowerCase(),
+			source_kind: 'reporting',
+			source_url: `https://${source_name.toLowerCase()}.test/${item_id}`,
+			published_at: '2026-01-03T09:00:00Z',
+			time_source: 'feed',
+			carried_by: 1,
+			watchlist_hit: false,
+			on_front_page: false,
+			rank_score,
+			// Three outlets ran it, so two of them are other outlets from the
+			// anchor's point of view. The count and the names have to agree.
+			also_covered_by: same_story_as === null ? 2 : 2,
+			same_story_as,
+			introduced_by_run: 1,
+			lenses: []
+		};
+	}
+
+	const COMMITTED = {
+		version: '2026-01-03T09:00',
+		date: FOLD_DAY,
+		generated_at: '2026-01-03T10:00:00Z',
+		partial: false,
+		items_planned: 4,
+		items_failed: 0,
+		runs: [{ n: 1, at: '2026-01-03T10:00:00Z', items_added: 4 }],
+		verticals: [
+			{ id: 'ai', display_name: 'AI', count: 3, desk_count: 3 },
+			{ id: 'world', display_name: 'World', count: 1, desk_count: 1 }
+		],
+		// One lead on the anchor and one on a story the anchor folds. The second is
+		// what says which of the two wins, and the fold does: a folded story is not
+		// drawn as its own card, so it is not an anchor the block can point at.
+		leads: [
+			{ item_id: ANCHOR, reason: 'Three newsrooms ran it.' },
+			{ item_id: MEMBERS[0], reason: 'A second telling of the same story.' }
+		],
+		items: [
+			story(ANCHOR, 'Alpha', 0.9, null),
+			story(MEMBERS[0], 'Beta', 0.7, ANCHOR),
+			story(MEMBERS[1], 'Gamma', 0.8, ANCHOR),
+			{ ...story(ALONE, 'Delta', 0.4, null), also_covered_by: 0 }
+		]
+	};
+
+	/** The served day, written by the projector that writes every served day. */
+	const SERVED = projectDay(JSON.stringify(COMMITTED));
+
+	/** Open the routed day, and count what was intercepted.
+	 *
+	 * A case that intercepted nothing has proved that a page loads, which it would
+	 * have done anyway - the same rule the broken-day cases above follow.
+	 */
+	async function openFolded(page: Page, hash = ''): Promise<void> {
+		const taken: string[] = [];
+		await page.route(`**${FOLD_PATH}`, async (route) => {
+			taken.push(new URL(route.request().url()).pathname);
+			await route.fulfill({ status: 200, contentType: 'application/json', body: SERVED });
+		});
+		await page.addInitScript(`localStorage.setItem('idhazh:theme', 'dark')`);
+		await page.setViewportSize({ width: 1536, height: 900 });
+		await page.goto(`/${FOLD_DAY}/${hash}`);
+		await dayReady(page, `/${FOLD_DAY}/${hash} never settled on a state`);
+		expect(taken.length, 'the case intercepted nothing, so it measured nothing').toBeGreaterThan(0);
+	}
+
+	const drawn = (page: Page): Promise<string[]> =>
+		page.locator('article.item[id]').evaluateAll((nodes) => nodes.map((node) => node.id));
+
+	test('the projector kept every story, so nothing built from the payload lost one', () => {
+		// The archive list and the month search index are both built from this
+		// payload and never from the page, so this is what says a folded story keeps
+		// its archive entry and its search entry. The fold is a drawing decision.
+		const served = JSON.parse(SERVED) as { items: { item_id: string; same_story_as?: string }[] };
+		expect(served.items.map((item) => item.item_id)).toEqual([ANCHOR, ...MEMBERS, ALONE]);
+		for (const member of MEMBERS) {
+			const item = served.items.find((one) => one.item_id === member);
+			expect(item?.same_story_as, `${member} lost the story it names`).toBe(ANCHOR);
+		}
+	});
+
+	test('the anchor draws one card and the stories it folds draw none', async ({ page }) => {
+		await openFolded(page);
+
+		const ids = await drawn(page);
+		expect(ids, 'the page did not fold the group into one card').toEqual([ANCHOR, ALONE]);
+		expect(
+			ids.filter((id) => id === ANCHOR).length,
+			'the anchor was drawn more than once'
+		).toBe(1);
+	});
+
+	test('the card names the other newsrooms, and every name is a link to one', async ({ page }) => {
+		await openFolded(page);
+
+		const stack = page.locator(`article.item[id="${ANCHOR}"] [data-item-stack]`);
+		await expect(stack, 'the folding card names nobody').toHaveCount(1);
+		await expect(stack, 'the stack lost its sentence').toContainText('Also covered by');
+
+		// Strongest first, which is `rank_score` order: Gamma at 0.8 before Beta at
+		// 0.7. A stack in payload order would pass a count and fail this.
+		const pills = page.locator(`article.item[id="${ANCHOR}"] [data-coverage-pill]`);
+		await expect(pills).toHaveText(['Gamma', 'Beta']);
+		expect(
+			await pills.evaluateAll((nodes) =>
+				nodes.map((node) => node.getAttribute('data-coverage-pill'))
+			),
+			'a publisher name points at a story other than the one it folds'
+		).toEqual([MEMBERS[1], MEMBERS[0]]);
+		expect(
+			await pills.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('href'))),
+			'a publisher name is not a link to that story on this page'
+		).toEqual([`#${MEMBERS[1]}`, `#${MEMBERS[0]}`]);
+
+		// A story no group holds keeps the sentence and gets no stack, because the
+		// count and the names answer different questions.
+		await expect(
+			page.locator(`article.item[id="${ALONE}"] [data-item-stack]`),
+			'a story on its own was given a publisher stack'
+		).toHaveCount(0);
+	});
+
+	// One test per folded story rather than one loop over both, because a second
+	// `goto` to the same address with a different fragment is a hash change: the
+	// client router never re-fetches, so the second pass would measure a page the
+	// first pass had already loaded. A cold load of the address is the case.
+	for (const member of MEMBERS) {
+		test(`${member} is folded, and its own address still lands on it`, async ({ page }) => {
+			// This is the whole of what pulled the collapse the first time. A folded
+			// story is not removed - it keeps its address - so its address has to work.
+			await openFolded(page, `#${member}`);
+
+			const card = page.locator(`article.item[id="${member}"]`);
+			const ids = await drawn(page);
+			await expect(
+				card,
+				`the page drew ${ids.join(', ')} and none of them was the story the address named`
+			).toHaveCount(1, { timeout: 15_000 });
+			await expect(card, `${member} was drawn but not scrolled to`).toBeInViewport();
+			await expect(card, `${member} was scrolled to but not focused`).toBeFocused();
+
+			// And the page does not say the story is missing, which is the sentence the
+			// first attempt at this made every grouped story print.
+			await expect(
+				page.locator('[data-anchor-missing]'),
+				`${member} is on the page and the page says it is not`
+			).toHaveAttribute('data-anchor-missing', 'no');
+			console.log(`[reading-page] ${member}: folded, addressed, drawn, in view, focused`);
+		});
+	}
+
+	test('pressing a publisher name opens that newsroom on the same page', async ({ page }) => {
+		await openFolded(page);
+
+		await page.locator(`[data-coverage-pill="${MEMBERS[0]}"]`).click();
+		const card = page.locator(`article.item[id="${MEMBERS[0]}"]`);
+		await expect(card, 'the name did not open the story it folds').toHaveCount(1, {
+			timeout: 15_000
+		});
+		await expect(card, 'the story opened but the page did not go to it').toBeInViewport();
+		// Our summary of THEIR piece, with their own way out under it. That is why
+		// the name links here rather than straight out to the publisher.
+		await expect(card.locator('[data-item-summary]')).toContainText('Beta');
+		await expect(card.locator('a[href^="https://beta.test/"]')).toHaveCount(1);
+	});
+
+	test('the pager does not offer stories the fold took off the page', async ({ page }) => {
+		// The day published four stories and the page draws two. `Show N more`
+		// counts against the day's own total unless the list is narrowed on purpose,
+		// so a fold that left the floor alone would offer two stories for ever.
+		await openFolded(page);
+		await expect(
+			page.getByRole('button', { name: /^Show \d+ more$/ }),
+			'the pager offers stories the fold removed, so it can never empty'
+		).toHaveCount(0);
+	});
+
+	test('the leading block drops a lead the fold took off the page', async ({ page }) => {
+		// A lead is an anchor into the stream, so a lead on a story that is not drawn
+		// is a link to nothing. The block resolves against the list the page holds,
+		// which is the list after the fold, so the lead simply is not in it - the
+		// block is one entry shorter rather than one entry broken.
+		await openFolded(page);
+
+		const leads = await page
+			.locator('[data-lead]')
+			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-lead')));
+		expect(leads, 'the block kept a lead on a story the page does not draw').toEqual([ANCHOR]);
 	});
 });

@@ -79,7 +79,7 @@ which is the same family.
 | 2 | Two feeds of one outlet are one source | - | A | DONE | - | #782 | - |
 | 3 | Measure: title signal against the committed days | - | A | DONE | - | #782 | - |
 | 4 | Correct the token-share number defect 22 shipped | - | A | DONE | - | #785 | - |
-| 5 | Draw the collapse, with a publisher stack that links | - | B | PENDING | - | - | - |
+| 5 | Draw the collapse, with a publisher stack that links | - | B | DONE | - | - | - |
 | 6 | Retire the four hosts that serve one page | - | B | DONE | - | - | - |
 | 7 | One outlet never runs the identical piece twice | - | B | PENDING | - | - | - |
 | 8 | A ceiling on the day, beside the ceiling on a run | - | B | PENDING | - | - | - |

@@ -1,5 +1,11 @@
 import { expect, test } from '@playwright/test';
-import { DAY_FIELDS, ITEM_FIELDS, VIEW_VERSION, projectDay } from '../src/lib/payload/project';
+import {
+	COVERAGE_NAMES_MAX,
+	DAY_FIELDS,
+	ITEM_FIELDS,
+	VIEW_VERSION,
+	projectDay
+} from '../src/lib/payload/project';
 
 /**
  * The served day, read the way a browser reads it.
@@ -272,4 +278,147 @@ test('a field the shell does not know does not throw and disturbs nothing beside
 			);
 		}
 	}
+});
+
+/**
+ * The publisher names, which are the one name on a served item the committed day
+ * does not carry.
+ *
+ * `coverageOf` derives them from the grouping the day already recorded, and the
+ * page folds a group into one card and prints them. The same cases are asserted
+ * in `backend/tests/contracts/test_served_day.py` against the other projector, so
+ * a rule that moved in one language and not the other turns one of the two red.
+ *
+ * Nothing here reads a committed day. Every case is a shape the archive has never
+ * produced - four outlets on one story, one outlet running it twice, a story
+ * naming an anchor the day does not hold - and building it is the only way to
+ * reach it (`CLAUDE.md` section 13).
+ */
+
+/** A day of stories, some of them one story. Each member is
+ * `[item_id, source_name, rank_score]`; the first is the anchor unless `anchor`
+ * names another, and every other member points at it. */
+function grouped(
+	members: [string, string, number | null][],
+	anchor?: string
+): Record<string, unknown>[] {
+	const keeper = anchor ?? members[0][0];
+	return members.map(([item_id, source_name, rank_score]) =>
+		committedItem(item_id, {
+			vertical: item_id.split('-')[0],
+			source_name,
+			source_id: source_name.toLowerCase(),
+			rank_score,
+			same_story_as: item_id === keeper ? null : keeper
+		})
+	);
+}
+
+/** Every story's publisher stack, as `outlet@item id` pairs, off the projection. */
+function stacks(items: Record<string, unknown>[]): Record<string, string[]> {
+	const served = read(projectDay(JSON.stringify({ date: '2026-09-16', items })));
+	expect(served, 'the built day did not survive the projection').not.toBeNull();
+	return Object.fromEntries(
+		(served as Served).items.map((item) => [
+			String(item.item_id),
+			(item.covered_by as { source_name: string; item_id: string }[]).map(
+				(one) => `${one.source_name}@${one.item_id}`
+			)
+		])
+	);
+}
+
+test('a folded story is named by the card that folds it', () => {
+	const found = stacks(
+		grouped([
+			['ai-01', 'Alpha', 0.9],
+			['ai-02', 'Beta', 0.7],
+			['ai-03', 'Gamma', 0.8]
+		])
+	);
+
+	expect(found['ai-01']).toEqual(['Gamma@ai-03', 'Beta@ai-02']);
+	// And from every member's point of view, because a card is drawn for a
+	// member whenever the fold is off or the reader's own address named it.
+	expect(found['ai-02']).toEqual(['Alpha@ai-01', 'Gamma@ai-03']);
+	expect(found['ai-03']).toEqual(['Alpha@ai-01', 'Beta@ai-02']);
+});
+
+test('a story no group holds, and a story naming an anchor this day lost, are named by nobody', () => {
+	expect(
+		stacks([
+			...grouped([
+				['ai-01', 'Alpha', 0.9],
+				['ai-02', 'Beta', 0.7]
+			]),
+			...grouped([['world-01', 'Alpha', 0.5]])
+		])['world-01'],
+		'a story on its own was given a publisher stack'
+	).toEqual([]);
+
+	// A run appends, so a day can carry a story whose anchor was published
+	// under a retention window that has since dropped it. The page cannot draw
+	// a card that is not here, so neither may the stack.
+	expect(
+		stacks(
+			grouped(
+				[
+					['ai-02', 'Beta', 0.7],
+					['ai-03', 'Gamma', 0.8]
+				],
+				'ai-99'
+			)
+		),
+		'a name pointed at a card the day does not hold'
+	).toEqual({ 'ai-02': [], 'ai-03': [] });
+});
+
+test('one outlet running a story twice is named once, by its stronger piece', () => {
+	// `also_covered_by` counts mastheads. A stack naming pieces would print
+	// three newsrooms under a sentence saying two.
+	expect(
+		stacks(
+			grouped([
+				['ai-01', 'Alpha', 0.9],
+				['ai-02', 'Beta', 0.4],
+				['ai-03', 'Beta', 0.8]
+			])
+		)['ai-01']
+	).toEqual(['Beta@ai-03']);
+});
+
+test('the stack stops at the cap, and an unscored or tied story is ordered last', () => {
+	const capped = stacks(
+		grouped([
+			['ai-01', 'Alpha', 0.9],
+			['ai-02', 'Beta', 0.8],
+			['ai-03', 'Gamma', 0.7],
+			['ai-04', 'Delta', 0.6],
+			['ai-05', 'Epsilon', 0.5]
+		])
+	);
+	expect(capped['ai-01'].length).toBe(COVERAGE_NAMES_MAX);
+	expect(capped['ai-01']).toEqual(['Beta@ai-02', 'Gamma@ai-03', 'Delta@ai-04']);
+
+	// Null is unknown, never 0, and never the top of the stack either.
+	expect(
+		stacks(
+			grouped([
+				['ai-01', 'Alpha', 0.9],
+				['ai-02', 'Beta', null],
+				['ai-03', 'Gamma', 0.1]
+			])
+		)['ai-01']
+	).toEqual(['Gamma@ai-03', 'Beta@ai-02']);
+
+	// A total order, so two builds of one day agree and so do two languages.
+	expect(
+		stacks(
+			grouped([
+				['ai-01', 'Alpha', 0.5],
+				['ai-03', 'Gamma', 0.5],
+				['ai-02', 'Beta', 0.5]
+			])
+		)['ai-01']
+	).toEqual(['Beta@ai-02', 'Gamma@ai-03']);
 });

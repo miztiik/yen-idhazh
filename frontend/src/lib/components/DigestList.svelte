@@ -16,6 +16,7 @@
 		deskCount,
 		deskOf,
 		filterNeedle,
+		foldedMembers,
 		indexDay,
 		leadingStories,
 		orderByTime,
@@ -23,7 +24,7 @@
 		shortlist
 	} from '$lib/day-shape';
 	import type { UiConfig } from '$lib/server/config';
-	import type { DayForPage } from '$lib/payload/types';
+	import type { DayForPage, DigestCoverage, DigestItem } from '$lib/payload/types';
 	import { forgetAll, loadHideRead, loadRead, markRead, setHideRead } from '$lib/readstate';
 	import { onMount, tick } from 'svelte';
 
@@ -80,6 +81,17 @@
 		read = loadRead(day.date, ui.read_mark_days);
 	});
 
+	// Every story this page is about, before anything is folded. It is what a
+	// publisher name may link to: a folded story is still on this page's list, so
+	// the anchor's card can reach it and the pager can walk to it.
+	const inScope = $derived(
+		vertical ? day.items.filter((item) => deskOf(item) === vertical) : day.items
+	);
+	// The stories drawn behind another story's card. `wanted` is never one of them,
+	// which is the whole reachability answer: a reader who followed a publisher
+	// name, or any deep link, gets the story they asked for drawn, paged to and
+	// focused. See `foldedMembers`.
+	const folded = $derived(foldedMembers(inScope, ui.draw_same_story, wanted));
 	// The order the reader gets, decided before read-state is consulted. Newest
 	// first by the time on the item, which is a re-order and never a filter: the
 	// set here is the set the payload published, and the day's own view of what
@@ -87,8 +99,20 @@
 	// idempotent, so a document whose seed the build already ordered pays for it
 	// once and a fetched day is ordered the same way when it lands.
 	const scoped = $derived(
-		orderByTime(vertical ? day.items.filter((item) => deskOf(item) === vertical) : day.items)
+		orderByTime(
+			folded.size > 0 ? inScope.filter((item) => !folded.has(item.item_id)) : inScope
+		)
 	);
+	// Every address a publisher name on this page may point at. A group can straddle
+	// two desks, so on a topic route one half of it can be on another page - and a
+	// name linking to a card this page does not hold is a link to nothing. It is not
+	// lost either way: `also_covered_by` is the whole count, so a name dropped here
+	// is still in the remainder the card prints.
+	const onPage = $derived(new Set(inScope.map((item) => item.item_id)));
+	function stackOf(item: DigestItem): DigestCoverage[] {
+		if (!ui.draw_same_story) return [];
+		return (item.covered_by ?? []).filter((one) => onPage.has(one.item_id));
+	}
 	// The topics the day published, or none when the payload does not say. A day
 	// fetched by a shell older than the facts carries no topic list, and an empty
 	// list is what draws no topic row - never an invented one.
@@ -169,14 +193,20 @@
 	// more" and then "Show 55 more" the moment the fetch landed, which is a number
 	// ticking under a reader who is looking at it - the same fault `DayNotice`
 	// avoids by reading the desk counts. `total` is those counts, so it is already
-	// the truth about the day and it does not move. A filter or a hide narrows the
-	// list on purpose, and then the list IS the promise.
-	const reachable = $derived(filtering || hideRead ? visible.length : Math.max(visible.length, total));
+	// the truth about the day and it does not move. A filter, a hide or a fold
+	// narrows the list on purpose, and then the list IS the promise: a fold takes
+	// cards off the page that `total` still counts, so leaving the day's own number
+	// as the floor would offer a reader stories the pager can never draw.
+	const reachable = $derived(
+		filtering || hideRead || folded.size > 0 ? visible.length : Math.max(visible.length, total)
+	);
 	const remaining = $derived(Math.max(reachable - paged.length, 0));
 	// A fragment naming a story this page never draws. The whole day rather than
 	// what is visible, so a story the reader has hidden or filtered out is not
 	// reported as absent - it is here, and the controls to bring it back are on
-	// screen. Only once the list in hand is the whole list: a story still on its
+	// screen. A folded story is not absent either: it is excluded from the fold the
+	// moment its own address names it, so by the time this is read its card is
+	// drawn. Only once the list in hand is the whole list: a story still on its
 	// way is not a story that was never here.
 	const missing = $derived(settled && wanted !== '' && !index.at.has(wanted));
 	const verticalNames = $derived(
@@ -280,6 +310,7 @@
 						{item}
 						verticalName={verticalNames[deskOf(item)] ?? deskOf(item)}
 						showMark={ui.source_mark}
+						stack={stackOf(item)}
 						onDate={day.date}
 						read={read.has(item.item_id)}
 						onRead={() => (read = markRead(item.item_id, read, day.date))}

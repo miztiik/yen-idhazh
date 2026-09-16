@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-16
 Where the pipeline writes what a reader reads and what a reader's URL looks like. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
 What happens to any of it afterwards is the other half, and it is [retention.md](retention.md): unpublishing a day, what bounds the committed state tree, and the score shards that turn into summaries once they age out.
@@ -131,8 +131,9 @@ A day runs the same story from more than one of our feeds, and until 2026-09-01 
 
 | Field | What it says | What it is not |
 | --- | --- | --- |
-| `also_covered_by` | How many **other sources** carried the same story today. | Not `carried_by`, which counts syndication of one address and reads 1 when two outlets write their own piece. |
-| `same_story_as` | The item a reading surface would draw for this story. | Not a deletion, and not something any page acts on today. |
+| `also_covered_by` | How many **other outlets** carried the same story today. | Not `carried_by`, which counts syndication of one address and reads 1 when two outlets write their own piece. |
+| `same_story_as` | The item the page draws for this story. | Not a deletion. The story keeps its address, its archive entry and its month search entry. |
+| `covered_by` | Which other outlets ran it, **by name**, strongest first, capped at three. | Not on the committed day. The projector derives it, so a day published before the names existed still serves them. |
 
 **Two items become one story down this path, and nowhere else.** `collapse_same_story` in [../../../backend/idhazh/assemble.py](../../../backend/idhazh/assemble.py) is the only thing that writes either field. Every rule below the diagram is one of its boxes.
 
@@ -152,16 +153,33 @@ flowchart TD
   floor -- no --> apart
   fits --> all{"Does it clear against<br/>EVERY member of the group?"}
   all -- no --> apart
-  all -- yes --> join["One group. The strongest rank_score is<br/>what a reading surface draws;<br/>every member carries also_covered_by"]
+  all -- yes --> join["One group. The strongest rank_score is the anchor;<br/>every member carries also_covered_by and same_story_as"]
+  join --> draw{"ui.draw_same_story?"}
+  draw -- no --> own["One card per story,<br/>which is the revert path"]
+  draw -- yes --> fold["The anchor draws one card carrying the other<br/>outlets by name. Every name links to that<br/>outlet's own story, which still has its address"]
 ```
 
 Two things the diagram is deliberate about. The headline branch and the vector branch are **two ways to clear one bar**, not two passes - which is why the all-pairs check at the bottom is shared. And nothing on it deletes: every item keeps its place, its address and its search entry whichever way it exits.
 
-**`also_covered_by` is what a reader sees.** The item's footer, under the summary, reads `Also covered by N other sources today.` It is a fact about our feed set and never a claim about the world - we know who we read, not who else covered a story. Null prints nothing at all, which is what every day published before 2026-09-01 does.
+**`also_covered_by` is what a reader sees where no name can be linked.** The item's footer, under the summary, reads `Also covered by N other sources today.` It is a fact about our feed set and never a claim about the world - we know who we read, not who else covered a story. Null prints nothing at all, which is what every day published before 2026-09-01 does. Where the page has names - a folding card on a reading route - the stack prints instead and this sentence does not, because the names are the more useful answer and printing both would say one thing twice.
 
 **Zero prints nothing either, since 2026-09-14, and that is a ruling rather than an oversight.** It used to read `Only one of our sources carried this.` Over the committed days that sentence printed **5,299 times** against 93 for the positive form. The Editor read 2026-09-12 by hand and counted about **95 of 356 items - 27 percent - in a cross-source cluster**, where the pass had found 8; so roughly a quarter of the items carrying the sentence were on the page more than once and the sentence was false. On 2026-09-03 five cards printed it about an acquisition that ran thirteen times on the same page, while three other cards on that page said the story was covered twice. **What the reader loses is the genuine signal that a story is an exclusive.** That is a real loss and it is accepted: a signal wrong a quarter of the time is not a signal, and silence is always available. It returns when recall is measured ([../../../TODO/20260914-29-found-once-plan.md](../../../TODO/20260914-29-found-once-plan.md)).
 
-**`same_story_as` is recorded and not yet drawn**, and that is deliberate. Collapsing a group in `DigestList` was built and then taken out again on the evidence of its own smoke: the reading routes reach an item by paging a topic, so an item filtered out of the list is not merely undrawn on the first screen - it becomes unreachable through every reading route while its address still exists. **Half of that has since been answered and half has not.** A story's own address now pages the stream down to it and focuses it (below), so a reader who follows a link to a collapsed story arrives at it. What is still missing is the way in for a reader who has no link: nothing on the page names the stories a group swallowed, so drawing the collapse today would take five stories off the 2026-08-30 page with no route a reader could find them by. The field is on the committed day so the decision is recorded and auditable; it is **not** on the served projection, because a field with no renderer does not earn the wire.
+**`same_story_as` has been drawn since 2026-09-16, and this is the reachability answer that pulled it the first time.** Collapsing a group in `DigestList` was built and then taken out again on the evidence of its own smoke: the reading routes reach a story by paging, so a story filtered out of the list is not merely undrawn on the first screen - it becomes unreachable through every reading route while its address still exists. Three things close that, and the fold does not ship without all three.
+
+- **The anchor's card names the other newsrooms, and every name is a link.** `covered_by` carries the outlet and that outlet's own item id, so a reader who has no link still has a way in. It links to OUR page for that piece - our summary of it, with its own `Read the original` under it - rather than straight out to the publisher: a reader who wanted the publisher's version is one more click away, and a reader who wanted ours has not lost it.
+- **A story the reader's own address names is never folded.** `foldedMembers` takes the fragment as an argument and excludes it, so `/<date>/#<item id>` draws that story, pages the stream down to it and focuses it. A publisher name is one of those addresses, which is why pressing one works at all.
+- **A story whose anchor is not on this page is never folded either.** A group can straddle two desks, so on a topic route one half of it can be on another page; folding behind a card this page does not draw would take the story off the page with nothing to find it by.
+
+**What the reader loses, stated.** On a false merge a story is one click away instead of on the page. That is a real loss and it is the trade the owner took on 2026-09-14, on the reasoning under `Editor's asymmetry` below. `ui.draw_same_story` is the revert: default true, and false restores one card per story with no other change. It is removed when the grouping's false-merge rate has been measured on a published day and the Editor has accepted it.
+
+**The card prints names where it has them and a count where it does not**, because the two answer different questions. `covered_by` is capped at three and drops a name this page cannot reach, so it is never the whole of the count; `also_covered_by` is whole, and the card prints the difference as `and N more`. A card that named two newsrooms on a story five outlets ran would be a wrong number, which is the one thing this block exists to avoid.
+
+**The names are derived at projection time rather than written onto the committed day**, and that is the reason they work at all. Twenty-six days are already committed carrying `same_story_as` and none of them carries a name list; a new field on `DigestDay` would be empty on every one of them until the day was rebuilt, which never happens. The projector runs over the committed tree on every build, so the names are recomputed for every day the site serves. `coverage_names` in [../../../backend/idhazh/contracts/digest_view.py](../../../backend/idhazh/contracts/digest_view.py) and `coverageOf` in [../../../frontend/src/lib/payload/project.ts](../../../frontend/src/lib/payload/project.ts) are the two halves, and the same cases are asserted against both so one cannot move without the other going red.
+
+**One entry per outlet, never one per piece.** A group can hold two pieces from one masthead, and `also_covered_by` counts mastheads - so a list counting pieces would print a longer stack than the sentence beside it admits to. The outlet's strongest piece is the one linked. The order is `rank_score`, strongest first, with an unscored piece last and the item id breaking every tie: a total order, so two builds of one day agree and so do two languages.
+
+**The pager's floor comes off when anything is folded.** `Show N more` counts against the day's own published total rather than the list in hand, because on a reading route the list in hand can be a seed. A fold takes cards off the page that the day's total still counts, so leaving the floor alone would offer a reader stories the pager can never draw. A filter and a hide already had the same rule: a list narrowed on purpose IS the promise.
 
 **Nothing is unpublished.** A grouped item keeps its place in the published order, its address, and its entry in the month search index. Measured on the committed 2026-08-30 day, 2026-09-01: **431 items in, 431 items out**, 5 of them marked as the same story as another.
 
@@ -227,7 +245,7 @@ Nineteen more groups form and 45 more items sit in one. Dolly Parton's death, wh
 
 **The one that stays apart is the all-pairs rule refusing, not the headline rule failing**, and it was read. On 2026-08-31 two outlets share a headline about the lake renaming, but one of them had already joined a third item on its vector, and the newcomer does not clear the bar against that third item. The group that exists is correct and the item left out is a story the reader still gets; joining it would mean dropping complete-link, which is the trade `Every pair inside a group clears the bar` above already refused.
 
-**Editor's asymmetry is deferred, not repealed.** The rule above leans the *other* way from `What chose 0.94` - it adds groups rather than withholding them - and that is allowed only while `same_story_as` is recorded and not drawn. A missed group today prints a false sentence on a page the reader can see, five times over; a false merge today prints one wrong count on a card that still runs. The day the collapse is drawn, a false merge starts costing a story nobody can see is missing, and this paragraph expires with it.
+**Editor's asymmetry came due on 2026-09-16, and the trade is named rather than reversed.** The headline rule leans the *other* way from `What chose 0.94` - it adds groups rather than withholding them - and that was allowed while `same_story_as` was recorded and not drawn, because a false merge then printed one wrong count on a card that still ran. The collapse is drawn now, so a false merge costs a reader a story they cannot see is missing. Three things pay for it. The names are one: a folded story is behind a pill rather than behind nothing, so the cost is one click and not the story. `ui.draw_same_story` is the second: the revert is a config edit. The third is that the measurement is still owed - the recall of this pass on a published day - and until it is taken this paragraph is the standing statement of what is being risked rather than a claim that it is small.
 
 ### What it costs the runner
 
@@ -243,7 +261,7 @@ Two passes read the finished day inside `assemble.build_day`, and both were writ
 
 **The order changes nothing today, and that is measured rather than assumed.** The two passes touch different fields: the grouping writes `also_covered_by` and `same_story_as` and nothing else, and lead selection reads neither. Rebuilding both passes in each order over the eleven committed days - 4,086 items, 2026-09-01, a developer machine / / Python 3.14.2 - gives the identical block on every day. Ten of the eleven produce no block at all, because a lead may only run on the feed's own clock and `time_source` landed on 2026-08-31; the one day that does produce a block holds five leads over eight groups, and **none of the five is a collapsed item and no group holds two of them**.
 
-**What is not yet a rule.** Nothing forbids a lead being an item the grouping collapsed, or two members of one group both leading - the source cap does not catch that, because a group is always across sources. Neither costs a reader anything while `same_story_as` is recorded and not drawn. Both become rules to write on the day the collapse is drawn, which is row 24's reachability question above.
+**What is still not a rule.** Nothing forbids a lead being a story the grouping folded, or two members of one group both leading - the source cap does not catch that, because a group is always across outlets. The first no longer leaves a dead link: the block is resolved against the list the page holds, which is the list after the fold, so a folded lead is not in the block at all. The block is one entry shorter and the story is still behind the anchor's pill, which is the trade the fold makes everywhere else. The second would print one story twice at the top of the page, which is what the block exists to avoid, and it has never fired on a committed day. Both are rules to write when the first day produces one.
 
 ## A topic says why it ran what it ran
 

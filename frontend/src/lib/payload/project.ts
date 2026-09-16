@@ -28,10 +28,23 @@
  * which is erased with the annotations, and no value is imported at all.
  */
 
-import type { DigestDay } from './types';
+import type { DigestCoverage, DigestDay } from './types';
 
 /** Parsed JSON, before anything has been proved about it. */
 type Json = Record<string, unknown>;
+
+/** The four names `coverageOf` reads, and nothing else.
+ *
+ * Narrow on purpose: it is handed raw parsed JSON by `projectDay` and typed
+ * items by the build-time reader, and neither carrier should have to be
+ * converted into the other to answer one question about the day's grouping.
+ */
+export interface CoverageSource {
+	item_id: string;
+	source_name?: string | null;
+	rank_score?: number | null;
+	same_story_as?: string | null;
+}
 
 /** The stamp `DigestView` carries, and the same string
  * `DigestView.schema_version()` returns.
@@ -41,7 +54,17 @@ type Json = Record<string, unknown>;
  * file and fails if it and the contract disagree, which is what stops the two
  * halves of one payload drifting across two languages.
  */
-export const VIEW_VERSION = '2026-09-13T22:30';
+export const VIEW_VERSION = '2026-09-16T00:40';
+
+/** How many publisher names a served item may carry.
+ *
+ * Mirrors `COVERAGE_NAMES_MAX` in `backend/idhazh/contracts/digest_view.py`, and
+ * a contract test reads this literal out of this file and fails if the two
+ * disagree. It is a shape rather than a tuning: the names ride to every reader
+ * on every grouped story, and a file written under one cap has to stay readable
+ * under another.
+ */
+export const COVERAGE_NAMES_MAX = 3;
 
 // The fields a page renders, and no others. Traced along the render path rather
 // than guessed: `DigestList` scopes and filters the list, and `DigestItem` with
@@ -89,15 +112,17 @@ export const VIEW_VERSION = '2026-09-13T22:30';
 // the read side of every shell already in a browser - and that is a different
 // decision from deleting a divider. It costs 1.16 gzipped bytes an item.
 //
-// Its sibling on the committed item, `same_story_as`, is deliberately NOT here.
-// No page draws a group as one item yet, and a field without a reader does not
-// earn the wire.
+// Two more joined on 2026-09-16, and they ship together because neither is worth
+// anything alone. `same_story_as` is what the page folds on: a story naming
+// another is not drawn as its own card. `covered_by` is what makes the fold
+// recoverable - the anchor's card prints the other newsrooms by name, and every
+// name is a link to that newsroom's own story, which still has its address, its
+// archive entry and its month search entry. Shipping the fold without the names
+// would put a story behind nothing a reader could see.
 //
-// One more joined on 2026-09-12: `desk` is the topic the day publishes a story
-// under, where `vertical` is the word its carrying feed declares about itself.
-// The reading page groups by it, so a desk this file dropped would be a grouping
-// the browser cannot make - and a slug beside a slug is the cheapest name on the
-// list. Absent reads as unknown and falls back to `vertical`.
+// `covered_by` is the one name on this list the committed day does not carry.
+// `coverageOf` below derives it from the grouping the day already recorded, so a
+// day published before the names existed still serves them.
 //
 // The order is the order the staged file writes its keys in, so a name moved
 // here rewrites every staged day.
@@ -125,7 +150,9 @@ export const ITEM_FIELDS: readonly string[] = [
 	'also_covered_by',
 	'introduced_by_run',
 	'lenses',
-	'key_points'
+	'key_points',
+	'same_story_as',
+	'covered_by'
 ];
 
 // The three `ItemVisual` reads. `kind` is read at build time off the committed
@@ -190,10 +217,69 @@ if (leaked.length > 0) {
 const pick = (source: Json, fields: readonly string[]): Json =>
 	Object.fromEntries(fields.map((name) => [name, source[name] ?? null]));
 
-/** One item, as a page renders it. */
-export function projectItem(item: Json): Json {
+/** What each story in a day carries as its publisher stack, by item id.
+ *
+ * The same rule as `coverage_names` in
+ * `backend/idhazh/contracts/digest_view.py`, and a contract test drives both
+ * over one day and compares - two languages cannot be allowed to name two
+ * different stacks for one story.
+ *
+ * One entry per OTHER OUTLET, never one per member: `also_covered_by` counts
+ * mastheads, so a list counting pieces would print a longer stack than the
+ * number beside it admits to. The outlet's strongest piece is the one linked,
+ * because that is the telling we would rather the reader opened.
+ *
+ * Ordered by `rank_score`, strongest first, with an unscored piece last and
+ * `item_id` breaking every tie - a total order, so neither language can sort one
+ * day two ways.
+ */
+export function coverageOf(items: readonly CoverageSource[]): Map<string, DigestCoverage[]> {
+	const present = new Set(items.map((item) => item.item_id).filter((id) => typeof id === 'string'));
+	const groups = new Map<string, CoverageSource[]>();
+	for (const item of items) {
+		if (typeof item.item_id !== 'string') continue;
+		const named = item.same_story_as;
+		// A story naming an anchor this day does not hold is its own group. The page
+		// cannot draw a card that is not here, so neither may this list.
+		const anchor = typeof named === 'string' && present.has(named) ? named : item.item_id;
+		const members = groups.get(anchor);
+		if (members) members.push(item);
+		else groups.set(anchor, [item]);
+	}
+	// `rank_score` is `>= 0`, so -1 puts an unscored piece behind every scored one
+	// without inventing a score for it.
+	const strength = (item: CoverageSource): number =>
+		typeof item.rank_score === 'number' && Number.isFinite(item.rank_score) ? item.rank_score : -1;
+	const stacks = new Map<string, DigestCoverage[]>();
+	for (const members of groups.values()) {
+		if (members.length < 2) continue;
+		const ranked = [...members].sort(
+			(a, b) => strength(b) - strength(a) || String(a.item_id).localeCompare(String(b.item_id))
+		);
+		for (const item of members) {
+			const seen = new Set<string>();
+			const names: DigestCoverage[] = [];
+			for (const other of ranked) {
+				const outlet = other.source_name;
+				if (typeof outlet !== 'string' || outlet === item.source_name || seen.has(outlet)) continue;
+				seen.add(outlet);
+				names.push({ source_name: outlet, item_id: String(other.item_id) });
+			}
+			stacks.set(String(item.item_id), names.slice(0, COVERAGE_NAMES_MAX));
+		}
+	}
+	return stacks;
+}
+
+/** One item, as a page renders it.
+ *
+ * `stack` is the day's answer for this story, because the publisher names are a
+ * fact about the day's grouping and not a field on the story - see `coverageOf`.
+ */
+export function projectItem(item: Json, stack: readonly DigestCoverage[] = []): Json {
 	const projected = pick(item, ITEM_FIELDS);
 	projected.visual = item.visual ? pick(item.visual as Json, VISUAL_FIELDS) : null;
+	projected.covered_by = stack;
 	return projected;
 }
 
@@ -214,10 +300,11 @@ export function projectDay(text: string): string {
 		day,
 		DAY_FIELDS.filter((name) => name !== 'items')
 	);
+	const stacks = coverageOf(items as unknown as CoverageSource[]);
 	return JSON.stringify({
 		version: VIEW_VERSION,
 		...facts,
-		items: items.map((item) => projectItem(item))
+		items: items.map((item) => projectItem(item, stacks.get(String(item.item_id)) ?? []))
 	});
 }
 

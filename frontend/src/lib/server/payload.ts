@@ -21,7 +21,7 @@ import { dayKey, toDay } from '../charts/viewport';
 import { deskOf, orderByTime } from '../day-shape';
 import { settled } from '../feed-health';
 import { publishedVisual, refusedDrawing } from '../payload/drawing';
-import { dropVectors } from '../payload/project';
+import { dropVectors, coverageOf } from '../payload/project';
 import type { DigestDay, DigestItem, SeededVisual } from '$lib/payload/types';
 
 /** The build runs from `frontend/`, so the repo root is one level up. */
@@ -355,7 +355,17 @@ export function dayShell(
 	// published order would put the day's highest-scoring stories in the document
 	// and then shuffle them the moment the rest of the day arrived - a first
 	// screen that rewrites itself while the reader is on it.
-	const ordered = orderByTime(day.items);
+	//
+	// The publisher names are stamped on here for the same reason the order is:
+	// they are what a card prints for a group, the projector puts them on every
+	// served day, and a document seeded from the committed tree without them would
+	// fold a group behind a card with no way out of it until the fetch landed.
+	// Computed over the WHOLE day, because a group is a fact about the day.
+	const stacks = coverageOf(day.items);
+	const ordered = orderByTime(day.items).map((item) => ({
+		...item,
+		covered_by: stacks.get(item.item_id) ?? []
+	}));
 	// `deskOf` and not `item.vertical`: the route is a topic, and the topic a
 	// story is read under is where the day published it. Filtering on the feed's
 	// own word here would seed the document with a different set from the one the
