@@ -220,7 +220,9 @@
 	   the guard: the measured room is floored to whole pixels so the drawing
 	   already fits, and this only catches the frame between a card moving and the
 	   watcher reporting it. A `width: 100%` here would stretch the coordinate
-	   space again and undo the whole row. */
+	   space again and undo the whole row. **The guard is one-sided.** A card that
+	   narrowed clamps the old drawing down to fit; a card that widened leaves it
+	   short until the redraw, because `max-width` stretches nothing. */
 	.visual svg {
 		display: block;
 		height: auto;
