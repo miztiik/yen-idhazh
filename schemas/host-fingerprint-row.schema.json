@@ -1,0 +1,335 @@
+{
+  "$defs": {
+    "ServerJob": {
+      "description": "Which workflow job produced a row.\n\nOurs to name, so it is a closed set. Every other identifier on a host row is\na string the machine chose and cannot be one - see\n`docs/reference/host-metrics.md`. Both values here already sit in the\ncommitted ledger; refusing anything else is what stops a typo becoming a\nthird job nobody can group by.",
+      "enum": [
+        "work",
+        "visuals"
+      ],
+      "title": "ServerJob",
+      "type": "string"
+    }
+  },
+  "$id": "host-fingerprint-row.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the silicon a job drew, its instruction set and its bandwidth.",
+      "version": "2026-09-16",
+      "why": "Throughput moved 3.7x by machine and nothing recorded which machine."
+    }
+  ],
+  "description": "One job, one machine, one row: what the host said it was.",
+  "properties": {
+    "boot_seconds": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "How long the machine had been up when the job reached this probe. A small number is a freshly started virtual machine; a large one is a pooled machine this job was handed.",
+      "title": "Boot Seconds"
+    },
+    "cores": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Physical cores the job can see.",
+      "title": "Cores"
+    },
+    "cpu_family": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "`cpu family`. With model and stepping this names the part.",
+      "title": "Cpu Family"
+    },
+    "cpu_model": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The `model name` line, in the host's own words.",
+      "title": "Cpu Model"
+    },
+    "cpu_model_number": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "`model`, the number rather than the marketing name.",
+      "title": "Cpu Model Number"
+    },
+    "cpu_stepping": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "`stepping`.",
+      "title": "Cpu Stepping"
+    },
+    "cpu_vendor": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "`vendor_id`: GenuineIntel, AuthenticAMD.",
+      "title": "Cpu Vendor"
+    },
+    "date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "fingerprint": {
+      "description": "A digest over the columns that cannot change inside a job - vendor, family, model, stepping, core counts, cache and flags. Two jobs on the same kind of machine carry the same value, which is what makes a distribution countable without matching model-name strings by hand.",
+      "pattern": "^[0-9a-f]{16}$",
+      "title": "Fingerprint",
+      "type": "string"
+    },
+    "flags": {
+      "default": "",
+      "description": "The watched instruction-set flags this host reported, sorted and space joined. Empty means none of them, which is itself a reading.",
+      "title": "Flags",
+      "type": "string"
+    },
+    "job": {
+      "$ref": "#/$defs/ServerJob",
+      "default": "work",
+      "description": "The workflow job that drew this machine."
+    },
+    "l3_cache_bytes": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "L3 as the host reports it. Read beside `memcpy_probe_mib`: a probe buffer smaller than this measured cache rather than memory.",
+      "title": "L3 Cache Bytes"
+    },
+    "measured_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "Measured At",
+      "type": "string"
+    },
+    "memcpy_gib_s": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Large-block copy bandwidth, bytes read plus bytes written, the way STREAM counts a copy. Decode is bandwidth bound and nothing else here measures bandwidth. Absent where the probe was switched off.",
+      "title": "Memcpy Gib S"
+    },
+    "memcpy_probe_mib": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The buffer each side of the copy used. Below `l3_cache_bytes` the figure is a cache reading.",
+      "title": "Memcpy Probe Mib"
+    },
+    "mhz_at_probe": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The mean `cpu MHz` across processors at the moment of the probe. Not a reading under load - the probe runs before the model server starts - so it says what the machine idles at, never what it sustains.",
+      "title": "Mhz At Probe"
+    },
+    "mhz_max": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "`CPU max MHz`, where the host publishes one.",
+      "title": "Mhz Max"
+    },
+    "microcode": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "`microcode` revision, which moves under a fixed stepping.",
+      "title": "Microcode"
+    },
+    "run_id": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "runner_name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The runner label the platform gave this job.",
+      "title": "Runner Name"
+    },
+    "shard": {
+      "description": "The shard within that job. A single-shard job writes 0.",
+      "minimum": 0,
+      "title": "Shard",
+      "type": "integer"
+    },
+    "threads": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Logical processors. Four on every stock runner so far.",
+      "title": "Threads"
+    },
+    "version": {
+      "default": "2026-09-16",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "vm_fault_domain": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The fault domain, which separates one rack from another.",
+      "title": "Vm Fault Domain"
+    },
+    "vm_location": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The region the metadata service named.",
+      "title": "Vm Location"
+    },
+    "vm_size": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The platform's own name for this machine size, from the host metadata service. This is the placement decision in the platform's vocabulary rather than ours. Absent where the service did not answer.",
+      "title": "Vm Size"
+    },
+    "vm_zone": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The availability zone, where the platform publishes one.",
+      "title": "Vm Zone"
+    }
+  },
+  "required": [
+    "date",
+    "run_id",
+    "shard",
+    "fingerprint",
+    "measured_at"
+  ],
+  "title": "HostFingerprintRow",
+  "type": "object",
+  "version": "2026-09-16"
+}

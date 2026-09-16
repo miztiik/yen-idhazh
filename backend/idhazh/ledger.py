@@ -108,6 +108,7 @@ from idhazh import day_partition
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.feed_retirement import FeedRetirementRow
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import RETIRED_CELLS, ItemHealthRow, ItemOutcome
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
@@ -120,6 +121,7 @@ STATE_DIRNAME: Final = "state"
 SEEN_DIRNAME: Final = "seen"
 HEALTH_DIRNAME: Final = "feed-health"
 ITEM_HEALTH_DIRNAME: Final = "item-health"
+HOST_FINGERPRINT_DIRNAME: Final = "host-fingerprint"
 TELEMETRY_AGGREGATE_DIRNAME: Final = "telemetry-aggregate"
 SPAN_ROLLUP_DIRNAME: Final = "span-rollup"
 PUBLISHED_DIRNAME: Final = "published"
@@ -158,6 +160,10 @@ ITEM_HEALTH_KEY: Final = ("date", "run_id", "item_id")
 #: a fan-out. Without it the visual planner's row is dropped as a repeat of the
 #: summarizer's, which is silent: the append filter returns a count, not a fault.
 RUNTIME_COUNTERS_KEY: Final = ("date", "run_id", "job", "shard")
+
+#: One machine a job, so the same four cells that identify a counter snapshot
+#: identify the host that produced it.
+HOST_FINGERPRINT_KEY: Final = ("date", "run_id", "job", "shard")
 
 #: What makes two span-rollup rows the same record. One shard's fold of one span
 #: name, in one run. The row is derived from the shard's spans, so a re-run of a
@@ -332,6 +338,22 @@ def item_health_path(state_dir: Path, date: str) -> Path:
     browser fetches - see `docs/concepts/partitions.md`.
     """
     return state_dir / ITEM_HEALTH_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+
+
+def host_fingerprint_relpath(date: str) -> str:
+    """`state/host-fingerprint/<YYYY>/<MM>/<DD>.csv` - the POSIX form, for a log line."""
+    return f"{STATE_DIRNAME}/{HOST_FINGERPRINT_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+
+
+def host_fingerprint_path(state_dir: Path, date: str) -> Path:
+    """The day file a run on this date records its machines in.
+
+    A day rather than a flat file, for the reason `item_health_path` gives, and
+    with a second reason of its own: this collection only earns its keep when
+    somebody counts across it, and a day tree is the shape a bounded window can
+    read (Guardrail #12).
+    """
+    return state_dir / HOST_FINGERPRINT_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
 
 
 def telemetry_aggregate_relpath(month: str) -> str:
@@ -1087,6 +1109,27 @@ def append_runtime_counters(state_dir: Path, rows: Iterable[RuntimeCountersRow])
 def recorded_runtime_counters(path: Path) -> set[tuple[str, ...]]:
     """Every shard the file already carries a snapshot for."""
     return {tuple(row[name] for name in RUNTIME_COUNTERS_KEY) for row in _read_rows(path)}
+
+
+def append_host_fingerprint(state_dir: Path, date: str, rows: Iterable[HostFingerprintRow]) -> int:
+    """Append what machine each job drew. One row a job, so a re-read is not a second fact.
+
+    Filters on the same key as the counter snapshot: a job runs on one machine,
+    so a second row for that job is the same machine written twice, and counting
+    a fingerprint twice is exactly what would make the distribution lie.
+
+    Returns how many landed, so a caller can log the count.
+    """
+    path = host_fingerprint_path(state_dir, date)
+    _, already = _header_and_keys(path, HOST_FINGERPRINT_KEY)
+    landing = []
+    for row in rows:
+        key = _key_of(row, HOST_FINGERPRINT_KEY)
+        if key in already:
+            continue
+        already.add(key)
+        landing.append(row)
+    return _append(path, HostFingerprintRow.csv_columns(), landing)
 
 
 def append_span_rollup(state_dir: Path, date: str, rows: Iterable[SpanRollupRow]) -> int:
