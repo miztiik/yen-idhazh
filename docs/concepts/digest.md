@@ -186,7 +186,7 @@ So the refusal holds at every length. What the count does NOT settle is what to 
 
 **What a reader loses** (guardrails: a veto names the loss). On four items in twenty they lose one fact each, and on one item in twenty they lose three. What they keep is an item they can skim in one pass instead of two, and a summary that is still the only thing on the item claiming to be complete.
 
-The field stays in the published payload. It is nine tenths of the twenty-three-field projection's added weight and the in-page filter reads it, so removing it is a contract change rather than a rendering one ([../architecture/publishing/layout.md](../architecture/publishing/layout.md#two-projections-and-what-one-day-costs)).
+The field stays in the published payload. It is nine tenths of the projection's added weight and the in-page filter reads it, so removing it is a contract change rather than a rendering one ([../architecture/publishing/layout.md](../architecture/publishing/layout.md#two-projections-and-what-one-day-costs)).
 
 ### The cut sentence carries the scale
 

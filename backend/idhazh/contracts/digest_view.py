@@ -52,7 +52,7 @@ payload ever written.
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Annotated, Any, ClassVar, Self
 
 from pydantic import Field, model_validator
@@ -75,6 +75,94 @@ from idhazh.contracts.eval_row import BandReason, ConfidenceBand
 from idhazh.contracts.item_health import TimeSource
 from idhazh.contracts.taxonomy import SourceKind
 from idhazh.contracts.visual_decision import VisualState
+
+#: How many publisher names a served item may carry.
+#:
+#: A shape rather than a tuning, which is why it is here and not in `config/`.
+#: The names ride to every reader on every grouped story, so the number decides
+#: what the payload weighs and what an older shell has to be able to read - and a
+#: file written under one cap has to stay readable under another. Three is what a
+#: card can print on one line beside the confidence chip at 360px; the rest is a
+#: count the reader already has in `also_covered_by`, so nothing is hidden by
+#: stopping here.
+COVERAGE_NAMES_MAX = 3
+
+
+def coverage_names(items: Sequence[Mapping[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    """Which other newsrooms ran each story, by name, from the day's own grouping.
+
+    `frontend/src/lib/payload/project.ts` holds the same rule for the projector
+    that writes the file, and a contract test drives both over one day and
+    compares. The derivation is here rather than on the committed item because
+    every committed day already carries `same_story_as` and none of them carries
+    this - so deriving it at projection time gives a reader the names on a day
+    published before the names existed, where a new field on `DigestDay` would
+    give them an empty list until the day was rebuilt, which never happens.
+
+    One entry per OTHER OUTLET, never one per member: `also_covered_by` counts
+    mastheads, so a list that counted pieces would print a longer stack than the
+    sentence beside it admits to. The outlet's strongest piece is the one linked,
+    because that is the telling of the story we would rather the reader opened.
+
+    Ordered by `rank_score`, strongest first, with an unscored piece last and
+    `item_id` breaking every tie - a total order, so the projector in the other
+    language cannot sort the same day differently.
+    """
+
+    def strength(item: Mapping[str, Any]) -> tuple[float, str]:
+        score = item.get("rank_score")
+        address = str(item.get("item_id") or "")
+        # `rank_score` is `ge=0.0`, so an unscored piece sorts behind every scored
+        # one without a score being invented for it. A bool is an int in Python
+        # and is not a score.
+        if isinstance(score, bool) or not isinstance(score, int | float):
+            return (1.0, address)
+        return (-float(score), address)
+
+    present = {
+        item.get("item_id") for item in items if isinstance(item.get("item_id"), str)
+    }
+    groups: dict[str, list[Mapping[str, Any]]] = {}
+    for item in items:
+        item_id = item.get("item_id")
+        if not isinstance(item_id, str):
+            continue
+        named = item.get("same_story_as")
+        # A story naming an anchor this day does not hold is its own group. The
+        # page cannot draw a card that is not here, so neither may this list.
+        anchor = named if isinstance(named, str) and named in present else item_id
+        groups.setdefault(anchor, []).append(item)
+
+    covered: dict[str, list[dict[str, Any]]] = {}
+    for members in groups.values():
+        if len(members) < 2:
+            continue
+        ranked = sorted(members, key=strength)
+        for item in members:
+            mine = item.get("source_name")
+            seen: set[str] = set()
+            names: list[dict[str, Any]] = []
+            for other in ranked:
+                outlet = other.get("source_name")
+                if not isinstance(outlet, str) or outlet == mine or outlet in seen:
+                    continue
+                seen.add(outlet)
+                names.append({"source_name": outlet, "item_id": other.get("item_id")})
+            covered[str(item.get("item_id"))] = names[:COVERAGE_NAMES_MAX]
+    return covered
+
+
+class DigestCoverage(Model):
+    """One other newsroom that ran the same story, and the way in to its piece.
+
+    The link is to OUR page for that piece - our summary of it, and its own
+    `Read the original` - never straight out to the publisher. A reader who
+    wanted the publisher's version is one more click away and a reader who
+    wanted ours has not lost it.
+    """
+
+    source_name: str = Field(min_length=1, description="The masthead, as the card prints it.")
+    item_id: ItemId = Field(description="That newsroom's own story, which still has its address.")
 
 
 class DigestViewVisual(Model):
@@ -182,8 +270,11 @@ class DigestViewItem(Model):
         ge=0,
         description=(
             "How many other OUTLETS carried the same story today - a masthead, not a "
-            "feed, so an outlet with four feeds counts once. 1 or more prints 'Also "
-            "covered by N other sources today.' 0 and null both print nothing: null "
+            "feed, so an outlet with four feeds counts once. It is the count and "
+            "`covered_by` is the names, and the two answer different questions: this one "
+            "is whole where the names are capped, so the card prints the difference as a "
+            "remainder. On a card with no stack, 1 or more prints 'Also covered by N "
+            "other sources today.' 0 and null both print nothing: null "
             "means the day recorded no answer, and 0 stopped printing 'Only one of our "
             "sources carried this.' on 2026-09-14 because the pass finds far too little "
             "of the day's duplication for that sentence to be true. See "
@@ -195,6 +286,28 @@ class DigestViewItem(Model):
     )
     lenses: list[Slug] = Field(default_factory=list)
     key_points: list[str] = Field(min_length=1)
+    same_story_as: ItemId | None = Field(
+        default=None,
+        description=(
+            "The item the page draws this story on, null on the one that is drawn. It was "
+            "on the committed item and off the wire until 2026-09-16, because no page "
+            "folded a group and a field with no renderer does not earn the wire. The page "
+            "folds now: a story naming another is not drawn as its own card. It is not "
+            "removed - it keeps its address, its archive entry and its month search "
+            "entry, and the anchor's card links to it by name."
+        ),
+    )
+    covered_by: list[DigestCoverage] = Field(
+        default_factory=list,
+        max_length=COVERAGE_NAMES_MAX,
+        description=(
+            "Which other newsrooms ran this story, by name, strongest first. Empty on a "
+            "story the day grouped with nothing, and empty on a day published before the "
+            "pass existed - both mean the page draws no publisher stack. It is capped, so "
+            "it is never the whole of the count: `also_covered_by` is how many other "
+            "outlets there are, and the card prints the difference as a remainder."
+        ),
+    )
 
     @model_validator(mode="after")
     def _item_id_is_addressed_by_vertical(self) -> Self:
@@ -217,6 +330,11 @@ class DigestView(Contract):
     __schema_stem__: ClassVar[str] = "digest-view"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-16T00:40",
+            change="Added DigestViewItem.same_story_as and .covered_by.",
+            why="The page folds a group into one card, which has to name the other outlets.",
+        ),
+        ChangelogEntry(
             version="2026-09-13T22:30",
             change="DigestViewVisual.path became data_path.",
             why="The reader's browser draws the chart from the marks, so no SVG is published.",
@@ -230,11 +348,6 @@ class DigestView(Contract):
             version="2026-09-12T06:56",
             change="Added DigestViewItem.desk, so a served item says which topic it sat under.",
             why="A browser fetches this copy, and the reading page groups stories by desk.",
-        ),
-        ChangelogEntry(
-            version="2026-09-12T03:55",
-            change="lenses on a served item is a list of Slug rather than of the closed LensId.",
-            why="A browser fetches this, so the closed enum was a second copy of the taxonomy.",
         ),
         ChangelogEntry(
             version="2026-08-31T12:00",
@@ -312,6 +425,10 @@ class DigestView(Contract):
         if not isinstance(written, list) or not all(isinstance(item, Mapping) for item in written):
             return cls.model_validate({**served, "items": written})
         visual_names = list(DigestViewVisual.model_fields)
+        # The one name on a served item the committed day does not hold. It is a
+        # fact about the day rather than about one story, so it is computed once
+        # over the whole list and read out of the map below.
+        covered = coverage_names(written)
         items: list[dict[str, Any]] = []
         for item in written:
             names = DigestViewItem.model_fields
@@ -322,6 +439,7 @@ class DigestView(Contract):
                 if isinstance(visual, Mapping)
                 else None
             )
+            item_view["covered_by"] = covered.get(str(item.get("item_id")), [])
             items.append(item_view)
         return cls.model_validate({**served, "items": items})
 

@@ -31,6 +31,11 @@ export interface UiConfig {
 	 * `config/appearance.json` as `digest.visual_side`. */
 	visual_side: 'above' | 'leading' | 'trailing';
 	source_mark: boolean;
+	/** Whether the page folds a group of the same story into one card. On, a story
+	 * that names another as its story is not drawn as its own card and the anchor
+	 * prints the other newsrooms by name. Off restores one card per story, which is
+	 * the revert path. Nothing is unpublished either way. */
+	draw_same_story: boolean;
 	show_filter: boolean;
 	/** How many characters a reader types before an in-place filter narrows a
 	 * list. The day page and the archive share one panel, so they share this. */
@@ -315,6 +320,7 @@ const DEFAULTS: UiConfig = {
 	theme_default: 'dark',
 	visual_side: 'trailing',
 	source_mark: true,
+	draw_same_story: true,
 	show_filter: true,
 	filter_min_chars: 2,
 	topic_pills_max: 5,
