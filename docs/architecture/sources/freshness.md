@@ -319,6 +319,16 @@ Two rules bound what it touches. **A feed's own near-identical repeats are not i
 
 It ships **record-only**. `collect.dedup_enforce` is false, so the pass writes each would-collapse pair to the run log against the story it matched and removes nothing - a day's duplicate rate is measured before any cut is turned on. Turning the flag on cuts the lower-ranked telling of each pair, before the safety ceiling and with nothing else changed, so enforcing is a config edit rather than a code change. A record pass never stops a run: an encoder that will not load costs the run its duplicate record, never its plan.
 
+## One outlet never runs the identical piece twice
+
+The address collapse joins two feeds carrying the identical URL. One newsroom republishing its own piece at a second address is a different shape and that pass cannot see it: two addresses, two `url_key`s, one masthead saying one thing twice. The semantic pass above cannot see it either - it refuses a same-source pair by design, and rightly, because a feed's own near-identical repeats are `max_per_source`'s business.
+
+So a third check sits between them, and it is deterministic: no encoder, no threshold, no number to tune. Two planned items are **the same piece** when they come from one outlet AND their headlines reduce to the same key. That reduction is `assemble.headlines_match` - the same function, not a second copy of the rule, so what counts as one headline at plan time is what counts as one headline on the published page ([../publishing/layout.md](../publishing/layout.md)). The words have to reduce identically and every figure in them has to agree at the coarser of the two precisions it was written with, so `$12.9 billion` and `$12.93bn` are one deal and `25 percent` and `50 percent` are two figures.
+
+**The outlet is the masthead, not the feed.** `source_id` is a feed and four of ours are CGTN, so a rule written on the feed id would miss the case it exists for. A feed whose id resolves to no name falls back to the id, which is the narrower key - two feeds of an unnamed outlet keep both copies rather than one being dropped on a guess.
+
+It runs straight after the address collapse and before everything else, so the second copy is never fetched, never summarised and never costs a slot under the safety ceiling. The strongest telling survives, on the same order the address collapse sorts on: rank first, then vertical, item id and feed id, so a re-run of one day drops the same copy every time. An item with no headline, or a headline that reduces to nothing, is never equal to anything - including another item with no headline.
+
 ## Design rationale
 
 The fifth slot was added at 02:20 rather than 22:20. Both are one more attempt

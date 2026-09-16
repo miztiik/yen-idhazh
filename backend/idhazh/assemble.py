@@ -811,7 +811,7 @@ def _numbers_clash(left: StoryKey | None, right: StoryKey | None) -> bool:
     return not numbers_agree(left.numbers, right.numbers)
 
 
-def _headlines_match(left: StoryKey | None, right: StoryKey | None) -> bool:
+def headlines_match(left: StoryKey | None, right: StoryKey | None) -> bool:
     """Do two published headlines say the same thing?
 
     The words have to reduce identically AND every figure in them has to agree,
@@ -822,6 +822,10 @@ def _headlines_match(left: StoryKey | None, right: StoryKey | None) -> bool:
 
     An item with no key - untitled, or a headline that reduces to nothing - is
     never equal to anything, including another item with no key.
+
+    Public because two stages ask it. This pass asks it of two outlets and joins
+    them; `stages/plan` asks it of one outlet and drops the second copy. One
+    rule with two spellings would be two rules within a week.
     """
     if left is None or right is None:
         return False
@@ -889,7 +893,7 @@ def _pair_terms(left: str, right: str, day: _DayScoring) -> _Terms | None:
         right_norm=day.norms[right],
     )
     points = key_point_overlap(day.points[left], day.points[right])
-    headline = _headlines_match(key, other)
+    headline = headlines_match(key, other)
     score = (
         1.0
         if headline

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Example Repeat Wire</title>
+    <link>https://repeat.example-wire.net/</link>
+    <description>An outlet that files one piece and then files it again.</description>
+    <item>
+      <title>Repeat Wire reports a $12.9 billion grid deal</title>
+      <link>https://repeat.example-wire.net/2026/08/grid-deal</link>
+      <pubDate>Fri, 21 Aug 2026 07:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

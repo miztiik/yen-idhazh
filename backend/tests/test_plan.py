@@ -61,6 +61,8 @@ NOTICES_URL = "https://notices.example.gov/feed"
 FORWARD_URL = "https://forward.example-press.net/feed"
 DUPLICATE_URL = "https://energy.example-wire.net/feed"
 PROLIFIC_URL = "https://prolific.example-wire.net/feed"
+REPEAT_FIRST_URL = "https://repeat.example-wire.net/feed"
+REPEAT_SECOND_URL = "https://rerun.example-wire.net/feed"
 FRONT_PAGE_URL = "https://salience.example.org/feed"
 
 MODEL_RELEASE = "https://blog.example-lab.org/2026/08/model-release"
@@ -121,6 +123,23 @@ PROLIFIC = FeedDef(
     url=PROLIFIC_URL,
     tier=SourceTier.TRADE_PRESS,
 )
+#: Two feeds of one masthead. `title` is the masthead, so these two are one
+#: outlet however many feed ids they hold - which is the whole point of the
+#: same-outlet check they exist to drive.
+REPEAT_FIRST = FeedDef(
+    id="repeat-wire",
+    vertical="ai",
+    title="Example Repeat Wire",
+    url=REPEAT_FIRST_URL,
+    tier=SourceTier.INSTITUTION,
+)
+REPEAT_SECOND = FeedDef(
+    id="repeat-wire-rerun",
+    vertical="ai",
+    title="Example Repeat Wire",
+    url=REPEAT_SECOND_URL,
+    tier=SourceTier.COMMUNITY,
+)
 FRONT_PAGE = SalienceFeedDef(
     id="front-page",
     title="Example Front Page",
@@ -147,6 +166,8 @@ BODIES = {
     FORWARD_URL: "future-dated.xml",
     DUPLICATE_URL: "cross-vertical-duplicate.xml",
     PROLIFIC_URL: "prolific-outlet.xml",
+    REPEAT_FIRST_URL: "outlet-repeat-first.xml",
+    REPEAT_SECOND_URL: "outlet-repeat-second.xml",
     FRONT_PAGE_URL: "front-page.xml",
 }
 
@@ -501,6 +522,51 @@ def test_cross_vertical_duplicate_drops_once_before_the_safety_ceiling(caplog: p
 
     key = matching[0].url_key
     assert f"plan duplicates dropped count=1 url_keys={key} source_ids=energy-wire" in caplog.text
+
+
+def test_one_outlet_never_runs_the_identical_piece_twice(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Two addresses, two feeds, one masthead, one story. It plans once.
+
+    The two headlines are not byte-identical - one writes `$12.9 billion` and
+    the other `$12.93bn!` - so what joins them is the reduction the published
+    day already uses, not string equality.
+    """
+    caplog.set_level("INFO", logger="idhazh")
+
+    built = plan([REPEAT_FIRST, REPEAT_SECOND, LAB, TRADE, COMMUNITY])
+
+    from_outlet = [
+        item for item in built.items if item.source_id in {"repeat-wire", "repeat-wire-rerun"}
+    ]
+    assert len(from_outlet) == 1, "one newsroom's second copy of its own piece is not planned"
+    assert from_outlet[0].source_id == "repeat-wire", "the stronger telling survives"
+    assert "plan same-outlet repeats dropped count=1 outlets=Example Repeat Wire" in caplog.text
+
+
+def test_two_outlets_on_one_story_are_both_planned() -> None:
+    """The same rule, with the one thing changed that is allowed to change it.
+
+    The two feeds carry the identical pair of headlines as the arm above. Only
+    the masthead differs, and both pieces plan - because two newsrooms running
+    one story is the digest working, not a repeat.
+    """
+    built = plan(
+        [REPEAT_FIRST, REPEAT_SECOND.model_copy(update={"title": "Example Rival Wire"}), LAB],
+    )
+
+    from_outlets = [
+        item for item in built.items if item.source_id in {"repeat-wire", "repeat-wire-rerun"}
+    ]
+    assert len(from_outlets) == 2
+
+
+def test_an_outlet_running_two_different_stories_keeps_both() -> None:
+    """The check reads the headline, so two pieces from one masthead are two."""
+    built = plan([PROLIFIC, LAB, TRADE])
+    from_prolific = [item for item in built.items if item.source_id == "prolific-wire"]
+    assert len(from_prolific) > 1
 
 
 def test_the_committed_ceiling_is_far_above_any_real_day() -> None:

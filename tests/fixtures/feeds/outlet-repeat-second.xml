@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Example Repeat Wire, second address</title>
+    <link>https://rerun.example-wire.net/</link>
+    <description>The same piece at a second address, with the headline redressed.</description>
+    <item>
+      <title>Repeat Wire reports a $12.93bn grid deal!</title>
+      <link>https://rerun.example-wire.net/2026/08/grid-deal-again</link>
+      <pubDate>Fri, 21 Aug 2026 07:05:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>
