@@ -345,6 +345,18 @@ from run 34943695821 shard 3, 20 articles, 2026-09-15.
 
 `labels` was empty on 8 of 20 articles and `proposed` on all 20.
 
+**The prompt names these eight fields and no others, and a test holds it
+there.** `LabelReply` forbids an unknown key, so a prompt asking for a field the
+reply has no room for does not fail a run: the decoder moves the probability
+behind that key onto the keys the grammar does allow. A field the prompt stops
+describing is still required, and is still emitted with nothing said about it.
+Both are silent, and both cost quality on every item.
+`test_the_label_prompt_names_every_field_of_the_reply_and_no_other` reads the
+names the prompt introduces at the left margin and compares them against
+`LabelReply.model_fields`. The three recorded-byte fixtures beside it say the
+prompt moved; this one says the move is wrong, which is the difference that
+matters the moment somebody re-records.
+
 **The two mention lists reach a reader, and that was measured rather than
 assumed.** `elements.py` mints only `QUANTITY` and `DATE`; `ENTITY` and `PLACE`
 exist only because these two lists produce them. Over the published archive on
