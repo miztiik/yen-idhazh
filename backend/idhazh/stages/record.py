@@ -20,7 +20,6 @@ from idhazh.stages.common import (
     LOG,
     _extraction_health,
     _item_payloads,
-    _recovered,
     _run_dir,
     shard_of,
 )
@@ -41,6 +40,13 @@ def stage_record(
     An item whose summary is not written yet was interrupted rather than failed,
     and this ledger has no way to correct a row once it is in.
 
+    **The row is the one the shard sealed wherever there is one.** The work stage
+    validates 113 cells an item and leaves them beside the article and the
+    summary; rebuilding from those two payloads carries 40 of them. So this reads
+    the shard's own row and only falls back to `telemetry.classify_item` for an
+    item no shard sealed one for - which on a healthy run is none of them, and is
+    why the log line below says how many were rebuilt.
+
     Each row is stamped with this worker's own `shard`, which is the only moment
     the number is known: `stage_assemble` runs once for the whole day and cannot
     say which machine an item was for, so the rows it adds leave the cell empty.
@@ -53,13 +59,16 @@ def stage_record(
     mine = {item.item_id for item in shard_of(plan, shard=shard, shards=shards)}
     health: list[ItemHealthRow] = []
     rows: list[EvalRow] = []
+    rebuilt = 0
     for payload in _item_payloads(plan, items_dir):
         if payload.planned.item_id not in mine:
             continue
         if not telemetry.is_final(payload.article, payload.summary):
             continue
+        rebuilt += payload.recorded is None
         health.append(
-            telemetry.classify_item(
+            telemetry.census_row(
+                recorded=payload.recorded,
                 planned=payload.planned,
                 article=payload.article,
                 summary=payload.summary,
@@ -67,7 +76,6 @@ def stage_record(
                 run_id=plan.run_id,
                 shard=shard,
                 extraction=_extraction_health(payload.article, settings),
-                recovered=_recovered(payload.decision_path),
             )
         )
         if payload.eval_path.exists():
@@ -75,11 +83,12 @@ def stage_record(
     recorded = ledger.append_item_health(common.STATE_ROOT, plan.date, health)
     scored = writer.append(common.STATE_ROOT, rows)
     LOG.info(
-        "recorded shard=%s/%s run=%s settled=%s item_health_rows=%s eval_rows=%s",
+        "recorded shard=%s/%s run=%s settled=%s rebuilt=%s item_health_rows=%s eval_rows=%s",
         shard,
         shards,
         plan.run_id,
         len(health),
+        rebuilt,
         recorded,
         scored,
     )
