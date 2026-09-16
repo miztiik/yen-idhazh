@@ -1,6 +1,6 @@
 # Gemma-4-E4B-it-qat-UD-Q4_K_XL
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-16
 **Status: evaluated.** It has been benched and it has never served a published
 item. `evaluated` is one of three words a dossier's status line may hold -
 `evaluated`, `incumbent`, `superseded` - and this line is the only place this
@@ -10,6 +10,13 @@ One model, one page. Every figure below is a reading of **these weights**, it is
 the only reading of that quantity in force, and it carries the hardware that took
 it, the date and the spread. Nothing here was re-derived and nothing was rounded:
 each figure is the one the instrument recorded, moved rather than restated.
+
+**Where a quantity depends on which runner GitHub gave the job, the reading in
+force is the spread across machines rather than one number.** That is still one
+reading of one quantity - the quantity is what these weights do on the fleet we
+actually get, and a single figure would answer a question nobody can ask, since
+nothing selects the machine ([the processor
+lottery](../benchmarks/the-processor-lottery.md), owner ruling 2026-09-15).
 
 **This page says how fast, and it does not say how good.** The bench reads
 throughput, memory and wall-clock. It does not grade a summary and it does not
@@ -63,20 +70,40 @@ bench workflows.
 
 ## Prefill and decode
 
-Measured 2026-09-15 on **AMD EPYC 7763 64-Core Processor**, 4 threads,
-llama.cpp `b10598` (`56db501e7`), 3 repeats, `llama-bench`. Prefill falls as the
-prompt grows, so one tokens-per-second figure would be wrong at both ends.
+llama.cpp `b10598` (`56db501e7`), 4 threads, 3 repeats, `llama-bench`. Prefill
+falls as the prompt grows, so one tokens-per-second figure would be wrong at both
+ends.
 
-**`llama-bench` does not load the draft head**, so these four readings are the
-main model decoding alone. What the head is worth is a different question and
-this page does not answer it - see below.
+**`llama-bench` does not load the draft head**, so every reading here is the main
+model decoding alone. What the head is worth is a different question, answered
+further down.
 
-| Reading | Value | Runs |
-| --- | --- | --- |
-| Prefill, 730-token prompt | **20.564 +/- 0.035** tok/s | n = 3 |
-| Prefill, 1,800-token prompt | **20.228 +/- 0.017** tok/s | n = 3 |
-| Prefill, 4,850-token prompt | **19.570 +/- 0.037** tok/s | n = 3 |
-| Decode, 250 tokens | **9.676 +/- 0.083** tok/s | n = 3 |
+**The reading is the spread across machines, not one number.** GitHub gives a job
+whatever runner is free, and these weights have landed on three different
+processors. A single figure would be a reading of one lucky draw rather than of
+this model, so every draw is below with the machine that took it (owner ruling,
+2026-09-15). What the fleet does to a number is
+[the processor lottery](../benchmarks/the-processor-lottery.md).
+
+| Processor | Draws | Prefill, 730 | Prefill, 1,800 | Prefill, 4,850 | Decode, 250 |
+| --- | --- | --- | --- | --- | --- |
+| AMD EPYC 7763 64-Core | 4 | 20.466 to 20.564 | 20.137 to 20.228 | 19.532 to 19.622 | 9.676 to 10.532 |
+| AMD EPYC 9V45 96-Core | 2 | 74.637 to 75.453 | 73.033 to 74.926 | 69.929 to 71.377 | 15.516 to 15.744 |
+| Intel Xeon Platinum 8573C | 1 | 59.322 +/- 0.348 | 55.483 +/- 0.238 | 51.433 +/- 0.174 | 10.212 +/- 0.019 |
+
+All figures are tokens a second. A row with more than one draw shows the range
+across them; the one-draw row shows that draw's own spread.
+
+**Which machine a run draws is worth more than any model choice.** Reading is 3.7
+times faster on the 9V45 than on the 7763 - the same weights, the same build, the
+same prompt. **So no figure on this page may be compared with a figure on another
+model's page unless both carry the same processor.**
+
+Two rows are worth reading twice. **Prefill on the 7763 repeats to within half a
+percent across four draws, and decode on the same four spans 8.8 percent** - so a
+decode difference under 8.8 percent cannot be shown by comparing two runs. And
+the Xeon reads 2.9 times faster than the 7763 while decoding at the same speed,
+which is why a fast runner is not a thing.
 
 ## Memory
 
@@ -121,33 +148,49 @@ The timings stand because each repeat is a complete pass over whatever text it
 fetched, and the three totals agree to within 1.4 percent. What the rejection
 correctly forbids is reading them against another run's.
 
-## What the draft head is worth: not measured
+## What the draft head is worth
 
-A second dispatch of the same weights with `draft` set to null ran 5 seconds
-later on 2026-09-15. It is not on this page as a comparison, and the reason is
-the instrument rather than the result.
+**The head is 6.3 percent faster, and it changes every summary.** Both halves of
+that sentence come from one paired dispatch, run `35011578538` on 2026-09-15, on
+an AMD EPYC 7763. The two configurations alternated inside that one job, so the
+machine is cancelled and the comparison holds.
 
-| Case | Processor | A whole repeat, median |
+| Case | A whole repeat over five articles, median | Spread over 2 repeats |
 | --- | --- | --- |
-| With the `draft-mtp` head | AMD EPYC 7763 | 3,970 s |
-| With no draft head | AMD EPYC 9V74 | 4,192 s |
+| With the `draft-mtp` head | 2,937,218 ms | +/- 13,131 |
+| With no draft head | 3,122,864 ms | +/- 6,409 |
 
-**GitHub put the two cases on different processors, so the 5.3 percent between
-them is not attributable to the head.** The size of the confound is measurable
-and was measured: the same `llama-bench` decode test, on the same weights, on
-two machines both reporting EPYC 7763, differed by 8.8 percent between these two
-runs - 9.676 against 10.532 tok/s. A 5.3 percent difference read across two runs
-sits under an 8.8 percent between-run spread, so this pair says nothing.
+The head saves **185,646 ms, which is 3 minutes 6 seconds over five articles, or
+6.3 percent.** The gap is fourteen times the wider of the two spreads, so it is
+not noise.
 
-**The instrument that could answer it is a paired case**: both configurations
-alternating inside one job, on one machine, which cancels the machine. The bench
-already runs that shape - `runtime_candidate` alternates a baseline against a
-named variant - but every variant it offers today is an `inference` knob, and the
-draft head is a sibling of `inference` rather than a knob inside it. No second
-download is needed, because both cases open the same weights file.
+**An earlier attempt could not establish this and was right not to try.** Two
+separate dispatches put the cases on different processors and differed by 5.3
+percent, which sits under the 8.8 percent that two runs on one processor model
+differ by anyway ([the processor
+lottery](../benchmarks/the-processor-lottery.md)). The instrument that answered
+it was the paired case, and it is the only shape that can.
 
-Until that runs, this project has no reading of what the draft head is worth, and
-none may be quoted.
+### The head is not free: it changes the output
+
+The bench refused this dispatch, with `rejected_output_drift`, and the refusal is
+the more important half of the result. **All five articles got a different
+summary with the head than without it.**
+
+Sampling is deterministic here, which is what makes that a finding rather than
+noise: each case reproduced its own five summaries byte-identically across both
+its repeats, and the two cases disagreed on all five.
+
+A speculative decoder that accepts a draft token only when it matches what the
+main model would have produced is output-identical by construction. **This one is
+not, so `draft-mtp` on this build is doing something other than lossless
+speculation.** Whether that is the head, the acceptance rule or the pinned build
+is unmeasured.
+
+**What it means for adoption: the 6.3 percent is not a free speedup, it is a
+different model.** The head cannot be switched on after qualification and it
+cannot be switched off after it - whichever configuration is qualified is the one
+that has to publish.
 
 ## What this page still owes
 
@@ -157,19 +200,23 @@ none may be quoted.
   identifier, and nobody has read them against this project's use yet.
 - **The tokenizer cost.** Tokens a word decides how much article fits the window,
   and it belongs to this tokenizer rather than to the incumbent's.
-- **What the draft head is worth**, per the section above.
+- **Why the draft head changes the output.** The section above establishes that it
+  does. Whether the cause is the head, the acceptance rule or the pinned build is
+  unmeasured, and it decides whether a lossless configuration exists at all.
 
 ## The records behind this page
 
 | What | Where |
 | --- | --- |
-| The bench dispatch behind every reading above | GitHub Actions run `34972996987`, 2026-09-15 |
-| The no-draft case quoted and set aside | GitHub Actions run `34973005911`, 2026-09-15 |
+| Every prefill and decode draw, with its processor | [../benchmarks/the-processor-lottery.md](../benchmarks/the-processor-lottery.md) |
+| The wall-clock and memory readings above | GitHub Actions run `34972996987`, 2026-09-15 |
+| The paired draft-head case | GitHub Actions run `35011578538`, 2026-09-15 |
 | The recorded `--spec-type` list the pinned build accepts | `tests/fixtures/runtime/b10598-llama-server-help.txt`, from run `34971210901` |
 | The declared identity | `config/models/gemma-4-e4b-qat.json` |
 
 ## See also
 
 - [../models.md](../models.md) - one row a model, and what the status word means.
+- [../benchmarks/the-processor-lottery.md](../benchmarks/the-processor-lottery.md) - what machine a run draws, and what it does to a reading.
 - [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md) - how a candidate gets measured and what has to pass before it serves.
 - [../measurements.md](../measurements.md) - the instrument log.

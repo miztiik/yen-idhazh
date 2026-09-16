@@ -1,6 +1,6 @@
 # Ornith-1.5-9B-Q5_K_M
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-16
 **Status: evaluated.** It has been benched and it has never served a published
 item. `evaluated` is one of three words a dossier's status line may hold -
 `evaluated`, `incumbent`, `superseded` - and this line is the only place this
@@ -10,6 +10,13 @@ One model, one page. Every figure below is a reading of **these weights**, it is
 the only reading of that quantity in force, and it carries the hardware that took
 it, the date and the spread. Nothing here was re-derived and nothing was rounded:
 each figure is the one the instrument recorded, moved rather than restated.
+
+**Where a quantity depends on which runner GitHub gave the job, the reading in
+force is the spread across machines rather than one number.** That is still one
+reading of one quantity - the quantity is what these weights do on the fleet we
+actually get, and a single figure would answer a question nobody can ask, since
+nothing selects the machine ([the processor
+lottery](../benchmarks/the-processor-lottery.md), owner ruling 2026-09-15).
 
 **This page says how fast, and it does not say how good.** The bench reads
 throughput, memory and wall-clock. It does not grade a summary and it does not
@@ -47,16 +54,31 @@ on its own.
 
 ## Prefill and decode
 
-Measured 2026-09-15 on **AMD EPYC 7763 64-Core Processor**, 4 threads,
-llama.cpp `b10598` (`56db501e7`), 3 repeats, `llama-bench`. Prefill falls as the
-prompt grows, so one tokens-per-second figure would be wrong at both ends.
+llama.cpp `b10598` (`56db501e7`), 4 threads, 3 repeats, `llama-bench`. Prefill
+falls as the prompt grows, so one tokens-per-second figure would be wrong at both
+ends.
 
-| Reading | Value | Runs |
-| --- | --- | --- |
-| Prefill, 730-token prompt | **6.195 +/- 0.004** tok/s | n = 3 |
-| Prefill, 1,800-token prompt | **6.165 +/- 0.0015** tok/s | n = 3 |
-| Prefill, 4,850-token prompt | **6.083 +/- 0.0013** tok/s | n = 3 |
-| Decode, 250 tokens | **4.538 +/- 0.011** tok/s | n = 3 |
+**The reading is the spread across machines, not one number.** These weights have
+landed on two processors; every draw is below with the machine that took it
+(owner ruling, 2026-09-15). What the fleet does to a number is [the processor
+lottery](../benchmarks/the-processor-lottery.md).
+
+| Processor | Draws | Prefill, 730 | Prefill, 1,800 | Prefill, 4,850 | Decode, 250 |
+| --- | --- | --- | --- | --- | --- |
+| AMD EPYC 7763 64-Core | 2 | 6.195 to 6.226 | 6.165 to 6.192 | 6.083 to 6.116 | 4.412 to 4.538 |
+| AMD EPYC 9V74 80-Core | 1 | 6.374 +/- 0.008 | 6.355 +/- 0.010 | 6.293 +/- 0.013 | 4.696 +/- 0.004 |
+
+All figures are tokens a second. The two-draw row shows the range across them;
+the one-draw row shows that draw's own spread.
+
+**Do not read the narrow range as a model that does not care what machine it
+gets.** These three draws span 2.6 percent because **this model has only ever
+drawn the two machines that read at the same speed as each other.** It has never
+landed on a 9V45 or a Xeon, and both of those read other models three to four
+times faster than the 7763 does. The range above is a gap in the sample.
+
+**No figure here may be compared with a figure on another model's page unless
+both carry the same processor.**
 
 ## Memory
 
@@ -114,11 +136,13 @@ other.
 
 | What | Where |
 | --- | --- |
-| The bench dispatch that took every reading above | GitHub Actions run `34938565911`, 2026-09-15 |
+| Every prefill and decode draw, with its processor | [../benchmarks/the-processor-lottery.md](../benchmarks/the-processor-lottery.md) |
+| The bench dispatch that took the wall-clock and memory readings | GitHub Actions run `34938565911`, 2026-09-15 |
 | The declared identity | `config/models/ornith-1.5-9b-q5km.json` |
 
 ## See also
 
 - [../models.md](../models.md) - one row a model, and what the status word means.
+- [../benchmarks/the-processor-lottery.md](../benchmarks/the-processor-lottery.md) - what machine a run draws, and what it does to a reading.
 - [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md) - how a candidate gets measured and what has to pass before it serves.
 - [../measurements.md](../measurements.md) - the instrument log.
