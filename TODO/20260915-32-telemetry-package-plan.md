@@ -37,7 +37,7 @@ decision about current behaviour; that belongs in `docs/` (Guardrail #4).
 | 1 | The shape the timeline reads, settled first | - | A | PENDING | - | - | - |
 | 2 | Where every one of the 113 columns comes from | - | A | PENDING | - | - | - |
 | 3 | The package exists and re-exports | - | A | PENDING | - | - | - |
-| 4 | The recorder moves in and returns a validated row | 3 | B | PENDING | - | - | - |
+| 4 | The recorder moves in and returns a validated row | 3 | B | DONE | p32r4 | - | - |
 | 5 | The work stage persists what it recorded | 1, 4 | C | PENDING | - | - | - |
 | 6 | The census prefers the persisted row | 5 | D | PENDING | - | - | - |
 | 7 | Six columns that are arithmetic over filled ones | 6 | E | PENDING | - | - | - |
@@ -259,6 +259,9 @@ are deleted by row 15.
 | 1 | `close()` returns the contract type. A loose dict is what let 53 cells be computed and discarded without a type error | Fowler |
 | 2 | `_slowest` in `stages/work.py` reads the typed row. It is the only consumer today and it stays working | Fowler |
 | 3 | The test drives the canary day, not the committed archive. Fixed cost and it can carry a case the archive never produced (section 13) | Fowler |
+| 4 | The work stage's own terminal cells move to `census.classify_article`, because a row it could not build is a row `close()` raises on. The branch named `extract` whatever had really failed, so a fetch code landed on an extract row - a pairing `ItemHealthRow` refuses - and an article with no typed code recorded a failure with no reason. Shipped 2026-09-15 | Fowler |
+| 5 | `telemetry.record` is now the MODULE and no longer the serializer. Python binds a submodule onto its package, so a function re-exported under the same name means one word with two meanings decided by import order. The function keeps its home at `telemetry.events.record`; nothing outside the package called it. Shipped 2026-09-15 | Fowler |
+| 6 | Each call slot records its `kind` beside its five numbers. The census row holds a slot to filling whole or not at all, so five numbers and no kind was half a call and no row at all | Fowler |
 
 - **Rejected alternatives:**
 
