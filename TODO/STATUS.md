@@ -35,14 +35,14 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 16 | 12 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 11 |
-| [20260914-29-found-once-plan.md](20260914-29-found-once-plan.md) | 17 | 5 | 12 | 9 |
+| [20260914-29-found-once-plan.md](20260914-29-found-once-plan.md) | 17 | 6 | 11 | 8 |
 
 ## In flight - 0
 
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 40
+## Ready now - 39
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -88,7 +88,6 @@ section 3 is where it is answered.
 | #10 | 29 | - | A story that has been running ranks below one that broke today | - |
 | #12 | 29 | - | Label the sheet, then set the weights | - |
 | #13 | 29 | - | The chrome ledger: a host that repeats itself is caught | - |
-| #14 | 29 | - | The composite score, proving it changed nothing | - |
 | #17 | 29 | - | Does a short extraction publish at all | - |
 
 ## Waiting on another row - 51
@@ -144,7 +143,7 @@ section 3 is where it is answered.
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
 | #11 | 29 | - | The lead is a weighted score, and the page says how | 10 is PENDING |
-| #15 | 29 | - | The weights and the 0.88 floor | 12 is PENDING; 14 is PENDING |
+| #15 | 29 | - | The weights and the 0.88 floor | 12 is PENDING |
 | #16 | 29 | - | Refuse boilerplate, on a week of evidence | 13 is PENDING |
 
 ## Finished - 19 plans with no live row
