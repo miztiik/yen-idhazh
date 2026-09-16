@@ -104,7 +104,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Final, NamedTuple, Protocol
 
-from idhazh import day_partition
+from idhazh import day_partition, month_partition
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.feed_retirement import FeedRetirementRow
@@ -1243,10 +1243,10 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
 
     `date` says which files. A run appends only to the shard its own date routes
     to, so a repeat the union merge left behind can only be in a file that run
-    wrote - and all three dated ledgers here contribute one file each whatever
-    the archive holds. `date=None` is the operator's full pass and names every
-    file; it is the only cover that costs more every day, and Guardrail #12
-    is why a person has to ask for it by name.
+    wrote - and every dated ledger here contributes one file whatever the archive
+    holds. `date=None` is the operator's full pass and names every file; it is
+    the only cover that costs more every day, and Guardrail #12 is why a person
+    has to ask for it by name.
 
     Nothing here is a clock. An older day is skipped because this run did not
     write it, not because it is old, so the bound does not weaken as a run gets
@@ -1285,6 +1285,21 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     writer is the plan stage, whose commit step DOES name a settlement command,
     so its repeats are settled by the run that made them - the same position
     `state/feed-health/` is in.
+
+    `state/host-fingerprint/` and `state/span-rollup/` joined on 2026-09-16, and
+    they were absent for the same reason rather than for a reason of their own:
+    nothing staged the fingerprint at all, so there was no committed file for a
+    repeat to be in, and the rollup was staged on 2026-09-15 without anyone
+    walking this list. Both declare a key and both are written by a work shard,
+    whose commit step names a settlement command - so a second attempt at one
+    shard is settled by the run that made it, the same position
+    `state/feed-health/` is in. Neither key can disagree with itself: a job runs
+    on one machine, and a re-run of a shard folds the same spans again.
+
+    `state/span-rollup/` is the one month file in the set, so the full pass names
+    one file a recorded month where every dated entry beside it names one a day.
+    The run's own cover is a month file too, and it is still one file: a run
+    appends under one date, and one date is in one month.
     """
     flat: list[KeyedLedger] = [
         KeyedLedger(runtime_counters_path(state_dir), RUNTIME_COUNTERS_KEY, RuntimeCountersRow),
@@ -1306,6 +1321,14 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
                 ItemHealthRow,
                 ITEM_HEALTH_CARRIED,
             ),
+            KeyedLedger(
+                host_fingerprint_path(state_dir, date),
+                HOST_FINGERPRINT_KEY,
+                HostFingerprintRow,
+            ),
+            KeyedLedger(
+                span_rollup_path(state_dir, date[:7]), SPAN_ROLLUP_KEY, SpanRollupRow
+            ),
         ]
     return [
         *flat,
@@ -1324,6 +1347,14 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
         *(
             KeyedLedger(path, ITEM_HEALTH_KEY, ItemHealthRow, ITEM_HEALTH_CARRIED)
             for path in day_partition.day_files(state_dir / ITEM_HEALTH_DIRNAME)
+        ),
+        *(
+            KeyedLedger(path, HOST_FINGERPRINT_KEY, HostFingerprintRow)
+            for path in day_partition.day_files(state_dir / HOST_FINGERPRINT_DIRNAME)
+        ),
+        *(
+            KeyedLedger(path, SPAN_ROLLUP_KEY, SpanRollupRow)
+            for path in month_partition.month_files(state_dir / SPAN_ROLLUP_DIRNAME, ".csv")
         ),
     ]
 

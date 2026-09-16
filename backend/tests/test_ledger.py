@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import csv
 import io
+import json
 import tracemalloc
 from collections.abc import Iterator
 from datetime import date as date_type
@@ -13,7 +14,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 
 from idhazh import cli, config, day_partition, ledger
 from idhazh.contracts.base import derive_url_key
@@ -21,6 +22,7 @@ from idhazh.contracts.call_cost import COST_FIELDS, CallKind
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import (
     RETIRED_CELLS,
     FailureCode,
@@ -31,6 +33,7 @@ from idhazh.contracts.item_health import (
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
+from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.evals import writer
 from idhazh.evals.writer import OBSERVATION_KEY
@@ -120,6 +123,43 @@ def counterfactual_row(
         lens_multiplier=1.25,
         score_committed=1.2,
         score_counterfactual=1.275,
+    )
+
+
+def fingerprint_row(*, on: str = DATE, shard: int = 0, cpu: str = "one") -> HostFingerprintRow:
+    """One job's machine, from the committed contract fixture with the key rewritten.
+
+    The fixture is read inside this helper rather than at module scope, so a
+    fixture that stops parsing fails the three tests that ask for a row instead
+    of every test in the file (CLAUDE.md section 13). `cpu_model` is the cell the
+    callers vary, because it is outside the key: a repeat may carry a different
+    one and the settlement must still keep the first.
+    """
+    raw = json.loads(
+        read_text(CONTRACT_FIXTURES_DIR / "host-fingerprint-row" / "every-reading-taken.json")
+    )
+    return HostFingerprintRow.model_validate(
+        raw
+        | {
+            "version": HostFingerprintRow.schema_version(),
+            "date": on,
+            "run_id": f"{on}-1",
+            "shard": shard,
+            "cpu_model": cpu,
+        }
+    )
+
+
+def span_fold_row(*, on: str = DATE, shard: int = 0, total_ms: int = 16) -> SpanRollupRow:
+    """One shard's fold of one span name. `total_ms` is the cell a repeat could double."""
+    return SpanRollupRow(
+        version=SpanRollupRow.schema_version(),
+        date=on,
+        run_id=f"{on}-1",
+        shard=shard,
+        span_name=RollupSpan.TAG,
+        count=20,
+        total_ms=total_ms,
     )
 
 
@@ -1700,15 +1740,19 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     else here says what makes two of its rows one record, and everything that
     says so is settled.
 
-    Both covers name the same six ledgers on a tree with one day of each in it.
+    Both covers name the same eight ledgers on a tree with one day of each in it.
     What separates them is what a second day would add: to the operator's pass, a
-    file; to a run's pass, nothing.
+    file; to a run's pass, nothing. The span fold is the exception that proves
+    the shape - it files by month, so a second day adds nothing to either cover
+    and a second month adds one file to the operator's.
     """
     ledger.append_seen(tmp_path, DATE, [seen_row()])
     ledger.append_health(tmp_path, DATE, [health_row()])
     ledger.append_runtime_counters(tmp_path, [counters_row(0)])
     ledger.append_visual_prunes(tmp_path, DATE, [prune_row(on=DATE)])
     ledger.append_counterfactual_scores(tmp_path, DATE, [counterfactual_row()])
+    ledger.append_host_fingerprint(tmp_path, DATE, [fingerprint_row()])
+    ledger.append_span_rollup(tmp_path, DATE, [span_fold_row()])
     item_health = ledger.item_health_path(tmp_path, DATE)
     item_health.parent.mkdir(parents=True, exist_ok=True)
     item_health.write_text(",".join(ItemHealthRow.csv_columns()) + "\n", encoding="utf-8")
@@ -1722,6 +1766,11 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
         ),
         (f"feed-health/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv", ledger.FEED_HEALTH_KEY),
         (f"item-health/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv", ledger.ITEM_HEALTH_KEY),
+        (
+            f"host-fingerprint/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
+            ledger.HOST_FINGERPRINT_KEY,
+        ),
+        (f"span-rollup/{DATE[:7]}.csv", ledger.SPAN_ROLLUP_KEY),
     ]
 
     every = ledger.keyed_paths(tmp_path, date=None)
@@ -1733,6 +1782,82 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     assert [
         (target.path.relative_to(tmp_path).as_posix(), target.key) for target in this_run
     ] == named
+
+
+def test_a_repeated_fingerprint_is_settled_inside_the_day_that_holds_it(
+    tmp_path: Path,
+) -> None:
+    """Nothing staged this ledger until 2026-09-16, so nothing could settle it either.
+
+    A job runs on one machine, so two rows under one `(date, run_id, job, shard)`
+    are one machine written down twice - and counting a machine twice is exactly
+    what would make the fleet distribution lie. The union merge is what puts the
+    second row there: a second attempt at one shard cannot see the rows the first
+    attempt pushed, so it appends its own. The first row wins.
+    """
+    state = tmp_path / "state"
+    ledger.append_host_fingerprint(state, DATE, [fingerprint_row(cpu="first")])
+    path = ledger.host_fingerprint_path(state, DATE)
+    clean = path.read_text(encoding="utf-8")
+    second_attempt = clean.splitlines()[1].replace(",first,", ",second,")
+    assert second_attempt != clean.splitlines()[1], "the two attempts must differ off the key"
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        handle.write(second_attempt + "\n")
+
+    registered = {target.path: target.key for target in ledger.keyed_paths(state, date=DATE)}
+    assert registered[path] == ledger.HOST_FINGERPRINT_KEY
+    assert ledger.drop_repeated_rows(path, ledger.HOST_FINGERPRINT_KEY) == 1
+    assert path.read_text(encoding="utf-8") == clean
+
+
+def test_a_repeated_span_fold_is_settled_inside_the_month_that_holds_it(
+    tmp_path: Path,
+) -> None:
+    """`SPAN_ROLLUP_KEY` said the first row wins from the day it was written; nothing applied it.
+
+    The row is a fold of a shard's own spans, so a second attempt at that shard
+    recomputes the same numbers - and a second row adds a count to itself rather
+    than recording a new fact. The month file is the one file a repeat can be in:
+    a run appends under one date, and one date is in one month.
+    """
+    state = tmp_path / "state"
+    ledger.append_span_rollup(state, DATE, [span_fold_row(total_ms=16)])
+    path = ledger.span_rollup_path(state, DATE[:7])
+    clean = path.read_text(encoding="utf-8")
+    second_attempt = clean.splitlines()[1].replace(",20,16,", ",20,999,")
+    assert second_attempt != clean.splitlines()[1], "the two attempts must differ off the key"
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        handle.write(second_attempt + "\n")
+
+    registered = {target.path: target.key for target in ledger.keyed_paths(state, date=DATE)}
+    assert registered[path] == ledger.SPAN_ROLLUP_KEY
+    assert ledger.drop_repeated_rows(path, ledger.SPAN_ROLLUP_KEY) == 1
+    assert path.read_text(encoding="utf-8") == clean
+
+
+def test_the_full_pass_reaches_a_fingerprint_day_and_a_fold_month_no_run_named(
+    tmp_path: Path,
+) -> None:
+    """What the operator's pass buys: a repeat a run's own settle step never cleared.
+
+    The dated cover names the files this run wrote and nothing else, so a repeat
+    left in an older day is nobody's to sweep up in passing. `--every-shard` is
+    the command that reaches it. The fingerprint files by day and the fold by
+    month, so this asks for both at once and asserts on the paths rather than on
+    a count.
+    """
+    state = tmp_path / "state"
+    older = "2026-07-04"
+    ledger.append_host_fingerprint(state, older, [fingerprint_row(on=older)])
+    ledger.append_span_rollup(state, older, [span_fold_row(on=older)])
+
+    every = {target.path: target.key for target in ledger.keyed_paths(state, date=None)}
+    this_run = {target.path for target in ledger.keyed_paths(state, date=DATE)}
+
+    assert every[ledger.host_fingerprint_path(state, older)] == ledger.HOST_FINGERPRINT_KEY
+    assert every[ledger.span_rollup_path(state, older[:7])] == ledger.SPAN_ROLLUP_KEY
+    assert ledger.host_fingerprint_path(state, older) not in this_run
+    assert ledger.span_rollup_path(state, older[:7]) not in this_run
 
 
 # --- One feed, one run, one result ------------------------------------------

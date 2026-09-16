@@ -238,7 +238,7 @@ listed: its cover is its argument. These are `backend/`'s;
 | Read | What it opens | Its cover |
 | --- | --- | --- |
 | `evals.writer.recorded_observations` | `state/score-index/` and `state/score-archive/` | every observation identity, as 76-byte digests |
-| `stages.dedupe_ledgers.stage_dedupe_ledgers`, via `ledger.keyed_paths` | seven files on the ordinary pass | the files this run staged |
+| `stages.dedupe_ledgers.stage_dedupe_ledgers`, via `ledger.keyed_paths` | nine files on the ordinary pass | the files this run staged |
 | `stages.validate_days.stage_validate_days` | one `stat` a day, plus `state/day-validations.csv` | a receipt on payload length, digest and validator identity |
 | `ledger.append_counterfactual_scores` | one day file of `state/counterfactual-scores/` | one date, and inside it the run's own bounded pool - every item the run took plus `lens_weights.counterfactual_refused_per_desk` refused candidates a desk. A run's write costs the same on a five-year archive as on a fresh clone |
 | `ledger.load_settled_failures` | one item-health day file | one date |
