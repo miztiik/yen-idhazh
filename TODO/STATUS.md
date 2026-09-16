@@ -35,7 +35,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 16 | 12 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 11 |
-| [20260914-29-found-once-plan.md](20260914-29-found-once-plan.md) | 17 | 9 | 8 | 5 |
+| [20260914-29-found-once-plan.md](20260914-29-found-once-plan.md) | 17 | 10 | 7 | 5 |
 
 ## In flight - 0
 
@@ -82,12 +82,12 @@ section 3 is where it is answered.
 | #10 | 27 | D | A killed shard keeps the work it finished | - |
 | #11 | 27 | E | Two articles, three arms, one runner | 4 |
 | #9 | 29 | - | The same story is one story for 36 hours, not one day | - |
-| #10 | 29 | - | A story that has been running ranks below one that broke today | - |
+| #11 | 29 | - | The lead is a weighted score, and the page says how | 10 |
 | #12 | 29 | - | Label the sheet, then set the weights | - |
 | #13 | 29 | - | A source's quality decides its own future | - |
 | #17 | 29 | - | Does a short extraction publish at all | - |
 
-## Waiting on another row - 51
+## Waiting on another row - 50
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -139,7 +139,6 @@ section 3 is where it is answered.
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
-| #11 | 29 | - | The lead is a weighted score, and the page says how | 10 is PENDING |
 | #15 | 29 | - | The weights and the 0.88 floor | 12 is PENDING |
 | #16 | 29 | - | Refuse boilerplate, on a week of evidence | 13 is PENDING |
 
