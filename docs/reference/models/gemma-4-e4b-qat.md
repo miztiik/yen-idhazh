@@ -150,54 +150,21 @@ correctly forbids is reading them against another run's.
 
 ## What the draft head is worth
 
-**The head is 6.3 percent faster, and it changes every summary.** Both halves of
-that sentence come from one paired dispatch, run `35011578538` on 2026-09-15, on
-an **AMD EPYC 9V74**. The two configurations alternated inside that one job, so
-the machine is cancelled and the comparison holds.
+**6.3 percent faster, and it changes every summary it touches.** Both halves come
+from paired dispatches where the two configurations alternated inside one job, so
+the machine cancels - which it has to, because the platform places each job
+separately and a comparison across two dispatches says nothing.
 
-**That machine is not the one in the table above.** The prefill and decode rows
-come from the `llm` job and this comes from the `runtime` job, and the platform
-places each job separately - nine of twelve dispatches split across two different
-processors ([the processor
-lottery](../benchmarks/the-processor-lottery.md)). Which is exactly why the
-comparison had to be paired inside one job to mean anything.
+The speed reading is one run and has not been repeated. The output change has
+replicated on a second set of articles and a second machine, so it is the
+mechanism rather than those articles.
 
-| Case | A whole repeat over five articles, median | Spread over 2 repeats |
-| --- | --- | --- |
-| With the `draft-mtp` head | 2,937,218 ms | +/- 13,131 |
-| With no draft head | 3,122,864 ms | +/- 6,409 |
+**What follows from it: the head is not a speed setting, it is a different
+model.** Whichever configuration is qualified is the one that has to publish.
 
-The head saves **185,646 ms, which is 3 minutes 6 seconds over five articles, or
-6.3 percent.** The gap is fourteen times the wider of the two spreads, so it is
-not noise.
-
-**An earlier attempt could not establish this and was right not to try.** Two
-separate dispatches put the cases on different processors and differed by 5.3
-percent, which sits under the 8.8 percent that two runs on one processor model
-differ by anyway ([the processor
-lottery](../benchmarks/the-processor-lottery.md)). The instrument that answered
-it was the paired case, and it is the only shape that can.
-
-### The head is not free: it changes the output
-
-The bench refused this dispatch, with `rejected_output_drift`, and the refusal is
-the more important half of the result. **All five articles got a different
-summary with the head than without it.**
-
-Sampling is deterministic here, which is what makes that a finding rather than
-noise: each case reproduced its own five summaries byte-identically across both
-its repeats, and the two cases disagreed on all five.
-
-A speculative decoder that accepts a draft token only when it matches what the
-main model would have produced is output-identical by construction. **This one is
-not, so `draft-mtp` on this build is doing something other than lossless
-speculation.** Whether that is the head, the acceptance rule or the pinned build
-is unmeasured.
-
-**What it means for adoption: the 6.3 percent is not a free speedup, it is a
-different model.** The head cannot be switched on after qualification and it
-cannot be switched off after it - whichever configuration is qualified is the one
-that has to publish.
+Every dispatch, the timings, the digest tables and the evidence this project
+threw away are in [what the draft head is
+worth](../benchmarks/what-the-draft-head-is-worth.md).
 
 ## What this page still owes
 
@@ -215,6 +182,7 @@ that has to publish.
 
 | What | Where |
 | --- | --- |
+| What the draft head is worth, every dispatch behind it | [../benchmarks/what-the-draft-head-is-worth.md](../benchmarks/what-the-draft-head-is-worth.md) |
 | Every prefill and decode draw, with its processor | [../benchmarks/the-processor-lottery.md](../benchmarks/the-processor-lottery.md) |
 | The wall-clock and memory readings above | GitHub Actions run `34972996987`, 2026-09-15 |
 | The paired draft-head case | GitHub Actions run `35011578538`, 2026-09-15 |

@@ -3,6 +3,13 @@
 One row a job. The columns are fixed for the length of that job - a processor
 does not change model number mid-run - which is why they are not repeated on
 every item row beside the readings that do move.
+
+**Only `job` is an enum, and that is deliberate.** It is the one column this
+project names; every other identifier here is a string the machine chose. A
+vendor renames a part, a cloud adds a machine size, a microcode revision ships -
+and a closed set would refuse the row rather than record the new thing, which is
+the opposite of what an instrument is for. The rule and its cost are written
+down in `docs/reference/host-metrics.md`.
 """
 
 from __future__ import annotations
@@ -19,6 +26,7 @@ from idhazh.contracts.base import (
     RunId,
     Timestamp,
 )
+from idhazh.contracts.runtime_counters import WORK_JOB, ServerJob
 
 #: The instruction-set flags this project has a reason to read back. A flag
 #: outside this list is not recorded, so the column stays a fixed width and
@@ -55,7 +63,9 @@ class HostFingerprintRow(Contract):
 
     date: DateStamp
     run_id: RunId
-    job: str = Field(description="The workflow job that drew this machine.")
+    job: ServerJob = Field(
+        default=WORK_JOB, description="The workflow job that drew this machine."
+    )
     shard: int = Field(
         ge=0, description="The shard within that job. A single-shard job writes 0."
     )

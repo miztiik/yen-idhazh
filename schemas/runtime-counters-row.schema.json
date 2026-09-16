@@ -1,4 +1,15 @@
 {
+  "$defs": {
+    "ServerJob": {
+      "description": "Which workflow job produced a row.\n\nOurs to name, so it is a closed set. Every other identifier on a host row is\na string the machine chose and cannot be one - see\n`docs/reference/host-metrics.md`. Both values here already sit in the\ncommitted ledger; refusing anything else is what stops a typo becoming a\nthird job nobody can group by.",
+      "enum": [
+        "work",
+        "visuals"
+      ],
+      "title": "ServerJob",
+      "type": "string"
+    }
+  },
   "$id": "runtime-counters-row.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
@@ -81,12 +92,9 @@
       "type": "string"
     },
     "job": {
+      "$ref": "#/$defs/ServerJob",
       "default": "work",
-      "description": "The workflow job that wrote this row. Two jobs stand a model server up and they serve different weights - `work` the summarizer, `visuals` the visual planner - so a rate pooled across both describes no model, and every other cell here is unreadable without this one. It is the last column rather than a fourth identity cell so the migration that put it on every committed row is one appended cell a line, and nothing reading this file by position moves. An empty cell is refused rather than defaulted: a row that cannot say which job wrote it proves nothing.",
-      "maxLength": 40,
-      "pattern": "^[a-z][a-z0-9_-]*$",
-      "title": "Job",
-      "type": "string"
+      "description": "The workflow job that wrote this row. Two jobs stand a model server up and they serve different weights - `work` the summarizer, `visuals` the visual planner - so a rate pooled across both describes no model, and every other cell here is unreadable without this one. It is the last column rather than a fourth identity cell so the migration that put it on every committed row is one appended cell a line, and nothing reading this file by position moves. An empty cell is refused rather than defaulted: a row that cannot say which job wrote it proves nothing."
     },
     "job_seconds": {
       "anyOf": [

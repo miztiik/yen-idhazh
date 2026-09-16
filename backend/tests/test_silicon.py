@@ -7,6 +7,7 @@ from pathlib import Path
 from idhazh import config, ledger
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.telemetry import silicon
 
 
@@ -92,7 +93,7 @@ def test_the_row_reads_family_model_stepping_off_the_text_it_is_given() -> None:
     row = silicon.read_row(
         date="2026-09-16",
         run_id="2026-09-16-1",
-        job="work",
+        job=ServerJob.WORK,
         shard=0,
         probe_mib=0,
         ask_placement=False,
@@ -111,7 +112,7 @@ def test_the_clock_is_the_mean_across_processors_and_threads_is_their_count() ->
     row = silicon.read_row(
         date="2026-09-16",
         run_id="2026-09-16-1",
-        job="work",
+        job=ServerJob.WORK,
         shard=0,
         probe_mib=0,
         ask_placement=False,
@@ -129,7 +130,7 @@ def test_a_probe_size_of_zero_switches_the_bandwidth_reading_off() -> None:
     row = silicon.read_row(
         date="2026-09-16",
         run_id="2026-09-16-1",
-        job="work",
+        job=ServerJob.WORK,
         shard=0,
         probe_mib=0,
         ask_placement=False,
@@ -184,7 +185,7 @@ def test_the_stage_writes_one_row_a_job_into_the_day_file(tmp_path: Path) -> Non
     settings.app.observability.host_fingerprint_bandwidth_mib = 0
 
     row = silicon.stage_fingerprint(
-        a_plan(), settings=settings, state_root=tmp_path, shard=2, job="work"
+        a_plan(), settings=settings, state_root=tmp_path, shard=2, job=ServerJob.WORK
     )
 
     assert row is not None
@@ -199,8 +200,8 @@ def test_a_second_call_for_one_job_does_not_write_a_second_row(tmp_path: Path) -
     settings.app.observability.host_fingerprint_bandwidth_mib = 0
     plan = a_plan()
 
-    silicon.stage_fingerprint(plan, settings=settings, state_root=tmp_path, shard=0, job="work")
-    silicon.stage_fingerprint(plan, settings=settings, state_root=tmp_path, shard=0, job="work")
+    silicon.stage_fingerprint(plan, settings=settings, state_root=tmp_path, shard=0, job=ServerJob.WORK)
+    silicon.stage_fingerprint(plan, settings=settings, state_root=tmp_path, shard=0, job=ServerJob.WORK)
 
     lines = ledger.host_fingerprint_path(tmp_path, "2026-09-16").read_text(encoding="utf-8")
     assert lines.count("\n") == 2, "one header and one row, however many times the stage ran"

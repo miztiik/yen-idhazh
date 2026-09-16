@@ -332,38 +332,27 @@ AVX-512 than on one without, which is a far larger gap than anything separating
 our candidate models ([the processor
 lottery](../reference/benchmarks/the-processor-lottery.md)).
 
-So there is a second record, at a third grain: **one row a job**, in
-`state/host-fingerprint/<YYYY>/<MM>/<DD>.csv`.
-
-| What it holds | Why the string alone could not say it |
-| --- | --- |
-| Vendor, family, model, stepping, microcode | The generation, from the host. A codename somebody recognised is not a reading |
-| Instruction-set flags | Which kernels the runtime can dispatch to. This is the cell that tracks prefill |
-| Physical cores, threads, L3 | Every machine drawn so far is 2 cores by 2 threads, so cache is what varies |
-| A large-block copy rate | Decode is bandwidth bound and nothing else here measures bandwidth |
-| Uptime at the probe | A freshly started machine and a pooled one are different facts |
-| Machine size, region, zone, fault domain | The platform's own name for the placement, rather than ours |
-| A 16-character `fingerprint` | A digest over only the cells that cannot change inside a job, so two draws of one machine type carry one id and the distribution is countable |
+So there is a third grain: **one row a job**, in
+`state/host-fingerprint/<YYYY>/<MM>/<DD>.csv`, holding what the host reports
+about its own silicon plus a memory-bandwidth probe.
 
 **Why a third grain rather than more columns on the two rows above.** These cells
 are fixed for the whole job. Repeating twenty of them on every item row would
 store the same answer a hundred times a day and say nothing new; the job grain
-stores it once. The `fingerprint` column is what joins the two - a short id
-rather than a re-statement.
+stores it once. The two tables share the key `date`, `run_id`, `job`, `shard`, so
+the key is the join and no column is duplicated to make it work.
 
 **It is read once, early, before the model server starts.** The bandwidth probe
 wants a gigabyte and a quiet machine, and a probe taken after the server is up
 would measure the server. `idhazh fingerprint` is its own stage for that reason.
 
-**`observability.host_fingerprint` switches the whole record off**, and
-`observability.host_fingerprint_bandwidth_mib` sets the probe buffer, where zero
-means do not probe. The default beats the largest L3 this project has drawn,
-because a buffer that fits in cache measures cache and reads several times too
-high - which is why the row records the buffer size and the L3 side by side, so
-nobody can read one for the other.
-
 **Nothing on this record reaches a reader.** It is an operator surface, and the
 published telemetry projection does not carry it.
+
+Every column, what it means, what it is for, and why almost none of it is an
+enum: [host-metrics.md](../reference/host-metrics.md). It is a page of its own
+rather than a section here, because this page is about the instrument and that
+one is a column reference somebody arrives at with a number in hand.
 
 ## The visual ledger, and the eight terms that outlive it
 

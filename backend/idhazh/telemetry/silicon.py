@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, Final
 from idhazh import ledger
 from idhazh.contracts.host_fingerprint import WATCHED_FLAGS, HostFingerprintRow
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.runtime_counters import WORK_JOB, ServerJob
 from idhazh.telemetry.host import runner_name
 
 if TYPE_CHECKING:  # pragma: no cover - a type, not a runtime dependency
@@ -227,7 +228,7 @@ def read_row(
     *,
     date: str,
     run_id: str,
-    job: str,
+    job: ServerJob,
     shard: int,
     probe_mib: int,
     ask_placement: bool = True,
@@ -276,7 +277,7 @@ def stage_fingerprint(
     settings: config.Settings,
     state_root: Path,
     shard: int = 0,
-    job: str = "work",
+    job: ServerJob = WORK_JOB,
 ) -> HostFingerprintRow | None:
     """Record what machine this job drew, before anything else competes for it.
 

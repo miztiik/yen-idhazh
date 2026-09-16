@@ -1,4 +1,15 @@
 {
+  "$defs": {
+    "ServerJob": {
+      "description": "Which workflow job produced a row.\n\nOurs to name, so it is a closed set. Every other identifier on a host row is\na string the machine chose and cannot be one - see\n`docs/reference/host-metrics.md`. Both values here already sit in the\ncommitted ledger; refusing anything else is what stops a typo becoming a\nthird job nobody can group by.",
+      "enum": [
+        "work",
+        "visuals"
+      ],
+      "title": "ServerJob",
+      "type": "string"
+    }
+  },
   "$id": "host-fingerprint-row.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
@@ -122,9 +133,9 @@
       "type": "string"
     },
     "job": {
-      "description": "The workflow job that drew this machine.",
-      "title": "Job",
-      "type": "string"
+      "$ref": "#/$defs/ServerJob",
+      "default": "work",
+      "description": "The workflow job that drew this machine."
     },
     "l3_cache_bytes": {
       "anyOf": [
@@ -314,7 +325,6 @@
   "required": [
     "date",
     "run_id",
-    "job",
     "shard",
     "fingerprint",
     "measured_at"

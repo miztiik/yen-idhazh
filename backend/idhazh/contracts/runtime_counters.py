@@ -72,6 +72,7 @@ from __future__ import annotations
 
 import re
 from datetime import UTC, datetime
+from enum import StrEnum
 from typing import Annotated, Any, ClassVar, Final, Self
 
 from pydantic import Field, StringConstraints, model_validator
@@ -107,8 +108,24 @@ CpuModel = Annotated[str, _CPU_MODEL, fits_its_column(_CPU_MODEL, absent=UNPRINT
 
 #: The workflow job that wrote a row. Lowercase, because it is the job's own id
 #: in `.github/workflows/digest.yml` rather than a display name - a display name
-#: would drift from the thing it is supposed to identify.
+#: would drift from the thing it is supposed to identify. Kept as the shape the
+#: pattern describes, for a reader of the schema; `ServerJob` below is what the
+#: column actually accepts.
 JobName = Annotated[str, StringConstraints(pattern=JOB_NAME_PATTERN, max_length=40)]
+
+class ServerJob(StrEnum):
+    """Which workflow job produced a row.
+
+    Ours to name, so it is a closed set. Every other identifier on a host row is
+    a string the machine chose and cannot be one - see
+    `docs/reference/host-metrics.md`. Both values here already sit in the
+    committed ledger; refusing anything else is what stops a typo becoming a
+    third job nobody can group by.
+    """
+
+    WORK = "work"
+    VISUALS = "visuals"
+
 
 #: The default, and it is a reading rather than a guess: until 2026-09-12 exactly
 #: one step in the repository ran `idhazh counters`, and it is in the `work` job,
@@ -117,7 +134,7 @@ JobName = Annotated[str, StringConstraints(pattern=JOB_NAME_PATTERN, max_length=
 #: (`CLAUDE.md` section 11) instead of inventing a value for rows nobody can go
 #: back and ask. The property is what the default rests on; the count moves every
 #: run.
-WORK_JOB: Final = "work"
+WORK_JOB: Final = ServerJob.WORK
 
 #: The Prometheus series each field is read from, on llama.cpp `b10598`. The
 #: names are the wire format and the field names are ours, so a llama.cpp rename
@@ -384,7 +401,7 @@ class RuntimeCountersRow(Contract):
         ),
     )
 
-    job: JobName = Field(
+    job: ServerJob = Field(
         default=WORK_JOB,
         description=(
             "The workflow job that wrote this row. Two jobs stand a model server up and "
