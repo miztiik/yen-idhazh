@@ -737,7 +737,10 @@ def render_dossier(readings: BenchReadings) -> str:
         ),
         MEMORY_SECTION: (
             f"Sampled once a second across {context['server_repeats']} repeats on "
-            f"{context['runner']}, against the 16 GB the runner has. What this does NOT "
+            f"{context['runner']}, {context.get('server_cpu', 'an unrecorded processor')}, "
+            "against the 16 GB the runner has. **That processor is not the one above**: "
+            "the server case is its own job and the platform places each job separately. "
+            "What this does NOT "
             "split is anonymous from file-backed pages, so it cannot say how much of the "
             "peak a second process would have to compete for. `Rss_Anon` and `Rss_File` "
             "from `/proc/<pid>/smaps_rollup`, sampled by the same thread, would settle "
@@ -749,7 +752,8 @@ def render_dossier(readings: BenchReadings) -> str:
         ),
         ITEM_SECTION: (
             f"{context['corpus']}, {context['server_repeats']} repeats, on "
-            f"{context['runner']}. There is no 95th percentile here: five articles cannot "
+            f"{context['runner']}, {context.get('server_cpu', 'an unrecorded processor')}. "
+            "There is no 95th percentile here: five articles cannot "
             "carry one. The published ledger over a real day is what gives that number."
         ),
     }

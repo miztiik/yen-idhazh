@@ -107,6 +107,13 @@ def watched_flags(text: str | None) -> str:
     return " ".join(flag for flag in WATCHED_FLAGS if flag in present)
 
 
+def host_cpu_model(text: str | None = None) -> str | None:
+    """This host's `model name`, for a caller that wants the label and nothing else."""
+    raw = _text(CPUINFO) if text is None else text
+    fields, _ = _cpuinfo_fields(raw or "")
+    return fields.get("model name") or None
+
+
 def cache_bytes(level: int = 3, root: Path | None = None) -> int | None:
     """One cache level in bytes, from the kernel rather than from a product page."""
     base = CACHE_ROOT if root is None else root

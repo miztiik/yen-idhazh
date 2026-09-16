@@ -25,6 +25,7 @@ from idhazh import config
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.llm.server import server_argv
+from idhazh.telemetry import silicon
 from utilities import sweep_verdict
 
 ROOT = Path("backend/var/runtime-sweep")
@@ -399,6 +400,10 @@ def sweep(args: argparse.Namespace) -> int:
     summary = {
         "measured_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "candidate": candidate,
+        # The machine THIS job drew. `llama-bench` runs in a different job and the
+        # platform places each separately, so the processor beside a prefill rate
+        # is not the processor beside these wall-clock figures.
+        "cpu": silicon.host_cpu_model() or "unrecorded",
         "repeats": args.repeats,
         # What the timing was actually taken over. It is not `repeats` whenever
         # a page moved mid-job, and a reader who assumed it was would be reading

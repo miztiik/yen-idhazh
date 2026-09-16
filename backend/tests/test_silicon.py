@@ -178,6 +178,12 @@ def test_uptime_is_the_first_field_and_a_missing_file_is_not_a_zero() -> None:
     assert silicon.boot_seconds("") is None
 
 
+def test_the_bench_can_ask_for_the_model_name_on_its_own() -> None:
+    """The server case records which machine it drew, so a dossier can name it."""
+    assert silicon.host_cpu_model(CPUINFO_MILAN) == "AMD EPYC 7763 64-Core Processor"
+    assert silicon.host_cpu_model("") is None
+
+
 def test_the_stage_writes_one_row_a_job_into_the_day_file(tmp_path: Path) -> None:
     """The whole point: a reading somebody takes next month can find the machine."""
     settings = config.load()
