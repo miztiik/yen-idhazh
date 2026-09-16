@@ -190,6 +190,33 @@ class UiConfig(Model):
             "arrival is a catch-up and three are yesterday's page."
         ),
     )
+    lead_rank_weight: float = Field(
+        default=1.0,
+        ge=0.0,
+        description=(
+            "How much of a lead's score is the number the planning step gave the story. "
+            "1.0 ships, which is what the block scored before it was a weighted sum at "
+            "all, so the composite landed changing no published block. It is the only "
+            "term measured over every story the day carries: every other signal here "
+            "fires on a minority of them, so a weight on this is what stops the block "
+            "being chosen by whichever minority signal happened to fire."
+        ),
+    )
+    lead_also_covered_weight: float = Field(
+        default=0.0,
+        ge=0.0,
+        description=(
+            "What each OTHER source that carried the same story adds to a lead's score. "
+            "0.0 ships, so the term is computed and logged and carries no weight yet: "
+            "at today's recall the count is 0 on most genuinely multi-source stories, "
+            "so a weight on it would reward the pass for finding a group rather than "
+            "the story for being carried. Turn it on when the same-story pass has a "
+            "measured recall the owner accepts - that measurement is the labelling "
+            "study, and until it exists this knob has no number a person could defend. "
+            "Removal condition (Guardrail #6): it stops being a placeholder the day "
+            "that study sets it above zero."
+        ),
+    )
     topic_pills_max: int = Field(
         default=5,
         ge=1,

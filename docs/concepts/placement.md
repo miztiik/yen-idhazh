@@ -96,11 +96,14 @@ would move a story a reader had already read.
 **Stage 1 knows nothing about the article.** It has the feed, the link, the
 headline and the time of publication, and nothing else - which is why a re-run
 over the same feeds produces the same list. Stage 2 runs once the day is
-finished, adds one step for a subject several sources named, and multiplies the
-result by what the story's age is worth at that hour, to choose the block at the
-top of the page.
+finished and scores a weighted sum - the stage 1 number, a subject several
+sources named, and how many other sources carried the story - then multiplies
+the result by what the story's age is worth at that hour, to choose the block at
+the top of the page.
 **Stage 2 is the only part of the order that reads a clock**, and
-`backend/idhazh/placement.py` carries the reason beside the code.
+`backend/idhazh/placement.py` carries the reason beside the code. The terms and
+what each is worth are in
+[layout.md](../architecture/publishing/layout.md#the-weighted-score-that-chooses-the-leading-block).
 **The exact formula is
 [discovery.md](../architecture/sources/discovery.md#ranking-is-arithmetic-not-judgement),
 in the code block it already carries, and it is not repeated here.** That page
@@ -129,6 +132,8 @@ quietly going stale.
 | The days of record that reliability reads | `collect.reliability_window_days` | 30 |
 | A subject several sources named, in stage 2 | `ui.lead_shared_subject_weight` | 0.2 |
 | Sources that have to name it before it counts | `ui.lead_cluster_floor` | 3 |
+| How much of a lead's score the stage 1 number is | `ui.lead_rank_weight` | 1.0 |
+| What each other source carrying the story adds | `ui.lead_also_covered_weight` | 0.0 |
 | Hours a story keeps its whole number before age counts, in stage 2 | `placement.freshness_offset_hours` | 6.0 |
 | Hours past that at which it is worth the share below | `placement.freshness_scale_hours` | 24.0 |
 | What it is worth by then, as a share of what it was | `placement.freshness_decay_at_scale` | 0.5 |
