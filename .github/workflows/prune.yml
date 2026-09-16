@@ -62,42 +62,14 @@ jobs:
         with:
           fetch-depth: 1
 
-      # Standard library only, so the cheap path needs no Python setup and no
-      # install. It READS two committed files and writes nothing; the stamp that
-      # closes the loop is written by the contract, further down.
+      # Reads two committed files and writes nothing. The stamp that closes the
+      # loop is written by the contract, further down.
       - id: due
         env:
           FORCE: ${{ inputs.force }}
         run: |
           set -euo pipefail
-          python3 - <<'PY' >> "$GITHUB_OUTPUT"
-          import json
-          import os
-          from datetime import UTC, date, datetime, timedelta
-
-          finetune = json.load(open("config/idhazh.json", encoding="utf-8"))["finetune"]
-          every = finetune["prune_every_days"]
-          keep = finetune["prune_keep_days"]
-          for name, value in (("prune_every_days", every), ("prune_keep_days", keep)):
-              if type(value) is not int or value < 1:
-                  raise SystemExit(f"finetune.{name} must be a whole number of days, 1 or more")
-
-          today = datetime.now(tz=UTC).date()
-          try:
-              with open("corpus/corpus.meta.json", encoding="utf-8") as handle:
-                  last = json.load(handle).get("pruned_date")
-          except FileNotFoundError:
-              last = None
-          # Never pruned is always due. Without the stamp this check fires again
-          # tomorrow and every day after that, which is a force-push a day.
-          elapsed = None if last is None else (today - date.fromisoformat(last)).days
-          due = os.environ.get("FORCE") == "true" or elapsed is None or elapsed >= every
-          print(f"due={'true' if due else 'false'}")
-          print(f"keep_days={keep}")
-          print(f"today={today.isoformat()}")
-          print(f"boundary={(today - timedelta(days=keep)).isoformat()}")
-          print(f"last_prune={last or 'never'}")
-          PY
+          python3 backend/utilities/prune_due.py | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
       - name: Not due
         if: steps.due.outputs.due != 'true'
