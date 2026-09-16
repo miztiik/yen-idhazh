@@ -45,9 +45,7 @@ from idhazh.month_partition import month_files, oldest_month_kept
 CONSOLE_DIRNAME: Final = "console"
 BAND_FILENAME: Final = "band.json"
 
-#: The six month series, each the directory name under `frontend/public/`.
-SCORES_DIRNAME: Final = "scores"
-FEED_HEALTH_DIRNAME: Final = "feed-health"
+#: The four month series, each the directory name under `frontend/public/`.
 RUN_DAYS_DIRNAME: Final = "run-days"
 DAY_METRICS_DIRNAME: Final = "day-metrics"
 MACHINE_DIRNAME: Final = "machine"
@@ -57,9 +55,9 @@ SPAN_ROLLUP_DIRNAME: Final = "span-rollup"
 #: telemetry projection is not here: it predates this module and
 #: `public_telemetry` owns its own path so that the fold which deletes a shard
 #: and the publish which writes one cannot spell `<month>.csv` two ways.
+#: `scores` and `feed-health` were two more until 2026-09-16, when the trees
+#: they named were deleted with the projections that wrote them.
 MONTH_SERIES: Final[tuple[tuple[str, str], ...]] = (
-    (SCORES_DIRNAME, ".csv"),
-    (FEED_HEALTH_DIRNAME, ".csv"),
     (RUN_DAYS_DIRNAME, ".json"),
     (DAY_METRICS_DIRNAME, ".json"),
     (MACHINE_DIRNAME, ".csv"),
@@ -72,8 +70,6 @@ MONTH_SERIES: Final[tuple[tuple[str, str], ...]] = (
 #: takes every sibling ledger staged in the same call with it.
 PUBLISHED_ROOTS: Final[tuple[str, ...]] = (
     CONSOLE_DIRNAME,
-    SCORES_DIRNAME,
-    FEED_HEALTH_DIRNAME,
     RUN_DAYS_DIRNAME,
     DAY_METRICS_DIRNAME,
     MACHINE_DIRNAME,
@@ -84,12 +80,10 @@ __all__ = [
     "BAND_FILENAME",
     "CONSOLE_DIRNAME",
     "DAY_METRICS_DIRNAME",
-    "FEED_HEALTH_DIRNAME",
     "MACHINE_DIRNAME",
     "MONTH_SERIES",
     "PUBLISHED_ROOTS",
     "RUN_DAYS_DIRNAME",
-    "SCORES_DIRNAME",
     "SPAN_ROLLUP_DIRNAME",
     "console_root",
     "encode_csv",

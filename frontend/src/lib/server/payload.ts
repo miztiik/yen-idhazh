@@ -480,9 +480,8 @@ export function readCsv(path: string): CsvTable {
  * oldest first and hands back one table. Pass `-1` to read every day, and say
  * beside the call why (`docs/concepts/growing-reads.md`).
  *
- * The mirror under `frontend/public/scores/` stays monthly and this is not it -
- * a `state/` store files by what a run writes, a published mirror by what a
- * browser fetches (`docs/concepts/partitions.md`).
+ * There is no published mirror of this ledger. `frontend/public/scores/` was one
+ * until 2026-09-16 and no route ever fetched it, so it went with its producer.
  */
 export function evalRows(days: number = LEDGER_WINDOW_DAYS): CsvTable {
 	return readDayShards(join(STATE_ROOT, 'scores'), days);
