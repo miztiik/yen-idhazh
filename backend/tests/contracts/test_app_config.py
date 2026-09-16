@@ -799,6 +799,14 @@ def test_the_item_health_census_is_not_switchable() -> None:
     the console prints keeps its denominator whether tracing is on or off - which
     is not true of any of the other three in the same way, and is why it is
     allowed to be a switch at all.
+
+    `host_fingerprint` is the fifth, added 2026-09-16, and it makes the same
+    argument. It records what silicon a job drew; nothing divides by it, no
+    published page reads it, and every rate keeps its denominator with it off.
+    What it costs to switch off is comparability rather than a measurement: a
+    throughput figure taken with no fingerprint beside it cannot be set against
+    another run's, because the machine moved 3.7x between draws and nothing says
+    which one produced the number.
     """
     switches = {
         name
@@ -810,6 +818,7 @@ def test_the_item_health_census_is_not_switchable() -> None:
         "telemetry_publish",
         "runtime_counters_scrape",
         "tracing_enabled",
+        "host_fingerprint",
     }
     assert "census" in (ObservabilityConfig.__doc__ or "")
 
