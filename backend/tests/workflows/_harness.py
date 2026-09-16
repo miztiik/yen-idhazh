@@ -615,6 +615,11 @@ COMMIT_STAGED_PATHS: Final = {
     # writes it, and until that day nothing staged it, so nine days of folded
     # spans were measured and then thrown away with the runner. `state/traces`
     # is the raw evidence the fold is taken from and was missed the same way.
+    #
+    # `state/host-fingerprint` joined on 2026-09-16 and had been missed since the
+    # probe shipped: it is written by its own subcommand rather than from inside
+    # `stage_work`, so the guard that reads the stage's own ledger calls never
+    # saw it, and `git ls-files` found not one committed fingerprint.
     "work": [
         "state/item-health",
         "state/scores",
@@ -622,6 +627,7 @@ COMMIT_STAGED_PATHS: Final = {
         "state/runtime-counters.csv",
         "state/span-rollup",
         "state/traces",
+        "state/host-fingerprint",
     ],
     "assemble": [
         "frontend/public/digest",
@@ -822,6 +828,7 @@ COMMIT_REFRESH_PATHS: Final = {
         "state/runtime-counters.csv",
         "state/span-rollup",
         "state/traces",
+        "state/host-fingerprint",
     ],
 }
 

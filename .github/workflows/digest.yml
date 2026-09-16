@@ -763,6 +763,16 @@ jobs:
       # trace file is named for one shard of one run, so two shards never write one
       # path and no merge driver is needed - unlike the four ledgers above, which
       # is why `merge=union` covers `state/**/*.csv` and not this.
+      #
+      # `state/host-fingerprint` is the third of that kind and the oldest. The
+      # step `What machine this job drew` above writes one row a job into
+      # `state/host-fingerprint/<YYYY>/<MM>/<DD>.csv` before the model server
+      # starts, and no list has ever named the path - so `git ls-files` found not
+      # one fingerprint this project has taken. It is written by its own
+      # subcommand rather than inside `stage_work`, which is why the guard that
+      # reads the stage's own ledger calls never saw it. The day file is settled
+      # by the same `--date` pass: the key opens with `date`, so a repeat can only
+      # be in the day file this run wrote.
       - name: Commit what this shard measured
         if: always()
         continue-on-error: true
@@ -775,7 +785,7 @@ jobs:
         run: >-
           bash .github/scripts/commit-and-push.sh
           state/item-health state/scores state/score-index state/runtime-counters.csv
-          state/span-rollup state/traces
+          state/span-rollup state/traces state/host-fingerprint
 
       - name: Prompt cache log summary
         if: always()
@@ -1149,6 +1159,7 @@ jobs:
             state/runtime-counters.csv
             state/span-rollup
             state/traces
+            state/host-fingerprint
           REGENERATE_COMMAND: >-
             python -m idhazh assemble --date ${{ needs.plan.outputs.date }}
             --commit ${{ github.sha }} --runner ubuntu-latest

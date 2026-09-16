@@ -254,6 +254,7 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
         "state/score-index": score_writer.index_relpath(SUBSTITUTED_DATE),
         "state/runtime-counters.csv": "state/runtime-counters.csv",
         "state/span-rollup": ledger.span_rollup_relpath(SUBSTITUTED_DATE[:7]),
+        "state/host-fingerprint": ledger.host_fingerprint_relpath(SUBSTITUTED_DATE),
     }
     per_shard = {
         "state/traces": telemetry.committed_trace_relpath(f"{SUBSTITUTED_DATE}-1", 1),
@@ -328,24 +329,65 @@ def test_every_ledger_the_work_stage_appends_to_is_staged_by_the_work_job() -> N
         )
 
 
-def test_the_span_rollup_ships_with_a_header_so_the_commit_step_can_name_it() -> None:
+#: Where each ledger the fingerprint stage appends to lands, as the staged path
+#: names it. It is a separate list because the probe is its own subcommand:
+#: `silicon.stage_fingerprint` runs from `cli.py` in a step of its own, before
+#: the model server starts, so nothing in `work.py` names it and the guard above
+#: could never have seen it. Every fingerprint taken before 2026-09-16 was
+#: deleted with its runner for exactly that reason.
+FINGERPRINT_STAGE_APPENDS: Final = {
+    "append_host_fingerprint": "state/host-fingerprint",
+}
+
+
+def test_every_ledger_the_fingerprint_stage_appends_to_is_staged_by_the_work_job() -> None:
+    """A machine nobody recorded cannot be counted next month.
+
+    The probe runs early on purpose - the bandwidth reading wants an idle host -
+    so it sits in a step of its own rather than inside `stage_work`, and the
+    guard above reads `work.py`. That is the whole reason this one exists: two
+    writers, two source files, one staged list, and a shape that already failed
+    silently once.
+
+    Read out of the stage's own source rather than spelled here, so a second
+    ledger added to the probe fails this instead of dying with the runner.
+    """
+    source = read_text(REPO_ROOT / "backend" / "idhazh" / "telemetry" / "silicon.py")
+    called = set(re.findall(r"\bledger\.(append_[a-z_]+)\(", source))
+
+    assert called, "the fingerprint stage writes no ledger - has the call moved?"
+    assert called <= set(FINGERPRINT_STAGE_APPENDS), (
+        f"the fingerprint stage writes {sorted(called - set(FINGERPRINT_STAGE_APPENDS))}, "
+        "which this test cannot say a staged path for. Add it to "
+        "FINGERPRINT_STAGE_APPENDS, and to the work job's commit step."
+    )
+    staged = set(COMMIT_STAGED_PATHS["work"])
+    for helper in sorted(called):
+        assert FINGERPRINT_STAGE_APPENDS[helper] in staged, (
+            f"stage_fingerprint calls {helper} but the work job never stages "
+            f"{FINGERPRINT_STAGE_APPENDS[helper]}, so the rows die with the runner"
+        )
+
+
+def test_every_path_the_work_job_stages_is_in_a_fresh_checkout() -> None:
     """`git add` on a path that is not there aborts the whole step.
 
-    The commit step runs under `set -euo pipefail` and stages six paths in one
-    call, so a missing `state/span-rollup` or `state/traces` would take
-    item-health, the scores and the runtime counters down with it on every fresh
-    clone. The same reason `state/feed-retirements.csv` and
+    The commit step runs under `set -euo pipefail` and stages every path in one
+    call, so one absent path takes all the others down with it on a fresh clone.
+    The same reason `state/feed-retirements.csv` and
     `state/counterfactual-scores/` ship with a header and no rows.
 
-    The trace directory ships a keep-file rather than a sample trace: a trace is
+    Asked of the staged list rather than of a list written again here, so a path
+    added to the commit step without a seed fails this instead of failing a
+    scheduled run - which is how `state/host-fingerprint` would have landed as a
+    directory nothing had ever committed.
+
+    `state/traces` ships a keep-file rather than a sample trace: a trace is
     evidence with a seven-day window, so a committed sample would be the one file
     in it the prune could never justify keeping.
     """
-    for relative in (
-        f"{ledger.STATE_DIRNAME}/{ledger.SPAN_ROLLUP_DIRNAME}",
-        f"{ledger.STATE_DIRNAME}/{telemetry.TRACES_DIRNAME}",
-    ):
-        assert (REPO_ROOT / relative).is_dir(), f"{relative} must be in a fresh checkout"
+    for relative in COMMIT_STAGED_PATHS["work"]:
+        assert (REPO_ROOT / relative).exists(), f"{relative} must be in a fresh checkout"
         committed = subprocess.run(
             ["git", "ls-files", relative],
             cwd=REPO_ROOT,
