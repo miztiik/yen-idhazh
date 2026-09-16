@@ -267,10 +267,31 @@ is `run.shard_size` items, five today, so a shard carries about 15.6 KB of it -
 none of it is published: `backend/var/` is run scratch, and this ledger under
 `state/` is still the durable copy.
 
-**Nothing reads it yet.** The census is still built the way it was, and making
-`stages.record` and `stages.assemble` prefer this file is the next change rather
-than this one. Until then the file is the evidence a reader can open when a
+**The census reads it, and prefers it.** `telemetry.census_row` is the door both
+writers go through. Where this file exists the committed row IS this row, cell
+for cell; where it does not, `telemetry.classify_item` rebuilds what the article
+and the summary payloads can say. Preferring the file took the fixture day from
+40 filled columns to 71, and the three cells it does not cover are named in the
+next paragraph. The file is also still the evidence a reader can open when a
 committed row and a shard's log disagree.
+
+**Three cells are laid over it rather than taken from it**: `span_integrity`,
+`elements_found` and `element_class`. The work stage does not measure them - the
+element count is taken after the summary is accepted, by the stage that is about
+to publish - so the census supplies its own reading for those three and takes
+everything else from the shard. The list is read off `ExtractionHealth._fields`
+rather than written out, so a fourth cell joins it the day it is added.
+
+**What preferring it costs.** A committed row grew by 206.8 bytes on the fixture
+day (Windows 11, Python 3.14.2, 2026-09-16; five items, 3,495 to 4,529 bytes over
+the five). Against a published day's `state/` - 480 item-health rows at the
+median, 18.7 percent of the 28.2 MB tree measured on 2026-09-16 - that is
+8.1 percent more `state/` a day, and the fixture cannot reach 18 of the columns
+a real run fills, so the production figure is an estimate of 15 to 17 percent.
+The estimate is what a per-cell width from `state/runtime-counters.csv` and the
+published `rank_score` widths give; a measurement on the first real day replaces
+it. Plan 32's decision 3 priced this at 3.2 percent before the columns were
+counted, which was about three times low.
 
 ## Which worker wrote the row
 
@@ -288,12 +309,16 @@ run. The worst was run `2026-08-27-2`, where eight shards ranged from 9.75 to
 disappears, and until this column existed pooling was the only read available -
 so a slow day and a slow machine looked the same.
 
-Only a worker writes it. `stages.record.stage_record` stamps its own number on every row
-it files, which is the one moment the number is known. `stages.assemble.stage_assemble` runs
-once for the whole day, so the census rows it adds - the items no worker reached
-- leave the cell empty rather than naming a machine that may never have started.
-An empty cell means no worker claimed the row, and it is also what every row
-written before 2026-08-30 holds. **It is never shard 0.**
+Only a worker knows it. `stages.work` reads the number once a shard and notes it
+on every item it seals, so the cell travels with the row in
+`<item_id>.health.json` and reaches the ledger through whichever writer files it
+first. `stages.record.stage_record` runs per shard and
+`stages.assemble.stage_assemble` runs once for the whole day, and since
+2026-09-16 that difference no longer shows in this column: both prefer the
+sealed row, so assemble's rows name the machine that ran the item rather than
+leaving the cell empty. An empty cell means no worker sealed a row for the item
+- it was planned and never reached - and it is also what every row written
+before 2026-08-30 holds. **It is never shard 0.**
 
 `shard` is not in the published projection
 ([../publishing/telemetry-series.md](../publishing/telemetry-series.md)). Which

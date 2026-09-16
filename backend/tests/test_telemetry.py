@@ -10,14 +10,16 @@ import csv
 import json
 import logging
 import re
+from collections.abc import Mapping
 from dataclasses import replace
 from datetime import date
+from enum import Enum
 from pathlib import Path
-from typing import Final
+from typing import Annotated, Any, Final, get_args, get_origin
 
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
-from pydantic import TypeAdapter, ValidationError
+from pydantic import StringConstraints, TypeAdapter, ValidationError
 
 from idhazh import config, extract, ledger, summarize, telemetry
 from idhazh.contracts.article import Article, ArticleStatus
@@ -26,6 +28,7 @@ from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 from idhazh.contracts.item_health import (
     UNSPECIFIED,
+    ElementClass,
     FailureCode,
     ItemHealthDetail,
     ItemHealthRow,
@@ -35,9 +38,11 @@ from idhazh.contracts.item_health import (
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.summary import Summary
+from idhazh.elements import ExtractionHealth
 from idhazh.fetch import BLOCKED_REASONS, FetchResult, refused
 from idhazh.llm.server import Completion, parse_completion
 from idhazh.stages.common import _log_no_reply
+from idhazh.telemetry.census import EXTRACTION_CELLS
 
 
 def plan() -> RunPlan:
@@ -499,6 +504,195 @@ def test_a_summarize_failure_carries_stage_timings() -> None:
     assert row.stage is ItemStage.SUMMARIZE
     assert row.outcome is ItemOutcome.FAILED
     assert (row.fetch_ms, row.extract_ms, row.summarize_ms) == (321, 54, 987)
+
+
+# --- The census door, and the ratchet on it --------------------------------
+#
+# `census_row` prefers the row a shard sealed. The tests below are the guard on
+# that preference: one that the door carries every cell the shard recorded, and
+# one that names, column by column, what nothing writes yet.
+
+#: A value for each string column the row constrains by pattern. Keyed on the
+#: pattern rather than the column, so a column that joins an existing family is
+#: filled the day it lands, and a column in a NEW family raises here by name
+#: instead of arriving empty and unnoticed.
+_BY_PATTERN: Final[Mapping[str, str]] = {
+    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$": "2026-08-21T06:00:00Z",
+    r"^[a-z0-9][a-z0-9_.+-]*$": "fixture",
+    r"^[ -~]+$": "a value this column accepts",
+}
+
+#: A value for each plain column, by its own declared type.
+_BY_TYPE: Final[Mapping[type, object]] = {bool: True, int: 1, float: 1.0, str: "fixture"}
+
+#: Every column no production writer fills today, and the reason each one is
+#: empty. A column leaves this map in the commit that starts filling it; a
+#: column that arrives with no writer has to be argued for here rather than
+#: landing empty and unread. The ratchet below asserts this map exactly, so it
+#: cannot drift in either direction.
+UNFILLED: Final[Mapping[str, str]] = {
+    "slot_id": "the server's own prefix-cache slot, which llama-server does not report per call",
+    "kv_tokens_at_start": "the cache depth a call began at, which no response field carries",
+    "prefix_shared_with_previous": "whether two calls shared a prefix, inferred from the two above",
+}
+
+
+def _a_cell(name: str, annotation: Any) -> Any:
+    """A value this column accepts, read off the column's own declared type.
+
+    Nothing here is keyed on a column name, so a column added to the contract is
+    filled by whichever branch its type lands in. A type no branch knows raises
+    and names the column, which is the whole point.
+    """
+    inner = next((arg for arg in get_args(annotation) if arg is not type(None)), annotation)
+    if get_origin(inner) is Annotated:
+        base, *metadata = get_args(inner)
+        constraint = next((meta for meta in metadata if isinstance(meta, StringConstraints)), None)
+        pattern = constraint.pattern if constraint is not None else None
+        if pattern is not None:
+            if not isinstance(pattern, str) or pattern not in _BY_PATTERN:
+                raise AssertionError(f"{name} constrains its text a way this test cannot fill")
+            return _BY_PATTERN[pattern]
+    else:
+        base = inner
+    if isinstance(base, type) and issubclass(base, Enum):
+        return next(iter(base))
+    if base not in _BY_TYPE:
+        raise AssertionError(f"{name} is typed a way this test cannot fill: {base}")
+    return _BY_TYPE[base]
+
+
+def a_recorded_row(**overrides: Any) -> ItemHealthRow:
+    """The row a shard seals for an item, with every column it can carry filled.
+
+    The identity cells come from the run-plan fixture so they agree with each
+    other. The state cells are pinned because the contract pairs them: a row
+    carries `http_status` only where it stopped at the fetch, and a failure code
+    only where the stage it names can fail that way. The two call slots are
+    filled whole with the flat cells equal to their sum, which is what
+    `_a_recorded_call_is_recorded_whole` asks for. Everything else is filled
+    from its own declared type by `_a_cell`.
+    """
+    planned = item()
+    cells: dict[str, Any] = {
+        name: _a_cell(name, field.annotation)
+        for name, field in ItemHealthRow.model_fields.items()
+        if name not in UNFILLED
+    }
+    cells.update(
+        version=ItemHealthRow.schema_version(),
+        date=plan().date,
+        run_id="2026-08-21-1",
+        item_id=planned.item_id,
+        url_key=planned.url_key,
+        canonical_url=planned.canonical_url,
+        vertical=planned.vertical,
+        source_id=planned.source_id,
+        stage=ItemStage.FETCH,
+        outcome=ItemOutcome.FAILED,
+        code=FailureCode.HTTP_CLIENT_ERROR,
+        http_status=404,
+        model_calls=2,
+        prefill_ms=2,
+        decode_ms=2,
+        input_tokens=2,
+        output_tokens=2,
+        cached_tokens=2,
+    )
+    cells.update(overrides)
+    return ItemHealthRow.model_validate(cells)
+
+
+def test_no_census_column_is_silently_unowned() -> None:
+    """The ratchet: every column is filled on the way through, or named as empty.
+
+    It cannot settle that a written value is the RIGHT value - only that no
+    column is silently unowned. A cell that is present and wrong passes here and
+    is caught by the test that owns the quantity.
+
+    Two ways to fail, which is why the assertion is an exact equality. A column
+    the shard records that the census drops fails on the left: that was the
+    defect this row closes, when the census rebuilt from two payloads that
+    between them could say 43 of 113 things. A column nothing writes and nobody
+    declared fails on the right, naming itself.
+    """
+    recorded = a_recorded_row()
+
+    carried = telemetry.census_row(
+        recorded=recorded,
+        planned=item(),
+        article=article(),
+        summary=summary(),
+        date=plan().date,
+        run_id="2026-08-21-1",
+        extraction=ExtractionHealth(
+            span_integrity=True, elements_found=3, element_class=ElementClass.CHARTABLE
+        ),
+    )
+
+    empty = {name for name in ItemHealthRow.csv_columns() if getattr(carried, name) is None}
+    assert empty == set(UNFILLED)
+    assert set(UNFILLED) <= set(ItemHealthRow.csv_columns())
+    assert set(UNFILLED).isdisjoint(EXTRACTION_CELLS)
+
+
+def test_the_census_prefers_the_recorded_row_and_overlays_only_the_extraction_cells() -> None:
+    """The shard's row wins cell for cell, except the three the census measures.
+
+    The extraction cells are the one thing the work stage does not seal - it
+    counts elements after the summary is written - so they are laid over the
+    recorded row rather than derived a second time.
+    """
+    recorded = a_recorded_row(elements_found=3, element_class=ElementClass.CHARTABLE)
+    overlay = ExtractionHealth(span_integrity=False, elements_found=None, element_class=None)
+
+    carried = telemetry.census_row(
+        recorded=recorded,
+        planned=item(),
+        article=article(),
+        summary=summary(),
+        date=plan().date,
+        run_id="2026-08-21-1",
+        extraction=overlay,
+    )
+
+    moved = {
+        name
+        for name in ItemHealthRow.csv_columns()
+        if getattr(carried, name) != getattr(recorded, name)
+    }
+    assert moved == set(EXTRACTION_CELLS)
+    assert (carried.span_integrity, carried.elements_found, carried.element_class) == (
+        False,
+        None,
+        None,
+    )
+
+
+def test_an_item_whose_shard_sealed_nothing_is_rebuilt_from_its_payloads() -> None:
+    """The fallback stays: an item whose worker died still needs a census line.
+
+    Nothing wrote a row for it, so there is nothing to prefer, and the row the
+    census builds says what the two payloads can say and no more.
+    """
+    rebuilt = telemetry.census_row(
+        recorded=None,
+        planned=item(),
+        article=article(),
+        summary=summary(),
+        date=plan().date,
+        run_id="2026-08-21-1",
+    )
+
+    assert rebuilt == telemetry.classify_item(
+        planned=item(),
+        article=article(),
+        summary=summary(),
+        date=plan().date,
+        run_id="2026-08-21-1",
+    )
+    assert rebuilt.stage is ItemStage.PUBLISH
+    assert rebuilt.cpu_model is None
 
 
 def test_a_sixteen_column_item_health_row_reads_as_unmeasured() -> None:
