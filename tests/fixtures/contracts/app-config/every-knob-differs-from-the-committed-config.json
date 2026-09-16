@@ -5,7 +5,8 @@
       "cosine_weight": 0.8,
       "floor_min": 0.91,
       "key_point_weight": 0.2
-    }
+    },
+    "same_story_window_hours": 18.0
   },
   "assist": {
     "eval_corpus_through": "2026-08-26",

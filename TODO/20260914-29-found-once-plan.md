@@ -160,7 +160,7 @@ which is the same family.
 | 6 | Retire the four hosts that serve one page | - | B | DONE | - | #794 | p29-r6b |
 | 7 | One outlet never runs the identical piece twice | - | B | DONE | - | - | p29-r7 |
 | 8 | A ceiling on the day, beside the ceiling on a run | - | B | DONE | - | - | p29-r8 |
-| 9 | The same story is one story for 36 hours, not one day | - | C | PENDING | - | - | - |
+| 9 | The same story is one story for 36 hours, not one day | - | C | DONE | - | - | p29-r9 |
 | 10 | A story that has been running ranks below one that broke today | - | C | DONE | - | - | p29-r10 |
 | 11 | The lead is a weighted score, and the page says how | 10 | C | DONE | - | - | p29-r11 |
 | 12 | Label the sheet, then set the weights | - | C | PENDING | - | - | - |
