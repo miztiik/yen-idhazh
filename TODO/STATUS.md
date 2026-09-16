@@ -36,7 +36,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 11 |
 | [20260914-29-found-once-plan.md](20260914-29-found-once-plan.md) | 17 | 5 | 12 | 9 |
-| [20260915-32-telemetry-package-plan.md](20260915-32-telemetry-package-plan.md) | 16 | 1 | 15 | 3 |
+| [20260915-32-telemetry-package-plan.md](20260915-32-telemetry-package-plan.md) | 16 | 2 | 14 | 3 |
 
 ## In flight - 0
 
@@ -95,7 +95,7 @@ section 3 is where it is answered.
 | #2 | 32 | A | Where every one of the 113 columns comes from | - |
 | #3 | 32 | A | The package exists and re-exports | - |
 
-## Waiting on another row - 63
+## Waiting on another row - 62
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -150,8 +150,7 @@ section 3 is where it is answered.
 | #11 | 29 | - | The lead is a weighted score, and the page says how | 10 is PENDING |
 | #15 | 29 | - | The weights and the 0.88 floor | 12 is PENDING; 14 is PENDING |
 | #16 | 29 | - | Refuse boilerplate, on a week of evidence | 13 is PENDING |
-| #4 | 32 | B | The recorder moves in and returns a validated row | 3 is PENDING |
-| #5 | 32 | C | The work stage persists what it recorded | 1 is PENDING; 4 is PENDING |
+| #5 | 32 | C | The work stage persists what it recorded | 1 is PENDING |
 | #6 | 32 | D | The census prefers the persisted row | 5 is PENDING |
 | #7 | 32 | E | Six columns that are arithmetic over filled ones | 6 is PENDING |
 | #8 | 32 | E | The label call's own clock and both finish reasons | 6 is PENDING |
