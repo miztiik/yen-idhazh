@@ -16,9 +16,7 @@ from idhazh import (
     assemble,
     config,
     extract,
-    fingerprint,
     ledger,
-    machine,
     summarize,
     telemetry,
 )
@@ -60,7 +58,7 @@ from idhazh.stages.common import (
     shard_of,
 )
 from idhazh.stages.two_calls import two_calls_one_item
-from idhazh.telemetry import census
+from idhazh.telemetry import census, host
 from idhazh.telemetry.record import Flags, ItemRecorder, persist, shard_done
 
 
@@ -124,7 +122,13 @@ def _summarize_band_sort_key(work: _FetchedWorkItem, settings: config.Settings) 
     return band.min_source_words, work.original_index
 
 
-def _shard_cells(settings: config.Settings, *, shard: int, shard_item_count: int) -> dict[str, Any]:
+def _shard_cells(
+    settings: config.Settings,
+    *,
+    shard: int,
+    shard_item_count: int,
+    facts: host.HostFacts,
+) -> dict[str, Any]:
     """What was true of this shard before it read a single article.
 
     Read once and noted on every item, because the question these answer is
@@ -132,17 +136,19 @@ def _shard_cells(settings: config.Settings, *, shard: int, shard_item_count: int
     size and the output budget that item ran under, and a shard-grain ledger
     somewhere else makes them join two files to get it.
 
-    **Every one of them is config, so none of them is a measurement.** They are
-    the settings the run was given, which is exactly what a person comparing two
-    runs needs - the readings are the machine cells beside them.
+    **Every one of them is config except the two `facts` carries**, so none of
+    them is a measurement. They are the settings the run was given, which is
+    exactly what a person comparing two runs needs - the readings are the machine
+    cells beside them. The processor and the runner label come from the one
+    `host_facts` call this shard's counters row reads as well, so the two rows
+    cannot name two different machines.
     """
     model = settings.models.summarize
     inference = model.inference
     return {
         "shard": shard,
         "shard_item_count": shard_item_count,
-        "cpu_model": fingerprint.host_cpu() or None,
-        "runner_name": machine.runner_name(),
+        **facts.shard_cells(),
         "model_id": model.id,
         "model_quantisation": model.quantisation,
         "n_ctx_configured": inference.n_ctx,
@@ -340,8 +346,11 @@ def stage_work(
     # Read once per shard and noted on every item. The process table scan and
     # the CPU model read are each a few file opens; doing them per item would be
     # 80 scans for an answer that cannot change inside a shard.
-    server_pid = machine.llama_server_pid()
-    shard_cells = _shard_cells(settings, shard=shard, shard_item_count=len(mine))
+    server_pid = host.llama_server_pid()
+    shard_facts = host.host_facts()
+    shard_cells = _shard_cells(
+        settings, shard=shard, shard_item_count=len(mine), facts=shard_facts
+    )
     failures: dict[str, int] = {}
     finished: list[ItemHealthRow] = []
     ready: list[_FetchedWorkItem] = []
@@ -458,7 +467,7 @@ def stage_work(
         with (
             tracer.trace(_trace_id(plan.run_id, item)),
             tracer.span(telemetry.SpanName.ITEM) as item_span,
-            machine.Watch(
+            host.Watch(
                 interval_s=flags.waiting_heartbeat_seconds,
                 server_pid=server_pid,
                 on_tick=_heartbeat(recorder),
