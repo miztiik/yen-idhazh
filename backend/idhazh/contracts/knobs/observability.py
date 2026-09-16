@@ -176,6 +176,33 @@ class ObservabilityConfig(Model):
             "republishes the gap."
         ),
     )
+    host_fingerprint: bool = Field(
+        default=True,
+        description=(
+            "Whether a job records what silicon it drew - processor family, model, "
+            "stepping, instruction-set flags, cache, and the platform's own name for "
+            "the machine size - into state/host-fingerprint/<YYYY>/<MM>/<DD>.csv. "
+            "False writes no row, and every throughput number that run takes becomes "
+            "uncomparable with any other run's, because nothing says which machine "
+            "produced it. Retire it when the platform stops mixing processor "
+            "generations in one runner pool: a quarter of runs in which every job "
+            "reports the same family, model and flags, which would make the row a "
+            "constant and a constant is not a reading."
+        ),
+    )
+    host_fingerprint_bandwidth_mib: int = Field(
+        default=512,
+        ge=0,
+        description=(
+            "The buffer each side of the memory-bandwidth probe allocates, so the "
+            "probe holds twice this. Zero switches the probe off and leaves the "
+            "bandwidth cell empty; every other cell of the fingerprint still gets "
+            "written. The default beats the largest L3 this project has drawn, 480 "
+            "MiB, because a buffer that fits in cache measures cache and reads as a "
+            "memory figure four times too high. Raise it when a drawn machine "
+            "reports an L3 at or above this."
+        ),
+    )
     runtime_counters_scrape: bool = Field(
         default=True,
         description=(

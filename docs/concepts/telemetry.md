@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-16T12:00
 
 The structured-event vocabulary: the envelope every event carries, the event names that are emitted, the two shapes those names take, the span tree a developer can switch on, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, which is a project non-goal ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 0a).
 
@@ -322,6 +322,48 @@ absent on every GitHub-hosted runner this project has probed, so that cell is
 usually empty in CI and always empty on a developer machine - a fact about the
 instrument, not about the job. What one sample costs is in
 [measurements.md](../reference/measurements.md).
+
+## What the machine WAS, which is a different question
+
+`cpu_model` on the two rows above says which processor, in one string. It does
+not say what that processor can do, and **the thing that moves throughput most is
+what it can do**: the same weights read 3.7 times faster on a machine with
+AVX-512 than on one without, which is a far larger gap than anything separating
+our candidate models ([the processor
+lottery](../reference/benchmarks/the-processor-lottery.md)).
+
+So there is a second record, at a third grain: **one row a job**, in
+`state/host-fingerprint/<YYYY>/<MM>/<DD>.csv`.
+
+| What it holds | Why the string alone could not say it |
+| --- | --- |
+| Vendor, family, model, stepping, microcode | The generation, from the host. A codename somebody recognised is not a reading |
+| Instruction-set flags | Which kernels the runtime can dispatch to. This is the cell that tracks prefill |
+| Physical cores, threads, L3 | Every machine drawn so far is 2 cores by 2 threads, so cache is what varies |
+| A large-block copy rate | Decode is bandwidth bound and nothing else here measures bandwidth |
+| Uptime at the probe | A freshly started machine and a pooled one are different facts |
+| Machine size, region, zone, fault domain | The platform's own name for the placement, rather than ours |
+| A 16-character `fingerprint` | A digest over only the cells that cannot change inside a job, so two draws of one machine type carry one id and the distribution is countable |
+
+**Why a third grain rather than more columns on the two rows above.** These cells
+are fixed for the whole job. Repeating twenty of them on every item row would
+store the same answer a hundred times a day and say nothing new; the job grain
+stores it once. The `fingerprint` column is what joins the two - a short id
+rather than a re-statement.
+
+**It is read once, early, before the model server starts.** The bandwidth probe
+wants a gigabyte and a quiet machine, and a probe taken after the server is up
+would measure the server. `idhazh fingerprint` is its own stage for that reason.
+
+**`observability.host_fingerprint` switches the whole record off**, and
+`observability.host_fingerprint_bandwidth_mib` sets the probe buffer, where zero
+means do not probe. The default beats the largest L3 this project has drawn,
+because a buffer that fits in cache measures cache and reads several times too
+high - which is why the row records the buffer size and the L3 side by side, so
+nobody can read one for the other.
+
+**Nothing on this record reaches a reader.** It is an operator surface, and the
+published telemetry projection does not carry it.
 
 ## The visual ledger, and the eight terms that outlive it
 
