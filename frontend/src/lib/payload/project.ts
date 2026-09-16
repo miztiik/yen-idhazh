@@ -311,7 +311,7 @@ export function projectDay(text: string): string {
 /** The committed day with its vector block removed.
  *
  * The other half of the same rule, for the caller that keeps the whole day
- * rather than twenty-three fields of it. Whatever the build-time reader returns
+ * rather than the projection of it. Whatever the build-time reader returns
  * is inlined into every prerendered document that renders the day, and nothing
  * in a browser opens the block: its one production reader is the backend's
  * index rebuild, which reads `frontend/public/` from disk. The committed
