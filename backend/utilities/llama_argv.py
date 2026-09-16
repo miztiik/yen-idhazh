@@ -1,18 +1,7 @@
 """Which command line starts llama-server for one config root?
 
-Four callers needed this and three of them carried their own copy: the shared
-start script, the qualification's candidate start, and the tokenizer start in
-the bench. They differed in exactly one thing - which config root to read - and
-that is now an argument.
-
-**This file names no llama-server flag.** `idhazh.llm.server.server_argv` is the
-one place a flag may be spelled (Guardrail #6), and the reason the copies were
-dangerous is that each one was a place where the list could drift. It did drift:
-the qualification once rendered its own list and went two changes without the
-context-shift refusal the daily run had already had for weeks.
-
-The output is NUL-joined, so a flag value carrying a space stays one argument
-when `mapfile -d ''` reads it back.
+Names no flag itself: `idhazh.llm.server.server_argv` is the one place a
+llama-server flag may be spelled (Guardrail #6).
 """
 
 from __future__ import annotations

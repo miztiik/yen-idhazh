@@ -1,17 +1,7 @@
 """How long does one candidate take over a fixed five-article corpus?
 
-The bench's second case: a real `llama-server`, real fetches, real summaries,
-timed. It shells `python -m idhazh work` rather than reimplementing it, so what
-this measures is production's own path - the harness is the server lifecycle,
-the config the server reads, and the collection afterwards.
-
-It lived in a 431-line YAML heredoc until 2026-09-15. Nothing could lint it,
-type-check it or import it, and the one time that mattered a missing `import
-hashlib` let it summarize all five articles and then die on the collecting line
-fifty minutes in, on every dispatch for weeks.
-
-Which repeats may be compared is a separate question with no server in it, and
-it lives in `sweep_verdict.py`.
+Shells `python -m idhazh work`, so what it times is production's own path.
+Which repeats may be compared is a separate question, in `sweep_verdict.py`.
 """
 
 from __future__ import annotations
