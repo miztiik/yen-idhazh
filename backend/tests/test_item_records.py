@@ -22,7 +22,7 @@ from idhazh.contracts.article import Article
 from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage, TimeSource
 from idhazh.contracts.run_plan import PlannedItem
-from idhazh.telemetry import events
+from idhazh.telemetry import events, host
 from idhazh.telemetry.record import NAMED_STAGE_MS, Flags, ItemRecorder, shard_done
 
 
@@ -158,7 +158,16 @@ def test_every_cell_the_stage_hands_over_arrives_on_the_row() -> None:
         "date": "2026-09-15",
         "run_id": "2026-09-15-1",
         "item_started_at": "2026-09-15T06:00:00Z",
-        **work._shard_cells(settings, shard=2, shard_item_count=8),
+        **work._shard_cells(
+            settings,
+            shard=2,
+            shard_item_count=8,
+            facts=host.HostFacts(
+                cpu_model="Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz",
+                runner_name="ubuntu-4core-3",
+                cgroup_peak_bytes=15_032_385_536,
+            ),
+        ),
         **work._planned_cells(_planned(article), index=0),
         **work._article_cells(article),
         "stage": ItemStage.PUBLISH.value,

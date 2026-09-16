@@ -1,22 +1,34 @@
-"""What the machine was doing while one item ran.
+"""What was the machine doing, at the two grains that ask - one sampler, two consumers.
 
-A throughput number with no machine beside it is not a measurement
-(Guardrail #10), and until now the only machine readings this project took were
-at shard grain, in `state/runtime-counters.csv`, written from shell captures the
-workflow handed to `stages.counters`. A shard figure cannot say whether one slow
-item met a noisy neighbour, which is the question a 4.2x between-runner spread
-raises. So the same readings are taken here, around one item.
+A throughput number with no machine beside it is not a measurement (Guardrail
+#10), and two readers of one machine fact are two answers nobody can reconcile.
+So every host reading this project takes is taken here, once, and handed to both
+things that write it down:
+
+- **the item row**, through `Watch`, around one item. A shard figure cannot say
+  whether one slow item met a noisy neighbour, which is the question a 4.2x
+  between-runner spread raises.
+- **`state/runtime-counters.csv`**, through `stage_counters`, at shard grain.
+  That store is the independent check on the census's own timings, so it stays a
+  separate store: a check folded into the thing it checks stops being a check.
+
+The two grains are the point and they are not the same number. `cpu_busy_pct` on
+an item row is that item's window; on the shard row it is the whole job,
+including the cache restore and the weight load. What must never differ is a
+fact that does not change inside a job - the processor, the runner label - and
+those come from one `host_facts()` call.
 
 **Every source is a local file read.** `/proc/stat`, `/proc/loadavg`,
 `/proc/self/status`, `/proc/<server pid>/status` and the cgroup peak file - one
-`open()` each, a few milliseconds against a median 475,890 ms of model time.
-`psutil` would be a dependency, its install time and its shipped bytes for
-arithmetic that is four lines (Guardrail #8).
+`open()` each, against a median 475,890 ms of model time. `psutil` would be a
+dependency, its install time and its shipped bytes for arithmetic that is four
+lines (Guardrail #8). What one reading costs is in
+`docs/reference/measurements.md`.
 
 **The arithmetic is not written twice.** `contracts.runtime_counters` already
 differences two `/proc/stat` captures into a busy share, and this module calls
 that rather than reproducing it (Guardrail #5). What is new here is the reading,
-not the maths: nothing in the pipeline had ever opened these files in-process.
+not the maths.
 
 **A reading that cannot be taken records empty and never raises.** None of these
 paths exists on the developer machines this project is written on, and a missing
@@ -25,6 +37,7 @@ instrument degrades the row rather than the run (CLAUDE.md section 1a).
 
 from __future__ import annotations
 
+import logging
 import os
 import threading
 import time
@@ -33,7 +46,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from idhazh.contracts.runtime_counters import cpu_busy_pct_between
+from idhazh import assemble, ledger
+from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.runtime_counters import WORK_JOB, RuntimeCountersRow, cpu_busy_pct_between
+from idhazh.fingerprint import host_cpu
+
+LOG: Final = logging.getLogger("idhazh")
 
 #: The aggregate processor counters, since boot. Differenced, never read alone:
 #: a single read is mostly the runner's idle boot.
@@ -50,6 +68,12 @@ PROC: Final = Path("/proc")
 #: than failing - and why it is worth reading anyway: it is the number the runner
 #: would kill the job over (Guardrail #2).
 CGROUP_PEAK: Final = Path("/sys/fs/cgroup/memory.peak")
+
+#: The key the shard job writes the kernel's peak under when it copies that file
+#: into `memory-peak.txt`. The copy exists so the runtime artifact and the
+#: operator get the number too. It is the same file, so it is read by the same
+#: function rather than by a second parser somewhere else.
+CGROUP_PEAK_KEY: Final = "cgroup_memory_peak_bytes"
 
 #: `/proc` reports these in kilobytes.
 _KB: Final = 1024
@@ -93,12 +117,43 @@ def load_1m() -> float | None:
         return None
 
 
-def cgroup_peak_bytes() -> int | None:
-    """What the kernel counted against the job's memory limit, at its highest."""
-    text = _text(CGROUP_PEAK)
-    if text is None or not text.strip().isdigit():
+def cgroup_peak_bytes(reported: str | None = None) -> int | None:
+    """What the kernel counted against the job's memory limit, at its highest.
+
+    One reader, and the one fact arrives in two shapes. The kernel writes a bare
+    count. The shard job copies that count into `memory-peak.txt` as
+    `cgroup_memory_peak_bytes=<count>`, and writes the word `unavailable` where
+    the kernel file is not there - which is what a GitHub-hosted runner has
+    measured every time. `reported` is that copy; with no copy in hand this opens
+    the kernel file itself. Anything that is not a plain count reads as unknown,
+    and unknown is not zero.
+    """
+    text = _text(CGROUP_PEAK) if reported is None else reported
+    if not text:
         return None
-    return int(text.strip())
+    for line in text.splitlines():
+        key, found, raw = line.strip().partition("=")
+        value = raw.strip() if found and key.strip() == CGROUP_PEAK_KEY else line.strip()
+        if value.isdigit():
+            return int(value)
+    return None
+
+
+def cpu_model(reported: str | None = None) -> str | None:
+    """The processor this job drew, in the host's own words.
+
+    One reader, two callers. `reported` is what the shard job's first step read
+    out of `/proc/cpuinfo` before a checkout existed; with nothing reported this
+    reads the same file through `fingerprint.host_cpu`. Both answers are the same
+    file on the same host, which is why the item row and the shard row cannot
+    name two different processors.
+
+    A probe that reported nothing and could read nothing records nothing: an
+    empty cell means the reading was not taken, which is a different fact from a
+    processor with no name.
+    """
+    named = (reported or "").strip() or host_cpu().strip()
+    return named or None
 
 
 def runner_name(environ: dict[str, str] | None = None) -> str | None:
@@ -140,7 +195,50 @@ def llama_server_pid(comm: str = "llama-server") -> int | None:
 
 
 @dataclass(frozen=True, slots=True)
-class Reading:
+class HostFacts:
+    """Every host cell that both consumers name, taken in one call.
+
+    The item row and `state/runtime-counters.csv` each carry a `cpu_model` and a
+    `cgroup_peak_bytes` column, so a second reader on either side is two answers
+    to one question and nothing to say which is right (Guardrail #10).
+    """
+
+    cpu_model: str | None
+    runner_name: str | None
+    cgroup_peak_bytes: int | None
+
+    def shard_cells(self) -> dict[str, str | None]:
+        """The two a shard reads once and notes on every item it records.
+
+        `cgroup_peak_bytes` is deliberately not here. It is a high-water mark
+        that grows across a job, so an item row takes it again at the end of
+        each item rather than once before the first one runs.
+        """
+        return {"cpu_model": self.cpu_model, "runner_name": self.runner_name}
+
+
+def host_facts(
+    *,
+    reported_cpu_model: str | None = None,
+    reported_cgroup_peak: str | None = None,
+    environ: dict[str, str] | None = None,
+) -> HostFacts:
+    """One call, so that no two consumers disagree about what machine this was.
+
+    Every argument is something the platform already handed a caller - the shard
+    job reads the processor and copies the kernel peak in its own shell, before
+    Python exists. Hand over nothing and nothing is assumed: each reading falls
+    back to the file this module would have opened anyway.
+    """
+    return HostFacts(
+        cpu_model=cpu_model(reported_cpu_model),
+        runner_name=runner_name(environ),
+        cgroup_peak_bytes=cgroup_peak_bytes(reported_cgroup_peak),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class HostReading:
     """One instant, as this machine reported it."""
 
     #: The raw aggregate `cpu` line, kept rather than parsed: the busy share is
@@ -152,9 +250,9 @@ class Reading:
     python_rss_bytes: int | None
 
 
-def read_now(*, server_pid: int | None = None) -> Reading:
+def read_now(*, server_pid: int | None = None) -> HostReading:
     """Every point-in-time reading, taken together so they describe one instant."""
-    return Reading(
+    return HostReading(
         cpu_stat=_text(PROC_STAT),
         load_1m=load_1m(),
         llama_rss_bytes=_status_kb(server_pid, "VmRSS"),
@@ -164,8 +262,13 @@ def read_now(*, server_pid: int | None = None) -> Reading:
 
 
 @dataclass(frozen=True, slots=True)
-class Span:
-    """What the machine did across one item, as cells the census row names."""
+class HostCells:
+    """What the machine did across one item, as cells the census row names.
+
+    Not called a span. `telemetry.Span` is one node of the trace tree and lives
+    two modules away, and two things called a span inside one package is how a
+    reader loses ten minutes.
+    """
 
     cpu_busy_pct: float | None
     cpu_busy_max: float | None
@@ -206,9 +309,24 @@ class Watch:
     A zero or negative interval samples the two ends and never ticks, which is
     how `logging.waiting_heartbeat_seconds = 0` turns the heartbeat off without
     also turning the maximum and the minimum off.
+
+    `facts` is the sampler call this watch shares with whatever else writes the
+    same column names. A run hands over nothing and the watch reads the kernel
+    peak itself at close, which is what a high-water mark wants - and it reads
+    only that one file, because the processor cannot change inside a shard.
     """
 
-    __slots__ = ("_busy", "_first", "_interval", "_last", "_on_tick", "_pid", "_stop", "_thread")
+    __slots__ = (
+        "_busy",
+        "_facts",
+        "_first",
+        "_interval",
+        "_last",
+        "_on_tick",
+        "_pid",
+        "_stop",
+        "_thread",
+    )
 
     def __init__(
         self,
@@ -216,10 +334,12 @@ class Watch:
         interval_s: float,
         server_pid: int | None = None,
         on_tick: Callable[[float], None] | None = None,
+        facts: HostFacts | None = None,
     ) -> None:
         self._interval = interval_s
         self._pid = server_pid
         self._on_tick = on_tick
+        self._facts = facts
         self._busy: list[float] = []
         self._first = read_now(server_pid=server_pid)
         self._last = self._first
@@ -228,7 +348,7 @@ class Watch:
 
     def __enter__(self) -> Watch:
         if self._interval > 0:
-            self._thread = threading.Thread(target=self._sample, name="machine-watch", daemon=True)
+            self._thread = threading.Thread(target=self._sample, name="host-watch", daemon=True)
             self._thread.start()
         return self
 
@@ -248,7 +368,7 @@ class Watch:
             if self._on_tick is not None:
                 self._on_tick(round(time.monotonic() - opened, 1))
 
-    def close(self) -> Span:
+    def close(self) -> HostCells:
         """Stop sampling and return what the machine did, as cells.
 
         The mean is the whole-item difference rather than the mean of the
@@ -269,7 +389,11 @@ class Watch:
             for value in (self._first.llama_rss_peak_bytes, end.llama_rss_peak_bytes)
             if value is not None
         ]
-        return Span(
+        # Only the kernel peak, never a whole `host_facts`. The processor cannot
+        # change inside a shard, so reading it again here would be one extra
+        # `/proc/cpuinfo` open on every item for an answer already on the row.
+        peak = cgroup_peak_bytes() if self._facts is None else self._facts.cgroup_peak_bytes
+        return HostCells(
             cpu_busy_pct=whole,
             cpu_busy_max=max(seen) if seen else None,
             cpu_busy_min=min(seen) if seen else None,
@@ -277,5 +401,104 @@ class Watch:
             llama_rss_bytes=end.llama_rss_bytes,
             llama_rss_peak_bytes=max(peaks) if peaks else None,
             python_rss_bytes=end.python_rss_bytes,
-            cgroup_peak_bytes=cgroup_peak_bytes(),
+            cgroup_peak_bytes=peak,
         )
+
+
+def stage_counters(
+    plan: RunPlan,
+    *,
+    state_root: Path,
+    metrics_path: Path,
+    shard: int = 0,
+    shards: int = 1,
+    job: str = WORK_JOB,
+    job_started_at: int | None = None,
+    cpu_model_reported: str | None = None,
+    cpu_stat_at_start: str | None = None,
+    cpu_stat_at_end: str | None = None,
+    rss_samples_path: Path | None = None,
+    server_log_path: Path | None = None,
+    memory_peak_path: Path | None = None,
+    facts: HostFacts | None = None,
+) -> RuntimeCountersRow:
+    """Commit what this shard's model server counted, so the ledger can be checked.
+
+    Every timing on the item-health ledger is a field the summarize stage copied
+    out of one model reply. The server's own counters are the second instrument,
+    and until now they reached only a job log that keeps them for two days - so
+    the rates two published surfaces quote could not be reconciled with anything
+    (Guardrail #10).
+
+    Both counters are cumulative for the server process and a shard runs one
+    server for its whole job, so this one read covers the shard entirely.
+
+    The same row carries the job's own facts as well as the server's: the clock,
+    the host, how busy that host was, the window one sequence got, three memory
+    high points and what the weights cost to open. The server's counters and the
+    job's clock arrive as files this stage opens. **The host's readings arrive
+    from `host_facts`, which is the call the item row's `Watch` takes as well**,
+    so the processor named on an item row and the processor named on that shard's
+    row are one reading rather than two that happen to agree.
+
+    A missing or empty body still writes a row, with every counter null. A shard
+    whose server was already gone and a shard that never ran are different facts,
+    and pooling a run needs to see the shard that contributed nothing.
+
+    `job` is which of the two model-server jobs this is. It is on the row because
+    the two serve different weights, so nothing downstream can pool them and
+    nothing can tell them apart without it.
+    """
+    read = (
+        host_facts(
+            reported_cpu_model=cpu_model_reported,
+            reported_cgroup_peak=_text_if_readable(memory_peak_path) or None,
+        )
+        if facts is None
+        else facts
+    )
+    row = RuntimeCountersRow.from_metrics_text(
+        _text_if_readable(metrics_path),
+        date=plan.date,
+        run_id=plan.run_id,
+        shard=shard,
+        shards=shards,
+        scraped_at=assemble.utc_now(),
+        job=job,
+        job_started_at=job_started_at,
+        cpu_model=read.cpu_model,
+        cpu_stat_at_start=cpu_stat_at_start,
+        cpu_stat_at_end=cpu_stat_at_end,
+        rss_samples=_text_if_readable(rss_samples_path),
+        server_log=_text_if_readable(server_log_path),
+        cgroup_peak_bytes=read.cgroup_peak_bytes,
+    )
+    landed = ledger.append_runtime_counters(state_root, [row])
+    LOG.info(
+        "counted job=%s shard=%s/%s run=%s read_tokens=%s read_seconds=%s job_seconds=%s "
+        "cpu=%s cpu_busy_pct=%s peak_rss_bytes=%s model_load_ms=%s n_ctx_configured=%s "
+        "python_peak_rss_bytes=%s cgroup_peak_bytes=%s rows=%s",
+        row.job,
+        shard,
+        shards,
+        plan.run_id,
+        row.prompt_tokens_total,
+        row.prompt_seconds_total,
+        row.job_seconds,
+        row.cpu_model,
+        row.cpu_busy_pct,
+        row.peak_rss_bytes,
+        row.model_load_ms,
+        row.n_ctx_configured,
+        row.python_peak_rss_bytes,
+        row.cgroup_peak_bytes,
+        landed,
+    )
+    return row
+
+
+def _text_if_readable(path: Path | None) -> str:
+    """A file the job may not have written is absent text, never a failed stage."""
+    if path is None or not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8", errors="replace")
