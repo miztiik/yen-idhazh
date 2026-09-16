@@ -85,6 +85,42 @@ class CallCost(Model):
             raise ValueError("cached_tokens cannot exceed input_tokens")
         return self
 
+    @property
+    def cache_pct(self) -> float | None:
+        """How much of this call's prompt the runtime reused, as a percentage.
+
+        A call with no prompt has no share to report, so the answer is null. A
+        zero here is the real answer for a cold slot and says something else.
+        """
+        if self.input_tokens == 0:
+            return None
+        return round(100 * self.cached_tokens / self.input_tokens, 2)
+
+    @property
+    def prefill_tokens_per_s(self) -> float | None:
+        """Prompt tokens a second, over the tokens the server really evaluated.
+
+        The denominator is `input_tokens` minus `cached_tokens`, which is what
+        `prefill_ms` paid for - counting the reused tokens as work makes a warm
+        slot read as a fast server, and then this cell and `cache_pct` are the
+        same fact twice. On 2026-09-14 one summarize call read 787 tokens a
+        second over its whole prompt and 8.4 over the 52 that were new.
+
+        Read it as one call at one context depth rather than as a speed to
+        compare: `prefill_ms` stays the primary record for the reason its own
+        description gives.
+        """
+        if self.prefill_ms == 0:
+            return None
+        return round((self.input_tokens - self.cached_tokens) / (self.prefill_ms / 1000), 2)
+
+    @property
+    def decode_tokens_per_s(self) -> float | None:
+        """Tokens a second this call wrote, over the time it spent writing."""
+        if self.decode_ms == 0:
+            return None
+        return round(self.output_tokens / (self.decode_ms / 1000), 2)
+
 
 #: The five per-call numbers, in the order every flattened spelling uses them.
 COST_FIELDS: tuple[str, ...] = (
@@ -93,4 +129,16 @@ COST_FIELDS: tuple[str, ...] = (
     "input_tokens",
     "output_tokens",
     "cached_tokens",
+)
+
+#: The three the five above imply, spelled the way the flattened ledgers spell them.
+#:
+#: They are properties rather than fields, so nothing persists them twice and no
+#: schema grows a column - a holder of the five gets these for free, and every
+#: writer of the flattened cells divides the same way. A null is what a missing
+#: denominator writes; a zero would claim the call did nothing in measurable time.
+DERIVED_FIELDS: tuple[str, ...] = (
+    "cache_pct",
+    "prefill_tokens_per_s",
+    "decode_tokens_per_s",
 )

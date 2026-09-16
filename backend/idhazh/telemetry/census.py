@@ -20,7 +20,7 @@ from typing import Any, Final
 
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import fit_cell
-from idhazh.contracts.call_cost import COST_FIELDS, CallCost
+from idhazh.contracts.call_cost import COST_FIELDS, DERIVED_FIELDS, CallCost
 from idhazh.contracts.feed_health import RobotsOutcome
 from idhazh.contracts.item_health import (
     CALL_SLOTS,
@@ -322,12 +322,17 @@ def _flatten_calls(calls: tuple[CallCost | None, CallCost | None]) -> dict[str, 
     cannot nest, and `Summary` describes the five numbers once - so this is the
     single place the two shapes meet, rather than a second copy of the
     vocabulary in the writer.
+
+    `DERIVED_FIELDS` ride along because a rate nobody records is a rate every
+    reader works out for itself, and two dividers drift. They are `CallCost`'s
+    own arithmetic rather than this function's, so the cells a rebuilt row
+    carries and the cells the shard sealed are the same numbers by construction.
     """
     cells: dict[str, Any] = {"model_calls": None}
     recorded = 0
     for slot, call in zip(CALL_SLOTS, calls, strict=True):
         cells[f"{slot}_kind"] = None if call is None else call.kind
-        for field in COST_FIELDS:
+        for field in (*COST_FIELDS, *DERIVED_FIELDS):
             cells[f"{slot}_{field}"] = None if call is None else getattr(call, field)
         recorded += call is not None
     if recorded:

@@ -206,9 +206,12 @@ function writeItemHealthCanary() {
 	 * round: fetch, extract, summarize and faithfulness, plus a remainder that
 	 * varies by item id so the top band is not a flat ribbon across the chart.
 	 *
-	 * The rates are each call's own tokens over its own milliseconds, rounded
-	 * the way `stages/work.py` rounds them. Those milliseconds are the server's
-	 * real numbers, so they are used for the rates and NOT for the bands: this
+	 * The six derived cells are `CallCost`'s arithmetic in JavaScript, to two
+	 * decimals: a share of the prompt that was cached, and two rates. A prefill
+	 * rate is over the tokens the server really evaluated - `input_tokens` minus
+	 * `cached_tokens` - because over the whole prompt a warm slot reads as a fast
+	 * server and the cell says the same thing as `cache_pct`. Those milliseconds
+	 * are the server's real numbers, so they are used for the rates and NOT for the bands: this
 	 * canary's stage clock is a fixture and its model clock is a measurement, so
 	 * `prefill_ms + decode_ms` is far larger than `summarize_ms` on the rows that
 	 * carry both. The bands split `summarize_ms` in the calls' own proportion
@@ -223,6 +226,8 @@ function writeItemHealthCanary() {
 		const faithfulness = 20 + (spread % 40);
 		const gap = 60 + (spread % 120);
 		const rate = (tokens, ms) => (ms > 0 ? Math.round(((1000 * tokens) / ms) * 100) / 100 : '');
+		const share = (cached, prompt) =>
+			prompt > 0 ? Math.round(((100 * cached) / prompt) * 100) / 100 : '';
 		const [label, summary] = calls ?? [];
 		const wire = (calls ?? []).reduce((total, call) => total + call[1] + call[2], 0);
 		const labelMs = label && wire > 0 ? Math.round((summarizeMs * (label[1] + label[2])) / wire) : '';
@@ -239,9 +244,11 @@ function writeItemHealthCanary() {
 			visual_plan_ms: planMs,
 			visual_plan_ms_is_estimate: summary ? 'True' : '',
 			visual_plan_tokens_written: summary ? Math.round(summary[4] * 0.2) : '',
-			label_prefill_tokens_per_s: label ? rate(label[3], label[1]) : '',
+			label_cache_pct: label ? share(label[5], label[3]) : '',
+			summary_cache_pct: summary ? share(summary[5], summary[3]) : '',
+			label_prefill_tokens_per_s: label ? rate(label[3] - label[5], label[1]) : '',
 			label_decode_tokens_per_s: label ? rate(label[4], label[2]) : '',
-			summary_prefill_tokens_per_s: summary ? rate(summary[3], summary[1]) : '',
+			summary_prefill_tokens_per_s: summary ? rate(summary[3] - summary[5], summary[1]) : '',
 			summary_decode_tokens_per_s: summary ? rate(summary[4], summary[2]) : '',
 			cpu_model: 'AMD EPYC 7763 64-Core Processor',
 			cpu_busy_pct: Math.round((60 + (spread % 3500) / 100) * 100) / 100,

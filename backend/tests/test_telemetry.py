@@ -24,7 +24,7 @@ from pydantic import StringConstraints, TypeAdapter, ValidationError
 from idhazh import config, extract, ledger, summarize, telemetry
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import column_bounds, derive_url_key, field_column
-from idhazh.contracts.call_cost import CallCost, CallKind
+from idhazh.contracts.call_cost import COST_FIELDS, DERIVED_FIELDS, CallCost, CallKind
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 from idhazh.contracts.item_health import (
     UNSPECIFIED,
@@ -897,6 +897,121 @@ def test_the_census_row_says_which_call_each_number_came_from() -> None:
     cells = row.csv_row()
     assert cells["label_kind"] == "label"
     assert ItemHealthRow.from_csv_row(cells) == row
+
+
+def test_a_rebuilt_row_carries_the_six_cells_that_are_arithmetic() -> None:
+    """The six columns a row the shard never sealed used to leave empty.
+
+    Every one of them is arithmetic over five cells the row already carries, so
+    the cost of leaving them blank is not the number - it is that each reader
+    works it out again, and the readers then disagree. All 12,437 committed rows
+    carry these six empty, which is the whole reason the row exists.
+
+    The numbers are chosen so the prefill rate tells one convention from the
+    other: 1,224 prompt tokens in 6.2 seconds is 197.42 a second over the whole
+    prompt, and 8.39 over the 52 the server had not already read.
+    """
+    calls = (
+        CallCost(
+            kind=CallKind.LABEL,
+            prefill_ms=500,
+            decode_ms=1_250,
+            input_tokens=1_000,
+            output_tokens=41,
+            cached_tokens=175,
+        ),
+        CallCost(
+            kind=CallKind.SUMMARIZE_AND_PLAN,
+            prefill_ms=6_200,
+            decode_ms=3_300,
+            input_tokens=1_224,
+            output_tokens=193,
+            cached_tokens=1_172,
+        ),
+    )
+    totals = {field: sum(getattr(call, field) for call in calls) for field in COST_FIELDS}
+    split = summary().model_copy(update={"call_1": calls[0], "call_2": calls[1], **totals})
+
+    row = telemetry.classify_item(
+        planned=item(), date=plan().date, run_id="2026-08-21-1", article=article(), summary=split
+    )
+
+    assert row.label_cache_pct == 17.5
+    assert row.summary_cache_pct == 95.75
+    assert row.label_prefill_tokens_per_s == 1650.0, "825 tokens evaluated in half a second"
+    assert row.summary_prefill_tokens_per_s == 8.39, "52 tokens evaluated, not 1,224"
+    assert row.label_decode_tokens_per_s == 32.8
+    assert row.summary_decode_tokens_per_s == 58.48
+
+    cells = row.csv_row()
+    assert cells["summary_prefill_tokens_per_s"] == "8.39"
+    assert ItemHealthRow.from_csv_row(cells) == row
+
+
+def test_a_call_with_no_clock_to_divide_by_writes_null_and_not_zero() -> None:
+    """A rate of zero claims the model produced nothing in measurable time.
+
+    That is a different statement from "this call reports no clock", and it is
+    the difference between a skipped row and a zero dragging down every average
+    that reads the column. The share of the prompt that was cached still lands,
+    because that denominator is there.
+    """
+    no_clock = CallCost(
+        kind=CallKind.LABEL,
+        prefill_ms=0,
+        decode_ms=0,
+        input_tokens=900,
+        output_tokens=12,
+        cached_tokens=300,
+    )
+    totals = {field: getattr(no_clock, field) for field in COST_FIELDS}
+    split = summary().model_copy(update={"call_1": no_clock, "call_2": None, **totals})
+
+    row = telemetry.classify_item(
+        planned=item(), date=plan().date, run_id="2026-08-21-1", article=article(), summary=split
+    )
+
+    assert row.model_calls == 1
+    assert row.label_cache_pct == 33.33, "the share is answerable, the rates are not"
+    assert row.label_prefill_tokens_per_s is None
+    assert row.label_decode_tokens_per_s is None
+    assert row.csv_row()["label_prefill_tokens_per_s"] == ""
+
+
+def test_both_writers_of_the_six_reach_the_same_arithmetic() -> None:
+    """The test that would have caught the second divider.
+
+    Two places fill these cells - the work stage as the call returns, and the
+    census when it rebuilds a row from the payloads - and a rate written two
+    ways is two rates. The work stage's own cell builder is driven here against
+    the contract's properties on the same five numbers, so the day one of them
+    changes denominator is the day this goes red rather than the day an operator
+    notices one day's column reads three times the next.
+    """
+    from idhazh.stages.two_calls import _call_cells
+
+    reply = Completion(
+        content="{}",
+        prompt_tokens=1_224,
+        completion_tokens=193,
+        prefill_ms=6_200,
+        decode_ms=3_300,
+        cached_tokens=1_172,
+    )
+    same = CallCost(
+        kind=CallKind.SUMMARIZE_AND_PLAN,
+        prefill_ms=reply.prefill_ms,
+        decode_ms=reply.decode_ms,
+        input_tokens=reply.prompt_tokens,
+        output_tokens=reply.completion_tokens,
+        cached_tokens=reply.cached_tokens,
+    )
+    written = _call_cells("summary", CallKind.SUMMARIZE_AND_PLAN, reply)
+
+    assert {field: written[f"summary_{field}"] for field in DERIVED_FIELDS} == {
+        field: getattr(same, field) for field in DERIVED_FIELDS
+    }
+    assert same.prefill_tokens_per_s == 8.39, "both of them over the evaluated tokens"
 
 
 def test_a_refused_reply_reaches_the_census_row_with_what_it_cost() -> None:
