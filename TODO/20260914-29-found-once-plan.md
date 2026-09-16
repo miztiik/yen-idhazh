@@ -80,15 +80,15 @@ which is the same family.
 | 3 | Measure: title signal against the committed days | - | A | DONE | - | #782 | - |
 | 4 | Correct the token-share number defect 22 shipped | - | A | DONE | - | #785 | - |
 | 5 | Draw the collapse, with a publisher stack that links | - | B | PENDING | - | - | - |
-| 6 | Retire the four hosts that serve one page | - | B | DONE | - | - | - |
+| 6 | Retire the four hosts that serve one page | - | B | DONE | - | #794 | p29-r6b |
 | 7 | One outlet never runs the identical piece twice | - | B | PENDING | - | - | - |
 | 8 | A ceiling on the day, beside the ceiling on a run | - | B | PENDING | - | - | - |
 | 9 | The same story is one story for 36 hours, not one day | - | C | PENDING | - | - | - |
 | 10 | A story that has been running ranks below one that broke today | - | C | PENDING | - | - | - |
 | 11 | The lead is a weighted score, and the page says how | 10 | C | PENDING | - | - | - |
 | 12 | Label the sheet, then set the weights | - | C | PENDING | - | - | - |
-| 13 | The chrome ledger: a host that repeats itself is caught | - | C | PENDING | - | - | - |
-| 14 | The composite score, proving it changed nothing | - | C | DONE | - | - | - |
+| 13 | The chrome ledger: a host that repeats itself is caught | - | C | BLOCKED | - | - | - |
+| 14 | The composite score, proving it changed nothing | - | C | DONE | - | #799 | p29-r14 |
 | 15 | The weights and the 0.88 floor | 12, 14 | D | PENDING | - | - | - |
 | 16 | Refuse boilerplate, on a week of evidence | 13 | D | PENDING | - | - | - |
 | 17 | Does a short extraction publish at all | - | D | PENDING | - | - | - |
@@ -522,6 +522,11 @@ improvement and the measurement is already paid for.
 **Ruled by Fowler, 2026-09-15. Correction level 4.** The scope expansions below
 are his, under the owner's standing instruction that structure fixes matter.
 
+**BLOCKED, 2026-09-16.** The measurement that justified this row was falsified
+by row #6's own count. The contract below stands as ruled and none of it has
+been withdrawn; what is missing is a reason to spend it. See
+`The example this row was sold on is gone` at the end of this row.
+
 **Intent.** A publisher that serves one template for every article is caught the
 third time, not the 166th. No length rule can see a 400-word template; only
 comparing a host's pages against each other can.
@@ -582,9 +587,35 @@ committed days.
 
 **The number this row does NOT claim.** The 5.2 hours of summarize time those
 four hosts consumed are **not** this row's to save - row #6 retires them, and
-three of the four already carry a length signal. What this row uniquely catches
-is the Energy Monitor shape: a host whose template is long enough that no length
-rule will ever see it.
+three of the four already carry a length signal.
+
+**The example this row was sold on is gone, and that is why it is BLOCKED.**
+The row said it uniquely catches "the Energy Monitor shape: a host whose
+template is long enough that no length rule will ever see it". Row #6's count of
+2026-09-16 falsified that: Energy Monitor served an article on 28 of its 34
+recorded rows, 286 to 1,025 words, over 10 separate days. It is not a template
+host and never was. The row's own reading had looked only at its 6 failure rows,
+and a feed's failures always look like a template host, because that is what a
+failure is.
+
+**What is still true, and what it is worth, are two different questions.**
+`boilerplate_ratio` has never fired once in 12,277 committed item-health rows,
+so a signal with an enum value, two config knobs, tests and documentation on
+three pages is dead code either way. That is a real defect. What the row no
+longer has is a measured host it would have caught - so the size of the prize is
+now unknown, and the row asks for a new contract file, a new store, a new
+pruner, three knobs and a Guardrail #12 declaration to chase it.
+
+**Three moves are open and the owner picks one** (`CLAUDE.md` section 0d):
+build it as ruled and find out what it catches; delete the inert signal and its
+knobs and docs instead, which is the cheap half of the same defect; or measure
+first - count, over the committed `state/item-health/**` shards, how many hosts
+serve a line set that repeats across their own pages, and let that number decide.
+The third is the only one that turns the unknown into a figure, and it costs one
+read of a bounded store.
+
+**Row #16 cannot start until this one does**, because it reads the cells this
+row would write.
 
 ## Row #14 - the composite score, proving it changed nothing
 
@@ -691,6 +722,7 @@ cost of roughly **386 genuine short items** dropped.
 **This row is a decision request, not an implementation.** It does not start
 until the Editor and the owner rule.
 
+## Rejected
 
 Recorded so nobody proposes them again. Each is a dated decision, not a law
 (section 0a) - what would reopen it is named.
@@ -699,7 +731,6 @@ Recorded so nobody proposes them again. Each is a dated decision, not a law
 | --- | --- | --- |
 | Cut the day to 90-120 items | The digest is a self-curating feed of digests, not a fixed-size bulletin. Content chooses its position and its relevance; we do not choose content, and more desks are coming rather than fewer | Nothing on the present design. The day is bounded by row #8's ceilings, which refuse without choosing |
 | Per-day TF-IDF over headline words | Refused as a dependency, and that reason was wrong - it is about twenty lines of `collections.Counter` and `math.log`, no install and no shipped bytes. It stands refused because the comparison this project bets on is semantic and over the summary, and a word-overlap score is neither | Row #12 measuring it beating the shipped scorer on the same labels |
-
 | A canonical "what happened" line from the summariser | Cannot be backfilled, so no committed day can measure it | A measured failure that only a rewritten summary could reach |
 | Encode the article's lede and compare that | Proposed on 2026-09-15 and refused the same day. It serves no purpose the summary does not already serve, and the premise of this project is that the summariser did its job - so the comparison is over what the summariser wrote. The encoder's 256-token window meant it was never the whole article either | A measurement showing our summaries of one story diverge in a way the articles do not |
 | Shared rare title tokens as a term in the composite | Its different-pair p99 is 1.0000 - about one different pair in a hundred scores a perfect match, which over 9,055 pairs is roughly 90 wrong pairs each handed a full weight. Separation 35.8 percent, the weakest of the three | The same distribution measured conditioned on the cosine already being near the floor, rather than over random pairs 99.9 percent of which are nowhere near the decision |
@@ -748,21 +779,11 @@ one. Each is a rule a grouping change has to honour, not a preference.
 - ~~Grouping never crosses days.~~ **Overruled by the owner, 2026-09-15.** A
   story that breaks at 23:00 and is picked up at 07:00 is one story, and the
   window is `assemble.same_story_window_hours`, default 36.
-
-From the Editor's ruling, 2026-09-14. Each is a rule a grouping change has to
-honour, not a preference.
-
-- **A reaction is never merged into its event.** The reaction is the newer news.
-  This is the 0.9317 pair.
-- **An analysis piece is never merged into a reporting piece.** `source_kind`
-  already records which is which. It is 5 percent of the day and the most
-  distinctive 5 percent.
-- **A round-up or live blog is never grouped, in either direction.**
-- **Two feeds of one outlet are one source.** Row #2.
-- **No sentence on a card may state as fact something the same page
-  contradicts.** Silence is always available.
-- **Grouping never crosses days.**
-- **Nothing is removed from the page until recall is measured.**
+- ~~Nothing is removed from the page until recall is measured.~~ **Overruled by
+  the owner, 2026-09-14** - a duplicate is worse than a miss. Row #5 folds a
+  group's members behind publisher pills before recall is measured, and every
+  member keeps its own page, its archive entry and its search entry, so nothing
+  is removed. That reachability is what the ruling bought the line back with.
 
 ## Out of scope
 
