@@ -43,8 +43,8 @@ all 113 fields by construction and fills none of them: a contract says what a
 cell may be, never what it is.
 
 **A dash under `Computed in` means nothing in `backend/idhazh/` puts a value
-under that name.** Three columns carry one, and they are the same three: the
-model server's own prefix-cache state, which nothing has yet asked it for.
+under that name.** No column carries one. The last three did until 2026-09-16 -
+the model server's own prefix-cache state, which nothing had asked it for.
 
 **`Reaches the row` is the column the rest of this page is for.** A cell that
 is computed on every item and named in no row is measured and thrown away: it
@@ -222,9 +222,9 @@ Whether a slower row was a slower runner. A throughput with no machine beside it
 | `llama_rss_peak_bytes` | int | `backend/idhazh/telemetry/host.py` | - | no |
 | `python_rss_bytes` | int | `backend/idhazh/telemetry/host.py` | - | no |
 | `cgroup_peak_bytes` | int | `backend/idhazh/telemetry/host.py` | - | no |
-| `slot_id` | int | - | - | no |
-| `kv_tokens_at_start` | int | - | - | no |
-| `prefix_shared_with_previous` | bool | - | - | no |
+| `slot_id` | int | `backend/idhazh/stages/two_calls.py` | - | no |
+| `kv_tokens_at_start` | int | `backend/idhazh/stages/two_calls.py` | - | no |
+| `prefix_shared_with_previous` | bool | `backend/idhazh/stages/two_calls.py` | - | no |
 
 ### The run settings
 
@@ -257,10 +257,13 @@ That stops being true one wiring commit at a time, so the count above is a
 reading and not a rule (Guardrail #10). Re-run the command rather than trusting
 this paragraph.
 
-**Three columns are empty for the other reason**, and they are the honest case:
-`slot_id`, `kv_tokens_at_start` and `prefix_shared_with_previous` are the model
-server's own prefix-cache state, and nothing here has yet asked whether the
-pinned build reports it on a completion response.
+**Every column now has a producer.** `slot_id`, `kv_tokens_at_start` and
+`prefix_shared_with_previous` were the last three with none, because nobody had
+asked the model server whether it reports its prefix-cache state. It does, on
+the reply the summarizer already reads, and since 2026-09-16 the row carries all
+three off the item's first model call -
+[../summarize/model-boundary.md](../summarize/model-boundary.md#the-outward-shim)
+owns what each one means and why the second call is excluded.
 
 ## See also
 

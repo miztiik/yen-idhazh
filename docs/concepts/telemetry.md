@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-16T12:00
 
 The structured-event vocabulary: the envelope every event carries, the event names that are emitted, the two shapes those names take, the span tree a developer can switch on, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, which is a project non-goal ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 0a).
 
@@ -322,6 +322,37 @@ absent on every GitHub-hosted runner this project has probed, so that cell is
 usually empty in CI and always empty on a developer machine - a fact about the
 instrument, not about the job. What one sample costs is in
 [measurements.md](../reference/measurements.md).
+
+## What the machine WAS, which is a different question
+
+`cpu_model` on the two rows above says which processor, in one string. It does
+not say what that processor can do, and **the thing that moves throughput most is
+what it can do**: the same weights read 3.7 times faster on a machine with
+AVX-512 than on one without, which is a far larger gap than anything separating
+our candidate models ([the processor
+lottery](../reference/benchmarks/the-processor-lottery.md)).
+
+So there is a third grain: **one row a job**, in
+`state/host-fingerprint/<YYYY>/<MM>/<DD>.csv`, holding what the host reports
+about its own silicon plus a memory-bandwidth probe.
+
+**Why a third grain rather than more columns on the two rows above.** These cells
+are fixed for the whole job. Repeating twenty of them on every item row would
+store the same answer a hundred times a day and say nothing new; the job grain
+stores it once. The two tables share the key `date`, `run_id`, `job`, `shard`, so
+the key is the join and no column is duplicated to make it work.
+
+**It is read once, early, before the model server starts.** The bandwidth probe
+wants a gigabyte and a quiet machine, and a probe taken after the server is up
+would measure the server. `idhazh fingerprint` is its own stage for that reason.
+
+**Nothing on this record reaches a reader.** It is an operator surface, and the
+published telemetry projection does not carry it.
+
+Every column, what it means, what it is for, and why almost none of it is an
+enum: [host-metrics.md](../reference/host-metrics.md). It is a page of its own
+rather than a section here, because this page is about the instrument and that
+one is a column reference somebody arrives at with a number in hand.
 
 ## The visual ledger, and the eight terms that outlive it
 

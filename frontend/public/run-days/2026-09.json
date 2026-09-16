@@ -1183,5 +1183,63 @@
     "site_bytes": 25305494,
     "site_files": 52,
     "version": "2026-09-09"
+  },
+  {
+    "date": "2026-09-16",
+    "models": [
+      "qwen3-5-9b-q4-k-m"
+    ],
+    "published_charts": 0,
+    "published_items": 217,
+    "runs": [
+      {
+        "charts_drafted": 37,
+        "decided": 71,
+        "decision_ms": 15,
+        "failed": 9,
+        "n": 1,
+        "planned": 80,
+        "prefiltered": 0,
+        "run_id": "2026-09-16-35070051359",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-09-16T07:44:41Z",
+        "status": "partial",
+        "succeeded": 71
+      },
+      {
+        "charts_drafted": 38,
+        "decided": 74,
+        "decision_ms": 26,
+        "failed": 6,
+        "n": 2,
+        "planned": 80,
+        "prefiltered": 0,
+        "run_id": "2026-09-16-35091687880",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-09-16T11:42:04Z",
+        "status": "partial",
+        "succeeded": 74
+      },
+      {
+        "charts_drafted": 35,
+        "decided": 72,
+        "decision_ms": 87,
+        "failed": 8,
+        "n": 3,
+        "planned": 80,
+        "prefiltered": 0,
+        "run_id": "2026-09-16-35112294166",
+        "skipped": 0,
+        "source_list_stale": false,
+        "started_at": "2026-09-16T15:00:23Z",
+        "status": "partial",
+        "succeeded": 72
+      }
+    ],
+    "site_bytes": 25888838,
+    "site_files": 54,
+    "version": "2026-09-09"
   }
 ]
