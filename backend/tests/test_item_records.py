@@ -212,8 +212,8 @@ def test_a_call_slot_with_numbers_and_no_kind_is_half_a_call() -> None:
         content="{}", prompt_tokens=2389, completion_tokens=567,
         prefill_ms=186750, decode_ms=292626, cached_tokens=1493,
     )
-    pair = _call_cells("label", CallKind.LABEL, label) | _call_cells(
-        "summary", CallKind.SUMMARIZE_AND_PLAN, answer
+    pair = _call_cells("label", CallKind.LABEL, label, wall_ms=303_004) | _call_cells(
+        "summary", CallKind.SUMMARIZE_AND_PLAN, answer, wall_ms=479_500
     )
 
     row = settled(
@@ -234,6 +234,31 @@ def test_a_call_slot_with_numbers_and_no_kind_is_half_a_call() -> None:
     without_the_kind = {name: value for name, value in pair.items() if name != "label_kind"}
     with pytest.raises(ValidationError, match="recorded whole or not at all"):
         settled(recorder(), model_calls=2, **without_the_kind).close()
+
+
+def test_a_calls_clock_is_the_stopwatch_and_not_the_two_cells_beside_it() -> None:
+    """Plan 32 row #8. `label_ms` used to be `label_prefill_ms + label_decode_ms`.
+
+    That is a column which agrees with its two neighbours by construction, so
+    subtracting them gave zero on every row ever written and a server that made
+    an item queue read exactly like one that answered at once. Driven from a
+    reply a server really sent, so the five minutes it claims for itself are its
+    own number and not a figure this test chose (Guardrail #7).
+    """
+    from idhazh.llm.server import parse_completion
+    from idhazh.stages.two_calls import _call_cells
+
+    reply = parse_completion(
+        (FIXTURES_DIR / "completions" / "rendered" / "label.json").read_text(encoding="utf-8")
+    )
+    claimed = reply.prefill_ms + reply.decode_ms
+
+    cells = _call_cells("label", CallKind.LABEL, reply, wall_ms=claimed + 1_234)
+
+    assert claimed == 299_178, "the recorded reply claims this much for itself"
+    assert cells["label_prefill_ms"] + cells["label_decode_ms"] == claimed
+    assert cells["label_ms"] == claimed + 1_234
+    assert cells["label_finish_reason"] == "length"
 
 
 def test_the_gap_is_the_item_minus_the_stages_that_named_themselves() -> None:

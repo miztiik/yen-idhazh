@@ -9,9 +9,14 @@ from idhazh import config
 from idhazh.contracts.article import Article
 from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.knobs.turns import TurnsConfig
-from idhazh.contracts.qualification import ItemObservation, QualificationShard
+from idhazh.contracts.qualification import (
+    GateStatus,
+    ItemObservation,
+    QualificationShard,
+)
 from idhazh.contracts.summary import Summary
 from idhazh.evals import qualification_summary
+from idhazh.evals.qualify import schema_validity
 from idhazh.llm.server import Completion
 from idhazh.stages import qualify
 
@@ -132,11 +137,18 @@ def test_a_call_that_never_happened_contributes_nothing_and_raises_nothing() -> 
 
 
 def test_an_item_with_no_reply_at_all_still_produces_an_observation() -> None:
-    """A failure that vanishes from the record takes the denominator with it."""
+    """A failure that vanishes from the record takes the denominator with it.
+
+    It names no reason, and until 2026-09-16 it named `stop`. The fold stands a
+    bare `Completion` in for the replies that never arrived, and that stand-in
+    inherited a default of `stop` - so an item the server never answered was
+    counted by `schema_validity` as an attempt that decoded cleanly.
+    """
     observation = folded(None, None)
 
     assert observation.prompt_tokens == 0
-    assert observation.finish_reason
+    assert observation.finish_reason is None
+    assert schema_validity([observation]).status is GateStatus.FAILED
 
 
 def test_the_job_page_says_which_path_produced_its_numbers_before_the_table() -> None:
