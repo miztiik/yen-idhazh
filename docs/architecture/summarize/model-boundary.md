@@ -241,6 +241,35 @@ apart by (Guardrail #10). It is not an enum for the reason
 llama-server, and a row that would not validate because the runtime minted a
 word would lose the whole item over a label.
 
+The envelope also says which prefix-cache slot answered the call. Three fields
+carry it, and all three arrive on the route the summarizer already posts to, so
+reading them costs no extra request (measured 2026-09-15 on build
+`b10598-56db501e7`, [measurements.md](../../reference/measurements.md)).
+
+| Census column | Reply field | What it says |
+| --- | --- | --- |
+| `slot_id` | `id_slot` | which slot answered. `0` at `-np 1`, which is every committed model entry |
+| `kv_tokens_at_start` | `tokens_cached` | what the slot holds once this prompt is in it - where the next call starts from |
+| `prefix_shared_with_previous` | `timings.cache_n` above zero | whether this call read anything back out of the slot |
+
+**An item makes two calls and the row has one set of those columns, so the row
+carries the FIRST call's.** The second call's prompt is the first one's extended
+- that is the whole point of the continuation - so its `cache_n` is above zero
+on every row and its slot state is a fact about the item itself. Only the first
+call's slot was last touched by the item *before* this one, which is the
+question these three exist to answer.
+
+`timings.cache_n` is read once, in `parse_completion`, and both
+`label_cached_tokens` and `prefix_shared_with_previous` come off that one
+reading. A boolean derived anywhere else would be the same reading written
+twice, and two writings drift (Guardrail #10).
+
+**An absent field is null and never zero.** Slot `0` is a real slot, and a cold
+slot really does reuse nothing, so a default would put a number nobody measured
+on every row. A field the server sends as something that is not a whole number
+is absent too: these fill an instrument column, and an instrument may not cost
+an item.
+
 Everything after that is the app's own validation.
 
 ## What proves the two sides agree

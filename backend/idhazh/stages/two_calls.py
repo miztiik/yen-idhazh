@@ -19,7 +19,7 @@ import json
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import Any, NamedTuple
+from typing import Any, Final, NamedTuple
 
 from pydantic import ValidationError
 
@@ -59,6 +59,12 @@ from idhazh.stages.common import (
 from idhazh.telemetry.record import Flags, ItemRecorder
 from idhazh.visual_validator import validate_plan
 
+#: The column prefix the item's FIRST call writes under. `ItemHealthRow` names
+#: its two call slots after the calls this stage happens to make, and
+#: `label_kind` is documented as "which call the stage made first" - so the slot
+#: is the ordinal, and this is the name of ordinal one.
+FIRST_CALL: Final = "label"
+
 
 def _call_cells(slot: str, kind: CallKind, reply: Completion, *, wall_ms: int) -> dict[str, Any]:
     """One model call's numbers, under the slot's own column names.
@@ -91,11 +97,28 @@ def _call_cells(slot: str, kind: CallKind, reply: Completion, *, wall_ms: int) -
     evaluating 52 real tokens in 6.2 seconds, which is 8.4. The cache share is
     the column that says how much was skipped, so a rate that also claims it is
     the same number twice (Guardrail #10).
+
+    **Three more cells belong to the ITEM rather than to the call**, and the row
+    holds one set of them for a stage that makes two calls, so they are carried
+    off the first call and no other. The first call is the only one whose slot
+    was last touched by the item BEFORE this one; the second call's prompt is
+    literally the first one's extended, so its reuse is true by construction and
+    would say nothing about anything. They are read straight off the reply -
+    `server.parse_completion` derives them, this carries them.
     """
     prefill_s = reply.prefill_ms / 1000
     decode_s = reply.decode_ms / 1000
     cached = min(reply.cached_tokens, reply.prompt_tokens)
     evaluated = reply.prompt_tokens - cached
+    item_cells: dict[str, Any] = (
+        {
+            "slot_id": reply.slot_id,
+            "kv_tokens_at_start": reply.slot_tokens_held,
+            "prefix_shared_with_previous": reply.prefix_reused,
+        }
+        if slot == FIRST_CALL
+        else {}
+    )
     return {
         f"{slot}_kind": kind.value,
         f"{slot}_prefill_ms": reply.prefill_ms,
@@ -114,6 +137,7 @@ def _call_cells(slot: str, kind: CallKind, reply: Completion, *, wall_ms: int) -
         f"{slot}_decode_tokens_per_s": (
             round(reply.completion_tokens / decode_s, 2) if decode_s > 0 else None
         ),
+        **item_cells,
     }
 
 
@@ -552,7 +576,7 @@ def two_calls_one_item(
                 )
                 return failed(no_reply)
             so_far.one = one
-            kept.note(**_call_cells("label", CallKind.LABEL, one, wall_ms=label_ms))
+            kept.note(**_call_cells(FIRST_CALL, CallKind.LABEL, one, wall_ms=label_ms))
             _kept_call(
                 kept,
                 date,

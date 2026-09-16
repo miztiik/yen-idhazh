@@ -354,6 +354,18 @@ class Completion:
     prefill_ms: int = 0
     decode_ms: int = 0
     cached_tokens: int = 0
+    #: Which prefix-cache slot answered this call, as llama-server's `id_slot`.
+    #: None where the reply named none, because slot 0 is a real slot.
+    slot_id: int | None = None
+    #: What the slot holds once this call's prompt is in it, as `tokens_cached`.
+    #: `cached_tokens` beside it is what this call read back OUT of the slot, so
+    #: the two answer different questions and a cold slot answers 0 to one of
+    #: them and the whole prompt to the other.
+    slot_tokens_held: int | None = None
+    #: Did this call read anything at all out of the slot? Derived once, in the
+    #: one place that can see whether the server reported `cache_n`: an absent
+    #: field is a server that did not say, not a call that reused nothing.
+    prefix_reused: bool | None = None
 
     @property
     def hit_the_budget(self) -> bool:
@@ -658,7 +670,10 @@ def one_reply(*, thought: Completion, answer: Completion) -> Completion:
 
     `prompt_tokens` and `cached_tokens` are span two's own. Their difference is
     what span two really had to prefill, which is the one number that settles
-    whether the slot held the thinking or re-read it.
+    whether the slot held the thinking or re-read it. The three slot facts ride
+    with them for the same reason and by the same mechanism - `replace` carries
+    what it is not told to change - so a row's slot columns and its cache count
+    describe one span rather than two.
     """
     return replace(
         answer,
@@ -712,6 +727,19 @@ def continued_completion_payload(
     }
 
 
+def _reported(value: object) -> int | None:
+    """One of the server's own counts, or None where the reply did not carry it.
+
+    **Absent is not zero.** Slot 0 is a real slot and a cold slot really holds
+    nothing, so a field that defaulted to 0 would read downstream as a
+    measurement nobody took. A value that is not a whole number is absent too:
+    these fill an instrument column, and an instrument may not cost an item.
+    """
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
+
+
 def parse_completion(body: str) -> Completion:
     """Read the envelope. Nothing here trusts the content yet.
 
@@ -731,6 +759,12 @@ def parse_completion(body: str) -> Completion:
     to read an absence as `stop`, which is the one reading that cannot be told
     from a real clean stop afterwards - so an unreported ending reached the
     census as a reported one, on every row, for ever.
+
+    **The three slot facts are read here and derived nowhere else.** This is the
+    only place that can tell a field the server omitted from a field it set to
+    zero, and `prefix_reused` is taken off the same `cache_n` that
+    `cached_tokens` is, so the boolean and the count cannot disagree about one
+    reply.
     """
     payload = json.loads(body)
     # llama.cpp reports prefill and decode separately; a runtime that does not
@@ -739,6 +773,9 @@ def parse_completion(body: str) -> Completion:
     prefill_ms = round(float(timings.get("prompt_ms", 0.0)))
     decode_ms = round(float(timings.get("predicted_ms", 0.0)))
     cached_tokens = int(timings.get("cache_n", 0))
+    slot_id = _reported(payload.get("id_slot"))
+    slot_tokens_held = _reported(payload.get("tokens_cached"))
+    prefix_reused = cached_tokens > 0 if "cache_n" in timings else None
     if "choices" in payload:
         choices = payload.get("choices") or []
         if not choices:
@@ -754,6 +791,9 @@ def parse_completion(body: str) -> Completion:
             prefill_ms=prefill_ms,
             decode_ms=decode_ms,
             cached_tokens=cached_tokens,
+            slot_id=slot_id,
+            slot_tokens_held=slot_tokens_held,
+            prefix_reused=prefix_reused,
         )
     if "content" not in payload:
         raise ValueError("the runtime returned neither a choice nor a completion")
@@ -766,6 +806,9 @@ def parse_completion(body: str) -> Completion:
         prefill_ms=prefill_ms,
         decode_ms=decode_ms,
         cached_tokens=cached_tokens,
+        slot_id=slot_id,
+        slot_tokens_held=slot_tokens_held,
+        prefix_reused=prefix_reused,
     )
 
 

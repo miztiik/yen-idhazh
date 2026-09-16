@@ -581,6 +581,94 @@ class TestTheRenderedCompletionEnvelope:
             parse_completion('{"timings": {}}')
 
 
+class TestTheThreeSlotFacts:
+    """What the reply says about the prefix-cache slot it was answered from.
+
+    Driven from the same recorded reply as the class above, because these three
+    arrive on the route the summarizer already posts to and cost no extra
+    request (`docs/reference/measurements.md`, 2026-09-15). The recording is
+    build b10444-5f754ea0e and carries no `id_slot`; the pinned build
+    b10598-56db501e7 does, and reads `0` at `-np 1`. So the case the recording
+    cannot reach is built on top of it, one field at a time, the way the stop
+    reasons above are - a whole second fixture would be a file nobody captured.
+    """
+
+    def test_the_recorded_reply_carries_two_of_the_three_and_says_nothing_about_the_third(
+        self,
+    ) -> None:
+        """A field the build did not send is absent, never zero.
+
+        Slot 0 is a real slot and a cold slot really did reuse nothing, so a
+        default here would put a number nobody measured on 12,277 rows.
+        """
+        completion = parse_completion(read_text(RENDERED_REPLY))
+
+        assert completion.slot_id is None, "this build named no slot, which is not slot 0"
+        assert completion.slot_tokens_held == 1646
+        assert completion.prefix_reused is False, "cache_n of 0 is a measurement"
+
+    def test_a_reply_that_names_its_slot_lands_it_beside_the_other_two(self) -> None:
+        """The pinned build's shape: all three, from one reply, at no extra request."""
+        named = json.loads(read_text(RENDERED_REPLY)) | {"id_slot": 0}
+
+        completion = parse_completion(json.dumps(named))
+
+        assert completion.slot_id == 0
+        assert completion.slot_tokens_held == 1646
+        assert completion.prefix_reused is False
+
+    def test_a_reply_that_reported_no_cache_at_all_answers_nothing_about_the_prefix(
+        self,
+    ) -> None:
+        """Absent `cache_n` is a server that did not say, not a call that reused nothing.
+
+        The other two are unaffected, because each field is read on its own. A
+        reader that folded the three into one presence check would lose two
+        measurements to one missing field.
+        """
+        silent = json.loads(read_text(RENDERED_REPLY))
+        del silent["timings"]["cache_n"]
+
+        completion = parse_completion(json.dumps(silent))
+
+        assert completion.prefix_reused is None
+        assert completion.slot_tokens_held == 1646
+        assert completion.cached_tokens == 0, "the count still has to be arithmetic"
+
+    def test_the_boolean_and_the_count_are_read_off_one_field(self) -> None:
+        """`prefix_reused` and `cached_tokens` cannot disagree about one reply.
+
+        `label_cached_tokens` on the census row is this count, and
+        `prefix_shared_with_previous` is this boolean. Deriving the second from
+        anything but the first is how a ledger comes to hold a reading twice and
+        then hold it two ways (Guardrail #10).
+        """
+        warm = json.loads(read_text(RENDERED_REPLY))
+        warm["timings"]["cache_n"] = 1568
+
+        completion = parse_completion(json.dumps(warm))
+
+        assert completion.cached_tokens == 1568
+        assert completion.prefix_reused is True
+
+    def test_a_count_the_server_sent_as_something_else_is_absent_rather_than_fatal(
+        self,
+    ) -> None:
+        """An instrument column may not cost an item.
+
+        No build has done this. It is the shape a build that renamed or retyped
+        a field would arrive in, and these three fill telemetry - losing a
+        summary over one of them would trade the product for the instrument.
+        """
+        odd = json.loads(read_text(RENDERED_REPLY)) | {"id_slot": "0", "tokens_cached": None}
+
+        completion = parse_completion(json.dumps(odd))
+
+        assert completion.slot_id is None
+        assert completion.slot_tokens_held is None
+        assert completion.content.startswith('{\n  "labels"'), "the reply is still read"
+
+
 class TestWhereTheSystemTextGoes:
     """Two placements, one set of words, and what each of them moves.
 

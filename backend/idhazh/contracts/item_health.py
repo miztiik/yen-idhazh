@@ -337,6 +337,11 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-16T12:30",
+            change="The three slot columns carry the item's first call.",
+            why="All three were declared with no producer; the pinned build reports them.",
+        ),
+        ChangelogEntry(
             version="2026-09-16",
             change="label_ms and summary_ms are a stopwatch; both finish reasons may be null.",
             why="A clock that was its two neighbours summed could not see a wait.",
@@ -350,11 +355,6 @@ class ItemHealthRow(Contract):
             version="2026-09-15T22:10",
             change="FailureCode gained model_timed_out and shard_out_of_time.",
             why="Both were being reported under a name that sends an operator to the wrong place.",
-        ),
-        ChangelogEntry(
-            version="2026-09-15T20:00",
-            change="failure_code may now carry model_refused.",
-            why="model_unreachable was doing two jobs.",
         ),
         ChangelogEntry(
             version="2026-08-23",
@@ -708,16 +708,34 @@ class ItemHealthRow(Contract):
     slot_id: int | None = Field(
         default=None,
         ge=0,
-        description="Which llama-server prefix-cache slot served this item.",
+        description=(
+            "Which llama-server prefix-cache slot served this item, from id_slot on the "
+            "reply to its FIRST model call. The row holds one set of these three columns "
+            "for a stage that makes two calls, and the first call is the only one whose "
+            "slot was last touched by the item before this one. Null where the reply "
+            "named no slot, which is not the same as slot 0."
+        ),
     )
     kv_tokens_at_start: int | None = Field(
         default=None,
         ge=0,
-        description="How many tokens that slot already held when the item began.",
+        description=(
+            "What that slot held once the item's first call had been prefilled, from "
+            "tokens_cached on the same reply. It is where the item's second call starts "
+            "from, and then the next item. label_cached_tokens is the other half of the "
+            "pair and answers the opposite question: what the call read back out."
+        ),
     )
     prefix_shared_with_previous: bool | None = Field(
         default=None,
-        description="Did this item's prompt share a prefix with the item before it in the shard?",
+        description=(
+            "Did the item's first call read anything at all out of the slot? Taken from "
+            "the same timings.cache_n that label_cached_tokens is, so the boolean and "
+            "the count cannot disagree about one reply. The second call is excluded on "
+            "purpose: its prompt IS the first one's extended, so it reuses a prefix on "
+            "every row and says nothing about the item before it. Null where the reply "
+            "carried no cache_n at all."
+        ),
     )
     label_prefill_tokens_per_s: float | None = Field(
         default=None,

@@ -111,6 +111,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "The three slot columns carry the item's first call.",
+      "version": "2026-09-16T12:30",
+      "why": "All three were declared with no producer; the pinned build reports them."
+    },
+    {
       "change": "label_ms and summary_ms are a stopwatch; both finish reasons may be null.",
       "version": "2026-09-16",
       "why": "A clock that was its two neighbours summed could not see a wait."
@@ -124,11 +129,6 @@
       "change": "FailureCode gained model_timed_out and shard_out_of_time.",
       "version": "2026-09-15T22:10",
       "why": "Both were being reported under a name that sends an operator to the wrong place."
-    },
-    {
-      "change": "failure_code may now carry model_refused.",
-      "version": "2026-09-15T20:00",
-      "why": "model_unreachable was doing two jobs."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -570,7 +570,7 @@
         }
       ],
       "default": null,
-      "description": "How many tokens that slot already held when the item began.",
+      "description": "What that slot held once the item's first call had been prefilled, from tokens_cached on the same reply. It is where the item's second call starts from, and then the next item. label_cached_tokens is the other half of the pair and answers the opposite question: what the call read back out.",
       "title": "Kv Tokens At Start"
     },
     "label_budget_tokens": {
@@ -975,7 +975,7 @@
         }
       ],
       "default": null,
-      "description": "Did this item's prompt share a prefix with the item before it in the shard?",
+      "description": "Did the item's first call read anything at all out of the slot? Taken from the same timings.cache_n that label_cached_tokens is, so the boolean and the count cannot disagree about one reply. The second call is excluded on purpose: its prompt IS the first one's extended, so it reuses a prefix on every row and says nothing about the item before it. Null where the reply carried no cache_n at all.",
       "title": "Prefix Shared With Previous"
     },
     "published_at": {
@@ -1174,7 +1174,7 @@
         }
       ],
       "default": null,
-      "description": "Which llama-server prefix-cache slot served this item.",
+      "description": "Which llama-server prefix-cache slot served this item, from id_slot on the reply to its FIRST model call. The row holds one set of these three columns for a stage that makes two calls, and the first call is the only one whose slot was last touched by the item before this one. Null where the reply named no slot, which is not the same as slot 0.",
       "title": "Slot Id"
     },
     "source_chars": {
@@ -1524,7 +1524,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-16",
+      "default": "2026-09-16T12:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1615,5 +1615,5 @@
   ],
   "title": "ItemHealthRow",
   "type": "object",
-  "version": "2026-09-16"
+  "version": "2026-09-16T12:30"
 }

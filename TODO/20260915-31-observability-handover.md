@@ -1,6 +1,6 @@
 # Handover: the instrument is built, the slowdown is not fixed
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-16
 
 **Level**: 3 for everything open here, except the two marked Level 5 in section 6.
 
@@ -95,6 +95,8 @@ Fire it with `gh workflow run idhazh-pipeline-tests.yaml --ref main`. It publish
 ### 3.4 Three columns cannot be filled, and one record is unreachable
 
 `slot_id`, `kv_tokens_at_start` and `prefix_shared_with_previous` are declared and empty because the model server does not report them on the completions route. Check whether its `/slots` endpoint does.
+
+**Answered, and the premise was wrong.** The pinned build reports all three on the completions route the summarizer already posts to - `id_slot`, `tokens_cached` and `timings.cache_n`, at no extra request ([`docs/reference/measurements.md`](../docs/reference/measurements.md)). The row has carried them off the item's first call since 2026-09-16, so `/slots` was never needed and this heading's first sentence is history.
 
 `item.abandoned` is wired but unreachable - the model loop cannot exit early, so the sweep over unclosed recorders is always empty. It is there so that an early exit added later says so rather than dropping items silently.
 

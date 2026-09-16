@@ -14,7 +14,7 @@ from idhazh import config, summarize
 from idhazh.classify import calls, dag
 from idhazh.contracts.call_cost import CallKind
 from idhazh.contracts.fingerprint import PipelineInputs
-from idhazh.contracts.item_health import FailureCode
+from idhazh.contracts.item_health import FailureCode, ItemHealthRow
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual_data import VisualData
 from idhazh.contracts.visual_decision import (
@@ -28,6 +28,7 @@ from idhazh.fingerprint import text_digest
 from idhazh.render.write import asset_relpath
 from idhazh.stages import common
 from idhazh.stages.assemble import _recorded_inputs
+from idhazh.telemetry.record import HEALTH_SUFFIX
 
 from ._builders import (
     _work_stage,
@@ -119,6 +120,58 @@ class TestTheWorkStageDispatchesBothCalls:
             assert summary.call_1 is not None and summary.call_2 is not None
             assert summary.call_1.kind is CallKind.LABEL
             assert summary.call_2.kind is CallKind.SUMMARIZE_AND_PLAN
+
+    def test_the_slot_columns_carry_the_first_call_and_not_whichever_ran_last(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
+        """Two calls land in a slot; the row has one set of columns for them.
+
+        The row carries the FIRST call's, because that is the only one whose
+        slot was last touched by the item before this one. The second call's
+        prompt is the first one's extended by construction, so its `cache_n` is
+        above zero on every row and says nothing about anything.
+
+        Both replies are given slot facts here, and deliberately different ones,
+        so a row built from whichever call happened to be last fails rather than
+        passing on a coincidence. `id_slot` of 1 on the second call is a shape no
+        `-np 1` server produces - that is the point of it.
+
+        The numbers come off the recorded rendered reply and the 2026-09-15 probe
+        (`docs/reference/measurements.md`); the fixtures these are written onto
+        are shared by every test in this file and none of the others reads a
+        count off them. The `usage` blocks are written here for the same reason
+        and are what make the two cache counts mean anything - without them both
+        prompts are zero tokens long and every cache count is zero by arithmetic.
+        """
+        label = json.loads(read_text(LABEL_REPLY)) | {"id_slot": 0, "tokens_cached": 1646}
+        label["usage"] = {"prompt_tokens": 1646, "completion_tokens": 96}
+        label["timings"] = {"prompt_ms": 1030.0, "predicted_ms": 611.0, "cache_n": 0}
+        second = json.loads(read_text(SUMMARIZE_AND_PLAN_REPLY)) | {
+            "id_slot": 1,
+            "tokens_cached": 2731,
+        }
+        second["usage"] = {"prompt_tokens": 2731, "completion_tokens": 400}
+        second["timings"] = {"prompt_ms": 60.0, "predicted_ms": 900.0, "cache_n": 1646}
+
+        _run_plan, items, _served = worked(
+            tmp_path,
+            monkeypatch,
+            replies=(json.dumps(label).encode("utf-8"), json.dumps(second).encode("utf-8")),
+        )
+
+        rows = [
+            ItemHealthRow.from_json(read_text(path))
+            for path in sorted(items.glob(f"*{HEALTH_SUFFIX}"))
+        ]
+        assert rows, "the stage sealed no row, so this asserts nothing"
+        for row in rows:
+            assert row.slot_id == 0, "the second call claimed slot 1 and does not own this column"
+            assert row.kv_tokens_at_start == 1646
+            assert row.prefix_shared_with_previous is False
+            # The boolean and the count are one reading, off one `cache_n`. The
+            # second call reused 1,646 tokens and would have made this True.
+            assert row.label_cached_tokens == 0
+            assert row.summary_cached_tokens == 1646
 
     def test_every_item_that_publishes_carries_a_decision(
         self, tmp_path: Path, monkeypatch: MonkeyPatch
