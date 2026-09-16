@@ -72,7 +72,7 @@ from idhazh.embed import (
     text_for,
     to_base64,
 )
-from idhazh.placement import desk_bounds, place, secondary_desk_of
+from idhazh.placement import desk_bounds, freshness_multiplier, place, secondary_desk_of
 from idhazh.rank import desk_of, desks_below_floor
 from idhazh.tag import tags
 
@@ -1205,10 +1205,18 @@ class LeadCandidate:
     term: float
     reason: str
     from_desk_fallback: bool
+    #: What this story's age is worth at the hour the block was chosen, 1.0 down
+    #: towards 0.0. `placement.freshness_multiplier` owns the curve.
+    freshness: float
 
     @property
     def score(self) -> float:
-        return (self.item.rank_score or 0.0) + self.term
+        """How good the story is, times what its age has done to it.
+
+        Age multiplies rather than adding, so it moves where a story sits in
+        time and never outvotes how good the story is.
+        """
+        return ((self.item.rank_score or 0.0) + self.term) * self.freshness
 
 
 def _ordered(candidates: Sequence[LeadCandidate]) -> list[LeadCandidate]:
@@ -1315,13 +1323,24 @@ def leading_stories(
     date: str,
     watchlist: Watchlist,
     ui: UiConfig,
+    placement: PlacementConfig,
+    now: str,
     desk_names: Mapping[str, str] | None = None,
 ) -> list[DigestLead]:
     """The day's leading stories, strongest first, or nothing at all.
 
-    Selection is `rank_score` plus a shared-subject term, across the whole day.
-    Not the head of the published order: that head is grouped by run and then
-    by desk, so it opens on whichever desk sorted first in run 1.
+    Selection is `rank_score` plus a shared-subject term, across the whole day,
+    times what the story's age is worth at `now`. Not the head of the published
+    order: that head is grouped by run and then by desk, so it opens on
+    whichever desk sorted first in run 1.
+
+    **This is the only order in the day that reads a clock.** `rank_score` is
+    fixed at the run that planned the item, so a story planned at 02:20 holds
+    the freshness it earned that morning until midnight. The block is the one
+    place where a 02:20 story and an 18:20 story compete, and it is rebuilt from
+    scratch at every run, so reading the clock here moves nothing a reader has
+    already read. `placement.freshness_multiplier` owns the curve and
+    `placement.py` records why the stream may not read it.
 
     Four caps bound the block and each answers a different question. A desk may
     hold `leading_per_desk`. A source may hold one. A subject may hold one - a
@@ -1373,6 +1392,9 @@ def leading_stories(
                         ),
                         reason=reason,
                         from_desk_fallback=fallback,
+                        freshness=freshness_multiplier(
+                            item.published_at, now=now, config=placement
+                        ),
                     )
                 )
         if refusal is not None and _notable(item, clusters, floor):
@@ -1745,9 +1767,10 @@ def build_day(
         same_story=same_story,
         group_identical_titles=group_identical_titles,
     )
+    frame = placement or PlacementConfig()
     combined = place(
         combined,
-        config=placement or PlacementConfig(),
+        config=frame,
         bounds=desk_bounds(taxonomy),
         closed=desks_below_floor(plan.verticals),
     )
@@ -1817,6 +1840,8 @@ def build_day(
             date=plan.date,
             watchlist=watchlist or Watchlist(version=Watchlist.schema_version(), entities=[]),
             ui=ui or UiConfig(),
+            placement=frame,
+            now=generated_at,
             desk_names=names,
         ),
         embeddings=merged,
