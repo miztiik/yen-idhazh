@@ -457,6 +457,22 @@ against a binary nobody runs.
 pinned asset, runs `--help` and keeps the output. It exists because the
 alternative way to learn what a build accepts is the hour the Gemma run spent.
 
+**Turning the head off is a pointer change, not an edit.** The same Gemma
+weights sit in two files - `config/models/gemma-4-e4b-qat.json` with the head,
+`config/models/gemma-4-e4b-qat-no-draft.json` with `draft` null - and
+`models_file` chooses between them. Both name one `sha256`, so this is one model
+offered two ways rather than two models. The alternative to a second file is
+editing `draft` in place, which is a change somebody has to remember to undo,
+and the run that publishes is not where that gets discovered (`CLAUDE.md`
+Guardrail #6). The bench does not need either file: `runtime_candidate=no_draft`
+patches the head off for one measurement without touching what publishes.
+
+**A file the pointer does not name is still a file it can name**, so every entry
+under `config/models/` is loaded and checked by
+`backend/tests/contracts/test_model_registry.py` rather than only the active
+one. Before that, an alternative sat unvalidated until the day somebody switched
+to it - and that day is a pipeline run.
+
 ## The two measurement cases
 
 Both are manual dispatch. Neither gates a merge: the fastest and slowest shard
