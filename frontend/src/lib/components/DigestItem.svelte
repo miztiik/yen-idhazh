@@ -28,7 +28,7 @@
 	 */
 	import { KIND_WORTH_SAYING, SOURCE_KINDS } from '$lib/bands';
 	import { deskOf } from '$lib/day-shape';
-	import { itemTime, shortDate } from '$lib/format';
+	import { itemTime, paragraphsOf, shortDate } from '$lib/format';
 	import Icon from '$lib/icons/Icon.svelte';
 	import type { DigestCoverage, DigestItem } from '$lib/payload/types';
 	import { shownLenses } from '$lib/payload/lenses';
@@ -76,6 +76,10 @@
 
 	const lenses = $derived(shownLenses(item.lenses));
 	const kindWorthSaying = $derived(KIND_WORTH_SAYING.includes(item.source_kind));
+	/** The summary's paragraphs. One entry on every day published before
+	 * 2026-09-17 and on every short summary written since, so this draws exactly
+	 * what a single `<p>` drew before it existed. */
+	const summaryParagraphs = $derived(paragraphsOf(item.summary));
 	/** The story's own time, or null where there is no number to print.
 	 *
 	 * Null on `time_source: unknown`, where neither the feed nor our own first
@@ -184,7 +188,9 @@
 				{#if read}<span class="sr-only">Read. </span>{/if}{item.title}
 			</svelte:element>
 
-			<p class="text-lg text-text" data-item-summary>{item.summary}</p>
+			{#each summaryParagraphs as paragraph, index (index)}
+				<p class="text-lg text-text" class:mt-3={index > 0} data-item-summary>{paragraph}</p>
+			{/each}
 			{#if item.reader_note}
 				<p class="mt-2 text-base text-text-secondary">
 					{item.reader_note}

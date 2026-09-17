@@ -442,6 +442,7 @@ def label_system_prompt(prompt_config: SummarizeConfig | None = None) -> str:
                 title_words_max=ask.title_words_max,
                 key_point_words_max=ask.key_point_words_max,
                 max_verbatim_words=ask.max_verbatim_words,
+                paragraph_rule=summarize.paragraph_rule(ask),
             ),
             _plan_half(),
         )

@@ -1,6 +1,6 @@
 # Agent Notes - Browser
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-17
 Traps in Playwright, the integrated browser, the service worker, and the Svelte
 components a spec drives. Index and scope:
 [../agent-notes.md](../agent-notes.md).
@@ -47,6 +47,12 @@ expect(await locator.count).toBe(n); // does not
 ```
 
 The helper exists because seven specs already waited longhand and the eighth, written without it, was the one that broke. The ninth was `payload-state.spec.ts` on 2026-09-12: red on `ubuntu-latest` with `Expected: > 0, Received: 0`, green on a re-run with no edit. It is a fragment-focus test, so the day it had to wait for was never what it was about - which is how a spec comes to read a dated route with no wait at all. Ask what the page fetches, not what the test is called.
+
+**`waitUntil: 'networkidle'` never returns on `/console/`**, so `page.goto` dies on its timeout and reads as a broken console page. The console keeps fetching telemetry after first paint, so the idle window never opens. The tell is that the same wait settles on `/`, `/archive/` and `/evals/` in the same snippet - a condition that works on three routes and hangs on the fourth is about that route's fetching, not about navigation. Seen 2026-09-17 during a section 12 smoke. Name the thing you are about to assert on instead:
+
+```javascript
+await page.goto(url, { waitUntil: 'domcontentloaded' });
+```
 
 **A negated `toHaveAttribute` passes when the element is absent**, so it is the wrong shape for "the page is not in state X" - it reports a state the page never reached. Playwright special-cases only `toHaveCount`, `toBeVisible`, `toBeHidden`, `toBeAttached`, `toBeDetached` and `toBeInViewport` for a locator resolving to nothing; everything else falls through to `matches = options.isNot`. Assert the positive form of the state you do want. It is strictly stronger and fails with "element(s) not found" rather than passing.
 

@@ -18,6 +18,7 @@ from idhazh.contracts.base import (
     ChangelogEntry,
     Contract,
     ItemId,
+    Prose,
     Sha256,
     Slug,
     Timestamp,
@@ -90,7 +91,7 @@ class Summary(Contract):
             "costing the item (section 1a)."
         ),
     )
-    summary: str | None = None
+    summary: Prose | None = None
     key_points: list[str] = Field(default_factory=list)
 
     output_digest: Sha256 = Field(

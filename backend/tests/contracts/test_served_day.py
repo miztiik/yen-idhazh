@@ -10,6 +10,7 @@ import pytest
 from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
+from idhazh.contracts.base import paragraphs_of
 from idhazh.contracts.digest_day import DigestItem, DigestVisual
 from idhazh.contracts.digest_view import (
     COVERAGE_NAMES_MAX,
@@ -329,3 +330,35 @@ def test_a_served_day_written_before_the_version_existed_still_reads() -> None:
     del payload["version"]
 
     assert DigestView.model_validate(payload).version == DigestView.schema_version()
+
+
+def test_a_summary_written_before_paragraphs_existed_reads_as_one_paragraph() -> None:
+    """The read-side migration for 2026-09-17, and why it folds instead of refusing.
+
+    Measured 2026-09-17 over the 9,989 summaries in `frontend/public/digest`:
+    none holds a control character, but three end on a space and six carry a
+    lone newline. A version of this rule that REFUSED them would make today's
+    build unable to read days yesterday's build wrote, which section 11 calls a
+    release blocker - so `Prose` folds.
+
+    The shapes are built rather than read off the archive, because a committed
+    day is re-staged on every build and a test that waits for one of those nine
+    to come round is a test with a date on it (`CLAUDE.md` section 13).
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-view" / "one-day.json"))
+    payload["items"][0]["summary"] = "A first claim.\nA second claim. "
+
+    item = DigestView.model_validate(payload).items[0]
+
+    assert item.summary == "A first claim. A second claim."
+    assert paragraphs_of(item.summary) == ["A first claim. A second claim."]
+
+
+def test_a_served_summary_carries_a_paragraph_break_through_unchanged() -> None:
+    """The other half: a break a run wrote is the one thing the fold keeps."""
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-view" / "one-day.json"))
+    payload["items"][0]["summary"] = "A first claim.\n\nA second claim."
+
+    item = DigestView.model_validate(payload).items[0]
+
+    assert paragraphs_of(item.summary) == ["A first claim.", "A second claim."]

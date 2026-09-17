@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-17
 Traps in the commands that decide whether a change is done: the test selector,
 pytest, ruff, mypy, the schema drift gate, the build, the canary day, and the
 measurement recipes that run on top of them. Index and scope:
@@ -49,6 +49,14 @@ python -c "from idhazh.cli import _validator_identity; print(_validator_identity
 
 ```powershell
 git grep -n '"--<your flag>"' -- backend
+```
+
+**`ruff format --check backend` reports 198 files on a clean checkout of `main`, and it is not one of this repository's gates.** `ruff check` is the gate and is what the selector runs; the formatter has never been applied here. Read as your own damage it costs a cycle, and taking its advice is a 198-file reformat nobody asked for. The tell is that the count does not move when your change is not in the tree - run it in the shared main checkout before believing it. Seen 2026-09-17: 198 would reformat, 219 already formatted, identical on the branch and on `main`.
+
+**A hand-picked `pytest` path is not the backend gate, and it goes green while the suite is red.** The selector's `publishing` group runs the WHOLE backend, and a change to a shared contract type reaches modules whose names contain nothing you edited. On 2026-09-17 an annotation on `contracts/base.py` passed `pytest backend/tests/test_summarize.py backend/tests/contracts` and then failed `test_canaries.py`, `test_classify.py` and `test_corpus_contract.py` - three files the hand-picked set could not have named. Ask the selector what it wants rather than guessing:
+
+```powershell
+npm --prefix frontend run test:changed -- --list
 ```
 
 ## Contracts and schemas

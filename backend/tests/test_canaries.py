@@ -39,7 +39,7 @@ from pydantic import ValidationError
 
 from idhazh import cli, config, extract, telemetry
 from idhazh.contracts.article import Article, ArticleStatus, TitleSource
-from idhazh.contracts.base import Model, derive_output_digest, derive_url_key
+from idhazh.contracts.base import Model, derive_output_digest, derive_url_key, normalize_prose
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.qualification import CanaryObservation
@@ -647,17 +647,23 @@ def test_no_planted_attack_reaches_a_span_attribute(canary: Canary, tmp_path: Pa
 
     sink = spans.Collect()
     tracer = telemetry.Tracer(sink=sink, now=lambda: "2026-08-30T06:00:00Z")
+    repeated = _summary_repeating(canary, article)
     with tracer.trace(f"2026-08-30-1-{article.item_id}"), tracer.span(telemetry.SpanName.ITEM):
         with tracer.span(telemetry.SpanName.EXTRACT) as span:
             telemetry.article_attributes(
                 span, article, source_digest=text_digest(article.text or "")
             )
         with tracer.span(telemetry.SpanName.PARSE_REPLY) as span:
-            telemetry.summary_attributes(span, _summary_repeating(canary, article))
+            telemetry.summary_attributes(span, repeated)
 
     planted = (
         canary.raw_title,
         canary.raw_text,
+        # The folded text is what the payload carries, so it is the needle that
+        # can actually be there. Without it a fold would quietly turn the
+        # raw-text needle into one that cannot match, and the sweep would pass
+        # for the wrong reason.
+        repeated.summary or "",
         *canary.must_survive,
         *canary.must_not_survive,
     )
@@ -677,14 +683,16 @@ def _summary_repeating(canary: Canary, article: Article) -> Summary:
     """
     base: dict[str, Any] = json.loads(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json"))
     key_points = [*canary.must_survive] or ["nothing survived"]
+    # The published words, not the raw ones. `Prose` folds a block on read, so a
+    # digest taken over the unfolded text is a digest of words this payload does
+    # not carry - which the contract refuses, correctly.
+    published = normalize_prose(canary.raw_text)
     base["item_id"] = article.item_id
     base["url_key"] = article.url_key
     base["title"] = canary.raw_title
-    base["summary"] = canary.raw_text
+    base["summary"] = published
     base["key_points"] = key_points
-    base["output_digest"] = derive_output_digest(
-        canary.raw_text, key_points, title=canary.raw_title
-    )
+    base["output_digest"] = derive_output_digest(published, key_points, title=canary.raw_title)
     return Summary.model_validate(base)
 
 

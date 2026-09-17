@@ -38,7 +38,12 @@ from idhazh import config, extract
 from idhazh.classify import calls
 from idhazh.classify.calls import summarize_and_plan_schema
 from idhazh.contracts.article import Article, ArticleStatus
-from idhazh.contracts.base import canonical_json, derive_output_digest
+from idhazh.contracts.base import (
+    canonical_json,
+    derive_output_digest,
+    normalize_prose,
+    paragraphs_of,
+)
 from idhazh.contracts.call_cost import CallKind
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
@@ -99,6 +104,7 @@ from idhazh.summarize import (
     length_verdict,
     output_schema,
     output_schema_text,
+    paragraph_rule,
     parse_draft,
     prompt_inputs,
     split_thinking,
@@ -2460,6 +2466,83 @@ def test_a_summary_with_no_sentence_end_inside_the_budget_publishes_whole() -> N
     """A dangling half-clause reads as a bug. An over-long paragraph reads as prose."""
     runaway = "word " * 60
     assert trim_to_words(runaway, 10) == runaway
+
+
+def test_the_trimmer_keeps_the_paragraph_break_it_trims_across() -> None:
+    """The defect this replaces, and the reason it was worth a test.
+
+    The old trimmer rejoined every kept sentence with one space, so a break did
+    not survive a trim - and a trim fires because a reply ran long, which is the
+    only kind of reply this pipeline asks to break at all. A break that dies on
+    exactly the summaries that earn one is a feature with no live path.
+    """
+    two = "One two three four. Five six.\n\nSeven eight nine ten. Eleven twelve."
+    assert trim_to_words(two, 10) == "One two three four. Five six.\n\nSeven eight nine ten."
+
+
+def test_a_trim_that_empties_the_second_paragraph_leaves_no_dangling_break() -> None:
+    """One paragraph and no trailing blank line, which `Prose` would fold away anyway."""
+    two = "One two three four.\n\nFive six seven eight."
+    assert trim_to_words(two, 4) == "One two three four."
+
+
+def test_the_sanitizer_and_not_the_prompt_decides_what_a_paragraph_break_is() -> None:
+    """Guardrail #11 in one assertion: the prompt asks, the fold is what enforces.
+
+    Four things a decoder emits for "a blank line", and one shape out. The lone
+    newline rejoins because a model that wrapped its prose at some width meant
+    one paragraph, and the tab is the case that matters most - a control
+    character in a published field breaks a CSV cell and a `merge=union` day
+    file, and no paragraph break is worth that.
+    """
+    assert normalize_prose("One.\nTwo.") == "One. Two."
+    assert normalize_prose("One.\n\n\n\nTwo.") == "One.\n\nTwo."
+    assert normalize_prose("One.\r\n\r\nTwo.") == "One.\n\nTwo."
+    assert normalize_prose("One.\tTwo.") == "One. Two."
+    assert normalize_prose("  One.\n\nTwo.  ") == "One.\n\nTwo."
+
+
+def test_the_paragraph_cap_folds_the_extra_text_in_rather_than_dropping_it() -> None:
+    """A cap that shortened a summary would undo the length gate that just passed it."""
+    three = "One.\n\nTwo.\n\nThree."
+    assert normalize_prose(three, paragraphs_max=2) == "One.\n\nTwo. Three."
+    assert normalize_prose(three, paragraphs_max=1) == "One. Two. Three."
+    assert paragraphs_of(normalize_prose(three, paragraphs_max=2)) == ["One.", "Two. Three."]
+
+
+def test_the_paragraph_rule_names_the_cap_and_the_length_that_earns_a_break() -> None:
+    """A break in a 45-word summary makes two half-thoughts, not two paragraphs.
+
+    The threshold is a number the model applies to the length it was already
+    asked for, rather than a question answered per band here - see the next
+    test for why it cannot be answered per band.
+    """
+    ask = SummarizeConfig()
+    rule = paragraph_rule(ask)
+    assert str(ask.paragraphs_max) in rule
+    assert str(ask.second_paragraph_from_words) in rule
+    assert "empty line" in rule
+
+
+def test_the_paragraph_rule_cannot_vary_with_the_article() -> None:
+    """The prefix cache is why, and it is a budget fact rather than a style one.
+
+    The two-call path renders this into a system turn that takes no article, so
+    that turn is the same bytes on every item and holds one cache slot at
+    `n_parallel = 1`. A rule that read the band would make the system turn vary
+    per item and evict the article on every alternation.
+    """
+    ask = SummarizeConfig()
+    rendered = {paragraph_rule(ask) for _ in ask.bands}
+    assert len(rendered) == 1, "the rule reads the config and never a band"
+    assert paragraph_rule(ask) in calls.label_system_prompt(ask)
+
+
+def test_one_paragraph_max_turns_the_break_off_everywhere() -> None:
+    """The knob's substitution test: change the config, change the behaviour."""
+    off = paragraph_rule(SummarizeConfig(paragraphs_max=1))
+    assert off.strip() == "Write the summary as one paragraph."
+    assert "empty line" not in off
 
 
 def test_a_summary_far_over_its_ask_still_reaches_the_reader() -> None:

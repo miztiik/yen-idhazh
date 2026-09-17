@@ -293,6 +293,34 @@ class SummarizeConfig(Model):
             "publishes with the least-restating up to the band's key_points_min."
         ),
     )
+    paragraphs_max: int = Field(
+        default=2,
+        ge=1,
+        le=4,
+        description=(
+            "Most paragraphs a published summary may hold. One turns the feature off "
+            "and folds every summary back to a single block, which is what every day "
+            "published before 2026-09-17 carries. Two is what ships: a reader scanning "
+            "a wall of 114 words gets one place to breathe, and a third break in a "
+            "summary this length makes paragraphs that are one sentence each. The cap "
+            "is enforced by folding the extra text into the last paragraph kept rather "
+            "than by dropping it, so it can never shorten a summary."
+        ),
+    )
+    second_paragraph_from_words: int = Field(
+        default=90,
+        ge=1,
+        description=(
+            "The length, in words of the ASK, at and above which the prompt asks for a "
+            "second paragraph. Below it the prompt asks for one block, because a break "
+            "in a 45-word summary makes two half-thoughts rather than two paragraphs. "
+            "Compared against the band's target_words_max, so the question is asked "
+            "once per band rather than per article: at the committed bands that is the "
+            "two longest of five. A request, not a control - the shape a reply actually "
+            "has is whatever `normalize_prose` folds it into, and a model that writes "
+            "one paragraph for a long article is published as one."
+        ),
+    )
     asks_for_a_visual_plan: bool = Field(
         default=True,
         description=(

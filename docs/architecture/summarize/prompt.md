@@ -196,6 +196,53 @@ second call an item on the tail of a run, against a failure the three outcomes
 above already handle. Building it is a decision somebody makes with a
 measurement of how often the tail is reached, not a gap left by accident.
 
+## A long summary may be two paragraphs
+
+Since 2026-09-17 a summary may hold a paragraph break, and the separator is one
+blank line and nothing else. `summarize.paragraphs_max` is the ceiling and
+`summarize.second_paragraph_from_words` is the length at which the prompt starts
+asking for one; setting the first to `1` puts every summary back to a single
+block, which is what every day published before that date carries.
+
+**The prompt asks and the sanitizer decides.** Prompt wording is untrusted text
+like any other (Guardrail #11), so what makes a break is
+`contracts.base.normalize_prose`, which runs on the reply at `parse_draft`. A
+lone newline rejoins its lines, because a model that wrapped its prose at some
+width meant one paragraph. A run of blank lines is one break. Every other control
+character becomes a space - a tab in a published field breaks a CSV cell, a
+`merge=union` day file and the reader's line box, and no paragraph break is worth
+those three.
+
+**The rule the model is given names a number, not a band.** The two-call path
+renders it into a system turn that takes no article at all, which is what makes
+that turn the same bytes on every item and lets it hold one prefix-cache slot at
+`n_parallel = 1`. A rule that read the article's rung would make the system turn
+vary per item and evict the article on every alternation, so the threshold is
+stated as a word count the model applies to the length it was already asked for.
+`summarize.paragraph_rule` is the one place that sentence is built, and both
+prompt files take it.
+
+**The cap folds rather than drops.** Text past `paragraphs_max` joins the last
+paragraph kept. Dropping it would shorten a summary the length gate above has
+already measured, and a long last paragraph is a worse-looking summary rather
+than a wrong one.
+
+**The trimmer keeps the break it trims across.** This is the clause that made the
+feature real rather than nominal: the trimmer rejoined every kept sentence with a
+single space until 2026-09-17, so a break did not survive a trim - and a trim
+fires because a reply ran long, which is the only kind of reply this pipeline
+asks to break at all. A break that died on exactly the summaries that earn one
+had no live path.
+
+**Reading an older payload costs one space on nine stories.** `Prose` folds on
+read rather than refusing, because refusing would be a release blocker (CLAUDE.md
+section 11). Measured 2026-09-17 over the 9,989 summaries in
+`frontend/public/digest`: none holds a control character, three end on a space
+and six carry a lone newline that a run published before anything asked about
+paragraph shape. HTML already collapsed both, so no published page changes; what
+changes is that every reader of the field now gets one shape instead of three.
+
+
 **The decoder rail is the trap in this design.**
 `SummarizeConfig.decoder_words_max` is deliberately the loosest number in the
 file - the widest ask plus its allowance - because the rail is enforced as a
