@@ -1,6 +1,6 @@
 # Principles
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-17
 
 The small set of beliefs that shape every yen-idhazh decision, stated once as vocabulary. These operationalize the engineering contract for a build-time digest pipeline; the authoritative guardrails live in [../../CLAUDE.md](../../CLAUDE.md) section 1. This page explains the *why* a reader needs before those guardrails make sense - it does not restate them.
 
@@ -10,7 +10,7 @@ What reaches a reader is a file that was committed hours earlier. No backend, no
 
 ## 2. The runner is the architecture
 
-A stock 4 vCPU runner with no GPU, a 6 h job cap and a 10 GB cache is the machine. Which model can be used, how long an article may be, how work is divided and when a job is killed all fall out of that. When a feature does not fit, the feature is simplified - the budget is not raised. Treating the constraint as the platform rather than as an inconvenience is what keeps the design honest.
+A stock 4 vCPU runner with no GPU and a 6 h job cap is the machine. Which model can be used, how long an article may be, how work is divided and when a job is killed all fall out of that. When a feature does not fit the job, the feature is simplified - the budget is not raised. Treating the constraint as the platform rather than as an inconvenience is what keeps the design honest. Not every number in the budget works that way, and Guardrail #2 says which: the 10 GB cache is GitHub's to evict, so crossing it costs a re-download rather than a run.
 
 ## 3. Measured, not estimated
 
