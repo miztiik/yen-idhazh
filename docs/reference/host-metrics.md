@@ -224,13 +224,14 @@ Authority: Carmack, 2026-09-16.
 already compares the ledgers a stage writes against the paths its job stages, and
 it reads `stages/work.py`. The probe is not there - it runs from `cli.py` as its
 own subcommand, early, because the bandwidth reading wants an idle host. So the
-guard was correct and blind at the same time. A second guard now reads
-`telemetry/silicon.py` the same way, and since 2026-09-17 it reads the workflow
-too: it asks which jobs run the probe and checks each one's staged list, so a
-fourth job that records a machine and commits nothing fails there. **Scoping a
+guard was correct and blind at the same time. A second guard reading
+`telemetry/silicon.py` shipped beside the fix and was retired on 2026-09-17: a
+second file-scoped guard is the same defect a second time. **Scoping a
 drift guard to a file rather than to a question is what let a second writer
-through**, and the two guards are kept as two rather than merged, because each
-names the source it protects in the message it fails with.
+through**, and what replaced both names no file - it charges each store to the
+job whose `python -m idhazh <verb>` step reaches its writer, so a fourth job that
+records a machine and stages nothing fails without an edit
+([github-actions.md](github-actions.md#the-commit-steps-push-through-a-rebase-and-the-one-that-can-rebuild-rebuilds)).
 
 **A repeated row now settles, and it could not have before.** `ledger.keyed_paths`
 is the registry the post-merge pass walks, and this ledger was not in it - which
