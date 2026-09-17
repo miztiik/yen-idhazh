@@ -76,6 +76,8 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 
 This section is the intent and the contract derived from it. A worker implements it. A worker does not re-decide it. Where a worker finds the contract wrong, that is an ESCALATE under table 0b or a persona debate under docs/how-to/execute-a-plan.md - never a local judgement call.
 
+**Every line number in this plan is a pointer, not an identity.** They were read against `origin/main` on 2026-09-17 and `main` moves several times a day - `digest.yml`'s job anchors shifted about eighteen lines within hours of this plan being written. **Locate by the quoted content, never by the number**, and where a quote no longer matches anything, that is a finding to report rather than a nearby line to settle for. The symbol names, file paths, key tuples and column names in this section do not rot the same way and are the reliable anchors.
+
 ### 2.1 Intent
 
 Three sentences. Everything below serves them.
