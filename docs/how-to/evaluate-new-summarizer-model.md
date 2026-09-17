@@ -362,14 +362,18 @@ in `problems` as `input_drift_dropped`, and records `repeats_timed` beside
 when an case has fewer than two agreeing repeats left, because a median over one
 reading is not a reading.
 
-**Dropping a repeat is the cheap answer, not the right one.** The right one is to
-freeze the text: keep repeat 1's articles and replay them, which is what
+**Dropping a repeat is the answer, and freezing the text was declined.** The
+alternative was to keep repeat 1's articles and replay them, which is what
 `idhazh qualify` already does and the reason its own docstring gives for existing.
-The bench cannot do it today because replaying needs `stage_work` to accept an
-article it already holds, and no stage exposes that - a stage contract change
-rather than a workflow one. Until then a repeat that read edited text is dropped
-rather than replayed, so a long run still loses readings a frozen corpus would
-have kept.
+The bench could not do it today in any case: replaying needs `stage_work` to
+accept an article it already holds, and no stage exposes that - a stage contract
+change rather than a workflow one. The owner declined it on 2026-09-16 for a
+reason that outranks the cost: **text changing is how the real world works**, so a
+bench that never meets an edited page measures a world the pipeline does not run
+in. So a repeat that read edited text is dropped rather than replayed, `problems`
+names it `input_drift_dropped`, and a long run loses readings a frozen corpus
+would have kept. That loss is the price of measuring the live web, and it is paid
+rather than hidden.
 
 A laptop result is a laptop result. It can reject a candidate quickly and cannot
 select production.
