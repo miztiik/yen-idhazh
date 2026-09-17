@@ -1,6 +1,6 @@
 # What CI depends on outside its own files
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-17
 
 The settings this repository has to carry and the platform behaviour nobody here
 controls. Both decide how a workflow behaves, and neither is visible in a
@@ -84,9 +84,11 @@ Verified 2026-08-20.
 - **A cache entry unread for 7 days is deleted**, and a restore is paid once per
  *job* rather than once per run. That is why `digest.yml` gives a worker a
  shard of several items instead of fanning out one job per item: the weights
- restore is the largest fixed cost, and every extra job pays it again. Which
- entry each workflow fills, and the bar a new one clears against the shared
- 10 GB ceiling, is in [ci-caches.md](ci-caches.md).
+ restore is the largest fixed cost, and every extra job pays it again. Past the
+ shared 10 GB allowance GitHub saves the new entry anyway and evicts by oldest
+ last-access until the total is under, so a full cache costs a re-download and
+ never a failed save. Which entry each workflow fills, and the bar a new one
+ clears, is in [ci-caches.md](ci-caches.md).
 - **`GITHUB_TOKEN` allows 1,000 API requests per hour per repository**, shared
  across every job of every concurrently running workflow. A step that polls in
  a loop spends a budget the scheduled pipeline also needs.

@@ -1202,7 +1202,7 @@ disagree. None of them reaches the prerendered `/archive/` document.
 
 Not everything variable is tunable. Two categories stay out of `config/`:
 
-- **Facts, not preferences.** The runner's core count, the 6 h job cap and the 10 GB cache ceiling are properties of the platform (Guardrail #2). Making them configurable would imply they can be chosen.
+- **Facts, not preferences.** The runner's core count, the 6 h job cap and the 10 GB cache allowance are properties of the platform (Guardrail #2). Making them configurable would imply they can be chosen.
 - **Identifiers.** Stage names, event names, visual kinds and score-band names are schema-validated enums defined in the contracts. Code references them; they never change to match a label. Which word a new key takes is [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md).
 
 The distinction matters because a value in `config/` reads as an invitation to change it.
