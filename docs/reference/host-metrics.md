@@ -38,11 +38,28 @@ whole. This is a day tree, because it only earns its keep when somebody counts
 across many days, and a day tree is the shape a bounded window can read
 (Guardrail #12).
 
-**The two tables join on the key, and no column is duplicated to make that
-work.** Both carry `date`, `run_id`, `job`, `shard`, and a job runs on one
-machine, so the key is the join. There is deliberately no `host_fingerprint`
-column on the counters row: it would be a second copy of a value this table
-already holds, and a second copy is a thing that can disagree.
+**Three tables join on the key, and no column is duplicated to make that work.**
+This table, `state/runtime-counters.csv` and
+`state/item-health/<YYYY>/<MM>/<DD>.csv` all carry `date`, `run_id`, `job` and
+`shard`, and a job runs on one machine, so the key is the join. There is
+deliberately no `host_fingerprint` column on the counters row and none on the
+item row: it would be a second copy of a value this table already holds, and a
+second copy is a thing that can disagree.
+
+**The item row is the third from 2026-09-17, and it is the one that answers per
+item.** It carried `shard` from 2026-08-30 and could spell three of the four
+columns; `plan`, `work` and `assemble` all write shard 0, so three of the four
+found every job of the run rather than the one that read the item. With `job`
+beside it the question "which processor summarized this item, and what could it
+do" is one equality:
+
+```sql
+SELECT ih.item_id, hf.fingerprint, hf.cpu_model, hf.microcode, hf.flags
+FROM item_health ih
+JOIN host_fingerprint hf
+  ON hf.date = ih.date AND hf.run_id = ih.run_id
+ AND hf.job  = ih.job  AND hf.shard  = ih.shard
+```
 
 ## Identity
 

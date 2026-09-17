@@ -48,7 +48,12 @@ from typing import Final
 
 from idhazh import assemble, ledger
 from idhazh.contracts.run_plan import RunPlan
-from idhazh.contracts.runtime_counters import WORK_JOB, RuntimeCountersRow, cpu_busy_pct_between
+from idhazh.contracts.runtime_counters import (
+    WORK_JOB,
+    RuntimeCountersRow,
+    ServerJob,
+    cpu_busy_pct_between,
+)
 from idhazh.fingerprint import host_cpu
 
 LOG: Final = logging.getLogger("idhazh")
@@ -206,15 +211,27 @@ class HostFacts:
     cpu_model: str | None
     runner_name: str | None
     cgroup_peak_bytes: int | None
+    #: Which workflow job drew this machine. Not a reading - no file on the host
+    #: says it - so it is handed in rather than probed for, and it travels here
+    #: because it is one half of the key the item row joins the host record on.
+    job: ServerJob | None = None
 
     def shard_cells(self) -> dict[str, str | None]:
-        """The two a shard reads once and notes on every item it records.
+        """The three a shard reads once and notes on every item it records.
+
+        `job` is here rather than beside `shard` in the caller because the pair
+        it forms is the join, and a key column filled in one place cannot drift
+        from the machine cells filled in another.
 
         `cgroup_peak_bytes` is deliberately not here. It is a high-water mark
         that grows across a job, so an item row takes it again at the end of
         each item rather than once before the first one runs.
         """
-        return {"cpu_model": self.cpu_model, "runner_name": self.runner_name}
+        return {
+            "cpu_model": self.cpu_model,
+            "runner_name": self.runner_name,
+            "job": None if self.job is None else self.job.value,
+        }
 
 
 def host_facts(
@@ -222,6 +239,7 @@ def host_facts(
     reported_cpu_model: str | None = None,
     reported_cgroup_peak: str | None = None,
     environ: dict[str, str] | None = None,
+    job: ServerJob | None = None,
 ) -> HostFacts:
     """One call, so that no two consumers disagree about what machine this was.
 
@@ -229,11 +247,16 @@ def host_facts(
     job reads the processor and copies the kernel peak in its own shell, before
     Python exists. Hand over nothing and nothing is assumed: each reading falls
     back to the file this module would have opened anyway.
+
+    `job` is the one argument with no fallback, because there is nothing to fall
+    back to: no file on the host names the workflow job, and a default would
+    claim a machine for every row that never said which job it was.
     """
     return HostFacts(
         cpu_model=cpu_model(reported_cpu_model),
         runner_name=runner_name(environ),
         cgroup_peak_bytes=cgroup_peak_bytes(reported_cgroup_peak),
+        job=job,
     )
 
 

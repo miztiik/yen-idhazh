@@ -125,7 +125,7 @@ function writeItemHealthCanary() {
 		'source_id', 'stage', 'outcome', 'code', 'http_status', 'source_chars', 'source_words',
 		'summary_words', 'detail', 'fetch_ms', 'extract_ms', 'summarize_ms', 'prefill_ms',
 		'decode_ms', 'input_tokens', 'output_tokens', 'cached_tokens', 'source_words_before_cap',
-		'shard', 'span_integrity', 'elements_found', 'element_class', 'model_calls',
+		'shard', 'job', 'span_integrity', 'elements_found', 'element_class', 'model_calls',
 		'label_kind', 'label_prefill_ms', 'label_decode_ms', 'label_input_tokens',
 		'label_output_tokens', 'label_cached_tokens', 'summary_kind', 'summary_prefill_ms',
 		'summary_decode_ms', 'summary_input_tokens', 'summary_output_tokens', 'summary_cached_tokens',

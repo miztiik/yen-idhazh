@@ -77,6 +77,18 @@
       "title": "ItemStage",
       "type": "string"
     },
+    "ServerJob": {
+      "description": "Which workflow job produced a row.\n\nOurs to name, so it is a closed set. Every other identifier on a host row is\na string the machine chose and cannot be one - see\n`docs/reference/host-metrics.md`. Refusing anything else is what stops a typo\nbecoming a job nobody can group by.\n\nEvery value is a job's own id in its workflow file, lowercase, so a reader\ngoes from a row to the steps that wrote it with no lookup table in between.\nA display name would drift from the thing it identifies.\n\n**`visuals` is here for the rows and not for a job.** `digest.yml` ran one\nuntil 2026-09-13, when the small model, its job and its flag were retired\ntogether. Six committed counters rows still carry the value, and a member\nwith no producer left is the only thing that can read them back.",
+      "enum": [
+        "plan",
+        "work",
+        "assemble",
+        "visuals",
+        "runtime"
+      ],
+      "title": "ServerJob",
+      "type": "string"
+    },
     "SourceForm": {
       "enum": [
         "article",
@@ -111,6 +123,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "job names the workflow job whose machine took this row's readings.",
+      "version": "2026-09-17",
+      "why": "Shard alone does not reach the host record: more than one job spells shard 0."
+    },
+    {
       "change": "The three slot columns carry the item's first call.",
       "version": "2026-09-16T12:30",
       "why": "All three were declared with no producer; the pinned build reports them."
@@ -124,11 +141,6 @@
       "change": "time_source is typed TimeSource rather than a lowercase token.",
       "version": "2026-09-15T22:50",
       "why": "A closed set the pipeline mints is one a producer selects from, never spells."
-    },
-    {
-      "change": "FailureCode gained model_timed_out and shard_out_of_time.",
-      "version": "2026-09-15T22:10",
-      "why": "Both were being reported under a name that sends an operator to the wrong place."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -558,6 +570,18 @@
       "default": null,
       "description": "What the item cost, from item_started_at to item_ended_at with queue_wait_ms taken out. The stage fetches every item and then runs the model over them in a different order, so the raw wall clock counts the whole queue ahead of each item and the column summed to the shard's own duration once per item.",
       "title": "Item Total Ms"
+    },
+    "job": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ServerJob"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Which workflow job's machine took this row's readings - never which job wrote the row. With `shard` this is the whole of `HOST_FINGERPRINT_KEY`, so an item resolves to exactly one host record. Null on the same terms as `shard`: assemble writes the day's census and cannot know whose machine an item ran on, and every row written before this column predates it."
     },
     "kv_tokens_at_start": {
       "anyOf": [
@@ -1524,7 +1548,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-16T12:30",
+      "default": "2026-09-17",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1615,5 +1639,5 @@
   ],
   "title": "ItemHealthRow",
   "type": "object",
-  "version": "2026-09-16T12:30"
+  "version": "2026-09-17"
 }

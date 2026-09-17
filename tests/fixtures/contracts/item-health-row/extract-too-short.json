@@ -31,6 +31,7 @@
   "item_index": null,
   "item_started_at": null,
   "item_total_ms": null,
+  "job": null,
   "kv_tokens_at_start": null,
   "label_budget_tokens": null,
   "label_cache_pct": null,

@@ -221,6 +221,9 @@ def test_one_sampler_call_reaches_both_consumers_and_they_cannot_disagree(
     assert item_cells["cgroup_peak_bytes"] == shard_row.cgroup_peak_bytes == A_KERNEL_PEAK
     assert once.shard_cells()["cpu_model"] == shard_row.cpu_model == A_PROCESSOR
     assert once.shard_cells()["runner_name"] == "ubuntu-4core-3"
+    assert once.shard_cells()["job"] is None, (
+        "no file on the host names the workflow job, so nothing may invent one"
+    )
 
 
 def test_every_host_cell_the_sampler_names_is_a_column_the_item_row_declares() -> None:
@@ -247,5 +250,6 @@ def test_every_host_cell_the_sampler_names_is_a_column_the_item_row_declares() -
         "cgroup_peak_bytes",
         "cpu_model",
         "runner_name",
+        "job",
     }
     assert sampled <= set(ItemHealthRow.model_fields)

@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-17
 
 The console's interactive charts read a published projection of item health. They
 never read `state/item-health/` directly.
@@ -43,7 +43,7 @@ The published columns are exactly:
 
 `date, run_id, item_id, vertical, source_id, stage, outcome, code, source_words, summary_words, source_words_before_cap, fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens, cached_tokens, model_calls, label_kind, label_prefill_ms, label_decode_ms, label_input_tokens, label_output_tokens, label_cached_tokens, summary_kind, summary_prefill_ms, summary_decode_ms, summary_input_tokens, summary_output_tokens, summary_cached_tokens, queue_wait_ms, label_ms, summary_ms, visual_plan_ms, visual_plan_ms_is_estimate, faithfulness_ms, model_wait_ms, item_total_ms, stage_gap_ms, visual_plan_tokens_written, label_prefill_tokens_per_s, label_decode_tokens_per_s, summary_prefill_tokens_per_s, summary_decode_tokens_per_s, cpu_model, cpu_busy_pct, load_1m`
 
-Forty-nine of the census's 113. The last seventeen landed 2026-09-15 and are
+Forty-nine of the census's 114. The last seventeen landed 2026-09-15 and are
 [the three questions](#the-seventeen-columns-an-operator-asks-for-since-2026-09-15)
 below. Positions 20 to 31 are the two model calls' own shares of the five cost
 cells before them, and the kind of call each one was. The flat cells are their
@@ -184,7 +184,7 @@ Nothing on the page needs one today.
 
 ### The seventeen columns an operator asks for, since 2026-09-15
 
-The census measures 113 columns an item at a time. This projection published 32
+The census measures 114 columns an item at a time. This projection published 32
 of them, so three questions an operator asks had no answer anywhere a person
 could read.
 

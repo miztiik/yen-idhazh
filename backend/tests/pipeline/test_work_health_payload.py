@@ -1,6 +1,6 @@
 """Does the row a shard recorded outlive the process that recorded it?
 
-The recorder validates 113 cells an item at a time and used to hand them to a
+The recorder validates 114 cells an item at a time and used to hand them to a
 log line and to nothing else. A log line is a CI artifact that expires, so the
 census was rebuilt later out of the article and the summary payloads, which
 between them cannot carry most of those cells. These tests read the file the
@@ -31,6 +31,7 @@ from pytest import LogCaptureFixture, MonkeyPatch
 from idhazh import config
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.stages import common
 from idhazh.stages.work import stage_work
 from idhazh.telemetry import host
@@ -116,7 +117,7 @@ def test_the_file_is_the_row_the_shard_reported_cell_for_cell(
 
     The log line is the only account of a shard that anybody trusted before this
     payload existed. If the two ever disagree, a reader has no way to tell which
-    one measured the item - so the test compares all 113 cells rather than the
+    one measured the item - so the test compares all 114 cells rather than the
     handful a caller happens to use.
     """
     caplog.set_level(logging.INFO, logger="idhazh")
@@ -224,6 +225,26 @@ def test_the_shard_names_one_machine_on_every_row_it_records(
 
     assert len({row.cpu_model for row in written.values()}) == 1
     assert {row.runner_name for row in written.values()} == {"ubuntu-4core-3"}
+
+
+def test_every_row_a_shard_seals_names_the_job_and_the_worker_that_read_it(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """`job` and `shard` together are the key that reaches this machine's host record.
+
+    A shard is not a key on its own: `plan`, `work` and `assemble` each draw a
+    machine and each write shard 0, so three of the four columns resolve to
+    three host records rather than one. The work stage is the only place that
+    knows both, which is why this asserts on the rows it sealed rather than on
+    the census that reads them later.
+    """
+    a_machine_that_answers(monkeypatch, tmp_path / "host")
+    _, items_dir = worked(tmp_path, monkeypatch)
+
+    written = rows(items_dir)
+
+    assert written, "no rows means the loop below asserts nothing"
+    assert {(row.job, row.shard) for row in written.values()} == {(ServerJob.WORK, 0)}
 
 
 def test_an_item_that_failed_extraction_still_leaves_a_row(

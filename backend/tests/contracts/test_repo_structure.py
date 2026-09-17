@@ -152,6 +152,7 @@ def test_the_item_health_ledger_columns_are_defined_once() -> None:
         "cached_tokens",
         "source_words_before_cap",
         "shard",
+        "job",
         "span_integrity",
         "elements_found",
         "element_class",

@@ -27,6 +27,7 @@ from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
+from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX
 from idhazh.evals import evidence, metrics, score
@@ -136,12 +137,14 @@ def _shard_cells(
     size and the output budget that item ran under, and a shard-grain ledger
     somewhere else makes them join two files to get it.
 
-    **Every one of them is config except the two `facts` carries**, so none of
+    **Every one of them is config except the three `facts` carries**, so none of
     them is a measurement. They are the settings the run was given, which is
     exactly what a person comparing two runs needs - the readings are the machine
     cells beside them. The processor and the runner label come from the one
     `host_facts` call this shard's counters row reads as well, so the two rows
-    cannot name two different machines.
+    cannot name two different machines. `job` rides with them for the same
+    reason: with `shard` it is the key that reaches this job's host record, and a
+    key filled from two places is a key that can disagree with itself.
     """
     model = settings.models.summarize
     inference = model.inference
@@ -265,7 +268,7 @@ def _failure_detail(recorder: ItemRecorder, summary: Summary) -> str | None:
 def _slowest(finished: list[ItemHealthRow]) -> dict[str, Any] | None:
     """The item that cost the shard most, and enough to find it again.
 
-    Four cells and not the row: a shard record carrying 113 columns of one item
+    Four cells and not the row: a shard record carrying 114 columns of one item
     buries the totals beside it, and the item's own completion record is already
     in the log for anyone who wants the rest.
 
@@ -347,7 +350,7 @@ def stage_work(
     # the CPU model read are each a few file opens; doing them per item would be
     # 80 scans for an answer that cannot change inside a shard.
     server_pid = host.llama_server_pid()
-    shard_facts = host.host_facts()
+    shard_facts = host.host_facts(job=ServerJob.WORK)
     shard_cells = _shard_cells(
         settings, shard=shard, shard_item_count=len(mine), facts=shard_facts
     )
