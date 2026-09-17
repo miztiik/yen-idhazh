@@ -167,7 +167,7 @@ which is the same family.
 | 13 | A source's quality decides its own future | - | C | DONE | - | - | p29-r13 |
 | 14 | The composite score, proving it changed nothing | - | C | DONE | - | #799 | p29-r14 |
 | 15 | The weights and the 0.88 floor | 12, 14 | D | PENDING | - | - | - |
-| 16 | Refuse boilerplate, on a week of evidence | 13 | D | PENDING | - | - | - |
+| 16 | Refuse boilerplate, on a week of evidence | 13 | D | DESCOPED | - | - | - |
 | 17 | Does a short extraction publish at all | - | D | DONE | - | - | p29-r17 |
 
 **Owner decisions, 2026-09-15.** Every row carries its contract. The contracts
@@ -780,11 +780,37 @@ that is merely correct has not either (`CLAUDE.md` section 14).
 
 ### The store the loop reads
 
-**The defect it closes.** `boilerplate_ratio(lines, seen_elsewhere)` in
-`backend/idhazh/extract.py` has existed, with an enum value, two config knobs,
+**REVERTED, 2026-09-17, the day it shipped.** Everything below was built and
+merged, then taken back out. The half of row #13 that survives is the retirement
+loop and the reliability strip; this store is gone. Three findings killed it, and
+they are kept here because they are the price of reviving it.
+
+**It changed nothing.** A full run with the store live produced **zero
+`boilerplate` cells in 12,917 committed item-health rows** - the same zero the
+defect statement below quotes as the reason to build it. Only 31 lines across 14
+hosts cleared the three-page floor; the busiest host had 8, and a page would have
+to be 40 percent those 8 lines to trip the ratio.
+
+**It cost 36 files.** A contract, a schema, a module, a ledger key, a prune rule,
+a fold in assemble, a read in every shard, three config knobs, and prose on seven
+doc pages - for a signal that fired zero times.
+
+**It made a word mean three things.** This repository already used "chrome" for
+the console's own furniture and for the browser we smoke-test in, across 31
+files. The store added a third sense in the same tree.
+
+**The order was wrong, and that is the lesson.** Guardrail #10 says measure when
+a number would change the decision. The number here was cheap - count committed
+extractions carrying a line the same host printed on three other pages - and it
+was taken after the instrument was built rather than before. Anything reviving
+this store takes that count first.
+
+**The defect it was built to close.** `boilerplate_ratio(lines, seen_elsewhere)`
+in `backend/idhazh/extract.py` has existed, with an enum value, two config knobs,
 tests and documentation on three pages, and **has never fired**: nothing in
 production passes `seen_elsewhere`, so it divides by an empty set and returns
-0.0. Measured: **zero `boilerplate` cells in 12,277 committed item-health rows.**
+0.0. That is still true, and after this revert it is the signal's resting state
+rather than a gap waiting on a store.
 
 **Contract.**
 
@@ -944,17 +970,23 @@ missing. **Today a false merge is cheap and it will never be this cheap again.**
 
 ## Row #16 - refuse boilerplate, on a week of evidence
 
-**Intent.** Turn the chrome signal from a recording into a refusal, once there
-are real rows to read.
+**DESCOPED, 2026-09-17.** There is nothing left to read. The store this row was
+waiting a week on was reverted the day it shipped, so `boilerplate` is back to
+dividing by an empty set and no run will ever write a cell for this row to
+inspect. Reviving the row means reviving the store first.
 
-**Contract.** After row #13 has run for a week, read the `boilerplate` cells it
-wrote. If they name hosts that genuinely serve templates, flip
-`extract.reject_boilerplate` to true and land the refusal **before summarize**.
-If they name genuine articles, tune `boilerplate_ratio_max` instead and say what
-the reading was.
+**Intent, as written.** Turn the boilerplate signal from a recording into a
+refusal, once there are real rows to read.
 
-**This is a reading, not a design question.** Correction level 3, and it needs a
-person because it changes what publishes.
+**Why the evidence never arrived.** A full run with the store live produced
+**zero `boilerplate` cells in 12,917 committed item-health rows**. Only 31 lines
+across 14 hosts ever cleared the three-page floor, and the busiest host had 8 -
+which would have to be 40 percent of an article's lines to trip the ratio.
+
+**What would restart it.** A measurement first, then the store: count how many
+committed extractions contain a line the same host printed on three or more other
+pages, off the corpus we already hold. If that number is zero again, the signal
+itself is the thing to delete rather than the store.
 
 ## Row #17 - does a short extraction publish at all
 

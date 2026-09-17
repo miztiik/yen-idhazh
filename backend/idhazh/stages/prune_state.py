@@ -7,11 +7,9 @@ body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
 from __future__ import annotations
 
 from datetime import date as date_type
-from datetime import timedelta
 from pathlib import Path
 
-from idhazh import chrome, ledger, retention
-from idhazh.contracts.chrome_line import CHROME_LINE_RULE
+from idhazh import ledger, retention
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.extract import ExtractConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
@@ -109,7 +107,6 @@ def stage_prune_state(
     removed += _prune_feed_health_shards(state, observability, today, dry_run=dry_run)
     removed += _prune_score_shards(state, observability, today, dry_run=dry_run)
     removed += _prune_trial_shards(state, run, retention_config, today, dry_run=dry_run)
-    _prune_chrome_lines(state, extract_config or ExtractConfig(), today, dry_run=dry_run)
     result = retention.prune_telemetry(
         state, observability, today, public_root=public, dry_run=dry_run
     )
@@ -267,62 +264,6 @@ def _prune_seen_shards(
         seen.kept[0] if seen.kept else "no day file",
     )
     return list(seen.deleted)
-
-
-def _prune_chrome_lines(
-    state: Path, knobs: ExtractConfig, today: date_type, *, dry_run: bool
-) -> int:
-    """Forget the chrome lines no page has carried for a while, and re-apply the cap.
-
-    **This is what makes the bound on `state/chrome.csv` real.** The fold in
-    `stages.assemble` caps each host at `chrome_lines_per_host_max` on the way
-    in, but a `merge=union` can put back a line a fold evicted, and nothing in
-    the fold removes a line whose host stopped printing it - a rebuilt template
-    would be carried for ever against pages that cannot match it. Both are this
-    pass.
-
-    It returns a count rather than a file list and does not join `removed`,
-    because nothing here deletes a file: one file loses rows. `_report_removals`
-    names files, and naming a hash there would name nothing a person can act on.
-
-    A row written under a retired reduction goes too. Its hash answers a
-    different question, so keeping it holds space against a line that could be
-    counted.
-
-    Runs with the rest of this stage, after the day is committed, so the worst a
-    failure costs is one run's worth of rows.
-    """
-    held = ledger.load_chrome(state)
-    if not held:
-        LOG.info("chrome prune: the store holds no line, so there is nothing to forget")
-        return 0
-    cutoff = (today - timedelta(days=knobs.chrome_forget_days)).isoformat()
-    fresh = [row for row in held if row.line_rule == CHROME_LINE_RULE and row.last_seen >= cutoff]
-    kept = chrome.fold(
-        (), known=fresh, date=cutoff, lines_per_host_max=knobs.chrome_lines_per_host_max
-    )
-    dropped = len(held) - len(kept)
-    if not dropped:
-        LOG.info(
-            "chrome prune: every one of %s lines was seen since %s and every host is "
-            "inside its cap of %s",
-            len(held),
-            cutoff,
-            knobs.chrome_lines_per_host_max,
-        )
-        return 0
-    if not dry_run:
-        ledger.write_chrome(state, kept)
-    LOG.info(
-        "chrome prune%s: dropped %s of %s lines - not seen since %s, over the cap of %s "
-        "a host, or written under a retired reduction",
-        " (dry run)" if dry_run else "",
-        dropped,
-        len(held),
-        cutoff,
-        knobs.chrome_lines_per_host_max,
-    )
-    return dropped
 
 
 def _prune_counterfactual_shards(

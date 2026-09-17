@@ -80,6 +80,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-17T18:00",
+            change="The three extract.chrome_* knobs, removed with the store they governed.",
+            why="Over a full run the store moved the boilerplate signal zero times.",
+        ),
+        ChangelogEntry(
             version="2026-09-17T17:00",
             change="extract.reject_too_short, additive, default false. Never rejects an abstract.",
             why="Two of the three shape signals had a switch and the third did not.",
@@ -93,11 +98,6 @@ class AppConfig(Contract):
             version="2026-09-17T15:00",
             change="The prune block, additive, dry_run true and two collections.",
             why="GitHub holds 1 GB of artifacts that no file in this repository names.",
-        ),
-        ChangelogEntry(
-            version="2026-09-17T12:00",
-            change="bench.corpus_items, additive, default 3.",
-            why="The bench corpus was two source literals, and at five it overran the job.",
         ),
         ChangelogEntry(
             version="2026-08-21",

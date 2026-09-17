@@ -516,7 +516,7 @@ def _rewritten_stores() -> set[str]:
     A writer that replaces settles nothing as it writes, so it names no key. The
     post-merge key is still right for it: the file is `merge=union`, so two runs'
     folds stack in the merged copy and the settler is the only thing that can take
-    one of them back out again. `state/chrome.csv` is the case (`ledger.write_chrome`).
+    one of them back out again. No store is in this shape today.
     """
     stores = _writer_stores()
     replaced = {store for name, store in stores.items() if name.startswith("write_")}
