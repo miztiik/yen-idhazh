@@ -39,12 +39,12 @@ always downloaded a model would turn the one-minute probe below into the
 slowest question here, and a `WEIGHTS_FILE` allowed to be empty would make the
 refusals every other caller depends on optional.
 
-**`idhazh-pipeline-tests.yaml` and `probe.yml` are on those scripts.**
-`digest.yml`, `measure.yml` and `validate.yml` still declare the three variables
-in their own `env:` block and fetch the build themselves.
+**`idhazh-pipeline-tests.yaml`, `probe.yml` and `validate.yml` are on those
+scripts.** `digest.yml` and `measure.yml` still declare the three variables in
+their own `env:` block and fetch the build themselves.
 
-So the three values are written in **four places today: the pin file and three
-`env:` blocks.** It was six until 2026-09-17, and converting the other three
+So the three values are written in **three places today: the pin file and two
+`env:` blocks.** It was six until 2026-09-17, and converting the other two
 takes it to one. `digest.yml` is the last and the largest conversion, because
 that is the workflow that publishes.
 
@@ -63,10 +63,16 @@ same file.
 
 The weights cache key names the build: `llm-<weights>-<revision>-<build>-v4` in
 the two `digest.yml` jobs and in `idhazh-pipeline-tests.yaml`,
-`validate-<challenger>-<build>-v3` in `validate.yml`. The `digest.yml` suffix
+`qualify-<candidate>-<build>` in `validate.yml`. The `digest.yml` suffix
 moved to `v4` when the weights half stopped coming from a workflow variable, so
 the first run after that refetched once rather than restoring an entry nobody
-could attribute. `v3` was the same move for the build.
+could attribute.
+
+A converted caller reads `<build>` off the step that ran the pin, never off a
+workflow variable. In `validate.yml` that step is in the `plan` job and the
+build travels as a job output, because `needs` resolves before a shard's first
+step and `steps` does not - which is the same reason the model refs travel that
+way.
 
 **The key matters more than the pin.** The fetch step runs only on a cache
 miss. Keyed on the weights alone, the cache froze one binary and then served a
