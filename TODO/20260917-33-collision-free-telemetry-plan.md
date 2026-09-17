@@ -85,9 +85,11 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 9 | Server batching counters, per item | - | - | **COLLAPSED into #7** | - | - | - |
 | 8 | Memory split by prefill and decode | - | - | **ESCALATED - not dispatchable** | - | - | - |
 
-**Section numbers and row numbers are unrelated. Find a row by its `Row #N` title**, never by section number - section 20 holds Row #18 and section 29 holds Row #27. "The panel analysis" is the name of the section that scores all 23 panels; it is cited by that name and never as "section 19", because Row #19 is a different thing.
+**The plan is in two parts, and a row heading carries its row number and nothing else.** Part A is the write path - rows #1 to #17, which close the collision that destroyed 303 rows. Part B is the read path - rows #18 to #28, which make the panel analysis true on the page. **Nothing in Part A depends on Part B.** Row headings were numbered by section until 2026-09-17; they are not any more, because "section 19" and "Row #19" were different things and the plan cited both. Find a row by its `Row #N` heading.
 
-**Rows #18 to #28 are the console half.** Row #18 runs first and alone: it writes the twelve chart-craft rules into `docs/concepts/console-design.md` so no later panel row re-argues them. The panel analysis carries the panel-by-panel scoring and every ruling those rows implement. **Row #14 is ABSORBED into Row #21** - two rows built one panel, and Row #21's outcome is a strict superset of Row #14's, so they were not independently revertible.
+**Rows are listed in DISPATCH order, not numeric order.** Row #17 sits between #4 and #5 because it depends on #4, and the numbers record when a row was added rather than when it runs.
+
+**Rows #18 to #28 are the console half.** Row #18 runs first and alone: it writes the twelve chart-craft rules into `docs/concepts/console-design.md` so no later panel row re-argues them. The panel analysis at the head of Part B carries the panel-by-panel scoring and every ruling those rows implement. **Row #14 is ABSORBED into Row #21** - two rows built one panel, and Row #21's outcome is a strict superset of Row #14's, so they were not independently revertible.
 
 **Group I is a CHAIN, not a fan-out, and this is the plan's own medicine.** Seven console rows name `frontend/src/routes/console/machine/+page.svelte`, one file of 64,634 bytes holding all 15 panels as siblings, and four of them name `frontend/src/lib/charts/machine.ts`. Fowler found on 2026-09-17 that the console half would otherwise reproduce in the frontend the exact collision the backend half exists to remove - intent 2.1.1 says two writers never share a path, and `Rollback: None` means there is no merge driver, no key and no dedup pass for markup. **The price: the console half serialises and takes longer in wall clock.** The alternative - extracting the 15 panels into one component file each so every panel row owns a file - is a Level 3 refactor with no row here. It is priced and offered in Row #27's rejected alternatives, not assumed.
 
@@ -509,7 +511,11 @@ No technical debt. Every artifact below is deleted by the row named, in the same
 
 Fowler found on 2026-09-17 that the word-list form catches none of D28 through D33, and that one existing spec reads `runtime-counters.csv` as a bare path string carrying neither spelling - the grep catches it only because `runtime.counters` treats the dot as a wildcard. The structural half is what makes the sweep mean what it says.
 
-## 3 - Row #1 - Segment store and the `compact` stage, shipped inert
+# PART A - The write path: segments, compaction, and the ledgers
+
+Rows #1 to #17. These close the collision that destroyed 303 rows on 2026-09-16. They depend on nothing in Part B.
+
+## Row #1 - Segment store and the `compact` stage, shipped inert
 
 - **Scope:** `state/segments/` exists, `idhazh compact` drains it and is wired into `assemble` and the hygiene workflow, and nothing writes a segment yet.
 - **Files touched:**
@@ -546,7 +552,7 @@ Fowler found on 2026-09-17 that the word-list form catches none of D28 through D
 | 3 | A branch per job that `assemble` merges | A stale branch pins pre-prune history and defeats `prune.yml` | Branch cleanup for a dead assemble, plus 8 fetch-merge-delete cycles a run, for durability one commit already gives | Fowler |
 | 4 | Leave the rebase-tolerance fix (PR 840) as the whole answer | Writers still share a filename, so it fails intent 2.1.1 outright | Keeping `dedupe_ledgers`, six `*_KEY` tuples, the two-header repair and six hand-listed staging paths | Fowler |
 
-## 4 - Row #2 - `host-fingerprint` writes segments
+## Row #2 - `host-fingerprint` writes segments
 
 - **Scope:** `plan`, `work` and `assemble` write `host-fingerprint` segments; `assemble` compacts them; nothing writes the head directly.
 - **Files touched:** `backend/idhazh/ledger.py`, `backend/idhazh/telemetry/silicon.py`, `.github/workflows/digest.yml`, `.github/workflows/measure.yml`, `backend/tests/pipeline/test_compact.py`, `backend/tests/telemetry/test_silicon.py`
@@ -567,7 +573,7 @@ Fowler found on 2026-09-17 that the word-list form catches none of D28 through D
 | 1 | Move all four ledgers in one row | One revert would take four ledgers with it | Nothing technical; it trades a reviewable unit for a shorter table | Fowler |
 | 2 | Keep `assemble` writing the head directly since it has no siblings | Two writers of one path is the thing being removed, and "has no siblings today" is how the next one arrives | An exception a later reader has to re-derive | Fowler |
 
-## 5 - Row #3 - `item-health`, `scores`, `score-index` write segments
+## Row #3 - `item-health`, `scores`, `score-index` write segments
 
 - **Scope:** `work` and `assemble` write segments for the three item-grain ledgers.
 - **Files touched:** `backend/idhazh/ledger.py`, `backend/idhazh/evals/writer.py`, `backend/idhazh/evals/archive.py`, `backend/idhazh/stages/assemble.py`, `.github/workflows/digest.yml`, `backend/tests/pipeline/test_compact.py`, `backend/tests/evals/`
@@ -586,7 +592,7 @@ Fowler found on 2026-09-17 that the word-list form catches none of D28 through D
 | --- | --- | --- | --- | --- |
 | 1 | Give segments their own contract and schema | A segment holds the head's rows; a second shape for the same rows is the thing that drifts | Three more schemas and a drift surface that proves nothing | Fowler |
 
-## 6 - Row #4 - `span-rollup` writes segments
+## Row #4 - `span-rollup` writes segments
 
 - **Scope:** `work` writes `span-rollup` segments; compaction merges them into the month head.
 - **Files touched:** `backend/idhazh/ledger.py`, `backend/idhazh/telemetry/spans.py`, `.github/workflows/digest.yml`, `backend/tests/pipeline/test_compact.py`
@@ -604,7 +610,7 @@ Fowler found on 2026-09-17 that the word-list form catches none of D28 through D
 | --- | --- | --- | --- | --- |
 | 1 | Move `span-rollup` to a day tree while we are here | Unrelated to collision; its reader is already bounded by `TIMELINE_WINDOW_MONTHS` | A published-shard rewrite and a console reader change for no collision benefit | Fowler |
 
-## 6a - Row #17 - `runtime-counters` writes segments
+## Row #17 - `runtime-counters` writes segments
 
 - **Scope:** the `counters` stage writes a segment instead of appending to the one shared file, so `runtime-counters` stops being a collider while it still exists.
 - **Files touched:** `backend/idhazh/ledger.py`, `backend/idhazh/telemetry/host.py` (`stage_counters`), `.github/workflows/digest.yml`, `.gitattributes`, `backend/tests/pipeline/test_compact.py`
@@ -625,7 +631,7 @@ Fowler found on 2026-09-17 that the word-list form catches none of D28 through D
 | 1 | Let Row #12 depend on Row #11 as first drafted | The collision fix - the thing 303 rows were destroyed for - would wait on four rows of column work through a contract file whose changelog was already at its cap | Weeks of exposure to the failure the plan exists to stop | Fowler |
 | 2 | Split the plan in two | The user asked for one plan, and this row buys the same independence for one extra `append_*` path | Two plan-docs, two closures, one shared contract section to keep in sync | Fowler proposed it; the user's one-plan instruction and this row together answer it |
 
-## 7 - Row #5 - Machine page stops lying about a day with no rows
+## Row #5 - Machine page stops lying about a day with no rows
 
 - **Scope:** the Hardware route tells three states apart and says which: the instrument had not started, the day was quiet, and **the day published articles and its machine record is gone**.
 - **Files touched:** `frontend/src/lib/charts/machine-cards.ts`, `frontend/src/lib/components/MachineCard.svelte`, `frontend/src/lib/console/recording.ts`, `frontend/src/routes/console/machine/+page.server.ts`, `frontend/src/routes/console/machine/+page.svelte`, the fleet panel, `frontend/tests/`
@@ -648,7 +654,7 @@ Fowler found on 2026-09-17 that the word-list form catches none of D28 through D
 | --- | --- | --- | --- | --- |
 | 1 | Leave it; the page just draws fewer points | It does not draw fewer points, it prints a false sentence - `machine-cards.ts` line 191 falls back to `source: 'counters'` and the card then says the record had not begun | The operator keeps losing the difference between a missing instrument and destroyed rows | Susan |
 
-## 8 - Row #6 - One concurrency group for `digest`, `validate`, `measure`
+## Row #6 - One concurrency group for `digest`, `validate`, `measure`
 
 - **Scope:** the three workflows that commit `state/` cannot run at the same time.
 - **Files touched:** `.github/workflows/digest.yml`, `.github/workflows/validate.yml`, `.github/workflows/measure.yml`, `backend/tests/workflows/`
@@ -668,7 +674,7 @@ Fowler found on 2026-09-17 that the word-list form catches none of D28 through D
 | --- | --- | --- | --- | --- |
 | 1 | Let segments fix it | Segments narrow what a digest shard can lose; they do not narrow what `validate.yml` picks up when it stages `state` whole | An unbounded, rare, human-triggered corruption path left open | Carmack |
 
-## 9 - Row #7 - OS memory, load, and the derived decode count, per item
+## Row #7 - OS memory, load, and the derived decode count, per item
 
 - **Scope:** every item row records what the MACHINE had, not only what a process held, plus the one server counter worth keeping - in ONE contract commit with ONE changelog entry.
 - **Files touched:** `backend/idhazh/contracts/item_health.py`, `schemas/item-health-row.schema.json` (generated), `backend/idhazh/telemetry/host.py` (`Watch.read_now`), `backend/idhazh/stages/summarize.py`, `frontend/scripts/build-canary.mjs`, `backend/tests/telemetry/`, `backend/tests/contracts/`
@@ -693,7 +699,7 @@ Fowler found on 2026-09-17 that the word-list form catches none of D28 through D
 | 3 | Read the samples out of `rss-samples.tsv` by item window | Decision 1 - measured wrong on production data | The plan's own rejected alternative 1, rebuilt with a different instrument | Carmack |
 | 4 | `busy_slots_per_decode` as a per-item delta | `llamacpp:n_busy_slots_per_decode` is declared a gauge - a lifetime average, not a counter - so two reads cannot be differenced. And it reads `1.0` on 382 of 383 committed rows, because one python worker per shard sends one request at a time | Nothing buys it. The number does not vary and the mechanism does not support the arithmetic | Carmack, correcting his own earlier ruling |
 
-## 10 - Row #8 - Memory split by prefill and decode - ESCALATED, NOT DISPATCHABLE
+## Row #8 - Memory split by prefill and decode - ESCALATED, NOT DISPATCHABLE
 
 **This row cannot be built on what the row records. Do not dispatch it. It is here so nobody re-derives it as a good idea.**
 
@@ -705,13 +711,13 @@ The user asked for `llama_rss_peak_prefill_bytes` and `llama_rss_peak_decode_byt
 
 **What would make it buildable:** `label_started_at` and `summary_started_at` on `ItemHealthRow`, and a `Watch` that marks its ticks against them. That is new instrumentation to make a measurement possible, which is a different piece of work from moving a measurement that already exists - ESCALATE 0b6. It needs its own price and its own decision.
 
-## 11 - Row #9 - COLLAPSED into Row #7
+## Row #9 - COLLAPSED into Row #7
 
 Its two columns split three ways once Carmack measured them on 2026-09-17. `n_decode_calls` is derivable from columns the row already carries, so it moved into Row #7 with no probe at all. `busy_slots_per_decode` is refused outright - it is a gauge, so two reads cannot be differenced into an interval average, and it reads `1.0` on 382 of 383 committed rows because one python worker per shard never opens a second slot. Section 2.7 carries both rulings.
 
 Collapsing it also retires the changelog overflow and the five-file hand-conflict that two parallel `ItemHealthRow` rows would have had.
 
-## 12 - Row #10 - `model_load_ms` and `job_seconds` join `host-fingerprint`
+## Row #10 - `model_load_ms` and `job_seconds` join `host-fingerprint`
 
 - **Scope:** the two genuinely job-grain cells move to the ledger whose grain is the job.
 - **Files touched:** `backend/idhazh/contracts/host_fingerprint.py`, `schemas/host-fingerprint-row.schema.json` (generated), `backend/idhazh/telemetry/silicon.py`, `.github/workflows/digest.yml`, `backend/tests/telemetry/`, `backend/tests/contracts/`
@@ -732,7 +738,7 @@ Collapsing it also retires the changelog overflow and the five-file hand-conflic
 | 1 | Put them on `item-health` | They happen once per job; stamping a job total on ~400 item rows is the failure Susan rejected for the staleness signal | An operator reads the number 400 times and can act on it zero times | Susan |
 | 2 | Move the fingerprint probe to job end so one write carries everything | Destroys `mhz_at_probe` and `boot_seconds`, the two readings the probe exists for | Two measurements, to save a join the compaction already does | Fowler |
 
-## 13 - Row #11 - Delete `runtime-counters` and everything that reads it
+## Row #11 - Delete `runtime-counters` and everything that reads it
 
 - **Scope:** D1 through D10 and D19 through D22 of section 2.11 are gone, `ServerJob` and `WORK_JOB` move to `contracts/base.py`, and the Hardware page is rebuilt on `item-health` and `host-fingerprint`.
 - **Files touched:** every path named in D1-D10 and D19-D22, plus `backend/idhazh/contracts/base.py`, `frontend/src/routes/console/machine/+page.server.ts`, `frontend/src/lib/charts/machine-cards.ts`, `frontend/src/lib/charts/fleet.ts`, `frontend/src/lib/charts/machine.ts`, `frontend/src/lib/charts/machine-split.ts`, `frontend/scripts/build-canary.mjs`, `frontend/scripts/tests/build-state.test.mjs`, `backend/tests/workflows/_harness.py`, `backend/idhazh/telemetry/publish/machine.py`, `docs/concepts/growing-reads.md`
@@ -757,7 +763,7 @@ Collapsing it also retires the changelog overflow and the five-file hand-conflic
 | 2 | Keep the file for the cross-check | **The cross-check is kept WITHOUT the file** - `server_prompt_tokens` and `server_prompt_seconds` move to `host-fingerprint` at the same key (2.7b), so the two-clocks panel keeps working on two independent instruments. The first draft said Row #9 moved the check to item grain; that was **false**, and Andre caught it on 2026-09-17: Row #9's survivor is arithmetic over the very ledger it would be checking | 411 MB of git a year to carry 250 KB of rows, for a check two columns already give | Andre |
 | 3 | Keep a read-side fallback for one release | The user ruled no strangler fig | A second code path that has to be deleted later, by someone who no longer remembers why it exists | the user |
 
-## 14 - Row #12 - Delete the merge machinery
+## Row #12 - Delete the merge machinery
 
 - **Scope:** D11 through D14 and D23 of section 2.11. No path in the repository carries a union merge driver except the two single-writer ledgers that declare it explicitly.
 - **Files touched:** `.gitattributes`, `.github/scripts/commit-and-push.sh`, `.github/workflows/digest.yml`, `backend/idhazh/stages/dedupe_ledgers.py` (deleted whole), `backend/idhazh/cli.py`, `backend/tests/workflows/`, `backend/tests/pipeline/`
@@ -778,7 +784,7 @@ Collapsing it also retires the changelog overflow and the five-file hand-conflic
 | 1 | Delete `dedupe_ledgers.py` whole | Its key logic is what makes the compaction idempotent | Re-deriving six key tuples and the supersede rule inside the new module | **REVERSED on 2026-09-17.** Fowler showed the premise false: `keyed_paths` and the settle function are in `ledger.py`, not the stage. The module IS deleted whole, and this row is kept to record the error |
 | 2 | Keep `merge=union` as a safety net | A silent stack is worse than a conflict that stops the push, and a net nobody tests is a net nobody has | The exact failure `dedupe_ledgers.py` line 30 calls "the one shape every reader of it assumes cannot happen" | Carmack |
 
-## 15 - Row #13 - Compaction lag on the console band
+## Row #13 - Compaction lag on the console band
 
 - **Scope:** `band.json` carries the three fields in section 2.9 and the console renders the sentence when the lag is non-zero.
 - **Files touched:** `backend/idhazh/contracts/console_band.py`, `schemas/console-band.schema.json` (generated), `backend/idhazh/telemetry/publish/console_band.py`, `frontend/src/lib/console/band.ts`, `frontend/src/lib/components/ConsoleBand.svelte`, `frontend/src/contracts/`, `frontend/tests/`
@@ -801,34 +807,13 @@ Collapsing it also retires the changelog overflow and the five-file hand-conflic
 | 1 | A new console route for compaction health | The band is fetched by every console route and already ranks a worst-thing across them | A route, a payload, a nav entry, for one sentence | Susan |
 | 2 | Say nothing; the window control already shows the end date | Every number on the page reads as current. A page silently two days behind is not thinner, it is confidently wrong | The operator finds out from somewhere else, or not at all | Susan |
 
-## 16 - Row #14 - The per-item machine load panel
-
-- **Scope:** one panel drawing what each item cost the machine, from the columns Row #7 creates.
-- **Files touched:** `frontend/src/lib/charts/`, `frontend/src/routes/console/machine/+page.svelte`, `frontend/src/lib/server/payload.ts`, `frontend/tests/`
-- **Acceptance gates:** local - frontend selected checks, `npx playwright test --project=console`. CI - full suite. Browser smoke per section 12 including the data-absent arm. Plus the sufficiency checks in `docs/concepts/design-system.md`.
-- **Oracle:** rendered against a fixture day, the panel shows one mark per item in run order, and a day whose items carry null OS columns renders the panel's empty state rather than a flat line at zero. **What it cannot settle:** whether it is good enough to ship - that is Susan's ruling on the built panel, taken during the row.
-- **Decisions:**
-
-| # | Decision | Authority |
-| --- | --- | --- |
-| 1 | The panel answers one question: **does the machine lose headroom as a job goes on, and is the kernel evicting the weight pages while it does** - `os_mem_available_min_bytes` against `os_mem_cached_bytes`, one mark per item in run order | Jony and Susan. It is a live question: a work shard ran at 91.9 percent of its 200 min bound and peak server memory reached 12.66 GiB of 16 GB |
-| 2 | **The panel must say what it cannot separate.** It cannot say WHICH phase of the model call costs the peak - that is the escalated Row #8 | Susan - "a memory panel that stays silent about what it cannot separate invites the reader to assume it separated it" |
-| 3 | The panel declares a `tone` and sits with the newest-run panels; it does NOT become a 16th flat `h2` sibling | Susan - the route already fails the one-thing-lands-first check with 15 equal siblings and zero grouping headings. The grouping question itself is Jony's and is not this row |
-| 4 | Absence is drawn as absence, per `Reading<T>` carrying `from` and `outOf` | Susan - a figure made from three shards of sixteen may not pose as covering the run |
-
-- **Rejected alternatives:**
-
-| # | Option | Why rejected | What it would cost to take | Authority |
-| --- | --- | --- | --- | --- |
-| 1 | No panel; the columns are enough for an operator querying the CSV | The data has existed per item for weeks and nobody has seen it; a column nobody draws is a column nobody checks | The question that motivated Rows #7 and #8 stays unanswered on the page | Susan |
-
-## 16 - Row #14 - ABSORBED into Row #21
+## Row #14 - ABSORBED into Row #21
 
 Row #14 was going to build one panel drawing what each item cost the machine. Row #21 builds one panel carrying item, shard and span grains plus machine load, which is a strict superset of that outcome. They shared `machine.ts`, `machine/+page.svelte` and `payload.ts`, and no dependency edge existed between them, so both were dispatchable at the same instant into the same slot pool - two workers building one panel.
 
 Fowler collapsed it on 2026-09-17 against the plan's own test: **a row is one outcome that can be verified and reverted, and Row #21 cannot be reverted without reverting Row #14.** Row #21 carries Row #14's four decisions forward unchanged.
 
-## 17 - Row #15 - Generated TypeScript contracts replace the hand-written ones
+## Row #15 - Generated TypeScript contracts replace the hand-written ones
 
 - **Scope:** `HostFingerprint` and any other hand-written TypeScript mirror of a Pydantic contract is generated, and the drift gate covers it.
 - **Files touched:** `frontend/src/lib/server/host-fingerprint.ts`, `frontend/src/contracts/`, `backend/idhazh/contracts/export.py`, `frontend/scripts/`, `backend/tests/contracts/`
@@ -847,7 +832,7 @@ Fowler collapsed it on 2026-09-17 against the plan's own test: **a row is one ou
 | --- | --- | --- | --- | --- |
 | 1 | Leave it; it has not drifted yet | "Has not drifted yet" is the state every drift starts in, and section 1a already says frontend types are generated | A silent divergence the drift gate cannot see | Fowler |
 
-## 18 - Row #16 - Docs, and the orphan sweep
+## Row #16 - Docs, and the orphan sweep
 
 - **Scope:** every page that describes the old shape describes the new one, `retention.fold_month` is renamed, and the sweep in section 2.11 returns empty.
 - **Files touched:** `docs/reference/github-actions.md`, `docs/concepts/telemetry.md`, `docs/concepts/growing-reads.md`, `docs/concepts/partitions.md`, `docs/concepts/adaptive-pruning.md`, `docs/architecture/contracts/schemas.md`, `docs/reference/repository-layout.md`, `docs/reference/measurements.md`, `backend/idhazh/retention.py`, `AGENTS.md`, any module `AGENTS.md` whose invariants moved
@@ -867,7 +852,11 @@ Fowler collapsed it on 2026-09-17 against the plan's own test: **a row is one ou
 | --- | --- | --- | --- | --- |
 | 1 | A docs row per surface, folded into each code row | A doc that describes a shape half-migrated is worse than one that describes the old shape honestly | Sixteen partial rewrites of five pages | Fowler |
 | 2 | Rename every `fold` in the repository | 49 files, most of them Unicode case-folding | Churn with no reader benefit | Fowler |
-## 19 - Signal from noise: what every console panel is for
+# PART B - The read path: what every console panel is for
+
+Rows #18 to #28. These make the panel analysis true on the page. Row #18 runs first and alone; the rest are a chain, not a fan-out.
+
+## The panel analysis - signal from noise
 
 The goal in section 0 is made checkable here. Susan ruled this section on 2026-09-17 after reading all 23 panels, both timing components, the chart library and the committed ledgers. **Score today: 13 pass, 2 partial, 8 fail.**
 
@@ -1003,7 +992,7 @@ Row #18 writes these into `docs/concepts/console-design.md` **before any panel r
 
 **Every panel the new columns earn lands inside a panel that already exists or inside Row #21.** The route grows by nothing and loses three: `Where a shard's clock went` is deleted, `Where the run's time went` moves to Pipeline, and `Peak memory` dissolves into the merged memory panel. **15 Hardware panels become 12, and Pipeline gains 1.**
 
-## 20 - Row #18 - Chart-craft doctrine
+## Row #18 - Chart-craft doctrine
 
 - **Scope:** table 19D lands in `docs/concepts/console-design.md` and the sufficiency checks gain the two-second clause. No code.
 - **Files touched:** `docs/concepts/console-design.md`, `docs/concepts/design-system.md`
@@ -1023,7 +1012,7 @@ Row #18 writes these into `docs/concepts/console-design.md` **before any panel r
 | --- | --- | --- | --- | --- |
 | 1 | Let each panel row make its own call | Nine rows re-arguing axis and stacking order produce nine answers, and a reader cannot learn nine | Nine reviews instead of one | Susan |
 
-## 21 - Row #19 - The shard board
+## Row #19 - The shard board
 
 - **Scope:** `Shards of the newest run` answers its own claim - read and write rate per shard, memory and CPU as range marks, load and job clock, tooltips.
 - **Files touched:** `frontend/src/lib/charts/machine.ts`, the shard-board component, `frontend/src/routes/console/machine/+page.server.ts`, `frontend/src/routes/console/machine/+page.svelte`, `frontend/tests/`
@@ -1043,7 +1032,7 @@ Row #18 writes these into `docs/concepts/console-design.md` **before any panel r
 | --- | --- | --- | --- | --- |
 | 1 | A piecewise 0/10/50/100 axis | Equal pixel steps for unequal value steps misreports by construction | Low-end detail compresses on a linear domain - and that compression is the true picture of a 6x spread | Susan |
 
-## 22 - Row #20 - Timing panels merge and move to Pipeline
+## Row #20 - Timing panels merge and move to Pipeline
 
 - **Scope:** `Where a shard's clock went` is deleted; `Where the run's time went` moves to Pipeline and gains a shard/item grain switch, a per-shard sort, tooltips, and legend keys for hollow and hatched.
 - **Files touched:** **Pipeline currently loads NONE of this data, so this row is bigger than its first draft said** (Fowler, 2026-09-17):
@@ -1075,7 +1064,7 @@ Row #18 writes these into `docs/concepts/console-design.md` **before any panel r
 | 1 | Keep the panel and make the bar thinner | The band is 0.026 px of 760. No thickness makes it appear | A legend that teaches the reader a category is zero when it is unmeasurable | Susan |
 | 2 | Leave the timeline on Hardware and only delete the span panel | The two panels are 22 KB of the 64 KB Hardware route, and moving them is what makes room for the memory work | Hardware stays at 15 flat siblings and Row #27 has nothing to group | Susan |
 
-## 23 - Row #21 - Memory and load, three grains - ABSORBS Row #14
+## Row #21 - Memory and load, three grains - ABSORBS Row #14
 
 - **Scope:** `Peak memory`, the memory row of `Outside the model call`, and the per-item panel Row #14 was going to build become ONE panel carrying three grains - item, shard, span - and a second series for machine load.
 - **Files touched:** `frontend/src/lib/charts/machine.ts`, `frontend/src/routes/console/machine/+page.svelte`, `frontend/src/lib/server/payload.ts`, `frontend/tests/`
@@ -1100,7 +1089,7 @@ Row #18 writes these into `docs/concepts/console-design.md` **before any panel r
 | 2 | Keep Row #14 as a separate row that #21 amends | An amendment whose outcome subsumes the amended row's outcome is not an amendment | Two workers building one panel with no edge between them | Fowler |
 | 3 | A separate panel for machine load | An eighth writer on a file seven rows already serialise over | One more link in the chain for a series that belongs beside the memory it explains | Fowler |
 
-## 24 - Row #22 - Platform mix as grouped bars
+## Row #22 - Platform mix as grouped bars
 
 - **Scope:** `What the platform has been giving us` becomes grouped bars - one group per day, one bar per processor family, y = placements - with a top-K fold into "other".
 - **Files touched:** `frontend/src/lib/charts/fleet.ts`, the ranked-list call site, `frontend/src/routes/console/machine/+page.svelte`, **`backend/idhazh/contracts/knobs/console.py`** (the new top-K field), **`schemas/appearance-config.schema.json`** (generated), **`backend/idhazh/contracts/appearance_config.py`** (version stamp and changelog), `config/appearance.json`, **`frontend/src/lib/server/config.ts`** (the read side), `frontend/tests/`
@@ -1123,7 +1112,7 @@ Row #18 writes these into `docs/concepts/console-design.md` **before any panel r
 | 1 | Keep the ranked list | Its title asks what is changing and a list cannot answer that | The trend question goes unanswered on the panel that asks it | Susan |
 | 2 | Add the day breakdown to `FleetKind` as a declared field | The panel derives it from `date`, which every fingerprint row already carries | A payload field nothing writes, and a second place for the day grain to disagree with itself | Fowler |
 
-## 25 - Row #23 - Tokens per run becomes one grouped chart
+## Row #23 - Tokens per run becomes one grouped chart
 
 - **Scope:** the two panes become one grouped chart on one linear axis.
 - **Files touched:** `frontend/src/lib/charts/machine.ts`, `frontend/src/routes/console/machine/+page.svelte`, `frontend/tests/`
@@ -1142,7 +1131,7 @@ Row #18 writes these into `docs/concepts/console-design.md` **before any panel r
 | --- | --- | --- | --- | --- |
 | 1 | Keep two panes with their own axes | Each series fills its plot and neither can be compared to the other | The comparison the title promises | Susan |
 
-## 26 - Row #24 - Counterfactual cost gets a shape
+## Row #24 - Counterfactual cost gets a shape
 
 - **Scope:** the four numbers stay and a chart joins them, with a top-right switch between a cumulative line and a per-day stacked bar.
 - **Files touched:** `frontend/src/lib/charts/`, `frontend/src/routes/console/machine/+page.svelte`, the shape-switch component, `docs/concepts/console-design.md`
@@ -1162,7 +1151,7 @@ Row #18 writes these into `docs/concepts/console-design.md` **before any panel r
 | --- | --- | --- | --- | --- |
 | 1 | Two builder calls, one per shape | Two derivations of one quantity can disagree, which is the reason the original rule existed | The rule's reason, discarded while keeping its words | Susan |
 
-## 27 - Row #25 - Outside the model call, as range marks
+## Row #25 - Outside the model call, as range marks
 
 - **Scope:** four figures become four identical value-in-span tracks; the memory row leaves for Row #21.
 - **Files touched:** a range-mark chart module, `frontend/src/routes/console/machine/+page.svelte`, `frontend/tests/`
@@ -1180,7 +1169,7 @@ Row #18 writes these into `docs/concepts/console-design.md` **before any panel r
 | --- | --- | --- | --- | --- |
 | 1 | Keep the prose | Every one of the four figures has a span, and no two of them can be compared as sentences | The comparison the panel exists to make | Susan |
 
-## 28 - Row #26 - Machine cards: L3 and bandwidth as bars - AMENDS Row #5
+## Row #26 - Machine cards: L3 and bandwidth as bars - AMENDS Row #5
 
 - **Scope:** L3 cache and memory bandwidth become bars on a scale shared across cards.
 - **Files touched:** `frontend/src/lib/charts/machine-cards.ts`, `frontend/src/lib/components/MachineCard.svelte`, `frontend/tests/`
@@ -1199,7 +1188,7 @@ Row #18 writes these into `docs/concepts/console-design.md` **before any panel r
 | --- | --- | --- | --- | --- |
 | 1 | Rebuild the chips | They are correct. The defect is upstream, in the data | Churn on the one part of this card that already works | Susan |
 
-## 29 - Row #27 - Route grouping and panel order
+## Row #27 - Route grouping and panel order
 
 - **Scope:** Hardware's flat siblings group under three headings - this run, this window, the machines - and the item timeline sits lower on Pipeline.
 - **Files touched:** both console route files, `frontend/tests/console-frame.spec.ts`
@@ -1211,7 +1200,7 @@ Row #18 writes these into `docs/concepts/console-design.md` **before any panel r
 | --- | --- | --- |
 | 1 | This runs LAST, after every panel row | Susan - grouping a route whose panels are still moving is grouping twice |
 | 2 | Three headings, not more | Susan - this closes Row #14's standing finding that the route fails the one-thing-lands-first check with 15 equal siblings |
-## 30 - Row #28 - Pipeline panels: the share track goes, Extraction gains a trend
+## Row #28 - Pipeline panels: the share track goes, Extraction gains a trend
 
 - **Scope:** the two Pipeline panels that fail the two-second test and had no owner. `How much of each prompt was already in memory` loses its share track and keeps its counts. `Extraction` gains the trend its own text tells the reader to look for.
 - **Files touched:** `frontend/src/routes/console/+page.svelte`, `frontend/src/lib/charts/` (the extraction series builder), `frontend/src/routes/console/+page.server.ts`, `frontend/tests/`
