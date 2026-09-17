@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-17
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
 **A rule is here if it binds a token or a bound the whole site resolves.** A rule about one named console panel - how a figure is worded, ranked, tinted or drawn there - is in [console-design.md](console-design.md), which reads this page's vocabulary and adds no token of its own.
@@ -459,6 +459,7 @@ The checks, applied to any reader-facing surface:
 - **Does it separate figure from ground?** A page with one surface colour and no elevation is a page where nothing is in front of anything.
 - **Is there one thing the eye lands on first?** If everything is the same weight, the page has no order to read it in.
 - **Does it look like it was made this year?** Not a matter of fashion. A surface that looks abandoned is read as abandoned, and the judgement transfers to the summaries.
+- **Can a reader make its comparison in two seconds?** A drawing names one comparison before it draws, and it is the comparison rather than the subject: "peak memory" is a subject, "how near 16 GiB the worst shard got, against the rest" is a comparison. Write it as a sentence with the word "against" in it - one that cannot take an "against" is a number looking for a home rather than a drawing. Two seconds is what a glance is worth, so a figure whose comparison only arrives after a paragraph has not been drawn yet. Susan, 2026-09-17; the chart rules that follow from it are in [console-design.md](console-design.md).
 
 A surface that fails one of these ships only with a `## Design rationale` entry saying why. `CLAUDE.md` section 9 carries the Definition-of-Done line; Susan ([../../.github/agents/susan.agent.md](../../.github/agents/susan.agent.md)) rules them.
 
