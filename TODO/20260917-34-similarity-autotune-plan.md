@@ -359,8 +359,8 @@ Two places do assume flat.
 
 | Where | What breaks | Fix |
 | --- | --- | --- |
-| `backend/idhazh/telemetry/inventory.py` | `_day_files` globs `*/YYYY/MM/DD*` - one segment. A nested store is two, so `idhazh telemetry files --date X` **omits it and says nothing about the omission**. `_month_files` has the same shape | Glob both `*/Y/M/D*` and `*/*/Y/M/D*`. Two lines, plus one unit test over a built temp tree |
-| `backend/idhazh/telemetry/prune.py` | `TARGETS` is built on "the word an operator types IS the directory name". A nested store's word would carry a slash into a closed vocabulary | Make `TARGETS` a mapping from a one-segment word to a relative path: `similarity-pairs` maps to `story-similarity/scored-pairs`. The vocabulary stays closed, so no path travels through the argument (Guardrail #11) |
+| `backend/idhazh/telemetry/inventory.py` | `_day_files` globs `*/YYYY/MM/DD*` - one segment. A nested store is two, so `idhazh telemetry files --date X` **omits it and says nothing about the omission**. `_month_files` has the same shape | Glob both depths. Two lines, plus one unit test over a built temp tree |
+| `backend/idhazh/telemetry/prune.py` | `TARGETS` is built on "the word an operator types IS the directory name". A nested store's word would carry a slash into a closed vocabulary | **Moved to row #7**, which is where the first nested store exists. Changing the shape of `TARGETS` while every member is still flat is a change with no beneficiary and no test that could fail |
 
 **`commit-and-push.sh` costs nothing and the nest buys something there.** It
 takes paths as arguments, so the workflow stages one path -
@@ -369,7 +369,8 @@ script's own header records a new `state/` writer arriving without being staged
 three times; the nest closes that for this feature permanently.
 
 **Test tier: unit.** Driven by a built temp tree, never by the committed
-archive.
+archive. The test was checked against the old glob before the fix landed and
+failed there, so it holds the defect shut rather than describing the fix.
 
 ## Row #5 - score and select the borderline pairs
 
