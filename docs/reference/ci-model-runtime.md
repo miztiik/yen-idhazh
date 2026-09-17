@@ -39,14 +39,13 @@ always downloaded a model would turn the one-minute probe below into the
 slowest question here, and a `WEIGHTS_FILE` allowed to be empty would make the
 refusals every other caller depends on optional.
 
-**`idhazh-pipeline-tests.yaml`, `probe.yml` and `validate.yml` are on those
-scripts.** `digest.yml` and `measure.yml` still declare the three variables in
-their own `env:` block and fetch the build themselves.
+**`digest.yml`, `idhazh-pipeline-tests.yaml`, `probe.yml` and `validate.yml` are
+on those scripts.** `measure.yml` is the one still declaring the three variables
+in its own `env:` block and fetching the build itself.
 
-So the three values are written in **three places today: the pin file and two
-`env:` blocks.** It was six until 2026-09-17, and converting the other two
-takes it to one. `digest.yml` is the last and the largest conversion, because
-that is the workflow that publishes.
+So the three values are written in **two places today: the pin file and one
+`env:` block.** It was six until 2026-09-17, and converting `measure.yml` takes
+it to one.
 
 Nothing read those places against each other before. A contract test now pins
 the three variables in every workflow that still spells them and refuses any
@@ -69,10 +68,10 @@ the first run after that refetched once rather than restoring an entry nobody
 could attribute.
 
 A converted caller reads `<build>` off the step that ran the pin, never off a
-workflow variable. In `validate.yml` that step is in the `plan` job and the
-build travels as a job output, because `needs` resolves before a shard's first
-step and `steps` does not - which is the same reason the model refs travel that
-way.
+workflow variable. In `digest.yml` and `validate.yml` that step is in the `plan`
+job and the build travels as a job output, because `needs` resolves before a
+worker's first step and `steps` does not - which is the same reason the model
+refs travel that way.
 
 **The key matters more than the pin.** The fetch step runs only on a cache
 miss. Keyed on the weights alone, the cache froze one binary and then served a
@@ -86,8 +85,10 @@ hashed key moves when a comment moves, which throws a multi-gigabyte entry away
 for an edit that changed no byte of what it holds. That is why the pin file
 prints the build rather than being hashed.
 
-The run manifest is not fixed by this. It still records `runtime_build` as the
-fixed string `llama-server-local`, so the manifest does not yet name the build.
+The run manifest records `runtime_build` as the build the `plan` job read out of
+the pin and handed to the work step, so a published day names the binary that
+decoded it. A run with nothing pinned - a developer machine - records
+`build-not-recorded` rather than inventing a tag.
 
 ### `probe.yml` asks the build what it accepts
 

@@ -199,7 +199,7 @@ LLAMA_SHARED_SCRIPTS: Final = (LLAMA_RUNTIME_SCRIPT, LLAMA_INSTALL_SCRIPT)
 LLAMA_PIN_SCRIPT: Final = "llama-cpp-pin.sh"
 
 LLAMA_SCRIPT_CALLERS: Final = frozenset(
-    {"idhazh-pipeline-tests.yaml", "probe.yml", "validate.yml"}
+    {"digest.yml", "idhazh-pipeline-tests.yaml", "probe.yml", "validate.yml"}
 )
 
 LLAMA_INLINE_RUNTIME_WORKFLOWS: Final = LLAMA_RUNTIME_WORKFLOWS - LLAMA_SCRIPT_CALLERS

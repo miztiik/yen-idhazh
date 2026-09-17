@@ -39,6 +39,7 @@ from ._harness import (
     _mapping,
     _names,
     _own_nodes,
+    _pin_output_name,
     _plan_output,
     _reads_the_environment,
     _run_bodies,
@@ -445,6 +446,11 @@ def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
     until the entry expires. The composed string is asserted too: an expression
     that does not resolve leaves a literal `${{` in the key, and Actions would
     key the cache on that text.
+
+    The build half is a `plan` output rather than a workflow variable, because
+    the pin moved into `.github/scripts/llama-cpp-pin.sh` and the job that reads
+    it publishes what it read. `needs` resolves before a worker's first step and
+    `steps` does not, which is the same reason the weights half travels that way.
     """
     workflow = _load_workflows()["digest.yml"]
     keys = dict(_runtime_cache_keys(workflow))
@@ -454,7 +460,7 @@ def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
     for job_name, role in WEIGHTS_CACHE_ROLES.items():
         weights = _plan_output(f"{role}_file")
         revision = _plan_output(f"{role}_revision")
-        build = _expression("env.LLAMA_CPP_BUILD")
+        build = _plan_output(_pin_output_name())
         assert keys[job_name] == (
             f"llm-{weights}-{revision}-{build}-{WEIGHTS_CACHE_SUFFIX}"
         ), job_name
