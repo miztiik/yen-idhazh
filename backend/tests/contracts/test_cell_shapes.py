@@ -254,7 +254,6 @@ FOREIGN_CENSUS_CELLS: tuple[str, ...] = (
     "label_finish_reason",
     "summary_finish_reason",
     "cpu_model",
-    "runner_name",
     "model_id",
     "model_quantisation",
     "failed_field",

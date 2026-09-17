@@ -187,8 +187,10 @@ def stage_assemble(
     # Every planned item's census row. A shard that reached the item sealed the
     # row itself and left it beside the payloads, so this prefers that row: it
     # carries 113 cells where the article and the summary between them carry 40,
-    # and it names the worker that ran the item. The rebuild is what an item no
-    # shard reached gets, which is what keeps the denominator in this file.
+    # and it names the worker and the workflow job that ran the item. The rebuild
+    # is what an item no shard reached gets, which is what keeps the denominator
+    # in this file - and it passes neither `shard` nor `job`, because this stage
+    # runs once for the whole day on a machine that read none of these items.
     item_health_rows = [
         telemetry.census_row(
             recorded=payload.recorded,

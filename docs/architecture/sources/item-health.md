@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-17
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -325,6 +325,40 @@ before 2026-08-30 holds. **It is never shard 0.**
 machine ran an item is an operator's question, and the page that asks it reads
 `state/` at build time rather than fetching it in the browser.
 
+## Which machine read it, and what that machine was
+
+`job` is the workflow job whose machine took this row's readings - never which
+job wrote the row. It reads `work` on every row a shard sealed, because that is
+the job the model server runs in, and `assemble` never fills it: that stage runs
+once for the whole day on a machine that read none of these items.
+
+**With `shard` it is the whole of `ledger.HOST_FINGERPRINT_KEY`**, which is
+`date`, `run_id`, `job`, `shard` - the key
+`state/host-fingerprint/<YYYY>/<MM>/<DD>.csv` files one row a job under
+([../../reference/host-metrics.md](../../reference/host-metrics.md)). So the
+question "which processor summarized this item, and what could it do" is one
+equality:
+
+```sql
+SELECT ih.item_id, hf.fingerprint, hf.cpu_model, hf.microcode, hf.flags
+FROM item_health ih
+JOIN host_fingerprint hf
+  ON hf.date = ih.date AND hf.run_id = ih.run_id
+ AND hf.job  = ih.job  AND hf.shard  = ih.shard
+```
+
+**Three of the four columns are not a key, and that is why `job` exists.**
+`plan`, `work`, `assemble` and `runtime` each draw their own machine and each
+write shard 0, so a lookup on `date`, `run_id` and `shard` alone finds every job
+of the run. The item row could spell three of the four and stopped there.
+
+**The rule is one-directional: a row that names a job names a shard too, and not
+the converse.** A job with no shard is half a key and resolves to every shard
+that job ran, so the contract refuses it. A shard with no job is what every row
+written before 2026-09-17 holds, and `ledger.append_item_health` reads those
+rows back through `from_csv_row` before it appends - so a two-directional rule
+would refuse the whole archive on the first run after the column landed.
+
 ## Stages and outcomes
 
 An item can terminate at one of five stages:
@@ -489,44 +523,64 @@ for a defect we own.
 
 A new column on this row is not finished when the contract and the schema agree.
 `ledger._append` calls `require_matching_header` before it writes, and that
-refuses any header that is not the contract's column list exactly. The month
-shard the pipeline is currently appending to already exists with the old header,
-so the first run after the contract widens raises:
+refuses any header that is not the contract's column list exactly. The day file
+the pipeline is currently appending to already exists with the old header, so
+the first run after the contract changes would raise:
 
 ```text
-2026-08.csv has 19 columns and the contract has 24.
+2026-09-17.csv has 113 columns and the contract has 113.
 Migrate the ledger before appending to it.
 ```
 
-That is a failed scheduled run, not a failed lint. The migration ships in the
-same commit (`CLAUDE.md` section 11):
+**The two counts are equal there and it still raised**, which is the clearest
+thing this message says: the guard compares the whole tuple. That is the real
+shape of the 2026-09-17 change - one column added, one retired - and a check on
+the width alone would have called it clean.
 
-1. Append the new columns at the **end** of the model, never in the middle. The
- guard compares the whole list, and a reader maps by name, so the only reason
- order matters is that an appended column leaves the old header a prefix of the
- new one - which is what makes step 2 mechanical and reviewable.
-2. Rewrite each existing shard under `state/` with the widened header and an
- empty cell for every new column on every old row. Empty is correct: those
- runs measured nothing, and `from_csv_row` reads an empty cell as `None`.
-3. Read every migrated row back through `from_csv_row` before committing. A
- header that widened without its rows widening is worse than a raised error.
+That is a failed scheduled run, not a failed lint. **This is the one ledger that
+migrates itself, and the reason is that it is the one that has retired a
+heading.** `ledger.append_item_health` reads line 1 before it writes; where the
+header is not the contract's it calls `ledger.migrate_header`, which re-files
+every row through `ItemHealthRow.from_csv_row` and writes the file back under
+the current column list. The migration ships in the same commit as the contract
+(`CLAUDE.md` section 11) because that function IS the migration, not because a
+utility has to be run by hand.
 
-**A check on the migration reads rows, never shards.** Step 2 rewrites the
-shards that exist on the day it runs, so a shard the pipeline opens afterwards
-holds no migrated row at all - and it opens one on the first of every month. Two
-tests asked every committed shard for a row older than the column and went red
-on 2026-09-01, when `state/item-health/2026-09.csv` arrived with 63 rows and
-none of them older than either column. The population a migration check is about
-is the ledger, and so is the guard that stops the check passing on an empty
-list.
+Three things follow, and the first is the one most often got wrong:
 
-Expect a merge conflict on the shard, because the pipeline appends to it several
-times an hour. Resolve it by taking the upstream file whole and re-running the
-migration on it - never by keeping your copy, which would drop the rows the
-pipeline wrote while the branch was open.
+1. **A column may be filed beside the one it relates to.** `migrate_header` maps
+ by name, never by position, so an appended column buys nothing here. Order
+ still matters for `FeedHealthRow` and the other eight ledgers, which reach
+ `_append` with no migration of their own - that is where
+ `backend/tests/contracts/test_repo_structure.py::test_the_feed_health_ledger_columns_are_defined_once`
+ spells the appending rule and why.
+2. **An added column costs no code at all.** `from_csv_row` reads each field
+ with `row.get(name, "")`, so a file written before the widening reads the new
+ cell as absent. Empty is correct: those runs measured nothing.
+3. **A removed column must be named in `ledger.ITEM_HEALTH_CARRIED`, in the same
+ commit.** `migrate_header` refuses any heading that is neither a current
+ column nor one the reader carries, rather than dropping cells silently - so a
+ retired column with no entry there raises on the first append to every
+ committed day file, and takes every ledger staged beside it down with it.
+ `runner_name` is in that set for exactly this reason.
 
-The guard is deliberate and stays. Widening it to tolerate a prefix would let a
-column land silently in the wrong position on a shard nobody re-read.
+**The committed day files are not rewritten by the pull request.** Each one is
+re-filed by the first run that appends to it. `state/**/*.csv` is `merge=union`
+in `.gitattributes`, so a branch that rewrote a day file whole would have every
+line of it stacked against the lines the pipeline wrote while the branch was
+open - a clean merge and a doubled file.
+
+**A check on the migration reads rows, never day files.** A day file the
+pipeline opens after the migration holds no pre-migration row at all, and it
+opens a new one every day. Two tests asked every committed file for a row older
+than the column and went red on 2026-09-01, when a fresh file arrived with 63
+rows and none of them older than either column. The population a migration check
+is about is the rows, and the way to get one that cannot age out is to build the
+older generation rather than to look for it
+(`backend/tests/test_ledger.py::A_RETIRED_GENERATION`).
+
+The guard in `_append` is deliberate and stays. Widening it to tolerate a prefix
+would let a column land silently in the wrong position on a file nobody re-read.
 
 ## Caveats
 
@@ -612,37 +666,45 @@ your copy, which drops the rows the pipeline wrote while the branch was open.
 
 ## Scaling
 
-Measured 2026-09-15 on the committed repository, after the row widened to 113
-columns. The previous reading was taken on 2026-08-25 against a 24-column row in
-a month file; both the shape and the path have moved since, so it was a stale
+Measured 2026-09-17 on the committed repository. The row still carries 113
+columns: `job` arrived and `runner_name` went, so the count is unchanged and
+the names are not. The previous reading was taken on 2026-09-15 against the
+113-column row this one replaced; the shape has moved since, so it was a stale
 reading rather than history and has been replaced (Guardrail #10).
 
 | Quantity | Value | How |
 | --- | --- | --- |
-| Day files in `state/item-health/` | 22, 11,966 rows | `rglob` count |
-| Ledger on disk | 5,034,396 bytes | `stat` |
-| Mean row | **420.7 bytes** | size / rows |
+| Day files in `state/item-health/` | 24, 12,837 rows | `rglob` count |
+| Ledger on disk | 5,639,488 bytes | `stat` |
+| Mean row | **439.3 bytes** | size / rows |
 | Widest day, `2026/08/25.csv` | 1,000 rows, 396,015 bytes | `stat` |
 | Rows on a full day | **800** | 5 runs x the 160-item `safety_ceiling_per_run` |
-| A full day at the current width | **~336 KB** | 800 x 420.7 |
-| Published projection `frontend/public/telemetry/2026-09.csv` | 1,019,079 bytes, 32 of the 113 columns | `stat` |
-| Mean published row | 151.2 bytes raw, **35.2 bytes gzipped** (4.3x) | gzip at maximum level |
-| Whole ledger before the widening | 4,173,082 bytes | `stat`, same day |
-| What 70 columns cost | **+861 KB, +20.6 percent** | the two totals |
+| A full day at the current width | **~351 KB** | 800 x 439.3 |
+| Published projection `frontend/public/telemetry/2026-09.csv` | 1,373,976 bytes, 49 of the 113 columns | `stat` |
+| Mean published row | 180.5 bytes raw, **41.3 bytes gzipped** (4.4x) | gzip at maximum level |
+
+What the 2026-09-17 column change costs the archive, one time, on the first
+append to each day file:
+
+| Move | Bytes | How |
+| --- | --- | --- |
+| `job` added | **+12,933** | one comma on each of 12,837 rows, plus `,job` on 24 headers |
+| `runner_name` dropped | **-23,194** | 12,837 commas, 399 filled values totalling 10,069 characters, and `,runner_name` off 24 headers |
+| Net | **-10,261 bytes** | the row gets narrower, not wider |
 
 Projected forward at the current cadence and ceiling:
 
 | Horizon | Ledger | Served projection (gzipped) |
 | --- | --- | --- |
-| a day | 336 KB | 28 KB |
-| a month | **10 MB** | **845 KB** |
-| a year | 123 MB | 10 MB |
+| a day | 351 KB | 33 KB |
+| a month | **10.5 MB** | **991 KB** |
+| a year | 128 MB | 12 MB |
 
 Three limits, in the order they will actually bite:
 
 1. **The reader's download, first.** The console fetches a whole month shard.
- 845 KB gzipped at the end of a busy month is far more than the rest of the
- page. The lever is the projection, not the ledger: the served file carries 32
+ 991 KB gzipped at the end of a busy month is far more than the rest of the
+ page. The lever is the projection, not the ledger: the served file carries 49
  of the row's 113 columns and could carry fewer, or become a pre-aggregated
  day-grain file with the per-item rows kept for the operator only. Nothing
  here is measured against a slow connection yet, so that is the next
@@ -664,15 +726,15 @@ the evidence it exists to keep. Windows are applied on read.
 ## A cell is fitted to its column, by the column
 
 Most of what lands in this row is not ours. `cpu_model` comes from a kernel
-file, `runner_name` from the environment, `summary_finish_reason` and
+file, `summary_finish_reason` and
 `label_finish_reason` from the runtime, `model_quantisation` from committed
 config, and `detail` from whatever went wrong - which, whenever a Pydantic
 `ValidationError` is what went wrong, quotes the value it refused. A page title
 with a curly quote in it therefore arrives inside the message that says the
 title was refused.
 
-Every one of those columns declares what a value may be made of. `detail`,
-`cpu_model` and `runner_name` take printable ASCII on one line; the token
+Every one of those columns declares what a value may be made of. `detail` and
+`cpu_model` take printable ASCII on one line; the token
 columns take a lowercase name. So a character outside the class made the row
 raise - and the row that raised was the one reporting the failure. The evidence
 and the item were lost together, over a dash.
