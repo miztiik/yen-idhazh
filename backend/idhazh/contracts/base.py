@@ -117,6 +117,90 @@ FingerprintId = Annotated[str, StringConstraints(pattern=FINGERPRINT_PATTERN)]
 _STEM_PATTERN: Final = re.compile(SLUG_PATTERN)
 
 
+# --- a published block of prose ----------------------------------------------
+#
+# A published summary is one block of prose, and since 2026-09-17 a long one may
+# be two paragraphs rather than one. The separator is a single blank line and
+# nothing else, which is what keeps this additive: a payload written before that
+# date carries no break at all and is one paragraph, which is what every reader
+# already drew for it.
+#
+# Spelled as a validator rather than a `pattern`, because the charset cannot be
+# narrowed here. A summary names people and places the open web spelled, so an
+# ASCII pattern would refuse correct text; what this refuses is the control
+# characters, which is a different rule and the one that matters. A tab or a
+# form feed in a published field breaks a CSV cell, a `merge=union` day file and
+# the reader's line box, and none of the three is worth a paragraph break.
+PARAGRAPH_BREAK: Final = "\n\n"
+#: Every C0 control and DEL except the newline, which the break is made of.
+_CONTROL_EXCEPT_NEWLINE: Final = re.compile(r"[\x00-\x09\x0b-\x1f\x7f]")
+_BLANK_LINE_RUN: Final = re.compile(r"\n[^\S\n]*\n\s*")
+
+
+def paragraphs_of(prose: str) -> list[str]:
+    """The paragraphs of a published block, in order.
+
+    One entry where there is no break, which is every payload written before
+    2026-09-17 and every short summary written since. A caller that renders this
+    never needs to ask which kind it has.
+    """
+    return prose.split(PARAGRAPH_BREAK)
+
+
+def normalize_prose(raw: str, *, paragraphs_max: int | None = None) -> str:
+    """Fold what a model wrote into the one shape this field admits.
+
+    This is the writer's half of the rule `Prose` checks, and it is why the
+    field handed to a constrained decoder can stay a plain string: the prompt
+    ASKS for a blank line and this is what MAKES one (Guardrail #11 - the
+    sanitizer is the control and the prompt is untrusted text like any other).
+
+    A lone newline rejoins its lines, because a model that wrapped its prose at
+    some width meant one paragraph. A run of blank lines is one break. Text past
+    `paragraphs_max` is folded into the last paragraph kept rather than dropped:
+    dropping it would silently shorten a summary the length gate has already
+    measured, and a long last paragraph is a worse-looking summary rather than a
+    wrong one.
+    """
+    text = _CONTROL_EXCEPT_NEWLINE.sub(" ", raw.replace("\r\n", "\n").replace("\r", "\n"))
+    blocks = [" ".join(block.split()) for block in _BLANK_LINE_RUN.split(text)]
+    kept = [block for block in blocks if block]
+    if not kept:
+        return ""
+    if paragraphs_max is not None and len(kept) > paragraphs_max:
+        kept = [*kept[: paragraphs_max - 1], " ".join(kept[paragraphs_max - 1 :])]
+    return PARAGRAPH_BREAK.join(kept)
+
+
+def _published_prose(value: Any) -> Any:
+    """Fold a stored block into the canonical shape, and refuse nothing.
+
+    This is the read-side migration the paragraph break needs (CLAUDE.md section
+    11), and it is a fold rather than a check because a check would have been a
+    release blocker. Measured 2026-09-17 over the 9,989 summaries in
+    `frontend/public/digest`: none holds a control character, but **three end on
+    a space and six carry a lone newline** a run published before anything asked
+    about paragraph shape. Refusing those nine would make today's build unable to
+    read days yesterday's build wrote.
+
+    What the fold costs, stated rather than implied: for those nine the text a
+    reader gets differs from the bytes on disk by one space. HTML already
+    collapsed both, so no published page changes; what changes is that every
+    reader of this field now gets one shape instead of three.
+
+    A non-string passes through untouched, so Pydantic raises its own type error
+    rather than this raising a confusing one about whitespace.
+    """
+    if not isinstance(value, str):
+        return value
+    return normalize_prose(value)
+
+
+#: A published block of prose: printable text, paragraphs separated by one blank
+#: line. Used by every surface that carries a summary a reader will see.
+Prose = Annotated[str, BeforeValidator(_published_prose)]
+
+
 def derive_url_key(canonical_url: str) -> str:
     """Item identity for dedupe and skip.
 
