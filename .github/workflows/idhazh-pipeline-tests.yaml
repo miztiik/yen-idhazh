@@ -24,6 +24,13 @@
 # nothing here is on any reader's path. What the cases produced leaves as an
 # artifact.
 #
+# It also answers "can this candidate model walk the real path", for the price
+# of a dispatch rather than the price of a bench. Name a models file and every
+# case runs on those weights, through the real prompts and the real two calls;
+# name nothing and it runs the configured model exactly as it always did. It is
+# not the qualification - that is validate.yml, eleven gates on a frozen corpus
+# - and two articles settle nothing about how good a model is.
+#
 # Two things one dispatch cannot settle. Whether two articles are
 # representative of the eighty a production day carries - they are not, and the
 # draw is what stops them being representative of nothing. And the faithfulness
@@ -32,11 +39,21 @@
 # the two-call path is being measured for.
 name: Pipeline tests
 
-# Dispatch only, and deliberately without inputs. Everything a dispatch varies
-# is drawn or read from config (Guardrail #6), so there is nothing for an
-# operator to type and nothing typed for a step to have to shape.
+# Dispatch only, and it asks for ONE thing: which model to run the cases on.
+# Every case setting is still drawn or read from config (Guardrail #6) - the
+# addresses, the draw size, the job bound, the slot counts, the windows. The
+# committed config names the incumbent by design, so which model to check is
+# the one question config cannot answer, and it is the same line a swap would
+# later move.
+#
+# Empty runs the configured model, which is exactly what this dispatch did
+# before the input existed.
 on:
   workflow_dispatch:
+    inputs:
+      candidate_models_file:
+        description: 'Models file under config/, for example models/gemma-4-e4b-qat.json. Empty runs the configured model.'
+        default: ''
 
 permissions:
   contents: read
@@ -48,10 +65,10 @@ concurrency:
   group: pipeline-tests
   cancel-in-progress: false
 
+# No llama.cpp pin here. It is `.github/scripts/llama-cpp-pin.sh`, which the
+# fetch step sources and the step above reads, so this workflow cannot spell a
+# build the binary it unpacks disagrees with.
 env:
-  LLAMA_CPP_BUILD: b10598
-  LLAMA_CPP_ASSET: llama-b10598-bin-ubuntu-x64.tar.gz
-  LLAMA_CPP_SHA256: d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c
   LLAMA_PORT: '8080'
 
 jobs:
@@ -90,18 +107,56 @@ jobs:
           python3 backend/utilities/pipeline_draw.py pick --seed "$PICK_SEED" \
             | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
-      # Read once, here, so the fetch and the cache key below cannot open config
-      # a second time and disagree.
+      # Which model this dispatch runs, read once and published to every step
+      # that needs it. The input arrives through `env` rather than pasted into
+      # this program, because a pasted value is text before it is a value
+      # (Guardrail #11) - and it becomes a FILE PATH, so the program resolves it
+      # and proves it sits inside `config/` before opening it.
+      #
+      # `--models-file` empty reads the committed pointer, so an empty dispatch
+      # publishes exactly the refs the `configured` mode used to publish.
       - id: models
+        env:
+          CANDIDATE_MODELS_FILE: ${{ inputs.candidate_models_file }}
         run: |
           set -euo pipefail
-          python3 backend/utilities/model_refs.py configured \
+          python3 backend/utilities/model_refs.py candidate \
+            --prefix candidate_ \
+            --models-file "$CANDIDATE_MODELS_FILE" \
             | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
-      # The same key the daily run uses, so a dispatch on a warm runner pays
-      # nothing for the weights. The key names every part of what it holds: the
-      # fetch below only runs on a miss, so a key missing one of them turns that
-      # step into dead code and serves whatever bytes are already there.
+      # The config root every case is cut from. The committed `config/` is never
+      # edited - the action copies it and moves one line, `models_file`, so a
+      # candidate is run through the exact line a swap would later move and
+      # every other control is the committed one by construction.
+      #
+      # `trial_state` is not a control. It says where this run's own ledgers
+      # land, and `pipeline-tests` is where the bench already puts its own - so
+      # a dispatch writes nothing beside the rows the console reads.
+      - name: Build the config this dispatch runs
+        uses: ./.github/actions/candidate-config
+        with:
+          models_file: ${{ steps.models.outputs.candidate_models_file }}
+          trial_state: pipeline-tests
+
+      # The build the fetch below is about to install, asked of the file that
+      # decides it. The cache key names the build and the cache step runs before
+      # the fetch, so the pin has to be readable here - and reading it from its
+      # one home is what stops this workflow carrying a second copy that can
+      # disagree with the binary it actually unpacks.
+      - id: runtime
+        name: Say which llama.cpp build this job installs
+        run: |
+          set -euo pipefail
+          bash .github/scripts/llama-cpp-pin.sh \
+            | tee /dev/stderr >> "$GITHUB_OUTPUT"
+
+      # The same key the daily run uses when nothing is named, so a dispatch on
+      # a warm runner pays nothing for the weights, and a second entry only
+      # appears when a dispatch really does run other bytes. The key names every
+      # part of what it holds: the fetch below only runs on a miss, so a key
+      # missing one of them turns that step into dead code and serves whatever
+      # bytes are already there.
       - name: Cache weights and runtime
         id: weights
         uses: actions/cache@v6
@@ -109,53 +164,49 @@ jobs:
           path: |
             backend/models
             backend/bin
-          key: llm-${{ steps.models.outputs.summarize_file }}-${{ steps.models.outputs.summarize_revision }}-${{ env.LLAMA_CPP_BUILD }}-v4
+          key: llm-${{ steps.models.outputs.candidate_file }}-${{ steps.models.outputs.candidate_revision }}-${{ steps.runtime.outputs.llama_cpp_build }}-v4
 
+      # One shared step, and four workflows still to convert onto it. It sources
+      # the pin, so this workflow spells no part of it - and every value it
+      # reads arrives through `env` rather than pasted into it.
       - name: Fetch runtime and weights
         if: steps.weights.outputs.cache-hit != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          mkdir -p backend/bin backend/models
-          URL=$(curl -fsS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-            "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}" \
-            | jq -r --arg asset "$LLAMA_CPP_ASSET" \
-              'if type=="object" then ([.assets[] | select(.name == $asset)][0].browser_download_url // "") else "" end')
-          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
-            echo "pinned llama.cpp asset not found: ${LLAMA_CPP_BUILD}/${LLAMA_CPP_ASSET}" >&2
-            exit 1
-          fi
-          curl -fsSL --retry 3 --retry-all-errors -o llama.tar.gz "$URL"
-          echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256sum --check
-          mkdir -p llama && tar -xzf llama.tar.gz -C llama
-          # `cp -a`, never `find -type f`: these builds ship versioned shared
-          # objects as symlinks, and a symlink is not a file to `find`.
-          SRC=$(dirname "$(find llama -type f -name 'llama-server' | head -1)")
-          cp -a "$SRC"/. backend/bin/
-          chmod +x backend/bin/llama-server
-          # The pinned commit, never a branch, and `-f` so an HTTP error body
-          # cannot be written into the weights file and then cached.
-          curl -fsSL --retry 3 --retry-all-errors \
-            -o "backend/models/${{ steps.models.outputs.summarize_file }}" \
-            "https://huggingface.co/${{ steps.models.outputs.summarize_repo }}/resolve/${{ steps.models.outputs.summarize_revision }}/${{ steps.models.outputs.summarize_file }}?download=true"
+          WEIGHTS_REPO: ${{ steps.models.outputs.candidate_repo }}
+          WEIGHTS_REVISION: ${{ steps.models.outputs.candidate_revision }}
+          WEIGHTS_FILE: ${{ steps.models.outputs.candidate_file }}
+          DRAFT_REPO: ${{ steps.models.outputs.candidate_draft_repo }}
+          DRAFT_REVISION: ${{ steps.models.outputs.candidate_draft_revision }}
+          DRAFT_FILE: ${{ steps.models.outputs.candidate_draft_file }}
+        run: bash .github/scripts/fetch-model-runtime.sh
 
       # No `if:`. A restored cache entry is the one case where nobody watched
       # the bytes arrive, so it is the case that most needs checking.
+      #
+      # The digest is read out of the config root the cases are cut from, which
+      # IS the candidate's own entry - so a dispatch cannot check one model's
+      # bytes against another model's recorded digest.
       - name: Verify the weights
+        env:
+          DRAFT_FILE: ${{ steps.models.outputs.candidate_draft_file }}
+          DRAFT_SHA256: ${{ steps.models.outputs.candidate_draft_sha256 }}
         run: |
           set -euo pipefail
-          EXPECTED=$(python -c 'import json, pathlib; config = json.load(open("config/idhazh.json", encoding="utf-8")); models = json.load(open(pathlib.Path("config") / config["models_file"], encoding="utf-8")); print(models["summarize"]["sha256"] or "")')
+          EXPECTED=$(python -c 'import json, pathlib; root = pathlib.Path("backend/var/candidate-config"); config = json.load(open(root / "idhazh.json", encoding="utf-8")); models = json.load(open(root / config["models_file"], encoding="utf-8")); print(models["summarize"]["sha256"] or "")')
           if [ -z "$EXPECTED" ]; then
             echo "config records no sha256 for models.summarize" >&2
             exit 1
           fi
-          echo "${EXPECTED}  backend/models/${{ steps.models.outputs.summarize_file }}" | sha256sum --check
+          echo "${EXPECTED}  backend/models/${{ steps.models.outputs.candidate_file }}" | sha256sum --check
+          if [ -n "${DRAFT_FILE}" ]; then
+            echo "${DRAFT_SHA256}  backend/models/${DRAFT_FILE}" | sha256sum --check
+          fi
 
-      # One config root per case, built from the committed `config/` and
-      # differing only in what that case changes. The committed config is never
-      # edited: a case that edited it would leave the next case reading whatever
-      # the last one wrote.
+      # One config root per case, cut from the scratch copy above and differing
+      # only in what that case changes. The committed config is never edited: a
+      # case that edited it would leave the next case reading whatever the last
+      # one wrote.
       #
       # Two files move, and the case declares one intention that moves both.
       # `visuals.enabled_kinds` empty is what makes no picture reachable, so the
@@ -166,7 +217,8 @@ jobs:
       - name: Write each case's config
         run: |
           set -euo pipefail
-          python3 backend/utilities/pipeline_case_config.py
+          python3 backend/utilities/pipeline_case_config.py \
+            --config-root backend/var/candidate-config
 
       # One plan, written once, from the addresses the draw chose. The cases all
       # run it, so the two item ids are fixed before the first request and the
@@ -192,7 +244,7 @@ jobs:
 
       - name: Start the model
         env:
-          LLAMA_WEIGHTS: backend/models/${{ steps.models.outputs.summarize_file }}
+          LLAMA_WEIGHTS: backend/models/${{ steps.models.outputs.candidate_file }}
         run: |
           set -euo pipefail
           mkdir -p backend/var
@@ -272,7 +324,7 @@ jobs:
         id: restart
         if: ${{ !cancelled() }}
         env:
-          LLAMA_WEIGHTS: backend/models/${{ steps.models.outputs.summarize_file }}
+          LLAMA_WEIGHTS: backend/models/${{ steps.models.outputs.candidate_file }}
         run: |
           set -euo pipefail
           kill "$(cat llama-server.pid)" 2>/dev/null || true

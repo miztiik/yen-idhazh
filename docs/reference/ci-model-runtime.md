@@ -1,6 +1,6 @@
 # The model on a runner
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-17
 
 How a job gets the inference runtime and the weights, and how it proves it got
 the ones it asked for. Every value here is exact: a pin, a cache key, a digest,
@@ -10,8 +10,8 @@ a flag. The workflows that use them are in
 ## The inference runtime is pinned, and the cache key says which build
 
 `digest.yml`, `validate.yml`, `measure.yml`, `idhazh-pipeline-tests.yaml` and
-`probe.yml` run one llama.cpp build. Each declares the same three variables, and
-each checks the archive against its digest before it unpacks anything.
+`probe.yml` run one llama.cpp build. Each checks the archive against its digest
+before it unpacks anything.
 
 | Variable | Value |
 | --- | --- |
@@ -22,11 +22,38 @@ each checks the archive against its digest before it unpacks anything.
 The SHA-256 is the release API's own `digest` for that asset. It was confirmed
 on 2026-08-25 by downloading the 16,377,727-byte archive and hashing it.
 
-The weights cache key names the build: `llm-<weights>-<build>-v4` in the two
-`digest.yml` jobs, `validate-<challenger>-<build>-v3` in `validate.yml`. The
-`digest.yml` suffix moved to `v4` when the weights half stopped coming from a
-workflow variable, so the first run after that refetched once rather than
-restoring an entry nobody could attribute. `v3` was the same move for the build.
+### Where the three values are written, and how many places that still is
+
+**One file decides the build: `.github/scripts/llama-cpp-pin.sh`.** Source it
+and it assigns all three; run it and it prints the build as `key=value`, which
+is what a cache key reads - the key names the build, the cache step runs before
+the fetch, so the pin has to be readable without downloading anything.
+`.github/scripts/fetch-model-runtime.sh` sources it, installs the build, checks
+the archive, and downloads the weights the calling step names through `env`.
+
+**Only `idhazh-pipeline-tests.yaml` is on those two.** `digest.yml`,
+`measure.yml`, `validate.yml` and `probe.yml` still declare the three variables
+in their own `env:` block and fetch the build themselves. So the pin lives in
+nine places today: one script, four `env:` blocks and six fetch steps. It was
+eleven until 2026-09-17, and converting the other four takes it to one.
+`digest.yml` is the last and the largest, because that is the workflow that
+publishes.
+
+Nothing read those places against each other before. A contract test now pins
+the three variables in every workflow that still spells them and refuses any
+copy of them in a workflow that has been converted, so a conversion is one line
+in that test's `LLAMA_SCRIPT_CALLERS` set and the check tightens rather than
+being rewritten. The digest check on every fetch path and the build inside every
+runtime cache key are held by the same file.
+
+### What the cache key holds
+
+The weights cache key names the build: `llm-<weights>-<revision>-<build>-v4` in
+the two `digest.yml` jobs and in `idhazh-pipeline-tests.yaml`,
+`validate-<challenger>-<build>-v3` in `validate.yml`. The `digest.yml` suffix
+moved to `v4` when the weights half stopped coming from a workflow variable, so
+the first run after that refetched once rather than restoring an entry nobody
+could attribute. `v3` was the same move for the build.
 
 **The key matters more than the pin.** The fetch step runs only on a cache
 miss. Keyed on the weights alone, the cache froze one binary and then served a
@@ -35,11 +62,13 @@ following the newest release with none of its freshness, and no record on the
 run of which build served the day. A throughput number measured in `measure.yml`
 now describes the binary that writes the digest (Guardrail #10).
 
+**The key is not a hash of the script that fetches, and that is deliberate.** A
+hashed key moves when a comment moves, which throws a multi-gigabyte entry away
+for an edit that changed no byte of what it holds. That is why the pin file
+prints the build rather than being hashed.
+
 The run manifest is not fixed by this. It still records `runtime_build` as the
 fixed string `llama-server-local`, so the manifest does not yet name the build.
-
-A workflow contract test pins the three variables, the digest check on every
-fetch path, and the build inside every runtime cache key.
 
 ### `probe.yml` asks the build what it accepts
 

@@ -75,6 +75,7 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("digest.yml", "shards"): DISPATCH_CHOICE,
     ("drift.yml", "baseline_days"): "^[0-9]{1,4}$",
     ("drift.yml", "recent_days"): "^[0-9]{1,4}$",
+    ("idhazh-pipeline-tests.yaml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "corpus_links"): "^[1-9][0-9]{0,4}$",
     ("measure.yml", "runtime_candidate"): DISPATCH_CHOICE,
@@ -178,6 +179,27 @@ PINNED_LLAMA_SHA256: Final = "d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b
 LLAMA_RUNTIME_WORKFLOWS: Final = frozenset(
     {"digest.yml", "idhazh-pipeline-tests.yaml", "measure.yml", "probe.yml", "validate.yml"}
 )
+
+# The shared step that installs the build, the file that decides which build,
+# and the workflows converted onto them. A converted caller carries no copy of
+# the pin, so the two cannot disagree. Every name still outside this set spells
+# the pin out in its own `env:` block and fetches the build itself, which is the
+# arrangement that let a fetch step and a cache key name different builds.
+#
+# A conversion moves a name in here and nothing else: the pin test below then
+# stops asking that workflow for an `env:` copy and starts refusing one.
+LLAMA_RUNTIME_SCRIPT: Final = "fetch-model-runtime.sh"
+
+LLAMA_PIN_SCRIPT: Final = "llama-cpp-pin.sh"
+
+LLAMA_SCRIPT_CALLERS: Final = frozenset({"idhazh-pipeline-tests.yaml"})
+
+LLAMA_INLINE_RUNTIME_WORKFLOWS: Final = LLAMA_RUNTIME_WORKFLOWS - LLAMA_SCRIPT_CALLERS
+
+# What a converted caller may not spell for itself. The build is the one an
+# upgrade moves; the other two move with it and are what a half-done upgrade
+# leaves behind.
+LLAMA_PIN_NAMES: Final = ("LLAMA_CPP_BUILD", "LLAMA_CPP_ASSET", "LLAMA_CPP_SHA256")
 
 # The subset that starts a server and posts to it. `probe.yml` installs the
 # same binary and asks it what it accepts, which needs no port - and a port
@@ -1385,13 +1407,40 @@ def _normalize_condition(value: object, description: str) -> str:
     return " ".join(condition.split())
 
 
+#: A shipped script named inside a `run:` body. A name is letters, digits and
+#: the punctuation a filename here uses, so the shellcheck step's
+#: `.github/scripts/*.sh` glob is not read as a call to anything.
+SCRIPT_CALL: Final = re.compile(r"\.github/scripts/(?P<name>[A-Za-z0-9._-]+\.sh)")
+
+
+def _effective_shell(step: Mapping[str, object]) -> str:
+    """A step's own shell, plus the text of every shipped script it hands to bash.
+
+    A step that calls a script runs that script's shell, so a search over `run:`
+    bodies alone stops seeing a fetch the moment the fetch is extracted - and
+    every check written over that search silently passes on nothing. Following
+    the call is what lets extraction be a refactor rather than a hole.
+    """
+    script = step.get("run")
+    if not isinstance(script, str):
+        return ""
+    bodies = [script]
+    for line in script.splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        for match in SCRIPT_CALL.finditer(line):
+            called = SCRIPTS_DIR / match.group("name")
+            if called.is_file():
+                bodies.append(called.read_text(encoding="utf-8"))
+    return "\n".join(bodies)
+
+
 def _llama_fetch_scripts(workflow: dict[str, object]) -> list[tuple[str, object, str]]:
     return [
-        (job_name, step.get("name"), script)
+        (job_name, step.get("name"), shell)
         for job_name in _mapping(workflow.get("jobs"), "jobs")
         for step in _steps(workflow, job_name)
-        if isinstance(script := step.get("run"), str)
-        and "ggml-org/llama.cpp/releases" in script
+        if "ggml-org/llama.cpp/releases" in (shell := _effective_shell(step))
     ]
 
 
@@ -1408,8 +1457,8 @@ def _weights_fetch_steps(
     for filename, workflow in workflows.items():
         for job_name in _mapping(workflow.get("jobs"), "jobs"):
             for step in _steps(workflow, job_name):
-                script = step.get("run")
-                if not (isinstance(script, str) and "huggingface.co/" in script):
+                script = _effective_shell(step)
+                if "huggingface.co/" not in script:
                     continue
                 name = step.get("name")
                 assert isinstance(name, str), f"{filename}/{job_name}: name the fetch step"
