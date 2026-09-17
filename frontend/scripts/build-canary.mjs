@@ -906,6 +906,11 @@ function writeHostFingerprintCanary() {
 		if (held === undefined) byDay.set(rowDate, [row]);
 		else held.push(row);
 	}
+	// A day the record opened a file for and kept no row of, on a day that
+	// published nothing. It is the control for the loss state: the page may say
+	// a day lost its machine record only where that day published articles, and
+	// a quiet day with an empty file must not read as an incident.
+	if (!byDay.has(back(2))) byDay.set(back(2), []);
 	for (const [rowDate, dayRows] of byDay) {
 		const at = join(STATE, 'host-fingerprint', rowDate.slice(0, 4), rowDate.slice(5, 7));
 		mkdirSync(at, { recursive: true });

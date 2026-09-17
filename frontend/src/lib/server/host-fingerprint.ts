@@ -28,7 +28,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 // Relative, not `$lib`, for the reason in `runtime-counters.ts`: the browser
 // suite loads this module in plain Node, where no Vite alias resolves.
-import { LEDGER_WINDOW_DAYS, readDayShards, REPO_ROOT, STATE_ROOT } from './payload';
+import { dayShardFiles, LEDGER_WINDOW_DAYS, readDayShards, REPO_ROOT, STATE_ROOT } from './payload';
 
 /** One job's machine, as the host reported it. Absence is null, never zero. */
 export interface HostFingerprint {
@@ -112,6 +112,23 @@ export function hostFingerprints(
 
 /** Where the generated schema for the machine panels sits. */
 export const MACHINE_PANELS_SCHEMA = join(REPO_ROOT, 'schemas', 'machine-panels.schema.json');
+
+/** The dates the machine record opened a day file for, whether or not it kept a row.
+ *
+ * The fact `hostFingerprints` cannot carry. A day with no file is a day the
+ * record did not run, and a day whose file holds only its header is a day it
+ * ran and what it wrote did not survive - which is the whole difference between
+ * an instrument that had not started and a measurement that was destroyed.
+ *
+ * Bounded by the same cover and the same call the rows are read with, so the
+ * two can never answer over different days.
+ */
+export function machineRecordDays(
+	days: number = LEDGER_WINDOW_DAYS,
+	root: string = STATE_ROOT
+): string[] {
+	return dayShardFiles(join(root, 'host-fingerprint'), days).map((shard) => shard.date);
+}
 
 /** The flags a card draws a chip for, in the order the probe records them.
  *

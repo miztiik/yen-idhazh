@@ -1,6 +1,6 @@
 # Console Design
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-17
 How a figure on the operator console is worded, coloured, ranked and drawn. It is
 the operator half of [design-system.md](design-system.md), which keeps the
 vocabulary the whole site resolves - the tokens, the colour ramps, the motion set
@@ -56,14 +56,44 @@ days after the score ledger - so five days inside a thirty-day window have
 scores and no server figures at all. A console that only designed the loaded
 state would be mostly undesigned.
 
-Five states have fixed wording, written by the owner on 2026-08-30 and held in
+Six states have fixed wording, five written by the owner on 2026-08-30 and one
+by Susan on 2026-09-17, all held in
 [../../frontend/src/lib/console/recording.ts](../../frontend/src/lib/console/recording.ts):
 measurement off, sampled below 1.0, counters but no scores, scores but no
-counters, and recording started mid-window. Only the dates and counts inside
-them are computed, and every one is derived from the ledger that is missing - **a
-date that is not true is worse than no date**. None is apologetic, none is
-styled as an error, and none is a banner across the page: three panels can be in
-three different states on one day.
+counters, recording started mid-window, and a day that published and lost what
+it measured. Only the dates and counts inside them are computed, and every one
+is derived from the ledger that is missing - **a date that is not true is worse
+than no date**. None is apologetic, none is styled as an error, and none is a
+banner across the page: three panels can be in three different states on one
+day.
+
+### A record that had not begun, a quiet day, and a record that was destroyed
+
+They are three states and they send an operator to three different places, so
+they may not share a sentence. Susan, 2026-09-17.
+
+On 2026-09-16 a merge collision destroyed 303 machine rows. The day had
+published articles; the record's own day file survived with its header and
+nothing else. Hardware printed the sentence a day before the record shipped
+gets - the flags and the cache **start on the day the machine record ran** - so
+the one day the console existed to report read as the one day nothing had
+happened yet.
+
+**The derivation is one join and it carries no judgement.** The digest for that
+date carries articles, so a run worked; the record opened a day file and kept no
+row, so what it measured is gone. A day with no file at all is the first state,
+not this one. A day whose file is empty and that published nothing is the
+second.
+
+**A day proved lost is never counted as a day before the recording started.**
+Counted in that gap it would date the instrument's own start to the day AFTER
+the loss and hand that date back as the reason for it.
+
+**The states are named in `data-` attributes, not only in the sentences.** A
+page whose state can be read only off its prose can be checked only by looking
+for a sentence, and an assertion that a sentence is absent passes as happily
+when somebody renamed it as when the defect was fixed. `data-machine-record`
+carries one of `recorded`, `off`, `lost` and `none` on every build.
 
 Two of them are worth reading twice. **A sampled figure is never scaled up** -
 multiplying a quarter-sample by four publishes an estimate as a measurement,
