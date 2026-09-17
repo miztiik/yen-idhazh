@@ -564,6 +564,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "DigestViewItem.summary is Prose - paragraphs split by one blank line.",
+      "version": "2026-09-17",
+      "why": "A long summary is two paragraphs, and read-side folding keeps old days readable."
+    },
+    {
       "change": "Added DigestViewItem.same_story_as and .covered_by.",
       "version": "2026-09-16T00:40",
       "why": "The page folds a group into one card, which has to name the other outlets."
@@ -577,11 +582,6 @@
       "change": "item_id accepts a second shape: sixteen Crockford base32 symbols.",
       "version": "2026-09-12T18:40",
       "why": "Ten decimal digits is 33 bits of an address, which collides on a busy day."
-    },
-    {
-      "change": "Added DigestViewItem.desk, so a served item says which topic it sat under.",
-      "version": "2026-09-12T06:56",
-      "why": "A browser fetches this copy, and the reading page groups stories by desk."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -712,7 +712,7 @@
       "title": "Runs"
     },
     "version": {
-      "default": "2026-09-16T00:40",
+      "default": "2026-09-17",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -739,5 +739,5 @@
   ],
   "title": "DigestView",
   "type": "object",
-  "version": "2026-09-16T00:40"
+  "version": "2026-09-17"
 }

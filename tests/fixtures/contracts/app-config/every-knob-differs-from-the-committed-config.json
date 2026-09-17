@@ -309,6 +309,8 @@
       "undershoot_ratio": 0.25
     },
     "max_verbatim_words": 15,
+    "paragraphs_max": 3,
+    "second_paragraph_from_words": 70,
     "title_words_max": 12,
     "title_words_min": 5
   },

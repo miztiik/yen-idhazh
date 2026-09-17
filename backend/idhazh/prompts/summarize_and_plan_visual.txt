@@ -11,7 +11,7 @@ The summary.
   point that restates the summary is a wasted line.
 
   "summary" - one piece of prose. The question below says how long it is and
-  how many key points go with it.
+  how many key points go with it. $paragraph_rule
 
   For all three: keep every figure exactly as the item wrote it. Keep the
   item's hedges - "reportedly", "is expected to", "could" - and add none it did

@@ -331,4 +331,31 @@ test.describe('the item is a low-chrome card', () => {
 		expect(sizes.whenColour, 'the time is a colour of its own').toBe(sizes.eyebrowColour);
 		expect(sizes.whenWeight, 'the time is a weight of its own').toBe(sizes.eyebrowWeight);
 	});
+
+	test('a summary with a paragraph break is drawn as two paragraphs', async ({ page }) => {
+		// The canary gives exactly one story a break (`build_canary_day.py`), the
+		// same way it gives exactly one story no clock - so this checks both
+		// shapes at once rather than swapping one for the other, and a change
+		// that renders `\n\n` as a space fails on the day it lands rather than on
+		// the day a long article happens to come round.
+		await open(page, 'dark');
+		const drawn = await page.evaluate(() =>
+			[...document.querySelectorAll('article.item')].map((card) => ({
+				paragraphs: card.querySelectorAll('[data-item-summary]').length,
+				// A block ends on its own sentence: proof the split landed on the
+				// break rather than mid-clause, which no count can show.
+				first: (card.querySelector('[data-item-summary]')?.textContent ?? '').trim()
+			}))
+		);
+
+		expect(drawn.length, 'no stories on the canary day').toBeGreaterThan(0);
+		const broken = drawn.filter((card) => card.paragraphs > 1);
+		expect(broken, 'the canary story with a break drew one paragraph').toHaveLength(1);
+		expect(broken[0].paragraphs, 'a two-paragraph summary drew more than two').toBe(2);
+		expect(broken[0].first, 'the first paragraph does not end on a sentence').toMatch(/[.!?]$/);
+		expect(
+			drawn.filter((card) => card.paragraphs === 1).length,
+			'every other story is still one paragraph'
+		).toBe(drawn.length - 1);
+	});
 });
