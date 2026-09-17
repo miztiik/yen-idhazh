@@ -1,6 +1,6 @@
 # Published Console
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-17
 The operator's surface: which panel is on which route, the question each one
 answers, and the ruling behind its shape. `/console/` tells the owner what
 happened to the pipeline, where the digest tells a reader what happened in the
@@ -25,9 +25,21 @@ what it owes instead is legibility - a figure readable at a glance, a table that
 fits the screen it is on, and a page that can be scanned in one pass
 ([../../concepts/vision.md](../../concepts/vision.md)).
 
-## The console answers "is it working", in one screen
+## The console answers two questions, and every panel names which
 
-`/console/` is the operator's surface. The digest tells a reader what happened in the world; the console tells the owner what happened to the pipeline. It is instrumentation: it takes no ornament and spends no reader attention, and what it owes instead is legibility - a figure readable at a glance, a table that fits the screen it is on, and a page that can be scanned in one pass ([../../concepts/vision.md](../../concepts/vision.md)).
+**Is it working** and **what is broken** are two questions rather than one, and a panel that asks the first in its title while drawing the second is the commonest defect this surface has. A verdict panel takes the central value or the count and covers every subsystem. A break panel takes the extreme and the individual that owns it, and covers every candidate inside one subsystem. **A verdict panel sits above the panels it verdicts**, or the operator reads ten readings before he reaches the line that tells him whether to trust them.
+
+| Surface | Which question it answers |
+| --- | --- |
+| the standing band | is it working - one verdict across all five routes, at a size that does not grow with the pipeline |
+| `/console/` "At a glance" | is it working - for this route alone, and over the open window where the band's figures are whole-record |
+| `/console/` panels | what is broken in the run |
+| `/console/model/`, `/console/judgement/`, `/console/voices/` | what is broken in the writing, the labelling and the supply |
+| `/console/machine/` | what is broken on the box, and nothing else - it carries no verdict the band does not already give |
+
+The band is not a route. It stands on all five, which is why it is the surface that can verdict five.
+
+How a panel obeying this is allowed to draw is [../../concepts/console-design.md](../../concepts/console-design.md), whose thirteen chart rules carry it as the last and widest of them. Susan, 2026-09-17.
 
 `/evals/` remains a published entry point for old bookmarks. It carries a
 prerendered meta refresh, a canonical link and a plain link to `/console/`.
