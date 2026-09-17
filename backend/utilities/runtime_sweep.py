@@ -1,4 +1,4 @@
-"""How long does one candidate take over a fixed five-article corpus?
+"""How long does one candidate take over a fixed corpus of `bench.corpus_items` articles?
 
 Shells `python -m idhazh work`, so what it times is production's own path.
 Which repeats may be compared is a separate question, in `sweep_verdict.py`.
@@ -35,10 +35,6 @@ RUN_ROOT = Path("backend/var/run")
 SERVER_BINARY = Path("backend/bin/llama-server")
 WEIGHTS_DIR = Path("backend/models")
 
-#: Five, because the corpus is fixed and a repeat that wrote four measured
-#: something else. It is asserted rather than assumed at both ends.
-CORPUS_ITEMS = 5
-
 #: What each named candidate changes about the server it starts. Every value is
 #: an `inference` knob except `draft`, which is a sibling of `inference` and is
 #: lifted one level up by `write_config`.
@@ -66,6 +62,18 @@ SIZED_BY_DISPATCH = ("threads", "threads_batch")
 #: argument named `--port` is a second spelling of a llama-server flag and the
 #: whole rule is that the flag list has one spelling.
 PORT_ENV = "LLAMA_PORT"
+
+
+def corpus_items(config_root: Path | None) -> int:
+    """How many articles one repeat reads, from `bench.corpus_items`.
+
+    One number, read from config by everything that needs it. Until 2026-09-17 it
+    was two source literals - a `--cap` in the workflow and a constant here - and
+    when they disagreed `freeze_corpus` killed the dispatch after the plan step
+    (Guardrail #6). `None` is the committed tree, which is what a fresh clone has.
+    """
+    settings = config.load(config_root) if config_root is not None else config.load()
+    return settings.app.bench.corpus_items
 
 
 def candidate_update(name: str, *, threads: int, threads_batch: int) -> tuple[dict[str, Any], int]:
@@ -165,7 +173,7 @@ class Collected(NamedTuple):
     per_item: list[dict[str, Any]]
 
 
-def collect(date: str, label: str, repeat: int) -> Collected:
+def collect(date: str, label: str, repeat: int, *, items: int) -> Collected:
     """Read one repeat's output back off disk.
 
     `sources` is a digest of the article as extracted rather than of the page,
@@ -173,7 +181,7 @@ def collect(date: str, label: str, repeat: int) -> Collected:
 
     Each item carries the words the candidate wrote, not only a digest of them.
     A digest proves two candidates disagreed; it never says how, so four sweeps
-    have now shown a difference nobody could read. Five articles of our own
+    have now shown a difference nobody could read. A few articles of our own
     prose is a small thing to carry and it is the only thing here a person can
     actually judge.
 
@@ -187,10 +195,8 @@ def collect(date: str, label: str, repeat: int) -> Collected:
     articles = sorted(items_dir.glob("*.article.json"))
     summaries = sorted(items_dir.glob("*.summary.json"))
     for what, found in (("articles", articles), ("summaries", summaries)):
-        if len(found) != CORPUS_ITEMS:
-            raise RuntimeError(
-                f"{label} repeat {repeat} wrote {len(found)} {what}, not {CORPUS_ITEMS}"
-            )
+        if len(found) != items:
+            raise RuntimeError(f"{label} repeat {repeat} wrote {len(found)} {what}, not {items}")
 
     sources = {}
     for path in articles:
@@ -243,7 +249,7 @@ def run_once(
     candidate_id: str,
     port: int,
 ) -> dict[str, Any]:
-    """One server start, one pass over the five articles, one set of readings."""
+    """One server start, one pass over the fixed corpus, one set of readings."""
     cfg = write_config(f"{label}-{repeat}", update)
     settings = config.load(cfg)
     log_path = ROOT / f"{label}-{repeat}.llama-server.log"
@@ -313,7 +319,7 @@ def run_once(
                 server.wait(timeout=20)
             sampler.join(timeout=5)
 
-    found = collect(date, label, repeat)
+    found = collect(date, label, repeat, items=settings.app.bench.corpus_items)
     return {
         "label": label,
         "candidate": candidate,
@@ -333,17 +339,17 @@ def run_once(
     }
 
 
-def freeze_corpus(date: str) -> None:
-    """Cut the day's plan to five articles and keep a copy beside the readings.
+def freeze_corpus(date: str, *, items: int) -> None:
+    """Cut the day's plan to `items` articles and keep a copy beside the readings.
 
-    The plan is frozen so every repeat reads the same five ADDRESSES. Their text
-    is refetched each time, which is what `sweep_verdict` exists to notice.
+    The plan is frozen so every repeat reads the same ADDRESSES. Their text is
+    refetched each time, which is what `sweep_verdict` exists to notice.
     """
     plan_path = RUN_ROOT / date / "plan.json"
     payload = json.loads(plan_path.read_text(encoding="utf-8"))
-    payload["items"] = payload["items"][:CORPUS_ITEMS]
-    if len(payload["items"]) != CORPUS_ITEMS:
-        raise SystemExit(f"the runtime sweep needs exactly {CORPUS_ITEMS} planned articles")
+    payload["items"] = payload["items"][:items]
+    if len(payload["items"]) != items:
+        raise SystemExit(f"the runtime sweep needs exactly {items} planned articles")
     counts = Counter(item["vertical"] for item in payload["items"])
     for vertical in payload["verticals"]:
         vertical["planned"] = counts.get(vertical["id"], 0)
@@ -375,8 +381,8 @@ def sweep(args: argparse.Namespace) -> int:
     candidate = args.candidate
     # Two, because a spread needs two readings and this stops a dispatch that
     # cannot produce one. The ceiling is the job timeout rather than taste: a
-    # named candidate runs two cases, and one repeat of five articles has taken
-    # over an hour on every machine measured so far (Guardrail #2).
+    # named candidate runs two cases, so the repeats multiply the corpus, and
+    # `bench.corpus_items` is the knob sized against that bound (Guardrail #2).
     if args.repeats < sweep_verdict.MIN_AGREEING_REPEATS:
         raise SystemExit("runtime_repeats must be at least 2 - one reading has no spread")
     port = server_port()
@@ -443,8 +449,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    freeze = sub.add_parser("freeze-corpus", help="Cut the day's plan to five articles.")
+    size = sub.add_parser("corpus-items", help="Print how many articles one repeat reads.")
+    size.add_argument("--config", type=Path, default=None)
+
+    freeze = sub.add_parser("freeze-corpus", help="Cut the day's plan to the configured size.")
     freeze.add_argument("--date", required=True)
+    freeze.add_argument("--config", type=Path, default=None)
 
     run = sub.add_parser("sweep", help="Time the candidate against the baseline.")
     run.add_argument("--date", required=True)
@@ -457,8 +467,11 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--gguf-cache-hit", default="false")
 
     args = parser.parse_args(argv)
+    if args.command == "corpus-items":
+        print(corpus_items(args.config))
+        return 0
     if args.command == "freeze-corpus":
-        freeze_corpus(args.date)
+        freeze_corpus(args.date, items=corpus_items(args.config))
         return 0
     return sweep(args)
 

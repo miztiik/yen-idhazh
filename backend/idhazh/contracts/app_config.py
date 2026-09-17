@@ -30,6 +30,7 @@ from pydantic import Field, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract
 from idhazh.contracts.knobs.assist import AssistConfig
+from idhazh.contracts.knobs.bench import BenchConfig
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.evaluation import DriftConfig, EvaluationConfig
@@ -78,6 +79,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-17T12:00",
+            change="bench.corpus_items, additive, default 3.",
+            why="The bench corpus was two source literals, and at five it overran the job.",
+        ),
+        ChangelogEntry(
             version="2026-09-17",
             change="extract gained three chrome knobs, additive, the fold on.",
             why="The boilerplate signal divided by an empty set and said no to every page.",
@@ -93,11 +99,6 @@ class AppConfig(Contract):
             why="The leading block is a weighted score now, so every term needs a knob.",
         ),
         ChangelogEntry(
-            version="2026-09-16T15:00",
-            change="placement gained three freshness knobs, additive, the curve on.",
-            why="A story planned at 02:20 held its morning freshness against the evening.",
-        ),
-        ChangelogEntry(
             version="2026-08-21",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
@@ -105,6 +106,7 @@ class AppConfig(Contract):
     )
 
     run: RunConfig = Field(default_factory=RunConfig)
+    bench: BenchConfig = Field(default_factory=BenchConfig)
     collect: CollectConfig = Field(default_factory=CollectConfig)
     extract: ExtractConfig = Field(default_factory=ExtractConfig)
     elements: ElementsConfig = Field(default_factory=ElementsConfig)
