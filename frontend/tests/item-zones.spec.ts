@@ -8,7 +8,7 @@
  * | zone | token | from |
  * | --- | --- | --- |
  * | the source mark | `--zone-mark` | every width |
- * | the card | `minmax(0, 1fr)`, its text at `--measure` | every width |
+ * | the card | `minmax(0, 1fr)`, its prose block at `--measure` | every width |
  * | the item's footer rail | `--zone-rail` | the middle breakpoint |
  * | the day's aside | `--zone-aside` | the wide breakpoint, and the rail retires |
  *
@@ -100,6 +100,8 @@ interface Reading {
 	itemUsed: number;
 	proseUsed: number;
 	proseMaxWidth: number;
+	titleRight: number;
+	summaryRight: number;
 	asideUsed: number | null;
 	railUsed: number | null;
 	scrollWidth: number;
@@ -129,7 +131,12 @@ async function read(page: Page, rootPx: number): Promise<Reading> {
 			parseFloat(getComputedStyle(frame).paddingLeft) +
 			parseFloat(getComputedStyle(frame).paddingRight);
 		const item = document.querySelector('article.item') as HTMLElement;
-		const prose = document.querySelector('[data-item-summary]') as HTMLElement;
+		// The block that owns the measure, not the paragraph inside it: a `ch`
+		// belongs to the element it lands on, so the cap is set once at the prose
+		// size and the title inherits the used width rather than computing its own.
+		const prose = item.querySelector('.prose') as HTMLElement;
+		const edge = (el: Element | null) =>
+			el ? Math.round(el.getBoundingClientRect().right * 100) / 100 : NaN;
 
 		return {
 			rootFontPx: remPx,
@@ -145,6 +152,8 @@ async function read(page: Page, rootPx: number): Promise<Reading> {
 			itemUsed: width(item) as number,
 			proseUsed: width(prose) as number,
 			proseMaxWidth: parseFloat(getComputedStyle(prose).maxWidth),
+			titleRight: edge(item.querySelector('.prose > h2, .prose > h3')),
+			summaryRight: edge(item.querySelector('[data-item-summary]')),
 			asideUsed: width(document.querySelector('.day-aside')),
 			railUsed: width(document.querySelector('.item .item-rail')),
 			scrollWidth: document.documentElement.scrollWidth,
@@ -192,11 +201,24 @@ test.describe('the reading page spends its width in named zones', () => {
 					).toBeCloseTo(reading.zoneRail, 1);
 				}
 
-				// --- The measure is on the text, never on the shell -------------
+				// --- The measure is on the prose block, never on the shell -------
 				expect(
 					reading.proseUsed,
-					`the summary is ${reading.proseUsed}px against a measure of ${reading.proseMaxWidth}px`
+					`the prose is ${reading.proseUsed}px against a measure of ${reading.proseMaxWidth}px`
 				).toBeLessThanOrEqual(reading.proseMaxWidth + 0.5);
+
+				// --- One right edge ---------------------------------------------
+				// A `ch` belongs to the element it lands on, so a measure class worn
+				// by the title and again by the summary is two measures. Measured
+				// 2026-09-17 before the block cap landed: 1025.33px against 878.21px
+				// at this width, a 147.13px step on every card. The title's own cap
+				// never bound - 68ch of 28px type is 1057px and the body is 806.93.
+				expect(
+					reading.titleRight,
+					`the title ends at ${reading.titleRight}px and the summary at ` +
+						`${reading.summaryRight}px, so the card has two right edges ` +
+						`${Math.round((reading.titleRight - reading.summaryRight) * 100) / 100}px apart`
+				).toBeCloseTo(reading.summaryRight, 1);
 
 				// --- The page uses the box it has -------------------------------
 				// At and above the wide breakpoint the aside takes a trailing column

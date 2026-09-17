@@ -165,25 +165,32 @@
 			{/if}
 		</p>
 
-		<svelte:element
-			this={`h${level}`}
-			class="measure mb-2 text-2xl"
-			class:font-semibold={!read}
-			class:font-normal={read}
-			class:text-text={!read}
-			class:text-text-secondary={read}
-		>
-			<!-- The ring and the weight say this to a reader looking at the page and
-			     to nobody else. The word is what a screen reader gets. -->
-			{#if read}<span class="sr-only">Read. </span>{/if}{item.title}
-		</svelte:element>
+		<!-- The measure is on this block, not on each line of text inside it. A
+		     `ch` resolves against the element that uses it, so a title carrying the
+		     same `68ch` as the summary got 68 characters of 28px type - 1057px,
+		     wider than the card, which is no cap at all. The figure stays outside,
+		     because a chart is drawn at a width rather than wrapped to one. -->
+		<div class="prose">
+			<svelte:element
+				this={`h${level}`}
+				class="title mb-2 text-2xl"
+				class:font-semibold={!read}
+				class:font-normal={read}
+				class:text-text={!read}
+				class:text-text-secondary={read}
+			>
+				<!-- The ring and the weight say this to a reader looking at the page and
+				     to nobody else. The word is what a screen reader gets. -->
+				{#if read}<span class="sr-only">Read. </span>{/if}{item.title}
+			</svelte:element>
 
-		<p class="measure text-lg text-text" data-item-summary>{item.summary}</p>
-		{#if item.reader_note}
-			<p class="measure mt-2 text-base text-text-secondary">
-				{item.reader_note}
-			</p>
-		{/if}
+			<p class="text-lg text-text" data-item-summary>{item.summary}</p>
+			{#if item.reader_note}
+				<p class="mt-2 text-base text-text-secondary">
+					{item.reader_note}
+				</p>
+			{/if}
+		</div>
 
 		<ItemVisual visual={item.visual} />
 	</div>
@@ -194,9 +201,44 @@
 </article>
 
 <style>
-	/* The measure is on the TEXT, never on the shell. Below the side-rail
-	   breakpoint the item is one column and the rail simply follows the body,
-	   which is what a phone should do.
+	/* One measure for the whole prose block, set once at the prose size.
+
+	   `--measure` is `68ch` and a `ch` is a property of the element it lands on,
+	   so putting it on the title and the summary separately gave one card two
+	   right edges: measured 2026-09-17 in Chromium at 1536px, the summary stopped
+	   at 659.81px and the title ran to 1025.33px, 147.13px further. The title was
+	   not held to a narrower measure - it was held to no measure at all, because
+	   68 characters of 28px type is 1057px and the card body is 806.93px.
+
+	   `font-size` here exists to resolve that `ch`, and every child sets its own
+	   size over it. The display face makes the arithmetic moot as well as wrong:
+	   a `ch` of Inter is not a `ch` of the reading stack, so a per-element cap
+	   could not have agreed with itself even at one size. */
+	.prose {
+		max-width: var(--measure);
+		font-size: var(--text-lg);
+		/* The text comes off the open web: one unbroken token - a URL, a chemical
+		   name, a German compound - is wider than the measure and pushes a
+		   scrollbar under the whole column. Breaking the word is the lesser harm,
+		   and it is the only thing on this page allowed to break one. */
+		overflow-wrap: break-word;
+		/* Trades a slower line-breaking pass for no orphan on the last line. The
+		   browsers that do not have it keep today's greedy wrapping. */
+		text-wrap: pretty;
+	}
+
+	/* The display face, on the one line of this card that is a headline. It is
+	   already fetched and preloaded for the wordmark, so a title in it costs no
+	   byte the reader was not already paying. `balance` rather than `pretty`
+	   because a heading is short enough for the browser to even out every line
+	   rather than only rescue the last one. */
+	.title {
+		font-family: var(--font-display);
+		text-wrap: balance;
+	}
+
+	/* Below the side-rail breakpoint the item is one column and the rail simply
+	   follows the body, which is what a phone should do.
 
 	   Every column here is a `rem` token from config/appearance.json, so a
 	   reader who set their browser text larger gets wider furniture with it -
