@@ -172,8 +172,9 @@ def test_two_candidates_dispatched_together_are_two_qualifications_and_not_one()
 
     `group: validate` admitted one run. GitHub keeps only ONE pending run per
     group and a newer pending run cancels the older one, so a comparison fired
-    several candidates wide kept the first arm and the last and cancelled every
-    arm between them - with no error anywhere, only a cancelled run.
+    several candidates wide kept the run that started and the case dispatched
+    last, and cancelled every case between them - no error anywhere, only a
+    cancelled run.
 
     The candidate list is read off `config/models/`, so a model added later is
     covered without anybody remembering this test.

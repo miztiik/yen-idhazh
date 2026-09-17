@@ -709,8 +709,8 @@ procedure and the acceptance requirements.
 them were silently cancelled.** `Model validation` grouped every run under
 `concurrency: group: validate`, so a comparison fired four candidates wide
 queued three of them - and GitHub keeps only **one** pending run per group, each
-new one cancelling the last. The operator got the first arm, the fourth arm, and
-two cancelled runs with no error on them. The group is now
+new one cancelling the last. The operator got the run that started, the case
+dispatched last, and two cancelled runs with no error on them. The group is now
 `validate-${{ inputs.candidate_models_file || 'the-configured-model' }}`: the
 candidate file is the whole of what makes two dispatches different questions, so
 it is what names the group. Two dispatches of one candidate still queue, which

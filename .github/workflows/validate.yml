@@ -58,9 +58,10 @@ concurrency:
   # `group: validate` admitted one run of this workflow at a time. A dispatch
   # fired while another was going waited, which is the intent - but GitHub
   # keeps only ONE pending run per group and a newer pending run cancels the
-  # older one. So dispatching a comparison, several candidates at once, kept
-  # the first arm and the last and silently cancelled every arm in between,
-  # with no error anywhere: the operator sees a cancelled run and no reason.
+  # older one. So dispatching four candidates at once kept the run that
+  # started and the case dispatched last, and silently cancelled the two
+  # between them - no error anywhere, only a cancelled run with no reason on
+  # it.
   #
   # The candidate file is the whole of what makes two dispatches different
   # runs, so it is what names the group. Two dispatches of the SAME candidate
