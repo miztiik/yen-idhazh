@@ -650,6 +650,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "DigestItem.summary is Prose - paragraphs split by one blank line.",
+      "version": "2026-09-17",
+      "why": "A long summary is two paragraphs, and read-side folding keeps old days readable."
+    },
+    {
       "change": "Added DigestItem.same_story_on - which day holds the item it collapses onto.",
       "version": "2026-09-16T17:00",
       "why": "A story can now be the same story as one from yesterday; absent means today."
@@ -663,11 +668,6 @@
       "change": "Added DigestVisual.data_path - where this visual's data file landed.",
       "version": "2026-09-13T20:00",
       "why": "The reader's browser draws the chart, so it needs the marks rather than an SVG."
-    },
-    {
-      "change": "Added DigestItem.secondary_desk - the one other desk a story has a claim to.",
-      "version": "2026-09-13",
-      "why": "The desk ceiling sends an over-ceiling story to a second desk, unnamed."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -744,7 +744,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-16T17:00",
+      "default": "2026-09-17",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -769,5 +769,5 @@
   ],
   "title": "DigestDay",
   "type": "object",
-  "version": "2026-09-16T17:00"
+  "version": "2026-09-17"
 }

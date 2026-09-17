@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 import shutil
 from collections.abc import Sequence
 from datetime import date as calendar_date
@@ -46,7 +47,7 @@ from idhazh.assemble import (
     write_atomic,
 )
 from idhazh.contracts.article import Article, ArticleStatus
-from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.base import derive_url_key, normalize_prose
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.eval_row import EvalRow
@@ -443,7 +444,7 @@ def to_item(
         source_kind=SourceKind.REPORTING,
         published_at=appeared_at,
         time_source=time_source,
-        summary=raw_text,
+        summary=summary_for(index, raw_text),
         key_points=[line for line in raw_text.splitlines() if line.strip()][:3] or ["-"],
         band=verdict.band,
         band_reason=verdict.reason,
@@ -453,6 +454,42 @@ def to_item(
         lenses=lenses_for(index),
         introduced_by_run=run_n,
     )
+
+
+#: The one story that carries a paragraph break, the same way `APPEARED` carries
+#: one story with no clock: a fixture earns its keep by holding the case the
+#: archive has never produced (`CLAUDE.md` section 13). Every other story stays
+#: one paragraph, which is what every day published before 2026-09-17 carries,
+#: so the fixture checks both shapes at once rather than swapping one for the
+#: other.
+BREAKS_AT: Final = 2
+
+
+def summary_for(index: int, raw_text: str) -> str:
+    """This story's summary, folded to the one shape `Prose` admits.
+
+    Every story is folded to ONE paragraph first, and the reason is what the
+    canary text actually is: these are prompt-injection probes, and their raw
+    text already carries blank lines around the bait. Folding with no cap kept
+    all of them, which gave every story three to six paragraphs and no story the
+    shape this fixture is here to carry. Production never sees that, because
+    `parse_draft` folds a reply with `paragraphs_max` - so this passes the cap
+    for the same reason.
+
+    The break goes at a sentence end near the middle, which is where a model
+    asked to break "where the subject turns" would put one. A text with nothing
+    to split stays whole rather than growing an empty paragraph.
+    """
+    one = normalize_prose(raw_text, paragraphs_max=1)
+    if index != BREAKS_AT:
+        return one
+    sentences = re.findall(r"[^.!?]*[.!?]+\s*|[^.!?]+$", one)
+    if len(sentences) < 2:
+        return one
+    half = len(sentences) // 2
+    head = "".join(sentences[:half])
+    tail = "".join(sentences[half:])
+    return normalize_prose(f"{head}\n\n{tail}", paragraphs_max=2)
 
 
 def desk_for(index: int) -> str | None:
