@@ -674,36 +674,36 @@ reading rather than history and has been replaced (Guardrail #10).
 
 | Quantity | Value | How |
 | --- | --- | --- |
-| Day files in `state/item-health/` | 24, 12,757 rows | `rglob` count |
-| Ledger on disk | 5,567,033 bytes | `stat` |
-| Mean row | **436.4 bytes** | size / rows |
+| Day files in `state/item-health/` | 24, 12,837 rows | `rglob` count |
+| Ledger on disk | 5,639,488 bytes | `stat` |
+| Mean row | **439.3 bytes** | size / rows |
 | Widest day, `2026/08/25.csv` | 1,000 rows, 396,015 bytes | `stat` |
 | Rows on a full day | **800** | 5 runs x the 160-item `safety_ceiling_per_run` |
-| A full day at the current width | **~349 KB** | 800 x 436.4 |
-| Published projection `frontend/public/telemetry/2026-09.csv` | 1,347,770 bytes, 49 of the 113 columns | `stat` |
-| Mean published row | 179.0 bytes raw, **40.6 bytes gzipped** (4.4x) | gzip at maximum level |
+| A full day at the current width | **~351 KB** | 800 x 439.3 |
+| Published projection `frontend/public/telemetry/2026-09.csv` | 1,373,976 bytes, 49 of the 113 columns | `stat` |
+| Mean published row | 180.5 bytes raw, **41.3 bytes gzipped** (4.4x) | gzip at maximum level |
 
 What the 2026-09-17 column change costs the archive, one time, on the first
 append to each day file:
 
 | Move | Bytes | How |
 | --- | --- | --- |
-| `job` added | **+12,853** | one comma on each of 12,757 rows, plus `,job` on 24 headers |
-| `runner_name` dropped | **-21,020** | 12,757 commas, 319 filled values totalling 7,975 characters, and `,runner_name` off 24 headers |
-| Net | **-8,167 bytes** | the row gets narrower, not wider |
+| `job` added | **+12,933** | one comma on each of 12,837 rows, plus `,job` on 24 headers |
+| `runner_name` dropped | **-23,194** | 12,837 commas, 399 filled values totalling 10,069 characters, and `,runner_name` off 24 headers |
+| Net | **-10,261 bytes** | the row gets narrower, not wider |
 
 Projected forward at the current cadence and ceiling:
 
 | Horizon | Ledger | Served projection (gzipped) |
 | --- | --- | --- |
-| a day | 349 KB | 32 KB |
-| a month | **10.5 MB** | **975 KB** |
-| a year | 127 MB | 12 MB |
+| a day | 351 KB | 33 KB |
+| a month | **10.5 MB** | **991 KB** |
+| a year | 128 MB | 12 MB |
 
 Three limits, in the order they will actually bite:
 
 1. **The reader's download, first.** The console fetches a whole month shard.
- 975 KB gzipped at the end of a busy month is far more than the rest of the
+ 991 KB gzipped at the end of a busy month is far more than the rest of the
  page. The lever is the projection, not the ledger: the served file carries 49
  of the row's 113 columns and could carry fewer, or become a pre-aggregated
  day-grain file with the per-item rows kept for the operator only. Nothing
