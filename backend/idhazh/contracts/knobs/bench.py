@@ -43,3 +43,29 @@ class BenchConfig(Model):
             "to bound an undetected defect rate."
         ),
     )
+
+    run_model_speed_case: bool = Field(
+        default=True,
+        description=(
+            "Does a bench dispatch measure the model's raw speed before it measures "
+            "real work? Default true, and it is removed the day the speed case stops "
+            "costing a dispatch time worth saving - measured 2026-09-16 over four "
+            "dispatches on stock ubuntu-latest at 9.1, 26.7, 27.2 and 87.6 minutes, "
+            "so today it is worth between a tenth and a third of the whole dispatch.\n\n"
+            "False runs the rest of the flow and skips that half: the fixed corpus, "
+            "the real server over it, the machine record and the committed host row "
+            "all still happen. What is given up is the prefill and decode rates, and "
+            "with them the dossier - a dossier is both cases, so a dispatch that "
+            "skipped one emits the server half and a line saying which half is "
+            "missing rather than a page that reads whole.\n\n"
+            "It also moves who pays for the weights. The speed case fills the cache "
+            "entry the server case restores, so a dispatch that skips it downloads "
+            "the candidate once in the server case instead - the same bytes, in a "
+            "different job.\n\n"
+            "`measure.yml`'s `model_speed_case` dispatch input overrules this for one "
+            "run without a commit: `config` follows this knob, `run` and `skip` do "
+            "not. This is operator control rather than a feature behind a flag, so "
+            "there is no second implementation waiting behind it - the same jobs run "
+            "either way and one of them is not dispatched."
+        ),
+    )
