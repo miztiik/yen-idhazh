@@ -164,7 +164,7 @@ which is the same family.
 | 10 | A story that has been running ranks below one that broke today | - | C | DONE | - | - | p29-r10 |
 | 11 | The lead is a weighted score, and the page says how | 10 | C | DONE | - | - | p29-r11 |
 | 12 | Label the sheet, then set the weights | - | C | PENDING | - | - | - |
-| 13 | A source's quality decides its own future | - | C | PENDING | - | - | - |
+| 13 | A source's quality decides its own future | - | C | DONE | - | - | p29-r13 |
 | 14 | The composite score, proving it changed nothing | - | C | DONE | - | #799 | p29-r14 |
 | 15 | The weights and the 0.88 floor | 12, 14 | D | PENDING | - | - | - |
 | 16 | Refuse boilerplate, on a week of evidence | 13 | D | PENDING | - | - | - |

@@ -1,5 +1,11 @@
 {
+  "auto_retire": false,
   "complete_dates": 2,
+  "dwell_dates": [
+    "2026-08-18",
+    "2026-08-19"
+  ],
+  "dwell_days": 14,
   "first_date": "2026-08-18",
   "generated_at": "2026-08-20T06:20:00Z",
   "headline_sentence": "3 figures on this page are not computed yet.",
@@ -11,13 +17,29 @@
   "sources": [
     {
       "availability": "answering",
+      "days_under_the_mark": 1,
       "opportunities": 3,
       "permission": "allowed",
       "publications": 2,
+      "recent_days": [
+        {
+          "date": "2026-08-18",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-08-19",
+          "opportunities": 2,
+          "publications": 1,
+          "source_failures": 1
+        }
+      ],
       "reliability": 0.75,
       "reliability_reads": 4,
       "retired": false,
       "retired_on": null,
+      "retires_on": null,
       "source_failures": 1,
       "source_id": "allowed-wire",
       "title": "Allowed Wire",
@@ -25,13 +47,16 @@
     },
     {
       "availability": "never_asked",
+      "days_under_the_mark": 0,
       "opportunities": 0,
       "permission": "denied",
       "publications": 0,
+      "recent_days": [],
       "reliability": 1.0,
       "reliability_reads": 0,
       "retired": false,
       "retired_on": null,
+      "retires_on": null,
       "source_failures": 0,
       "source_id": "refused-wire",
       "title": "Refused Wire",
@@ -39,13 +64,16 @@
     },
     {
       "availability": "never_asked",
+      "days_under_the_mark": 0,
       "opportunities": 0,
       "permission": "unrecorded",
       "publications": 0,
+      "recent_days": [],
       "reliability": 0.5,
       "reliability_reads": 6,
       "retired": true,
       "retired_on": "2026-08-11",
+      "retires_on": null,
       "source_failures": 0,
       "source_id": "retired-wire",
       "title": "Retired Wire",
@@ -53,5 +81,7 @@
     }
   ],
   "version": "2026-09-13",
+  "yield_alarm_min_decisions": 30,
+  "yield_alarm_point": 0.5,
   "yield_readable": false
 }

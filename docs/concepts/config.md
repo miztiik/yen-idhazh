@@ -161,6 +161,14 @@ Extraction has three shape and access control groups:
  text carries `not_prose`.
 - `extract.boilerplate_ratio_max` decides when sibling-shared lines carry
  `boilerplate`.
+- `extract.chrome_pages_min`, `extract.chrome_lines_per_host_max` and
+ `extract.chrome_forget_days` govern the store that makes the line above mean
+ anything. Until 2026-09-17 nothing fed that comparison, so the ratio divided by
+ an empty set and answered no on every page. `chrome_pages_min` (3) is how many
+ distinct pages of a host must carry a line before it counts as that host's
+ furniture; the other two bound `state/chrome.csv` at hosts times 200 lines and
+ forget a line 90 days after the last page carried it
+ ([../architecture/extraction/chrome.md](../architecture/extraction/chrome.md)).
 - `extract.paywall_markers` is the fallback when JSON-LD does not declare a
  paywall.
 
@@ -308,6 +316,8 @@ a refusal is persisted, so the next run asks the host again - and
 | `source_yield_min_complete_days` | 30 | Complete days of item-health evidence a per-source yield judgement needs before it may be made - and, since 2026-09-03, how far back the published source-health record reads. |
 | `source_yield_alarm_point` | 0.5 | The yield below which a run names a source on its own summary. A flag for a person; it moves nothing on its own. |
 | `source_yield_alarm_min_decisions` | 30 | Addresses a source must have decided before its yield may raise that flag. |
+| `source_quality_dwell_days` | 14 | Running days under the alarm point before a source retires itself. A bad week cannot retire anything. |
+| `source_quality_auto_retire` | `false` | Whether a completed dwell files a retirement, or only draws the countdown. Delete this flag once one real retirement has been reviewed and accepted. |
 
 **`quarantine_after_failures` was removed on 2026-09-03**, and a config still
 spelling it is refused with a message naming `availability_strikes_before_rest`.

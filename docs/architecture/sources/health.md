@@ -148,12 +148,35 @@ it. It ships with its header and no rows, because the plan job's commit step
 stages every path it owns in one call and a path that is not in the checkout
 aborts the whole step ([../contracts/schemas.md](../contracts/schemas.md)).
 
-**`http_410` is the only cause the enum admits**, and that is the design rather
-than a starting point. A 403, a 404, a paywall, a transient failure and an empty
-feed all say something about today; only `410 Gone` is the server saying the
-address is not coming back. Retiring on anything softer removes unique primary or
-regional reporting over one bad week, and nothing here puts it back without a
-person noticing it went.
+**`http_410` was the only cause the enum admitted until 2026-09-17**, and that
+clause was not a starting point. A 403, a 404, a paywall, a transient failure
+and an empty feed all say something about today; only `410 Gone` is the server
+saying the address is not coming back. Retiring on anything softer removes
+unique primary or regional reporting over one bad week, and nothing here puts it
+back without a person noticing it went.
+
+**`low_yield` is the second cause, and it answers that clause rather than
+deleting it.** The risk is real, so the price of a softer cause is four things
+holding at once rather than one server header: the trailing share under
+`collect.source_yield_alarm_point`, on at least
+`collect.source_yield_min_complete_days` finished days and
+`collect.source_yield_alarm_min_decisions` decisions, held there for
+`collect.source_quality_dwell_days` days running. The run must be unbroken - one
+day back at or above the mark resets it to zero - so a bad week cannot retire
+anything and a source that recovers keeps its place.
+
+The two causes fill two different evidence cells, and that is a shape rule
+rather than a convention. `evidence_run_ids` names the runs that read the `410`.
+`evidence_dates` names the days the share stayed under the mark, because a day
+the schedule fired five times is still one day under the mark and recording its
+five run ids would say a fortnight's dwell was a fortnight and a half. A row
+carrying neither is a retirement nobody can check, which is the one thing this
+ledger exists to prevent.
+
+**`collect.source_quality_auto_retire` is false in the first release.** The
+countdown is drawn on `/console/voices/` and nothing fires. A person reads it
+first; the flag and the branch it guards are deleted once one real low-yield
+retirement has been reviewed and accepted.
 
 **Five distinct runs, not five results.** A job that is re-run keeps its run id,
 so a single bad afternoon retrying itself would otherwise retire an address on

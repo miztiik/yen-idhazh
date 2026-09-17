@@ -98,6 +98,7 @@ from __future__ import annotations
 
 import csv
 import io
+import os
 from collections.abc import Callable, Collection, Iterable, Iterator, Sequence
 from datetime import date as date_type
 from datetime import timedelta
@@ -105,6 +106,7 @@ from pathlib import Path
 from typing import Final, NamedTuple, Protocol
 
 from idhazh import day_partition, month_partition
+from idhazh.contracts.chrome_line import ChromeLineRow
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.feed_retirement import FeedRetirementRow
@@ -129,6 +131,7 @@ VISUAL_PRUNES_DIRNAME: Final = "visual-prunes"
 COUNTERFACTUAL_SCORES_DIRNAME: Final = "counterfactual-scores"
 RUNTIME_COUNTERS_FILENAME: Final = "runtime-counters.csv"
 FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
+CHROME_FILENAME: Final = "chrome.csv"
 
 #: What makes two feed-health rows the same record. One feed, read once, in one
 #: run. The ledger always meant that - `docs/architecture/sources/health.md`
@@ -196,6 +199,17 @@ COUNTERFACTUAL_SCORE_KEY: Final = ("date", "run_id", "vertical", "url_key")
 #: in curated config must not make its dead address eligible again, and editing
 #: that feed's URL already produces a different key.
 FEED_RETIREMENT_KEY: Final = ("endpoint_key",)
+
+#: What makes two chrome rows the same record. One host, one reduction, one line.
+#: `line_rule` is in the key rather than filtered before it, because two rules
+#: produce two unrelated hashes of one line and settling them against each other
+#: would pick between measurements that were never comparable.
+#:
+#: This is the one ledger whose writer REWRITES rather than appends, so its
+#: repeats are the ordinary case rather than a re-run: a fold that moved a count
+#: from 5 to 6 writes a different line, and `merge=union` keeps both. They can
+#: disagree, so this is the second key with a rule.
+CHROME_LINE_KEY: Final = ("host", "line_rule", "line_hash")
 
 #: How far back a health read looks. Not a policy - just enough history to reach
 #: into last month's shard, so a quarantine decided on the first of the month can
@@ -282,9 +296,32 @@ def _feed_health_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
         return False
 
 
+def _chrome_line_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
+    """The higher page count wins.
+
+    Two chrome rows under one key are two folds of the same line, and the one
+    that counted more pages read more of the archive - a superset rather than a
+    contradiction. Keeping the first row seen would let a stale checkout's fold
+    undo a fresher one every time the merge stacked them.
+
+    A cell that does not parse as a number keeps whatever is on record, the same
+    choice `_feed_health_rule` makes and for the same reason: this pass runs
+    inside a commit step, so refusing would cost the run every row staged beside
+    this one.
+    """
+    try:
+        return int(later["pages_seen"]) > int(kept["pages_seen"])
+    except (KeyError, ValueError):
+        return False
+
+
 #: The keys whose repeats can disagree, and how each one picks a winner.
 FEED_HEALTH_RULE: Final[Preference] = _feed_health_rule
-_PREFERENCES: Final[dict[tuple[str, ...], Preference]] = {FEED_HEALTH_KEY: FEED_HEALTH_RULE}
+CHROME_LINE_RULE_PREFERENCE: Final[Preference] = _chrome_line_rule
+_PREFERENCES: Final[dict[tuple[str, ...], Preference]] = {
+    FEED_HEALTH_KEY: FEED_HEALTH_RULE,
+    CHROME_LINE_KEY: CHROME_LINE_RULE_PREFERENCE,
+}
 
 
 def seen_relpath(date: str) -> str:
@@ -422,6 +459,24 @@ def feed_retirements_relpath() -> str:
 
 def feed_retirements_path(state_dir: Path) -> Path:
     return state_dir / FEED_RETIREMENTS_FILENAME
+
+
+def chrome_relpath() -> str:
+    """`state/chrome.csv` - the POSIX form, for a log line."""
+    return f"{STATE_DIRNAME}/{CHROME_FILENAME}"
+
+
+def chrome_path(state_dir: Path) -> Path:
+    """One flat file, and the read over it carries no clock.
+
+    A day or month layout answers "what happened then". Nobody asks that here:
+    chrome learned in August is still chrome in September, so every partition
+    would be opened on every read and the walk would buy nothing. What bounds
+    the file instead is the source registry - `extract.chrome_lines_per_host_max`
+    lines a host - so it grows with how many hosts we read and then stops, never
+    with the archive (Guardrail #12). `state/traces/` is the precedent.
+    """
+    return state_dir / CHROME_FILENAME
 
 
 def visual_prunes_relpath(date: str) -> str:
@@ -1085,6 +1140,65 @@ def load_retirements(state_dir: Path) -> list[FeedRetirementRow]:
     return rows
 
 
+def write_chrome(state_dir: Path, rows: Sequence[ChromeLineRow]) -> int:
+    """Replace the chrome store with this run's fold. The one ledger that rewrites.
+
+    Every other file here appends, because every other row is a fact about a run
+    and a run that ran twice did happen twice. A chrome row is not that shape: it
+    is one running count of how many pages a host has printed one line on, so a
+    second row is the same fact with a bigger number rather than a second fact.
+    Appending them would make a reader add a count to itself.
+
+    Rewriting a `merge=union` file has a cost and it is paid rather than hidden.
+    Two runs whose folds differ leave both lines in the merged file, and
+    `CHROME_LINE_KEY` plus `_chrome_line_rule` settle them afterwards by keeping
+    the larger count. What that settlement cannot undo is an EVICTION: a line one
+    run dropped survives in the other run's lines, so the cap is enforced again
+    by the next fold and by `stages.prune_state`, never by the merge.
+
+    Written through a temp file and a rename, so a run killed mid-write leaves
+    the previous fold rather than half of this one.
+
+    Returns how many rows the file now holds, so a caller can log the count.
+    """
+    path = chrome_path(state_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    columns = ChromeLineRow.csv_columns()
+    scratch = path.with_suffix(f".{os.getpid()}.tmp")
+    with scratch.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
+        writer.writeheader()
+        for row in rows:
+            payload = row.csv_row()
+            writer.writerow({name: payload[name] for name in columns})
+    scratch.replace(path)
+    return len(rows)
+
+
+def load_chrome(state_dir: Path) -> list[ChromeLineRow]:
+    """Every line the store holds, in file order. Never windowed.
+
+    Cover: -1, unbounded on purpose, and bounded by the file rather than by a
+    clock. Chrome learned in August is chrome in September, so a window in days
+    would forget a template that is still on the page. What keeps the read cheap
+    is that the file itself is capped - `extract.chrome_lines_per_host_max` lines
+    a host, pruned past `extract.chrome_forget_days` - so it grows with the
+    source registry and stops, never with the archive (Guardrail #12).
+
+    Streamed rather than materialised, and a row that no longer parses is
+    skipped rather than fatal. The direction of that failure is the safe one: an
+    unreadable line is one line not called chrome, so the item publishes. The
+    other direction would refuse a run over one stale cell.
+    """
+    rows: list[ChromeLineRow] = []
+    for raw in _stream_rows(chrome_path(state_dir)):
+        try:
+            rows.append(ChromeLineRow.from_csv_row(raw))
+        except (KeyError, ValueError):
+            continue
+    return rows
+
+
 def append_runtime_counters(state_dir: Path, rows: Iterable[RuntimeCountersRow]) -> int:
     """Append what each job's model server counted. Never windowed.
 
@@ -1255,6 +1369,13 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     The two flat ledgers are named on both covers. They are one file each, so
     settling them costs the same on a fresh clone and on a five-year archive.
 
+    `state/chrome.csv` is the third flat one and it joined on 2026-09-17. It is
+    the only entry here whose writer rewrites rather than appends, so its
+    repeats are the ordinary case rather than a re-run: a fold that moved a
+    count writes a different line and `merge=union` keeps both. It is the second
+    key in the set whose repeats can disagree, and `_chrome_line_rule` settles
+    them by keeping the larger count.
+
     `state/seen/` is the one that is deliberately absent. It has no key at all:
     `load_seen` folds a second sight by keeping the earliest, so a repeat costs
     bytes and never moves an age.
@@ -1304,6 +1425,7 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     flat: list[KeyedLedger] = [
         KeyedLedger(runtime_counters_path(state_dir), RUNTIME_COUNTERS_KEY, RuntimeCountersRow),
         KeyedLedger(feed_retirements_path(state_dir), FEED_RETIREMENT_KEY, FeedRetirementRow),
+        KeyedLedger(chrome_path(state_dir), CHROME_LINE_KEY, ChromeLineRow),
     ]
     if date is not None:
         return [

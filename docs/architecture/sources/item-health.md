@@ -421,19 +421,28 @@ that happens, and what a change in either rate is allowed to prove, is
 
 ## What counts against a source
 
-Nineteen codes never count against a source:
+Eighteen codes never count against a source:
 
 `not_attempted`, `robots_denied`, `robots_unreachable`, `blocked_address`,
-`http_rate_limited`, `too_short`, `not_prose`, `boilerplate`,
+`http_rate_limited`, `too_short`, `not_prose`,
 `model_unreachable`, `model_refused`, `model_timed_out`, `shard_out_of_time`,
 `context_exceeded`, `output_truncated`,
 `labels_truncated`, `bad_shape`, `length_out_of_range`, `copied_source`,
 `leaked_address`
 
-The remaining eight can count against the source:
+`boilerplate` left that list on 2026-09-17, and it is the only code that ever
+has. It was neutral because it could not be anything else: nothing fed the
+comparison, so the ratio divided by an empty set and answered 0.0 on every page
+we ever fetched - zero `boilerplate` cells in 12,277 committed rows.
+`state/chrome.csv` gives the comparison its other side
+([../extraction/chrome.md](../extraction/chrome.md)), and once the signal can
+fire it is a fact about the source: this host served a page that was mostly its
+own furniture.
 
-`http_client_error`, `http_server_error`, `network_error`, `no_text`,
-`no_title`, `paywalled`, `unsupported_form`, `unknown`
+The remaining nine can count against the source:
+
+`boilerplate`, `http_client_error`, `http_server_error`, `network_error`,
+`no_text`, `no_title`, `paywalled`, `unsupported_form`, `unknown`
 
 The contract carries this as data on the enum side, not as prose only, because a
 later source-health reader uses it.

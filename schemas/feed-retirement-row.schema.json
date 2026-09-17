@@ -1,9 +1,10 @@
 {
   "$defs": {
     "RetirementCause": {
-      "description": "Why an address was retired. One member, and adding a second is a design change.\n\nRetiring on anything softer than `410 Gone` eventually removes unique\nprimary or regional reporting over a bad week, and nothing here can put it\nback without a person noticing it went.",
+      "description": "Why an address was retired. Two members, and adding a third is a design change.\n\nRetiring on anything softer than `410 Gone` eventually removes unique\nprimary or regional reporting over a bad week, and nothing here can put it\nback without a person noticing it went. That clause stands. `LOW_YIELD` is\nwhat it costs to answer it: three evidence floors and a dwell, spelled out\nin this module's docstring, so no single bad week reaches this row.",
       "enum": [
-        "http_410"
+        "http_410",
+        "low_yield"
       ],
       "title": "RetirementCause",
       "type": "string"
@@ -13,6 +14,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "RetirementCause gained low_yield, and evidence_dates beside evidence_run_ids.",
+      "version": "2026-09-17",
+      "why": "A source that answers and never reads had no way to stop being asked."
+    },
     {
       "change": "Initial shape: the feed, the endpoint, the day, the deciding run, the cause.",
       "version": "2026-09-02T20:00",
@@ -36,13 +42,23 @@
       "title": "Endpoint Key",
       "type": "string"
     },
+    "evidence_dates": {
+      "default": [],
+      "description": "The distinct complete days whose yield justifies the retirement, oldest first. Space-separated in the CSV cell. The evidence cell a `low_yield` retirement fills, because that decision is made on days and not on runs: a day the schedule fired five times is still one day under the mark, and recording its five run ids would say a fortnight's dwell was a fortnight and a half.",
+      "items": {
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+        "type": "string"
+      },
+      "title": "Evidence Dates",
+      "type": "array"
+    },
     "evidence_run_ids": {
-      "description": "The distinct runs whose results justify the retirement, oldest first. Space-separated in the CSV cell. Recorded rather than counted, so the decision can be checked against the ledger that produced it.",
+      "default": [],
+      "description": "The distinct runs whose results justify the retirement, oldest first. Space-separated in the CSV cell. Recorded rather than counted, so the decision can be checked against the ledger that produced it. The evidence cell an `http_410` retirement fills: five runs read five `410` answers.",
       "items": {
         "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
         "type": "string"
       },
-      "minItems": 1,
       "title": "Evidence Run Ids",
       "type": "array"
     },
@@ -57,7 +73,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-02T20:00",
+      "default": "2026-09-17",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -68,10 +84,9 @@
     "endpoint_key",
     "retired_on",
     "decided_by_run",
-    "cause",
-    "evidence_run_ids"
+    "cause"
   ],
   "title": "FeedRetirementRow",
   "type": "object",
-  "version": "2026-09-02T20:00"
+  "version": "2026-09-17"
 }

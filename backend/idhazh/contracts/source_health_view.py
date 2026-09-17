@@ -125,6 +125,55 @@ class SourceAvailability(StrEnum):
     NEVER_ASKED = "never_asked"
 
 
+class DayYield(Model):
+    """One source, one complete day: what it offered and what it read.
+
+    The strip on `/console/voices/` needs a time axis and the totals beside it
+    cannot supply one - fourteen days into a countdown and a dip yesterday land
+    in the same number. So the shares are published a day at a time and the page
+    draws a square each.
+
+    The two counts rather than the share, because a share with no denominator
+    cannot tell a bad day from a quiet one. 0 of 0 is a day the source offered
+    nothing, which the page draws as no record rather than as a failure.
+    """
+
+    date: DateStamp
+    opportunities: int = Field(
+        ge=0, description="Distinct addresses this source had planned on this date."
+    )
+    publications: int = Field(
+        ge=0, description="Those that reached publish on any attempt of this date."
+    )
+    source_failures: int = Field(
+        ge=0, description="Those lost to a failure this source owns, on this date."
+    )
+
+    @model_validator(mode="after")
+    def _the_day_is_arithmetically_possible(self) -> Self:
+        """The same bound the totals carry, applied one day at a time."""
+        if self.publications > self.opportunities:
+            raise ValueError("publications cannot exceed opportunities on a day")
+        if self.source_failures > self.opportunities:
+            raise ValueError("source_failures cannot exceed opportunities on a day")
+        return self
+
+    @property
+    def decisions(self) -> int:
+        """Addresses whose fate this source decided on this date."""
+        return self.publications + self.source_failures
+
+    @property
+    def day_yield(self) -> float | None:
+        """This date's share, or `None` where the source decided nothing.
+
+        `SourceHealthRow.source_yield` over one day and by the same rule, so a
+        square and the bar above it cannot mean two things.
+        """
+        decided = self.decisions
+        return self.publications / decided if decided else None
+
+
 class SourceHealthRow(Model):
     """One configured address, as a page is allowed to read it.
 
@@ -197,6 +246,39 @@ class SourceHealthRow(Model):
             "dash rather than a full bar."
         ),
     )
+    recent_days: tuple[DayYield, ...] = Field(
+        default=(),
+        description=(
+            "This source's share a day at a time over the dwell window, oldest first, "
+            "on the view's own `dwell_dates` axis. Every date on that axis is present "
+            "even where the source offered nothing, so every row's strip has the same "
+            "squares in the same places and one date axis serves the whole list. Empty "
+            "where the record holds no complete date yet."
+        ),
+    )
+    days_under_the_mark: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "The UNBROKEN run of days at the newest end of `recent_days` whose share "
+            "was under `collect.source_yield_alarm_point`. This is the dwell, and the "
+            "run is what `collect.source_quality_dwell_days` is counted against: one "
+            "day back at or above the mark resets it to zero, so a source that "
+            "recovered keeps its place. Computed here rather than in the page - a "
+            "countdown a console re-derives is a second verdict, and the day the two "
+            "disagree neither is trustworthy."
+        ),
+    )
+    retires_on: DateStamp | None = Field(
+        default=None,
+        description=(
+            "The day the dwell completes if the source stays under the mark, derived "
+            "from the newest date on the axis and NEVER from a wall clock - a page "
+            "re-opened at midnight must not move a date the run decided. Absent when "
+            "no dwell is running, when the source is already retired, or when the "
+            "evidence floors are not met."
+        ),
+    )
 
     @model_validator(mode="after")
     def _the_record_is_arithmetically_possible(self) -> Self:
@@ -253,6 +335,11 @@ class SourceHealthView(Contract):
 
     __schema_stem__: ClassVar[str] = "source-health-view"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-17",
+            change="A dwell axis on the view and a day strip, a run and a date on each row.",
+            why="A total cannot say whether a source is recovering or counting down.",
+        ),
         ChangelogEntry(
             version="2026-09-13",
             change="Each row gains reliability and reliability_reads, and the view gains a window.",
@@ -327,6 +414,53 @@ class SourceHealthView(Contract):
     last_date: DateStamp | None = Field(
         default=None,
         description="Newest complete date in the census. Absent when there is none.",
+    )
+    yield_alarm_point: float = Field(
+        default=0.5,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "`collect.source_yield_alarm_point` - the share a source has to stay at or "
+            "above. Carried for the reason `reliability_floor` is: the bound and the "
+            "figure must come from one run, or the page holds a published share to a "
+            "mark it read somewhere else."
+        ),
+    )
+    yield_alarm_min_decisions: int = Field(
+        default=30,
+        ge=1,
+        description=(
+            "`collect.source_yield_alarm_min_decisions` - decisions a source needs "
+            "before its share may be judged at all. The page prints it beside a source "
+            "that has not reached it, so a dash says what is missing rather than only "
+            "that something is."
+        ),
+    )
+    dwell_days: int = Field(
+        default=14,
+        ge=1,
+        description=(
+            "`collect.source_quality_dwell_days` - running days under the mark that "
+            "complete a retirement. It is also how many dates `dwell_dates` carries."
+        ),
+    )
+    auto_retire: bool = Field(
+        default=False,
+        description=(
+            "`collect.source_quality_auto_retire`. False means a completed dwell files "
+            "nothing and this view is watching only, which the page says in words - a "
+            "countdown that retires nothing and does not admit it is a lie told in "
+            "colour."
+        ),
+    )
+    dwell_dates: tuple[DateStamp, ...] = Field(
+        default=(),
+        description=(
+            "The dates every row's `recent_days` runs over, oldest first: the newest "
+            "`dwell_days` complete dates the census read. One axis for the whole list, "
+            "so a square in the same column on two rows is the same day - which is the "
+            "only thing that makes a stack of strips readable."
+        ),
     )
     sources: list[SourceHealthRow] = Field(
         description=(

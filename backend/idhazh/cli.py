@@ -590,6 +590,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return prune_state.stage_prune_state(
             observability=settings.app.observability,
             collect=settings.app.collect,
+            extract_config=settings.app.extract,
             retention_config=settings.app.retention,
             lens_weights=settings.app.lens_weights,
             run=settings.app.run,

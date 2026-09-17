@@ -417,6 +417,47 @@ A trend line takes one colour and never the trend ramp. A rising failure count
 and a rising published count are the same shape, and green on the first would be
 a verdict the page never measured.
 
+## A countdown is drawn as an area, never as a fraction in a chip
+
+`Sources close to retiring themselves` is one row per source on
+`/console/voices/`: the name, a target bar of the trailing share against the
+alarm point, and a square a day beneath it. Susan, 2026-09-17.
+
+It exists for one decision: **is this source recovering, or is it counting
+down?** A total cannot answer that. `41%` over thirty days and `41%` on the
+fourteenth day of an unbroken run are the same number and two completely
+different situations, so the panel adds a time axis and reads the run length off
+it.
+
+Six rulings hold it.
+
+- **The dwell is the area.** A 2px rule in `--fill-low` sits under exactly the
+ contiguous under-the-mark squares at the newest end. A `9/14` chip with no
+ marked run is the failure this replaces: it asks the operator to trust a count
+ they cannot check against the picture beside it.
+- **The track is the full 0 to 100 percent share, and the marker is the alarm
+ point on every row.** A per-row maximum, or a marker at a different x on
+ different rows, makes a stack of bars unreadable while each one looks correct.
+ The whole reason to stack them is that a column means one thing all the way
+ down, and the strip below obeys the same rule: one shared date axis, and every
+ date present on every row even where the source was silent.
+- **Colour is never the only signal.** Each square carries its own sentence, and
+ the row prints `Under the mark for 9 days running` and the date it completes.
+- **The date comes from the newest day the ledger holds, never from a clock.** A
+ console re-opened after midnight must not move a date the run decided.
+- **A red countdown while nothing retires is a lie told in colour.** While
+ `collect.source_quality_auto_retire` is false the panel says
+ `Nothing retires on this measurement yet - this panel is watching only.`
+- **A source under its evidence floors is drawn, not hidden.** It keeps its full
+ strip, its bar becomes a dash reading `not judged yet`, and the row prints how
+ much evidence it has against how much it needs. Hiding it would hide the shape,
+ which is what an operator came for; what it has not got is a number anybody may
+ act on.
+
+The ledger's own absence keeps the heading and both lead lines, and replaces the
+rows with one sentence. A panel that shrinks to nothing when its data is missing
+teaches an operator to stop looking at it.
+
 ## What the cap cost, by source
 
 `Sources cut short most often` is one row per source, ten of them, and it is the

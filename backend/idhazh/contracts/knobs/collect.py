@@ -126,6 +126,32 @@ class CollectConfig(Model):
             "the addresses it spends getting there buy the protection."
         ),
     )
+    source_quality_dwell_days: int = Field(
+        default=14,
+        ge=1,
+        description=(
+            "Running days a source must stay under source_yield_alarm_point before it "
+            "retires itself. **A bad week cannot retire anything** - that is the whole "
+            "reason this exists, and it is why the number is two weeks rather than "
+            "seven days. The run must be unbroken: one day back at or above the alarm "
+            "point resets it to zero, so a source that recovers keeps its place. This "
+            "is the fourth member of the yield family and extends it rather than "
+            "sitting beside it: the alarm point says what counts as too low, the two "
+            "evidence floors say when we may judge at all, and this says how long the "
+            "answer has to hold."
+        ),
+    )
+    source_quality_auto_retire: bool = Field(
+        default=False,
+        description=(
+            "Whether a completed dwell actually files a retirement row, or only draws "
+            "the countdown on /console/voices/. Default false for the first release "
+            "because nothing has ever retired on this measurement and the console panel "
+            "is what a person reads before trusting it. REMOVAL CONDITION: delete this "
+            "flag, and the branch it guards, once one real low-yield retirement has been "
+            "reviewed and accepted (Guardrail #6)."
+        ),
+    )
     watchlist_max_entities: int = Field(default=30, ge=1)
     settled_failure_codes: tuple[FailureCode, ...] = Field(
         default=(

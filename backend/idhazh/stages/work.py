@@ -14,6 +14,7 @@ from typing import Any, NamedTuple
 
 from idhazh import (
     assemble,
+    chrome,
     config,
     extract,
     ledger,
@@ -348,6 +349,14 @@ def stage_work(
     # 80 scans for an answer that cannot change inside a shard.
     server_pid = host.llama_server_pid()
     shard_facts = host.host_facts()
+    # Read once per shard for the same reason: what a host prints on every page
+    # cannot change inside a shard, and the file is capped by the source registry
+    # rather than by the archive (Guardrail #12, `ledger.chrome_path`). A fresh
+    # clone has no store and every line reads as this page's own, which is what
+    # every run did before the fold existed.
+    chrome_lines = chrome.by_host(
+        ledger.load_chrome(common.STATE_ROOT), pages_min=settings.app.extract.chrome_pages_min
+    )
     shard_cells = _shard_cells(
         settings, shard=shard, shard_item_count=len(mine), facts=shard_facts
     )
@@ -372,7 +381,7 @@ def stage_work(
             tracer.span(telemetry.SpanName.ITEM) as span,
         ):
             telemetry.item_attributes(span, item, run_id=plan.run_id, shard=shard)
-            fetched = _fetch_one(item, settings, read_url, tracer)
+            fetched = _fetch_one(item, settings, read_url, tracer, chrome_lines)
         article, source_text = fetched.article, fetched.source_text
         fetch_ms, extract_ms = fetched.fetch_ms, fetched.extract_ms
         # One reading of the pair, split across the two cells the stage records
