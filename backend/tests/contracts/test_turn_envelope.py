@@ -135,3 +135,32 @@ def test_the_retired_marker_file_is_refused_if_it_comes_back(
 
     monkeypatch.undo()
     assert config.load(CONFIG_DIR).models.summarize.turns.turn_closing
+
+
+def test_the_thinking_arms_closing_marker_is_derived_from_its_own_reply_openings() -> None:
+    """Guardrail #10 over a string: the marker is read off this model, not guessed.
+
+    `qwen3.5-9b-q4km-thinking.json` is the incumbent's weights with reasoning
+    declared. Its marker is a newline, the closing think tag, then two newlines,
+    and it was derived rather than
+    typed from memory: both reply openings were recorded from the server that
+    applies Qwen's own template, and the no-reasoning one is the reasoning one
+    with an EMPTY block already closed - which is Qwen's documented way to turn
+    reasoning off. So the difference between the two strings IS what closes a
+    block, and a non-empty block closes with the same bytes.
+
+    A wrong marker is the failure this whole envelope exists to stop: the stop
+    never fires, the span runs to the window, and the grammar still accepts
+    whatever comes back. That makes it worth an identity rather than a comment.
+    """
+    entry = ModelsConfig.from_json(
+        (CONFIG_DIR / "models" / "qwen3.5-9b-q4km-thinking.json").read_text(encoding="utf-8")
+    ).summarize
+    turns = entry.turns
+
+    assert turns.thinks, "the arm exists to turn reasoning on"
+    assert turns.thinking_close is not None
+    assert turns.reply_opening_thinking + turns.thinking_close == turns.reply_opening
+    assert turns.thinking_close == "\n</think>\n\n"
+    assert turns.thinking_kwarg == "enable_thinking", "a marker with no keyword is refused"
+    assert entry.sha256 == committed_models().summarize.sha256, "same weights, one dossier"
