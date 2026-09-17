@@ -1,6 +1,6 @@
 # What Gemma's draft head is worth
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-17
 
 `gemma-4-e4b-qat.json` declares a second file beside the weights: a 56.9 MiB
 speculation head, `mtp-gemma-4-E4B-it.gguf`, run with `--spec-type draft-mtp` and
@@ -91,21 +91,21 @@ publish, and qualifying one tells you nothing about the other.
 
 ## What this page cannot tell you, and why
 
-**Nobody can read the summaries.** The bench records a SHA-256 of each summary
-and nothing else - `runtime_sweep.collect` keeps `output_digest`, and the
-`*.summary.json` files are written on the runner and die with it.
+**Nobody can read these four runs' summaries.** The bench recorded a SHA-256 of
+each summary and nothing else - `runtime_sweep.collect` kept `output_digest`, and
+the `*.summary.json` files were written on the runner and died with it.
 
 So this page can prove the two configurations write **different** summaries and
 cannot show **how** they differ. Better, worse, or merely differently worded is
-unknown, and four runs have now thrown that evidence away.
+unknown, and four runs threw that evidence away.
 
-**What would settle it:** keep the summary text in the bench artifact, the way
-qualification already keeps `samples-{shard}.json`. Then one paired dispatch
-produces five pairs a person can read side by side, and the question becomes an
-editorial one rather than a cryptographic one.
-
-Until that lands, **the 6.3 percent may not be quoted as a free speedup**, and
-the head may not be adopted on the strength of it.
+**That was fixed on 2026-09-17: the bench artifact now carries the summary text**
+([../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md#13-bench-it---how-fast)).
+One paired dispatch from that day forward produces five pairs a person can read
+side by side, and the question becomes an editorial one rather than a
+cryptographic one. No such dispatch has been read yet, so **the 6.3 percent may
+not be quoted as a free speedup**, and the head may not be adopted on the strength
+of it.
 
 ## The records behind this page
 
