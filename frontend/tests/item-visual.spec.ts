@@ -550,9 +550,9 @@ test.describe('THE ORACLE: every fact is reachable without a mouse', () => {
 
 test.describe('THE ORACLE: a drawn string can be measured against the floor', () => {
 	/**
-	 * The second oracle, because the first one cannot see the reader. This row
+	 * The second oracle, because the first one cannot see the reader. This
 	 * asserts only that the browser path can be MEASURED at all - enforcing the
-	 * legibility floor is row #4's job, and row #4 cannot start until something
+	 * legibility floor is a separate job, and it cannot start until something
 	 * measurable is drawing.
 	 */
 	test.use({ viewport: { width: 390, height: 900 } });

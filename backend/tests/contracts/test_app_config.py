@@ -372,7 +372,7 @@ def test_the_training_window_covers_the_longest_row_the_cap_allows() -> None:
 
 
 def test_a_wider_window_moves_the_stamp_and_the_verbosity_does_not() -> None:
-    """The two halves of row 3's digest decision, in one place.
+    """The two halves of the digest decision, in one place.
 
     `n_ctx` is digested, so raising it stamps the work apart from every summary
     written at 8,192 - which is correct, because the prompt those summaries were
@@ -485,7 +485,7 @@ def test_the_console_window_presets_are_a_knob_the_frontend_agrees_with() -> Non
 
 
 def test_the_windows_and_the_reading_marks_are_the_spans_the_committed_config_names() -> None:
-    """The six spans row 1 of the constant-cost-reads plan settled, read off disk.
+    """The six spans that bound a constant-cost read, read off disk.
 
     Each is asserted against `config/` rather than against the model, because a
     default and a committed value are two different facts and only the second is

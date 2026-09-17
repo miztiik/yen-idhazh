@@ -16,9 +16,8 @@ trusting a path scan to notice afterwards.
 it crosses a process boundary and usually a machine boundary, which is what makes
 a shape a payload rather than a local variable (section 1a). It is written on a
 runner and read on a reviewer's laptop after a zip, which is the same test
-`EvidenceItem` already answered the same way. The reviewing tools rows 2 and 3
-add have to be able to refuse a queue they cannot trust, and refusing needs a
-shape to check against.
+`EvidenceItem` already answered the same way. A reviewing tool has to be able to
+refuse a queue it cannot trust, and refusing needs a shape to check against.
 
 **It is a contract under Guardrail #3 and not a migration surface under section 11.**
 Nothing this payload was ever written into survives: the oldest copy that can

@@ -15,8 +15,8 @@ import {
  * draws, plus the vector block. `scripts/copy-visuals.mjs` projects it into
  * `static/` through the allow-list in `src/lib/payload/project.ts`, and that
  * staged copy is what reaches a reader - fetched by `lib/assist/day.ts` when a
- * search result from that day is on screen, and by a reading route once row 26
- * of the reading-page plan lands.
+ * search result from that day is on screen, and by a reading route once the
+ * reading routes fetch it.
  *
  * **The lists below are a second copy on purpose.** The module holds the
  * behaviour; this file holds the promise. Reading only the module's constants

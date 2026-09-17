@@ -349,7 +349,7 @@ def new_fact_rate(key_points: Sequence[str], summary: str, *, ceiling: float) ->
     fresh words scores as new. The two-call planner unlocks the honest version - a
     key point whose span-anchored element ids are all already cited by the summary
     is a restatement by construction, with no lexical false positive (the element
-    table, plan 08). Until that ships this is the baseline, and it is read and never
+    table). Until that ships this is the baseline, and it is read and never
     acted on: best-of-N against it optimises key points for lexical difference from
     the summary, which is the Goodhart form of this exact number and stops the
     instrument detecting the thing it was built for.
