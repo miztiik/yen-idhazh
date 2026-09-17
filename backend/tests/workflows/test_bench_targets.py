@@ -496,6 +496,15 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
         assert not path.startswith(f"{BENCH_LEDGER_ROOT}/"), (
             f"a production job stages {path}, which is under the bench's own tree"
         )
+    # Two production jobs stage `state` whole, so the clause above cannot see
+    # the bench tree for them. What keeps them out is upstream of staging: the
+    # redirect comes from a config only `measure.yml` names, so a daily job
+    # writes nothing under the bench tree to stage in the first place.
+    daily = (REPO_ROOT / ".github" / "workflows" / "digest.yml").read_text(encoding="utf-8")
+    assert BENCH_CANDIDATE_CONFIG not in daily, (
+        f"digest.yml names {BENCH_CANDIDATE_CONFIG}, so a daily job would redirect its "
+        f"ledgers under {BENCH_LEDGER_ROOT}/ and stage them with `state`"
+    )
     assert (REPO_ROOT / staged[0]).is_dir(), (
         "`git add` on a path that is not there aborts the whole step, so the bench "
         "ledger ships with a header and no rows"
