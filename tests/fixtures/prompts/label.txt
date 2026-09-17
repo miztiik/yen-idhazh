@@ -112,6 +112,11 @@ The summary.
   "summary" - one piece of prose. The question below says how long it is and
   how many key points go with it.
 
+  Write the summary as one paragraph, or as at most 2 paragraphs with one
+  empty line between them. Use a second paragraph only where the summary
+  runs to 90 words or more and the subject turns. A break in a short summary
+  makes two half-thoughts.
+
   For all three: keep every figure exactly as the item wrote it. Keep the
   item's hedges - "reportedly", "is expected to", "could" - and add none it did
   not use. Name the source of a claim the way the item names it, and never name

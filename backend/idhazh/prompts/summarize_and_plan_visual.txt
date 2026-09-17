@@ -13,6 +13,8 @@ The summary.
   "summary" - one piece of prose. The question below says how long it is and
   how many key points go with it.
 
+$paragraph_rule
+
   For all three: keep every figure exactly as the item wrote it. Keep the
   item's hedges - "reportedly", "is expected to", "could" - and add none it did
   not use. Name the source of a claim the way the item names it, and never name

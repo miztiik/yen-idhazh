@@ -106,6 +106,17 @@ export function itemTime(
 	return { label: stamp, form: offset === 0 ? 'clock' : 'dated' };
 }
 
+/** A published block's paragraphs, in order.
+ *
+ * The separator is one blank line, which `Prose` in the backend contract is the
+ * only writer of. One entry where there is no break - every day published before
+ * 2026-09-17, and every short summary written since - so a caller renders the
+ * result the same way whichever kind it has.
+ */
+export function paragraphsOf(prose: string): string[] {
+	return prose.split('\n\n');
+}
+
 /** Initials of the first two meaningful words: "Ars Technica - AI" -> "AT". */
 export function monogram(name: string): string {
 	const skip = new Set(['the', 'a', 'an', 'of', 'and', 'for']);

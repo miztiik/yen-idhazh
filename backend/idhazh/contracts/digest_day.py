@@ -66,6 +66,7 @@ from idhazh.contracts.base import (
     DateStamp,
     ItemId,
     Model,
+    Prose,
     RelPath,
     Slug,
     Timestamp,
@@ -320,7 +321,7 @@ class DigestItem(Model):
         ),
     )
 
-    summary: str = Field(min_length=1)
+    summary: Prose = Field(min_length=1)
     key_points: list[str] = Field(min_length=1)
     lenses: list[Slug] = Field(default_factory=list)
     events: list[Slug] = Field(default_factory=list)
@@ -513,6 +514,11 @@ class DigestDay(Contract):
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-17",
+            change="DigestItem.summary is Prose - paragraphs split by one blank line.",
+            why="A long summary is two paragraphs, and read-side folding keeps old days readable.",
+        ),
+        ChangelogEntry(
             version="2026-09-16T17:00",
             change="Added DigestItem.same_story_on - which day holds the item it collapses onto.",
             why="A story can now be the same story as one from yesterday; absent means today.",
@@ -526,11 +532,6 @@ class DigestDay(Contract):
             version="2026-09-13T20:00",
             change="Added DigestVisual.data_path - where this visual's data file landed.",
             why="The reader's browser draws the chart, so it needs the marks rather than an SVG.",
-        ),
-        ChangelogEntry(
-            version="2026-09-13",
-            change="Added DigestItem.secondary_desk - the one other desk a story has a claim to.",
-            why="The desk ceiling sends an over-ceiling story to a second desk, unnamed.",
         ),
         ChangelogEntry(
             version="2026-08-21",
