@@ -281,25 +281,32 @@ test.describe('the item is a low-chrome card', () => {
 			const card = document.querySelector('article.item');
 			if (!card) throw new Error('no item');
 			const heading = card.querySelector('h2, h3');
-			const summary = card.querySelector('p.measure');
-			// By the hook rather than by a utility class: the eyebrow's own upper
-			// case moved onto the desk chip when that chip landed, and a selector
-			// reading `p.uppercase` would then have measured nothing and reported
-			// a font size of 0 as a pass.
+			// By the hook rather than by a utility class, and the same reason the
+			// eyebrow below uses one: the measure moved off the summary onto the
+			// prose block that holds it, and `p.measure` would then have matched
+			// nothing and reported a font size of 0 as a pass.
+			const summary = card.querySelector('[data-item-summary]');
+			// The eyebrow's own upper case moved onto the desk chip when that chip
+			// landed, and a selector reading `p.uppercase` would have done the same.
 			const eyebrow = card.querySelector('[data-item-eyebrow]');
 			const when = card.querySelector('[data-item-time]');
-			const px = (el: Element | null) => (el ? parseFloat(getComputedStyle(el).fontSize) : 0);
+			// Throws rather than returning 0, because 0 is what a renamed selector
+			// looks like and `toBeCloseTo` has no opinion about which zero it got.
+			const px = (el: Element | null, name: string) => {
+				if (!el) throw new Error(`no ${name} on the card to measure`);
+				return parseFloat(getComputedStyle(el).fontSize);
+			};
 			const root = getComputedStyle(document.documentElement);
 			return {
-				title: px(heading),
-				summary: px(summary),
-				eyebrow: px(eyebrow),
+				title: px(heading, 'title'),
+				summary: px(summary, 'summary'),
+				eyebrow: px(eyebrow, 'eyebrow'),
 				// The time is the eyebrow's own type, colour and
 				// weight - not smaller, not lighter, not a new step on any scale. A
 				// fifth typographic weight on this line is the wallpaper this
 				// avoids, and it is the one thing about it a
 				// screenshot cannot settle.
-				when: px(when),
+				when: px(when, 'time'),
 				whenColour: when ? getComputedStyle(when).color : '',
 				whenWeight: when ? getComputedStyle(when).fontWeight : '',
 				eyebrowColour: eyebrow ? getComputedStyle(eyebrow).color : '',

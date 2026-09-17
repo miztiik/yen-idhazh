@@ -85,8 +85,10 @@ test.describe('the frame', () => {
 		// Half the assertion: the shell is no longer a paragraph's width.
 		expect(frame, `the frame is still near the old ${BEFORE_PX}px cap`).toBeGreaterThan(1000);
 
-		// The other half: the prose did not stretch with it.
-		const ch = await measureCh(page, 'article.item p.measure');
+		// The other half: the prose did not stretch with it. By the hook rather
+		// than by the class - the measure moved off the summary onto the prose
+		// block that holds it, and a stale selector here measures nothing.
+		const ch = await measureCh(page, 'article.item [data-item-summary]');
 		expect(ch, 'no measured paragraph found').toBeGreaterThan(0);
 		expect(ch, `summary line is ${ch} characters`).toBeGreaterThanOrEqual(MEASURE_MIN_CH);
 		expect(ch, `summary line is ${ch} characters`).toBeLessThanOrEqual(MEASURE_MAX_CH);

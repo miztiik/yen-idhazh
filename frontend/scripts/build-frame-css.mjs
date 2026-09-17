@@ -37,6 +37,7 @@ const DEFAULTS = {
 	zone_aside_rem: 18,
 	duration_fast_ms: 120,
 	duration_base_ms: 200,
+	display_face_enabled: true,
 	movement_good_light: '#2f6f5e',
 	movement_bad_light: '#96453a',
 	movement_good_dark: '#7fc9ae',
@@ -56,6 +57,13 @@ const theme = { ...DEFAULTS, ...(raw.theme ?? {}) };
 const fast = motion.enabled ? (motion.duration_fast_ms ?? DEFAULTS.duration_fast_ms) : 0;
 const base = motion.enabled ? (motion.duration_base_ms ?? DEFAULTS.duration_base_ms) : 0;
 
+/* Turning the knob off has to change what a heading renders in, or it is not a
+   knob (CLAUDE.md Guardrail #6). The off value is the reading stack rather than
+   an empty string, so every `var(--font-display)` keeps resolving to a face. */
+const displayFace = theme.display_face_enabled
+	? "'InterVariable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+	: 'var(--font-reading)';
+
 const css = `/* Generated from config/appearance.json by scripts/build-frame-css.mjs.
    Do not hand-edit: the build regenerates it and a diff fails the gate. */
 :root {
@@ -69,6 +77,7 @@ const css = `/* Generated from config/appearance.json by scripts/build-frame-css
 	--zone-aside: ${frame.zone_aside_rem}rem;
 	--dur-fast: ${fast}ms;
 	--dur-base: ${base}ms;
+	--font-display: ${displayFace};
 }
 
 /* The movement pair, one value per theme, in the order tokens.css declares
