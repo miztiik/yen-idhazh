@@ -381,12 +381,23 @@ file. Its weights cache key is its own digest, so that cache is still valid.
 second GGUF - a repository, a commit, a filename and a digest of its own - that
 drafts a few tokens at a time which the real model then verifies.
 
-**The text does not change, and that is a property of the mechanism rather than
-a hope.** The target model checks every drafted token and rejects any it would
-not itself have produced, so a drafted run and an undrafted run write the same
-words. This is why the block is priced on what it costs and how hard it is to
-undo, rather than waiting on a quality measurement: there is no quality to
-measure ([`CLAUDE.md`](../../../CLAUDE.md) Guardrail #10).
+**The text is supposed not to change, and on the one run that checked, it did.**
+The mechanism says the target verifies every drafted token and rejects any it
+would not itself have produced, so a drafted run and an undrafted run should
+write the same words. Run `35011578538` put both cases in one job and all five
+articles came out different. Sampling is deterministic and each case reproduced
+its own five summaries byte-identically across its repeats, so that is a finding
+rather than noise, and a second run reproduced it on four more articles
+([what the draft head is worth](../../reference/benchmarks/what-the-draft-head-is-worth.md)).
+
+**That unsettles how a draft head is priced.** The argument for judging one on
+cost and reversal alone, rather than on quality, was that a mechanism which
+cannot change the output has no quality to measure
+([`CLAUDE.md`](../../../CLAUDE.md) Guardrail #10). That argument holds only while
+the property does, and today it does not. Nobody has found out whether the cause
+is llama.cpp, the `n_max` value, or an assumption about multi-token heads that
+does not hold the way it does for an ordinary draft model. Until somebody does,
+read a draft head as a change that can move the writing.
 
 **What it can do is waste time.** A draft the target keeps rejecting costs a
 forward pass per rejected token and buys nothing. The acceptance rate is the
