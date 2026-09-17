@@ -792,7 +792,7 @@ def duplicates_within_plan(
 
     A desk's only story is never recorded, whatever it resembles. A single-carrier
     story scores lowest by construction, so a pass that cut the weakest would cut
-    the exclusive story first (decision, row 52); the guard is the desk's item
+    the exclusive story first; the guard is the desk's item
     count, not the score.
 
     The walk is honest about enforcement: a story recorded as a would-cut is not

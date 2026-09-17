@@ -24,7 +24,7 @@ Two verbs, and the split is deliberate.
 JSON artifact under a path the caller names. A person reads the print-out and
 edits `backend/idhazh/measured.py`. A workflow that wrote a measurement into a
 commit would be a workflow deciding a number, which this tree reserves for people
-(row #13's rejected option 1) - printing is not writing.
+- printing is not writing.
 
 **No fetched text leaves this module.** The tokens-a-word probe reads corpus
 article bodies, which came off the open web, and emits counts of them and never a
