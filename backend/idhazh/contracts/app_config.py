@@ -80,6 +80,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-17T17:00",
+            change="extract.reject_too_short, additive, default false. Never rejects an abstract.",
+            why="Two of the three shape signals had a switch and the third did not.",
+        ),
+        ChangelogEntry(
             version="2026-09-17T16:00",
             change="bench.run_model_speed_case, additive, default true.",
             why="Testing the bench flow should not cost half an hour of llama-bench.",
@@ -93,11 +98,6 @@ class AppConfig(Contract):
             version="2026-09-17T12:00",
             change="bench.corpus_items, additive, default 3.",
             why="The bench corpus was two source literals, and at five it overran the job.",
-        ),
-        ChangelogEntry(
-            version="2026-09-17",
-            change="extract gained three chrome knobs, additive, the fold on.",
-            why="The boilerplate signal divided by an empty set and said no to every page.",
         ),
         ChangelogEntry(
             version="2026-08-21",

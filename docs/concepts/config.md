@@ -173,10 +173,22 @@ Extraction has three shape and access control groups:
 - `extract.paywall_markers` is the fallback when JSON-LD does not declare a
  paywall.
 
-Two enforcement switches default to false: `extract.reject_not_prose` and
-`extract.reject_boilerplate`. False means record the signal and publish. True
-means reject the item as a listing. `extract.min_source_words` now marks the
-brief tier. It does not reject the item.
+Three enforcement switches default to false: `extract.reject_not_prose`,
+`extract.reject_boilerplate` and `extract.reject_too_short`. False means record
+the signal and publish, which is Owner override O3. True means reject the item.
+There were two until 2026-09-17, and the third's absence was an asymmetry nobody
+chose rather than a decision anybody took.
+
+**`reject_too_short` carries a guard the other two do not need: it never rejects
+a feed a curator registered as `abstract`.** That feed publishes abstracts
+because a person said so, and an abstract is short by definition - rejecting one
+would delete a source on the strength of the property it was registered for.
+Measured 2026-09-17: at 34 words both forms carry `too_short`, so the declared
+form is the only thing that can tell a curator's abstract from a truncated
+article. The signal is recorded on the row either way; what the form changes is
+the consequence, never the fact.
+
+`extract.min_source_words` marks the brief tier. It does not reject the item.
 
 The brief floor is derived, not chosen: `extract.min_source_words` is
 `summarize.bands[0].target_words_min / evaluation.brief_compression_ceiling`.
