@@ -753,7 +753,7 @@ def render_dossier(readings: BenchReadings) -> str:
         ITEM_SECTION: (
             f"{context['corpus']}, {context['server_repeats']} repeats, on "
             f"{context['runner']}, {context.get('server_cpu', 'an unrecorded processor')}. "
-            "There is no 95th percentile here: five articles cannot "
+            f"There is no 95th percentile here: {context['corpus'].lower()} cannot "
             "carry one. The published ledger over a real day is what gives that number."
         ),
     }
@@ -885,7 +885,16 @@ def parse_args() -> argparse.Namespace:
     emit.add_argument(
         "--server", type=Path, required=True, help="The server case's runtime summary"
     )
-    emit.add_argument("--corpus", default="Five articles", help="What the server case replayed")
+    emit.add_argument(
+        "--corpus",
+        required=True,
+        help=(
+            "What the server case replayed, as the page should read it - for example "
+            "'3 articles'. Required rather than defaulted: it is the size of the corpus "
+            "a reading was taken over, and a default would be a second spelling of "
+            "`bench.corpus_items` that could disagree with it (Guardrail #6)."
+        ),
+    )
     emit.add_argument("--dossier", type=Path, default=Path("backend/var/bench/dossier.md"))
     emit.add_argument("--readings", type=Path, default=Path("backend/var/bench/readings.json"))
 

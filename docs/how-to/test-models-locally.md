@@ -1,6 +1,6 @@
 # Test the models locally
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-17
 How to run the pipeline's models on your own machine, compare them, and read the
 result. Everything here also runs in CI - the point of doing it locally is a
 fast loop, not a different answer.
@@ -384,7 +384,7 @@ That one dispatch runs both cases. Case one downloads only that model, runs both
 thread counts and uploads `hardware.txt`, `weights.txt`, `resources.json`,
 `llm.json` and `bench/raw-case.json` in the `bench-raw` artifact. Case two then
 restores those same weights out of the cache, stands a real server up, runs a
-fixed five-article shard three times and uploads
+fixed shard of `bench.corpus_items` articles three times and uploads
 `bench-server-<runtime_candidate>`, which carries the model dossier's page body
 with the numbers already in it. Image and corpus jobs are separate suites, so a
 CPU question does not start two unrelated jobs.
@@ -403,10 +403,10 @@ gh workflow run measure.yml \
 ```
 
 That job runs the current four-thread baseline and the eight-thread candidate
-three times each against one fixed five-article plan, interleaved by repeat. It
-rejects the candidate if source text or any output digest changes. Production
-stays at four threads until both measurements agree. Production and the harness
-now run the same pinned llama.cpp build, so that leg is settled.
+three times each against one fixed plan, interleaved by repeat. It rejects the
+candidate if source text or any output digest changes. Production stays at four
+threads until both measurements agree. Production and the harness now run the
+same pinned llama.cpp build, so that leg is settled.
 
 ## Test the browser model
 

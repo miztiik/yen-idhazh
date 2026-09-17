@@ -11,7 +11,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from typing import Any, NamedTuple
 
-#: Every repeat read the same five articles and every reading is comparable.
+#: Every repeat read the same articles and every reading is comparable.
 PASSED = "passed"
 
 #: Too few repeats agreed on what they read. Not "some drifted" - that is
@@ -48,7 +48,7 @@ class Verdict(NamedTuple):
 
 
 def input_key(result: Mapping[str, Any]) -> str:
-    """The five articles a repeat actually read, as one comparable string."""
+    """The articles a repeat actually read, as one comparable string."""
     return json.dumps(result["sources"], sort_keys=True)
 
 

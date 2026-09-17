@@ -271,7 +271,8 @@ the process:
  folds into the page.
 
 **Case two, artifact `bench-server-<runtime_candidate>`** - a real llama-server,
-real fetches, real summaries over a fixed five-article corpus:
+real fetches, real summaries over a fixed corpus of `bench.corpus_items`
+articles, which is **three** in `config/idhazh.json` today:
 
 - `runtime-summary.json`: per-repeat startup, work and per-item timings, the
  resident-set samples, the input and output drift verdicts, and **the summary
@@ -288,8 +289,8 @@ real fetches, real summaries over a fixed five-article corpus:
 evidence here a person can judge directly.** Until then the sweep kept the output
 digest and the token counts and threw the prose away, so four dispatches proved
 that a candidate wrote something different and left nothing to read. Owner
-approval, 2026-09-16. Five articles times the repeats times two candidates is
-about 29 KB of text at the median and 59 KB at the worst article this project has
+approval, 2026-09-16. The corpus times the repeats times two candidates is about
+17 KB of text at the median and 36 KB at the worst article this project has
 published, against a 500 MB artifact ceiling - so it needs no retention knob and
 has none.
 
@@ -350,8 +351,67 @@ gh workflow run measure.yml --ref <branch> \
 ```
 
 `runtime_repeats` is 2 here and not 3 on purpose. A named case runs two cases, so
-three repeats is roughly twice the 330-minute job timeout (Guardrail #2 - the
-limit is GitHub's, so the design is what gives).
+the repeats multiply the corpus, and the job timeout is what the product is spent
+against (Guardrail #2 - the limit is GitHub's, so the design is what gives).
+
+#### Why the bench corpus is three articles
+
+**Three is a fit, not thrift.** Measured 2026-09-17 over the four dispatches of
+2026-09-16 (`35086403868`, `35086407071`, `35086409972`, `35086412536`) on stock
+`ubuntu-latest` runners, `n = 4`. A named candidate runs two cases, so three
+repeats is six passes over the corpus, and the slowest pass measured took 65.6
+minutes for five articles.
+
+| Corpus | Six passes | Of the 330-minute job timeout |
+| :--- | ---: | ---: |
+| 5 articles | 393.7 min | **119% - the job dies** |
+| 4 articles | 315.0 min | 95.5% - no headroom |
+| **3 articles** | **236.2 min** | **71.6% - it fits** |
+
+**There is nothing to win outside the model.** In the same four dispatches the
+`runtime` job is 69 to 94 percent of the wall clock, prefill is 48.2 percent of
+it and decode 49.5 percent; everything else - provisioning, cache restore, digest
+verify, corpus build, artifact upload - is 3.06 minutes of 161.0, which is 1.9
+percent. So the corpus is the only lever with anything on it.
+
+**What five to three saves is a band, not a point: 28.7 to 37.0 percent of a
+dispatch.** The five articles were not equal - 519.7 to 715.8 seconds, a spread
+of 1.38 times - and the plan drops by rank rather than by length, so which two go
+decides where in the band you land. The saving is also slightly sub-linear,
+because fewer items amortise the shared prompt prefix over fewer calls; **that
+last clause is an estimate**, and one dispatch at three articles compared against
+the same job's per-item prefill would settle it.
+
+**What it costs, named rather than implied.** A per-article output-drift finding
+weakens from p = 0.03 at five articles to p = 0.125 at three under an exact
+binomial. That is still a finding and no longer an overwhelming one, and it is
+the thing this change gives up.
+
+**What it buys beyond time.** Article text drifted on 5 of 15
+article-observations across three dispatches - 33 percent, with a 95 percent
+range of roughly 15 to 58 percent - and a repeat whose text moved is dropped.
+Fewer articles means a better chance a dispatch produces a usable reading at all:
+roughly 13 percent at five against 30 percent at three. **That pair is an
+estimate under an assumption of independence which is certainly too pessimistic;
+the direction is certain and the size is not.**
+
+**The qualification corpus does not move, and must not.** `validate.yml` keeps
+30 articles. At 30 a clean canary sweep bounds an undetected defect rate at about
+10 percent under the rule of three; at 10 it is 30 percent, and the injection
+canaries are the Guardrail #11 control, where "most of them survived" is not a
+passing grade. The grader also has a measured length bias of 0.40 (2026-08-29,
+117 pairs), so a smaller qualification corpus would preferentially drop the long
+tier - exactly where the instrument is already known to be wrong.
+
+**The pairing is worth far more than the corpus, so nothing here touches it.**
+The bench alternates baseline and candidate inside one job, on one machine. The
+same comparison made across two dispatches needs 17 to 66 dispatches before its
+median is worth quoting, because two dispatches are two machines. Cutting the
+corpus keeps the pairing intact; cutting the pairing to afford a bigger corpus
+would trade a reading for a rumour.
+
+Set it in `config/idhazh.json` under `bench.corpus_items`. The workflow reads it,
+and nothing in the tree spells the number twice.
 
 **A repeat whose article a publisher edited is dropped, not fatal.** Every
 repeat refetches, and a news page moving inside a multi-hour job is ordinary: on
@@ -600,7 +660,7 @@ gh cache delete <old-summary-cache-id>
 **Measure the cache, do not derive it.** The key names the model file and the
 pinned llama.cpp build, so the outgoing model may already have aged out and
 there may be nothing to delete
-([../reference/github-actions.md](../reference/github-actions.md#the-cache-across-the-model-swap-measured-2026-08-27)).
+([../reference/measurements.md](../reference/measurements.md#the-cache-transition-measured-2026-08-27)).
 
 Production derives the worker count as
 `min(ceil(items / run.shard_size), run.max_parallel)`, so a full day at

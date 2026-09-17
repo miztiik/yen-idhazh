@@ -137,8 +137,9 @@ class ServerJob(StrEnum):
     ASSEMBLE = "assemble"
     # Retired from digest.yml on 2026-09-13. Kept for the six rows above.
     VISUALS = "visuals"
-    # measure.yml. The bench job that runs the real work stage over a fixed
-    # five-article corpus, and the one measurement job that writes a run plan.
+    # measure.yml. The bench job that runs the real work stage over the fixed
+    # corpus `bench.corpus_items` sizes, and the one measurement job that writes
+    # a run plan.
     RUNTIME = "runtime"
 
 

@@ -59,7 +59,7 @@ $py -c "from idhazh.contracts.item_health import ItemHealthRow as I; print('job'
 
 | id | Question | State |
 | --- | --- | --- |
-| R5c | Whether `measure.yml` and `validate.yml` should share more than the scratch-config block. The composite action `.github/actions/candidate-config` shipped as the first step; the rest is open | **Open.** Being consulted on separately. Written up in [`docs/reference/github-actions.md`](../docs/reference/github-actions.md) |
+| R5c | Whether `measure.yml` and `validate.yml` should share more than the scratch-config block. The composite action `.github/actions/candidate-config` shipped as the first step | **Answered 2026-09-17.** The rule, the next block worth extracting, what stays duplicated and what a bench must never share with production are in [`docs/reference/github-actions.md`](../docs/reference/github-actions.md#design-rationale) |
 | R5d | Whether to adopt either candidate model | **Not approved and not delivered.** `config/idhazh.json` still names `models/qwen3.5-9b-q4km.json`, the incumbent. [`docs/reference/models.md`](../docs/reference/models.md) holds each candidate's readings, and [`docs/reference/benchmarks/what-the-draft-head-is-worth.md`](../docs/reference/benchmarks/what-the-draft-head-is-worth.md) says what the draft-head runs did and did not settle |
 
 ## What the owner declined
