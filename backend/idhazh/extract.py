@@ -19,6 +19,7 @@ from urllib.parse import urlsplit
 import trafilatura
 from trafilatura.metadata import extract_metadata
 
+from idhazh import chrome
 from idhazh.contracts.article import Article, ArticleStatus, TitleSource, UntrustedLine
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome
@@ -473,9 +474,16 @@ def boilerplate_ratio(lines: list[str], seen_elsewhere: set[str]) -> float:
     Comparing pages against each other beats any faithfulness score for this
     failure, because a summary of navigation chrome is perfectly faithful to the
     chrome it was given.
+
+    `seen_elsewhere` is a set of HASHES, not of lines, and the reduction is
+    `chrome.reduce_line`'s. Storing the lines themselves would put fetched text
+    in a file this pipeline later reads (Guardrail #11); hashing both sides here
+    means the comparison never needs them. It also makes the match survive a
+    template that renders one space differently on two pages, which a raw
+    string comparison did not.
     """
     meaningful = [line for line in lines if line.strip()]
     if not meaningful:
         return 0.0
-    shared = sum(1 for line in meaningful if line.strip() in seen_elsewhere)
+    shared = sum(1 for line in meaningful if chrome.hash_line(line) in seen_elsewhere)
     return shared / len(meaningful)
