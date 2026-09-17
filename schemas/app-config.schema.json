@@ -850,6 +850,12 @@
           "title": "Reject Not Prose",
           "type": "boolean"
         },
+        "reject_too_short": {
+          "default": false,
+          "description": "If true, a too_short signal rejects the item. Default records and publishes, which is Owner override O3. **A feed a curator declared `abstract` is never rejected by this, whatever it is set to.** That feed publishes abstracts because a person said so, and abstracts are short by definition - rejecting one would delete a source on the strength of the property it was registered for. The signal is still recorded on its row either way: the item IS short, and the census says so. What the form changes is the consequence, never the fact.",
+          "title": "Reject Too Short",
+          "type": "boolean"
+        },
         "request_timeout_seconds": {
           "default": 20.0,
           "exclusiveMinimum": 0.0,
@@ -2121,6 +2127,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "extract.reject_too_short, additive, default false. Never rejects an abstract.",
+      "version": "2026-09-17T16:00",
+      "why": "Two of the three shape signals had a switch and the third did not."
+    },
+    {
       "change": "bench.corpus_items, additive, default 3.",
       "version": "2026-09-17T12:00",
       "why": "The bench corpus was two source literals, and at five it overran the job."
@@ -2134,11 +2145,6 @@
       "change": "assemble.same_story_window_hours, additive, default 36.",
       "version": "2026-09-16T18:00",
       "why": "A story that breaks at 23:00 and is picked up at 07:00 is one story."
-    },
-    {
-      "change": "ui.lead_rank_weight and ui.lead_also_covered_weight, additive.",
-      "version": "2026-09-16T16:00",
-      "why": "The leading block is a weighted score now, so every term needs a knob."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2216,7 +2222,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-17T12:00",
+      "default": "2026-09-17T16:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2227,5 +2233,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-17T12:00"
+  "version": "2026-09-17T16:00"
 }

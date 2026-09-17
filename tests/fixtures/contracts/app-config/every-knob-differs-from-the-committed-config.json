@@ -157,6 +157,7 @@
     "prose_sentence_words_min": 8,
     "reject_boilerplate": false,
     "reject_not_prose": false,
+    "reject_too_short": true,
     "request_timeout_seconds": 15.0,
     "truncation_cap_tokens": 4000,
     "user_agent": "yen-idhazh-test/1.0 (+https://example.org/contact)"
