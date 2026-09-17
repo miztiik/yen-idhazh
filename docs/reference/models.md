@@ -70,13 +70,21 @@ git grep -n -E '"(id|file|sha256)"' -- config/models/
 The first names the active file; the second prints the configuration id, the
 weight file and the SHA-256 the runtime checks the downloaded bytes against.
 
-**One model can have more than one file, and Gemma does.**
+**One model can have more than one file, and two models do.**
 `gemma-4-e4b-qat.json` runs its multi-token draft head;
-`gemma-4-e4b-qat-no-draft.json` is the same weights with `draft` null. The two
-carry one `sha256`, so the second command above prints the same digest twice -
-that is the pair working, not a duplicate. Which one is in force is the
-`models_file` line, and nothing else has to change to move between them
+`gemma-4-e4b-qat-no-draft.json` is the same weights with `draft` null.
+`qwen3.5-9b-q4km-thinking.json` is the incumbent's file with
+`turns.thinking_close` declared, so the same weights reason before they answer.
+Each pair carries one `sha256`, so the second command above prints the same
+digest twice - that is a pair working, not a duplicate. Which one is in force is
+the `models_file` line, and nothing else has to change to move between them
 ([../architecture/summarize/model-boundary.md](../architecture/summarize/model-boundary.md#a-second-smaller-model-that-guesses-ahead)).
+
+**A second file earns no second dossier.** This index is organised by subject -
+one page a model - so a file that names weights already on a page is described
+there rather than given a page of its own. The test is the `sha256`: same digest,
+same page. A dossier's status line is the only place a lifecycle is written, and
+two files over one set of weights have one lifecycle between them.
 
 ## A dossier is not a benchmark record
 
