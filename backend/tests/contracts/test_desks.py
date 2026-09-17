@@ -21,7 +21,7 @@ pytestmark = pytest.mark.contract
 
 
 #
-# The oracle of row #6 of TODO/20260910-23-article-classification-plan.md: an
+# A desk and a vertical are two words, and this is the case that proves it: an
 # item whose desk differs from its vertical validates, publishes and renders
 # under the desk, with its `item_id` still addressed `<vertical>-`. That
 # combination is exactly what repointing `Article.vertical` makes impossible, so
