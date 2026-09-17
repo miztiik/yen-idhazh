@@ -417,6 +417,109 @@ A trend line takes one colour and never the trend ramp. A rising failure count
 and a rising published count are the same shape, and green on the first would be
 a verdict the page never measured.
 
+## A machine is a colour and a name, and no rate is pooled across two of them
+
+The Hardware route draws three panels about the machine a job drew: **Reading
+against writing, machine by machine**, **The machines this run drew**, and **What
+the platform has been giving us**. One measurement shapes all three.
+
+Measured 2026-09-17 over `state/runtime-counters.csv` - 380 rows, 95 runs, 19
+dates - **86 of the 90 runs that name a processor drew more than one kind of
+processor**. Kinds per run: one on 4 runs, two on 39, three on 43, four on 4.
+Inside a single run the read rate between the fastest and the slowest machine
+runs 1.00x to 6.08x, median 2.32x, and 45 of the 86 exceed 2x. Run
+`2026-09-12-34689544296` read at 59.71 tokens a second on one shard's machine and
+9.83 on another's.
+
+So the rules below are not a preference about charts. A figure pooled across the
+machines of one run is wrong on 95.6 percent of runs, and it was the most
+quotable number on the route.
+
+- **The machine is the unit, and the pooled figure is deleted rather than kept
+ for comparison.** Each group prints its own read rate, write rate and
+ multiple, from its own shards, sum over sum. One headline survives and it is
+ the write-cost multiple of **the machine that read the most tokens in that
+ run**, named on the line.
+- **Shards that recorded no machine are their own group and are never merged
+ into a named one.** 24 of the 380 committed rows have no processor name, and
+ folding them into a machine attributes somebody else's seconds to it.
+- **The one case where pooling is allowed carries its own sentence.** Where no
+ shard of a run named a machine at all, the single group IS the pooled split,
+ and the panel says so: a run that drew more than one machine - 86 of the last
+ 90 did - would have had two machines averaged into it.
+- **A run that drew one machine says so too.** That is a good state, 4 of 90,
+ and the panel reads as one rather than as a panel with a missing spread.
+- **Colour is assigned ascending by key, and the key is the machine's digest
+ where one was recorded and its model-name string where none was.** Arbitrary
+ on purpose: by speed or by draw count the ramp would encode an ordering it
+ does not mean, and by order of first appearance a machine would change colour
+ when the operator changed the span - which is the control the colour exists to
+ survive. The ramp is assigned once for the page, over every machine any panel
+ can show at any preset, so the assignment is fixed for a build.
+- **`--chart-8`, the grey, is reserved for "Machine not recorded" and is given
+ to no machine.** An absence is not a machine and must not take a machine's
+ hue. Rejected: hashing a machine to a stop, which collides about 60 percent of
+ the time over six kinds in seven stops - and a collision is a lie the page
+ cannot see.
+- **`console.machine_colour_stops` bounds the ramp, and the overflow is named in
+ words.** Seven machines take seven stops; an eighth folds the tail into one
+ row that lists its members. Never two machines in one colour without the page
+ saying so.
+- **The name is on the row, always.** Colour here encodes a fact, so it is
+ semantic and may never be the only carrier of it. That is also why the split
+ is rows rather than a scatter: a scatter cannot carry a name per mark.
+- **A card carries every watched instruction-set flag, present or absent.** A
+ present flag takes `--tint-accent`; an absent one takes a hairline outline at
+ the same width. The machine we draw most reports none of the watched AVX-512
+ entries, so a list of what a machine has cannot show the one it is missing -
+ and the missing one is what decode dispatches on. **Never read** and
+ **reported none of them** are different facts: the first draws no chip and
+ says so.
+- **The bandwidth reading and the buffer it was taken with are one sentence.** A
+ buffer at or below L3 never left cache and reads several times high, so the
+ sentence says `this measured cache, not memory` rather than leaving a reader
+ to compare two numbers in different places.
+- **A count of machine kinds is a count and never a rate.** No percentage, no
+ probability, no pie: what the next job will draw is precisely what the
+ processor lottery refuses to quote. Under `console.fleet_min_rows` it is a
+ list with a sentence and **no bar at all** - bars over a handful of placements
+ read as a distribution, and a reader who has read one will act on it.
+- **None of the empty states is tinted and none gets the reserved box.** The
+ route is prerendered and reads `state/` at build time, so there is no fetch,
+ no waiting state and no unreachable state. Every nothing here is settled at
+ build time and gets words. The heading and the note always stay.
+
+Two panels were refused, and what the reader loses is on the record.
+
+- **Bandwidth against decode speed was refused**, so the only on-screen test of
+ whether decode is really bandwidth bound is missing, and the bandwidth probe's
+ reading is a number nothing is plotted against. What buys it back today is
+ that the machine card prints that reading in words per machine: the fact is on
+ the page and only the correlation is absent. It ships when
+ `console.fleet_min_rows` rows exist **and** `console.bandwidth_min_kinds`
+ distinct kinds carry a bandwidth reading. Two points define a line, so a
+ scatter of two is a claim rather than a measurement.
+- **A processor detail table was refused**, so a reader cannot read a raw column
+ value off the console, and twenty-seven columns is the reference page's job.
+ Five of those columns were bought back: the machine card's own `<details>`
+ carries the platform's size, region, zone and fault domain, plus `microcode` -
+ the one cell that moves without anything else moving, and so the only
+ explanation left for a speed change with no other change. Closed by default,
+ so the attention cost is zero.
+
+Authority: Susan, 2026-09-17, on
+[../../TODO/20260916-30-hardware-console-panels-plan.md](../../TODO/20260916-30-hardware-console-panels-plan.md).
+The sufficiency checks pass, conditional on the twelve flag chips shipping: a
+definition list of text rows with a semicolon-joined vendor string is a 2004
+page, and dropping the chips fails **made this year** and would need a
+`## Design rationale` entry of its own.
+
+**The veto that cost the most was a title.** "The host under the newest run"
+let the page carry one processor string for the whole of its life, and that
+framing is why a panel summing four counters across three machines read as
+correct for weeks. The reader lost the single most load-bearing fact on the
+route: a run is not a machine. Renaming it is the correction, not a rename.
+
 ## What the cap cost, by source
 
 `Sources cut short most often` is one row per source, ten of them, and it is the
