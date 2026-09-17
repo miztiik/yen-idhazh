@@ -303,6 +303,27 @@ run one script,
 [`.github/scripts/commit-and-push.sh`](../../.github/scripts/commit-and-push.sh).
 Two copies of the loop were a loop no test could execute.
 
+**A ledger reaches the repository only when the job that wrote it stages it.** No
+other job can stand in. Each one runs on its own runner with its own checkout, so
+the `state` assemble stages whole carries nothing a work shard wrote.
+`state/host-fingerprint` was written from the day the probe shipped and staged by
+nobody, and `state/span-rollup` for nine days, and neither broke a test: the
+ledger side was in Python, the staging side was in YAML, and nothing read both.
+[`backend/tests/workflows/test_ledger_staging.py`](../../backend/tests/workflows/test_ledger_staging.py)
+reads both. It takes every store from the `*_relpath` helpers `idhazh.ledger`
+already exports, charges each one to the job whose `python -m idhazh <verb>` step
+reaches its writer, and fails naming the ledger, the job, the workflow file and
+the step to add the path to. It names no ledger itself, so a twelfth store is
+covered the day its writer lands rather than the day somebody remembers to add it
+to a list.
+
+The same file holds the second half of that. A ledger that declares a key must be
+in `ledger.keyed_paths`, the registry the post-merge settlement walks, and a
+ledger that declares none must be absent from it. The two sides are compared as
+sets rather than as a subset, so the registry's one deliberate absence has to stay
+the one its own docstring claims. `state/span-rollup` was staged from 2026-09-15
+and settled by nothing until 2026-09-16, which is the gap this closes.
+
 A rebase refuses to start while a tracked file is modified. Run `32671663130`
 died that way: one file was CRLF against a `text eol=lf` attribute, so every
 Linux checkout saw it modified before any step ran, and the retry loop threw away
