@@ -558,14 +558,35 @@ jobs:
       # machine record is keyed on it - so the second dispatch's host would read
       # as a repeat of the first and be settled away. Nothing else here reads a
       # run id.
-      - name: Build fixed five-article corpus
+      #
+      # How big the corpus is comes from `bench.corpus_items` and is read once,
+      # here, by the module that also freezes the plan. It was a `--cap` literal
+      # in this file and a constant in that module until 2026-09-17, and when
+      # the two disagreed the dispatch died at the freeze step with the plan
+      # already paid for (Guardrail #6).
+      #
+      # `--config backend/var/candidate-config` is what keeps `plan` out of the
+      # production ledgers. `plan` appends to the seen store, feed health, feed
+      # retirements and the counterfactual scores, and without this flag it
+      # loads the committed config - which names no trial directory, so a bench
+      # marked real URLs seen and the next production day skipped those stories.
+      - name: Build the fixed bench corpus
         run: |
           set -euo pipefail
           DATE=$(date -u +%F)
           export RUNTIME_DATE="$DATE"
           echo "RUNTIME_DATE=$DATE" >> "$GITHUB_ENV"
-          python -m idhazh plan --date "$DATE" --cap 5 --execution "${{ github.run_id }}"
-          python3 backend/utilities/runtime_sweep.py freeze-corpus --date "$DATE"
+          CORPUS_ITEMS=$(python3 backend/utilities/runtime_sweep.py corpus-items \
+            --config backend/var/candidate-config)
+          echo "CORPUS_ITEMS=$CORPUS_ITEMS" >> "$GITHUB_ENV"
+          python -m idhazh plan \
+            --config backend/var/candidate-config \
+            --date "$DATE" \
+            --cap "$CORPUS_ITEMS" \
+            --execution "${{ github.run_id }}"
+          python3 backend/utilities/runtime_sweep.py freeze-corpus \
+            --config backend/var/candidate-config \
+            --date "$DATE"
 
       # A bench reading is about a machine, and until now the bench recorded
       # which processor it drew in one line of a JSON summary that expires with
@@ -627,7 +648,7 @@ jobs:
           python3 backend/utilities/measure_llm.py emit \
             --raw backend/var/raw-case/bench/raw-case.json \
             --server backend/var/runtime-sweep/runtime-summary.json \
-            --corpus 'Five articles' \
+            --corpus "${CORPUS_ITEMS} articles" \
             --dossier backend/var/runtime-sweep/dossier.md \
             --readings backend/var/runtime-sweep/readings.json
           cat backend/var/runtime-sweep/dossier.md >> "$GITHUB_STEP_SUMMARY"

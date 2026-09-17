@@ -30,6 +30,9 @@
     "search_months": 1,
     "similarity_floor": 0.35
   },
+  "bench": {
+    "corpus_items": 3
+  },
   "collect": {
     "availability_rest_runs": 5,
     "availability_strikes_before_rest": 5,
