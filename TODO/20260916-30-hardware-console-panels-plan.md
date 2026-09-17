@@ -1,18 +1,77 @@
 # Plan 30 - The hardware console has no panel for the machine it ran on
 
 **Created**: 2026-09-16
-**Status**: not started. Contract first - no panel is built before its shape is agreed.
-**Owner decision needed**: yes, on the panel list in section 3.
+**Status**: shipped 2026-09-17. Three panels landed, two were refused, and each
+refusal names what the reader loses.
+**Owner decision**: taken. Susan ruled on section 3 on 2026-09-17; the ruling is
+recorded as a `## Design rationale` in
+[../docs/concepts/console-design.md](../docs/concepts/console-design.md), which
+is the page that owns how a console figure is allowed to read on screen.
+
+## What shipped, and what was refused
+
+| id | Proposal | Outcome |
+| --- | --- | --- |
+| P1 | Deepen "The host under the newest run" | **Shipped, split in two.** The old panel keeps its four server rows and is retitled **What the server did outside the model call**. The machines became a panel of their own, **The machines this run drew**: one card a machine, the normalised name, family/model/stepping, all twelve watched flags as present-or-absent chips, L3 and the bandwidth reading in one sentence with its buffer, how many jobs drew it, and a `<details>` holding the platform's placement and the microcode |
+| P2 | Colour "Reading against writing" by machine | **Shipped first, and it is a correction rather than a feature.** The pooled rate was deleted. One group a machine, each with its own read rate, write rate and multiple; one headline, attributed to the machine that read the most tokens |
+| P3 | The fleet, over the window | **Shipped, gated at `console.fleet_min_rows` (160).** Under the gate it is a list with a sentence and no bar at all |
+| P4 | Bandwidth against decode | **Refused, with a trigger.** See below |
+| P5 | A processor detail table | **Refused, five columns bought back.** See below |
+
+**What the reader loses to the P4 refusal.** The only on-screen test of whether
+decode is really bandwidth bound, which is the hypothesis the bandwidth probe was
+built for - so the probe's reading is a number nothing is plotted against. What
+buys it back for now is P1, which prints that reading in words on each machine's
+card: the fact is on the page and only the correlation is missing. **It ships
+when `console.fleet_min_rows` rows exist and `console.bandwidth_min_kinds` (3)
+distinct kinds carry a bandwidth reading.** Two points define a line, so a
+scatter of two is a claim.
+
+**What the reader loses to the P5 refusal.** The ability to read a raw column
+value off the console. Five of the twenty-seven were bought back inside P1's
+card: `vm_size`, `vm_location`, `vm_zone`, `vm_fault_domain` and `microcode` -
+the last being the cell `host-metrics.md` calls the one that moves without
+anything else moving, and so the only explanation left for a speed change with
+no other change. Behind a native `<details>`, closed by default, so the
+attention cost is zero. The other twenty-two stay on
+[../docs/reference/host-metrics.md](../docs/reference/host-metrics.md), which is
+the reference page's job.
+
+**What the whole route loses.** The pooled `Nx` write-cost headline, which was
+the most quotable number on the page. It is replaced by the same multiple
+attributed to one named machine. That is the price of it being true.
+
+## The measurement that decided the order
+
+Taken 2026-09-17 over `state/runtime-counters.csv` - 380 rows, 95 runs, 19 dates.
+
+- **86 of the 90 runs that name a processor drew more than one kind.** One kind
+ on 4 runs, two on 39, three on 43, four on 4.
+- Inside one run the read rate between the fastest and the slowest machine runs
+ **1.00x to 6.08x, median 2.32x**; 45 of the 86 exceed 2x. Run
+ `2026-09-12-34689544296` read at 59.71 tokens a second on one shard's machine
+ and 9.83 on another's.
+- 24 of the 380 rows carry no processor name at all.
+
+So P2 shipped first: it was the only row that removed a wrong number from a live
+page, and that number was wrong on 95.6 percent of runs.
+
+**`console.fleet_min_rows` is a declared estimate, not a measurement**
+(`CLAUDE.md` Guardrail #10). The rarest of six machine kinds held 11 of 356
+committed counter rows, 3.1 percent - that part is measured - and 5 of those,
+the floor `console.min_attempts_for_rate` already sets, needs about 162 rows.
+A seventh machine kind lowers every share and raises the bar, so re-derive it
+rather than argue with it.
 
 ## The situation in one paragraph
 
 `state/host-fingerprint/<YYYY>/<MM>/<DD>.csv` has been written since 2026-09-16
-and **nothing reads it**. Every column is in
-[host-metrics.md](../docs/reference/host-metrics.md); none of it reaches the
-hardware console at `/console/machine/`, which today reads
-`state/runtime-counters.csv`, the item-health census, the span rollup and the run
-timeline. So the project now collects the answer to "which machine produced this
-number" and an operator still cannot see it.
+and **nothing read it** until this plan shipped. Every column is in
+[host-metrics.md](../docs/reference/host-metrics.md); none of it reached the
+hardware console at `/console/machine/`, which read `state/runtime-counters.csv`,
+the item-health census, the span rollup and the run timeline. So the project
+collected the answer to "which machine produced this number" and an operator
+still could not see it.
 
 ## Why this is a plan and not a commit
 
@@ -68,7 +127,9 @@ panel that already ships, not a new feature.
 
 ## 3. The panels to decide on
 
-Each row is a proposal, not a decision. **The owner picks which ship.**
+Each row was a proposal. The outcome of each is in the table at the top of this
+page; what follows is what was proposed, kept so a reader can see what the
+ruling answered.
 
 | id | Panel | The question it answers | What it draws | What it must never do |
 | --- | --- | --- | --- | --- |
@@ -92,30 +153,33 @@ is a page that is still readable in six months.
 
 ## 4. The contract, before any code
 
-Nothing is drawn until this exists:
+Nothing was drawn until this existed, and it landed as the first commit:
 
 1. **A reader payload shape**, as a Pydantic contract under
-   `backend/idhazh/contracts/`, generating its schema, the way every other
-   console payload is built. The frontend reads a generated type, never a CSV
-   column index - `series.ts` reading `cells[46]` is the failure mode to avoid.
-2. **A stated window.** The page reads a bounded number of days (Guardrail #12),
-   named in `config/` rather than in source.
-3. **An empty state for every panel.** The fingerprint is behind a flag, so a
-   deployment with it off must render a panel that says so rather than a blank
-   box (`CLAUDE.md` section 12, point 5).
-4. **A colour decision that survives both themes.** P2 assigns colour by machine
-   kind; that needs a palette that works light and dark and does not imply an
-   ordering between machines.
+   `backend/idhazh/contracts/machine_panels.py`, generating
+   `schemas/machine-panels.schema.json`. The frontend resolves the twelve flag
+   names out of that generated schema rather than typing a copy, so the drift
+   gate binds the page - `series.ts` reading `cells[46]` is the failure mode it
+   avoids.
+2. **A stated window.** The route already read `shardDays(max(console.window_presets))`,
+   and the machine record takes the same cover (Guardrail #12). No new window
+   knob was needed.
+3. **An empty state for every panel.** Ten of them, one per condition, in the
+   `## Design rationale` on
+   [../docs/concepts/console-design.md](../docs/concepts/console-design.md).
+4. **A colour decision that survives both themes.** `--chart-1` to `--chart-7`
+   assigned ascending by machine key, `--chart-8` reserved for an unrecorded
+   machine, the name in words on every row. **No token was added.**
 
 ## 5. Tasks
 
-| id | Task | Blocked on |
+| id | Task | State |
 | --- | --- | --- |
-| T1 | Owner picks from the P1-P5 table | nothing |
-| T2 | Susan rules on the shape of each chosen panel, both themes, empty and degraded states | T1 |
-| T3 | Write the payload contract and its schema | T2 |
-| T4 | Build the panels against the contract | T3 |
-| T5 | Browser smoke per `CLAUDE.md` section 12, including the data-absent arm | T4 |
+| T1 | Owner picks from the P1-P5 table | done, 2026-09-17 |
+| T2 | Susan rules on the shape of each chosen panel, both themes, empty and degraded states | done, 2026-09-17 |
+| T3 | Write the payload contract and its schema | done - `backend/idhazh/contracts/machine_panels.py`, `schemas/machine-panels.schema.json` |
+| T4 | Build the panels against the contract | done - P2, then P1, then P3 |
+| T5 | Browser smoke per `CLAUDE.md` section 12, including the data-absent arm | done - `frontend/tests/console-machine-panels.spec.ts` |
 
 ## 6. Not in scope
 

@@ -78,6 +78,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-17",
+            change="extract gained three chrome knobs, additive, the fold on.",
+            why="The boilerplate signal divided by an empty set and said no to every page.",
+        ),
+        ChangelogEntry(
             version="2026-09-16T18:00",
             change="assemble.same_story_window_hours, additive, default 36.",
             why="A story that breaks at 23:00 and is picked up at 07:00 is one story.",
@@ -91,11 +96,6 @@ class AppConfig(Contract):
             version="2026-09-16T15:00",
             change="placement gained three freshness knobs, additive, the curve on.",
             why="A story planned at 02:20 held its morning freshness against the evening.",
-        ),
-        ChangelogEntry(
-            version="2026-09-16T14:00",
-            change="run.safety_ceiling_per_day, additive, default 400.",
-            why="The per-run cap bounds a worker's timeout; it never bounded the day.",
         ),
         ChangelogEntry(
             version="2026-08-21",

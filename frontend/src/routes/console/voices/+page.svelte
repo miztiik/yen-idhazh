@@ -21,7 +21,7 @@
 	import SourceCutRange from '$lib/components/SourceCutRange.svelte';
 	import TargetBar from '$lib/components/TargetBar.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
-	import type { FeedDayOutcome } from './+page.server';
+	import type { FeedDayOutcome, YieldDay } from './+page.server';
 
 	let { data } = $props();
 
@@ -112,6 +112,26 @@
 		{ outcome: 'failed', text: 'failed, or answered with nothing' },
 		{ outcome: 'refused', text: 'politely refused' },
 		{ outcome: 'resting', text: 'not asked - resting' }
+	];
+
+	/** The dwell strip's own geometry. Its axis is the run's, not the window
+	 * control's: the countdown is counted against a knob the run applied, so a
+	 * control that moved this span would move a number nothing else moved. */
+	const dwellDates = $derived(data.retiring?.dates ?? []);
+	const dwellCell = $derived(denseCellFor(ROW_STRIP_PX, dwellDates.length));
+	const dwellAxis = $derived(
+		axisLabels(dwellDates, {
+			density: data.chart.tick_density,
+			pitch: dwellCell.cell + dwellCell.gap
+		})
+	);
+
+	/** What a square on the reliability strip means, in words. The two that are a
+	 * verdict take the fill ramp; the one that is not takes no verdict colour. */
+	const YIELD_KEY: { state: YieldDay; text: string }[] = [
+		{ state: 'at-or-above', text: 'at or above the mark' },
+		{ state: 'under', text: 'under the mark' },
+		{ state: 'nothing', text: 'it decided nothing that day' }
 	];
 
 	/** A label is placed inside its column, not laid out by it, so the widest
@@ -590,6 +610,231 @@
 		</div>
 	{/if}
 
+	<h2 class="console-h2">Sources close to retiring themselves</h2>
+
+	{#if data.retiring === null}
+		<p class="mt-2 text-[0.9375rem] text-text-secondary" data-retiring="absent">
+			The run published no source census, so there is nothing to judge today.
+		</p>
+	{:else}
+		{@const strip = data.retiring}
+		<!-- Not windowed, and it says so. The dwell is counted against
+		     `collect.source_quality_dwell_days`, which the run applied when it read
+		     the record - a control that moved this span would be a control that
+		     lies about what will fire. Same argument the ranking weight makes. -->
+		<div
+			class="console-table mt-3"
+			data-retiring="table"
+			data-retiring-dwell={strip.dwellDays}
+			data-retiring-auto={strip.autoRetire ? 'yes' : 'no'}
+			data-retiring-drawn={strip.rows.length}
+			data-retiring-hidden={strip.hidden}
+			data-retiring-cap={data.console.source_rows}
+			data-model-rule="no"
+			data-model-rule-name="source-yield"
+			data-model-rule-none="a source published an address or it did not, and no model was asked"
+		>
+			<p class="feeds-note" data-retiring-lead>
+				A source that publishes fewer than {pct(strip.alarmPoint)} of the addresses it decides,
+				every day for {strip.dwellDays} days running, stops being asked.
+			</p>
+			<p class="feeds-note" data-retiring-clear>
+				{strip.clear}
+				{strip.clear === 1 ? 'judged source is' : 'judged sources are'} at or above the mark today.
+			</p>
+			{#if !strip.autoRetire}
+				<p class="feeds-note" data-retiring-watching>
+					Nothing retires on this measurement yet - this panel is watching only.
+				</p>
+			{/if}
+
+			{#if strip.rows.length === 0 && strip.unjudged.length === 0}
+				<p class="feeds-note" data-retiring-empty>
+					No day has finished with a planned article on it, so no source has a yield to judge.
+					This fills on the next run that publishes a day.
+				</p>
+			{:else}
+				<ol class="feed-rows" data-retiring-rows>
+					{#each strip.rows as row (row.sourceId)}
+						<li
+							class="feed-row"
+							data-retiring-row={row.sourceId}
+							data-retiring-days-under={row.daysUnder}
+							data-retiring-on={row.retiresOn}
+							data-retiring-track={row.marks.track}
+						>
+							<p class="feed-name">
+								<span
+									>{row.title}<span class="source-note-id" data-source-note-id
+										>{row.sourceId}</span
+									></span
+								>
+								{#if row.retired}
+									<span class="feed-rested" data-retiring-chip>retired</span>
+								{:else if row.daysLeft !== null}
+									<span class="feed-rested" data-retiring-chip
+										>retires in {row.daysLeft}
+										{row.daysLeft === 1 ? 'day' : 'days'}</span
+									>
+								{/if}
+							</p>
+
+							<div class="feed-bar" data-retiring-cell="bar">
+								<TargetBar
+									marks={row.marks}
+									label="Published out of offered"
+									valueText={row.share === null ? 'no decisions' : pct(row.share)}
+									targetText="retires under {pct(strip.alarmPoint)}"
+									emptyNote="This source has decided nothing yet."
+									tone="health"
+								/>
+							</div>
+
+							{#if row.squares.length > 0}
+								<div
+									class="feed-strip yield-strip"
+									data-retiring-strip={row.sourceId}
+									style="grid-template-columns: repeat({strip.dates
+										.length}, {dwellCell.cell}px); gap: {dwellCell.gap}px"
+								>
+									{#each row.squares as square (square.date)}
+										<span
+											class="feed-square"
+											style="block-size: {dwellCell.cell}px"
+											data-retiring-day={square.date}
+											data-retiring-state={square.state}
+											title={square.label}
+											aria-label="{row.sourceId} on {square.label}"
+											role="img"
+										></span>
+									{/each}
+									<!-- The dwell is the AREA, not a number in a chip. It underlines
+									     exactly the contiguous under-the-mark squares at the newest
+									     end, so the run length is read off the picture. -->
+									{#if row.daysUnder > 0}
+										<span
+											class="yield-dwell"
+											data-retiring-dwell-rule
+											style="grid-column: {strip.dates.length -
+												row.daysUnder +
+												1} / -1"
+										></span>
+									{/if}
+								</div>
+							{/if}
+
+							<p class="feed-result" data-retiring-readout>
+								{row.publications} published of {row.opportunities} offered, over {strip.completeDates}
+								complete {strip.completeDates === 1 ? 'day' : 'days'}.{#if row.daysUnder > 0}
+									Under the mark for {row.daysUnder}
+									{row.daysUnder === 1 ? 'day' : 'days'} running - {row.daysUnder} of {strip.dwellDays}.{#if row.retiresOn && !row.retired}
+										Retires on {row.retiresOn} if it stays there.{/if}
+								{/if}
+							</p>
+						</li>
+					{/each}
+				</ol>
+
+				{#if strip.hidden > 0}
+					<p class="feeds-note" data-retiring-more>
+						{strip.hidden} more {strip.hidden === 1 ? 'source is' : 'sources are'} under the mark,
+						none closer to retiring than the last row here.
+					</p>
+				{/if}
+
+				{#if strip.dates.length > 0}
+					<div
+						class="feed-axis"
+						style="inline-size: {dwellCell.width}px; grid-template-columns: repeat({strip.dates
+							.length}, {dwellCell.cell}px); gap: {dwellCell.gap}px"
+					>
+						{#each dwellAxis as label (label.column)}
+							<div class="feed-axis-slot" style="grid-column: {label.column}">
+								<span style={ANCHOR[label.align]} data-day-axis data-retiring-axis={label.column}
+									>{label.text}</span
+								>
+							</div>
+						{/each}
+					</div>
+
+					<ul class="feed-key">
+						{#each YIELD_KEY as entry (entry.state)}
+							<li>
+								<span class="feed-square" data-retiring-state={entry.state}></span>{entry.text}
+							</li>
+						{/each}
+					</ul>
+				{:else}
+					<!-- A view written before the day strip existed has no axis to draw on.
+					     The shares above it are the run's own and still true; what is
+					     missing is the day-by-day reading, so the panel says which half it
+					     has rather than drawing a key for squares nobody can see. -->
+					<p class="feeds-note" data-retiring-no-strip>
+						The run that published this census recorded no day-by-day shares, so there is no
+						strip to draw. It fills on the next run.
+					</p>
+				{/if}
+
+				{#if strip.unjudged.length > 0}
+					<!-- Drawn, never hidden. A source under its evidence floors has a
+					     shape worth seeing; what it has not got is a number anybody may
+					     act on, so the bar is a dash and the floors are printed. -->
+					<p class="feeds-note" data-retiring-unjudged-lead>
+						Not judged yet - under one or both evidence floors, so no countdown may be drawn.
+						The record is {strip.completeDates} complete {strip.completeDates === 1
+							? 'day'
+							: 'days'} and a source is judged at {strip.minCompleteDays} of them plus {strip.minDecisions}
+						decisions of its own. Their days are still shown, closest to being judged first.
+					</p>
+					<ol class="feed-rows" data-retiring-unjudged>
+						{#each strip.unjudged as row (row.sourceId)}
+							<li class="feed-row" data-retiring-unjudged-row={row.sourceId}>
+								<p class="feed-name">
+									<span
+										>{row.title}<span class="source-note-id" data-source-note-id
+											>{row.sourceId}</span
+										></span
+									>
+								</p>
+								<p class="yield-unjudged" data-retiring-cell="bar">not judged yet</p>
+								{#if row.squares.length > 0}
+									<div
+										class="feed-strip yield-strip"
+										data-retiring-strip={row.sourceId}
+										style="grid-template-columns: repeat({strip.dates
+											.length}, {dwellCell.cell}px); gap: {dwellCell.gap}px"
+									>
+										{#each row.squares as square (square.date)}
+											<span
+												class="feed-square"
+												style="block-size: {dwellCell.cell}px"
+												data-retiring-day={square.date}
+												data-retiring-state={square.state}
+												title={square.label}
+												aria-label="{row.sourceId} on {square.label}"
+												role="img"
+											></span>
+										{/each}
+									</div>
+								{/if}
+								<p class="feed-result" data-retiring-readout>
+									Decided {row.decisions} of the {row.opportunities}
+									{row.opportunities === 1 ? 'address' : 'addresses'} it was offered.
+								</p>
+							</li>
+						{/each}
+					</ol>
+					{#if strip.unjudgedHidden > 0}
+						<p class="feeds-note" data-retiring-unjudged-more>
+							{strip.unjudgedHidden} more {strip.unjudgedHidden === 1 ? 'source is' : 'sources are'}
+							not judged yet either, none closer to its floors than the last row here.
+						</p>
+					{/if}
+				{/if}
+			{/if}
+		</div>
+	{/if}
+
 	<div data-windowed="source-cuts" data-window-days={cuts.days}>
 		<h2 class="console-h2">Sources cut short most often</h2>
 
@@ -924,6 +1169,50 @@
 	}
 
 	.feed-square[data-feed-outcome='resting'] {
+		box-shadow: inset 0 0 0 1px var(--color-rule);
+	}
+
+	/* The reliability strip reuses the feed strip's grid, and adds one row under
+	   it for the dwell rule. The rule is the panel's whole argument: the dwell is
+	   an AREA a reader can see, not a `9/14` chip they have to trust. */
+	.yield-strip {
+		grid-template-rows: auto 2px;
+		row-gap: 2px;
+		align-content: start;
+	}
+
+	.yield-dwell {
+		grid-row: 2;
+		block-size: 2px;
+		border-radius: 1px;
+		background: var(--fill-low);
+	}
+
+	/* The dash a source under its evidence floors gets instead of a bar. It sits
+	   in the bar column rather than under the name, because the whole point of
+	   drawing these rows is that the column means the same thing on every one. */
+	.yield-unjudged {
+		grid-area: bar;
+		margin: 0;
+		font-size: var(--text-xs);
+		line-height: var(--leading-xs);
+		color: var(--color-text-tertiary);
+	}
+
+	/* The same fill ramp the run strip and the feed strip use, for the same
+	   reason: a square this small is a solid rather than type, and the band
+	   tokens are weighted to be read as type. A day with no decisions is not a
+	   verdict, so it takes no verdict colour. */
+	.feed-square[data-retiring-state='at-or-above'] {
+		background: var(--fill-high);
+	}
+
+	.feed-square[data-retiring-state='under'] {
+		background: var(--fill-low);
+	}
+
+	.feed-square[data-retiring-state='nothing'] {
+		background: var(--color-surface-sunken);
 		box-shadow: inset 0 0 0 1px var(--color-rule);
 	}
 

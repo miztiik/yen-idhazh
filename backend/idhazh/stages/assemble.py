@@ -11,13 +11,14 @@ from datetime import date as date_type
 from datetime import timedelta
 from pathlib import Path
 
-from idhazh import assemble, config, ledger, rank, telemetry
+from idhazh import assemble, chrome, config, ledger, rank, telemetry
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow
+from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import SourceKind
 from idhazh.contracts.visual_decision import VisualDecision
@@ -36,7 +37,9 @@ from idhazh.stages.common import (
     _load_manifest,
     _run_dir,
 )
-from idhazh.telemetry.publish import day_metrics, dispatch, source_health
+from idhazh.telemetry import source_health
+from idhazh.telemetry.publish import day_metrics, dispatch
+from idhazh.telemetry.publish import source_health as source_health_publish
 
 
 def _index_root() -> Path:
@@ -328,6 +331,7 @@ def stage_assemble(
     landed = writer.append(common.STATE_ROOT, rows)
     published = ledger.append_published(common.STATE_ROOT, day.date, _published_rows(day, plan))
     item_health = ledger.append_item_health(common.STATE_ROOT, plan.date, item_health_rows)
+    chrome_lines = _fold_chrome(plan, items_dir, settings)
     # Every projection of the instrument, in the one order `dispatch` names. It
     # runs after the ledgers this stage appended and reads those files rather
     # than anything in memory here, so a run that failed to append publishes the
@@ -355,7 +359,7 @@ def stage_assemble(
         settings=settings,
         taxonomy_vectors=assemble.read_taxonomy_vectors(config.REPO_ROOT, settings.taxonomy),
     )
-    yield_alarm = source_health.yield_alarm(
+    yield_alarm = source_health_publish.yield_alarm(
         instrument.sources,
         alarm_point=settings.app.collect.source_yield_alarm_point,
         min_decisions=settings.app.collect.source_yield_alarm_min_decisions,
@@ -366,10 +370,11 @@ def stage_assemble(
         # counts all along and nobody read them, which is why this speaks.
         print(f"::warning title=Sources answering but not reading::{yield_alarm}")
         LOG.warning("%s", yield_alarm)
+    _retire_low_yield_sources(instrument.sources, plan=plan, run_id=run_id, settings=settings)
     _report_nothing_published(day, plan)
     LOG.info(
         "published date=%s items=%s partial=%s eval_rows=%s addresses=%s item_health_rows=%s "
-        "search_index=%s/%s day_metrics=%s projections=%s",
+        "search_index=%s/%s day_metrics=%s chrome_lines=%s projections=%s",
         plan.date,
         len(day.items),
         day.partial,
@@ -379,9 +384,93 @@ def stage_assemble(
         len(index.entries),
         index.vector_bytes // index.dimensions,
         day_metrics.day_metrics_relpath(plan.date),
+        chrome_lines,
         ",".join(instrument.dispatched),
     )
     return day
+
+
+def _retire_low_yield_sources(
+    view: SourceHealthView, *, plan: RunPlan, run_id: str, settings: config.Settings
+) -> int:
+    """File a retirement for every source that has held under the mark long enough.
+
+    **Behind `collect.source_quality_auto_retire`, default off.** A countdown
+    nobody has watched fire is a countdown nobody has checked, so the first
+    release draws the dwell on `/console/voices/` and files nothing. The flag
+    carries its removal condition on the line that declares it (Guardrail #6).
+
+    It runs after the console view is published rather than before, and reads
+    that view's own rows. The console and the retirement then rest on one
+    reading of the record: a person watching `retires in 2 days` sees exactly
+    the number that fires.
+
+    Nothing here edits `config/sources.json`. Retirement is filed against the
+    endpoint, so a curator who disagrees edits that feed's URL and the address
+    is asked again with a clean record.
+    """
+    if not settings.app.collect.source_quality_auto_retire:
+        return 0
+    feeds = source_health_publish.active_feeds(
+        settings.sources, [vertical.id for vertical in settings.taxonomy.verticals]
+    )
+    filed = source_health.low_yield_retirements(
+        feeds,
+        view=view,
+        already={row.endpoint_key for row in ledger.load_retirements(common.STATE_ROOT)},
+        date=plan.date,
+        run_id=run_id,
+    )
+    if not filed:
+        return 0
+    landed = ledger.append_retirements(common.STATE_ROOT, filed)
+    for row in filed:
+        LOG.warning(
+            "retired a source on its own yield feed=%s days_under=%s evidence=%s..%s",
+            row.feed_id,
+            len(row.evidence_dates),
+            row.evidence_dates[0],
+            row.evidence_dates[-1],
+        )
+    knobs = settings.app.collect
+    print(
+        "::warning title=Sources retired on their own yield::"
+        f"{len(filed)} source(s) stayed under {knobs.source_yield_alarm_point:.0%} for "
+        f"{knobs.source_quality_dwell_days} days running and will not be asked again: "
+        f"{', '.join(row.feed_id for row in filed)}. Edit that feed's URL in "
+        "config/sources.json to ask it again."
+    )
+    return landed
+
+
+def _fold_chrome(plan: RunPlan, items_dir: Path, settings: config.Settings) -> int:
+    """Count what each host printed on more than one of today's pages.
+    **Here rather than in the work shard, and that placement is the design.** The
+    question is how many DISTINCT pages of a host carried one line, and a shard
+    sees `index % shards` of the day - so eight shards would each answer a
+    fraction of it and eight partial answers would race into one file through a
+    `merge=union` that cannot add numbers. This stage is the one place the day's
+    whole item set exists.
+
+    Every article the day fetched, not only the ones that published. A page that
+    degraded is exactly where a template shows through, so dropping those would
+    throw away the evidence the signal is for.
+
+    Returns how many lines the store now holds, so the stage line can say it.
+    """
+    pages = [
+        chrome.page_lines(payload.article.canonical_url, (payload.article.text or "").splitlines())
+        for payload in _item_payloads(plan, items_dir)
+        if payload.article is not None
+    ]
+    knobs = settings.app.extract
+    folded = chrome.fold(
+        pages,
+        known=ledger.load_chrome(common.STATE_ROOT),
+        date=plan.date,
+        lines_per_host_max=knobs.chrome_lines_per_host_max,
+    )
+    return ledger.write_chrome(common.STATE_ROOT, folded)
 
 
 def _published_rows(day: DigestDay, plan: RunPlan) -> list[PublishedRow]:

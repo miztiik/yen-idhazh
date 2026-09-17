@@ -15,6 +15,7 @@ from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import Contract
+from idhazh.contracts.chrome_line import ChromeLineRow
 from idhazh.contracts.console_band import ConsoleBand
 from idhazh.contracts.corpus import CorpusMeta, CorpusRow
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
@@ -32,6 +33,7 @@ from idhazh.contracts.icon_manifest import IconManifest
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.label_row import LabelRow
+from idhazh.contracts.machine_panels import MachinePanels
 from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
 from idhazh.contracts.public_run_day import PublicRunDay
@@ -75,6 +77,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     AppConfig,
     AppearanceConfig,
     Article,
+    ChromeLineRow,
     ConsoleBand,
     CorpusMeta,
     CorpusRow,
@@ -92,6 +95,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     HostFingerprintRow,
     ItemHealthRow,
     LabelRow,
+    MachinePanels,
     ModelsConfig,
     ObservationIndexRow,
     PipelineTestsConfig,
