@@ -82,8 +82,9 @@ def file_digest(path: Path) -> str:
 def runtime_build(environ: Mapping[str, str] | None = None) -> str:
     """The llama.cpp release that decoded the weights, as the job pinned it.
 
-    `.github/workflows/digest.yml` sets `LLAMA_CPP_BUILD` beside the download it
-    checks against a recorded sha256, so the tag the stamp carries and the bytes
+    `.github/scripts/llama-cpp-pin.sh` decides the build, the job that installs
+    it reads that file, and the step running this stage is handed the same
+    answer as `LLAMA_CPP_BUILD` - so the tag the stamp carries and the bytes
     that ran are named in one place.
 
     A developer machine usually pins nothing. That degrades to `UNRECORDED_BUILD`
