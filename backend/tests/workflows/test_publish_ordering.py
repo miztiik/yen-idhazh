@@ -24,6 +24,7 @@ from ._harness import (
     _job,
     _load_workflows,
     _mapping,
+    _needs,
     _normalize_condition,
     _script,
     _step,
@@ -361,6 +362,51 @@ def test_ci_keeps_its_push_boundary_and_pages_publishes_only_a_verdict() -> None
     pinned = str(_mapping(checkout["with"], "pages.yml build checkout").get("ref"))
     assert "needs.decide.outputs.ref" in pinned, (
         "what deploys is the commit that was verified, not the tip minutes later"
+    )
+
+
+def test_a_newer_build_supersedes_an_older_one_and_a_deploy_is_never_cancelled() -> None:
+    """The two jobs want opposite answers, so neither can hold the other's.
+
+    A build makes a replaceable artifact and publishing is last-write-wins, so an
+    older build that finishes is discarded anyway. A deploy replaces the live
+    site, and a half-replaced site is worse than an old one.
+
+    Three of the four assertions are the safety argument rather than the saving.
+    The sharpest is that the groups differ: one name shared between them would
+    make the build's cancellation reach an in-flight deploy, which is the exact
+    thing the deploy's own setting exists to forbid. Whether the build may be
+    cancelled at all rests on `deploy` needing it - a cancelled job satisfies no
+    `needs`, so a build that stops early starts no deploy.
+    """
+    workflow = _load_workflows()["pages.yml"]
+
+    assert "concurrency" not in workflow, (
+        "a group over the whole run serialises the build behind the deploy of "
+        "the run before it, which is the queueing this split exists to end"
+    )
+
+    build = _mapping(_job(workflow, "build")["concurrency"], "pages.yml build concurrency")
+    deploy = _mapping(_job(workflow, "deploy")["concurrency"], "pages.yml deploy concurrency")
+
+    assert str(build["cancel-in-progress"]) == "true", (
+        "an older bundle that finishes is discarded the moment the newer one "
+        "deploys, so finishing it buys nothing"
+    )
+    assert str(deploy["cancel-in-progress"]) == "false", (
+        "a deploy in flight always completes: a half-replaced site is worse "
+        "than an old one"
+    )
+    assert build["group"] != deploy["group"], (
+        "sharing one group would let the build's cancellation reach a deploy "
+        "that is already replacing the site"
+    )
+    assert _needs(workflow, "deploy") == ["build"], (
+        "cancelling a build is only safe while nothing can deploy without one"
+    )
+    assert "if" not in _job(workflow, "deploy"), (
+        "the default condition is what refuses a cancelled build; a condition "
+        "here would have to keep refusing one, and silently might not"
     )
 
 
