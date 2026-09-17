@@ -27,7 +27,7 @@ from typing import Any, NamedTuple
 import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
-from idhazh import config
+from idhazh import chrome, config
 from idhazh import fetch as fetch_module
 from idhazh.contracts.article import ArticleStatus, TitleSource
 from idhazh.contracts.base import derive_url_key
@@ -888,18 +888,29 @@ def test_a_truncated_article_records_where_it_was_cut() -> None:
 
 def test_lines_shared_across_sibling_pages_read_as_chrome() -> None:
     """Comparing pages against each other beats any score computed from one page."""
-    seen = {"Subscribe", "All rights reserved", "Related stories"}
+    seen = {chrome.hash_line(line) for line in ("Subscribe", "All rights reserved")}
     assert boilerplate_ratio(["Subscribe", "All rights reserved", "Real sentence."], seen) > 0.6
 
 
+def test_a_line_matches_its_chrome_through_a_different_space() -> None:
+    """The reduction is the point: one template, two renderings, one hash.
+
+    A raw string comparison read `Subscribe  now` and `Subscribe\u00a0now` as two
+    different lines, so a host that renders its own furniture inconsistently was
+    invisible to this signal however many pages it printed.
+    """
+    seen = {chrome.hash_line("Subscribe now")}
+    assert boilerplate_ratio(["Subscribe\u00a0 NOW"], seen) == 1.0
+
+
 def test_an_article_is_not_mostly_chrome() -> None:
-    seen = {"Subscribe"}
+    seen = {chrome.hash_line("Subscribe")}
     lines = ["Subscribe", "A real sentence.", "Another real sentence.", "A third one."]
     assert boilerplate_ratio(lines, seen) < 0.3
 
 
 def test_an_empty_page_is_not_reported_as_chrome() -> None:
-    assert boilerplate_ratio([], {"Subscribe"}) == 0.0
+    assert boilerplate_ratio([], {chrome.hash_line("Subscribe")}) == 0.0
 
 
 def test_boilerplate_signal_publishes_by_default_and_can_reject() -> None:
@@ -912,9 +923,12 @@ def test_boilerplate_signal_publishes_by_default_and_can_reject() -> None:
         "</article></body></html>"
     )
     seen = {
-        "Shared navigation",
-        "This sentence has enough words to count as article prose today.",
-        "Another sentence has enough words to count as article prose today.",
+        chrome.hash_line(line)
+        for line in (
+            "Shared navigation",
+            "This sentence has enough words to count as article prose today.",
+            "Another sentence has enough words to count as article prose today.",
+        )
     }
     article = to_article(
         ITEM,

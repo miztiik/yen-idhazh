@@ -230,13 +230,23 @@ def test_the_console_fallback_bands_match_the_committed_ladder() -> None:
 
 
 def test_recorded_item_health_codes_never_count_against_a_source() -> None:
-    assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 19
+    assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 18
     assert FailureCode.NOT_ATTEMPTED in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.MODEL_UNREACHABLE in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.MODEL_REFUSED in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.NOT_PROSE in SOURCE_NEUTRAL_FAILURE_CODES
-    assert FailureCode.BOILERPLATE in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.HTTP_CLIENT_ERROR not in SOURCE_NEUTRAL_FAILURE_CODES
+
+
+def test_a_page_that_is_mostly_its_hosts_furniture_counts_against_that_host() -> None:
+    """`boilerplate` is the one code that has ever left the source-neutral set.
+
+    It was neutral because nothing fed the comparison it rests on, so the ratio
+    divided by an empty set and answered 0.0 on every page ever fetched.
+    `state/chrome.csv` gives that comparison its other side, and a host serving
+    a page that is mostly its own navigation is the source's doing.
+    """
+    assert FailureCode.BOILERPLATE not in SOURCE_NEUTRAL_FAILURE_CODES
 
 
 @pytest.mark.parametrize(
