@@ -1,4 +1,4 @@
-"""Merge the shards, run the eleven gates, and say which number failed.
+"""Merge the shards, run the gates this run can ask, and say which number failed.
 
 One stage, one module. `idhazh.cli` chooses which stage runs and holds no stage
 body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
@@ -30,11 +30,14 @@ from idhazh.stages.common import LOG
 def stage_qualify_decide(
     *, settings: config.Settings, date: str, job_budget_minutes: float, runner: str
 ) -> int:
-    """Merge the shards, run the eleven gates, and say which number failed.
+    """Merge the shards, run the gates this run can ask, and say which number failed.
 
     Returns non-zero when a gate fails. The verdict is an ESCALATE either way -
     adopting a model changes a persisted contract - so this writes the evidence
     and stops rather than switching anything itself.
+
+    Ten of the eleven are asked of every run; `determinism` is asked only at
+    temperature 0, and above it the run records `wording_spread` instead.
     """
     paths = sorted(common.QUALIFICATION_ROOT.glob("shard-*.json"))
     shards = [QualificationShard.read(path) for path in paths]
@@ -82,6 +85,11 @@ def stage_qualify_decide(
         gates=outcomes,
         diagnostics=[
             *qualify.stratification(frozen.items, summarize=settings.app.summarize),
+            *qualify.wording_spread(
+                frozen.observations,
+                inference=settings.models.summarize.inference,
+                repeats=frozen.repeats,
+            ),
             *qualify.diagnostics(frozen, evaluation=evaluation),
         ],
         qualified=not failed,
