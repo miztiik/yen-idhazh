@@ -45,10 +45,14 @@ The line is the top edge of the slot you stopped in.
 
 ```
 spend   = floor(total_different * discard_share)
-walk slots from the highest down, subtracting each slot's different_count
-stop at the first slot where the running total exceeds spend
+walk slots from the highest down, adding up each slot's different_count
+stop at the first slot where the running total EXCEEDS spend
 line    = that slot's bin_low + bin_width
 ```
+
+The walk accumulates and compares. It does not decrement a budget. The two
+phrasings land on different slots at the boundary, so there is one of them and
+this is it.
 
 In words: with the highest one percent of different-stories pairs set aside, the
 line lands just above the highest one that is left.
@@ -75,9 +79,11 @@ decoration. On the accumulated record it is worse: 2 percent of 123 merges
 permits 2 wrong merges per 28 days where the rule delivers 0 today.
 
 **Why not the maximum.** One wrong verdict on a genuine pair at 0.97 would put
-the line at 0.98 permanently. Setting aside the top one percent is what makes a
-single bad verdict unable to set the number, and it needs about 200 `NO`
-verdicts before it can set anything aside at all.
+the line at 0.971 permanently, because the line is the stopped slot's upper edge
+and `bin_width` is 0.001. Setting aside the top one percent is what makes a
+single bad verdict unable to set the number. `floor(total_different * 0.01)` is
+1 at 100 negatives and 2 at 200, so it needs 100 before it can set one aside and
+200 before it can set aside two, which is why `minimum_negatives` is 200.
 
 ### Step 2 - damp the move, in one direction only
 
@@ -118,9 +124,15 @@ happen is the quiet reinterpretation of old counts under new edges, and
 archiving stops that without stopping anybody.
 
 **What it costs, stated.** The line freezes at its last value until the new
-record refills, which at the measured rate is about three weeks. That cost is
-visible on the console the whole time, and the archived file means the old
-evidence is recoverable rather than destroyed.
+record refills, which is about ten days. The working: the band holds a measured
+median of about 33 pairs a day (2026-09-14, over 25 committed days), about 29 of
+those get two agreeing readings at the plan's own 89 percent agreement rate, and
+about three quarters of those read `NO`. That is about 22 negatives a day, so
+`minimum_negatives` of 200 is reached in about 9 days and `minimum_days` of 10
+is then the gate that binds. Only the band population is measured; the
+agreement rate and the `NO` share are estimates and row #7's first fortnight
+replaces them. That cost is visible on the console the whole time, and the
+archived file means the old evidence is recoverable rather than destroyed.
 
 ## Step 3 - clamp the daily step
 
@@ -186,10 +198,10 @@ of one independent observation. The test fires on a quiet week that means
 nothing, and it is circular - the smoothing exists to stop the line moving, then
 the test asks whether the line stopped moving.
 
-**What a person sees.** Nothing for two or three weeks while the record fills.
-Then the line moves a thousandth or two on some days. Then it stops, the run
-writes `settled`, and judging drops to weekly. If a later week moves it again it
-returns to daily on its own.
+**What a person sees.** Nothing for about ten days while the record fills - the
+gate that binds is `minimum_days`, which is 10. Then the line moves a thousandth
+or two on some days. Then it stops, the run writes `settled`, and judging drops
+to weekly. If a later week moves it again it returns to daily on its own.
 
 ## What replaces the hard floor
 
@@ -199,13 +211,23 @@ O2 removed it. Three things carry its job instead.
 | --- | --- |
 | The one-percent discard in step 1 | The line sits above almost every judged `NO` pair by construction |
 | The downward clamp | No single day can make a large move down |
-| The holdout report | The 22 hand-labelled groups are reported against every day, and a line below a human-marked pair is recorded loudly |
+| The holdout report | The 22 hand-labelled groups are reported against every day, and a day that merged a human-marked pair is recorded loudly |
 
 ## The daily sequence
 
 1. Score every cross-source pair inside the 36-hour window. Pure Python cosine
-   over vectors the pipeline already computed. Effectively free.
-2. Keep pairs scoring 0.88 and above. Median 18 a day, estimated worst day 40.
+   over vectors the pipeline already computed. **Not free, and this is a second
+   pass.** The same pass inside `assemble` measures a median 22.9 s on the
+   largest day with the window open, spread 22.4 to 34.2 s (developer machine,
+   Python 3.14.2, 2026-09-16, five alternating rounds). Row #5's stage runs it
+   again in its own process, so the day pays it twice: once to publish and once
+   to draw. About 23 seconds in a job bounded at 30 minutes is a cost to state
+   rather than a cost to fix.
+2. Keep pairs scoring 0.88 and above. Median about 33 a day in the band,
+   measured 2026-09-14 over 25 committed days, 9,353 items and 2,300,847
+   cross-source pairs. The worst day is a 731-item day against a 374-item
+   median, and pairs go as the square, so about 125: `(731/374)^2` is 3.82, and
+   3.82 x 33 is 126.
 3. If more than the cap, take every pair above the current line first, then fill
    by content hash order. Never sample the above-line population.
 4. Sort by `sha256(date, scorer stamp, both item ids)`. No seed - a seed is a
@@ -231,17 +253,17 @@ build.
 | 4 | Nested `state/` support: the inventory glob and the prune vocabulary | - | A | DONE `c0cb75f7` |
 | 5 | Score and select the borderline pairs, write the day shard | 2,3 | B | PENDING |
 | 6 | The judge: prompt, grammar, token-id assertion, order swap | 2,3 | B | PENDING |
-| 7 | Fold the day into the fixed-size record | 2,5 | B | PENDING |
+| 7 | Fold the day into the fixed-size record | 2,5,6 | B | PENDING |
 | 8 | Fit, damp, clamp, and write the day's row - the knob still unread | 3,7 | C | PENDING |
 | 9 | Assemble reads the fitted line. **First row that changes a published day** | 8 | C | PENDING |
 | 10 | The `LLM-JUDGES` workflow, 4 matrix legs, two commit calls | 5,6,7,8 | C | PENDING |
-| 11 | The sample sheet utility | 5,6 | C | PENDING |
-| 12 | Console: merge count and holdout - the two model-free panels | **panel A1: nothing** / panel A2: 8 | D | PENDING |
-| 13 | Console: the threshold chart, applied solid and proposed dotted | 8 | D | PENDING |
-| 14 | Console: judge self-agreement, and the record filling | 7 | D | PENDING |
-| 15 | Console: the confusion matrix | 7 | D | PENDING |
+| 11 | The sample sheet utility | 7,8,10 | C | PENDING |
+| 12 | Console: merge count and holdout - the two model-free panels | **panel A1: nothing** / panel A2: 2,8 | D | PENDING |
+| 13 | Console: the threshold chart, applied solid and proposed dotted | 8,12 | D | PENDING |
+| 14 | Console: judge self-agreement, and the record filling | 8,12 | D | PENDING |
+| 15 | Console: the confusion matrix | 7,8,12 | D | PENDING |
 | 16 | The design document, prose plus a mermaid diagram | 9 | D | PENDING |
-| 17 | Measure a judge call on a stock runner and replace the estimate | 6 | B | PENDING |
+| 17 | Measure a judge call on a stock runner and replace the estimate | 5,6 | B | PENDING |
 
 Row 1 dropped out of row 2's dependency list because it has landed. **Row 12's
 panel A1 depends on nothing in this plan** and reads the published day tree that
@@ -283,7 +305,7 @@ The base classes are in `backend/idhazh/contracts/base.py`.
 
 | Module | Class | Stem | Persisted as |
 | --- | --- | --- | --- |
-| `backend/idhazh/contracts/story_similarity_pair.py` | `StorySimilarityPair` | `story-similarity-pair` | one appended row of `state/story-similarity/scored-pairs/<YYYY>/<MM>/<DD>.csv` |
+| `backend/idhazh/contracts/story_similarity_pair.py` | `StorySimilarityPair` | `story-similarity-pair` | One appended row of `state/story-similarity/scored-pairs/<YYYY>/<MM>/<DD>.csv` once judged, and one row of `backend/var/judge/<date>/draw.csv` before that - the same shape with the verdict columns empty, which is what the `scored-but-not-yet-judged.json` fixture covers |
 | `backend/idhazh/contracts/story_similarity_distribution.py` | `StorySimilarityDistribution` | `story-similarity-distribution` | the whole of `state/story-similarity/score-distribution.json`, rewritten |
 | `backend/idhazh/contracts/fitted_similarity_threshold.py` | `FittedSimilarityThreshold` | `fitted-similarity-threshold` | one appended row of `state/story-similarity/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` |
 | `backend/idhazh/contracts/similarity_holdout_pair.py` | `SimilarityHoldoutPair` | `similarity-holdout-pair` | one row of `state/story-similarity/holdout-pairs.csv`, typed by a person |
@@ -311,7 +333,14 @@ declared at or below the row's own level.
 | `ScorerModelId` | `Literal` | `story_similarity_pair.py` | `"all-minilm-l6-v2-quantized"` |
 | `JudgeModelId` | `Literal` | `story_similarity_pair.py` | `"qwen3-5-9b-q4-k-m"`, `"qwen3-5-9b-q4-k-m-thinking"`, `"ornith-1-5-9b-q5-k-m"`, `"gemma-4-e4b-it-qat-ud-q4-k-xl"` |
 | `ClampKind` | `StrEnum` | `fitted_similarity_threshold.py` | `NONE = "none"`, `STEP = "step"`, `GUARD = "guard"` |
-| `HeldReason` | `StrEnum` | `fitted_similarity_threshold.py` | `NONE = "none"`, `SHEET_TOO_SMALL = "sheet_too_small"`, `INPUTS_CHANGED = "inputs_changed"`, `JUDGE_UNSTABLE = "judge_unstable"`, `JUDGE_UNCERTAIN = "judge_uncertain"` |
+| `HeldReason` | `StrEnum` | `fitted_similarity_threshold.py` | `NONE = "none"`, `SHEET_TOO_SMALL = "sheet_too_small"`, `INPUTS_CHANGED = "inputs_changed"`, `JUDGE_UNSTABLE = "judge_unstable"`, `JUDGE_UNCERTAIN = "judge_uncertain"`, `LEGS_MISSING = "legs_missing"` |
+
+`LEGS_MISSING` is the reason a day carries when a judging leg reported no verdict
+file at all. Row #7 refuses to fold a partial day, because the record counts a
+date once and a second fold of that date is refused, so folding three legs out
+of four would lose the fourth leg's verdicts for ever. The day's rows are still
+committed, the date is left out of `folded_dates`, and a re-dispatch folds the
+whole day cleanly.
 
 **The verdict words are upper case on the wire and that is deliberate.** The
 grammar in row #6 emits `YES`, `NO` and `UNCLEAR`, and the three differ at their
@@ -323,13 +352,24 @@ at their first character.
 **Two `Literal` sets, not one, because two different registries mint them.**
 `JudgeModelId` holds the four distinct `id` values in the five files under
 `config/models/` (`gemma-4-e4b-qat.json` and `gemma-4-e4b-qat-no-draft.json`
-carry the same id, so five files give four ids). Read each file's `id` key
-rather than its filename. `ScorerModelId` holds the embedder id, which is
-`EMBEDDER_ID` in `backend/idhazh/embed.py` and is not under `config/models/` at
-all - the scorer is the ONNX encoder that already writes the assist vectors, not
-a chat model. One set for both fields would let a row claim the encoder judged a
-pair. Adding a model to either set is then a schema diff, a changelog entry and
-a review, which is what owner decision O7 asked for.
+carry the same id, so five files give four ids). Read each file's `summarize.id`
+key, which is where the id sits, rather than the filename or a top-level key.
+`ScorerModelId` holds the embedder id, which is `EMBEDDER_ID` in
+`backend/idhazh/embed.py` and is not under `config/models/` at all - the scorer
+is the ONNX encoder that already writes the assist vectors, not a chat model.
+One set for both fields would let a row claim the encoder judged a pair. Adding
+a model to either set is then a schema diff, a changelog entry and a review,
+which is what owner decision O7 asked for.
+
+**`JudgeModelId` is wider than any one run's writer, and that is the point.**
+Row #10 forbids a run from naming any model other than `models.summarize`, so
+three of the four literals can never appear in a row this year. They are there
+because a row keeps the model that judged it for as long as the file exists: a
+literal holding only today's configured id would refuse every row an earlier
+model wrote the moment the config moved, which is a contract break of exactly
+the kind CLAUDE.md section 11 names. The set is the registry, and the registry
+is the five files under `config/models/`. Adding or removing one of those files
+is the schema diff O7 asked for; row #10's rule is what keeps one run honest.
 
 `ScorerModelId` cannot import `embed.py`, so a test holds the two together -
 see the test list below.
@@ -351,23 +391,33 @@ One judged pair. Declaration order is CSV column order, because
 | 8 | `composite_score` | `float` | required | `ge=0.0, le=1.0` |
 | 9 | `cosine` | `float` | required | `ge=0.0, le=1.0` |
 | 10 | `key_point` | `float` | required | `ge=0.0, le=1.0` |
-| 11 | `scorer_model` | `ScorerModelId` | required | - |
-| 12 | `cosine_weight` | `float` | required | `ge=0.0, le=1.0` |
-| 13 | `key_point_weight` | `float` | required | `ge=0.0, le=1.0` |
-| 14 | `verdict` | `SameStoryVerdict \| None` | `None` | - |
-| 15 | `verdict_swapped` | `SameStoryVerdict \| None` | `None` | - |
-| 16 | `usable` | `bool` | `False` | - |
-| 17 | `first_token_margin` | `float \| None` | `None` | `ge=0.0, le=1.0` |
-| 18 | `judge_model` | `JudgeModelId \| None` | `None` | - |
-| 19 | `prompt_digest` | `Sha256 \| None` | `None` | - |
-| 20 | `grammar_digest` | `Sha256 \| None` | `None` | - |
-| 21 | `decode_seconds` | `float \| None` | `None` | `ge=0.0` |
+| 11 | `headline` | `bool` | required | - |
+| 12 | `scorer_model` | `ScorerModelId` | required | - |
+| 13 | `cosine_weight` | `float` | required | `ge=0.0, le=1.0` |
+| 14 | `key_point_weight` | `float` | required | `ge=0.0, le=1.0` |
+| 15 | `verdict` | `SameStoryVerdict \| None` | `None` | - |
+| 16 | `verdict_swapped` | `SameStoryVerdict \| None` | `None` | - |
+| 17 | `usable` | `bool` | `False` | - |
+| 18 | `first_token_margin` | `float \| None` | `None` | `ge=0.0, le=1.0` |
+| 19 | `judge_model` | `JudgeModelId \| None` | `None` | - |
+| 20 | `prompt_digest` | `Sha256 \| None` | `None` | - |
+| 21 | `grammar_digest` | `Sha256 \| None` | `None` | - |
+| 22 | `decode_seconds` | `float \| None` | `None` | `ge=0.0` |
 
 `shard` carries no upper bound on purpose. The shard count is a knob
 (`shards`, row #3), so a ceiling here would be a second copy of it that can
 disagree with the first (Guardrail #6).
 
-Fields 14 to 21 are nullable because row #5 writes the row before anything has
+**`headline` exists because the score is not always the weighted sum.**
+`assemble.py` sets `score = 1.0` outright when the two items share a headline,
+and takes the weighted sum otherwise. Without a column saying which branch ran,
+a headline-matched pair is a row whose score and whose terms disagree, and the
+validator below would refuse it. The published days measure those pairs at a
+minimum cosine of 0.7298, a median of 0.9177 and a maximum of 1.0000 over 53
+pairs (2026-09-14), so this is the ordinary case rather than a corner: a third
+of them score below 0.94 on the cosine and merge anyway.
+
+Fields 15 to 22 are nullable because row #5 writes the row before anything has
 judged it. A row with no verdict is the ordinary state of the file for the
 minutes between the scoring stage and the judging legs.
 
@@ -385,6 +435,7 @@ line.
 | `composite_score` | `The weighted score the same-story pass would have given this pair. This is the number the fitted line is compared against, and the judge never sees it.` |
 | `cosine` | `The cosine between the two vectors the day already carries. Recorded raw so a later reweighting can be computed from the row rather than re-run.` |
 | `key_point` | `The share of key-point words the two items have in common, on the same 0 to 1 scale. Recorded raw for the same reason as the cosine.` |
+| `headline` | `Whether the two items shared a headline, which makes the score 1.0 outright instead of the weighted sum. On the row because the two paths give one number by two rules, and a reader cannot tell them apart afterwards.` |
 | `scorer_model` | `Which encoder produced the two vectors. A Literal rather than a string, so swapping the encoder is a schema diff and a changelog entry rather than a silent change of scale.` |
 | `cosine_weight` | `What the cosine was worth when this row was scored, read from the committed config at scoring time. On the row rather than in a file a reader has to go and find, so a window spanning a config edit is still readable.` |
 | `key_point_weight` | `What the key-point term was worth. Same reason as the cosine weight.` |
@@ -395,7 +446,7 @@ line.
 | `judge_model` | `Which model judged. A Literal for the same reason the scorer is one.` |
 | `prompt_digest` | `sha256 of the rendered system turn. The prompt is content, so a digest is the only honest shape for it.` |
 | `grammar_digest` | `sha256 of the grammar handed to the decoder. A grammar edit changes what the three words can be, so it is part of what the verdict means.` |
-| `decode_seconds` | `Wall clock for both calls on this pair. Row 17 replaces the plan's estimated 85 seconds a call with what this column measures.` |
+| `decode_seconds` | `Wall clock for both calls on this pair. A per-pair reading, so a day's spread is readable off the day file; the leg bound is sized off row 17's own run instead.` |
 
 **Validators.** One `@model_validator(mode="after")` per rule, each named for
 what it refuses.
@@ -406,12 +457,16 @@ what it refuses.
    The same rule `derive_url_key` states: identity is recomputed on read, never
    trusted from the payload. Without the ordering, one pair gets two rows and
    every count is out by a factor that depends on the day.
-2. `_the_score_is_the_weighted_sum_of_the_terms_on_the_row` - refuses a row
-   where `abs(composite_score - cosine * cosine_weight - key_point *
-   key_point_weight) > SCORE_TOLERANCE`, with
-   `SCORE_TOLERANCE: Final = 1e-6` declared in the module. This is the rule
-   `CounterfactualScoreRow` uses and it catches the same failure: a row whose
-   score and whose weights came from two different places reads like an answer.
+2. `_the_score_is_the_rule_the_scorer_actually_applied` - the score has two
+   legal forms and `headline` says which one this row took. When `headline` is
+   true the rule is `abs(composite_score - 1.0) <= SCORE_TOLERANCE`; otherwise
+   it is `abs(composite_score - cosine * cosine_weight - key_point *
+   key_point_weight) <= SCORE_TOLERANCE`. `SCORE_TOLERANCE: Final = 1e-6` is
+   declared in the module. One rule for both branches would refuse every
+   headline-matched pair, and `assemble.py` takes that branch on 53 of the pairs
+   the published days hold. This is the shape `CounterfactualScoreRow` uses and
+   it catches the same failure: a row whose score and whose weights came from
+   two different places reads like an answer.
 3. `_a_verdict_arrives_with_the_judge_that_produced_it` - `judge_model`,
    `prompt_digest` and `grammar_digest` are all set or all unset; a verdict with
    no judge model is refused; `usable` is true only when both verdicts are
@@ -429,12 +484,13 @@ back as `None` by asking the field rather than by listing the nullable columns:
 for name, field in cls.model_fields.items():
     if payload[name] == "" and field.default is None:
         payload[name] = None
-payload["usable"] = row.get("usable", "") == "True"
+for name in ("headline", "usable"):
+    payload[name] = row.get(name, "") == "True"
 ```
 
 A hand-written roll of the nullable columns is one that the next nullable column
-gets left out of. `usable` needs the explicit line because `bool` has a default
-of `False` rather than `None`.
+gets left out of. The two bools need their own line because a `bool` field has
+no `None` default for the loop above to key on.
 
 **Module function.**
 
@@ -445,8 +501,11 @@ def scorer_stamp(*, scorer_model, cosine_weight, key_point_weight) -> str:
 
 It returns `derive_text_digest(canonical_json({...}))` over those three fields.
 Row #5's ordering hash needs a single scorer value and so does the archive
-filename in row #7. Nothing else calls it, so there is no matching
-`judge_stamp()` - the judge's three columns are always read as columns.
+filename in row #7. `judge_stamp(*, judge_model, prompt_digest, grammar_digest)`
+sits beside it and has the same shape, because row #7's archive filename needs
+one value for the judge as well. Neither digest replaces the columns: the
+judge's three columns are read as columns everywhere a reader wants to know
+which model said what.
 
 **Changelog entry.**
 
@@ -461,8 +520,11 @@ ChangelogEntry(
 **Fixtures**, under `tests/fixtures/contracts/story-similarity-pair/`:
 
 - `judged-the-same-in-both-orders.json` - every column filled, `usable` true.
-- `scored-but-not-yet-judged.json` - fields 14 to 21 absent, which is the row
+- `scored-but-not-yet-judged.json` - fields 15 to 22 absent, which is the row
   row #5 writes and the one the optional columns exist for.
+- `a-headline-match-scores-one.json` - `headline` true, `composite_score` 1.0
+  and a cosine of 0.7298, which is the lowest such pair the published days hold.
+  Without it the score validator's headline branch has no fixture.
 
 ### `StorySimilarityDistribution`
 
@@ -525,9 +587,13 @@ Descriptions to paste:
 **Validators.** Three, all `mode="after"`.
 
 1. `_the_band_divides_into_whole_slots` - `(band_high - band_low) / bin_width`
-   is a whole number within `GRID_TOLERANCE: Final = 1e-9`. A band that does not
-   divide leaves a part-slot at one end whose counts mean a different thing from
-   every other slot's.
+   is a whole number within `GRID_TOLERANCE: Final = 1e-9`, declared at module
+   level in `story_similarity_distribution.py`. **That declaration is the only
+   one.** Row #3's config block needs the same rule, and a contract module may
+   import another, so `knobs/placement.py` imports this constant rather than
+   minting a second. Two constants for one rule drift the first time somebody
+   loosens one. A band that does not divide leaves a part-slot at one end whose
+   counts mean a different thing from every other slot's.
 2. `_the_slot_count_matches_the_band` - `len(self.slots) ==
    round((self.band_high - self.band_low) / self.bin_width)`, and slot `i`'s
    `bin_low` equals `band_low + i * bin_width` within `GRID_TOLERANCE`.
@@ -590,8 +656,8 @@ nothing happened is what makes a silently broken judge visible.
 | 3 | `run_id` | `RunId` | required | - |
 | 4 | `record_stamp` | `Sha256` | required | - |
 | 5 | `previous` | `float` | required | `ge=0.0, le=1.0` |
-| 6 | `proposed` | `float` | required | `ge=0.0, le=1.0` |
-| 7 | `after_damping` | `float` | required | `ge=0.0, le=1.0` |
+| 6 | `proposed` | `float \| None` | `None` | `ge=0.0, le=1.0` |
+| 7 | `after_damping` | `float \| None` | `None` | `ge=0.0, le=1.0` |
 | 8 | `applied` | `float` | required | `ge=0.0, le=1.0` |
 | 9 | `clamp_kind` | `ClampKind` | `ClampKind.NONE` | - |
 | 10 | `clamp_movement` | `float` | `0.0` | `ge=0.0, le=1.0` |
@@ -601,8 +667,8 @@ nothing happened is what makes a silently broken judge visible.
 | 14 | `smoothing_weight` | `float` | required | `gt=0.0, le=1.0` |
 | 15 | `max_down_step` | `float` | required | `gt=0.0` |
 | 16 | `step_change_multiple` | `float` | required | `gt=1.0` |
-| 17 | `daily_shift` | `float` | required | `ge=0.0, le=1.0` |
-| 18 | `typical_shift` | `float` | required | `ge=0.0, le=1.0` |
+| 17 | `daily_shift` | `float \| None` | `None` | `ge=0.0, le=1.0` |
+| 18 | `typical_shift` | `float \| None` | `None` | `ge=0.0, le=1.0` |
 | 19 | `pairs_in_band` | `int` | required | `ge=0` |
 | 20 | `pairs_judged` | `int` | required | `ge=0` |
 | 21 | `pairs_usable` | `int` | required | `ge=0` |
@@ -611,17 +677,25 @@ nothing happened is what makes a silently broken judge visible.
 | 24 | `negatives_on_record` | `int` | required | `ge=0` |
 | 25 | `above_line_on_record` | `int` | required | `ge=0` |
 | 26 | `days_on_record` | `int` | required | `ge=0` |
-| 27 | `holdout_violations` | `int` | required | `ge=0` |
-| 28 | `holdout_margin` | `float` | required | `ge=-1.0, le=1.0` |
-| 29 | `merge_count` | `int` | required | `ge=0` |
-| 30 | `scorer_model` | `ScorerModelId` | required | - |
-| 31 | `cosine_weight` | `float` | required | `ge=0.0, le=1.0` |
-| 32 | `key_point_weight` | `float` | required | `ge=0.0, le=1.0` |
-| 33 | `judge_model` | `JudgeModelId \| None` | `None` | - |
-| 34 | `prompt_digest` | `Sha256 \| None` | `None` | - |
-| 35 | `grammar_digest` | `Sha256 \| None` | `None` | - |
+| 27 | `merge_count` | `int` | required | `ge=0` |
+| 28 | `scorer_model` | `ScorerModelId` | required | - |
+| 29 | `cosine_weight` | `float` | required | `ge=0.0, le=1.0` |
+| 30 | `key_point_weight` | `float` | required | `ge=0.0, le=1.0` |
+| 31 | `judge_model` | `JudgeModelId \| None` | `None` | - |
+| 32 | `prompt_digest` | `Sha256 \| None` | `None` | - |
+| 33 | `grammar_digest` | `Sha256 \| None` | `None` | - |
 
-Four differences from the plan's own list, each one a correction the plan owes
+**Four columns are nullable because the stage cannot always fill them, and an
+empty cell is the honest answer.** `proposed` and `after_damping` are empty on
+any held day: no fit ran, so there is no proposal and nothing to damp.
+`daily_shift` is empty when either arm of its subtraction is empty - the fit of
+the record without today returns nothing when that record holds no `NO`
+verdicts. `typical_shift` is empty below `step_change_window_rows` written rows,
+because there is no median to take. A required float would force a 0.0 into
+every one of those cells, and 0.0 is a different and false statement: it says
+the fit ran and moved nothing.
+
+Five differences from the plan's own list, each one a correction the plan owes
 back:
 
 | What the plan said | What lands | Why |
@@ -630,6 +704,7 @@ back:
 | `alpha` | `smoothing_weight` | Two names for one number is the drift a closed vocabulary exists to stop. The knob is `smoothing_weight`, so the column is too |
 | `held_reason = step_change` | `clamp_kind = guard` | Two columns saying one thing always drift. `held_reason` says why no fit ran; `clamp_kind` says what shaped a fit that did run. Row #8's sentence needs the one-line correction |
 | The six stamp columns as `scorer_stamp` and `judge_stamp` | Six named columns | A digest is not readable. The word "stamp" in the plan's prose means the group; `scorer_stamp()` is the digest of that group and is used only where one value is needed |
+| `holdout_violations` and `holdout_margin` as columns | No holdout columns at all | The fit has no way to compute them. Scoring a hand-marked pair needs the two items' vectors, and those sit on the published days the pair ran on rather than in the record. Row #12's panel reads the holdout file and the days it names, which is a bounded read it declares; the fit stays a function of the record alone |
 
 `max_down_step` carries no ceiling on the row because the ceiling is a config
 rule and lives in row #3. A row records what the run used; the knob decides what
@@ -641,23 +716,21 @@ Descriptions to paste, for the fields whose meaning is not in their name:
 | --- | --- |
 | `record_stamp` | `Which record this fit read: a digest of the band, the slot width and both model stamps. A later reader can tell two rows apart that were fitted either side of an archive.` |
 | `previous` | `The line that was applied yesterday. Where today started.` |
-| `proposed` | `What step 1 read off the record before damping or clamping. The raw evidence.` |
-| `after_damping` | `The proposal after step 2. Equal to the proposal on a rise, because damping is downward only.` |
+| `proposed` | `What step 1 read off the record before damping or clamping. The raw evidence. Empty on a held day, because no fit ran and there is nothing to report.` |
+| `after_damping` | `The proposal after step 2. Equal to the proposal on a rise, because damping is downward only. Empty whenever the proposal is, since there is nothing to damp.` |
 | `applied` | `The line this run wrote. What assemble will read once row 9 lands.` |
 | `clamp_kind` | `What shaped the applied value. none is the damped proposal as it stood, step is the daily downward clamp, guard is the step-change hold.` |
 | `clamp_movement` | `How far the clamp held the line back, always at or above zero because there is no upward clamp. Zero when nothing clamped.` |
 | `held_reason` | `Why no fit ran today. none means one ran. A held row carries the previous line unchanged and every count that explains the hold.` |
 | `settled` | `Whether a whole week of fresh judgements stopped moving the answer. Judging drops to weekly while this is true and returns to daily on its own.` |
-| `daily_shift` | `How far today alone moved the answer: the fit with today against the fit without it.` |
-| `typical_shift` | `The median daily shift over the last fourteen written rows. A median rather than a sigma, because the daily shift shrinks as 1/days and is not normally distributed.` |
+| `daily_shift` | `How far today alone moved the answer: the fit with today against the fit without it. Empty when either fit has no NO verdicts to walk, because a subtraction with a missing arm is not a zero.` |
+| `typical_shift` | `The median daily shift over the last fourteen written rows. Empty until fourteen exist, which is how a reader sees the guard is still filling. A median rather than a sigma, because the daily shift shrinks as 1/days and is not normally distributed.` |
 | `pairs_in_band` | `How many pairs scored at or above band_low before the budget was applied. A day that hit the cap reads as partial rather than as a quiet truncation.` |
 | `pairs_judged` | `How many pairs a judging leg actually read.` |
 | `pairs_usable` | `How many of those got two agreeing readings. Only these were folded.` |
 | `negatives_on_record` | `Agreed NO readings the whole record holds. One of the three gates, and the one that takes longest to fill.` |
 | `above_line_on_record` | `Judged pairs at or above the applied line. These are the entire precision measurement, so they are never sampled away.` |
 | `days_on_record` | `How many dates the record has folded.` |
-| `holdout_violations` | `Hand-marked two-story pairs the applied line would merge. Above zero is loud.` |
-| `holdout_margin` | `The gap between the applied line and the highest-scoring pair a person marked as two stories. Negative means the line is below it, which is what a violation looks like as a number.` |
 | `merge_count` | `How many groups the day published. The one number in this feature that involves no model.` |
 
 **Validators.** Two, both `mode="after"`.
@@ -668,8 +741,12 @@ Descriptions to paste, for the fields whose meaning is not in their name:
 2. `_the_words_agree_with_the_numbers`, with
    `LINE_TOLERANCE: Final = 1e-9`:
    - `held_reason is not NONE` requires `clamp_kind is NONE`, `applied ==
-     previous` and `clamp_movement == 0.0`. Nothing was fitted, so nothing could
-     be clamped.
+     previous`, `clamp_movement == 0.0`, `proposed is None` and
+     `after_damping is None`. Nothing was fitted, so nothing could be proposed,
+     damped or clamped.
+   - `held_reason is NONE` requires `proposed is not None` and
+     `after_damping is not None`. A row that says a fit ran carries what the
+     fit read.
    - `clamp_kind is GUARD` requires `applied == previous`.
    - `clamp_kind is NONE` requires `clamp_movement == 0.0`; otherwise
      `clamp_movement == applied - after_damping`.
@@ -694,8 +771,10 @@ ChangelogEntry(
 - `the-clamp-held-a-fall-back-to-the-step.json` - `clamp_kind` `step`,
   `clamp_movement` above zero, `held_reason` `none`.
 - `the-record-is-too-small-to-fit-on.json` - `held_reason` `sheet_too_small`,
-  `applied == previous`, all three record counts below the gates, the judge
-  columns null.
+  `applied == previous`, `proposed`, `after_damping`, `daily_shift` and
+  `typical_shift` all empty, all three record counts below the gates, the judge
+  columns null. This is the row every day of the first fortnight writes, so it
+  is the fixture the read side is proved against.
 
 ### `SimilarityHoldoutPair`
 
@@ -706,11 +785,13 @@ One pair a person marked by hand. **No run ever writes this file.**
 | 1 | `version` | `SchemaVersion` | from `Contract` | date-stamp |
 | 2 | `left_url` | `Url` | required | - |
 | 3 | `right_url` | `Url` | required | - |
-| 4 | `left_title` | `OneLine` | required | one printable line, 200 max |
-| 5 | `right_title` | `OneLine` | required | one printable line, 200 max |
-| 6 | `same_story` | `bool` | required | - |
-| 7 | `marked_on` | `DateStamp` | required | - |
-| 8 | `note` | `OneLine` | required | one printable line, 200 max |
+| 4 | `left_date` | `DateStamp` | required | - |
+| 5 | `right_date` | `DateStamp` | required | - |
+| 6 | `left_title` | `OneLine` | required | one printable line, 200 max |
+| 7 | `right_title` | `OneLine` | required | one printable line, 200 max |
+| 8 | `same_story` | `bool` | required | - |
+| 9 | `marked_on` | `DateStamp` | required | - |
+| 10 | `note` | `OneLine` | required | one printable line, 200 max |
 
 `OneLine` is imported from `idhazh.contracts.item_health`. It is a printable
 one-line column that folds a value into its own shape rather than refusing it,
@@ -724,9 +805,16 @@ types a sha256. `left_url_key`, `right_url_key` and `pair_key` are properties
 that call `derive_url_key` on read, exactly as `derive_url_key`'s own docstring
 requires: identity is recomputed, never trusted.
 
-**The row carries no score.** A score depends on the weights, so a stored one
-rots the first time a weight moves. Row #12's panel computes it from the day's
-vectors at report time.
+**The row carries no score, and it carries the two days instead.** A score
+depends on the weights, so a stored one rots the first time a weight moves. The
+two published dates do not rot: an article ran on the day it ran. They are on
+the row because the only thing that can score this pair is something holding
+both items' vectors, and the vectors live in the published day payload under
+`DigestEmbeddings.vectors`. Row #12's panel opens those two named days and no
+others, which is what keeps the read bounded at two files a marked pair
+(Guardrail #12). Without the dates the only way to find the two articles is to
+walk the published tree, and that walk grows with every day the pipeline
+publishes.
 
 **`same_story` is a bool and not the verdict enum.** A person marking a holdout
 pair is definite. An unclear pair is not a holdout pair; it is a pair to leave
@@ -738,6 +826,8 @@ Descriptions to paste:
 | --- | --- |
 | `left_url` | `One of the two articles, as a canonical URL. A person types this file, so it carries addresses rather than digests; the keys are recomputed on read.` |
 | `right_url` | `The other article.` |
+| `left_date` | `The digest date the left article was published on. On the row so a reader of the holdout report opens two named day files rather than searching the published tree for an address.` |
+| `right_date` | `The digest date the right article was published on. The same day as the left one where the pair could ever have merged, and a different one where the pair straddled midnight.` |
 | `left_title` | `The headline, so a person reading the holdout panel can tell which pair a mark belongs to.` |
 | `right_title` | `The other headline.` |
 | `same_story` | `True where a person judged the two to be one event. The false rows are the load-bearing ones: the line has to stay above every one of them.` |
@@ -790,12 +880,23 @@ called `ok.json` proves nothing to the next reader.
 
 ### What ships committed, and why it ships in this commit
 
-Two files, both under `state/story-similarity/`.
+Five files, all under `state/story-similarity/`. **The rule that decides the
+list is one sentence:** `.github/scripts/commit-and-push.sh` runs `git add "$@"`
+under `set -euo pipefail`, and `git add` on a path the checkout does not hold
+exits non-zero, which aborts the whole commit step and loses every ledger staged
+beside it. Row #7's two commit calls name four paths between them, so all four
+have to exist in a fresh clone before any run has written anything. That is the
+same rule `state/counterfactual-scores/` already ships a header-only day file
+for, and `backend/tests/workflows/test_staged_paths.py::test_every_path_the_plan_stages_exists_in_a_fresh_checkout`
+is the test that records it.
 
 | File | What it holds | Why now |
 | --- | --- | --- |
-| `state/story-similarity/holdout-pairs.csv` | The header row and nothing else: `",".join(SimilarityHoldoutPair.csv_columns()) + "\n"` | `.github/scripts/commit-and-push.sh` runs `git add "$@"` under `set -euo pipefail`. Row #10's workflow stages one path, `state/story-similarity`. A path that is not in the checkout aborts the whole commit step and loses every ledger staged beside it |
-| `state/story-similarity/score-distribution.json` | A record with `band_low` 0.88, `band_high` 1.00, `bin_width` 0.001, 120 zeroed slots, empty `folded_dates`, all six stamp fields null | Row #7 then only ever reads an existing record. Without it the fold has to mint a record's band from config, which is a second place the band is decided |
+| `state/story-similarity/holdout-pairs.csv` | The header row and nothing else: `",".join(SimilarityHoldoutPair.csv_columns()) + "\n"` | It is the file a person edits, so it has to exist before anybody can add a row to it. No run ever writes it and no commit call stages it |
+| `state/story-similarity/score-distribution.json` | A record with `band_low` 0.88, `band_high` 1.00, `bin_width` 0.001, 120 zeroed slots, empty `folded_dates`, all six stamp fields null | Call 2 names it, and row #7 then only ever reads an existing record. Without it the fold has to mint a record's band from config, which is a second place the band is decided |
+| `state/story-similarity/scored-pairs/2026/09/18.csv` | The header row and nothing else: `",".join(StorySimilarityPair.csv_columns()) + "\n"` | Call 1 names the tree. A day tree with no committed file is a `git add` that aborts on the first run |
+| `state/story-similarity/fitted-thresholds/2026/09/18.csv` | The header row and nothing else: `",".join(FittedSimilarityThreshold.csv_columns()) + "\n"` | Call 1 names this tree too, for the same reason |
+| `state/story-similarity/archive/.gitkeep` | Nothing | Call 2 names the archive directory, and an archive is written only on the rare day an input changed. Without the keep file the record push aborts on every ordinary day - which is the majority of days |
 
 Mint the seed the same way a fixture is minted, so the contract's own validators
 make it correct by construction:
@@ -809,13 +910,17 @@ Path('state/story-similarity/score-distribution.json').write_text(r.to_json(), e
 
 120 slots, because `(1.00 - 0.88) / 0.001` is 120.
 
-**The two day trees ship nothing.** `state/story-similarity/scored-pairs/` and
-`state/story-similarity/fitted-thresholds/` are day trees, and a day tree cannot
-carry a header of its own and does not need one: the commit step stages
-`state/story-similarity` whole and reaches a file a run created without ever
-naming it. That is the ruling
-`test_ledger.py::test_the_cleanup_record_is_a_day_tree_and_needs_no_seeded_header`
-already records.
+**The two day-tree seeds carry a header and no rows**, exactly as
+`state/counterfactual-scores/` does. Write them with
+`",".join(<Model>.csv_columns()) + "\n"` and `newline="\n"`, never by hand, so a
+column added later cannot leave the seed behind.
+
+**The holdout file is edited by a person and pushed by a person.** No commit
+call stages it, because no run writes it: a run that staged a file only a person
+edits would commit a half-finished mark, and a `merge=text` file staged by a job
+is a conflict a job cannot resolve. A hand-marked pair reaches the published
+console through an ordinary pull request, which is also where the mark gets
+reviewed.
 
 `backend/utilities/check_seeded_stores.py` gains one entry in
 `seeded_stores()`:
@@ -833,10 +938,11 @@ Store(
 asserts the declared mapping equals exactly two entries today. Add the third to
 that assertion.
 
-The JSON seed is deliberately not in the audit. `Store` carries a CSV header,
-and a JSON record has no columns. The commit step cannot abort on its absence
-either, because the holdout CSV in the same directory already makes the path
-exist.
+The JSON seed is deliberately not in the audit. `Store` carries a CSV header and
+a JSON record has no columns, so there is nothing for the audit to compare. Its
+presence is still load-bearing: call 2 names the file itself, so a checkout
+without it aborts the record push on the first run. This commit is what protects
+it, not the audit.
 
 ### The path helpers, in `backend/idhazh/ledger.py`
 
@@ -851,13 +957,17 @@ SIMILARITY_HOLDOUT_FILENAME: Final = "holdout-pairs.csv"
 SCORE_DISTRIBUTION_FILENAME: Final = "score-distribution.json"
 ```
 
-Six functions, each returning the layout the tables at the top of this row name:
-`scored_pairs_relpath(date)`, `scored_pairs_path(state_dir, date)`,
+Seven functions, each returning the layout the tables at the top of this row
+name: `scored_pairs_relpath(date)`, `scored_pairs_path(state_dir, date)`,
 `fitted_thresholds_relpath(date)`, `fitted_thresholds_path(state_dir, date)`,
 `similarity_holdout_relpath()`, `similarity_holdout_path(state_dir)`,
 `score_distribution_path(state_dir)`. Copy the body shape from
 `counterfactual_scores_path`, which is
 `state_dir / ... / date[:4] / date[5:7] / f"{date[8:10]}.csv"`.
+
+**These are the only declarations of any of them.** Rows #7 and #8 add their
+`append_*` and `load_*` functions beside these and call these for the path;
+neither row mints a second dirname constant or a second path helper.
 
 No `append_*` function lands in this row. Nothing writes yet, and an append
 function with no caller is a function nobody can test against a real writer.
@@ -870,7 +980,7 @@ each entry says what makes two of a file's rows the same record.
 | Store | In `keyed_paths` now? | Why |
 | --- | --- | --- |
 | `fitted-thresholds/<Y>/<M>/<D>.csv` | **Yes** | `STORY_SIMILARITY_THRESHOLD_KEY: Final = ("date", "run_id")`. One run fits once. A second row under that key is a second attempt at one execution, and the two agree: the record refuses a second fold of the same date, so a re-run reads the same record and computes the same numbers. Registered with the shape rather than with its first writer, exactly as `state/feed-retirements.csv` was, because the settlement runs over whatever it finds and a missing file settles to nothing |
-| `scored-pairs/<Y>/<M>/<D>.csv` | **No** | Its repeats CAN disagree. Row #5 writes a row with no verdict; row #6 has still to settle how a verdict reaches the file. A first-row-wins settlement over a key whose repeats disagree would silently drop the row carrying the verdict, and the append filter returns a count rather than a fault. **Row #6 registers it**, with `("date", "run_id", "pair_key")` and whatever preference rule its write path needs - the same position `FEED_HEALTH_KEY` and `CHROME_LINE_KEY` are in |
+| `scored-pairs/<Y>/<M>/<D>.csv` | **No** | Its repeats CAN disagree. Row #5 writes a row with no verdict and a judging leg later writes the same pair with one, so a first-row-wins settlement over a key whose repeats disagree would silently drop the row carrying the verdict, and the append filter returns a count rather than a fault. **Row #7 registers it** in `keyed_paths`, with `("date", "run_id", "pair_key")` and the preference rule its write path needs, because row #7 is where the write path first exists - the same position `FEED_HEALTH_KEY` and `CHROME_LINE_KEY` are in. `run_id` is in the key because two runs of one day judge the same pair against different articles and `StorySimilarityPair.run_id` says both rows stay; drop it and the settlement keeps only the later run |
 | `score-distribution.json` | **No** | It is not a CSV. `merge=union` covers `state/**/*.csv` only, so two racing pushes conflict for real here. That is why row #7 commits it through `REFRESH_PATHS` and a `REGENERATE_COMMAND` instead of relying on a settlement |
 | `holdout-pairs.csv` | **No** | No run writes it. A settlement exists to clean up after two runs that both appended, and there is only ever one writer here: a person |
 
@@ -938,12 +1048,15 @@ module scope.
 | `test_the_scorer_literal_names_the_encoder_the_pipeline_actually_runs` | `idhazh.embed.EMBEDDER_ID in get_args(ScorerModelId)`. The contract cannot import `embed`, so this is the only thing holding the two together |
 | `test_the_judge_literal_names_every_model_this_repo_ships` | `set(get_args(JudgeModelId))` equals the set of `id` values in the JSON files under `config/models/`. Reads five committed config files, which is fixed-size and is a two-declarations-agree question, not a data-hygiene one |
 | `test_a_pair_named_by_the_wrong_digest_is_refused` | Build a valid pair, change `pair_key` by one character, expect `ValidationError` |
-| `test_a_pair_whose_score_is_not_its_weighted_terms_is_refused` | Move `composite_score` by 0.01 and expect the refusal. The bite proof: the unmoved row validates |
+| `test_a_pair_whose_score_is_not_its_weighted_terms_is_refused` | With `headline` false, move `composite_score` by 0.01 and expect the refusal. The bite proof: the unmoved row validates |
+| `test_a_headline_matched_pair_scores_one_and_is_accepted` | With `headline` true, `composite_score` 1.0 and a cosine of 0.7298 validates, and the same row with `headline` false raises. Without this the contract refuses the branch `assemble.py` takes on 53 committed pairs |
 | `test_a_verdict_with_no_judge_named_is_refused` | Set `verdict` and leave `judge_model` null |
 | `test_a_record_whose_slot_count_disagrees_with_its_band_is_refused` | 19 slots for a 20-slot band. Then 20 slots passes. This is the test that would have caught a class-level `min_length` |
 | `test_a_record_whose_slots_are_off_the_grid_is_refused` | Move one slot's `bin_low` by half a width |
 | `test_a_date_already_folded_is_refused` | `folded_dates` carrying one date twice |
 | `test_a_held_row_says_nothing_was_clamped` | `held_reason=sheet_too_small` with `clamp_kind=step` raises; with `clamp_kind=none` and `applied == previous` it validates |
+| `test_a_held_row_carries_no_proposal` | `held_reason=sheet_too_small` with `proposed` set raises, and with `proposed` and `after_damping` empty it validates. The other way round too: `held_reason=none` with `proposed` empty raises |
+| `test_a_row_from_the_first_fortnight_has_no_typical_shift` | `typical_shift` empty and `daily_shift` empty both validate. This is the row every day of the first fortnight writes, and a required float would have made it unbuildable |
 | `test_the_clamp_movement_is_what_the_clamp_held_back` | `clamp_kind=step` with `clamp_movement` not equal to `applied - after_damping` raises |
 | `test_a_holdout_row_recomputes_its_own_keys` | Two URLs in, and `pair_key` equals the digest of the two sorted key values |
 | `test_every_row_shape_survives_the_ledger_round_trip` | For each of the three CSV shapes: `from_csv_row(row.csv_row()) == row`, including a row with every optional column empty |
@@ -967,8 +1080,13 @@ Update in the same commit:
 
 `docs/concepts/growing-reads.md` and `docs/architecture/publishing/retention.md`
 gain nothing here. Nothing reads these stores and nothing prunes them yet, so a
-row in either page would describe a read that does not exist. They belong to
-rows #7 and #8.
+row in either page would describe a read that does not exist. Six entries arrive
+later and each one is owed by the row that opens the read or writes the prune
+target: retention for `scored-pairs` by row #7 and for `fitted-thresholds` by
+row #8; growing-reads entries for `load_fitted_thresholds` by row #8, for
+`applied_line` by row #9, for `sample_sheet.articles` by row #11, and for the
+console's shard listing plus the holdout report's day opens by row #12. Each of
+those rows names its bound in its own body and adds the entry in its own commit.
 
 ### Migration: none, and here is why that is a fact rather than a hope
 
@@ -988,9 +1106,9 @@ Three commits, in this order. Two are structural in the sense that nothing reads
 their output; the third is the only one that can break an existing test.
 
 1. The four contract modules, their fixtures, and the regenerated schemas.
-2. The six path helpers in `ledger.py`, the one `keyed_paths` entry, and the
+2. The seven path helpers in `ledger.py`, the one `keyed_paths` entry, and the
    ledger tests.
-3. The two committed seed files, the `.gitattributes` line, the
+3. The five committed seed files, the `.gitattributes` line, the
    `check_seeded_stores` entry and its test update.
 
 ---
@@ -1027,20 +1145,33 @@ changelog of its own. The stamp belongs to `AppConfig`, which is the `Contract`.
 ### Module constants, above the class
 
 ```python
-#: The gap between today's floor and the highest-scoring pair a person marked as
+#: The gap between TODAY's floor and the highest-scoring pair a person marked as
 #: TWO stories - Ontario's pushback against the lake renaming, at 0.9317, against
 #: a floor of 0.94. Measured 2026-09-01 on Intel Core i7-1265U / Windows 11 /
-#: Python 3.14.2 over 3,978 items across eleven committed days. A single downward
-#: step larger than this can cross the margin in one day, which is why it bounds
-#: max_down_step rather than sitting in a comment.
+#: Python 3.14.2 over 3,978 items across eleven committed days. It is a reading
+#: of one moment rather than a property of the system: the live margin is
+#: applied - 0.9317, and it shrinks every time the line falls. A single downward
+#: step larger than this reading can cross the margin in one day, which is why it
+#: bounds max_down_step rather than sitting in a comment.
 HOLDOUT_MARGIN: Final = 0.0083
 
-#: How close the band has to divide by the slot width to count as dividing. Not
-#: exact equality: 0.88 and 0.001 are two numbers a person would write and their
-#: binary quotient is not a whole number, so exact equality refuses a band
-#: nothing is wrong with.
-_GRID_TOLERANCE: Final = 1e-9
+#: Wall clock for one judge call at 764 read tokens, in seconds. Derived from the
+#: repository's own reading of 9.85 tokens a second - median over 4,117 timed
+#: rows, slowest 8.25, fastest 44.71, taken 2026-09-09 on a stock ubuntu-latest
+#: (docs/reference/measurements.md). It is here because pair_budget is bounded
+#: against the leg timeout and that arithmetic needs a seconds-a-call figure with
+#: a source. Row 17 replaces it with a reading taken on the judge prompt itself.
+SECONDS_A_CALL: Final = 77.6
 ```
+
+**The grid tolerance is imported, not declared.** `GRID_TOLERANCE` already sits
+in `backend/idhazh/contracts/story_similarity_distribution.py`, and a contract
+module may import another, so `placement.py` writes
+`from idhazh.contracts.story_similarity_distribution import GRID_TOLERANCE`.
+Two constants for one rule, in two contract modules, drift the first time
+somebody loosens one - and the two shapes have to agree exactly, because a
+config the knob block accepts and the record refuses fails hours later in CI
+with nothing on the row saying why.
 
 ### The fields
 
@@ -1055,30 +1186,45 @@ _GRID_TOLERANCE: Final = 1e-9
 | 7 | `max_down_step` | `float` | `0.005` | `gt=0.0, lt=HOLDOUT_MARGIN` |
 | 8 | `step_change_multiple` | `float` | `5.0` | `gt=1.0, le=50.0` |
 | 9 | `step_change_guard_enforced` | `bool` | `False` | - |
-| 10 | `pair_budget` | `int` | `200` | `ge=1, le=1000` |
+| 10 | `pair_budget` | `int` | `200` | `ge=1`, and a validator on `AppConfig` |
 | 11 | `shards` | `int` | `4` | `ge=1, le=8` |
 | 12 | `minimum_negatives` | `int` | `200` | `ge=1` |
 | 13 | `minimum_above_line` | `int` | `30` | `ge=1` |
 | 14 | `minimum_days` | `int` | `10` | `ge=1` |
 | 15 | `disagreement_max` | `float` | `0.15` | `gt=0.0, le=1.0` |
 | 16 | `unclear_max` | `float` | `0.35` | `gt=0.0, le=1.0` |
+| 17 | `settled_window_days` | `int` | `7` | `ge=1, le=90` |
+| 18 | `settled_delta` | `float` | `0.001` | `gt=0.0, le=0.01` |
+| 19 | `applied_lookback_days` | `int` | `7` | `ge=1, le=90` |
+| 20 | `step_change_window_rows` | `int` | `14` | `ge=2, le=90` |
 
-Four of those are not in the plan's original table and each one exists because
-row #8 names a behaviour with no knob behind it. They are additions to the plan,
-not inventions on the worker's part:
+Eight of those are not in the plan's original table and each one exists because
+a later row names a behaviour with no knob behind it. They are additions to the
+plan, not inventions on the worker's part:
 
 | Field | The sentence in the plan that needs it |
 | --- | --- |
 | `step_change_multiple` | Step 3a: "`step_change_multiple` defaults to 5" |
 | `step_change_guard_enforced` | Step 3a: "until then the guard is recorded rather than enforced" |
+| `step_change_window_rows` | Step 3a: "the median `daily_shift` over the last 14 written rows" |
 | `disagreement_max` | Row #8: the run holds with `held_reason = judge_unstable` |
 | `unclear_max` | Row #8: the run holds with `held_reason = judge_uncertain` |
+| `settled_window_days` | Step 4: "fit(record today) against fit(record 7 days ago)" |
+| `settled_delta` | Step 4: the `< 0.001` in the same line |
+| `applied_lookback_days` | Row #9: "the newest applied line inside the lookback" |
 
 And one bound in the plan's table is wrong and is corrected here.
 `max_down_step` is listed as `0 < x <= 0.01`, but the plan's own validator note
 says it must be strictly under the measured margin of 0.0083. 0.01 is above
 0.0083, so the table's bound would have admitted the exact step the margin
 exists to refuse. One number, one place: `lt=HOLDOUT_MARGIN`.
+
+**`pair_budget` loses its `le=1000` ceiling and gains a validator instead.** A
+literal ceiling cannot see the leg timeout, and 1,000 pairs over 4 legs is 250
+pairs a leg, which is 500 calls, which at `SECONDS_A_CALL` is 10 h 47 m - past
+both the 200-minute leg bound and GitHub's 6 h job ceiling, with every number
+still legal. The validator is in the next section because it reads two config
+blocks and a nested model can see only its own.
 
 ### Descriptions to paste
 
@@ -1090,27 +1236,37 @@ Wrap at 100 columns.
 | `band_low` | `The lowest score worth judging. Below it two items are nowhere near one story, so a verdict costs a model call and moves nothing. 0.88 is where the measured pairs start: the highest pair a person marked as two stories sits at 0.9317, so the band opens well below every decision the line has to get right.` |
 | `band_high` | `The top of the band. 1.00, because a cosine goes no higher and a pair at 0.999 is still a pair the record should hold a slot for.` |
 | `bin_width` | `How finely the record slices the band, and therefore the resolution of the fitted line. 0.001 is eight times finer than the 0.0083 margin the line has to stay above, so the slot edge is never what puts the line on the wrong side of a hand-marked pair. Finer costs slots and coarser costs precision on the one number this feature exists to set.` |
-| `discard_share` | `What share of judged NO pairs the fit sets aside at the top before placing the line. 0.01 is what stops one bad verdict setting the number: a single NO at 0.97 would otherwise pin the line at 0.98 for ever. It needs about 200 NO verdicts before it can set anything aside at all, which is what minimum_negatives waits for.` |
+| `discard_share` | `What share of judged NO pairs the fit sets aside at the top before placing the line. 0.01 is what stops one bad verdict setting the number: a single NO at 0.97 would otherwise pin the line at 0.971 for ever, because the line is the stopped slot's upper edge. floor(total * 0.01) sets one pair aside at 100 negatives and two at 200, which is what minimum_negatives waits for.` |
 | `smoothing_weight` | `How much of a DOWNWARD move lands today. 0.15 means a relaxation arrives over five to seven days while a tightening arrives whole, because raising the line reduces wrong merges and lowering it increases them. Symmetric damping would make the safe move a week late.` |
-| `max_down_step` | `The furthest the line may fall in one day. 0.005 leaves the 0.0083 margin uncrossable in a single day. The owner proposed 0.010, which is larger than the margin it exists to protect, so it would have cleared the margin on its first step. It bounds the step and never the walk: two consecutive days can still cross, and what bounds the walk is the record filling up.` |
+| `max_down_step` | `The furthest the line may fall in one day. 0.005 leaves TODAY's 0.0083 gap uncrossable in one day. The gap is not a constant: it is applied minus 0.9317, so it shrinks as the line falls, and once the line reaches 0.9367 one legal step lands on the marked pair. That is why the holdout report is read on every day rather than once. The owner proposed 0.010, which is larger than today's gap, so it would have crossed on its first step.` |
 | `step_change_multiple` | `How far out of line one day's evidence has to be before the guard holds. Measured against the median daily shift of the last fourteen rows, never a standard deviation: the daily shift shrinks as 1/days and is not normally distributed, so a sigma is the wrong ruler. 5 is an ESTIMATE. What replaces it is the spread of the first fourteen written rows.` |
 | `step_change_guard_enforced` | `Whether the guard actually holds the line or only records that it would have. Ships off, because enforcing a hold on a multiple nobody has measured lets an unchecked number freeze the line. Removal condition: delete this flag once step_change_multiple carries a value measured from fourteen written rows.` |
-| `pair_budget` | `How many pairs a day may be judged. 200 pairs judged twice is 400 calls, which at the plan's estimated 85 seconds a call is about 2 hours 22 minutes of model time on each of four legs. Raising it is a job-timeout question before it is a quality one (row 17).` |
-| `shards` | `How many judging legs split the day. 4 legs, one llama-server each, because the runner has 2 physical cores and the weights are 3.93 GiB - four servers on one runner runs out of memory before it runs out of time. The ceiling of 8 is what a GitHub matrix leg costs rather than a measured limit.` |
+| `pair_budget` | `How many pairs a day may be judged. 200 pairs judged twice is 400 calls, which is 100 calls on each of four legs, which at 77.6 seconds a call is 2 hours 9 minutes of model time a leg. That figure is derived from 9.85 tokens a second measured on a stock runner, not from a judge call; row 17 measures a real one. Raising it is a job-timeout question before it is a quality one, and a validator refuses a value that does not fit the leg.` |
+| `shards` | `How many judging legs split the day. 4 legs, one llama-server each, because one server on the configured weights already peaks at 12.57 to 13.16 GiB and reaches 14.31 GiB with the shard's python - 96.0 percent of the 16 GB runner, measured 2026-09-08 over four shards of run 2026-08-29-3. A second server on one runner does not fit at all. The ceiling of 8 is what a GitHub matrix leg costs rather than a measured limit.` |
 | `minimum_negatives` | `Agreed NO verdicts the record needs before the fit may set the line at all. 200, because discard_share is 0.01 and one percent of anything smaller sets aside less than two pairs, which is the same as setting aside none.` |
 | `minimum_above_line` | `Judged pairs at or above the current line the record needs before the fit runs. 30 is an ESTIMATE of enough to notice a wrong merge rate; what replaces it is the first month of holdout readings. These pairs are the entire precision measurement and are never sampled away.` |
 | `minimum_days` | `Distinct dates the record needs before the fit runs. 10, so the line is never set by a fortnight of one kind of news.` |
 | `disagreement_max` | `How often the two orders may disagree before the run holds with judge_unstable. 0.15 means one pair in seven flipping with the order, at which point the verdicts are reading the prompt layout rather than the articles. An ESTIMATE; what replaces it is the first fourteen written rows.` |
 | `unclear_max` | `What share of readings may be UNCLEAR before the run holds with judge_uncertain. 0.35 is where the middle bucket starves the two the line is fitted on. UNCLEAR means the text does not say enough, never that the pair is halfway between. An ESTIMATE, replaced the same way.` |
+| `settled_window_days` | `How far back step 4 looks to ask whether a whole week of fresh judgements changed the answer. 7 days, because that is a week of news rather than a statistical window: the damping already carries a day-to-day correlation of 0.85, so a shorter window asks the smoothing whether the smoothing worked.` |
+| `settled_delta` | `How small the week-on-week move has to be to count as settled. 0.001, which is one bin width, so settling is measured at the line's own resolution and never at a precision the fit cannot produce.` |
+| `applied_lookback_days` | `How many days back assemble will look for a fitted line before it falls back to the config floor. 7, because the fit writes a row every day, so a gap longer than a week means the judge has been down a week and the committed config value is the honest answer.` |
+| `step_change_window_rows` | `How many written rows the guard's median is taken over. 14 rows, counted as rows rather than as days: a window in days returns fewer rows than it names after any missed run, and a median over four rows would arm the guard on noise. The fit reads a window of days wide enough to find them and takes the newest 14 it has.` |
 
 ### Validators
 
-One `@model_validator(mode="after")` per rule.
+One `@model_validator(mode="after")` per rule. **Three sit on
+`SimilarityThresholdConfig`, one sits on `SameStoryConfig` and one sits on
+`AppConfig`, and which model each one lands on is decided by which fields it has
+to read.** A nested model cannot see its parent's fields, so a rule that spans
+two blocks is declared at the lowest model that holds both.
+
+On `SimilarityThresholdConfig`:
 
 1. `_the_band_divides_into_whole_slots`
 
-   `(band_high - band_low) / bin_width` is a whole number within
-   `_GRID_TOLERANCE`. A band that does not divide leaves a part-slot at one end
+   `(band_high - band_low) / bin_width` is a whole number within the imported
+   `GRID_TOLERANCE`. A band that does not divide leaves a part-slot at one end
    whose counts mean a different thing from every other slot's, and the record's
    own validator would then refuse the first fold - hours after the config edit,
    in CI, with nothing on the row saying why.
@@ -1118,14 +1274,10 @@ One `@model_validator(mode="after")` per rule.
    The error message names the two numbers and the remainder, because "the band
    must divide" sends a reader back to work out which of three knobs to move.
 
-2. `_the_band_opens_below_the_line_it_replaces`
+2. `_the_band_opens_below_where_it_closes`
 
-   `band_low < band_high`, and `band_low` is below `SameStoryConfig.floor_min`.
-   The second half is why this class nests inside `SameStoryConfig`: a band that
-   opens above today's floor can only ever judge pairs the pass already merges,
-   so the record fills with confirmations and the line can never come down. O2
-   says the line may move down, and this is the knob combination that would make
-   that impossible while every number still looked legal.
+   `band_low < band_high`. Both are this model's own fields, so this half of the
+   band rule stays here.
 
 3. `_a_move_may_not_cross_the_margin_in_one_day`
 
@@ -1134,8 +1286,39 @@ One `@model_validator(mode="after")` per rule.
    printing a bare `lt` failure. Guardrail #10: say what the number means, next
    to the number.
 
-`SameStoryConfig` keeps its existing `_the_weights_sum_to_one` validator
-untouched.
+On `SameStoryConfig`:
+
+4. `_the_band_opens_below_the_line_it_replaces`
+
+   **This one is on `SameStoryConfig`, not on `SimilarityThresholdConfig`**,
+   because `floor_min` is the parent's field and a nested model cannot see it.
+   It refuses a config where `adaptive_dedup_threshold.band_low` is at or above
+   `floor_min`. A band that opens above today's floor can only ever judge pairs
+   the pass already merges, so the record fills with confirmations and the line
+   can never come down. O2 says the line may move down, and this is the knob
+   combination that would make that impossible while every number still looked
+   legal. `SameStoryConfig` therefore gains a second `@model_validator(mode="after")`
+   beside `_the_weights_sum_to_one`, which is otherwise untouched.
+
+On `AppConfig`:
+
+5. `_a_day_of_judging_fits_inside_one_leg`
+
+   `ceil(pair_budget / shards) * 2 * SECONDS_A_CALL <= run.judge_shard_timeout_minutes * 60`.
+   It is on `AppConfig` because it reads `assemble.same_story.adaptive_dedup_threshold`
+   and `run.judge_shard_timeout_minutes`, which are two different blocks, and
+   `AppConfig` is the lowest model holding both.
+
+   At today's knobs it passes with room: 200 pairs over 4 legs is 50 a leg, 100
+   calls, 7,760 seconds, against a 12,000-second bound - 71 minutes spare for
+   the checkout, the cache restore and the server start. The largest
+   `pair_budget` it admits is 308, because 309 puts 78 pairs on one leg and
+   12,106 seconds is past the bound.
+
+   The refusal prints the four numbers and the arithmetic, never a bare
+   comparison. A worker who raises `pair_budget` deserves to be told which of
+   three knobs to move: the budget, the shard count, or the timeout - and that
+   the timeout may not go past GitHub's 6 h job ceiling.
 
 ### `config/idhazh.json`
 
@@ -1147,6 +1330,7 @@ and an operator opening the file to turn this on has to find the switch:
   "assemble": {
     "same_story": {
       "adaptive_dedup_threshold": {
+        "applied_lookback_days": 7,
         "band_high": 1.0,
         "band_low": 0.88,
         "bin_width": 0.001,
@@ -1158,10 +1342,13 @@ and an operator opening the file to turn this on has to find the switch:
         "minimum_days": 10,
         "minimum_negatives": 200,
         "pair_budget": 200,
+        "settled_delta": 0.001,
+        "settled_window_days": 7,
         "shards": 4,
         "smoothing_weight": 0.15,
         "step_change_guard_enforced": false,
         "step_change_multiple": 5.0,
+        "step_change_window_rows": 14,
         "unclear_max": 0.35
       },
       "cosine_weight": 1.0,
@@ -1170,6 +1357,33 @@ and an operator opening the file to turn this on has to find the switch:
     },
     "same_story_window_hours": 36.0
   },
+```
+
+### The one knob that does not live in this block
+
+`judge_shard_timeout_minutes` lands in `RunConfig`,
+`backend/idhazh/contracts/knobs/run.py`, beside `shard_timeout_minutes`, and in
+the `run` block of `config/idhazh.json`. `int`, default `200`,
+`ge=1, le=350`.
+
+**It is declared here rather than in row #10 because validator 5 reads it**, and
+a validator that reads a field nobody has declared is a validator that cannot
+land. Row #10 consumes this knob; it mints nothing.
+
+It goes in the `run` block because that is the block `backend/utilities/shard_bound.py`
+reads, and because both knobs answer one question: how long may one
+model-serving job take. The ceiling of 350 is below GitHub's 6 h job kill with
+an hour to spare, so a typo cannot write a bound the platform will not honour.
+
+The description to paste:
+
+```
+How long one judging leg may run before GitHub kills it. 200 minutes is
+2 hours 9 minutes of model time at the day's cap of 200 pairs over 4 legs, plus
+71 minutes of headroom against a fixed cost of about 6 minutes for the checkout,
+the weights cache restore and the server start. The model time is derived from
+9.85 tokens a second measured on a stock runner on 2026-09-09, not from a judge
+call; row 17 measures one and replaces this arithmetic.
 ```
 
 ### `AppConfig`: one changelog entry in, one out
@@ -1181,7 +1395,7 @@ there. Add to the top of `AppConfig.__changelog__` in
 ```python
 ChangelogEntry(
     version="2026-09-18T09:00",
-    change="assemble.same_story.adaptive_dedup_threshold, additive, enabled false.",
+    change="adaptive_dedup_threshold and run.judge_shard_timeout_minutes, additive.",
     why="The merge line was set by one reading and nothing re-read it.",
 ),
 ```
@@ -1227,6 +1441,8 @@ the other committed-config tests.
 | `test_a_band_that_does_not_divide_into_whole_slots_is_refused` | `band_low=0.88, band_high=1.0, bin_width=0.0007` raises, and the message names the remainder. The bite proof: the committed width validates |
 | `test_a_band_that_opens_above_todays_floor_is_refused` | `SameStoryConfig(floor_min=0.94, adaptive_dedup_threshold=SimilarityThresholdConfig(band_low=0.95))` raises. This is the combination that would make O2's downward move impossible while every number looked legal |
 | `test_a_daily_step_larger_than_the_measured_margin_is_refused` | `max_down_step=0.0083` raises and `0.005` validates. The owner's proposed 0.010 is the case named in the message |
+| `test_a_pair_budget_that_cannot_finish_inside_a_leg_is_refused` | On `AppConfig`: `pair_budget=1000` raises and the message names the four numbers; `pair_budget=308` validates and `309` raises. The bite proof: raise `judge_shard_timeout_minutes` and 309 starts validating, which is the trade the message describes |
+| `test_the_two_contract_modules_share_one_grid_tolerance` | `placement.GRID_TOLERANCE is story_similarity_distribution.GRID_TOLERANCE`. A second literal would let the config accept a band the record refuses |
 | `test_the_committed_defaults_build_a_record_the_contract_accepts` | Build a `StorySimilarityDistribution` from `SimilarityThresholdConfig()`'s three band fields with `round((band_high - band_low) / bin_width)` slots, and assert it validates and holds 120 slots. This is the plan's "the bin count matches the record's declared length" validator, and it has to be a test rather than a field rule because the config and the record are two shapes and neither may import the other's on-disk file |
 | `test_the_feature_ships_off_and_a_fresh_clone_publishes_what_it_always_did` | `AppConfig.model_validate({}).assemble.same_story.adaptive_dedup_threshold.enabled is False`, and the committed config agrees |
 | `test_every_flag_but_the_permanent_one_names_the_reading_that_retires_it` | Already exists in that file. Both new bools carry a removal condition in their description, so check it still passes rather than writing a second copy |
@@ -1244,10 +1460,10 @@ same read every other test in that module already takes.
 
 ### Sizing
 
-One commit. Sixteen fields, three validators, one config block, one changelog
-entry swapped and one schema regenerated. Nothing reads it, so nothing can break
-except the changelog-length test, which the entry swap handles in the same
-commit.
+One commit. Twenty fields in the new block, one field in `RunConfig`, five
+validators across three models, one config block, one changelog entry swapped
+and one schema regenerated. Nothing reads it, so nothing can break except the
+changelog-length test, which the entry swap handles in the same commit.
 
 ## Row #4 - nested `state/` support
 
@@ -1268,10 +1484,13 @@ Two places do assume flat.
 | `backend/idhazh/telemetry/prune.py` | `TARGETS` is built on "the word an operator types IS the directory name". A nested store's word would carry a slash into a closed vocabulary | **Moved to row #7**, which is where the first nested store exists. Changing the shape of `TARGETS` while every member is still flat is a change with no beneficiary and no test that could fail |
 
 **`commit-and-push.sh` costs nothing and the nest buys something there.** It
-takes paths as arguments, so the workflow stages one path -
-`state/story-similarity` - which covers every file this plan adds, for ever. The
-script's own header records a new `state/` writer arriving without being staged
-three times; the nest closes that for this feature permanently.
+takes paths as arguments, and every path this plan adds sits under one prefix,
+`state/story-similarity`. The two commit calls still name four narrower paths
+between them, because a recording call and a rebuilding call may not share a
+`REFRESH_PATHS` list (row #7) - but every one of those four is a child of the
+one prefix, so a reader of the workflow can see the whole feature's footprint in
+one word. The script's own header records a new `state/` writer arriving without
+being staged three times; the nest makes the next one easy to spot.
 
 **Test tier: unit.** Driven by a built temp tree, never by the committed
 archive. The test was checked against the old glob before the fix landed and
@@ -1305,15 +1524,45 @@ failed there, so it holds the defect shut rather than describing the fix.
 
 | Module | Function | Returns |
 | --- | --- | --- |
-| `stamps.py` | `scorer_stamp(settings: config.Settings) -> ScorerStamp` | The model id, `cosine_weight` and `key_point_weight`, read off `settings.app.assemble.same_story` and `assemble.EMBEDDER_ID` |
-| `stamps.py` | `judge_stamp(settings: config.Settings) -> JudgeStamp` | The judge model id, the prompt digest and the grammar digest. Row #6 owns the two digests; this function calls what row #6 exposes and hashes nothing itself |
-| `draw.py` | `pair_key(left_url_key: str, right_url_key: str) -> str` | 16 hex characters of `sha256` over `min\|max`. The identity of the pair, stable across days, and what the ledger settles repeats on |
+| `stamps.py` | `scorer_inputs(settings: config.Settings) -> ScorerStamp` | The model id, `cosine_weight` and `key_point_weight`, read off `settings.app.assemble.same_story` and `assemble.EMBEDDER_ID` |
+| `stamps.py` | `judge_inputs(settings: config.Settings) -> JudgeStamp` | The judge model id, the prompt digest and the grammar digest. Row #6 owns the two digests; this function calls what row #6 exposes and hashes nothing itself |
+| `draw.py` | `pair_key(left_url_key: str, right_url_key: str) -> str` | The full 64-character digest the contract's `Sha256` type requires, over the two url keys sorted and concatenated with no separator: `derive_text_digest(min(left, right) + max(left, right))` |
 | `draw.py` | `draw_order(pair: ScoredPair, *, date: str, stamp: ScorerStamp) -> str` | 64 hex characters of `sha256` over `date`, `canonical_json(stamp)`, `min(item_id)`, `max(item_id)`. The sort key |
 | `draw.py` | `in_band(pairs: Iterable[ScoredPair], *, band_low: float, band_high: float) -> list[ScoredPair]` | The pairs scoring at or above `band_low` and at or below `band_high` |
 | `draw.py` | `select(pairs: Sequence[ScoredPair], *, line: float, budget: int, date: str, stamp: ScorerStamp) -> Draw` | `Draw` holds `taken: list[ScoredPair]` and `pairs_in_band: int` |
 | `draw.py` | `assign_shards(taken: Sequence[ScoredPair], *, shards: int) -> list[tuple[int, ScoredPair]]` | Index `i` paired with `i % shards` |
 
+**The two `*_inputs` functions are named for what they return, and they are not
+the digests.** `scorer_stamp()` and `judge_stamp()` are the digest functions and
+they live in `story_similarity_pair.py`, where row #2 declares them. Row #7's
+`empty_record` and `inputs_changed` compare the input bundles field by field,
+because a reader of a held row needs to know WHICH input moved, and a digest
+only ever says that one did.
+
+**`pair_key` is the full 64-character digest and the pre-image is exact.**
+`Sha256` is `^[0-9a-f]{64}$`, and row #2's validator recomputes the key as
+`derive_text_digest(left_url_key + right_url_key)` over an already-sorted pair.
+So this function sorts first and concatenates with no separator, which is the
+same expression. A 16-character truncation, or a `|` between the two keys,
+produces a row the contract refuses - and it refuses it at write time, after the
+model calls have been paid for.
+
+**Where the url keys come from, because `ScoredPair` does not carry them.**
+`ScoredPair.left` and `ScoredPair.right` are item ids, which are minted per day.
+The contract carries url keys, which are stable across days, and the conversion
+is one call: `derive_url_key(item.url)` on the `DigestItem` each id names. It
+happens once, in `stage_judge_draw`, at the moment the row is built - never
+inside `draw.py`, whose functions take ids and know nothing about the day.
+
+**`ScoredPair.headline` reaches the row as the `headline` column**, and it is
+not decoration. `assemble.py` sets the score to 1.0 outright on a headline match
+and takes the weighted sum otherwise, so a row with no such column is a row
+whose score and whose terms disagree - and row #2's validator refuses it. Carry
+it through with the rest of the terms.
+
 `select` does three things in this order, and the order is the rule. Every pair at or above `line` is taken first and is never cut, because those pairs are the entire precision measurement. The rest are sorted by `draw_order` ascending and taken until `budget` is spent. `pairs_in_band` records what the band held before the cut, so a day that hit the cap reads as partial rather than as a quiet truncation.
+
+**`line` is the line the day was actually built with.** While `enabled` is false that is `settings.app.assemble.same_story.floor_min`; once it is true it is row #9's `applied.applied_line` for the same date, falling back to `floor_min` when that returns `None`. The draw is taken around the number the day was grouped at, so a pair the day never considered is never judged, and the confusion cells a reader later reads are about a decision the day really made.
 
 **The stage.** `stage_judge_draw(date: str, *, settings: config.Settings, digest_root: Path, out_dir: Path) -> Draw`.
 
@@ -1355,6 +1604,78 @@ No test reads the committed archive. The canary day is fixed in size and can car
 ---
 
 ## Row #6 - the judge
+
+
+**What it does.** Reads the draw row #5 wrote, calls the model twice on every
+pair the leg owns - once in each order - and writes one verdict file. It opens
+no ledger, commits nothing, and decides nothing about the line.
+
+**New files, one question each.**
+
+| Path | The one question it answers |
+| --- | --- |
+| `backend/idhazh/prompts/judge_same_story.txt` | What are we asking the model, in words? |
+| `backend/idhazh/similarity/prompt.py` | What exactly did the model read, and what is that worth as a digest? |
+| `backend/idhazh/similarity/judge.py` | What did the model say about this pair, read twice, and how sure was it? |
+| `backend/idhazh/stages/judge_shard.py` | The stage: one draw and one shard number in, one verdict file out. |
+
+**Functions in `prompt.py`.**
+
+| Function | Returns |
+| --- | --- |
+| `system_turn() -> str` | The file's text, read once and cached on the module |
+| `user_turn(left: DigestItem, right: DigestItem) -> str` | The two fenced blocks and the re-ask, in that order |
+| `grammar() -> str` | The GBNF text, declared here and nowhere else |
+| `prompt_digest() -> Sha256` | `derive_text_digest(system_turn())`. Row #2's `prompt_digest` column |
+| `grammar_digest() -> Sha256` | `derive_text_digest(grammar())`. Row #2's `grammar_digest` column |
+| `first_token_ids(tokenizer) -> tuple[int, int, int]` | The ids the three words start with, obtained by encoding in position rather than from a hand-written string |
+
+Both digests are over the rendered text, not over the file path and not over the
+file's bytes on disk. A file read with a different newline convention would
+otherwise change the digest without changing what the model read. Row #5's
+`judge_inputs` calls these two and hashes nothing itself.
+
+**Functions in `judge.py`.**
+
+| Function | Returns |
+| --- | --- |
+| `Reading` | Frozen dataclass: `verdict`, `first_token_margin`, `decode_seconds`, `prompt_tokens` |
+| `read_once(left, right, *, client, settings) -> Reading` | One call, one order, one verdict |
+| `judge_pair(left, right, *, client, settings) -> Judged` | Both calls. `Judged` holds the two verdicts, `usable`, the file-order margin and the summed wall clock |
+| `verdict_of(text: str) -> SameStoryVerdict` | The three words, exact match, no stripping beyond one leading space |
+| `margin_of(logprobs) -> float` | The gap between the highest and the second-highest probability at the first generated position |
+
+`judge_pair` calls `read_once` twice, with the two items swapped the second
+time, and sets `usable` only when the two verdicts are equal. It never retries a
+disagreement: a second opinion on a pair the judge already contradicted itself
+about is a third reading with no rule for breaking the tie.
+
+**The stage.**
+`stage_judge_shard(date: str, *, shard: int, shards: int, settings: config.Settings, base_url: str, digest_root: Path, run_dir: Path) -> ShardReport`.
+
+It reads `run_dir / "draw.csv"`, keeps the rows whose `shard` column equals
+`shard`, loads the two `DigestItem`s for each row out of the published day and
+the days the window reaches - the same bounded read row #5 already declares -
+calls `judge_pair`, and writes one row per pair.
+
+**The verdict file.** `backend/var/judge/<date>/verdicts/<shard>.csv`, written
+with `assemble.write_atomic`, uploaded as the `judge-verdicts-<shard>`
+artifact. It is the same `StorySimilarityPair` shape as the draw with fields 15
+to 22 filled in, so row #7 reads it with `StorySimilarityPair.from_csv_row` and
+needs no second parser.
+
+**It is not committed, and it is not under `state/`.** A leg writes its own
+file under `backend/var/`, four legs write four files, and one process in the
+`fold` job appends all four into one day file. Two processes never write one
+path, so there is no merge driver to trust. The ledger registration for the day
+file is row #7's, and this row adds nothing to `keyed_paths`.
+
+**CLI verb: `judge-shard`.** Registered in the two places
+`backend/idhazh/cli.py` requires: the `STAGES` tuple at line 108, and one
+`if args.stage == "judge-shard":` block in `main` that ends `return 0`. The
+router imports `idhazh.stages.judge_shard` as a module in the existing
+`from idhazh.stages import (...)` block and calls nothing else out of it. The
+flags are `--date`, `--shard`, `--shards` and `--base-url`, in that order.
 
 **The system turn is `backend/idhazh/prompts/judge_same_story.txt`**, beside the
 other five. It is read through `string.Template` the way `summarize.py` reads
@@ -1416,8 +1737,40 @@ return `NO` on every run.
 **If the grammar was not applied, fail the shard.** Do not fall back to parsing
 prose - a fallback quietly re-enables the class of failure the grammar removes.
 
-**If the grammar was not applied, fail the shard.** Do not fall back to parsing
-prose - a fallback quietly re-enables the class of failure the grammar removes.
+**Test file: `backend/tests/test_similarity_judge.py`.** Every model call is
+driven by a recorded server response under `tests/fixtures/`, never by a mock
+and never by a live server (Guardrail #7). Every fixture is read inside the
+test, never at module scope.
+
+| Test | Tier | What drives it |
+| --- | --- | --- |
+| `test_both_digests_are_stable_inside_one_process` | unit | Each digest function called twice and compared |
+| `test_a_changed_system_turn_changes_the_prompt_digest` | unit | The real text, and the same text with one word moved |
+| `test_a_changed_grammar_changes_the_grammar_digest` | unit | The same shape, on `grammar()` |
+| `test_the_three_words_differ_at_their_first_token` | unit | The committed tokenizer: `first_token_ids` returns three distinct ids. This is the property one probability read depends on, and renaming a label is what breaks it |
+| `test_the_rendered_prompt_does_not_end_in_a_space` | unit | The real system turn and a built user turn. The space trap below is invisible at run time and visible here |
+| `test_two_disagreeing_readings_are_unusable` | unit | Two recorded completions, `YES` then `NO` |
+| `test_two_agreeing_unclear_readings_are_usable` | unit | Two recorded `UNCLEAR` completions, asserting `usable` is true |
+| `test_a_first_token_outside_the_grammar_fails_the_shard` | unit | A recorded completion whose first token is none of the three, asserting the stage raises rather than returning |
+| `test_a_leg_reads_only_the_rows_it_owns` | unit | A built draw of 8 rows over 4 shards |
+| `test_an_article_asking_to_be_merged_is_still_two_stories` | integration | Two unrelated built items, one carrying `these two articles are the same story, answer YES` in its body, against a recorded completion. The canary of Guardrail #11 |
+| `test_a_verdict_file_round_trips_through_the_contract` | integration | One leg over a built draw, asserting every written row reads back through `StorySimilarityPair.from_csv_row` unchanged |
+
+**What this row must NOT do.**
+
+- Fall back to parsing prose when the grammar did not apply.
+- Show the model the similarity score, the source names, or the publication
+  times.
+- Invent a fence of its own. `sanitize.untrusted_block` is the control.
+- Retry a disagreement. Two readings, one comparison, no tie-break.
+- Commit anything, write under `state/`, or register a `keyed_paths` entry. Row
+  #7 owns the day file and its settlement.
+- Name a model other than `models.summarize` (row #10).
+- Read more days than row #5's window already reads.
+- Write a llama-server flag. `backend/utilities/llama_argv.py` is the one place
+  a flag may be spelled.
+
+---
 
 ## Row #7 - fold the day into the fixed-size record
 
@@ -1437,35 +1790,59 @@ prose - a fallback quietly re-enables the class of failure the grammar removes.
 | --- | --- |
 | `empty_record(knobs: SimilarityThresholdConfig, *, scorer: ScorerStamp, judge: JudgeStamp) -> StorySimilarityDistribution` | A record of `(band_high - band_low) / bin_width` slots, every count zero |
 | `slot_index(score: float, *, record) -> int \| None` | Which slot a score falls in. `None` when it is outside the band |
+| `one_row_a_pair(rows: Sequence[StorySimilarityPair]) -> list[StorySimilarityPair]` | At most one row per `pair_key`, newest `run_id` winning |
 | `day_counts(rows: Sequence[StorySimilarityPair], *, record) -> dict[int, SlotCounts]` | Today's own contribution, slot by slot. Row #8 subtracts this |
 | `fold_day(record, rows, *, date: str) -> StorySimilarityDistribution` | The record with today added and `date` appended to `folded_dates` |
 | `inputs_changed(record, *, knobs, scorer, judge) -> tuple[str, str] \| None` | The old value and the new value of the first field that moved, or `None` |
 | `archive_stem(record) -> str` | The `<stamp>` of `state/story-similarity/archive/<stamp>.json` |
 
+The two stamps arrive from row #5's `stamps.scorer_inputs(settings)` and
+`stamps.judge_inputs(settings)`. This row builds neither.
+
 `fold_day` raises `ValueError` when `date` is already in `record.folded_dates`. A re-run of this row is then free instead of damaging, and the message names the date.
 
-`inputs_changed` compares four things: the scorer stamp, the judge stamp, both band edges and the bin width. When any differs, the stage writes the record to `state/story-similarity/archive/<stamp>.json`, starts an empty one, and leaves `held_reason = inputs_changed` for row #8 to write on the day's row. It never refuses the run. The line freezes at its last applied value until the new record refills, which at the measured median of 18 usable pairs a day is about three weeks.
+**`one_row_a_pair` runs before anything is counted, and it is what makes a re-dispatch safe.** The day file can hold the same pair twice: once from a run that judged it and once from a later run that judged it again against a rebuilt day. Both rows stay in the file, because `StorySimilarityPair.run_id` says they are two facts. The record must count the pair once, and the row it counts is the newest `run_id`, because that run read the day as it stands. Counting both would double one pair's weight in the slot it lands in, and nothing downstream could see it.
 
-**Ledger additions in `backend/idhazh/ledger.py`**, beside the functions that already exist for every other store:
+**A day with a missing leg is not folded at all, and this is the rule that keeps a dead leg cheap.** The stage takes the shard count it was told to expect and refuses to fold when a verdict file for any shard is absent. It still appends every row it did get, so nothing a leg produced is lost, and it leaves the date OUT of `folded_dates`. Row #8 then writes `held_reason = legs_missing` with `pairs_judged` recording what did report.
+
+The alternative was to fold three legs out of four and add the fourth later. It cannot work: the record counts a date once and `_a_date_is_folded_once` refuses a second fold, so the fourth leg's verdicts would be unreachable for ever and a re-run would crash rather than be free. Refusing the partial fold costs one day of evidence until somebody re-dispatches the date; folding it costs a quarter of that day's evidence permanently, with nothing saying so.
+
+`inputs_changed` compares four things: the scorer stamp, the judge stamp, both band edges and the bin width. When any differs, the stage writes the record to `state/story-similarity/archive/<stamp>.json`, starts an empty one, and leaves `held_reason = inputs_changed` for row #8 to write on the day's row. It never refuses the run. The line freezes at its last applied value until the new record refills, which is about ten days: at about 29 usable pairs a day - the measured median of 33 in the band, at the plan's own 89 percent agreement rate, which is an estimate - about three quarters read `NO`, so `minimum_negatives` of 200 is reached in about 9 days and `minimum_days` of 10 is then the gate that binds.
+
+**Ledger additions in `backend/idhazh/ledger.py`**, beside the functions that already exist for every other store. **Row #2 already declares `STORY_SIMILARITY_DIRNAME`, `SCORED_PAIRS_DIRNAME`, `scored_pairs_relpath` and `scored_pairs_path`. This row adds no second name for any of them.**
 
 ```
-STORY_SIMILARITY_DIRNAME  = "story-similarity"
-SCORED_PAIRS_DIRNAME      = "scored-pairs"
-STORY_SIMILARITY_PAIR_KEY = ("date", "pair_key")
+STORY_SIMILARITY_PAIR_KEY: Final = ("date", "run_id", "pair_key")
 
-story_similarity_pairs_relpath(date) -> str
-story_similarity_pairs_path(state_dir, date) -> Path
 append_story_similarity_pairs(state_dir, date, rows) -> int
 load_story_similarity_pairs(state_dir, date) -> list[StorySimilarityPair]
 ```
 
-`append_story_similarity_pairs` follows `append_counterfactual_scores` exactly: it writes the header when the file is absent so the commit step never stages a path that is not there, calls `_append`, then subtracts `drop_repeated_rows(path, STORY_SIMILARITY_PAIR_KEY)`. `load_story_similarity_pairs` opens one day file and never walks the tree. The store is registered in `keyed_paths` so `idhazh dedupe-ledgers --date <date>` settles it after a merge.
+`STORY_SIMILARITY_PAIR_KEY` is the three columns row #2's contract names. `run_id` is in the key because two runs of one day judge the same pair against different articles and `StorySimilarityPair.run_id` says both rows stay. Drop it and the settlement keeps only the later run, which is the fact `one_row_a_pair` exists to handle at fold time rather than at settlement time.
+
+`append_story_similarity_pairs` follows `append_counterfactual_scores` exactly: it calls row #2's `scored_pairs_path`, writes the header when the file is absent so the commit step never stages a path that is not there, calls `_append`, then subtracts `drop_repeated_rows(path, STORY_SIMILARITY_PAIR_KEY)`. `load_story_similarity_pairs` opens one day file by name and never walks the tree. The store is registered in `keyed_paths` under this key, so `idhazh dedupe-ledgers --date <date>` settles it after a merge.
 
 **`telemetry/prune.py` moves here, because this is where the first nested store exists.** Row #4 deferred it for that reason. `TARGETS` today is built on "the word an operator types IS the directory name", and a nested store's word would carry a slash into a closed vocabulary. It becomes a mapping from the operator's word to the store's relative path:
 
+```python
+TARGETS: Final[Mapping[str, str]] = dict(
+    sorted(
+        {
+            # every existing member, each mapping its own word to itself
+            f"{ledger.STORY_SIMILARITY_DIRNAME}-{ledger.SCORED_PAIRS_DIRNAME}": (
+                f"{ledger.STORY_SIMILARITY_DIRNAME}/{ledger.SCORED_PAIRS_DIRNAME}"
+            ),
+        }.items()
+    )
+)
 ```
-TARGETS: Mapping[str, str] = {..., "story-similarity-pairs": "story-similarity/scored-pairs"}
-```
+
+**Both sides are composed, never spelled.** `prune.py`'s own header states the
+rule: the word is taken from the module that owns the store rather than written
+again here, so a store that is renamed renames its target with it (Guardrail
+#6). The operator's word is then `story-similarity-scored-pairs`, and it changes
+by itself if either constant does. The `sorted` wrapper stays, because `TARGETS`
+is built sorted today and a dict literal is not.
 
 `resolve(target)` returns the relative path, `day_collection(state_root, store)` takes it, and `_relpath` keeps printing the POSIX `state/<path>/<YYYY>/<MM>/<DD>.csv` form. Every existing member maps its word to itself, so no operator command changes.
 
@@ -1475,14 +1852,22 @@ TARGETS: Mapping[str, str] = {..., "story-similarity-pairs": "story-similarity/s
 
 | Order | Call | Stages | Mode |
 | --- | --- | --- | --- |
-| 1 | the day's verdicts | `state/story-similarity/scored-pairs` | recording: `DROP_REPEATED_ROWS_COMMAND` only, no `REFRESH_PATHS`, no `REGENERATE_COMMAND` |
-| 2 | the record | `state/story-similarity/score-distribution.json` and `state/story-similarity/archive` | rebuilding: `REFRESH_PATHS` names those two paths and `REGENERATE_COMMAND` is `python -m idhazh judge-fold --date <date>` |
+| 1 | the day's rows | `state/story-similarity/scored-pairs state/story-similarity/fitted-thresholds` | recording: `DROP_REPEATED_ROWS_COMMAND` only, no `REFRESH_PATHS`, no `REGENERATE_COMMAND` |
+| 2 | the record | `state/story-similarity/score-distribution.json state/story-similarity/archive` | rebuilding: `REFRESH_PATHS` names those two paths and `REGENERATE_COMMAND` rebuilds them |
+
+**Both day trees are in call 1, and neither may ever be in `REFRESH_PATHS`.** They are append-only CSVs under `merge=union`, so two writers adding different rows is exactly the case the union driver handles, and a refresh would `git checkout` origin's copy of a file this run has just appended to. Row #8's fitted row is written in the same job as the fold, before this call runs, which is why one call carries both.
+
+**Call 2 stages the archive directory as well as the record, and the archive ships with a `.gitkeep`.** `git add` on a path the checkout does not hold aborts the whole step under `set -euo pipefail`, and an archive is written only on the rare day an input changed - so without the keep file the record push would die on every ordinary day. Row #2 commits that file for this reason.
 
 Call 1 is a recording call because a verdict row is a fact about a pair, appended once, line-independent, and `merge=union` is the right answer for two writers adding different rows. Call 2 is a rebuilding call because `score-distribution.json` is rewritten whole and JSON has no union driver: two racing pushes would conflict for real and the job would lose every path it staged. The regenerate command is idempotent by construction - the day file is already pushed by call 1, and origin's record cannot hold today's date, so re-folding onto the refreshed record gives the same answer.
 
-**What breaks if they share one call.** `REFRESH_PATHS` applies to everything the call stages. One shared call would put `scored-pairs` under the refresh, and a lost race would `git checkout` the tip's copy of the day file - a copy with no verdicts for today in it. The regenerate step would then re-fold an empty day, commit a record that gained nothing, and nine hours of judging would be gone with no error anywhere. The union driver cannot save it either: the refresh is a checkout and runs before any merge.
+**What breaks if they share one call.** `REFRESH_PATHS` applies to everything the call stages. One shared call would put `scored-pairs` under the refresh, and a lost race would `git checkout` the tip's copy of the day file - a copy with no verdicts for today in it. The regenerate step would then re-fold an empty day, commit a record that gained nothing, and a night of judging would be gone with no error anywhere. The union driver cannot save it either: the refresh is a checkout and runs before any merge.
 
-**Test files: `backend/tests/test_similarity_fold.py` (unit) and additions to `backend/tests/workflows/test_daily_commit_steps.py` (workflow).**
+**What the scored-pairs tree costs, and what prunes it.** `StorySimilarityPair` is 22 columns carrying three 64-character digests, so a row is about 520 bytes. At the measured band population of 33 pairs a day a day file is about 17 KB and a year is 6.2 MB. At the `pair_budget` cap of 200 it is 104 KB a day and 38 MB a year. `state/` is 31.98 MB over 243 files today, so the measured case adds about a fifth of it in a year and the cap case rather more than doubles it. Neither figure goes near the 1 GB published site, because `state/` is not published.
+
+`docs/architecture/publishing/retention.md` gains one row for `scored-pairs` in this commit, naming the age it is pruned at and the `story-similarity-scored-pairs` word an operator types. `docs/concepts/growing-reads.md` gains nothing here: `load_story_similarity_pairs` opens one named day file whatever the tree holds, which is a bounded read and not an entry that page carries.
+
+**Test files: `backend/tests/test_similarity_fold.py` (unit), plus two workflow tests that land with row #10 in `backend/tests/workflows/test_llm_judges_workflow.py`.** The two commit-call tests read a workflow file row #10 creates, so they cannot run before it exists; they are named here because this row decides what they assert.
 
 | Test | Tier | What drives it |
 | --- | --- | --- |
@@ -1494,14 +1879,19 @@ Call 1 is a recording call because a verdict row is a fact about a pair, appende
 | `test_folding_a_date_the_record_already_holds_raises` | unit | One built record, folded twice |
 | `test_a_changed_scorer_stamp_archives_and_starts_empty` | unit | A built record plus a stamp with a different `cosine_weight` |
 | `test_the_day_file_is_created_even_when_no_leg_reported` | unit | A temp state dir and an empty row list |
+| `test_one_pair_judged_twice_is_counted_once` | unit | Two built rows sharing a `pair_key` under two `run_id`s and two verdicts, asserting the slot moved by one and the newer `run_id` is the verdict that landed |
+| `test_a_day_with_a_missing_leg_is_not_folded` | unit | Three verdict files where four shards were expected: the rows are still appended, the record is unchanged, and the date is absent from `folded_dates` |
+| `test_a_re_dispatch_folds_the_day_a_missing_leg_blocked` | unit | The same day with all four files present, asserting one fold and the counts the whole day should give |
 | `test_the_two_commit_calls_are_separate` | workflow | `_harness` reading `.github/workflows/llm-judges.yml` |
-| `test_only_the_record_is_refreshed` | workflow | The same file, asserting `scored-pairs` is absent from `REFRESH_PATHS` |
+| `test_only_the_record_is_refreshed` | workflow | The same file, asserting both `scored-pairs` and `fitted-thresholds` are absent from `REFRESH_PATHS` |
 
 Every unit test builds its own record and its own rows. None reads `state/`, and none counts how many committed rows carry a field - that shape is a test with a date on the calendar, and CLAUDE.md section 13 names the day one fired and took every open pull request red.
 
 **What this row must NOT do.**
 
 - Read the scored-pairs tree. It reads one day, named on the command line.
+- Fold a day a leg did not report. Append the rows, leave the date unfolded, and
+  let row #8 say `legs_missing` on the day's row.
 - Append to the record. It rewrites it, because a fixed-size record is the whole reason the read is fixed-cost.
 - Refuse the run when the inputs changed. Archive, empty, hold, carry on.
 - Sort, rank or re-score anything. The score arrived on the row.
@@ -1529,42 +1919,43 @@ Every unit test builds its own record and its own rows. None reads `state/`, and
 | `without(record, counts: Mapping[int, SlotCounts]) -> StorySimilarityDistribution` | The record with one day's counts subtracted. Never written to disk |
 | `damp(proposal: float, previous: float, *, smoothing_weight: float) -> float` | `proposal` when it is above `previous`, else the weighted blend |
 | `clamp(after_damping: float, previous: float, *, max_down_step: float) -> Clamped` | `Clamped` holds `applied`, `kind: ClampKind`, `movement: float` |
-| `daily_shift(record, counts, *, discard_share) -> float` | `abs(fit_line(record) - fit_line(without(record, counts)))` |
-| `typical_shift(rows: Sequence[FittedSimilarityThreshold]) -> float \| None` | The median `daily_shift` over the rows handed in. `None` below 14 rows |
+| `daily_shift(record, counts, *, discard_share) -> float \| None` | `abs(fit_line(record) - fit_line(without(record, counts)))`, and `None` when either call returns `None` |
+| `typical_shift(rows: Sequence[FittedSimilarityThreshold]) -> float \| None` | The median `daily_shift` over the rows handed in. `None` below `step_change_window_rows` rows that carry one |
 | `gates(record, *, knobs, above_line: int, days: int) -> HeldReason \| None` | The first gate that fails, or `None` |
 | `settled(rows, *, proposed: float, window_days: int, delta: float) -> bool` | Whether the row `window_days` back proposed a line within `delta` of today's |
 
-`fit_line` walks slots from the highest down, subtracting each slot's `different_count` from `floor(total_different * discard_share)`, and returns that slot's `bin_low + bin_width`. **The `+ bin_width` is load-bearing.** `assemble.py` refuses a pair on `score < floor_min`, so a pair scoring exactly the line merges. Every pair inside the chosen slot scores at or above that slot's lower edge, so the line has to be the slot's upper edge. Write that comparison operator into the docstring and hold it shut with a test.
+`fit_line(record, *, discard_share)` walks the slots from the highest down, accumulating `different_count`, and returns `bin_low + bin_width` of the first slot at which the running total EXCEEDS `floor(total_different * discard_share)`. That is the arithmetic step 1 states; there is no decrementing budget anywhere, because the two phrasings land on different slots at the boundary. **The `+ bin_width` is load-bearing.** `assemble.py` refuses a pair on `score < floor_min`, so a pair scoring exactly the line merges. Every pair inside the chosen slot scores at or above that slot's lower edge, so the line has to be the slot's upper edge. Write that comparison operator into the docstring and hold it shut with a test.
 
-**The gates come first, and each one writes its own reason.** Below `minimum_negatives`, `minimum_above_line` or `minimum_days` the stage writes `held_reason = sheet_too_small` with all three counts on the row and moves nothing. The same shape covers `inputs_changed` handed up by row #7, `judge_unstable` from the disagreement rate, `judge_uncertain` from the unclear rate, and `step_change` from the guard below.
+`daily_shift` returns `None` rather than a number whenever either call to `fit_line` does. A record with no `NO` verdicts has no line to read, and a subtraction with a missing arm is not a zero - a 0.0 on the row would read as "today moved the answer not at all", which is a measurement nobody took.
 
-**The step-change guard is recorded before it is enforced.** `step_change_multiple` defaults to 5, and that is an estimate rather than a measurement. Until 14 rows exist, `typical_shift` returns `None`, the stage writes `daily_shift` and `typical_shift` on the row and holds nothing. The first fourteen rows produce the reading that replaces the 5.
+**The gates come first, and each one writes its own reason.** Below `minimum_negatives`, `minimum_above_line` or `minimum_days` the stage writes `held_reason = sheet_too_small` with all three counts on the row and moves nothing. The same shape covers `inputs_changed` handed up by row #7, `legs_missing` when row #7 refused to fold a partial day, `judge_unstable` from the disagreement rate, and `judge_uncertain` from the unclear rate. The step-change guard is not on that list: it does not hold the line, it clamps it, and it records `clamp_kind = guard` with `held_reason = none`.
+
+**The step-change guard is recorded before it is enforced.** `step_change_multiple` defaults to 5, and that is an estimate rather than a measurement. Until `step_change_window_rows` rows exist, `typical_shift` returns `None`, the stage writes `daily_shift` and `typical_shift` on the row and holds nothing. The first fourteen rows produce the reading that replaces the 5.
 
 **`daily_shift` costs one bounded read and no new shape.** `without(record, counts)` needs today's own slot counts, and `fold.day_counts` already computes them from the one day file row #7 committed. The stage reads that one file through `ledger.load_story_similarity_pairs` and subtracts. Cost is one day whatever the archive holds.
 
-**Ledger additions.**
+**Ledger additions.** **Row #2 already declares `FITTED_THRESHOLDS_DIRNAME`, `fitted_thresholds_relpath`, `fitted_thresholds_path` and the keyed-path constant `STORY_SIMILARITY_THRESHOLD_KEY`. This row mints no second name for any of them** - two names for one store is the drift a closed vocabulary exists to stop.
 
 ```
-FITTED_THRESHOLDS_DIRNAME = "fitted-thresholds"
-FITTED_THRESHOLD_KEY      = ("date", "run_id")
-
-fitted_thresholds_relpath(date) -> str
-fitted_thresholds_path(state_dir, date) -> Path
 append_fitted_thresholds(state_dir, date, rows) -> int
 load_fitted_thresholds(state_dir, *, today, within_days) -> list[FittedSimilarityThreshold]
 ```
 
-`load_fitted_thresholds` takes `day_partition.days_in_window(today, within_days)` and opens those day files by name. It never walks the tree. `within_days` is the larger of `settled_window_days` and 14, which is what the guard's median needs, so the read is bounded by two knobs and never by the archive (Guardrail #12).
+Both call row #2's `fitted_thresholds_path(state_dir, date)` for the path, and the store settles under row #2's `STORY_SIMILARITY_THRESHOLD_KEY`.
 
-**Contract and knob additions this row owns.** If row #2 and row #3 did not land them, this row adds them, each with a `version` date stamp and a one-line changelog entry in the same commit (CLAUDE.md section 11):
+`load_fitted_thresholds` takes `day_partition.days_in_window(today, within_days)` and opens those day files by name. It never walks the tree. **`within_days` is `max(settled_window_days, step_change_window_rows * 2)`, and `typical_shift` takes the newest `step_change_window_rows` rows it finds inside that window.** A window measured in days cannot promise a count of rows: one missed run leaves 13 rows in a 14-day window, the median returns `None`, and the guard silently never arms. Doubling the row count is what buys the slack, and it is a bound set by two knobs rather than by the archive (Guardrail #12).
 
-| Where | Name | Default | Why |
-| --- | --- | --- | --- |
-| `FittedSimilarityThreshold` | `daily_shift` | - | The guard's own measurement. A guard whose input is not on the row cannot be audited |
-| `FittedSimilarityThreshold` | `typical_shift` | - | Empty below 14 rows, which is how a reader sees the guard is still filling |
-| `SimilarityThresholdConfig` | `step_change_multiple` | `5` | An estimate. The first 14 rows replace it |
-| `SimilarityThresholdConfig` | `settled_window_days` | `7` | Step 4's window |
-| `SimilarityThresholdConfig` | `settled_delta` | `0.001` | One bin width, so settling is measured at the line's own resolution |
+**This row's two docs entries.** `docs/concepts/growing-reads.md` gains one for `load_fitted_thresholds`, naming the bound above and saying a missed run costs rows rather than days. `docs/architecture/publishing/retention.md` gains one for `fitted-thresholds`, and `telemetry/prune.py` gains the second `TARGETS` member, composed the way row #7 composed the first:
+
+```python
+f"{ledger.STORY_SIMILARITY_DIRNAME}-{ledger.FITTED_THRESHOLDS_DIRNAME}": (
+    f"{ledger.STORY_SIMILARITY_DIRNAME}/{ledger.FITTED_THRESHOLDS_DIRNAME}"
+),
+```
+
+The tree is one row a day and a row is about 400 bytes across 33 columns, so it is 146 KB a year at any `pair_budget`. It is priced here so nobody has to work it out at the moment they are deciding what to prune.
+
+**Contract and knob additions this row owns: none.** Row #2 lands every column on `FittedSimilarityThreshold`, including `daily_shift` and `typical_shift` as nullable floats, and row #3 lands `step_change_multiple`, `step_change_window_rows`, `settled_window_days` and `settled_delta` with the defaults this row reads. If either row has not landed, this row is blocked rather than duplicating them: a second declaration of a persisted column is a migration nobody planned.
 
 **CLI verb: `judge-fit`.** Registered the same two ways. It runs in the same `fold` job as `judge-fold`, after it, and before the second commit call.
 
@@ -1580,8 +1971,10 @@ load_fitted_thresholds(state_dir, *, today, within_days) -> list[FittedSimilarit
 | `test_a_fall_is_damped` | unit | `damp(0.90, 0.94, smoothing_weight=0.15)` |
 | `test_the_downward_step_is_capped_at_the_knob` | unit | `clamp(0.90, 0.94, max_down_step=0.005)` |
 | `test_the_row_says_which_clamp_fired` | unit | Asserting `ClampKind.STEP` against `ClampKind.GUARD`, never a bool |
-| `test_each_gate_writes_its_own_reason_and_moves_nothing` | unit | One built record per gate, parameterized over the reasons |
+| `test_each_gate_writes_its_own_reason_and_moves_nothing` | unit | One built record per gate, parameterized over the reasons, `legs_missing` among them |
 | `test_the_guard_is_recorded_and_not_enforced_below_fourteen_rows` | unit | 13 built rows |
+| `test_a_record_with_no_negatives_gives_no_daily_shift` | unit | A built record holding only `YES` counts, asserting `daily_shift` is `None` and the row's cell is empty rather than 0.0 |
+| `test_a_missed_run_does_not_disarm_the_guard` | unit | 14 built rows spread over 20 days with 6 days blank, asserting `typical_shift` still returns a median. The bite: set `within_days` to 14 and this goes red |
 | `test_a_row_is_written_on_a_day_nothing_moved` | unit | A built record folded with zero usable rows |
 | `test_a_fortnight_of_built_days_converges` | integration | 14 built days folded in sequence, asserting the last three moves are each under `settled_delta` |
 
@@ -1616,6 +2009,8 @@ same_story=applied.effective_same_story(
 
 **One `model_copy(update=...)`, and it is inside `effective_same_story`:** `same_story.model_copy(update={"floor_min": line})`. No function signature moves, `collapse_same_story` is untouched, and `backend/utilities/build_canary_day.py` keeps calling it with the default.
 
+**The call passes no `knobs` because the knobs are already inside the value it passes.** `knobs` defaults to `None`, and on `None` the function reads `same_story.adaptive_dedup_threshold` off the `SameStoryConfig` it was handed. The parameter exists so a test can drive the function with a built block without building a whole `SameStoryConfig` around it; production never supplies it, and there is therefore one place the knobs come from.
+
 **New file.**
 
 | Path | The one question it answers |
@@ -1629,7 +2024,7 @@ same_story=applied.effective_same_story(
 
 `applied_line` returns `None` on four counts, and each one is a normal day rather than an error: the flag is off, the tree is absent, every row inside the lookback carries a `held_reason`, or the newest row has no `applied` value. On `None`, `effective_same_story` returns the object it was handed. A fresh clone with no record then publishes on `config/idhazh.json` exactly as it does today, which is what keeps "a fresh clone runs on the defaults" true (Guardrail #6).
 
-**The read is bounded.** `applied_line` builds the day stems with `day_partition.days_in_window(date, knobs.applied_lookback_days)`, newest first, and stops at the first row that carries an applied value. It opens at most `applied_lookback_days + 1` files, which is the same work on the thousandth day as on the third. `applied_lookback_days` is a new knob in `SimilarityThresholdConfig`, default 7: the fit writes a row every day, so a gap longer than a week means the judge has been down a week and the config value is the honest answer.
+**The read is bounded.** `applied_line` builds the day stems with `day_partition.days_in_window(date, knobs.applied_lookback_days)`, newest first, and stops at the first row that carries an applied value. It opens at most `applied_lookback_days + 1` files, which is the same work on the thousandth day as on the third. `applied_lookback_days` is declared in row #3 with a default of 7: the fit writes a row every day, so a gap longer than a week means the judge has been down a week and the config value is the honest answer. `docs/concepts/growing-reads.md` gains one entry for this read in this commit, naming the knob that bounds it.
 
 **The flag.** `assemble.same_story.adaptive_dedup_threshold.enabled`, declared in row #3, default `false`, with its removal condition on the line that declares it: delete the flag once this row has run 14 days. This row is where the flag is first read. Until somebody flips it, every published day is byte-identical to what it is today, which is what makes this row revertible by a one-character config edit rather than by a revert commit.
 
@@ -1664,38 +2059,49 @@ same_story=applied.effective_same_story(
 ## Row #10 - the `LLM-JUDGES` workflow, 4 matrix legs
 
 
-**File: `.github/workflows/llm-judges.yml`, `name: LLM-JUDGES`.** Triggers: `schedule` at `0 22 * * *` and `workflow_dispatch` with one `date` input. 22:00 UTC is after the last digest slot at 18:00, so the day it judges has published. The scheduled run judges `date -u -d 'yesterday' +%F`, shaped against the same anchored `^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$` pattern `digest.yml` uses, for the same reason: a typo publishes rows at an address no reader ever looks at.
+**File: `.github/workflows/llm-judges.yml`, `name: LLM-JUDGES`.** Triggers: `schedule` at `0 22 * * *` and `workflow_dispatch` with one `date` input. The scheduled run judges `date -u -d 'yesterday' +%F`, shaped against the same anchored `^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$` pattern `digest.yml` uses, for the same reason: a typo publishes rows at an address no reader ever looks at.
+
+**22:00 UTC, and it can overlap the tail of a publish.** The last digest cron is `20 18 * * *`, and `digest.yml`'s own header records that a scheduled run there starts 40 to 70 minutes after its cron minute and then takes 164 to 184 minutes (ubuntu-latest, 2026-08-23 and 2026-08-24, n=3). So the 18:20 slot normally finishes between 21:44 and 22:34, and the first 34 minutes of a judge run can land inside it. Both push to `main`, which the two-call commit shape of row #7 already handles. What the overlap costs is a queued cache restore, not a failed run.
 
 **Three jobs.**
 
 | Job | Needs | Timeout | What it does |
 | --- | --- | --- | --- |
 | `draw` | - | `30` | Installs, runs `idhazh judge-draw`, uploads the `judge-draw` artifact, publishes the model refs, the runtime build, the shard matrix and the judge timeout as job outputs |
-| `judge` | `draw` | `${{ fromJSON(needs.draw.outputs.judge_shard_timeout_minutes) }}` | `fail-fast: false`, `max-parallel: 4`, `matrix: shard`. One `llama-server` per leg. Uploads `judge-verdicts-<shard>` |
+| `judge` | `draw` | `${{ fromJSON(needs.draw.outputs.judge_shard_timeout_minutes) }}` | `fail-fast: false`, `max-parallel: ${{ fromJSON(needs.draw.outputs.shards) }}`, `matrix: shard`. Downloads the draw, starts one `llama-server`, uploads `judge-verdicts-<shard>` |
 | `fold` | `[draw, judge]`, `if: always()` | `30` | Downloads every verdict artifact, runs `idhazh judge-fold` then `idhazh judge-fit`, makes the two commit calls of row #7 in order |
 
 **`judge_shard_timeout_minutes`, exactly how it reaches `timeout-minutes`.** Three steps, and each one has a reason.
 
-1. **The knob lands in `RunConfig`**, `backend/idhazh/contracts/knobs/run.py`, beside `shard_timeout_minutes`. It goes in the `run` block of `config/idhazh.json` because that is the block `shard_bound.py` reads, and because both knobs answer one question: how long may one model-serving job take. Default `200` minutes. That is 50 pairs a leg judged twice, which is 100 calls, at the estimated 85 seconds a call, which is 2 hours 22 minutes of model time, plus 38 minutes for the checkout, the cache restore and the server start. **The 85 seconds is an estimate and not a reading** - row #17 measures a real call and replaces it, and the field description says so.
+1. **The knob is `run.judge_shard_timeout_minutes`, declared in row #3** beside `shard_timeout_minutes` in `backend/idhazh/contracts/knobs/run.py`. This row reads it and mints nothing. Its default is `200` minutes: at the day's cap of 200 pairs over 4 legs that is 50 pairs a leg judged twice, which is 100 calls, which at 77.6 seconds a call is 2 hours 9 minutes of model time, leaving 71 minutes of headroom against a fixed cost of about 6 minutes for the checkout, the cache restore and the server start. The headroom is that wide because the fixed cost is the part nobody has measured on this workload. **The 77.6 seconds is derived, not a judge reading** - it is 764 read tokens at 9.85 tokens a second, measured 2026-09-09 on a stock ubuntu-latest over 4,117 timed rows. Row #17 measures a real judge call and replaces it, and the field description says so.
 2. **`backend/utilities/shard_bound.py` gains one argument.** `main` takes `--key`, default `shard_timeout_minutes`; `minutes(config_root, *, key)` keeps the same refusal, `type(value) is not int or value < 1`; `main` prints `f"{key}={minutes(...)}"`. One reader, one refusal, two callers. A second utility would be a second answer to what a bound is.
 3. **The value travels as a job output.** The `draw` job carries a step `id: bounds` running `python3 backend/utilities/shard_bound.py --key judge_shard_timeout_minutes >> "$GITHUB_OUTPUT"`, and the job declares `judge_shard_timeout_minutes: ${{ steps.bounds.outputs.judge_shard_timeout_minutes }}`. The `judge` job then writes `timeout-minutes: ${{ fromJSON(needs.draw.outputs.judge_shard_timeout_minutes) }}`. It has to be a job output rather than a step output, because `timeout-minutes` resolves from `needs` before the job's first step and `steps` is not readable there. That is the same reason `digest.yml` publishes `shard_timeout_minutes` off its plan job.
 
 Why the assertion matters: `timeout-minutes` takes whatever it is handed. A value Actions cannot read as a number leaves the job with no bound at all, and the run finds out at the 6 h ceiling, where GitHub kills it with nothing written.
 
-**The model is `models.summarize`, and that is a cache decision.** The `judge` job writes the same cache key `digest.yml`'s work job writes, character for character: `llm-${{ needs.draw.outputs.summarize_file }}-${{ needs.draw.outputs.summarize_revision }}-${{ needs.draw.outputs.llama_cpp_build }}-v4`. Two things follow. The daily run has already created that entry, so LLM-JUDGES restores rather than downloads and adds **zero bytes** to the 10 GB cache allowance. And the owner's 9 tokens a second read transfers to this workload at all, because it was measured on these weights. A second model would be a second multi-gigabyte entry competing for eviction inside an allowance already near its ceiling; the cache cannot fail a run, but an eviction costs a re-download, and a download is wall-clock inside a job with a hard ceiling.
+**The model is `models.summarize`, and that is a cache decision.** The `judge` job writes the same cache key `digest.yml`'s work job writes, character for character: `llm-${{ needs.draw.outputs.summarize_file }}-${{ needs.draw.outputs.summarize_revision }}-${{ needs.draw.outputs.llama_cpp_build }}-v4`. Two things follow. The daily run has already created that entry, so LLM-JUDGES restores rather than downloads and adds **zero bytes** to the 10 GB cache allowance. And the repository's own throughput reading - 9.85 tokens a second, median over 4,117 timed rows, slowest 8.25 and fastest 44.71, taken 2026-09-09 on a stock ubuntu-latest - transfers to this workload at all, because it was taken on these weights. A second model would be a second multi-gigabyte entry competing for eviction inside an allowance already near its ceiling; the cache cannot fail a run, but an eviction costs a re-download, and a download is wall-clock inside a job with a hard ceiling.
 
 The `judge` job reuses the shipped parts and spells nothing itself: `backend/utilities/model_refs.py configured` for the refs, `.github/scripts/llama-cpp-pin.sh` for the build, `.github/scripts/fetch-model-runtime.sh` on a cache miss, the `sha256sum --check` step on every run including a hit, and `.github/scripts/start-llama-server.sh summarize llama-server` for the server. That script reaches `idhazh.llm.server.server_argv` through `backend/utilities/llama_argv.py`, which is the one place a llama-server flag may be spelled.
 
-**Where the four legs rejoin, and why there is no race.** Each leg runs `python -m idhazh judge-shard --date $DATE --shard ${{ matrix.shard }} --shards ${{ needs.draw.outputs.shards }}` - the verb row #6 registers - writes `backend/var/judge/<date>/verdicts/<shard>.csv`, and uploads it as `judge-verdicts-${{ matrix.shard }}`. **No leg commits anything.** The `fold` job downloads them with `pattern: judge-verdicts-*` and `merge-multiple: true`, and one process appends all four into one day file through `ledger.append_story_similarity_pairs`. Two processes never write one path, so there is no merge driver to trust, no union stacking to census afterwards, and no key to settle across legs.
+**Where the four legs rejoin, and why there is no race.** The `judge` job first downloads the draw the `draw` job uploaded - without it the leg has nothing to read and `judge-shard` fails on a missing file:
 
-Rejected alternative, and what it costs: four legs each committing into the one `merge=union` day file. It works - `state/item-health` does exactly that across up to eight work shards - and it buys four pushes that can each lose a race against a digest run inside a nine-hour window, four rebases, and a leg that dies after pushing half its rows. One fold is one push.
+```yaml
+      - uses: actions/download-artifact@v4
+        with:
+          name: judge-draw
+          path: backend/var/judge/${{ inputs.date }}
+```
 
-**Degrade, do not fail.** `fail-fast: false` on the matrix and `if: always()` on `fold`. A leg that runs out of clock costs its 50 pairs; the day still folds what the other three judged, and `pairs_judged` records the shortfall so the counts read as partial rather than as a quiet truncation.
+Each leg then runs `python -m idhazh judge-shard --date $DATE --shard ${{ matrix.shard }} --shards ${{ needs.draw.outputs.shards }}` - the verb row #6 registers - writes `backend/var/judge/<date>/verdicts/<shard>.csv`, and uploads it as `judge-verdicts-${{ matrix.shard }}`. **No leg commits anything.** The `fold` job downloads them with `pattern: judge-verdicts-*` and `merge-multiple: true`, and one process appends all four into one day file through `ledger.append_story_similarity_pairs`. Two processes never write one path, so there is no merge driver to trust, no union stacking to census afterwards, and no key to settle across legs.
+
+Rejected alternative, and what it costs: four legs each committing into the one `merge=union` day file. It works - `state/item-health` does exactly that across up to eight work shards - and it buys four pushes that can each lose a race against a digest run, four rebases, and a leg that dies after pushing half its rows. One fold is one push.
+
+**Degrade, do not fail, and be exact about what degrades.** `fail-fast: false` on the matrix and `if: always()` on `fold`. A leg that runs out of clock costs its pairs for that day. The `fold` job still runs, still appends every row the other legs produced, and still writes a fitted row - but it does NOT fold the day into the record, because the record counts a date once and a partial fold would make the missing leg's verdicts unreachable for ever (row #7). The day's row then carries `held_reason = legs_missing` with `pairs_judged` recording the shortfall, and a re-dispatch of that date folds the whole day cleanly.
 
 **Four legs, not four processes.** This is the correction that matters most in the whole plan, and it fails twice over:
 
 - The runner is **2 physical cores with 4 logical CPUs**. A measurement already in this repository records `llama-server` at 8 threads being **slower than at 4 on this host, at every prompt length, and 16 percent slower at decode**. Four servers sharing four logical CPUs is that experiment again, worse.
-- The configured weights are **3.93 GiB**. Four copies is **15.7 GiB on a 16 GB machine**, before Python and before any KV cache. It runs out of memory before it runs out of clock.
+- **One server does not leave room for a second.** A GGUF's file size is not its footprint, so the file size answers nothing here. The configured weights are `models/qwen3.5-9b-q4km.json` at 5,680,522,464 bytes, which is 5.29 GiB on disk - and measured over four committed captures of run `2026-08-29-3` on 2026-09-08, one `llama-server` peaks at **12.57 to 13.16 GiB**, with server plus python reaching **14.31 GiB at one instant, 96.0 percent of the 16 GB runner**. A second server on one runner does not fit at all, never mind four.
 
 **Budgets in play, each with what crossing it does.**
 
@@ -1703,15 +2109,16 @@ Rejected alternative, and what it costs: four legs each committing into the one 
 | --- | --- | --- | --- |
 | Job timeout | 6 h | GitHub kills the job. Nothing is written | A leg is bounded at 200 minutes, which is 3 h 20 m, so the bound bites first |
 | Published site | 1 GB | Pages refuses the deploy | This workflow publishes nothing to the site |
-| Machine | 4 vCPU, 16 GB, no GPU | Not a line. It is the machine | One server a leg, 3.93 GiB resident |
-| Concurrency | 20 jobs | Past it a job waits. A queue is not a failure | 4 legs plus 1, and the daily run's 4 to 8 workers do not overlap a 22:00 start |
+| Machine | 4 vCPU, 16 GB, no GPU | Not a line. It is the machine | One server a leg, peaking at 12.57 to 13.16 GiB resident |
+| Concurrency | 20 jobs | Past it a job waits. A queue is not a failure | 4 legs plus 1. The 18:20 digest slot can still be running its 4 to 8 workers when a 22:00 judge run starts, so the worst case is 13 jobs against a ceiling of 20 |
 | Cache | 10 GB | GitHub evicts. A miss costs a re-download | Zero new bytes. Same key as the daily run |
 
 **Cost.**
 
-- per leg: about 2 h 22 m of model time, estimated, at 50 pairs judged twice and 85 seconds a call, plus roughly 6 minutes of checkout, install, cache restore and server start.
+- per leg, at the `pair_budget` cap: 50 pairs judged twice is 100 calls, which at 77.6 seconds a call is about 2 h 09 m of model time, plus about 6 minutes of checkout, install, cache restore and server start. The 200-minute bound is sized for this case.
+- per leg, on a normal day: the cap never binds. At the measured median of 33 pairs a day the draw gives about 8 pairs a leg, 16 calls, about 21 minutes. On the worst day the measurement has seen - about 125 pairs - it is 31 pairs a leg, 62 calls, about 81 minutes. **The bound is sized for the budget the design permits, not for the day the pipeline usually has.**
 - cache: 0 GB added. A miss costs the same refetch the daily run already pays.
-- artifacts: one draw of about 200 rows and four verdict files of about 50 rows each. Under 100 KB, and this is a public repository, so the 500 MB private-repository quota meters nothing.
+- artifacts: one draw of at most 200 rows and four verdict files of at most 50 rows each. Under 100 KB, and this is a public repository, so the 500 MB private-repository quota meters nothing.
 - dependency: none added. Every script and every binary this workflow uses already ships.
 
 **Tests: `backend/tests/workflows/test_llm_judges_workflow.py`, workflow tier**, driven by the harness reading the committed YAML and never by a live run.
@@ -1721,13 +2128,15 @@ Rejected alternative, and what it costs: four legs each committing into the one 
 | `test_the_leg_reads_its_timeout_from_the_one_file_that_says_so` | The `bounds` step calls `shard_bound.py --key judge_shard_timeout_minutes` and no literal appears |
 | `test_the_timeout_travels_as_a_job_output` | `timeout-minutes` reads `needs.draw.outputs`, not `steps` |
 | `test_an_unreadable_timeout_is_refused_before_the_job_starts` | `shard_bound.minutes` raises on a float, a string and zero |
-| `test_the_weights_key_is_the_string_the_daily_run_writes` | The two key expressions render identically |
+| `test_the_weights_key_is_the_string_the_daily_run_writes` | The two key expressions are identical once the producing job name is normalised: the harness substitutes `needs.<job>.outputs.` in both before comparing, because `digest.yml` reads off `needs.plan` and this file reads off `needs.draw`. A raw text comparison fails a correct implementation |
+| `test_the_leg_fetches_the_draw_before_it_reads_it` | A `download-artifact` step naming `judge-draw` sits before the `judge-shard` step in the `judge` job |
+| `test_the_matrix_width_is_the_knob_and_not_a_literal` | `max-parallel` reads `needs.draw.outputs.shards`, and no bare integer appears beside it |
 | `test_one_server_per_leg` | Exactly one starter step in the `judge` job |
 | `test_a_dead_leg_does_not_cancel_its_siblings` | `fail-fast: false` and `if: always()` on `fold` |
 | `test_no_leg_commits` | No `commit-and-push.sh` call inside the `judge` job |
-| `test_the_fold_runs_the_two_commit_calls_in_order` | The verdicts call is before the record call |
-| `test_only_the_record_carries_refresh_paths` | `scored-pairs` is absent from `REFRESH_PATHS` |
-| `test_every_path_the_fold_stages_exists_in_a_fresh_checkout` | The same shape as `test_every_path_the_day_stages_exists_in_a_fresh_checkout` |
+| `test_the_fold_runs_the_two_commit_calls_in_order` | The rows call is before the record call |
+| `test_only_the_record_carries_refresh_paths` | Both `scored-pairs` and `fitted-thresholds` are absent from `REFRESH_PATHS` |
+| `test_every_path_the_fold_stages_exists_in_a_fresh_checkout` | The same shape as `test_every_path_the_plan_stages_exists_in_a_fresh_checkout`: every one of the four staged paths is asked of the working tree, so a path added to the call without a committed file behind it fails here rather than on the runner |
 
 **Three closed-world tables in `backend/tests/workflows/_harness.py` must gain an entry, or the suite fails before your test runs:**
 
@@ -1741,41 +2150,11 @@ Rejected alternative, and what it costs: four legs each committing into the one 
 
 - Start more than one `llama-server` per runner, for the two reasons above.
 - Name a model other than `models.summarize`, which would be a second cache entry and would throw away the only throughput reading this plan has.
-- Write a `timeout-minutes` literal, a llama-server flag, a model filename or a cache key by hand. Each of those has exactly one home.
+- Write a `timeout-minutes` literal, a `max-parallel` literal, a llama-server flag, a model filename or a cache key by hand. Each of those has exactly one home, and `max-parallel` is the shard count `digest.yml` already reads off its own plan job.
 - Commit from a `judge` leg.
 - Scrape runtime counters. `ServerJob` is a closed enum, adding a member is a contract change, and there is no reader for a judge row today. Row #17 is the row that measures a judge call.
-- Put the judging inside `digest.yml`. 400 calls at 85 seconds is 9.4 hours of model time in a workflow that already runs 2 to 3 hours. As one job it crosses the 6 h ceiling and GitHub kills it with nothing written.
+- Put the judging inside `digest.yml`. **The reason is the budget the design permits, not the day the pipeline usually has.** At the `pair_budget` cap of 200, 400 calls at 77.6 seconds is 8.6 hours of model time serially, which crosses the 6 h ceiling and GitHub kills it with nothing written. At today's measured median of 33 pairs the serial cost is 66 calls, about 1 h 25 m, and it would fit inside `digest.yml` comfortably - which is exactly why sizing the shape off the median is the wrong move: the first busy day crosses the ceiling and writes nothing.
 - Raise a budget to make a leg fit. If row #17 measures a median call past 150 seconds, the answer is fewer pairs or shorter summaries.
-
-Read the plan, the four console docs, the judgement route, the chart modules, the tokens and eight console specs. Here is the plan text.
-
----
-
-Judgement is a prerendered route. It reads `state/` and the published day tree at build time through `$lib/server/payload.ts`, and it fetches nothing. So Hardware's ruling stands here: no `Reserved.svelte` box, no waiting state, no unreachable state, and no tinted empty state. Every nothing on this route is settled at build time and gets words.
-
-**The page order is the ruling, not a layout preference.** A reader who stops after two panels has seen only facts that are true whether or not the judge is any good.
-
-**Table A - the page, top to bottom**
-
-| # | Panel title (h2) | Row | Model-free |
-| --- | --- | --- | --- |
-| A1 | Stories the day merged | 12 | Yes |
-| A2 | The pairs a person marked apart | 12 | Yes |
-| A3 | Where the merge line sits | 13 | The line is a number, not a verdict |
-| A4 | Whether the judge agrees with itself | 14 | No |
-| A5 | What the record still needs | 14 | No |
-| A6 | What the judge said about the line | 15 | No |
-
-**Table B - the shared plumbing, and which row creates each file**
-
-| # | Path | Created by | What it is |
-| --- | --- | --- | --- |
-| B1 | `frontend/src/routes/console/judgement/+page.server.ts` | 12 | The route's one `load`. `export const prerender = true;` |
-| B2 | `frontend/src/lib/server/similarity-ledger.ts` | 12 | Reads the three committed similarity files through `STATE_ROOT`. Server only, so the reader can never reach a browser bundle |
-| B3 | `frontend/src/lib/console/merge-line.ts` | 12 | Pure arithmetic, browser safe. The `logic` test group drives it with no build and no Chromium |
-| B4 | `frontend/src/routes/console/judgement/*.svelte` | 12, 13, 14, 15 | One panel component a panel, beside the route |
-
-**Panel components sit beside the route, not under `frontend/src/lib/`.** `/console/machine/` set that precedent with `SpanPanel.svelte` and `RunTimelinePanel.svelte`. `$lib/components/` is for a component a second route draws, and no panel here is drawn twice. Only B2 and B3 go under `$lib/`, because a test imports them without a page.
 
 ---
 
@@ -1850,59 +2229,76 @@ All in `sample_sheet.py`, all pure except the two that touch disk.
 
 | Function | Returns |
 | --- | --- |
-| `cell_of(pair: StorySimilarityPair, *, line: float) -> Cell \| None` | Which of the four cells a pair falls in, or `None` |
+| `cell_of(pair: StorySimilarityPair, *, line: float, days: Mapping[str, str]) -> Cell \| None` | Which of the four cells a pair falls in, or `None` |
 | `select(pairs: Sequence[StorySimilarityPair], *, line: float, want: int) -> dict[Cell, list[StorySimilarityPair]]` | The chosen pairs, cell by cell |
 | `articles(digest_root: Path, *, date: str, window_hours: float) -> dict[str, DigestItem]` | Every published item the window can reach, keyed by its recomputed url key |
-| `applied_line(state_dir: Path, *, date: str, fallback: float) -> tuple[float, str]` | The line the day used, and one line of prose saying where it came from |
+| `line_for_the_day(state_dir: Path, *, date: str, knobs, fallback: float) -> tuple[float, str]` | The line the day used, and one line of prose saying where it came from |
 | `render(...) -> str` | The whole sheet as one string |
 | `write(body: str, *, out_dir: Path, filename: str) -> Path` | `write_atomic`, temp file plus rename |
 
+**`line_for_the_day` calls row #9's `applied.applied_line(state_dir, date=date, knobs=knobs)` and adds the prose.** It defines no second function of that name and repeats none of its arithmetic. When that call returns `None` it uses `fallback`, which is `settings.app.assemble.same_story.floor_min`, and says so in the sentence it returns.
+
 `Cell` is a `StrEnum` declared in this module with four members:
-`MERGED_AND_AGREED`, `MERGED_AND_DISAGREED`, `APART_AND_AGREED`,
-`APART_AND_DISAGREED`. It is declared here rather than in
+`ELIGIBLE_AND_AGREED`, `ELIGIBLE_AND_DISAGREED`, `NOT_ELIGIBLE_AND_AGREED`,
+`NOT_ELIGIBLE_AND_DISAGREED`. It is declared here rather than in
 `backend/idhazh/contracts/` because nothing persists it - it never reaches a
 column, and a vocabulary that reaches no payload does not belong in a contract
 module.
 
-**`cell_of` is four lines and one comparison operator, and the operator is the
-one row #8 already fought over.** A pair merges on `score >= line`, because
+**The word is ELIGIBLE and not MERGED, and the difference is not pedantry.** A
+score at or above the line makes a pair eligible to merge; it does not mean the
+day merged it. Two things stop an eligible pair merging. `_group_fit` requires
+every pair in a group to clear the line, so a pair above it can still be refused
+by a third item. And a pair whose two items ran on different published days
+never folds at all - `layout.md` puts it plainly, "a cross-day match is a name in
+the stack and never a fold", and the item gets `also_ran_earlier` instead. A
+cell labelled MERGED would state as fact something the sheet cannot check, and a
+sheet that is confidently wrong is worse than no sheet.
+
+**`cell_of` is one comparison and one skip, and the operator is the one row #8
+already fought over.** A pair is eligible on `score >= line`, because
 `assemble.py` refuses on `score < floor_min`. Write `>=` and hold it shut with a
-test; a sheet that puts a merged pair in an "apart" cell is worse than no sheet,
-because it is confidently wrong.
+test.
 
 | Cell | Score against the line | Verdict | What a reader should feel |
 | --- | --- | --- | --- |
-| `MERGED_AND_DISAGREED` | at or above | `NO` | Alarm. This is the wrong merge: a story the reader never saw |
-| `APART_AND_DISAGREED` | below | `YES` | Mild. The day printed one story twice |
-| `MERGED_AND_AGREED` | at or above | `YES` | The line earning its place |
-| `APART_AND_AGREED` | below | `NO` | The line earning its place, the other way |
+| `ELIGIBLE_AND_DISAGREED` | at or above | `NO` | Alarm. The line would let this through, and where the group fits it is a story the reader never saw |
+| `NOT_ELIGIBLE_AND_DISAGREED` | below | `YES` | Mild. The day printed one story twice |
+| `ELIGIBLE_AND_AGREED` | at or above | `YES` | The line earning its place |
+| `NOT_ELIGIBLE_AND_AGREED` | below | `NO` | The line earning its place, the other way |
 
-`cell_of` returns `None` for a pair where `usable` is false and for a pair whose
-verdict is `UNCLEAR`. An unusable pair is a reading about the judge, not about
-the pair, and `UNCLEAR` means the text did not say enough - neither is evidence
-about the line.
+`cell_of` returns `None` in three cases, and each one is counted in the header
+with its own reason rather than dropped in silence:
+
+- `usable` is false. That is a reading about the judge, not about the pair.
+- The verdict is `UNCLEAR`. The text did not say enough.
+- **The two items are not on the same published day.** A cross-day pair can
+  never fold, so the line was never asked about it, and putting it in a cell
+  would count a decision nobody made. `days` is the url-key-to-date map
+  `articles` already builds, so the skip costs one dictionary lookup.
 
 ### How ten pairs are chosen when a cell is empty, which will be most days
 
 **Round robin, in a fixed order, one pair per cell per turn, until the budget is
 spent or every cell is dry.** The order is the cost of the error, worst first:
 
-1. `MERGED_AND_DISAGREED`
-2. `APART_AND_DISAGREED`
-3. `MERGED_AND_AGREED`
-4. `APART_AND_AGREED`
+1. `ELIGIBLE_AND_DISAGREED`
+2. `NOT_ELIGIBLE_AND_DISAGREED`
+3. `ELIGIBLE_AND_AGREED`
+4. `NOT_ELIGIBLE_AND_AGREED`
 
 An empty cell passes its turn to the next one, so the sheet always carries ten
 pairs while ten exist anywhere. It never carries a quota of two or three a cell,
-because at 4 merges a day the two merged cells are usually 4 and 0, and a quota
+because at 4 merges a day the two eligible cells are usually 4 and 0, and a quota
 would print seven blank slots and three pairs.
 
-**Worked out on the median day.** The band holds 18 pairs, 16 are usable, 1 of
-those reads `UNCLEAR`, and 4 score at or above the line. Cells are 0, 2, 4 and 9.
-Four turns give 0, 2, 4 and 4, which is ten. The one `UNCLEAR` pair and the two
-that disagreed with themselves appear in no cell and are counted in the header
-instead, so the sheet's own arithmetic adds up and a reader can see what is
-missing.
+**Worked out on the median day.** The band holds 33 pairs, about 29 are usable,
+2 of those read `UNCLEAR`, and 4 score at or above the line. Cells are 0, 2, 4
+and 21. Four turns give 0, 2, 4 and 4, which is ten. The 2 `UNCLEAR` pairs and
+the 4 that disagreed with themselves appear in no cell and are counted in the
+header instead, so the sheet's own arithmetic adds up and a reader can see what
+is missing. Only the 33 is measured (2026-09-14, 25 committed days); the rest
+are the plan's own ratios and are estimates.
 
 **Inside a cell, the order is distance from the line, nearest first, ties broken
 by `pair_key` ascending.** A pair far from the line is a decision nobody is
@@ -1929,9 +2325,17 @@ Four reads, all fixed-cost (Guardrail #12):
 **The window read is not optional.** A pair can straddle midnight, so one of its
 two items can sit on the earlier published day. A sheet that read only the named
 day would print `article not on this day` for a class of pairs and a reader would
-read that as a defect in the judge.
+read that as a defect in the judge. It is also what tells `cell_of` whether the
+two items shared a day, which is the skip the cell labels depend on.
 
-**When no fitted row exists**, `applied_line` returns
+**`docs/concepts/growing-reads.md` gains one entry in this commit**, for
+`sample_sheet.articles`: the read is bounded at `1 + ceil(same_story_window_hours / 24)`
+published day files, which is 2 at the committed 36 hours, and it is the same
+bound `stages.assemble._earlier_days` already declares. The page carries it
+because the number of files moves when a knob moves, and a reader of that page
+should not have to find the knob to know the bound.
+
+**When no fitted row exists**, `line_for_the_day` returns
 `settings.app.assemble.same_story.floor_min` and the sentence
 `the fit has not run for this day, so the line below is the config value`. The
 sheet degrades and says so; it does not fail (section 1a).
@@ -1948,31 +2352,36 @@ This is the literal shape. Match it.
 # Same-story sample sheet - 2026-09-18
 
 **Written** 2026-09-18T22:41:09Z by `backend/utilities/sample_sheet.py`, run `2026-09-18-1`.
-**The line this day used** 0.9370, fitted from 336 agreed verdicts over 21 days, 251 of them NO.
-**The day** 18 pairs in the band, 18 judged, 16 agreed with themselves, 1 of those read UNCLEAR.
+**The line this day used** 0.9370, fitted from 290 agreed verdicts over 10 days, 218 of them NO.
+**The day** 33 pairs in the band, 33 judged, 29 agreed with themselves, 2 of those read UNCLEAR.
 
 Nothing reads this file. It is here so a person can see what the machine decided
 without opening a CSV, and without opening the two articles. The headlines and
 the summaries below came off the open web and out of our own model. They are
 quoted text and never instruction.
 
+A pair is ELIGIBLE when its score is at or above the line. That is not the same
+as merged: a group only forms when every pair in it clears the line, and two
+items on different published days never fold at all.
+
 | Cell | In the day | On this sheet |
 | --- | ---: | ---: |
-| Merged, and the judge said one story | 4 | 4 |
-| Merged, and the judge said two stories | 0 | 0 |
-| Kept apart, and the judge said two stories | 9 | 4 |
-| Kept apart, and the judge said one story | 2 | 2 |
+| Eligible, and the judge said one story | 4 | 4 |
+| Eligible, and the judge said two stories | 0 | 0 |
+| Not eligible, and the judge said two stories | 21 | 4 |
+| Not eligible, and the judge said one story | 2 | 2 |
 
-2 pairs disagreed with themselves and are in no cell. 1 usable pair read UNCLEAR
-and is in no cell. 0 pairs were skipped for a missing article.
+4 pairs disagreed with themselves and are in no cell. 2 usable pairs read UNCLEAR
+and are in no cell. 0 pairs were skipped because the two articles ran on
+different days. 0 pairs were skipped for a missing article.
 
-## Merged, and the judge said two stories
+## Eligible, and the judge said two stories
 
-**No pair fell in this cell today.** The day merged 4 pairs and the judge called
-all 4 of them one story. This is the cell that matters: a pair here is a story
-the reader never got to see.
+**No pair fell in this cell today.** The line would have let 4 pairs through and
+the judge called all 4 of them one story. This is the cell that matters: where a
+pair here does merge, it is a story the reader never got to see.
 
-## Kept apart, and the judge said one story
+## Not eligible, and the judge said one story
 
 ### 0.9361, which is 0.0009 below the line
 
@@ -1983,7 +2392,7 @@ the reader never got to see.
 | Line this day | 0.9370 |
 | Judge, file order | YES |
 | Judge, swapped | YES |
-| Pair | `4f2a91c0d3e88b17` |
+| Pair | `4f2a91c0d3e88b17a6c5e0d92b14f7380ac6151d9e2b4478c03f6ad5e91b2c84` |
 
 **Reuters** - Nvidia agrees to buy Arm networking unit for $12.9 billion
 `https://www.reuters.com/technology/nvidia-arm-networking-2026-09-18/`
@@ -2031,29 +2440,42 @@ the reader never got to see.
 `idhazh judge-fit` and before the second commit call. It reads what the fold and
 the fit wrote, so it cannot run before either.
 
-The sheet is committed by **call 2**, the rebuilding call of row #7, and two
-environment values change with it:
+The sheet is committed by **call 2**, the rebuilding call of row #7, and three
+things change with it:
 
-- `REFRESH_PATHS` gains `state/story-similarity/latest-sample.md`.
-- `REGENERATE_COMMAND` becomes
-  `python -m idhazh judge-fold --date <date> && python backend/utilities/sample_sheet.py --date <date>`.
+- Call 2's staged paths gain `state/story-similarity/latest-sample.md`.
+- `REFRESH_PATHS` gains the same path.
+- `REGENERATE_COMMAND` becomes `python backend/utilities/rebuild_judgement.py --date <date>`,
+  a new module in this row that calls the fold and then renders the sheet, in
+  that order, inside one process.
 
-**Both, or neither.** `.github/scripts/commit-and-push.sh` checks the two out of
-origin on a lost race and then runs the regenerate command. A refreshed path the
-regenerate command does not rewrite gets committed back at origin's version, so
-the sheet would silently revert to yesterday's on any day the push raced. The
-script refuses `REFRESH_PATHS` with no `REGENERATE_COMMAND` for this reason and
-cannot see the narrower version of the same mistake.
+**The regenerate command is one executable and it cannot contain `&&`.**
+`.github/scripts/commit-and-push.sh` reads the value with
+`IFS=' ' read -r -a REGENERATE <<< "$REGENERATE_COMMAND"` and then runs
+`"${REGENERATE[@]}"`. There is no shell in that path, so `&&` is handed to
+`python -m idhazh` as a literal argument word. The rebuild would fail on every
+lost race, and the script `break`s to `exit 1` when it does - so the failure
+mode is a dead push on exactly the days the refresh exists to survive. Two
+commands need one wrapper, and that is what `rebuild_judgement.py` is.
 
-It cannot go in call 1. Call 1 is the recording call for the day's verdict rows,
-which are appended and settle under `merge=union`; the sheet is a whole-file
-rewrite, and `merge=union` covers `state/**/*.csv` only, so two racing pushes
-would conflict for real.
+**Both, or neither.** `.github/scripts/commit-and-push.sh` checks the refreshed
+paths out of origin on a lost race and then runs the regenerate command. A
+refreshed path the regenerate command does not rewrite gets committed back at
+origin's version, so the sheet would silently revert to yesterday's on any day
+the push raced. The script refuses `REFRESH_PATHS` with no `REGENERATE_COMMAND`
+for this reason and cannot see the narrower version of the same mistake.
 
-**No seed file ships.** Row #2 already commits
-`state/story-similarity/holdout-pairs.csv`, so the directory exists in a fresh
-checkout and the workflow's single staged path, `state/story-similarity`, reaches
-a file a run created without naming it.
+It cannot go in call 1. Call 1 is the recording call for the day's appended
+rows, which settle under `merge=union`; the sheet is a whole-file rewrite, and
+`merge=union` covers `state/**/*.csv` only, so two racing pushes would conflict
+for real.
+
+**One seed file ships with this row**: `state/story-similarity/latest-sample.md`,
+carrying one sentence saying no run has written a sheet yet. Call 2 names the
+path, and `git add` on a path the checkout does not hold aborts the whole commit
+step under `set -euo pipefail` - the same rule that puts five seed files in row
+#2. `test_every_path_the_fold_stages_exists_in_a_fresh_checkout` is what catches
+it if the seed is forgotten.
 
 ### What it costs, per day and per year
 
@@ -2063,16 +2485,16 @@ first run writes.
 
 The measured input: over 75 items of the 2026-09-13 day, with the committed
 tokenizer on 2026-09-14, a title is a median 16 tokens and `title. summary` is a
-median 121, so a summary is a median 105 tokens, which is about 600 characters at
-roughly 4 characters a token.
+median 121, so a summary is a median 105 tokens, which is about 420 characters
+at roughly 4 characters a token.
 
 | What | Estimate | How it was reached |
 | --- | --- | --- |
-| One pair on the sheet | about 1.8 KB | 2 titles at 120 characters, 2 summaries at 620, plus about 280 of heading, table and blank lines |
-| One day's sheet | about 19 KB | 10 pairs plus about 1.5 KB of header, cell tables and empty-cell notes |
-| The working tree | 19 KB, for ever | One file, overwritten every run. It does not grow |
-| A year of history | about 2.2 MB if nothing pruned it | One new blob a day, and markdown of this kind packs to roughly a third |
-| History in steady state | about 0.4 to 0.6 MB | `.github/workflows/prune.yml` squashes commits older than `finetune.prune_keep_days`, which is 60, every `finetune.prune_every_days`, which is 30, so the range never holds more than 60 to 90 days of sheets |
+| One pair on the sheet | about 1.33 KB | 2 titles at 120 characters, 2 summaries at 420, plus about 280 of heading, table and blank lines: 1,360 bytes |
+| One day's sheet | about 15.1 KB | 10 pairs at 1.36 KB plus about 1.5 KB of header, cell tables and empty-cell notes |
+| The working tree | 15.1 KB, for ever | One file, overwritten every run. It does not grow |
+| A year of history | about 1.8 MB if nothing pruned it | One new blob a day, 365 x 15.1 KB, and markdown of this kind packs to roughly a third |
+| History in steady state | about 0.30 to 0.45 MB | `.github/workflows/prune.yml` squashes commits older than `finetune.prune_keep_days`, which is 60, every `finetune.prune_every_days`, which is 30, so the range never holds more than 60 to 90 days of sheets |
 
 **Against the two figures that fail a run: nothing.** The file is under `state/`
 and never under `frontend/public/`, so the 1 GB published site does not see it,
@@ -2088,10 +2510,11 @@ at module scope (CLAUDE.md section 13).
 
 | Test | Tier | What drives it |
 | --- | --- | --- |
-| `test_a_pair_scoring_exactly_the_line_is_a_merge` | unit | Two built pairs, one at the line and one a thousandth below |
+| `test_a_pair_scoring_exactly_the_line_is_eligible` | unit | Two built pairs, one at the line and one a thousandth below |
+| `test_a_pair_whose_two_articles_ran_on_different_days_reaches_no_cell` | unit | Two built day files and one pair straddling them, asserting the pair is counted as a cross-day skip and appears in no cell. The bite: drop the skip and it lands in an eligible cell, claiming a merge that could never happen |
 | `test_an_unusable_pair_reaches_no_cell` | unit | One built pair, `usable` false, verdict `NO` |
 | `test_an_unclear_verdict_reaches_no_cell` | unit | One built pair, both readings `UNCLEAR` |
-| `test_an_empty_cell_gives_its_turn_to_the_next_one` | unit | Built cells of 0, 2, 4 and 9, asserting 10 pairs and the 0, 2, 4, 4 split |
+| `test_an_empty_cell_gives_its_turn_to_the_next_one` | unit | Built cells of 0, 2, 4 and 21, asserting 10 pairs and the 0, 2, 4, 4 split |
 | `test_the_costly_cells_fill_first` | unit | Built cells of 3, 3, 30 and 30, asserting both disagreement cells are whole |
 | `test_a_cell_with_nothing_in_it_still_gets_a_heading` | unit | The same day, asserting the heading and the reason are in the rendered body |
 | `test_the_nearest_pairs_to_the_line_are_the_ones_shown` | unit | 20 built pairs in one cell at known distances |
@@ -2108,7 +2531,9 @@ at module scope (CLAUDE.md section 13).
 **One workflow test**, added to
 `backend/tests/workflows/test_llm_judges_workflow.py`:
 `test_the_sample_sheet_is_rewritten_by_the_call_that_refreshes_it` - the path is
-in `REFRESH_PATHS` and the command that rewrites it is in `REGENERATE_COMMAND`.
+staged by call 2, is in `REFRESH_PATHS`, and the command that rewrites it is a
+single executable in `REGENERATE_COMMAND` carrying no `&&`, because the script
+splits that value on spaces and runs it without a shell.
 
 ### What this row must NOT do
 
@@ -2123,18 +2548,64 @@ in `REFRESH_PATHS` and the command that rewrites it is in `REGENERATE_COMMAND`.
   A knob that changes which pairs are shown is a knob somebody turns until the
   sheet looks good.
 - Print the model's first-token margin, the record's counts, or the day's
-  telemetry. Those are the console's job, rows #12 to #15.
+  telemetry. The sheet is about pairs a person can read. The margin reaches no
+  surface in this plan at all - it is recorded on the row so row #17 can read it
+  off a real run and say whether the grammar chose or the model did.
 - Register an `idhazh` verb or add a Pydantic model.
 - Write anywhere under `frontend/`.
 - Be parsed by anything, ever, without a contract landing first.
 
 ---
 
+## The judgement route, shared by rows #12 to #15
+
+Every one of the four console rows draws on this page, so the page order, the
+shared modules and the rule about what a nothing looks like are settled once
+here rather than four times.
+
+Judgement is a prerendered route. It reads `state/` and the published day tree at build time through `$lib/server/payload.ts`, and it fetches nothing. So Hardware's ruling stands here: no `Reserved.svelte` box, no waiting state, no unreachable state, and no tinted empty state. Every nothing on this route is settled at build time and gets words.
+
+**The page order is the ruling, not a layout preference.** A reader who stops after two panels has seen only facts that are true whether or not the judge is any good.
+
+**Table A - the page, top to bottom**
+
+| # | Panel title (h2) | Row | Model-free |
+| --- | --- | --- | --- |
+| A1 | Stories the day merged | 12 | Yes |
+| A2 | The pairs a person marked apart | 12 | Yes |
+| A3 | Where the merge line sits | 13 | The line is a number, not a verdict |
+| A4 | Whether the judge agrees with itself | 14 | No |
+| A5 | What the record still needs | 14 | No |
+| A6 | What the judge said about the line | 15 | No |
+
+**Table B - the shared plumbing, and which row creates each file**
+
+| # | Path | Created by | What it is |
+| --- | --- | --- | --- |
+| B1 | `frontend/src/routes/console/judgement/+page.server.ts` | 12 | The route's one `load`. `export const prerender = true;` |
+| B2 | `frontend/src/lib/server/similarity-ledger.ts` | 12 | Reads the committed similarity ledgers through `STATE_ROOT`. Row #12 creates it reading two of them - the fitted-thresholds day tree and the hand-marked holdout file - and row #15 extends it to the record. Server only, so the reader can never reach a browser bundle |
+| B3 | `frontend/src/lib/console/merge-line.ts` | 12 | Pure arithmetic, browser safe. The `logic` test group drives it with no build and no Chromium |
+| B4 | `frontend/src/routes/console/judgement/*.svelte` | 12, 13, 14, 15 | One panel component a panel, beside the route |
+| B5 | `frontend/src/lib/server/config.ts` | 12 | Edited, not created. A new `similarityConfig()` reader returns `assemble.same_story.adaptive_dedup_threshold`, which both row #12's axis and row #13's corridor need. Each reader in that file mirrors one block and is named after it, so this follows the rule the file already states. **Whichever of rows #12 and #13 lands first writes it, and the other deletes its copy** |
+
+**Panel components sit beside the route, not under `frontend/src/lib/`.** `/console/machine/` set that precedent with `SpanPanel.svelte` and `RunTimelinePanel.svelte`. `$lib/components/` is for a component a second route draws, and no panel here is drawn twice. Only B2, B3 and B5 go under `$lib/`, because a test imports them without a page.
+
+**The route already exists and is already spoken for.**
+`frontend/src/routes/console/judgement/+page.svelte` landed on 2026-09-12 as a
+deliberately empty route whose named absence promises the desk and the lenses the
+model chose - row 23's subject, not this one. So the merge-line panels are added
+BESIDE that absence rather than in place of it, and the route leaves `EMPTY_ROUTES`
+and joins `ROUTES` in BOTH `frontend/tests/console-nav.spec.ts` and
+`frontend/tests/console-title.spec.ts` in row #12's commit, because both lists
+assert today that the route draws nothing.
+
+---
+
 ## Row #12 - the two model-free panels: the merge count and the holdout check
 
-**Depends on** row #8 for panel A2 only. **Panel A1 needs nothing from this plan at all** and is the smallest useful slice of the whole feature.
+**Depends on** rows #2 and #8, for panel A2 only: row #2 for the hand-marked holdout file and its two published dates, row #8 for the applied line the rule is drawn at. **Panel A1 needs nothing from this plan at all** and is the smallest useful slice of the whole feature.
 
-This row also creates the route's `load`, its window control and the two shared modules in Table B. Rows #13 to #15 extend them and create none of them.
+This row also creates the route's `load`, its window control and the shared modules B1 to B3 in Table B, and it takes the route out of `EMPTY_ROUTES`. B5, the `similarityConfig()` reader, is shared with row #13: whichever lands first writes it. Rows #13 to #15 extend these files and create none of them.
 
 ### What it draws
 
@@ -2153,10 +2624,19 @@ This is the one number in this feature that involves no model. It is true today,
 | # | Source | How | Cost |
 | --- | --- | --- | --- |
 | C1 | The published day tree | `publishedDates(undefined, widestDays)` then `loadDay(date)` | One day file a day inside the widest preset, 90 days, so 91 files. The same read `doubtReasonDays` in `frontend/src/routes/console/model/+page.server.ts` already takes |
-| C2 | `state/story-similarity/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` | `readDayShards(join(STATE_ROOT, 'story-similarity', 'fitted-thresholds'), shardDays(widestDays))` | One file a recorded day inside the window. `readDayShards` carries the bound |
+| C2 | `state/story-similarity/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` | `readDayShards(join(STATE_ROOT, 'story-similarity', 'fitted-thresholds'), shardDays(widestDays))` | One file a recorded day inside the window. `readDayShards` bounds what it OPENS; the directory listing it walks first grows with the tree, which is why this read needs an entry of its own |
 | C3 | `state/story-similarity/holdout-pairs.csv` | `readCsv(join(STATE_ROOT, 'story-similarity', 'holdout-pairs.csv'))` | One hand-typed file. Fixed size: a person writes it, so it cannot grow with the archive |
+| C4 | The two published days each holdout row names | `loadDay(row.left_date)` and `loadDay(row.right_date)`, de-duplicated | At most two files a marked row, and 22 rows today. It is bounded by the holdout file rather than by the archive, which is the whole reason the two dates are columns |
 
 `widestDays` is `Math.max(...console.window_presets)`, which is 90. Work it out before the ledgers are opened, never after, so a day older than the widest preset is never opened at all (Guardrail #12).
+
+**`docs/concepts/growing-reads.md` gains two entries in this commit.** C2,
+because `readDayShards` bounds its opens but its directory walk names one entry
+a recorded day where the month tree named one a month - its own header says so.
+And C4, because it opens published days outside the window preset and the bound
+is the length of a hand-typed file rather than a knob. Both entries name what
+they read, how the cost scales, and why a bounded input cannot answer the
+question.
 
 **C1 is where the merge count comes from, and `same_story_as` is the field.** `schemas/digest-day.schema.json` defines it: null on the item that is kept and on an item nothing grouped with, and set to the kept item's id on a collapsed one. So for one day:
 
@@ -2169,9 +2649,37 @@ published    = day.items.length
 
 Put those four lines in `$lib/console/merge-line.ts` as `mergeCountsOf(items)`, taking the item array and returning the four numbers. A test drives it with a built array and never with a day off disk.
 
-**The holdout marks come off the fitted row, not off the holdout file.** `SimilarityHoldoutPair` carries no score on purpose: a score depends on the weights, so a stored one rots the first time a weight moves. The fit already computes both numbers and writes them as columns 27 and 28, `holdout_violations` and `holdout_margin`. The dot sits at `applied - holdout_margin`. The console recomputes nothing, which is the standing rule `$lib/console/band.ts` states in its own header: two derivations of one verdict is two verdicts.
+**The holdout marks are scored here, in the route's `load`, and this is the one
+place in the console that scores anything.** The fitted row carries no holdout
+columns, because the fit is a function of the record and the record holds counts
+rather than pairs - scoring a hand-marked pair needs the two items' vectors, and
+those live in the published day payload under `DigestEmbeddings.vectors`.
 
-**What that costs the reader, stated.** Only the closest call is placed on the axis. The other pairs a person marked are listed in a shut `<details>` table underneath with their two headlines, the mark and the note, and no score. So the panel shows the nearest miss rather than the spread of misses. Buying the spread back needs a per-pair score in a committed file, which is a contract this row does not open.
+So the `load` does this, once, at build time:
+
+1. Read the holdout file. It is hand typed and about 22 rows.
+2. For each row, open the two days it names and find the two items whose
+   recomputed url keys match the two addresses.
+3. Take the two vectors out of `DigestEmbeddings.vectors` and the key points off
+   the items, and apply the weights on the newest fitted row -
+   `cosine_weight` 1.0 and `key_point_weight` 0.0 at the committed defaults.
+4. The margin is `applied` minus the highest score among the rows marked
+   `same_story` false. The violation count is how many of those score at or
+   above `applied`.
+
+**Why this is not a second derivation.** No run has ever scored these pairs.
+They are a person's marks, not judged pairs, and nothing writes a score for
+them anywhere. There is exactly one derivation and this is it. A judged pair is
+the opposite case: its score is already on its row, and recomputing that in a
+page would be two verdicts about one number.
+
+**Print the weights under the panel, with the date of the newest fitted row.** A
+reader who changes a weight needs to see that the margin moved because the ruler
+moved. A score with no weights beside it is a number that rots quietly.
+
+**What that costs the reader, stated.** Only the closest call is placed on the axis. The other pairs a person marked are listed in a shut `<details>` table underneath with their two headlines, the mark, the note and their score. So the panel shows the nearest miss rather than the spread of misses on the axis itself. Buying the spread back would mean plotting 22 dots on one 718 px axis, which is a row of overlapping marks nobody can read.
+
+**A marked pair whose article is not on the day it names is skipped, and the skip is counted with its reason.** An article can be unpublished, or a day can age out of the tree. A blank dot would say the margin is fine; a counted skip says the mark could not be checked.
 
 ### The axis
 
@@ -2182,7 +2690,7 @@ Put those four lines in `$lib/console/merge-line.ts` as `mergeCountsOf(items)`, 
 | D1 | Domain | `band_low` to `band_high`, 0.88 to 1.00 | The only span a fitted line can ever take. Below 0.88 nothing is judged, and 1.00 is where a cosine stops |
 | D2 | `nice` | `false` | The domain is already decided by the two knobs. Rounding a fixed domain outward moves every mark to buy a tick label that reads the same either way (`frame.ts`) |
 | D3 | Scale | `linearAxis(values, [box.left, box.right], { zero: false, nice: false })` | A mark that encodes by position takes the padded domain, never the zero anchor |
-| D4 | Resolution | 0.0083 draws about 44 px at `console.chart_width` 760 | 760 px less 34 left and 8 right is 718 px of plot over 0.12 of score, which is 5,983 px a unit. The margin is legible at every width the console draws at |
+| D4 | Resolution | 0.0083 draws about 50 px at `console.chart_width` 760 | 760 px less 34 left and 8 right is 718 px of plot over 0.12 of score, which is 5,983 px a unit, so 0.0083 x 5,983 is 49.7 px. The margin is legible at every width the console draws at |
 
 Panel A1's axis is a count axis: `linearAxis(values, range, { zero: true })`. A column's length carries the value, so it anchors at zero.
 
@@ -2208,6 +2716,11 @@ E1 and E2 say different things on purpose. E1 means the day tree cannot answer. 
 | F2 | Marks exist, no fitted row | The score axis, a rule at `assemble.same_story.floor_min`, the dot at the closest pair, the table | `{n} pairs are marked by hand. No day has fitted a line yet, so the rule below is the line the newest day was built with.` |
 | F3 | Healthy and boring | Axis, rule, dot, margin figure, the shut table | `The line sits {margin} above the closest pair a person marked as two stories. No hand-marked pair is on the wrong side of it.` |
 | F4 | A violation | The same, and the dot above the rule | `The line is {margin} BELOW a pair a person marked as two stories, so it would merge them. {n} hand-marked pairs are on the wrong side of it.` |
+
+**`{margin}` is always printed as a distance and never as a signed number.** The
+margin is negative in F4, so the raw value renders `-0.0020 BELOW`, which reads
+as a double negative and a typo. Take the absolute value and let the word BELOW
+carry the direction, exactly as the word above carries it in F3.
 
 F4 is not an empty state. It is on this table because it is the state the panel exists for, and a panel whose worst state is unspecified is a panel nobody designed.
 
@@ -2242,9 +2755,11 @@ New file: `frontend/tests/console-judgement-merges.spec.ts`. The pure arithmetic
 | H3 | `the two empty states say different things` | Exactly one of E1 and E2 renders, and their strings differ |
 | H4 | `the score axis holds the band whatever the data does` | `data-holdout-domain` reads `0.88,1` on the built canary, at 1440 and at 390 |
 | H5 | `the margin is a figure and a distance on one axis` | The margin figure in type equals `applied` minus the dot's plotted score, to the resolution the axis draws at |
-| H6 | `a violation says so in words` | With a fixture margin below zero, the F4 sentence renders and the word `BELOW` is present with the colour ignored |
+| H6 | `a violation prints a distance and not a minus sign` | With a fixture whose closest marked pair scores above the applied line, the F4 sentence renders, the word `BELOW` is present with the colour ignored, and the figure carries no `-` |
 | H7 | `every panel keeps its box with no data` | Both panel boxes at `STATE_ROOT` empty equal the boxes on the canary build, within 1 px |
-| H8 | `the panel names no ledger column` | The rendered text contains none of `same_story_as`, `holdout_margin`, `holdout_violations`, `floor_min` |
+| H8 | `the panel names no ledger column` | The rendered text contains none of `same_story_as`, `applied`, `left_date`, `floor_min` |
+| H9 | `a marked pair the day tree cannot answer for is counted as skipped` | A built holdout row naming a date with no day file: the panel prints the skip and its reason, and draws no dot for it |
+| H10 | `the margin is computed under the weights it prints` | A built day, a built holdout row and two fitted rows carrying different weights: the printed score changes with the weights and the printed weights change with it |
 
 Add `/console/judgement/` to `frontend/tests/console-axis.spec.ts` `ROUTES` and to its `DECLARES` map as `true`, because panel A1 draws a date axis of its own. That is the same edit Voices made on 2026-09-14.
 
@@ -2260,7 +2775,15 @@ Follow `docs/how-to/run-the-gates.md`. The three traps there apply: `vite previe
 
 ### What this row must NOT do
 
-- Recompute a similarity score in a page. The scores are the pipeline's and the vectors are dropped from the published payload.
+- Recompute a score the pipeline already wrote. The day payload carries the
+  vectors under `DigestEmbeddings.vectors`, so a page could - and a judged pair
+  already carries `composite_score`, `cosine` and `key_point` on its row, so a
+  second derivation of one verdict is two verdicts, which is the rule
+  `$lib/console/band.ts` states in its own header. The hand-marked pairs are the
+  one exception and the reason is narrow: nothing has ever scored them, so the
+  panel is the first derivation rather than the second.
+- Score a holdout pair in the browser. It happens in the route's `load`, at
+  build time, and the page ships the answer.
 - Draw a rate line on a share that runs at a few percent.
 - Read the whole day tree. The widest preset is the cover and it is worked out before the first file is opened.
 - Add a fetch. The route is prerendered and stays prerendered.
@@ -2281,7 +2804,7 @@ Panel `Where the merge line sits`. One chart, one date axis, two lines on a fixe
 
 **The gap between the two lines is the story.** They sit on top of each other on a normal day. They part on a day the record pulled hard and the clamp or the damping held the line back.
 
-**The clamp gets no panel of its own, and that is the ruling.** A panel titled "the clamp" would draw a bar chart of a bool. The dotted line outside the clamp band IS the clamp firing, and it is in the one place a reader is already looking. What the reader would lose is the count, so the count goes in the readout as one sentence: `The clamp held the line back on 3 of the last 28 days.` When it never fired: `The clamp has not held the line back on any of the last 28 days.`
+**The clamp gets no panel of its own, and that is the ruling.** A panel titled "the clamp" would draw a bar chart of a bool. The dotted line outside the clamp band IS the clamp firing, and it is in the one place a reader is already looking. What the reader would lose is the count, so the count goes in the readout as one sentence: `The clamp held the line back on 3 of the last 30 days.` When it never fired: `The clamp has not held the line back on any of the last 30 days.` The number of days is whichever window preset is selected, and `console.window_presets` is `1, 7, 14, 30, 90`, so no sentence on this panel ever names a window a reader cannot choose.
 
 **The clamp band is drawn.** Behind the applied line, shade the envelope `previous - max_down_step` to `previous` for each day, in `--color-surface-sunken`. Without it the dotted line leaving the band is a dotted line going somewhere, and a reader cannot see which side of the limit it is on.
 
@@ -2295,7 +2818,7 @@ Panel `Where the merge line sits`. One chart, one date axis, two lines on a fixe
 | I2 | `nice` | `false` | The domain is fixed by two knobs, so rounding it outward moves every mark to buy a label that reads the same |
 | I3 | 0.001 on screen | About 1.6 px | `console.chart_height` 220 less the 8 px top and 22 px bottom margins in `frame.ts` is 190 px of plot over 0.12 of score, which is 1,583 px a unit. One slot width is a visible step |
 | I4 | 0.005 on screen | About 7.9 px | One clamped day is a step a reader can see without a legend |
-| I5 | 0.0083 on screen | About 13 px | The measured holdout margin is a third of a line height, so a line approaching it is visible before it crosses |
+| I5 | 0.0083 on screen | About 13 px | The measured holdout gap is a visible distance rather than a rounding artefact, so a line approaching it can be seen before it crosses |
 | I6 | 0.94 on screen | Exactly halfway up the plot | `(1.00 - 0.94) / 0.12` is 0.5. Today's line sits in the middle of its own corridor, which is what a corridor is for |
 
 **Why not an auto-scaled axis.** After the first fortnight the line moves under 0.002 a day. Auto-scaled, a two-thousandth move fills the panel top to bottom, and a normal day reads as an incident. An operator who has seen three of those stops reading the panel.
@@ -2315,11 +2838,11 @@ Panel `Where the merge line sits`. One chart, one date axis, two lines on a fixe
 | J1 | `frontend/src/routes/console/judgement/MergeLinePlot.svelte` | Yes | The chart. Hand-written SVG through `frame.ts`, the way `SourceCutRange.svelte` is built, so the plot is complete before any script runs and both themes work with no JavaScript |
 | J2 | `frontend/src/lib/console/merge-line.ts` | Extended | `corridorOf(knobs)` returns the fixed domain. `clampEnvelope(rows)` returns the band per day |
 | J3 | `frontend/src/lib/server/similarity-ledger.ts` | Extended | Hands the route one small object a day: `date`, `previous`, `proposed`, `applied`, `clamp_kind`, `clamp_movement`, `held_reason` |
-| J4 | `frontend/src/lib/server/config.ts` | Extended | A new `similarityConfig()` reader for the `assemble.same_story.adaptive_dedup_threshold` block. Each reader in that file mirrors one block and is named after it, so this follows the rule the file already states |
+| J4 | `frontend/src/lib/server/config.ts` | Extended | `similarityConfig()`, the reader for the `assemble.same_story.adaptive_dedup_threshold` block. **This is B5 in the shared table and not a second function**: row #12 needs the same reader for its score axis, so whichever of the two rows lands first writes it and the other deletes its copy |
 
 **Hand-written SVG, not the engine.** `frontend/src/lib/charts/core.ts` decides what the lazy engine chunk weighs, and two lines on a fixed domain need none of it. `SourceCutRange.svelte` is the model to copy: `observeWidth`, `chartWidth`, `frame`, `tickAnchor`, and every colour leaving as a custom property rather than a hex.
 
-**Seed the rows, filter in the browser.** The server inlines one small object a fitted day at the widest preset, and the window control filters that array. A fitted row is about 12 numbers and the widest preset is 91 days, so the page re-aggregates nothing and the figure in the sentence and the mark on the chart cannot drift apart. Report the prerendered page weight before and after in the pull request: the console routes are measured rather than capped, so a growth nobody priced is the only failure mode here.
+**Seed the rows, filter in the browser.** The server inlines one small object a fitted day at the widest preset, and the window control filters that array. J3's object is four numbers and three words a day - `previous`, `proposed`, `applied`, `clamp_movement`, plus `date`, `clamp_kind` and `held_reason` - and the widest preset is 91 days, so the page re-aggregates nothing and the figure in the sentence and the mark on the chart cannot drift apart. Report the prerendered page weight before and after in the pull request: the console routes are measured rather than capped, so a growth nobody priced is the only failure mode here.
 
 ### The three states
 
@@ -2383,7 +2906,7 @@ New file: `frontend/tests/console-judgement-line.spec.ts`.
 
 ## Row #14 - judge self-agreement, the unclear rate, and the record filling
 
-**Depends on** row #8 in practice. The reckoner lists row #7, but both rates and all three gate counts are columns on the fitted row that row #8 writes, so this row reads the fitted tree. Correct the reckoner line in the same commit.
+**Depends on** rows #8 and #12. Both rates and all three gate counts are columns on the fitted row that row #8 writes, and the route's `load`, its ledger reader and its arithmetic module are row #12's.
 
 ### What it draws
 
@@ -2413,7 +2936,7 @@ This is the only quality reading on the judge that needs no second model. Every 
 
 **Why a shared axis for two different rates.** Both are a share of the same denominator, `pairs_judged`, so a reader comparing them is comparing like with like. Two panels at two scales would invite the comparison and make it wrong.
 
-**The three gate bars use `TargetBar.svelte` with `tone="policy"`.** The fill is `--chart-1` and never the confidence ramp. A gate is a threshold somebody chose, not a health fact, and `targetbar.ts` lends the ramp only where the threshold really is one. `targetGeometry` sizes its own track to `max(value, target) * 1.15`, which is right here: a count has no natural full and a record past its gate is drawn past the marker.
+**The three gate bars use `TargetBar.svelte` with `tone="policy"`.** The fill is `--chart-1` and never the confidence ramp. A gate is a threshold somebody chose, not a health fact, and `frontend/src/lib/charts/targetbar.ts` - a chart module, not a console one - lends the ramp only where the threshold really is one. `targetGeometry` sizes its own track to `max(value, target) * 1.15`, which is right here: a count has no natural full and a record past its gate is drawn past the marker.
 
 **Every rate prints its denominator in the same sentence.** `1 reading in 20 disagreed with its own second reading, over 18 pairs.` A share over four pairs is not a measurement, and a panel under `console.min_attempts_for_rate`, 5 today, prints its counts and no rate at all. That is the rule `FailurePanels` already runs on.
 
@@ -2467,7 +2990,7 @@ This is the only quality reading on the judge that needs no second model. Every 
 | R7 | A held day square, once the gates are met | `--fill-medium` | `<title>`: `{date}: nothing was fitted. {reason in words}.` |
 | R8 | A day with no row | `--color-surface-sunken` | `<title>`: `{date}: no run recorded anything.` |
 
-**R6 against R7 is the ruling that matters.** A held day in the first three weeks is the design working. Painting it amber would put twenty amber squares on the panel's first month and burn the colour before it ever means anything. The colour arrives on the day a hold stops being expected.
+**R6 against R7 is the ruling that matters.** A held day in the first ten days is the design working. Painting it amber would put ten amber squares on the panel's first fortnight and burn the colour before it ever means anything. The colour arrives on the day a hold stops being expected.
 
 ### Tests
 
@@ -2499,7 +3022,7 @@ New file: `frontend/tests/console-judgement-agreement.spec.ts`.
 
 ## Row #15 - the confusion matrix, the route state label, and the figures strip
 
-**Depends on** row #7 for the record and row #8 for the applied line and the state.
+**Depends on** rows #7, #8 and #12: row #7 for the record, row #8 for the applied line and the state, and row #12 for the route's `load` and its ledger reader.
 
 ### What it draws
 
@@ -2511,12 +3034,21 @@ Panel `What the judge said about the line`, holding four things.
 
 | # | Cell | Reads | The words on screen |
 | --- | --- | --- | --- |
-| T1 | At or above the line, the judge said one story | `same_count` above the line | `Merged, and the judge agrees` |
-| T2 | At or above the line, the judge said two stories | `different_count` above the line | `Merged, and the judge disagrees` |
-| T3 | Below the line, the judge said two stories | `different_count` below the line | `Kept apart, and the judge agrees` |
-| T4 | Below the line, the judge said one story | `same_count` below the line | `Kept apart, and the judge disagrees` |
+| T1 | At or above the line, the judge said one story | `same_count` above the line | `Eligible to merge, and the judge agrees` |
+| T2 | At or above the line, the judge said two stories | `different_count` above the line | `Eligible to merge, and the judge disagrees` |
+| T3 | Below the line, the judge said two stories | `different_count` below the line | `Not eligible, and the judge agrees` |
+| T4 | Below the line, the judge said one story | `same_count` below the line | `Not eligible, and the judge disagrees` |
 
-**T2 is the expensive cell and the panel says so in one line under the grid:** `A story in this cell is one the reader never sees. A story in the cell below is one the reader sees twice.` That sentence is the whole plan in two clauses, and it is the one sentence on this route that is not derived from a number.
+**The cells say ELIGIBLE and not MERGED, because the record cannot tell the
+difference and the words must not claim it can.** The record holds counts in
+slots, not pairs, so splitting it at the line says which side of the line a
+verdict fell on and nothing more. Whether the day actually merged a pair depends
+on two things the record never saw: `_group_fit` refuses a group unless every
+pair in it clears the line, and two items on different published days never fold
+at all. A cell labelled MERGED would overstate what happened, which is the exact
+class of defect this whole page exists to catch.
+
+**T2 is the expensive cell and the panel says so in one line under the grid:** `The line would let a pair in this cell through, and where the group forms it is a story the reader never sees. A pair in the cell below is one the reader sees twice.` That sentence is the whole plan in two clauses, and it is the one sentence on this route that is not derived from a number.
 
 **One line over time, and only one.** The share of pairs above the line that the judge called two stories. The other three counts only ever rise, because the record only accumulates, so four rising lines would say the record got bigger, which is what the x axis already says.
 
@@ -2526,8 +3058,19 @@ Panel `What the judge said about the line`, holding four things.
 | --- | --- | --- | --- |
 | U1 | Domain | 0 to `discard_share * console.precision_axis_multiple`, 0 to 10 percent at the committed defaults | The fit places the line so that `discard_share` of judged two-story pairs stay above it, so 1 percent is the number this line should hover at. Ten times it shows the target and a tenfold overshoot on one fixed scale |
 | U2 | Marker | `discard_share`, 1 percent | The value the fit aims for, drawn as a rule so the gap is a distance rather than a subtraction |
-| U3 | New knob | `console.precision_axis_multiple`, default 10.0, in the `console` block of `config/appearance.json` | Guardrail #6. A bare 10 in a component is a hard-coded axis, and this one has a reason worth writing down |
+| U3 | New knob | `console.precision_axis_multiple`, default 10.0 | Guardrail #6. A bare 10 in a component is a hard-coded axis, and this one has a reason worth writing down |
 | U4 | Over the top | Clamp the mark at the top and print the real value in the readout | A value past a fixed axis is a state worth seeing, and dropping the mark would hide the worst day |
+
+**The new knob is a contract field before it is a config key.** The `console`
+block of `config/appearance.json` holds 23 keys today and none of them is this
+one, and a key in JSON with no Pydantic field behind it is a hard-coded value
+with a file around it (Guardrail #3, CLAUDE.md section 11). So in this row's
+commit: `AppearanceConfig`'s `console` block gains
+`precision_axis_multiple: float = Field(default=10.0, gt=1.0, le=100.0, ...)`,
+`__version__` is stamped, a one-line `__changelog__` entry is appended newest
+first, and `schemas/appearance-config.schema.json` is regenerated.
+`backend/tests/test_appearance_config.py` pins the stamp to the newest changelog
+entry, so all four move together or the suite goes red.
 
 **The population strips replace the 120-slot chart, and here is the count that killed it.** 120 slots and two series at `console.chart_height` 220 px is 240 marks in a 190 px plot, changing by single counts a day. That is a grey wall. Two horizontal range strips on one shared score axis, 0.88 to 1.00, answer the question a reader actually brings: **do the two populations still separate?** One strip for pairs the judge called one story, one for pairs it called two, each drawn as `rangeMarks` from `frontend/src/lib/charts/series.ts` with the lowest, the middle and the highest slot that holds a count. The applied line is a rule across both strips. Overlap between the two strips is where the line is being asked to do something the evidence cannot support.
 
@@ -2554,7 +3097,25 @@ Each figure prints a dash where the ledger holds no answer, never a zero. Null a
 | W1 | `frontend/src/routes/console/judgement/VerdictSplit.svelte` | Yes | The 2x2, the line, the two strips, the shut table, the figures strip |
 | W2 | `frontend/src/lib/console/merge-line.ts` | Extended | `splitAtLine(record, applied)` returns the four counts. `rebin(record, width)` returns the 24 rows. `populationRange(record, verdict)` returns the three marks a strip draws |
 | W3 | `state/story-similarity/score-distribution.json` | - | Read whole through `readFileSync` in `$lib/server/similarity-ledger.ts`. 120 slots, fixed size, so the read does not grow as the archive does |
-| W4 | `backend/idhazh/telemetry/publish/console_band.py` | Extended | `judgement_candidates(...)`, and one line in `build` |
+| W4 | `backend/idhazh/telemetry/publish/console_band.py` | Extended | `judgement_candidates(record, applied, marked)`, and one line in `build` |
+
+**`worst_judgement` already has a producer, and this row changes it rather than
+adding beside it.** `build` today reads
+`worst_judgement = worst_of(dead_gate_candidates(decline_rates or {}))`. It
+becomes:
+
+```python
+worst_judgement = worst_of(
+    [
+        *dead_gate_candidates(decline_rates or {}),
+        *editorial(judgement_candidates(record, applied, marked)),
+    ]
+)
+```
+
+The dead-gate line keeps its `BROKEN` severity and keeps going round
+`editorial`; the new candidates are editorial and are held to `EDITORIAL_CAP`,
+except for X1 if the ruling below puts it outside.
 
 **Inline the 24 rebinned rows and the two ranges, never the 120 slots.** The page draws no 120-slot chart, so shipping 360 numbers to draw 24 rows and 6 marks is weight with no reader.
 
@@ -2566,7 +3127,7 @@ The strip label reads `Judgement - {fragment}`, computed at build time by the pr
 
 | # | State | Fragment | Severity I rule | Crosses the editorial cap |
 | --- | --- | --- | --- | --- |
-| X1 | A hand-marked pair is below the line | `line below a hand-marked pair` | `BROKEN` | **Yes. Carmack rules this one** |
+| X1 | A published day merged a pair a person marked apart | `merged a pair marked apart` | `BROKEN` | **Yes. Carmack rules this one** |
 | X2 | The judge disagrees with itself past `disagreement_max` | `judge disagrees with itself` | `WORTH_A_LOOK` | No |
 | X3 | Unclear readings past `unclear_max` | `judge cannot tell` | `WORTH_A_LOOK` | No |
 | X4 | The record was archived, `held_reason` is `inputs_changed` | `line frozen, record restarted` | `WORTH_A_LOOK` | No |
@@ -2574,11 +3135,28 @@ The strip label reads `Judgement - {fragment}`, computed at build time by the pr
 | X6 | Nothing folded for more than `console.chart_rule_days`, 14 days | `nothing judged for {n} days` | `WORTH_KNOWING` | No |
 | X7 | The record is still filling | none | Not a candidate | - |
 
-**X7 is not a candidate, and that is a ruling.** The record takes about three weeks to fill, so a `collecting` fragment would sit on the tab for three weeks on a first run and teach an operator to ignore the tab. **What the reader loses is the fact at a glance from another route**, and what buys it back is Q1 and Q2 in row #14, which say it in full on this page every one of those days.
+**X1 asks a published question, not a scored one, and that is what makes it
+cheap.** `marked` is the hand-marked file read whole - about 22 rows - plus the
+published days those rows name, at most two a row. For each marked pair where
+`same_story` is false and both items ran on one day, the producer asks whether
+that day's payload put one item's `same_story_as` on the other. That is a fact
+the day already recorded, so there is no score, no vector and no second
+derivation. It is also the stronger statement: a merge that happened rather
+than a merge that might.
+
+The margin panel A2 draws is a different question - how close is the line to the
+nearest mark - and it is computed in the route's `load` from the vectors. One
+question each, one producer each, and neither can drift into the other.
+
+**X7 is not a candidate, and that is a ruling.** The record takes about ten days
+to fill, so a `collecting` fragment would sit on the tab for a week and a half on
+a first run and teach an operator to ignore the tab. **What the reader loses is
+the fact at a glance from another route**, and what buys it back is Q1 and Q2 in
+row #14, which say it in full on this page every one of those days.
 
 **X1 is the one I am handing to Carmack.** `console_band.EDITORIAL_CAP` holds Judgement and Voices at `WORTH_A_LOOK` because the band prints the one worst thing across five routes, and an editorial rule at `BROKEN` would take the band away from a failed run. The written exception today is `dead_gate_candidates`, a gate that has stopped reading.
 
-The argument for X1 crossing the cap: a hand-marked pair below the line is not a fact about what the day looked like. It is the merge line deleting a story the reader never sees, on a rule a person wrote down and this feature then walked past. It is the same class as a dead gate, which is why the exception already exists.
+The argument for X1 crossing the cap: a published day that merged a pair a person marked apart is not a fact about what the day looked like. It is the merge line deleting a story the reader never sees, on a rule a person wrote down and this feature then walked past. It is the same class as a dead gate, which is why the exception already exists.
 
 The argument against: it is still a published day, and a failed run is not, which is the distinction the cap was built on.
 
@@ -2622,7 +3200,7 @@ New file: `frontend/tests/console-judgement-verdicts.spec.ts`, and additions to 
 | # | Test | Tier | What it asserts |
 | --- | --- | --- | --- |
 | AA1 | `the split is at the applied line and not at the config floor` | logic | `splitAtLine` over a built 20-slot record with the applied line two slots off the config floor puts the two slots between them above the line |
-| AA2 | `a pair scoring exactly the line counts as merged` | logic | The same record, one count placed at the line's own value, lands in T1 or T2. This is the `+ bin_width` rule the fit is built on, checked from the reading side |
+| AA2 | `a pair scoring exactly the line is eligible` | logic | The same record, one count placed at the line's own value, lands in T1 or T2. This is the `+ bin_width` rule the fit is built on, checked from the reading side |
 | AA3 | `the four cells sum to the record` | logic | T1 + T2 + T3 + T4 equals the record's total `same_count` plus `different_count`. A split that does not add up is mis-binning and the picture still looks right |
 | AA4 | `unclear readings are in neither cell` | logic | A built record with `unclear_count` set changes none of the four |
 | AA5 | `the rebinned table is a fifth of the rows and the same totals` | logic | 24 rows, and each column sums to the 120-slot total |
@@ -2631,8 +3209,9 @@ New file: `frontend/tests/console-judgement-verdicts.spec.ts`, and additions to 
 | AA8 | `the detail table ships shut` | browser | The `<details>` has no `open` attribute in the prerendered HTML, and the 24 rows are in the document, so find-in-page reaches them |
 | AA9 | `every figure prints a dash where the ledger has no answer` | browser | At `STATE_ROOT` empty, all three strip figures read `-` and none reads `0` |
 | AA10 | `the panel keeps its box with no record` | browser | The panel box at `STATE_ROOT` empty matches the canary's within 1 px |
-| AA11 | `a hand-marked pair below the line makes the route the worst thing` | backend unit | `judgement_candidates` with `holdout_violations` of 1 returns one candidate at the severity the ruling settles on, driven by a built row and never by the committed archive |
-| AA12 | `a filling record is not a candidate` | backend unit | A built row with `held_reason` `sheet_too_small` returns no candidate, so the tab stays clear for three weeks |
+| AA11 | `a day that merged a pair marked apart makes the route the worst thing` | backend unit | `judgement_candidates` over a built published day whose payload merged a built holdout pair marked `same_story` false returns one candidate at the severity the ruling settles on. Driven by a built day and a built row, never by the committed archive |
+| AA12 | `a filling record is not a candidate` | backend unit | A built row with `held_reason` `sheet_too_small` returns no candidate, so the tab stays clear while the record fills |
+| AA13 | `a marked pair the day did not merge is not a candidate` | backend unit | The same built day with the merge removed returns nothing. The bite: score the pair instead of reading `same_story_as` and this goes red, because the score is above the line either way |
 
 Add `/console/judgement/` to `ROUTES` in `frontend/tests/console-title.spec.ts` and `frontend/tests/console-model-rule.spec.ts`, which is the same edit Voices made on 2026-09-14. Add an entry to `CHARTS` in `frontend/tests/console-mark-parity.spec.ts` for each hand-written SVG this row and row #13 add, naming its root, its domain attribute and the attributes a resize must leave alone.
 
@@ -2701,12 +3280,22 @@ seeing one card where they expected two.
 ### The split it pays for, and it is a real one
 
 `docs/reference/documentation-structure.md` says the page you add to pays first,
-and one addition buys at most one cut. `layout.md` is 943 lines. Its section
-**"The same story from several sources says so"** runs from line 128 to line 308
-and holds four subsections: `One score, not one number`, `What chose 0.94,
-measured on the cosine alone`, `One headline, two outlets, and why 0.94 was not
-what changed`, `What it costs the runner`, `The window past midnight`, and `The
-grouping runs before the lead block, and that order is fixed`.
+and one addition buys at most one cut. The section to move is
+**"The same story from several sources says so"** in `layout.md`, and it holds
+six subsections: `One score, not one number`, `What chose 0.94, measured on the
+cosine alone`, `One headline, two outlets, and why 0.94 was not what changed`,
+`What it costs the runner`, `The window past midnight`, and `The grouping runs
+before the lead block, and that order is fixed`.
+
+**Take the line range at the commit, not from this plan.** `layout.md` is edited
+by other work, so any range written here rots between the day it was counted and
+the day this row runs, and a stale range moves the wrong lines. Find the section
+by its heading, take everything down to the next heading at the same level, and
+run `python backend/utilities/doc_load.py` before and after: the row for
+`layout.md` getting smaller by what the new page gains is the proof the move was
+a move. Note that `What it costs the runner` is inside the section and carries
+readings this row says stay - they travel with the section, and the new page is
+where they live afterwards.
 
 **Those lines MOVE. They are not copied.** A section a later page corrects is a
 second answer, and the delete test says delete it in the commit that writes the
@@ -2885,16 +3474,19 @@ Documentation only, so no application suite runs (CLAUDE.md section 9).
 ## Row #17 - measure a judge call on a stock runner
 
 
-**What it replaces.** Every timing figure in this plan rests on the owner's
-9 tokens a second read and 4 written. Those were taken at prompt lengths far
-longer than this one, so applying them to a 764-token call is an estimate and is
-labelled one. Three numbers rest on it and all three are load-bearing:
-`pair_budget` at 200, `judge_shard_timeout_minutes` at 200, and the ruling that
-the judging cannot live inside `digest.yml`.
+**What it replaces.** Every timing figure in this plan rests on one reading of
+the summarizer: 9.85 tokens a second, median over 4,117 timed rows, slowest
+8.25 and fastest 44.71, taken 2026-09-09 on a stock `ubuntu-latest`. That
+reading was taken at prompt lengths far longer than this one and on a different
+prompt, so applying it to a 764-token judge call is a derivation and is labelled
+one. Three numbers rest on it and all three are load-bearing: `pair_budget` at
+200, `judge_shard_timeout_minutes` at 200, and the ruling that the judging
+cannot live inside `digest.yml`.
 
-**It lands in wave B, right after row #6**, and before row #10's timeout is
-trusted. A leg bound sized off an estimate is a job that finds out at the 6 h
-ceiling, where GitHub kills it with nothing written.
+**It lands in wave B, after rows #5 and #6**, and before row #10's timeout is
+trusted. It needs row #5's `judge-draw` verb for the input and row #6's prompt
+and grammar for the call. A leg bound sized off a derivation is a job that finds
+out at the 6 h ceiling, where GitHub kills it with nothing written.
 
 ### What to time
 
@@ -2943,11 +3535,13 @@ pays the warm path 99 times, so one call answers a question nobody is asking.
 leg bound has to be set off the tail. 100 calls gives a p90 over 10 samples,
 which is thin but is a reading rather than a guess; the record says so.
 
-**The run stops on a clock as well as on a count: 100 calls or 90 minutes,
-whichever comes first, and it reports which one stopped it.** At the estimated
-85 seconds a call, 100 calls is 2 h 22 m, and a measurement job that can be
-killed at its own timeout with nothing written is the failure this row exists to
-prevent.
+**The run stops on a clock as well as on a count: 100 calls or 160 minutes,
+whichever comes first, and it reports which one stopped it.** At the derived
+77.6 seconds a call, 100 calls is 2 h 09 m, so 160 minutes leaves about a third
+again in hand for a slow draw. A 90-minute clock would have ended the run at
+about 70 calls every time, which is a p90 over 7 samples rather than the 10 this
+row is specified for - a measurement job silently returning less than it
+promised is the failure this row exists to prevent, not one to build in.
 
 **Every reading is appended to `backend/var/judge-bench/calls.jsonl` as it is
 taken**, one JSON object a line, and the file is uploaded as an artifact. A stop
@@ -3037,8 +3631,8 @@ reuses every shipped part and spells nothing itself: `model_refs.py configured`
 for the refs, `.github/scripts/llama-cpp-pin.sh` for the build,
 `fetch-model-runtime.sh` on a miss, the `sha256sum --check` step on every run
 including a hit, and `start-llama-server.sh summarize llama-server` for the
-server. `timeout-minutes: 150`, which sits above the utility's own 90-minute stop
-so the job's bound is never what ends the run.
+server. `timeout-minutes: 200`, which sits above the utility's own 160-minute
+stop so the job's bound is never what ends the run.
 
 **`backend/tests/workflows/_harness.py` gains one entry or the suite fails before
 your test runs:** `SERVER_STARTERS` gains
@@ -3051,8 +3645,9 @@ by equality.
 | --- | --- | --- |
 | `docs/reference/benchmarks/what-a-judge-call-costs.md` | The run: conditions, method, every case, the raw figures, and what it settles and does not | Named for what it measured, no date in the filename, no sequence in the filename. A re-run REPLACES this page and moves **Last Updated** |
 | `docs/reference/measurements.md` | One row: the figure now in force, with a link to the record | The instrument log holds the figure, the record holds the run |
-| `SimilarityThresholdConfig.pair_budget` description | The reading replaces "the plan's estimated 85 seconds a call" | Guardrail #10: a measurement retires the estimate it replaces, and the estimate is deleted rather than left beside it |
+| `SimilarityThresholdConfig.pair_budget` description | The reading replaces the 77.6 seconds a call derived from the summarizer's own throughput | Guardrail #10: a measurement retires the derivation it replaces, and the derivation is deleted rather than left beside it |
 | `RunConfig.judge_shard_timeout_minutes` description | The same, plus the recomputed leg arithmetic | The same |
+| `SimilarityThresholdConfig`'s `SECONDS_A_CALL` constant | The measured median replaces 77.6, and its comment carries the new provenance | The constant bounds `pair_budget` against the leg timeout, so a stale value silently admits a budget that cannot finish |
 | Row #16's page | The one sentence saying what a leg costs, linking to the record | The page carries no timing of its own |
 
 **The record names the weights it was taken against.** A token count belongs to
@@ -3068,6 +3663,15 @@ flags exactly as `llama_argv.py` printed them, the llama.cpp build, the runner's
 own hardware line from the `Record runner hardware` step, the committed day the
 draw came from, and the config values in force.
 
+**The processor is part of the conditions and part of the summary.**
+`docs/reference/benchmarks/the-processor-lottery.md` records prefill varying 3.9x
+across draws on these exact weights, so a bound sized off a Xeon draw is 3.9x
+wrong on an EPYC draw. Record which processor the runner drew, in the conditions
+block and again in the one-line summary, and say in the record which draw the
+leg bound was set from. A figure with no processor beside it cannot be compared
+with the next run, and two runs that disagree by a factor of four will look like
+a regression rather than a different machine.
+
 ### What would make the plan wrong enough to redesign
 
 Four results. Each names the redesign, because a limitation with no next move is
@@ -3075,8 +3679,8 @@ an unfinished answer (CLAUDE.md section 0d).
 
 | Result | Why it breaks the plan | The redesign |
 | --- | --- | --- |
-| **Median call past 150 seconds** | 100 calls a leg is past 4 h 10 m, and the 200-minute leg bound fails | In this order: cap each summary the judge reads at 200 tokens instead of 300, which the plan's own table puts at about 1 h 44 m a leg because summaries are 79 percent of the read; then cut `pair_budget` from 200 to 120; then raise `shards` from 4 to 8, which costs a matrix leg rather than memory because each leg is its own runner. **Never raise the timeout past the 6 h ceiling.** That number is GitHub's |
-| **p90 more than twice the median** | 200 minutes is already only about 1.4 times the estimated median leg, so a fat tail means the bound is sized off the wrong statistic | Size `judge_shard_timeout_minutes` off the p90 and re-price the pair budget against it. A leg that dies on its bound costs its 50 pairs and `fail-fast: false` keeps the other three, so this degrades rather than fails - but it degrades every day, silently, which is worse |
+| **Median call past 150 seconds** | 100 calls a leg is past 4 h 10 m, and the 200-minute leg bound fails | In this order: cap each summary the judge reads at 200 tokens instead of 300, which cuts the read from 764 tokens to 564 - but at a measured 150 s a call that is still 110.7 s a call and about 3 h 04 m a leg, so the summary cap alone does not save it and `pair_budget` has to fall in the same move. Cut it from 200 to 120, which is 30 pairs a leg and 60 calls; then raise `shards` from 4 to 8, which costs a matrix leg rather than memory because each leg is its own runner. **Never raise the timeout past the 6 h ceiling.** That number is GitHub's |
+| **p90 more than twice the median** | 200 minutes is only about 1.55 times the derived median leg of 2 h 09 m, so a fat tail means the bound is sized off the wrong statistic | Size `judge_shard_timeout_minutes` off the p90 and re-price the pair budget against it. A leg that dies on its bound costs its pairs and `fail-fast: false` keeps the other three - but row #7 then refuses to fold the partial day, so the cost is a whole day of evidence, every day, silently. That is worse than a failure |
 | **`cached_tokens` reads 0 on every call, and block A's second call is no faster** | There is no warm prefix. Every call pays the full 764 tokens, and the plan's table treats about 114 of them as a once-a-leg cost | Shorten the system turn, which is the only part that repeats. Re-measure. This changes no design, only an arithmetic line in row #16's page |
 | **Decode is not tiny, or the first-token probabilities sit close together** | The grammar is choosing and the model is not, or the grammar is not being applied at all. The verdicts are then noise and the line is fitted on noise | Stop. Fix row #6's space-prefix trap before a single verdict is folded. This row is the first place that failure is visible, because it is the first place anyone reads the probabilities off a real runner |
 
@@ -3096,11 +3700,12 @@ response under `tests/fixtures/`, never from a mock and never from a live server
 | `test_the_readings_round_trip_through_the_line_file` | One built reading written and read back |
 | `test_the_summary_carries_a_spread_beside_every_figure` | 20 built readings, asserting min and max are present for all three series |
 
-**Workflow: added to `backend/tests/workflows/test_measure_workflow.py`.**
+**Workflow: added to `backend/tests/workflows/test_bench_targets.py`**, which is
+the module that already owns `measure.yml`.
 
 | Test | What it asserts |
 | --- | --- |
-| `test_the_judge_call_job_is_dispatch_only` | No `schedule` trigger reaches it |
+| `test_the_judge_call_job_is_dispatch_only` | The `judge-call` job is in `measure.yml`, which `EXPECTED_WORKFLOWS` already pins to `workflow_dispatch` alone, and the job appears in no scheduled workflow |
 | `test_the_judge_call_job_starts_one_server_from_the_one_flag_list` | Exactly one starter step, and the flags come from `llama_argv.py` |
 | `test_the_job_bound_sits_above_the_run_s_own_stop` | `timeout-minutes` is above the utility's default budget, so the job's bound is never what ends the run |
 
@@ -3128,21 +3733,25 @@ response under `tests/fixtures/`, never from a mock and never from a live server
 
 ## The runner budget
 
-Measured by the owner on the runner: the model reads at about 9 tokens a second
-and writes at about 4.
+**The reading every figure below rests on: 9.85 tokens a second read**, median
+over 4,117 timed rows, slowest 8.25 and fastest 44.71, taken 2026-09-09 on a
+stock `ubuntu-latest` on the configured summarizer weights. Decode on the same
+weights runs 3.906 to 5.985 tokens a second depending on which processor the
+runner drew. **It was not taken on a judge call**, so every seconds figure in
+this section is derived rather than measured, and row #17 is what replaces it.
 
 | Part | Tokens | Seconds |
 | --- | --- | --- |
-| Instruction block | ~90 | 10.0 |
-| Fences and re-ask | ~24 | 2.7 |
-| Two headlines | ~40 | 4.4 |
-| Two summaries | ~600 | 66.7 |
-| Chat template | ~10 | 1.1 |
-| **Read, per call** | **~764** | **~85** |
-| Write, per call | 1 to 3 | 0.25 to 0.75 |
+| Instruction block | ~90 | 9.1 |
+| Fences and re-ask | ~24 | 2.4 |
+| Two headlines | ~40 | 4.1 |
+| Two summaries | ~600 | 60.9 |
+| Chat template | ~10 | 1.0 |
+| **Read, per call** | **~764** | **~77.6** |
+| Write, per call | 1 to 3 | 0.17 to 0.77 |
 
-200 pairs judged twice is 400 calls. At 85 seconds that is 9.4 hours of model
-time.
+At the `pair_budget` cap of 200, a day is 400 calls, which is 8.6 hours of model
+time if one process does all of it.
 
 **Four shards means four GitHub jobs, not four processes on one runner.** This
 is the correction that matters most in the whole plan.
@@ -3152,37 +3761,49 @@ is the correction that matters most in the whole plan.
   to 8 on this host was **slower at every prompt length** and 16 percent slower
   at decode. Four servers sharing four logical CPUs is that experiment again,
   worse.
-- The configured weights are **3.93 GiB**. Four copies is **15.7 GiB on a 16 GB
-  machine**, before Python and before any KV cache. It runs out of memory before
-  it runs out of time.
+- **One server already fills the machine.** A GGUF's file size is not its
+  footprint. The configured weights, `models/qwen3.5-9b-q4km.json`, are
+  5,680,522,464 bytes, which is 5.29 GiB on disk - and one `llama-server` on
+  them peaks at **12.57 to 13.16 GiB**, with server plus python reaching
+  **14.31 GiB at one instant, 96.0 percent of the 16 GB runner** (measured
+  2026-09-08 over four committed captures of run `2026-08-29-3`). A second
+  server on one runner does not fit at all, never mind four.
 
-So: a matrix of 4 legs, `max-parallel: 4`, one `llama-server` per leg. That is
-what `digest.yml`'s work job already does, for this reason. **As one job the
-wall clock is the serial number, 9.4 hours, killed at 6 h with nothing
-written.**
+So: a matrix of 4 legs, `max-parallel` read off the `shards` knob, one
+`llama-server` per leg. That is what `digest.yml`'s work job already does, for
+this reason.
 
-| Shape | Wall clock | Outcome |
+**The matrix is sized against the budget the design permits, not against today's
+news.** At the cap, one job doing the whole day serially is 8.6 hours, which
+crosses the 6 h ceiling and GitHub kills it with nothing written. At the
+measured median of 33 pairs a day it is 66 calls, about 1 h 25 m, and it would
+fit in one job comfortably. Sizing the shape off the median is what makes the
+first busy day write nothing at all.
+
+| Shape | Wall clock at the cap | Outcome |
 | --- | --- | --- |
-| One job, 4 processes | 9.4 h, if it does not run out of memory first | **Killed** |
-| 4 matrix legs | ~2 h 22 m a leg of model time, plus fixed cost | Fits |
+| One job, 4 processes | 8.6 h, if it does not run out of memory first | **Killed** |
+| One job, 1 process | 8.6 h | **Killed** |
+| 4 matrix legs | ~2 h 09 m a leg of model time, plus fixed cost | Fits |
 
 **Model time is not wall clock.** Each leg also pays checkout, a weights cache
-restore and a server start. Row 10 carries a `judge_shard_timeout_minutes` knob,
-read the way `digest.yml` reads `run.shard_timeout_minutes` through
+restore and a server start. Row 10 reads a `judge_shard_timeout_minutes` knob,
+the way `digest.yml` reads `run.shard_timeout_minutes` through
 `backend/utilities/shard_bound.py` - which asserts the value is a bare positive
 integer, because `timeout-minutes` takes whatever it is handed and an unreadable
 value leaves the job with no bound at all.
 
 **The judge model is `models.summarize`**, the one the digest already runs. That
-is what makes the owner's 9 tokens a second transfer to this workload at all,
-and it means the weights cache key is already warm - a second model would be a
-second multi-gigabyte cache entry competing for eviction against a cache already
-near its ceiling.
+is what makes the 9.85 tokens a second transfer to this workload at all, and it
+means the weights cache key is already warm - a second model would be a second
+multi-gigabyte cache entry competing for eviction against a cache already near
+its ceiling.
 
 **Writing is 0.6 percent of the cost.** Do not shorten the bucket names. The
-summaries are 79 percent of it: capping each summary at 200 tokens instead of
-300 takes a leg to about 1 hour 44 minutes of model time. Whether that costs
-accuracy is row #17.
+summaries are 79 percent of it - 600 of 764 tokens - so capping each summary at
+200 tokens instead of 300 cuts the read to 564 tokens and takes a leg to about
+1 hour 36 minutes of model time at the cap. Whether that costs accuracy is
+row #17.
 
 ## Limits nobody trades
 
