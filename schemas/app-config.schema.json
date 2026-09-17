@@ -152,6 +152,12 @@
           "minimum": 1,
           "title": "Corpus Items",
           "type": "integer"
+        },
+        "run_model_speed_case": {
+          "default": true,
+          "description": "Does a bench dispatch measure the model's raw speed before it measures real work? Default true, and it is removed the day the speed case stops costing a dispatch time worth saving - measured 2026-09-16 over four dispatches on stock ubuntu-latest at 9.1, 26.7, 27.2 and 87.6 minutes, so today it is worth between a tenth and a third of the whole dispatch.\n\nFalse runs the rest of the flow and skips that half: the fixed corpus, the real server over it, the machine record and the committed host row all still happen. What is given up is the prefill and decode rates, and with them the dossier - a dossier is both cases, so a dispatch that skipped one emits the server half and a line saying which half is missing rather than a page that reads whole.\n\nIt also moves who pays for the weights. The speed case fills the cache entry the server case restores, so a dispatch that skips it downloads the candidate once in the server case instead - the same bytes, in a different job.\n\n`measure.yml`'s `model_speed_case` dispatch input overrules this for one run without a commit: `config` follows this knob, `run` and `skip` do not. This is operator control rather than a feature behind a flag, so there is no second implementation waiting behind it - the same jobs run either way and one of them is not dispatched.",
+          "title": "Run Model Speed Case",
+          "type": "boolean"
         }
       },
       "title": "BenchConfig",
@@ -184,7 +190,7 @@
         },
         "carriage_step": {
           "default": 0.25,
-          "description": "What one more of our feeds carrying the same address is worth. A flat step that fires once at two carriers and never grows - three carriers is not three times the story. A multiplier would double the term on a second carrier and pay most to whatever already scored highest, which is the opposite of what a tie-break does. What it counts is syndication rather than agreement: carried_by counts feeds carrying one address, so two outlets writing their own piece produce two addresses and both read 1 (docs/architecture/publishing/layout.md). An estimate, and it is set by two written rules rather than by a measurement, because nothing inside the window they leave is measurable. It may not reach the smallest gap between two collect.tier_weights values, or carriage would promote a community story past a trade-press one; and it may not fall to ui.lead_shared_subject_weight, or a recurring subject would outrank a story two independent feeds carried today. The default is the midpoint of those two bounds, which is the value that stays legal when either one is edited. Row #9a's pricing and then plan 23 row #17's per-run loop are what would overturn it, with the tier step as a hard bound.",
+          "description": "What one more of our feeds carrying the same address is worth. A flat step that fires once at two carriers and never grows - three carriers is not three times the story. A multiplier would double the term on a second carrier and pay most to whatever already scored highest, which is the opposite of what a tie-break does. What it counts is syndication rather than agreement: carried_by counts feeds carrying one address, so two outlets writing their own piece produce two addresses and both read 1 (docs/architecture/publishing/layout.md). An estimate, and it is set by two written rules rather than by a measurement, because nothing inside the window they leave is measurable. It may not reach the smallest gap between two collect.tier_weights values, or carriage would promote a community story past a trade-press one; and it may not fall to ui.lead_shared_subject_weight, or a recurring subject would outrank a story two independent feeds carried today. The default is the midpoint of those two bounds, which is the value that stays legal when either one is edited. Pricing it against measured carriage, and then a loop that re-derives it each run, are what would overturn it, with the tier step as a hard bound.",
           "minimum": 0.0,
           "title": "Carriage Step",
           "type": "number"
@@ -356,7 +362,7 @@
         },
         "watchlist_bonus": {
           "default": 0.5,
-          "description": "What a story about a subject on config/watchlist.json is worth, added once however many watchlist entries it names. It is the fourth and smallest of the four terms the order is built from - authority times the feed's weight, then decayed recency, then the feed's reliability, then this. An estimate. A watchlist subject fires several times as often as a second feed carrying one address, so the firing-rate method discovery.md uses for a content signal would price it far lower. That method is the wrong instrument here: a watchlist subject is not informative because it is rare, it is informative because a person chose it, and pricing it that way collapses the head onto one desk. Re-pricing this against the carriage step would move the leading block's order and belongs to plan 23 row #17's per-run loop.",
+          "description": "What a story about a subject on config/watchlist.json is worth, added once however many watchlist entries it names. It is the fourth and smallest of the four terms the order is built from - authority times the feed's weight, then decayed recency, then the feed's reliability, then this. An estimate. A watchlist subject fires several times as often as a second feed carrying one address, so the firing-rate method discovery.md uses for a content signal would price it far lower. That method is the wrong instrument here: a watchlist subject is not informative because it is rare, it is informative because a person chose it, and pricing it that way collapses the head onto one desk. Re-pricing this against the carriage step would move the leading block's order, so it belongs to a loop that re-derives both together each run.",
           "minimum": 0.0,
           "title": "Watchlist Bonus",
           "type": "number"
@@ -932,7 +938,7 @@
     },
     "FinetuneConfig": {
       "additionalProperties": false,
-      "description": "The training corpus and the schedules that maintain it.\n\nNothing here runs on the runner. Training needs a GPU and the runner has\nnone (section 0a), so these knobs size a file CI commits and a notebook\nsomewhere else reads. `teacher` names a KEY in `models` rather than a model,\nbecause `models.summarize` has already moved once and a knob that spells a\nmodel name is stale the day the config moves.\n\nThere is no `student`. It named the small visual planner, which plan 11 row\n#6 retired, and a distillation session needs two models: with one role left,\nthe student could only be the teacher.\n\nThe prune knobs live here and not in `retention`. That block is about\npublished-site images and its own `site_budget_mb`; putting corpus history\nunder the same name would file two unrelated retention policies together.",
+      "description": "The training corpus and the schedules that maintain it.\n\nNothing here runs on the runner. Training needs a GPU and the runner has\nnone (section 0a), so these knobs size a file CI commits and a notebook\nsomewhere else reads. `teacher` names a KEY in `models` rather than a model,\nbecause `models.summarize` has already moved once and a knob that spells a\nmodel name is stale the day the config moves.\n\nThere is no `student`. It named the small visual planner, retired when the\ntwo calls moved onto the summarizer's weights, and a distillation session\nneeds two models: with one role left, the student could only be the teacher.\n\nThe prune knobs live here and not in `retention`. That block is about\npublished-site images and its own `site_budget_mb`; putting corpus history\nunder the same name would file two unrelated retention policies together.",
       "properties": {
         "corpus_rows": {
           "default": 2000,
@@ -1855,7 +1861,7 @@
         },
         "archive_window_days": {
           "default": 30,
-          "description": "The span the archive's window control opens on, in days. IT MUST BE ONE OF `console.window_presets`, and `AppConfig` and `AppearanceConfig` both refuse a file where it is not - that is how the archive reuses the console's list of spans instead of declaring a second one, so the two surfaces cannot offer different day counts for the same idea. It names a span rather than a list for the reason `console.default_window_days` does: the list is the presets, and a second list is one more thing to keep in step. Thirty, because that is the span the console opens on and about the reach `assist.search_months` gives a search today, so the control ships opening on what the archive already costs. NOTHING READS IT YET - the control that will is row 25 of TODO/20260906-constant-cost-reads-plan.md. Read by the build alone, like `archive_recent_days`, so it never rides to a reader.",
+          "description": "The span the archive's window control opens on, in days. IT MUST BE ONE OF `console.window_presets`, and `AppConfig` and `AppearanceConfig` both refuse a file where it is not - that is how the archive reuses the console's list of spans instead of declaring a second one, so the two surfaces cannot offer different day counts for the same idea. It names a span rather than a list for the reason `console.default_window_days` does: the list is the presets, and a second list is one more thing to keep in step. Thirty, because that is the span the console opens on and about the reach `assist.search_months` gives a search today, so the control ships opening on what the archive already costs. NOTHING READS IT YET - the archive has no window control, so the span one would open on is declared and unused. Read by the build alone, like `archive_recent_days`, so it never rides to a reader.",
           "minimum": 1,
           "title": "Archive Window Days",
           "type": "integer"
@@ -1919,7 +1925,7 @@
         },
         "lead_shared_subject_weight": {
           "default": 0.2,
-          "description": "What a qualifying shared subject adds to a story's rank inside the leading block. It is a step and not a ramp: no measurement supports a shape, and a shape nobody measured may not justify a design (Guardrail #10). It must stay below what one more feed carrying the same address is worth, which is collect.carriage_step, so a recurring subject cannot outrank a story two independent feeds carried today. A shared subject fires several times as often as a second carrier, so this weight is the smaller of the two. Re-deriving it against the step would move the leading block's order and belongs to plan 23 row #17's per-run loop.",
+          "description": "What a qualifying shared subject adds to a story's rank inside the leading block. It is a step and not a ramp: no measurement supports a shape, and a shape nobody measured may not justify a design (Guardrail #10). It must stay below what one more feed carrying the same address is worth, which is collect.carriage_step, so a recurring subject cannot outrank a story two independent feeds carried today. A shared subject fires several times as often as a second carrier, so this weight is the smaller of the two. Re-deriving it against the step would move the leading block's order, so it belongs to a loop that re-derives both together each run.",
           "minimum": 0.0,
           "title": "Lead Shared Subject Weight",
           "type": "number"
@@ -1947,7 +1953,7 @@
         },
         "offline_bytes_kept": {
           "default": 20000000,
-          "description": "The most bytes of cached day payloads the offline reader keeps on the reader's device. A SECOND BOUND BESIDE `offline_days_kept`, NOT A REPLACEMENT FOR IT, because a day count cannot bound bytes: one day payload varies by more than two orders of magnitude, so fourteen days is anything from a fraction of a megabyte to tens of them, and the count alone promises the reader nothing. Twenty million bytes sits just above what the day count already permits at the largest day seen, so on today's payloads the day count still binds first and this is the backstop for when day payloads grow. The floor is above the largest single day seen, so no reachable value can leave the cache unable to hold one day - a ceiling that evicts a day as fast as it arrives is worse than no cache, because the reader pays the download and keeps nothing. The ceiling is 100 MB, a little over twice the 43.2 MB the on-device search model and its runtime already take, because taking a tenth of a gigabyte of somebody's phone for a news digest is not a thing a config edit should be able to do quietly. NOTHING READS IT YET - the eviction rule that will is row 8 of TODO/20260906-constant-cost-reads-plan.md. Read by the build alone, so it never rides to a reader.",
+          "description": "The most bytes of cached day payloads the offline reader keeps on the reader's device. A SECOND BOUND BESIDE `offline_days_kept`, NOT A REPLACEMENT FOR IT, because a day count cannot bound bytes: one day payload varies by more than two orders of magnitude, so fourteen days is anything from a fraction of a megabyte to tens of them, and the count alone promises the reader nothing. Twenty million bytes sits just above what the day count already permits at the largest day seen, so on today's payloads the day count still binds first and this is the backstop for when day payloads grow. The floor is above the largest single day seen, so no reachable value can leave the cache unable to hold one day - a ceiling that evicts a day as fast as it arrives is worse than no cache, because the reader pays the download and keeps nothing. The ceiling is 100 MB, a little over twice the 43.2 MB the on-device search model and its runtime already take, because taking a tenth of a gigabyte of somebody's phone for a news digest is not a thing a config edit should be able to do quietly. NOTHING READS IT YET - the offline cache evicts on `offline_days_kept` alone, so this ceiling is declared and unenforced. Read by the build alone, so it never rides to a reader.",
           "maximum": 100000000,
           "minimum": 2000000,
           "title": "Offline Bytes Kept",
@@ -2179,6 +2185,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "bench.run_model_speed_case, additive, default true.",
+      "version": "2026-09-17T16:00",
+      "why": "Testing the bench flow should not cost half an hour of llama-bench."
+    },
+    {
       "change": "The prune block, additive, dry_run true and two collections.",
       "version": "2026-09-17T15:00",
       "why": "GitHub holds 1 GB of artifacts that no file in this repository names."
@@ -2192,11 +2203,6 @@
       "change": "extract gained three chrome knobs, additive, the fold on.",
       "version": "2026-09-17",
       "why": "The boilerplate signal divided by an empty set and said no to every page."
-    },
-    {
-      "change": "assemble.same_story_window_hours, additive, default 36.",
-      "version": "2026-09-16T18:00",
-      "why": "A story that breaks at 23:00 and is picked up at 07:00 is one story."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2277,7 +2283,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-17T15:00",
+      "default": "2026-09-17T16:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2288,5 +2294,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-17T15:00"
+  "version": "2026-09-17T16:00"
 }

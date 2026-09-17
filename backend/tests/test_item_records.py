@@ -237,7 +237,7 @@ def test_a_call_slot_with_numbers_and_no_kind_is_half_a_call() -> None:
 
 
 def test_a_calls_clock_is_the_stopwatch_and_not_the_two_cells_beside_it() -> None:
-    """Plan 32 row #8. `label_ms` used to be `label_prefill_ms + label_decode_ms`.
+    """`label_ms` used to be `label_prefill_ms + label_decode_ms`.
 
     That is a column which agrees with its two neighbours by construction, so
     subtracting them gave zero on every row ever written and a server that made

@@ -7,11 +7,10 @@ the ledgers and the payloads this run has already written.
 
 **It is a move, not a second copy.** `frontend/src/lib/server/console-shell.ts`
 derives the same band at build time and serialises it into three prerendered
-documents; row 10 of the plan-doc deletes that derivation and the console
-fetches this file instead. Until it does, the two exist side by side and the
-sentences here are ported from there deliberately word for word - a band that
-said something different after the cutover would look like a pipeline change
-rather than a plumbing one.
+documents. Once the console fetches this file instead, that derivation goes.
+Until it does, the two exist side by side and the sentences here are ported from
+there deliberately word for word - a band that said something different after the
+cutover would look like a pipeline change rather than a plumbing one.
 
 **Where each fact comes from, and why.** A number is taken from the store that
 owns it, never re-derived from a wider one:
@@ -572,8 +571,8 @@ class MachineFacts:
 
     `frontend/src/lib/server/runtime-counters.ts` builds the whole picture for
     the Hardware route and keeps doing so - it will read the published machine
-    shards after row 10. What the band needs is three numbers, so three are
-    derived here rather than the twenty the route draws.
+    shards once they are published. What the band needs is three numbers, so
+    three are derived here rather than the twenty the route draws.
     """
 
     refused: int
@@ -1239,9 +1238,9 @@ def publish(
         run=run,
         collect=collect,
         sources=sources,
-        # Plan 23 row #10 is what produces a decline rate. Until it lands there
-        # is no gating kind to read, so the two-sided rule in
-        # `dead_gate_candidates` costs nothing and fires on nothing.
+        # Nothing produces a decline rate yet. With no gating kind to read, the
+        # two-sided rule in `dead_gate_candidates` costs nothing and fires on
+        # nothing.
         decline_rates={},
     )
     target = band_path(digest_root)

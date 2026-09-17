@@ -2501,7 +2501,7 @@ def test_loading_one_runs_counters_costs_the_run_and_not_the_file(tmp_path: Path
 
 
 def test_the_ledgers_prefill_rate_agrees_with_the_servers_own_counters() -> None:
-    """The Oracle for row 9, on one real captured run.
+    """The ledger's prefill rate holds against the server's own counters, on one real captured run.
 
     `docs/architecture/summarize/throughput.md` and the console both publish a
     read rate derived from the item-health ledger, which sums a field copied out

@@ -1,8 +1,8 @@
 """What a 90-day window costs at month grain and at day grain, over the same rows.
 
-The one figure `TODO/20260910-24-day-sharded-ledgers-plan.md` is priced against.
-Five `state/` ledgers are moving from one file a month to one file a day, and
-the windowed read trades **more file handles for fewer bytes**:
+The one figure the month-to-day shard move is priced against. Five `state/`
+ledgers are moving from one file a month to one file a day, and the windowed
+read trades **more file handles for fewer bytes**:
 `collect.seen_window_days` is 90, so `ledger.load_seen` opens at most 91 day
 files and used to open at most 4 month files - while 4 month shards can hold up
 to 120 days of rows where 91 day files hold exactly 90. Which way that lands on

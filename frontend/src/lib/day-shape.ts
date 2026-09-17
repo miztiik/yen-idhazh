@@ -366,7 +366,7 @@ export function leadingStories(leads: DigestLead[], items: DigestItem[]): Leadin
  * next - so a reader scrolling it met the same desk ninety times before the next
  * one started. The payload now carries one scored order with a frame over its
  * head, so this is re-ordering something defensible rather than rescuing
- * something broken, and plan 25 row #10 is where it stops.
+ * something broken.
  * Nothing editorial is lost by re-ordering it: what the day thinks is important
  * is in the leading block, chosen across the whole day.
  *

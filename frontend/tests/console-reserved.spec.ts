@@ -5,8 +5,8 @@ import { telemetryCsv } from '../src/lib/charts/series';
  * The console's reserved shape, and the four different nothings behind it.
  *
  * The page holds no telemetry row when its document arrives - every row is
- * fetched on mount (row 10 of the shell-and-fetch plan). That split one
- * "nothing" into four, and until row 12 the page drew three of them the same
+ * fetched on mount. That split one
+ * "nothing" into four, and the page used to draw three of them the same
  * way: an unmarked gap. A quiet pipeline and a broken fetch were one picture,
  * which is the exact pair this console exists to tell apart.
  *

@@ -112,7 +112,7 @@ def frame(**knobs: int) -> PlacementConfig:
 def heavy_ai_day() -> list[DigestItem]:
     """Forty stories, every one of which reads AI, carried by five desks' feeds.
 
-    The day plan 23 row #6 makes possible and the archive has never produced: a
+    The day a model-read desk makes possible and the archive has never produced: a
     model reads every article onto one desk while the feeds that carried them
     are spread across five. Without the ceiling this is a one-desk digest with
     four empty rails, on exactly the day a reader most needs the other four.

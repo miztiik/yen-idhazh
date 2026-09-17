@@ -265,8 +265,8 @@ class CollectConfig(Model):
             "outrank a story two independent feeds carried today. The default is the "
             "midpoint of those two bounds, which is the value that stays legal when "
             "either one is edited. "
-            "Row #9a's pricing and then plan 23 row #17's per-run loop are what would "
-            "overturn it, with the tier step as a hard bound."
+            "Pricing it against measured carriage, and then a loop that re-derives it "
+            "each run, are what would overturn it, with the tier step as a hard bound."
         ),
     )
     watchlist_bonus: float = Field(
@@ -283,8 +283,8 @@ class CollectConfig(Model):
             "wrong instrument here: a watchlist subject is not informative because it "
             "is rare, it is informative because a person chose it, and pricing it that "
             "way collapses the head onto one desk. Re-pricing this against the "
-            "carriage step would move the leading block's order and belongs to plan 23 "
-            "row #17's per-run loop."
+            "carriage step would move the leading block's order, so it belongs to a "
+            "loop that re-derives both together each run."
         ),
     )
     recency_weight: float = Field(
