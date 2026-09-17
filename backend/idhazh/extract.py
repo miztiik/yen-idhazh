@@ -401,6 +401,30 @@ def to_article_with_source(
             ),
             "",
         )
+    # The third of three, and the only one carrying a guard. A curator who
+    # registered a feed as `abstract` declared that it publishes abstracts, and an
+    # abstract is short by definition - so rejecting one here would delete a
+    # source on the strength of the property it was registered for. Measured
+    # 2026-09-17: both forms carry `too_short` at 34 words, so the form is the
+    # only thing that can tell a declared abstract from a truncated article.
+    #
+    # The signal stays on the row either way. The item IS short and the census
+    # says so; what the form changes is the consequence, never the fact.
+    if (
+        signal_code is FailureCode.TOO_SHORT
+        and config.reject_too_short
+        and item.source_form is not SourceForm.ABSTRACT
+    ):
+        return Extracted(
+            _failed(
+                item,
+                status=ArticleStatus.EXTRACT_FAILED,
+                detail="extracted text is shorter than the brief floor",
+                fetched_at=fetched_at,
+                failure_code=FailureCode.TOO_SHORT,
+            ),
+            "",
+        )
 
     # Last, because every other reason is the more useful one to record. An item
     # with no body and no headline is a `no_text` item; this is the one that read

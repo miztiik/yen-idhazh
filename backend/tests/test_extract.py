@@ -29,7 +29,7 @@ from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh import chrome, config
 from idhazh import fetch as fetch_module
-from idhazh.contracts.article import ArticleStatus, TitleSource
+from idhazh.contracts.article import Article, ArticleStatus, TitleSource
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow
@@ -949,6 +949,81 @@ def test_boilerplate_signal_publishes_by_default_and_can_reject() -> None:
     assert article.failure_code is FailureCode.BOILERPLATE
     assert rejected.status is ArticleStatus.EXTRACT_FAILED
     assert rejected.failure_code is FailureCode.BOILERPLATE
+
+
+# --- The short floor, and the one feed it may never close on ------------------
+
+#: Prose-shaped on purpose - three sentences of eight words or more - so the
+#: `not_prose` branch above `too_short` does not catch it first. 34 words, which
+#: is under the committed `min_source_words` of 60.
+SHORT_BUT_PROSE = (
+    "<html><body><article>"
+    "<p>The council approved the bridge repair late on Tuesday evening.</p>"
+    "<p>Work on the northern span begins in the second week of March.</p>"
+    "<p>The cost was put at four million pounds by the borough engineer.</p>"
+    "</article></body></html>"
+)
+
+
+def short_item(form: SourceForm) -> PlannedItem:
+    return ITEM.model_copy(update={"source_form": form})
+
+
+def read_short(form: SourceForm, config: ExtractConfig) -> Article:
+    return to_article(
+        short_item(form),
+        FetchResult(FetchOutcome.OK, status=200, body=SHORT_BUT_PROSE.encode("utf-8")),
+        config=config,
+        fetched_at=FETCHED_AT,
+    )
+
+
+def test_a_short_item_publishes_by_default_whatever_form_declared_it() -> None:
+    """Owner override O3: a shape signal is recorded and the item continues."""
+    for form in (SourceForm.ARTICLE, SourceForm.ABSTRACT):
+        article = read_short(form, ExtractConfig())
+
+        assert article.status is ArticleStatus.OK
+        assert article.brief
+        assert article.failure_code is FailureCode.TOO_SHORT
+
+
+def test_the_short_floor_closes_on_an_article_when_it_is_switched_on() -> None:
+    rejected = read_short(SourceForm.ARTICLE, ExtractConfig(reject_too_short=True))
+
+    assert rejected.status is ArticleStatus.EXTRACT_FAILED
+    assert rejected.failure_code is FailureCode.TOO_SHORT
+
+
+def test_the_short_floor_never_closes_on_a_feed_declared_as_abstracts() -> None:
+    """The guard, and it is the whole reason this knob is safe to own.
+
+    A curator who registered a feed as `abstract` declared that it publishes
+    abstracts, and an abstract is short by definition. Rejecting one would
+    delete a source on the strength of the property it was registered for.
+
+    Measured 2026-09-17: at 34 words BOTH forms carry `too_short`, so the
+    declared form is the only thing that can tell a curator's abstract from a
+    truncated article. Plan row #17 asserted an abstract carried no code at all;
+    it does, and this test is what that correction rests on.
+    """
+    published = read_short(SourceForm.ABSTRACT, ExtractConfig(reject_too_short=True))
+
+    assert published.status is ArticleStatus.OK
+    assert published.brief
+    # The signal is still on the row. The item IS short and the census says so;
+    # what the form changed is the consequence, never the fact.
+    assert published.failure_code is FailureCode.TOO_SHORT
+
+
+def test_the_three_shape_signals_each_have_a_switch_and_they_read_alike() -> None:
+    """Two of three had a switch until 2026-09-17. An asymmetry nobody chose is a defect."""
+    switches = {
+        name for name in ExtractConfig.model_fields if name.startswith("reject_")
+    }
+
+    assert switches == {"reject_boilerplate", "reject_not_prose", "reject_too_short"}
+    assert all(ExtractConfig().model_dump()[name] is False for name in switches)
 
 
 def test_the_labelled_short_source_oracle_matches_disposition_and_reason() -> None:

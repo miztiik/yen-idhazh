@@ -788,6 +788,13 @@ to the editor. They never count against a source by default. Only a paywall, an
 unsupported form, or genuine missing text stops extract. Authority: Owner
 override O3.
 
+Each of the three has a switch that closes it, all three false
+([../../concepts/config.md](../../concepts/config.md)). O3 is what the DEFAULT
+says, not what the code can express, and the difference matters: a curator who
+turns one on is taking a decision O3 left them, not overriding it.
+`reject_too_short` additionally never fires on a feed registered as `abstract`,
+because short is the property that feed was registered for.
+
 The row stores both `url_key` and `item_id`. `item_id` is derived from the
 address, so it survives a re-plan - but it was ten decimal digits until
 2026-09-12 and is sixteen base32 symbols after it, and rows either side of that

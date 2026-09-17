@@ -47,6 +47,19 @@ class ExtractConfig(Model):
         default=False,
         description="If true, a not_prose signal rejects the item. Default records and publishes.",
     )
+    reject_too_short: bool = Field(
+        default=False,
+        description=(
+            "If true, a too_short signal rejects the item. Default records and "
+            "publishes, which is Owner override O3. **A feed a curator declared "
+            "`abstract` is never rejected by this, whatever it is set to.** That "
+            "feed publishes abstracts because a person said so, and abstracts are "
+            "short by definition - rejecting one would delete a source on the "
+            "strength of the property it was registered for. The signal is still "
+            "recorded on its row either way: the item IS short, and the census "
+            "says so. What the form changes is the consequence, never the fact."
+        ),
+    )
     reject_boilerplate: bool = Field(
         default=False,
         description=(
