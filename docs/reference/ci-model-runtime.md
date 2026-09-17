@@ -11,7 +11,8 @@ a flag. The workflows that use them are in
 
 `digest.yml`, `validate.yml`, `measure.yml`, `idhazh-pipeline-tests.yaml` and
 `probe.yml` run one llama.cpp build. Each checks the archive against its digest
-before it unpacks anything.
+before it unpacks anything. `probe.yml` installs the build and stops there;
+the other four go on to download weights.
 
 | Variable | Value |
 | --- | --- |
@@ -28,25 +29,35 @@ on 2026-08-25 by downloading the 16,377,727-byte archive and hashing it.
 and it assigns all three; run it and it prints the build as `key=value`, which
 is what a cache key reads - the key names the build, the cache step runs before
 the fetch, so the pin has to be readable without downloading anything.
-`.github/scripts/fetch-model-runtime.sh` sources it, installs the build, checks
-the archive, and downloads the weights the calling step names through `env`.
 
-**Only `idhazh-pipeline-tests.yaml` is on those two.** `digest.yml`,
-`measure.yml`, `validate.yml` and `probe.yml` still declare the three variables
+Two shared scripts read it, and the split is about what a job actually needs.
+`.github/scripts/install-llama-runtime.sh` sources the pin, installs the build
+and checks the archive; that is the whole of what a job wants when it opens no
+weights. `.github/scripts/fetch-model-runtime.sh` sources that one and then
+downloads the weights the calling step names through `env`. One script that
+always downloaded a model would turn the one-minute probe below into the
+slowest question here, and a `WEIGHTS_FILE` allowed to be empty would make the
+refusals every other caller depends on optional.
+
+**`idhazh-pipeline-tests.yaml` and `probe.yml` are on those scripts.**
+`digest.yml`, `measure.yml` and `validate.yml` still declare the three variables
 in their own `env:` block and fetch the build themselves.
 
-So the three values are written in **five places today: the pin file and four
-`env:` blocks.** It was six until 2026-09-17, and converting the other four
-takes it to one. Eight steps download the archive; seven of them still spell the
-download inline and the eighth is the shared script. `digest.yml` is the last
-and the largest conversion, because that is the workflow that publishes.
+So the three values are written in **four places today: the pin file and three
+`env:` blocks.** It was six until 2026-09-17, and converting the other three
+takes it to one. `digest.yml` is the last and the largest conversion, because
+that is the workflow that publishes.
 
 Nothing read those places against each other before. A contract test now pins
 the three variables in every workflow that still spells them and refuses any
 copy of them in a workflow that has been converted, so a conversion is one line
 in that test's `LLAMA_SCRIPT_CALLERS` set and the check tightens rather than
-being rewritten. The digest check on every fetch path and the build inside every
-runtime cache key are held by the same file.
+being rewritten. What a converted caller is refused is the VALUE, not the name:
+a job whose stage records which build decoded the bytes has to put
+`LLAMA_CPP_BUILD` in that step's environment, and taking it from the step that
+published the pin reads the one home rather than copying it. The digest check on
+every fetch path and the build inside every runtime cache key are held by the
+same file.
 
 ### What the cache key holds
 
@@ -85,13 +96,13 @@ downloading that artifact rather than by a second run.
 
 It is a `workflow_dispatch` with no scheduled trigger and it loads no weights,
 so it costs about a minute of runner time. It takes no input for a build,
-either: it reads the same three pinned variables the runtime arms read and is
-held to them by the same test, so its answer cannot describe a binary
+either: it installs the build `llama-cpp-pin.sh` names, through the same shared
+install step the runtime arms reach, so its answer cannot describe a binary
 production does not run. Probing a candidate build is a branch that moves the
 pin, dispatched with `--ref` - the same commit somebody would have to make to
 adopt it.
 
-The question that made it was whether `b10598` accepts the kind a Gemma
+The question that made it was whether the pinned build accepts the kind a Gemma
 multi-token head needs, and that is the shape of every question it answers:
 read the runtime's own answer rather than a release note's.
 
