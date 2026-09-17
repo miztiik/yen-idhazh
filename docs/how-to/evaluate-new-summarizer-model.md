@@ -22,6 +22,7 @@ and are not changed here.
 | --- | --- |
 | The swap | one line in the committed config |
 | The revert | the same line back |
+| The walk | one dispatch, about 106 minutes. It says whether the real path runs at all |
 | The bench | one dispatch. It says how fast |
 | The qualification | one dispatch, hours of runner time, eleven gates on a frozen corpus. It says how good |
 | The decision | a person's, and it stays one |
@@ -35,6 +36,47 @@ Adoption is a Level 5 decision ([../../CLAUDE.md](../../CLAUDE.md) section 6).
 The gates inform it; they do not make it.
 
 Three blocks follow: **measure the candidate**, **adopt**, **revert**.
+
+---
+
+## The cheapest check is the pipeline tests, and it uses the real prompts
+
+Reach for `idhazh-pipeline-tests.yaml` first. It draws two real articles and
+runs the production path over them - the real fetcher, the real extractor, the
+real prompts, the real two calls, the real model server - and it takes a models
+file, so it runs that path on a candidate:
+
+```bash
+gh workflow run idhazh-pipeline-tests.yaml \
+ --ref '<the branch holding the candidate file>' \
+ -f candidate_models_file='models/<name>.json'
+```
+
+Type nothing and it runs the configured model, which is what it did before the
+field existed.
+
+**What it costs.** One dispatch took 106 minutes on 2026-09-15 - three cases
+over two articles, of which 105 minutes were the cases themselves and under a
+minute was setup. One dispatch, so there is no spread. A bench dispatch of
+`measure.yml` on 2026-09-16 took 189 minutes, and one of the four that day took
+288. A candidate is always a cache miss, so it pays its own download: the same
+fetch in `Model validation` took 25 to 74 seconds on 2026-08-26, which is about
+one percent of the dispatch.
+
+**What it settles.** Whether the weights load, whether the server serves the
+alias the config names, whether both calls come back inside the schema, and what
+one article costs end to end on a stock runner. A model that cannot do those
+things has failed, and it has failed for 106 minutes rather than for 189.
+
+**What it does not settle, and this is the larger half.** Two articles say
+nothing about quality. There is no gate, no frozen corpus, no repeat, no
+faithfulness scorer, and no comparison against the incumbent's recorded numbers.
+A green dispatch is permission to spend the bench and the qualification, never a
+substitute for them. It publishes nothing either: what the cases produced leaves
+as a 90-day artifact.
+
+The workflow is described in
+[../reference/github-actions.md](../reference/github-actions.md#pipeline-tests).
 
 ---
 

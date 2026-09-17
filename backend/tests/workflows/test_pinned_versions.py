@@ -11,19 +11,27 @@ from conftest import REPO_ROOT, read_text
 from ._harness import (
     APPROVED_ACTION_MAJORS,
     LLAMA_DIGEST_CHECK,
+    LLAMA_INLINE_RUNTIME_WORKFLOWS,
+    LLAMA_PIN_NAMES,
+    LLAMA_PIN_SCRIPT,
     LLAMA_PINNED_ENDPOINT,
+    LLAMA_RUNTIME_SCRIPT,
     LLAMA_RUNTIME_WORKFLOWS,
+    LLAMA_SCRIPT_CALLERS,
     PINNED_LLAMA_ASSET,
     PINNED_LLAMA_BUILD,
     PINNED_LLAMA_SHA256,
     RELEASE_LOOKUP_FORM,
+    SCRIPTS_DIR,
     WEIGHTS_FETCH_FORM,
     WORKFLOWS_DIR,
     _action_references,
     _llama_fetch_scripts,
     _load_workflows,
     _mapping,
+    _run_bodies,
     _setup_python_versions,
+    _strings,
 )
 
 pytestmark = pytest.mark.workflow
@@ -34,14 +42,61 @@ def test_every_workflow_that_runs_llama_cpp_pins_the_same_build() -> None:
 
     A throughput number is only about the pipeline if the pipeline runs the
     build the number was measured on (Guardrail #10).
+
+    An unconverted workflow spells the pin in its own `env:` block. A converted
+    one reads it off the shared script, which is the next test.
     """
     workflows = _load_workflows()
 
-    for filename in sorted(LLAMA_RUNTIME_WORKFLOWS):
+    for filename in sorted(LLAMA_INLINE_RUNTIME_WORKFLOWS):
         env = _mapping(workflows[filename].get("env"), f"{filename} env")
         assert env.get("LLAMA_CPP_BUILD") == PINNED_LLAMA_BUILD, filename
         assert env.get("LLAMA_CPP_ASSET") == PINNED_LLAMA_ASSET, filename
         assert env.get("LLAMA_CPP_SHA256") == PINNED_LLAMA_SHA256, filename
+
+
+def test_the_shared_fetch_script_is_the_one_home_of_the_pin_for_every_caller_on_it() -> None:
+    """One home per converted caller, and the test tightens as the rest convert.
+
+    The pin used to live in eleven places that had to change together - four
+    workflow `env:` blocks and seven fetch steps - and nothing read them against
+    each other. Miss one on an upgrade and a case runs on a build production
+    does not run, which is a measurement about a binary nobody ships
+    (Guardrail #10).
+
+    A conversion is one line in `LLAMA_SCRIPT_CALLERS`: that workflow stops
+    being asked for an `env:` copy above and starts being refused one here. The
+    set is not the whole runtime list yet, and this names which ones are left.
+    """
+    pin = read_text(SCRIPTS_DIR / LLAMA_PIN_SCRIPT)
+    assert f"LLAMA_CPP_BUILD={PINNED_LLAMA_BUILD}" in pin
+    assert f"LLAMA_CPP_SHA256={PINNED_LLAMA_SHA256}" in pin
+    assert PINNED_LLAMA_ASSET in pin.replace("${LLAMA_CPP_BUILD}", PINNED_LLAMA_BUILD)
+
+    fetch = read_text(SCRIPTS_DIR / LLAMA_RUNTIME_SCRIPT)
+    assert f".github/scripts/{LLAMA_PIN_SCRIPT}" in fetch, (
+        "the fetch reads the pin rather than repeating it"
+    )
+    for name in LLAMA_PIN_NAMES:
+        assert f"{name}=" not in fetch, f"{LLAMA_RUNTIME_SCRIPT} spells {name} for itself"
+
+    assert LLAMA_SCRIPT_CALLERS <= LLAMA_RUNTIME_WORKFLOWS, (
+        "a caller of the fetch script installs the runtime, so it belongs to that set"
+    )
+    assert LLAMA_SCRIPT_CALLERS, "nothing is converted, so this is checking nothing"
+
+    workflows = _load_workflows()
+    for filename in sorted(LLAMA_SCRIPT_CALLERS):
+        workflow = workflows[filename]
+        assert any(LLAMA_RUNTIME_SCRIPT in body for body in _run_bodies(workflow)), (
+            f"{filename} is converted, so it has to call {LLAMA_RUNTIME_SCRIPT}"
+        )
+        for name in LLAMA_PIN_NAMES:
+            spelt = sorted(text for text in _strings(workflow) if name in text)
+            assert not spelt, (
+                f"{filename} is converted, so the pin lives only in "
+                f"{LLAMA_PIN_SCRIPT}: it still spells {name} in {spelt}"
+            )
 
 
 def test_every_llama_cpp_fetch_is_pinned_and_digest_checked() -> None:
@@ -60,8 +115,18 @@ def test_every_llama_cpp_fetch_is_pinned_and_digest_checked() -> None:
 
 
 def test_no_workflow_takes_whichever_llama_cpp_release_is_newest() -> None:
-    """The list endpoint hands back a different binary on every cache eviction."""
-    for path in sorted((*WORKFLOWS_DIR.glob("*.yml"), *WORKFLOWS_DIR.glob("*.yaml"))):
+    """The list endpoint hands back a different binary on every cache eviction.
+
+    The scripts as well as the workflows, because the pin is moving into
+    `.github/scripts/` one caller at a time and a check that stopped at the YAML
+    would stop covering a fetch the moment that fetch was extracted.
+    """
+    named = (
+        *WORKFLOWS_DIR.glob("*.yml"),
+        *WORKFLOWS_DIR.glob("*.yaml"),
+        *SCRIPTS_DIR.glob("*.sh"),
+    )
+    for path in sorted(named):
         assert "releases?per_page" not in read_text(path), path.name
 
 

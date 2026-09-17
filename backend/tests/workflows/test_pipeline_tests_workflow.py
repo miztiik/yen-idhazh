@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -17,8 +18,12 @@ from pydantic import ValidationError
 from idhazh import config
 from idhazh.contracts.pipeline_tests import MINIMUM_CANDIDATES, PipelineTestsConfig
 from idhazh.contracts.run_plan import RunPlan
+from utilities import candidate_pointer, model_refs
 
 from ._harness import (
+    LLAMA_PIN_SCRIPT,
+    LLAMA_RUNTIME_SCRIPT,
+    PINNED_LLAMA_BUILD,
     SCRIPTS_DIR,
     WORKFLOWS_DIR,
     _bash,
@@ -26,7 +31,9 @@ from ._harness import (
     _isolated_env,
     _job,
     _load_workflows,
+    _mapping,
     _normalize_condition,
+    _run_bodies,
     _script,
     _step,
     _steps,
@@ -83,6 +90,47 @@ REPORT_STEP: str = "Say what the three cases measured"
 
 CASE_SCRIPT: Path = SCRIPTS_DIR / "run-pipeline-test-case.sh"
 
+#: The one dispatch input, the action that acts on it, and the scratch root that
+#: action writes. Named here so a second way of reaching a candidate has to be
+#: added on purpose.
+CANDIDATE_INPUT: str = "candidate_models_file"
+
+CANDIDATE_ACTION: str = "./.github/actions/candidate-config"
+
+SCRATCH_CONFIG: str = "backend/var/candidate-config"
+
+#: Where this dispatch's own ledgers land, as `run.trial_state_dirname`. The
+#: same directory the bench already writes to, so nothing a dispatch records
+#: sits beside the rows the console reads.
+TRIAL_STATE: str = "pipeline-tests"
+
+RUNTIME_SCRIPT: Path = SCRIPTS_DIR / LLAMA_RUNTIME_SCRIPT
+
+PIN_SCRIPT: Path = SCRIPTS_DIR / LLAMA_PIN_SCRIPT
+
+#: What the fetch step publishes for the cache key to read, and the output name
+#: the script prints it under.
+PIN_OUTPUT: str = "llama_cpp_build"
+
+FETCH_STEP: str = "Fetch runtime and weights"
+
+PIN_STEP: str = "Say which llama.cpp build this job installs"
+
+CACHE_STEP: str = "Cache weights and runtime"
+
+CASE_CONFIG_STEP: str = "Write each case's config"
+
+
+def _required_environment(script: str) -> set[str]:
+    """Every variable a shell script refuses to run without.
+
+    Read off the script's own `: "${NAME:?...}"` guards rather than listed, so a
+    guard added to the script is a guard the caller is held to from that commit
+    on. A list here would be a second copy of the script's interface, and the
+    copy is what goes stale.
+    """
+    return set(re.findall(r':\s*"\$\{([A-Z_][A-Z0-9_]*):\?', script))
+
 
 def _recorded(root: Path, case: str, item_ids: Sequence[str]) -> None:
     """Write what one case's work stage would have left under `backend/var/cases/`."""
@@ -125,18 +173,28 @@ def _settings() -> PipelineTestsConfig:
 
 
 def test_the_only_way_to_start_it_is_a_person_asking() -> None:
-    """Dispatch and nothing else, and it takes nothing typed.
+    """Dispatch and nothing else, and the form asks one question.
 
     A schedule would spend a runner-hour a day on a workflow nobody is reading
     the result of, and a push or pull_request trigger would spend one per
-    commit. A dispatch input would be a value the run acts on that config does
-    not already answer (Guardrail #6), and it would be a value somebody could
-    mistype into a 45-minute job.
+    commit.
+
+    The form asks which model to run, and nothing else. Every case setting is
+    still read from config or drawn (Guardrail #6) - the addresses, the draw
+    size, the job bound, the slot counts, the windows. Which model is the one
+    question config cannot answer, because the committed config names the
+    incumbent by design, and a second input would be a value somebody could
+    mistype into a job measured in hours.
     """
     workflow = _load_workflows()[WORKFLOW]
     assert set(_triggers(workflow)) == {"workflow_dispatch"}
-    assert _declared_dispatch_inputs(workflow) == {}, (
-        "the dispatch declares no inputs: every case setting is read from config"
+    declared = _declared_dispatch_inputs(workflow)
+    assert sorted(declared) == [CANDIDATE_INPUT], (
+        "one input, and it names the model: every case setting is read from config"
+    )
+    named = _mapping(declared[CANDIDATE_INPUT], f"{WORKFLOW} input {CANDIDATE_INPUT}")
+    assert named.get("default") == "", (
+        "empty is the default, so a dispatch that types nothing runs the configured model"
     )
 
 
@@ -445,13 +503,20 @@ def test_the_case_configs_the_workflow_writes_all_load(tmp_path: Path) -> None:
     outside its schema would fail on the runner after the weights were fetched,
     and the case whose numbers are worth having most - two slots, a doubled
     window - is the last one to run.
+
+    Cut from the scratch root the step names, not from `config/`, so this drives
+    the route a candidate dispatch really takes.
     """
-    shutil.copytree(CONFIG_DIR, tmp_path / "config")
+    scratch = _scratch(tmp_path, models_file=None)
     workflow = _load_workflows()[WORKFLOW]
-    assert CASE_CONFIG_CALL in _script(
-        _step(workflow, JOB, "name", "Write each case's config"), "case config"
+    case_config = _script(_step(workflow, JOB, "name", CASE_CONFIG_STEP), "case config")
+    assert CASE_CONFIG_CALL in case_config
+    assert f"--config-root {SCRATCH_CONFIG}" in case_config, (
+        "the cases are cut from the scratch copy, so a candidate reaches all three"
     )
-    written = _module_outputs([], cwd=tmp_path, module=CASE_CONFIG_MODULE)
+    written = _module_outputs(
+        ["--config-root", scratch.as_posix()], cwd=tmp_path, module=CASE_CONFIG_MODULE
+    )
 
     settings = _settings()
     assert sorted(written) == sorted(case.id for case in settings.cases)
@@ -581,10 +646,188 @@ def test_the_shell_it_runs_is_linted_like_every_other_script() -> None:
     where the linter looks and it has to be executable shell rather than a
     fragment somebody pasted.
     """
-    assert CASE_SCRIPT.parent == SCRIPTS_DIR
-    text = read_text(CASE_SCRIPT)
-    assert text.startswith("#!/usr/bin/env bash\n")
-    assert "set -euo pipefail" in text
+    for script in (CASE_SCRIPT, RUNTIME_SCRIPT, PIN_SCRIPT):
+        assert script.parent == SCRIPTS_DIR
+        text = read_text(script)
+        assert text.startswith("#!/usr/bin/env bash\n"), script.name
+        assert "set -euo pipefail" in text, script.name
+
+
+def _scratch(tmp_path: Path, *, models_file: str | None) -> Path:
+    """The scratch config root the composite action builds, built the same way.
+
+    The committed tree is copied and the shipped program moves the pointer, so a
+    test that passes here is a test of the bytes the action runs (Guardrail #7).
+    `None` means an empty dispatch, which is the committed pointer.
+    """
+    scratch = tmp_path / "backend" / "var" / "candidate-config"
+    scratch.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copytree(CONFIG_DIR, scratch)
+    named = models_file or json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models_file"]
+    candidate_pointer.point_at(named, scratch=scratch, trial_state=TRIAL_STATE)
+    return scratch
+
+
+def test_a_dispatch_that_names_nothing_runs_the_model_config_already_names() -> None:
+    """The empty form is the old behaviour, and the program is what says so.
+
+    The input exists to check a candidate. It may not change what a dispatch
+    that types nothing runs, because every reading this workflow has ever taken
+    was taken that way - and a form whose default quietly moved the model would
+    make the old numbers describe something else (Guardrail #10).
+    """
+    empty = dict(
+        row.split("=", 1)
+        for row in model_refs.candidate_rows(REPO_ROOT, "", prefix="candidate_")
+    )
+    configured = dict(
+        row.split("=", 1) for row in model_refs.configured_rows(REPO_ROOT, with_draft=False)
+    )
+
+    pointer = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models_file"]
+    assert empty["candidate_models_file"] == pointer
+    for field in model_refs.CONFIGURED_FIELDS:
+        assert empty[f"candidate_{field}"] == configured[f"summarize_{field}"], field
+
+
+def test_a_named_candidate_moves_one_line_and_leaves_the_committed_config_alone(
+    tmp_path: Path,
+) -> None:
+    """One line moves, and it is the line a swap would later move.
+
+    A dispatch that edited `config/` would leave the checkout it measured on
+    disagreeing with the tree it was cut from, and every control this workflow
+    holds fixed - the prompt, the schema, the sampler, the window, the
+    truncation cap - is the committed one only because the copy differs by that
+    one line and nothing else.
+    """
+    committed = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    named = next(
+        path.relative_to(CONFIG_DIR).as_posix()
+        for path in sorted((CONFIG_DIR / "models").glob("*.json"))
+        if path.relative_to(CONFIG_DIR).as_posix() != committed["models_file"]
+    )
+
+    scratch = _scratch(tmp_path, models_file=named)
+    written = json.loads(read_text(scratch / "idhazh.json"))
+
+    assert written["models_file"] == named
+    assert written["run"]["trial_state_dirname"] == TRIAL_STATE
+    moved = {
+        key
+        for key in set(committed) | set(written)
+        if committed.get(key) != written.get(key)
+    }
+    assert moved == {"models_file", "run"}, f"one pointer and one state root, not {moved}"
+    assert json.loads(read_text(CONFIG_DIR / "idhazh.json")) == committed, (
+        "the committed config is read, never written"
+    )
+    assert config.load(scratch).models.summarize.id, "the scratch root still loads"
+
+
+def test_no_step_opens_the_committed_models_file_once_a_candidate_may_be_named() -> None:
+    """Every reader of a model fact reads the copy, or a candidate is half-applied.
+
+    The failure this stops is a dispatch that fetches the candidate, checks it
+    against the incumbent's recorded digest, and starts a server on flags the
+    committed entry declares. Each of those is a step that looks right on its
+    own.
+    """
+    workflow = _load_workflows()[WORKFLOW]
+    build = _step(workflow, JOB, "uses", CANDIDATE_ACTION)
+    with_block = build.get("with")
+    assert isinstance(with_block, dict)
+    assert with_block.get("models_file") == "${{ steps.models.outputs.candidate_models_file }}"
+    assert with_block.get("trial_state") == TRIAL_STATE, (
+        "the ledgers this dispatch writes land off the production state root"
+    )
+
+    for body in _run_bodies(workflow):
+        for line in body.splitlines():
+            if line.lstrip().startswith("#"):
+                continue
+            assert '"config/idhazh.json"' not in line, line
+            assert 'Path("config")' not in line, line
+
+    names = [step.get("name") for step in _steps(workflow, JOB)]
+    assert names.index(build.get("name")) < names.index("Verify the weights"), (
+        "the digest is read out of the copy, so the copy has to exist first"
+    )
+    assert names.index(build.get("name")) < names.index(CASE_CONFIG_STEP)
+
+
+def test_the_fetch_step_hands_the_script_every_value_it_refuses_to_run_without() -> None:
+    """Read the script's own guards, never a list beside them.
+
+    A script that refuses a missing value and a caller that never passes it is a
+    step that fails after the cache step, on a runner, with the weights half
+    downloaded. The guards are the interface, so they are what the call site is
+    held to - and a guard added later is one this test enforces from that commit
+    without being edited.
+
+    Through `env`, never pasted: a value pasted into a program is text before it
+    is a value (Guardrail #11).
+    """
+    required = _required_environment(read_text(RUNTIME_SCRIPT))
+    assert "GITHUB_TOKEN" in required and "WEIGHTS_FILE" in required, (
+        f"the script no longer guards what it needs: {sorted(required)}"
+    )
+
+    fetch = _step(_load_workflows()[WORKFLOW], JOB, "name", FETCH_STEP)
+    assert _script(fetch, FETCH_STEP).strip() == f"bash .github/scripts/{LLAMA_RUNTIME_SCRIPT}"
+    supplied = fetch.get("env")
+    assert isinstance(supplied, dict)
+    assert required <= set(supplied), f"the step never passes {sorted(required - set(supplied))}"
+
+
+def test_the_cache_key_names_the_build_the_script_is_about_to_install() -> None:
+    """The key holds the runtime, so a key naming another build serves the wrong one.
+
+    The fetch runs only on a miss. A key that could name a build the script does
+    not install would restore one binary under the name of another and never
+    fetch again, which is the instability of following the newest release with
+    none of its freshness.
+
+    So the key reads the pin off the script rather than repeating it, and the
+    weights half names the candidate rather than the committed model - or a
+    dispatch checking one model would be served the other from cache.
+    """
+    workflow = _load_workflows()[WORKFLOW]
+    cache = _step(workflow, JOB, "name", CACHE_STEP)
+    with_block = cache.get("with")
+    assert isinstance(with_block, dict)
+    key = str(with_block.get("key"))
+    assert f"steps.runtime.outputs.{PIN_OUTPUT}" in key, key
+    assert "steps.models.outputs.candidate_file" in key, key
+    assert "steps.models.outputs.candidate_revision" in key, key
+
+    names = [step.get("name") for step in _steps(workflow, JOB)]
+    assert names.index(PIN_STEP) < names.index(CACHE_STEP), "the key cannot read a later step"
+
+
+@requires_bash
+def test_the_pin_script_prints_the_build_the_cache_key_reads(tmp_path: Path) -> None:
+    """Run it, do not read it (Guardrail #7).
+
+    The build is a constant in one file, the fetch sources that file, and the
+    cache key is built from what that file prints. This is the one place the
+    printed value and the pinned value are compared, and it is what makes the
+    extraction safe: an upgrade that moved the constant and not the print would
+    key the cache on the old build and restore the old binary forever.
+    """
+    shell = _bash()
+    assert shell is not None
+    completed = subprocess.run(
+        [shell, PIN_SCRIPT.as_posix()],
+        cwd=tmp_path,
+        env=_isolated_env(tmp_path),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.strip() == f"{PIN_OUTPUT}={PINNED_LLAMA_BUILD}"
+    assert not (tmp_path / "backend").exists(), "asking which build must not fetch one"
 
 
 def test_no_case_setting_is_written_into_the_workflow() -> None:

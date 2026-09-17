@@ -659,6 +659,18 @@ server - over two articles, three times over, and reports what each pass cost.
 It publishes nothing: no step writes `frontend/public/`, no step commits, and
 what the passes produced leaves as a 90-day artifact.
 
+**The dispatch takes one field, and it names the model.** Leave
+`candidate_models_file` empty and the cases run the model `config/idhazh.json`
+already names, which is what every reading this workflow has taken. Name a file
+under `config/models/` and a scratch copy of `config/` points at it, every case
+is cut from that copy, and the real prompts and the real two calls run on those
+weights - so the cheapest real-path check of a candidate is a dispatch here
+rather than a bench. What it settles and what it does not is in
+[../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md#the-cheapest-check-is-the-pipeline-tests-and-it-uses-the-real-prompts).
+The committed config is never written: the scratch copy differs in one line, and
+in `run.trial_state_dirname`, which puts this dispatch's own ledgers under
+`state/pipeline-tests/` rather than beside the rows the console reads.
+
 **The two articles are drawn, not fixed.** `config/pipeline-tests.json` holds at
 least twenty candidate addresses, each one an article this pipeline has really
 fetched and summarized, and each naming the feed in `config/sources.json` that

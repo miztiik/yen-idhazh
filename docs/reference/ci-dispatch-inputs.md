@@ -1,6 +1,6 @@
 # Dispatch inputs
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-17
 
 What shape a `workflow_dispatch` input has to have, which shapes exist, and what
 checks each one. One of them decides a published address, which is why the list
@@ -9,10 +9,10 @@ is closed rather than open. The workflows that take these inputs are in
 
 ## Every dispatch input has a shape, and one of them decides a published address
 
-A `workflow_dispatch` form is free text unless somebody constrained it. The
-seven workflows declare 24 inputs between them. Until 2026-08-27 one of those
-24 was constrained by nothing at all, and it was the one that decides where a
-day is published.
+A `workflow_dispatch` form is free text unless somebody constrained it. Seven
+workflows declare 22 inputs between them. Until 2026-08-27 one of those was
+constrained by nothing at all, and it was the one that decides where a day is
+published.
 
 **`digest.yml`'s `date` is the expensive one.** It becomes the day's directory,
 five artifact paths, two commit messages and six `--date` arguments.
@@ -41,31 +41,39 @@ under the paste is reading a script the input has already edited.
 
 ### Three shapes, and a closed list
 
-Every one of the 24 inputs is one of three things, and a contract test finds
+Every one of the 22 inputs is one of three things, and a contract test finds
 them by reading the workflow files rather than by consulting a list - so a new
 input fails the test until somebody says which one it is and the test finds the
 evidence in the file.
 
 | Shape | What it means | Count |
 | --- | --- | --- |
-| Enumerated | `type: choice` with an option list, or `type: boolean`. GitHub renders a menu or a checkbox and no other value can be submitted. | 5 |
-| Read by name | The value never lands in a script. It reaches a step as an environment variable, and the program that reads it decides what it means. | 10 |
+| Enumerated | `type: choice` with an option list, or `type: boolean`. GitHub renders a menu or a checkbox and no other value can be submitted. | 6 |
+| Read by name | The value never lands in a script. It reaches a step as an environment variable, and the program that reads it decides what it means. | 6 |
 | Matched | The workflow matches the value against an anchored pattern before anything acts on it. | 10 |
 
 The named inputs:
 
 - **Enumerated** - `backfill.commit`, `digest.faithfulness`, `digest.shards`,
- `measure.target`, `measure.runtime_candidate`.
-- **Read by name** - `measure.models`, `measure.runtime_repeats`,
- `measure.runtime_threads`,
- `measure.runtime_threads_batch`, and `candidate_models_file` on both
- `measure.yml` and `validate.yml`. That one becomes a file path, so the step
- resolves it and proves it sits inside `config/` rather than matching its
- spelling, then asserts every field it republishes is one bare word.
+ `measure.target`, `measure.runtime_candidate`, `prune.force`.
+- **Read by name** - `measure.runtime_repeats`, `measure.runtime_threads`,
+ `measure.runtime_threads_batch`, and `candidate_models_file` on
+ `measure.yml`, `validate.yml` and `idhazh-pipeline-tests.yaml`. That one
+ becomes a file path, so the step resolves it and proves it sits inside
+ `config/` rather than matching its spelling, then asserts every field it
+ republishes is one bare word.
 - **Matched** - `digest.date`, `drift.recent_days`, `drift.baseline_days`,
- `measure.corpus_links`, `measure.threads`, `validate.shards`,
- `validate.repeats`, `validate.corpus_per_shard`,
+ `measure.corpus_links`, `measure.threads`, `measure.budget_samples`,
+ `validate.shards`, `validate.repeats`, `validate.corpus_per_shard`,
  `validate.job_budget_minutes`.
+
+**`candidate_models_file` is the same field on all three, and that is the point.**
+Every fact about a candidate - the repository, the commit, the filename, the
+digest, the byte count, the alias, the quantisation - is already written in
+`config/models/<name>.json`. A form that asked for them again would let one
+workflow measure one set of bytes while another pointed at a different set, with
+every gate green. Empty means the configured model on all three, so a dispatch
+that types nothing runs what the committed config already names.
 
 `validate.yml` shapes its four numbers in one step of the `plan` job, which is
 the job every other job needs, so "before its first use" is anywhere after that
@@ -85,7 +93,8 @@ skipping the issue step on `if: success`.
 
 CI runs `shellcheck --severity=style.github/scripts/*.sh` in the gates job.
 `ruff` and `mypy` stop at Python, and that directory holds the retry loop both
-daily commit steps run - the one whose failure costs a whole day's digest.
+daily commit steps run - the one whose failure costs a whole day's digest - and
+since 2026-09-17 the llama.cpp pin and the fetch that reads it.
 `--severity=style` is the strictest level, so a warning fails the build rather
 than becoming a note somebody scrolls past.
 
