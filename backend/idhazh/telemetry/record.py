@@ -300,7 +300,7 @@ def persist(items_dir: Path, row: ItemHealthRow) -> Path:
     work stage learned, the log line carries them, and the log is a CI artifact
     kept for days - so the census the ledger keeps was rebuilt somewhere else out
     of the article and the summary payloads, which between them cannot carry 70
-    of the 114 columns. This is the file that makes the value survive the shard.
+    of the 113 columns. This is the file that makes the value survive the shard.
 
     **The payload is `ItemHealthRow` and nothing else**, so there is no second
     shape to version, to migrate or to keep in step (CLAUDE.md section 11).

@@ -85,6 +85,18 @@ RETIRED_CELLS: Final[Mapping[str, str]] = MappingProxyType(
     }
 )
 
+#: Headings a day file an earlier run wrote still carries that this row no longer
+#: names and that nothing replaced. A retired cell moves to another column; a
+#: dropped one is gone, and the value it held is answered elsewhere - the host
+#: record carries `runner_name` at job grain, which an item row reaches through
+#: `job` and `shard` (`docs/reference/host-metrics.md`).
+#:
+#: **This is a contract, not a courtesy.** `ledger.migrate_header` refuses any
+#: heading that is neither a current column nor one the reader carries, rather
+#: than dropping cells silently - so a column deleted above without an entry here
+#: raises on the first append to every committed day file.
+DROPPED_CELLS: Final[frozenset[str]] = frozenset({"runner_name"})
+
 
 class ItemStage(StrEnum):
     """The pipeline's stage vocabulary - one name per step an item passes through.
@@ -338,6 +350,11 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-17T12:00",
+            change="Retired runner_name; the host record carries it at job grain.",
+            why="Nothing read the item-row copy, and a second copy is a thing that can disagree.",
+        ),
+        ChangelogEntry(
             version="2026-09-17",
             change="job names the workflow job whose machine took this row's readings.",
             why="Shard alone does not reach the host record: more than one job spells shard 0.",
@@ -351,11 +368,6 @@ class ItemHealthRow(Contract):
             version="2026-09-16",
             change="label_ms and summary_ms are a stopwatch; both finish reasons may be null.",
             why="A clock that was its two neighbours summed could not see a wait.",
-        ),
-        ChangelogEntry(
-            version="2026-09-15T22:50",
-            change="time_source is typed TimeSource rather than a lowercase token.",
-            why="A closed set the pipeline mints is one a producer selects from, never spells.",
         ),
         ChangelogEntry(
             version="2026-08-23",
@@ -802,11 +814,15 @@ class ItemHealthRow(Contract):
     # A throughput number with no machine beside it is not a measurement
     # (Guardrail #10). These are what let a row from a slower runner be read as
     # a slower runner rather than as a regression.
+    #
+    # `runner_name` was here until 2026-09-17 and is in `DROPPED_CELLS`. The host
+    # record carries it once a job rather than once an item, and `job` with
+    # `shard` is what reaches that record - a second copy of it here was a thing
+    # that could disagree. `cpu_model` stays, and its reason is the one thing
+    # that separates the two: it crosses to the browser as
+    # `PublicTelemetryRow.cpu_model`, and a browser cannot join.
     cpu_model: OneLine | None = Field(
         default=None, description="The CPU the runner reported, verbatim."
-    )
-    runner_name: OneLine | None = Field(
-        default=None, description="The runner label the job ran on."
     )
     cpu_busy_pct: float | None = Field(
         default=None, ge=0.0, le=100.0, description="Mean CPU busy over the item."

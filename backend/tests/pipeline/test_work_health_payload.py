@@ -1,6 +1,6 @@
 """Does the row a shard recorded outlive the process that recorded it?
 
-The recorder validates 114 cells an item at a time and used to hand them to a
+The recorder validates 113 cells an item at a time and used to hand them to a
 log line and to nothing else. A log line is a CI artifact that expires, so the
 census was rebuilt later out of the article and the summary payloads, which
 between them cannot carry most of those cells. These tests read the file the
@@ -117,7 +117,7 @@ def test_the_file_is_the_row_the_shard_reported_cell_for_cell(
 
     The log line is the only account of a shard that anybody trusted before this
     payload existed. If the two ever disagree, a reader has no way to tell which
-    one measured the item - so the test compares all 114 cells rather than the
+    one measured the item - so the test compares all 113 cells rather than the
     handful a caller happens to use.
     """
     caplog.set_level(logging.INFO, logger="idhazh")
@@ -138,7 +138,6 @@ def test_the_file_is_the_row_the_shard_reported_cell_for_cell(
 #: them. Named once so a column added to the sampler moves one line here.
 HOST_COLUMNS: Final = (
     "cpu_model",
-    "runner_name",
     "cpu_busy_pct",
     "cpu_busy_max",
     "cpu_busy_min",
@@ -224,7 +223,6 @@ def test_the_shard_names_one_machine_on_every_row_it_records(
     written = rows(items_dir)
 
     assert len({row.cpu_model for row in written.values()}) == 1
-    assert {row.runner_name for row in written.values()} == {"ubuntu-4core-3"}
 
 
 def test_every_row_a_shard_seals_names_the_job_and_the_worker_that_read_it(

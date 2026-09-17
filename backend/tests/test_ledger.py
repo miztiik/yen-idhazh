@@ -1053,6 +1053,75 @@ def test_a_day_file_under_a_retired_header_alone_is_appendable_again(tmp_path: P
     assert read_back[0].csv_row() == stranded.csv_row()
 
 
+def test_a_dropped_heading_is_carried_and_its_cell_goes(tmp_path: Path) -> None:
+    """A column with no replacement still has to let its day file re-file.
+
+    The two kinds of carried heading differ in what happens to the cell.
+    `RETIRED_CELLS` names one that moved, and `from_csv_row` reads it into the
+    column that replaced it. `DROPPED_CELLS` names one that went - `runner_name`
+    on 2026-09-17, because the host record carries the label once a job and a
+    second copy is a thing that can disagree - so the row re-files with the cell
+    gone, which is the point of dropping it.
+
+    Built rather than read off the archive: this is a shape the committed days
+    hold today and will not hold after the first append to each of them, so a
+    test that read one would pass by accident now and vanish later
+    (`CLAUDE.md` section 13).
+    """
+    state = tmp_path / "state"
+    path = ledger.item_health_path(state, DATE)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    row = timed_row(1)
+    header = (*ItemHealthRow.csv_columns(), "runner_name")
+    cells = row.csv_row() | {"runner_name": "GitHub Actions 1000031786"}
+    buffer = io.StringIO()
+    out = csv.writer(buffer, lineterminator="\n")
+    out.writerow(header)
+    out.writerow([cells[name] for name in header])
+    path.write_text(buffer.getvalue(), encoding="utf-8", newline="")
+
+    assert ledger.append_item_health(state, DATE, [carried_row(2, source_id="wire")]) == 1
+
+    assert _committed_rows(path)[0] == list(ItemHealthRow.csv_columns())
+    assert "runner_name" not in path.read_text(encoding="utf-8")
+    assert ledger.load_item_health_shard(path)[0].csv_row() == row.csv_row()
+
+
+def test_without_the_carried_entry_the_same_file_refuses_to_re_file(tmp_path: Path) -> None:
+    """The bite proof for the test above, and the reason the entry ships in this commit.
+
+    `migrate_header` refuses any heading it cannot place rather than dropping
+    cells silently, so a column deleted from the contract without an entry in
+    `ITEM_HEALTH_CARRIED` raises on the first append to every committed day file
+    - and that raise costs the run its whole commit step, every ledger staged
+    beside this one included.
+
+    The carried set is passed empty here rather than edited, which is the same
+    call the append makes with the entry missing.
+    """
+    state = tmp_path / "state"
+    path = ledger.item_health_path(state, DATE)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    header = (*ItemHealthRow.csv_columns(), "runner_name")
+    cells = timed_row(1).csv_row() | {"runner_name": "GitHub Actions 1000031786"}
+    buffer = io.StringIO()
+    out = csv.writer(buffer, lineterminator="\n")
+    out.writerow(header)
+    out.writerow([cells[name] for name in header])
+    path.write_text(buffer.getvalue(), encoding="utf-8", newline="")
+    before = path.read_bytes()
+
+    with pytest.raises(ValueError, match="cannot place"):
+        ledger.migrate_header(
+            path, ItemHealthRow.csv_columns(), ledger.refiler(ItemHealthRow), carried=()
+        )
+
+    assert path.read_bytes() == before, "the refusal moves nothing"
+    assert "runner_name" in ledger.ITEM_HEALTH_CARRIED, (
+        "the entry that makes the append above succeed"
+    )
+
+
 def test_a_day_file_already_under_the_current_header_is_left_byte_identical(
     tmp_path: Path,
 ) -> None:
@@ -1227,7 +1296,7 @@ def test_the_append_reads_the_day_file_rows_once(
 
     The header and the records this run already holds are two answers to one
     pass, and the pass that answered the second built a dict of every column -
-    114 of them on this shard - to read three cells of each row.
+    113 of them on this shard - to read three cells of each row.
 
     Two opens remain and only one of them reads rows: `_append` re-reads line 1
     on its own account, because that guard protects the eight other ledgers that

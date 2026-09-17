@@ -218,7 +218,6 @@ def test_the_item_health_ledger_columns_are_defined_once() -> None:
         "summary_finish_reason",
         "recovered",
         "cpu_model",
-        "runner_name",
         "cpu_busy_pct",
         "cpu_busy_max",
         "cpu_busy_min",

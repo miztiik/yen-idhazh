@@ -526,7 +526,7 @@ _BY_PATTERN: Final[Mapping[str, str]] = {
 _BY_TYPE: Final[Mapping[type, object]] = {bool: True, int: 1, float: 1.0, str: "fixture"}
 
 #: Every column no production writer fills today, and the reason each one is
-#: empty. **It is empty, and that is the ratchet at its tightest**: all 114
+#: empty. **It is empty, and that is the ratchet at its tightest**: all 113
 #: columns have a producer, so the assertion below reads "no column of this row
 #: is None on the way through" with no exceptions to read past. The last three
 #: left on 2026-09-16, when the slot columns started carrying the item's first

@@ -139,7 +139,7 @@ function writeItemHealthCanary() {
 		'visual_plan_tokens_written', 'label_cache_pct', 'summary_cache_pct', 'slot_id',
 		'kv_tokens_at_start', 'prefix_shared_with_previous', 'label_prefill_tokens_per_s',
 		'label_decode_tokens_per_s', 'summary_prefill_tokens_per_s', 'summary_decode_tokens_per_s',
-		'label_finish_reason', 'summary_finish_reason', 'recovered', 'cpu_model', 'runner_name',
+		'label_finish_reason', 'summary_finish_reason', 'recovered', 'cpu_model',
 		'cpu_busy_pct', 'cpu_busy_max', 'cpu_busy_min', 'load_1m', 'llama_rss_bytes',
 		'llama_rss_peak_bytes', 'python_rss_bytes', 'cgroup_peak_bytes', 'model_id',
 		'model_quantisation', 'n_ctx_configured', 'n_parallel', 'n_threads', 'n_batch',

@@ -24,9 +24,9 @@ writes the whole day's census afterwards. A worker also leaves its own copy of
 the row beside the item's other payloads, which is
 [the file below](#the-row-on-the-shard-before-the-ledger-has-it).
 
-The row carries 114 columns. `ItemHealthRow.csv_columns` in
+The row carries 113 columns. `ItemHealthRow.csv_columns` in
 `backend/idhazh/contracts/item_health.py` is the list, and this page does not
-restate it - a second copy of 114 names is a second thing to keep in step, and
+restate it - a second copy of 113 names is a second thing to keep in step, and
 it drifts. [item-health-columns.md](item-health-columns.md) is the generated
 answer to "where does this cell come from": every column, the eight questions
 they group into, which module puts a value under each name, whether that value
@@ -245,7 +245,7 @@ the same temp-file-then-rename every per-item payload uses. The payload is
 `ItemHealthRow` and nothing else, so there is no second shape to version.
 
 **It exists because the row used to die with the shard.** The recorder validates
-all 114 cells an item at a time, and until 2026-09-15 the only place they went
+all 113 cells an item at a time, and until 2026-09-15 the only place they went
 was a log line - a CI artifact with its own expiry. The durable row was rebuilt
 afterwards from the article and the summary payloads, which between them cannot
 carry most of those cells, so a cell the shard measured correctly still reached
@@ -516,12 +516,17 @@ A new column on this row is not finished when the contract and the schema agree.
 `ledger._append` calls `require_matching_header` before it writes, and that
 refuses any header that is not the contract's column list exactly. The day file
 the pipeline is currently appending to already exists with the old header, so
-the first run after the contract widens would raise:
+the first run after the contract changes would raise:
 
 ```text
-2026-09-17.csv has 113 columns and the contract has 114.
+2026-09-17.csv has 113 columns and the contract has 113.
 Migrate the ledger before appending to it.
 ```
+
+**The two counts are equal there and it still raised**, which is the clearest
+thing this message says: the guard compares the whole tuple. That is the real
+shape of the 2026-09-17 change - one column added, one retired - and a check on
+the width alone would have called it clean.
 
 That is a failed scheduled run, not a failed lint. **This is the one ledger that
 migrates itself, and the reason is that it is the one that has retired a
@@ -652,10 +657,11 @@ your copy, which drops the rows the pipeline wrote while the branch was open.
 
 ## Scaling
 
-Measured 2026-09-17 on the committed repository, after the row moved to 114
-columns. The previous reading was taken on 2026-09-15 against a 113-column row;
-the shape has moved since, so it was a stale reading rather than history and has
-been replaced (Guardrail #10).
+Measured 2026-09-17 on the committed repository. The row still carries 113
+columns: `job` arrived and `runner_name` went, so the count is unchanged and
+the names are not. The previous reading was taken on 2026-09-15 against the
+113-column row this one replaced; the shape has moved since, so it was a stale
+reading rather than history and has been replaced (Guardrail #10).
 
 | Quantity | Value | How |
 | --- | --- | --- |
@@ -665,7 +671,7 @@ been replaced (Guardrail #10).
 | Widest day, `2026/08/25.csv` | 1,000 rows, 396,015 bytes | `stat` |
 | Rows on a full day | **800** | 5 runs x the 160-item `safety_ceiling_per_run` |
 | A full day at the current width | **~349 KB** | 800 x 436.4 |
-| Published projection `frontend/public/telemetry/2026-09.csv` | 1,347,770 bytes, 49 of the 114 columns | `stat` |
+| Published projection `frontend/public/telemetry/2026-09.csv` | 1,347,770 bytes, 49 of the 113 columns | `stat` |
 | Mean published row | 179.0 bytes raw, **40.6 bytes gzipped** (4.4x) | gzip at maximum level |
 
 What the 2026-09-17 column change costs the archive, one time, on the first
@@ -690,7 +696,7 @@ Three limits, in the order they will actually bite:
 1. **The reader's download, first.** The console fetches a whole month shard.
  975 KB gzipped at the end of a busy month is far more than the rest of the
  page. The lever is the projection, not the ledger: the served file carries 49
- of the row's 114 columns and could carry fewer, or become a pre-aggregated
+ of the row's 113 columns and could carry fewer, or become a pre-aggregated
  day-grain file with the per-item rows kept for the operator only. Nothing
  here is measured against a slow connection yet, so that is the next
  measurement rather than the next change.
@@ -711,15 +717,15 @@ the evidence it exists to keep. Windows are applied on read.
 ## A cell is fitted to its column, by the column
 
 Most of what lands in this row is not ours. `cpu_model` comes from a kernel
-file, `runner_name` from the environment, `summary_finish_reason` and
+file, `summary_finish_reason` and
 `label_finish_reason` from the runtime, `model_quantisation` from committed
 config, and `detail` from whatever went wrong - which, whenever a Pydantic
 `ValidationError` is what went wrong, quotes the value it refused. A page title
 with a curly quote in it therefore arrives inside the message that says the
 title was refused.
 
-Every one of those columns declares what a value may be made of. `detail`,
-`cpu_model` and `runner_name` take printable ASCII on one line; the token
+Every one of those columns declares what a value may be made of. `detail` and
+`cpu_model` take printable ASCII on one line; the token
 columns take a lowercase name. So a character outside the class made the row
 raise - and the row that raised was the one reporting the failure. The evidence
 and the item were lost together, over a dash.

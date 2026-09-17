@@ -109,7 +109,12 @@ from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
-from idhazh.contracts.item_health import RETIRED_CELLS, ItemHealthRow, ItemOutcome
+from idhazh.contracts.item_health import (
+    DROPPED_CELLS,
+    RETIRED_CELLS,
+    ItemHealthRow,
+    ItemOutcome,
+)
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
@@ -964,9 +969,11 @@ def _as_item_health_row(raw: dict[str, str]) -> dict[str, str]:
 
 
 #: The headings a day file an earlier run wrote still carries that the current
-#: row no longer names. `from_csv_row` reads each one into the column that
-#: replaced it, so a file carrying them is still a file this build can re-file.
-ITEM_HEALTH_CARRIED: Final[frozenset[str]] = frozenset(RETIRED_CELLS)
+#: row no longer names. Two kinds, and the difference is what happens to the
+#: cell: `from_csv_row` reads a RETIRED heading into the column that replaced
+#: it, and a DROPPED heading has no replacement - the file still re-files, and
+#: the cell goes, which is the point of dropping it.
+ITEM_HEALTH_CARRIED: Final[frozenset[str]] = frozenset(RETIRED_CELLS) | DROPPED_CELLS
 
 
 def _header_and_keys(
@@ -975,7 +982,7 @@ def _header_and_keys(
     """The file's own header and every record it already holds, in one pass.
 
     One `csv.reader` rather than a `DictReader`, and one open rather than two.
-    `DictReader` builds a dict of every column for each row, which is 114 keys on
+    `DictReader` builds a dict of every column for each row, which is 113 keys on
     an item-health shard to read three cells; the positions are taken off the
     header once and the cells are read by index after that.
 

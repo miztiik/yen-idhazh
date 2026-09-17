@@ -123,6 +123,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Retired runner_name; the host record carries it at job grain.",
+      "version": "2026-09-17T12:00",
+      "why": "Nothing read the item-row copy, and a second copy is a thing that can disagree."
+    },
+    {
       "change": "job names the workflow job whose machine took this row's readings.",
       "version": "2026-09-17",
       "why": "Shard alone does not reach the host record: more than one job spells shard 0."
@@ -136,11 +141,6 @@
       "change": "label_ms and summary_ms are a stopwatch; both finish reasons may be null.",
       "version": "2026-09-16",
       "why": "A clock that was its two neighbours summed could not see a wait."
-    },
-    {
-      "change": "time_source is typed TimeSource rather than a lowercase token.",
-      "version": "2026-09-15T22:50",
-      "why": "A closed set the pipeline mints is one a producer selects from, never spells."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -1130,22 +1130,6 @@
       "description": "Did this run ask the second call for a visual plan?",
       "title": "Run Visual Decision"
     },
-    "runner_name": {
-      "anyOf": [
-        {
-          "maxLength": 200,
-          "minLength": 1,
-          "pattern": "^[ -~]+$",
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "The runner label the job ran on.",
-      "title": "Runner Name"
-    },
     "selection_score": {
       "anyOf": [
         {
@@ -1548,7 +1532,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-17",
+      "default": "2026-09-17T12:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1639,5 +1623,5 @@
   ],
   "title": "ItemHealthRow",
   "type": "object",
-  "version": "2026-09-17"
+  "version": "2026-09-17T12:00"
 }

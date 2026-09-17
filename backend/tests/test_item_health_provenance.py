@@ -1,6 +1,6 @@
 """Does the column report name a real producer, and refuse a word that only looks like one?
 
-`ItemHealthRow` has 114 columns and nine other contracts also have a `date`, so
+`ItemHealthRow` has 113 columns and nine other contracts also have a `date`, so
 the scan's whole job is telling a module that fills a cell from one that uses
 the same word. Every fixture here is a source tree or a day file built under
 `tmp_path`. Nothing reads `backend/idhazh/` or the committed archive, which both
@@ -8,7 +8,7 @@ grow, so nothing here costs more as they do (CLAUDE.md section 13) - and a built
 tree can carry the shape the real one has never produced.
 
 The one exception is the grouping check, which reads `csv_columns()`. That is a
-contract and not a collection: it is 114 names today and 114 names on a five
+contract and not a collection: it is 113 names today and 113 names on a five
 year old clone.
 """
 
@@ -205,7 +205,7 @@ def test_a_class_of_cells_counts_and_the_contract_that_declares_the_row_does_not
     """The fetch timings are five dataclass fields handed over by field name.
 
     No static read resolves that dict's keys, and the class is the only place
-    the five names appear. The contract holds all 114 the same way and fills
+    the five names appear. The contract holds all 113 the same way and fills
     none of them, so it is left out by name.
     """
     module(

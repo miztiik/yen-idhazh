@@ -206,6 +206,13 @@ class HostFacts:
     The item row and `state/runtime-counters.csv` each carry a `cpu_model` and a
     `cgroup_peak_bytes` column, so a second reader on either side is two answers
     to one question and nothing to say which is right (Guardrail #10).
+
+    `runner_name` is the one field no consumer of this class takes any more -
+    the item row retired the column on 2026-09-17 and the counters row never had
+    it. It stays because this is the one call that reads the environment, and the
+    host record's own producer takes the same reading through `runner_name()`
+    below: dropping it here would leave the label read in one place and nowhere
+    to compare it against.
     """
 
     cpu_model: str | None
@@ -217,11 +224,17 @@ class HostFacts:
     job: ServerJob | None = None
 
     def shard_cells(self) -> dict[str, str | None]:
-        """The three a shard reads once and notes on every item it records.
+        """The two a shard reads once and notes on every item it records.
 
         `job` is here rather than beside `shard` in the caller because the pair
         it forms is the join, and a key column filled in one place cannot drift
         from the machine cells filled in another.
+
+        **`runner_name` left on 2026-09-17 and stays on this class.** The item
+        row no longer has the column - the host record carries the label once a
+        job, and `job` with `shard` is how an item reaches that record. What is
+        still read here is the one call that takes it, so nothing else has to
+        open the environment a second time.
 
         `cgroup_peak_bytes` is deliberately not here. It is a high-water mark
         that grows across a job, so an item row takes it again at the end of
@@ -229,7 +242,6 @@ class HostFacts:
         """
         return {
             "cpu_model": self.cpu_model,
-            "runner_name": self.runner_name,
             "job": None if self.job is None else self.job.value,
         }
 

@@ -42,7 +42,7 @@ def stage_record(
     and this ledger has no way to correct a row once it is in.
 
     **The row is the one the shard sealed wherever there is one.** The work stage
-    validates 114 cells an item and leaves them beside the article and the
+    validates 113 cells an item and leaves them beside the article and the
     summary; rebuilding from those two payloads carries 40 of them. So this reads
     the shard's own row and only falls back to `telemetry.classify_item` for an
     item no shard sealed one for - which on a healthy run is none of them, and is
