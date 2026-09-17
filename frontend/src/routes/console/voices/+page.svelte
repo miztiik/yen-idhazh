@@ -629,6 +629,7 @@
 			data-retiring-auto={strip.autoRetire ? 'yes' : 'no'}
 			data-retiring-drawn={strip.rows.length}
 			data-retiring-hidden={strip.hidden}
+			data-retiring-cap={data.console.source_rows}
 			data-model-rule="no"
 			data-model-rule-name="source-yield"
 			data-model-rule-none="a source published an address or it did not, and no model was asked"
@@ -755,23 +756,35 @@
 							</div>
 						{/each}
 					</div>
-				{/if}
 
-				<ul class="feed-key">
-					{#each YIELD_KEY as entry (entry.state)}
-						<li>
-							<span class="feed-square" data-retiring-state={entry.state}></span>{entry.text}
-						</li>
-					{/each}
-				</ul>
+					<ul class="feed-key">
+						{#each YIELD_KEY as entry (entry.state)}
+							<li>
+								<span class="feed-square" data-retiring-state={entry.state}></span>{entry.text}
+							</li>
+						{/each}
+					</ul>
+				{:else}
+					<!-- A view written before the day strip existed has no axis to draw on.
+					     The shares above it are the run's own and still true; what is
+					     missing is the day-by-day reading, so the panel says which half it
+					     has rather than drawing a key for squares nobody can see. -->
+					<p class="feeds-note" data-retiring-no-strip>
+						The run that published this census recorded no day-by-day shares, so there is no
+						strip to draw. It fills on the next run.
+					</p>
+				{/if}
 
 				{#if strip.unjudged.length > 0}
 					<!-- Drawn, never hidden. A source under its evidence floors has a
 					     shape worth seeing; what it has not got is a number anybody may
 					     act on, so the bar is a dash and the floors are printed. -->
 					<p class="feeds-note" data-retiring-unjudged-lead>
-						Not judged yet - these are under one or both evidence floors, so no countdown may be
-						drawn. Their days are still shown.
+						Not judged yet - under one or both evidence floors, so no countdown may be drawn.
+						The record is {strip.completeDates} complete {strip.completeDates === 1
+							? 'day'
+							: 'days'} and a source is judged at {strip.minCompleteDays} of them plus {strip.minDecisions}
+						decisions of its own. Their days are still shown, closest to being judged first.
 					</p>
 					<ol class="feed-rows" data-retiring-unjudged>
 						{#each strip.unjudged as row (row.sourceId)}
@@ -783,7 +796,7 @@
 										></span
 									>
 								</p>
-								<p class="feed-result" data-retiring-cell="bar">not judged yet</p>
+								<p class="yield-unjudged" data-retiring-cell="bar">not judged yet</p>
 								{#if row.squares.length > 0}
 									<div
 										class="feed-strip yield-strip"
@@ -805,14 +818,18 @@
 									</div>
 								{/if}
 								<p class="feed-result" data-retiring-readout>
-									{strip.completeDates} complete {strip.completeDates === 1 ? 'day' : 'days'},
-									{row.decisions}
-									{row.decisions === 1 ? 'decision' : 'decisions'} - judged at {strip.minCompleteDays}
-									and {strip.minDecisions}.
+									Decided {row.decisions} of the {row.opportunities}
+									{row.opportunities === 1 ? 'address' : 'addresses'} it was offered.
 								</p>
 							</li>
 						{/each}
 					</ol>
+					{#if strip.unjudgedHidden > 0}
+						<p class="feeds-note" data-retiring-unjudged-more>
+							{strip.unjudgedHidden} more {strip.unjudgedHidden === 1 ? 'source is' : 'sources are'}
+							not judged yet either, none closer to its floors than the last row here.
+						</p>
+					{/if}
 				{/if}
 			{/if}
 		</div>
@@ -1169,6 +1186,17 @@
 		block-size: 2px;
 		border-radius: 1px;
 		background: var(--fill-low);
+	}
+
+	/* The dash a source under its evidence floors gets instead of a bar. It sits
+	   in the bar column rather than under the name, because the whole point of
+	   drawing these rows is that the column means the same thing on every one. */
+	.yield-unjudged {
+		grid-area: bar;
+		margin: 0;
+		font-size: var(--text-xs);
+		line-height: var(--leading-xs);
+		color: var(--color-text-tertiary);
 	}
 
 	/* The same fill ramp the run strip and the feed strip use, for the same

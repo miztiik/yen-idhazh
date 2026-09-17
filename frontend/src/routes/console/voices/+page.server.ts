@@ -485,8 +485,16 @@ export interface Retiring {
 	dates: string[];
 	/** Ranked nearest-to-retirement first, then by how far under the mark. */
 	rows: Countdown[];
-	/** Under one or both evidence floors, so no countdown may be drawn yet. */
+	/** Under one or both evidence floors, so no countdown may be drawn. Capped the
+	 * same way the ranked rows are: the block exists so an operator can see the
+	 * shape of a source nobody may judge yet, and on a shallow record that is
+	 * every source we have - 156 of them on this checkout, which is a wall rather
+	 * than a panel. Closest to clearing its floors first, because a source with no
+	 * decisions at all has no shape to look at: its strip is empty by definition,
+	 * so ten of those would be ten rows saying nothing. */
 	unjudged: Countdown[];
+	/** Unjudged rows the cap dropped. */
+	unjudgedHidden: number;
 	/** How many judged sources are at or above the mark today. */
 	clear: number;
 	/** Rows the cap dropped. A ranking is read from the top and its tail is a
@@ -581,6 +589,9 @@ function retiring(view: SourceHealthView | null, rows: number): Retiring | null 
 				(a.share ?? 1) - (b.share ?? 1) ||
 				a.sourceId.localeCompare(b.sourceId)
 		);
+	const waiting = drawn
+		.filter((row) => row.unjudged)
+		.sort((a, b) => b.decisions - a.decisions || a.sourceId.localeCompare(b.sourceId));
 	return {
 		alarmPoint,
 		minDecisions,
@@ -590,9 +601,8 @@ function retiring(view: SourceHealthView | null, rows: number): Retiring | null 
 		autoRetire: view.auto_retire ?? false,
 		dates,
 		rows: under.slice(0, rows),
-		unjudged: drawn
-			.filter((row) => row.unjudged)
-			.sort((a, b) => a.sourceId.localeCompare(b.sourceId)),
+		unjudged: waiting.slice(0, rows),
+		unjudgedHidden: Math.max(waiting.length - rows, 0),
 		clear: judged.length - under.length,
 		hidden: Math.max(under.length - rows, 0),
 		generatedAt: view.generated_at,

@@ -177,9 +177,27 @@ test('a source under its evidence floors is drawn, not hidden, and says what is 
 	// Hiding these would hide the shape, and the shape is what an operator is
 	// here for. What they have not got is a number anybody may act on.
 	await expect(page.locator('[data-retiring-unjudged-lead]')).toHaveText(/Not judged yet/);
+	await expect(page.locator('[data-retiring-unjudged-lead]')).toHaveText(
+		/judged at \d+ of them plus \d+/
+	);
 	const readout = await unjudged.first().locator('[data-retiring-readout]').innerText();
-	expect(readout).toMatch(/judged at \d+ and \d+/);
+	expect(readout).toMatch(/Decided \d+ of the \d+ address/);
 	expect(await unjudged.first().locator('[data-retiring-chip]').count()).toBe(0);
+});
+
+test('the unjudged block is capped too, and its tail is a number', async ({ page }) => {
+	await page.goto(ROUTE);
+	const table = page.locator('[data-retiring="table"]');
+	test.skip((await table.count()) === 0, 'the canary published no source census');
+
+	const drawn = await page.locator('[data-retiring-unjudged-row]').count();
+	test.skip(drawn === 0, 'every source on the canary has cleared both floors');
+
+	// On a shallow record every source is unjudged, which on this repository is
+	// 156 rows. A wall is not a panel, so it caps like every other console list.
+	expect(drawn).toBeLessThanOrEqual(Number(await table.getAttribute('data-retiring-cap')));
+	const more = page.locator('[data-retiring-unjudged-more]');
+	if ((await more.count()) > 0) await expect(more).toHaveText(/^\d+ more/);
 });
 
 test('the tail of the ranking is a number, never another page of rows', async ({ page }) => {
