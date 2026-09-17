@@ -39,16 +39,33 @@ Each step was proposed by the owner and ruled on by Andre. Three changed.
 
 ### Step 1 - fit the line from the accumulated record
 
-**What happens.** Sort every pair the judge has ever called `DIFFERENT` by
-score. Discard the top one percent. Put the line just above the highest one
-left.
+**What happens.** Walk the record's slots from the top down, adding up how many
+`DIFFERENT` verdicts each holds. Stop when one percent of them have been passed.
+The line is the top edge of the slot you stopped in.
 
 ```
-line = the ceil((n + 1) * 0.99)-th smallest score among DIFFERENT verdicts
+spend   = floor(total_different * discard_share)
+walk slots from the highest down, subtracting each slot's different_count
+stop at the first slot where the running total exceeds spend
+line    = that slot's bin_low + bin_width
 ```
 
-That sentence in words: with the highest one percent thrown away, a fresh
-different-stories pair lands above the line about one time in a hundred.
+In words: with the highest one percent of different-stories pairs set aside, the
+line lands just above the highest one that is left.
+
+**`+ bin_width` is not a rounding flourish - without it the fit merges the pair
+it was placed to exclude.** `assemble.py` refuses on `score < floor_min`, so a
+pair scoring exactly the line **merges**. Every pair inside the chosen slot
+scores at or above that slot's lower edge, so the line has to be the slot's
+upper edge. Write the comparison operator into any code that touches this.
+
+**The fit reads the record and nothing else.** It never reads back the
+scored-pairs day tree. That is what keeps the read fixed-cost, and a worker who
+reads step 1 as "sort every pair ever judged" has re-introduced the growing read
+this design exists to avoid.
+
+**The line's resolution is `bin_width`.** At 0.001 that is finer than the
+sweep step the owner asked for and eight times finer than the 0.0083 margin.
 
 **Why not the owner's "maximise recall with precision at or above 98 percent".**
 About 4 pairs a day clear the line today. With 4 merges the precision can only
@@ -58,9 +75,9 @@ decoration. On the accumulated record it is worse: 2 percent of 123 merges
 permits 2 wrong merges per 28 days where the rule delivers 0 today.
 
 **Why not the maximum.** One wrong verdict on a genuine pair at 0.97 would put
-the line at 0.98 permanently. Discarding the top one percent is what makes a
+the line at 0.98 permanently. Setting aside the top one percent is what makes a
 single bad verdict unable to set the number, and it needs about 200 `DIFFERENT`
-verdicts before it can discard anything at all.
+verdicts before it can set anything aside at all.
 
 ### Step 2 - damp the move, in one direction only
 
@@ -80,7 +97,32 @@ arrive a week late.
 under 0.002 after the first fortnight, plus a few seconds of compute. The owner
 asked whether it costs anything beyond code; it does not.
 
-### Step 3 - clamp the daily step
+## When the record stops describing the same world
+
+The record is a row of slots covering the band. Four things can make the numbers
+in those slots stop meaning what they meant: the embedding model changes, either
+scoring weight changes, the band edges move, or the slot width changes. In every
+one of those cases a year of counts is silently on a different scale.
+
+**There is one response and it is never a refusal.** The record carries its own
+band, slot width and both stamps as fields. When any of them differs from what
+config now says, the run archives the record to
+`state/story-similarity/archive/<stamp>.json`, starts an empty one, holds the
+line at its last applied value, and writes `held_reason = inputs_changed` with
+both the old and the new values on the row.
+
+**Why not refuse the run.** Refusing would fight the point of this plan. The
+whole design exists so the number adapts without a person, and a config edit is
+a person acting on purpose - the run has no business vetoing it. What must never
+happen is the quiet reinterpretation of old counts under new edges, and
+archiving stops that without stopping anybody.
+
+**What it costs, stated.** The line freezes at its last value until the new
+record refills, which at the measured rate is about three weeks. That cost is
+visible on the console the whole time, and the archived file means the old
+evidence is recoverable rather than destroyed.
+
+## Step 3 - clamp the daily step
 
 ```
 downward move  <= 0.005 a day
@@ -93,12 +135,42 @@ pushback against Google doing the renaming, at 0.9317 - is 0.0083. A single
 clamped step of 0.010 lands at 0.930, below that pair. The clamp as proposed is
 larger than the margin it exists to protect.
 
+**What the clamp does and does not buy, stated so nobody over-trusts it.** One
+day cannot cross the margin. Two consecutive days can. The clamp bounds the
+step, never the walk - the thing that bounds the walk is the record, because
+each new day is a smaller share of it and the proposal stops moving.
+
 **Why no upward clamp.** A rise cannot cause the expensive error, so limiting it
 only delays safety.
 
 **It is also a free alarm.** Under this design the clamp should stop firing
 after the first fortnight. If it fires in week three, the fit has reverted to
 reading one day instead of the whole record.
+
+### Step 3a - the step-change guard
+
+The clamp bounds what the line does. Nothing yet bounds what the **evidence**
+does, and a day whose verdicts look nothing like every day before it is the
+signal that something upstream changed.
+
+```
+daily_shift   = | fit(record with today) - fit(record without today) |
+typical_shift = the median daily_shift over the last 14 written rows
+hold when daily_shift > step_change_multiple * typical_shift
+```
+
+In words: measure how far one day moved the answer, compare it with how far a
+day normally moves it, and hold if today is wildly out of line.
+
+**Why a multiple of the recent median rather than a standard deviation.** The
+daily shift is a one-sided quantity that shrinks as `1/days`, so it is not
+normally distributed and a sigma is the wrong ruler. A multiple of the recent
+median makes no distributional claim, and the multiple is a knob.
+
+**`step_change_multiple` defaults to 5** - an estimate, not a measurement. The
+first fourteen written rows produce the reading that replaces it, and until
+then the guard is recorded rather than enforced so it cannot hold the line on a
+number nobody has checked.
 
 ### Step 4 - settle on the evidence, not on the output
 
@@ -220,20 +292,33 @@ file is a score distribution with no labels attached and answers nothing.
 **A row is written every day, including days nothing moved.** A row that says
 nothing happened is what makes a silently broken judge visible.
 
-**O7: the two stamps are typed enums, not strings.**
+**O7: the two stamps are typed, and the enum sits where an enum belongs.**
 
-- `scorer_stamp` covers the embedding model identity and the two weights
-  `cosine_weight` and `key_point_weight`.
-- `judge_stamp` covers the judge model file digest, the prompt bytes and the
-  grammar. It covers nothing else. `LabelRow`'s pipeline stamp digested
-  seventeen inputs and as a result its gate has never once been met - a rebuild
-  must not reset a record that took three weeks to fill.
+A model digest is not known when the class is written, so an enum cannot hold
+one. The owner's intent - a model change becomes a contract discussion rather
+than a silent stamp - is delivered by a `Literal` of the model ids this repo
+ships, because adding one is then a schema diff and a changelog entry in the
+pull request that adds it.
 
-**Why an enum and not a free string.** A new value is then a contract change
-with a schema diff and a changelog entry, so the discussion happens in the pull
-request rather than in a silent scale mismatch a year later. The record holds
-cosine scores; change the encoder or either weight and every bin is on a
-different scale with no error anywhere.
+| Field | Type | Why |
+| --- | --- | --- |
+| `scorer_model` | `Literal` of the ids under `config/models/` | Adding a model is a contract change |
+| `cosine_weight`, `key_point_weight` | `float` | The other half of what makes a score mean something |
+| `judge_model` | `Literal`, same set | Same reason |
+| `prompt_digest`, `grammar_digest` | `Sha256` | Content, so a digest is the only honest shape |
+| `held_reason` | **`enum`** | A closed set of reasons, all known now |
+| `verdict` | **`enum`** | `SAME` / `DIFFERENT` / `UNCLEAR` |
+| `clamp_kind` | **`enum`** | `none` / `step` / `guard`. Never a bool - "was it clamped" cannot tell a step clamp from a step-change hold |
+
+**Every one of these is a declared column with a version stamp**, so a shape
+change is a schema diff, a changelog entry and a read-side migration in the same
+commit (CLAUDE.md section 11). That is the tracking the owner asked for, and it
+is the reason none of these is a free string.
+
+`judge_stamp` covers the judge model id, the prompt bytes and the grammar. It
+covers nothing else. `LabelRow`'s pipeline stamp digested seventeen inputs and
+as a result its gate has never once been met - a rebuild must not reset a record
+that took three weeks to fill.
 
 ## Row #3 - the knob block
 
@@ -362,15 +447,47 @@ and writes at about 4.
 | Write, per call | 1 to 3 | 0.25 to 0.75 |
 
 200 pairs judged twice is 400 calls. At 85 seconds that is 9.4 hours of model
-time, which over 4 parallel shards is **2 hours 22 minutes a shard against a
-6 hour kill** - 39 percent of the job.
+time.
+
+**Four shards means four GitHub jobs, not four processes on one runner.** This
+is the correction that matters most in the whole plan.
+
+- The runner is **2 physical cores with two threads each**, and a measurement
+  already in this repository records that raising `llama-server` from 4 threads
+  to 8 on this host was **slower at every prompt length** and 16 percent slower
+  at decode. Four servers sharing four logical CPUs is that experiment again,
+  worse.
+- The configured weights are **3.93 GiB**. Four copies is **15.7 GiB on a 16 GB
+  machine**, before Python and before any KV cache. It runs out of memory before
+  it runs out of time.
+
+So: a matrix of 4 legs, `max-parallel: 4`, one `llama-server` per leg. That is
+what `digest.yml`'s work job already does, for this reason. **As one job the
+wall clock is the serial number, 9.4 hours, killed at 6 h with nothing
+written.**
+
+| Shape | Wall clock | Outcome |
+| --- | --- | --- |
+| One job, 4 processes | 9.4 h, if it does not run out of memory first | **Killed** |
+| 4 matrix legs | ~2 h 22 m a leg of model time, plus fixed cost | Fits |
+
+**Model time is not wall clock.** Each leg also pays checkout, a weights cache
+restore and a server start. Row 10 carries a `judge_shard_timeout_minutes` knob,
+read the way `digest.yml` reads `run.shard_timeout_minutes` through
+`backend/utilities/shard_bound.py` - which asserts the value is a bare positive
+integer, because `timeout-minutes` takes whatever it is handed and an unreadable
+value leaves the job with no bound at all.
+
+**The judge model is `models.summarize`**, the one the digest already runs. That
+is what makes the owner's 9 tokens a second transfer to this workload at all,
+and it means the weights cache key is already warm - a second model would be a
+second multi-gigabyte cache entry competing for eviction against a cache already
+near its ceiling.
 
 **Writing is 0.6 percent of the cost.** Do not shorten the bucket names. The
 summaries are 79 percent of it: capping each summary at 200 tokens instead of
-300 takes a shard to 1 hour 44 minutes. Whether that costs accuracy is row #17.
-
-**Serial does not fit.** 400 calls at 85 seconds is 9.4 hours. The four shards
-must genuinely run in parallel or this row fails the job limit.
+300 takes a leg to about 1 hour 44 minutes of model time. Whether that costs
+accuracy is row #17.
 
 ## Limits nobody trades
 
