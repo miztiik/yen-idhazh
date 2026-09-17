@@ -1,12 +1,15 @@
-# CI Caches
+# CI Caches and Artifact Storage
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-17
 Every cache this repository keeps, what it holds, who reads it, and the bar a
-new one has to clear. Read this before adding one: the ceiling is shared, it is
-nearly full, and the entry a careless addition evicts is the one the daily
-pipeline needs.
+new one has to clear - plus the artifact total, because both are bytes GitHub
+retains between runs against a `CLAUDE.md` Guardrail #2 ceiling, and **on
+2026-09-17 both are over it.** Read this before adding either: the ceilings are
+shared, and the entry a careless addition evicts is the one the daily pipeline
+needs.
 
-`CLAUDE.md` Guardrail #2 states the 10 GB ceiling. The eviction behaviour behind it -
+`CLAUDE.md` Guardrail #2 states the 10 GB cache ceiling and the 500 MB artifact
+ceiling. The eviction behaviour behind the first -
 an entry unread for 7 days is deleted, and a restore is paid once per job rather
 than once per run - is in
 [ci-environment.md](ci-environment.md#platform-limits-that-shape-the-workflows).
@@ -15,40 +18,86 @@ This page is the inventory and the rule.
 ## The budget, measured
 
 Read with `gh api repos/miztiik/yen-idhazh/actions/cache/usage` and
-`.../actions/caches` on 2026-09-12. `n=1` - a cache listing is a state, not a
-sample, so there is no spread.
+`.../actions/caches` on **2026-09-17**. `n = 1` - a cache listing is a state, not
+a sample, so there is no spread. Bytes are the reading; a GB below is
+1,073,741,824 bytes and a MB is 1,048,576.
 
-| | Bytes | Of the 10 GB ceiling |
-| --- | --- | --- |
-| All 9 entries | 8.61 GB | 86% |
-| The two model weight entries alone | 7.50 GB | 75% |
-| Everything else (pip, npm) | 1.11 GB | 11% |
+| | Bytes | GB | Of the 10 GB ceiling |
+| --- | ---: | ---: | ---: |
+| All 7 entries | 17,175,463,744 | 16.0 | **160%** |
+| The three model weight entries alone | 16,317,054,735 | 15.20 | 152% |
+| Everything else (pip, npm, browser) | 858,409,009 | 0.80 | 8% |
 
-**Three quarters of the ceiling was two files of model weights.**
-`Qwen3.5-9B-Q4_K_M.gguf` is the summariser, named in `config/idhazh.json` and
-restored by the daily pipeline. `Qwen3-4B-Q4_K_M.gguf` served the visual planner
-until plan 11 row #6 retired it on 2026-09-13; nothing restores that entry any
-more, so GitHub evicts it once it is the least recently used and about 2.3 GB of
-the ceiling comes back on its own.
+**The cache is 6.0 GB over its ceiling.** Two of the three model entries are the
+transient `bench-` entries the four dispatches of 2026-09-16 left behind, 6.19 GB
+and 3.78 GB. Nothing restores either after its own dispatch, so both give their
+bytes back once they are the least recently used. The third, 5.23 GB, is the
+summariser `digest.yml` restores on every run.
 
-So the headroom for anything new is about 1.4 GB, and an addition that pushes
-past 10 GB does not fail loudly. GitHub evicts the least recently used entry -
-which, on a quiet weekend, can be a 5 GB weights entry the next digest run then
-refetches from Hugging Face. **A cache that overflows the ceiling costs the
-pipeline far more than it ever saved CI.**
+## Artifacts, measured
+
+Read with `gh api repos/miztiik/yen-idhazh/actions/artifacts --paginate` on
+**2026-09-17**, counting only artifacts that have not expired. Same rule: a
+listing is a state, not a sample, so `n = 1` and there is no spread.
+
+| | Bytes | MB | Count | Of the 500 MB ceiling |
+| --- | ---: | ---: | ---: | ---: |
+| Every live artifact | 1,113,878,190 | 1,062.3 | 612 | **212%** |
+| `github-pages` deployment artifacts alone | 1,050,902,892 | 1,002.2 | 30 | 200% |
+| Everything the pipeline and the gates upload | 62,975,298 | 60.1 | 582 | 12% |
+
+**Artifact storage is 562 MB over its ceiling, and 94 percent of it is one
+artifact name.** Each `github-pages` deployment artifact measures 33.2 to 33.5
+MB, and 30 of them are live. No pipeline step chooses to write these; the Pages
+deployment does.
+
+**Everything this repository's own workflows upload is 60.1 MB, which is 12
+percent of the ceiling.** The bench is a rounding error inside that: 24 dispatches
+hold 2,202,221 bytes between them, and the four dispatches of 2026-09-16 averaged
+158,962 bytes each - **0.15 MB a dispatch, which is 0.014 percent of the live
+total.**
+
+## Both ceilings are breached, and both need an owner decision
+
+**Guardrail #2's limits are GitHub's, so an agent surfaces them and never
+overrules them** (`CLAUDE.md` Guardrail #1). This section records the state. It
+proposes nothing, and nothing in this change acts on either number.
+
+**The cache overage has a named cost, and it does not land on CI.** GitHub does
+not fail a save that breaches the ceiling - it deletes the least recently used
+entry. The summariser entry and the transient `bench-` entries sit in one queue,
+and the summariser is the one nobody touches on a quiet weekend. **Evicting it
+costs the next digest run a 4.22 GB refetch from Hugging Face on the publishing
+path.** That is the whole risk in one sentence: a bench dispatch cannot slow CI
+down by overflowing the cache, and it can slow the digest down.
+
+**The artifact overage has no eviction mechanism to name.** Artifacts expire on
+their retention window rather than on pressure, so nothing here is at risk of
+being deleted early. What the number says is that the budget is spent, and spent
+by something no workflow in this repository chose to upload.
+
+What an owner needs to decide is which of the two readings is a budget to hold
+and which is a budget to re-measure and raise
+([measurements.md](measurements.md) states the ratchet rule). Neither question is
+answered here.
 
 ## The inventory
 
 | Cache | Key | Filled by | Read by | Size |
 | --- | --- | --- | --- | --- |
 | Summariser weights and runtime | `llm-<file>-<revision>-<llama.cpp build>-v4` | `digest.yml` `work` | every `work` shard of every run | 5.23 GB |
-| Visual planner weights and runtime | same scheme | `digest.yml` `visuals` | `visuals`, every run | 2.27 GB |
-| Candidate weights and runtime | `qualify-<candidate sha256>-<llama.cpp build>` | `validate.yml` `qualify` | the other shards of the same run | transient |
-| Bench weights and runtime | `bench-<candidate sha256>-<llama.cpp build>` | `measure.yml` `llm` | the `runtime` job of the same dispatch | transient |
-| pip download cache, 3.12 | `setup-python` default, hashed from `pyproject.toml` | any 3.12 job | `gates`, `site`, `browser`, `robots`, every `digest.yml` job, `measure.yml` `corpus` and `runtime`, `drift.yml`, `prune.yml`, `validate.yml`, `backfill.yml` | 173 MB |
-| pip download cache, 3.14 | same scheme, 3.14 | `robots` | `robots` | 152 MB |
+| Candidate weights and runtime | `qualify-<candidate sha256>-<llama.cpp build>` | `validate.yml` `qualify` | the other shards of the same run | transient, none live |
+| Bench weights and runtime | `bench-<candidate sha256>-<llama.cpp build>` | `measure.yml` `llm` | the `runtime` job of the same dispatch | transient, 6.19 GB and 3.78 GB live |
+| pip download cache, 3.12 | `setup-python` default, hashed from `pyproject.toml` | any 3.12 job | `gates`, `site`, `browser`, `robots`, every `digest.yml` job, `measure.yml` `corpus` and `runtime`, `drift.yml`, `prune.yml`, `validate.yml`, `backfill.yml` | 203 MB |
+| pip download cache, 3.14 | same scheme, 3.14 | `robots` | `robots` | 183 MB |
 | npm download cache | `setup-node` default, hashed from `frontend/package-lock.json` | any job running `npm ci` | `site`, `browser`, `whole-day`, `pages.yml`, `digest.yml` `assemble`, `backfill.yml` | 164 MB |
-| Browser binaries | `playwright-<os>-<playwright version>` | `ci.yml` `browser` and `whole-day` | both, on every pull request that buys the browser half | about 300 MB |
+| Browser binaries | `playwright-<os>-<playwright version>` | `ci.yml` `browser` and `whole-day` | both, on every pull request that buys the browser half | 269 MB |
+
+Every size is from the 2026-09-17 listing above. **The visual planner entry is no
+longer here, and its going is the eviction rule working.** `Qwen3-4B-Q4_K_M.gguf`
+served that job until plan 11 row #6 retired it on 2026-09-13, nothing restored
+the entry afterwards, and GitHub deleted the 2.27 GB. The same rule aimed at the
+summariser entry is the risk named above.
 
 The weights key and why it carries a revision and a build are in
 [ci-model-runtime.md](ci-model-runtime.md#the-inference-runtime-is-pinned-and-the-cache-key-says-which-build).
@@ -63,11 +112,12 @@ and it has three answers.
 never ages out, and the restore is paid once per job against a download paid
 once per job. Every entry in the table above except one is here.
 
-**Runs a few times a month: do not fill an entry of its own.** Measured over
-the 30 days to 2026-09-12: `ci.yml`, `digest.yml` and `pages.yml` ran more than
-100 times each, while `measure.yml` ran 8 times with its newest run on 08-25,
-`validate.yml` 4 times (newest 08-26), `drift.yml` 3 times and `backfill.yml`
-not at all. A cache on a workflow at that rate is cold on every dispatch: it
+**Runs a few times a month: do not fill an entry of its own.** Measured over the
+30 days to 2026-09-17, grouped by workflow file so a renamed display name does
+not split a count: `ci.yml` ran 2,362 times, `pages.yml` 988 and `digest.yml`
+128, while `measure.yml` ran 26 times (newest 09-16), `prune.yml` 18, `drift.yml`
+4 (newest 09-13), `validate.yml` 4 (newest 08-26) and `backfill.yml` not at all.
+A cache on a workflow at that rate is cold on every dispatch: it
 pays the save on the way out and the entry expires before anybody comes back
 for it. It also spends ceiling that the daily jobs need. **Such a job may still
 share a key a daily job keeps warm** - which is what `measure.yml` `corpus`
@@ -129,9 +179,10 @@ not the download.** The download is 9 s of a 25 s step, twice a run, against a
 34678620051 and run 34678820720, 2026-09-12). That is 4 percent of the wait on a
 pull request - worth taking, not worth much.
 
-What decided it was the ceiling. At 8.61 GB of 10 GB, the repository could
-afford roughly one more entry of this size and no more, so the design had to
-be one key rather than two, keyed on something that moves rarely rather than on
+What decided it was the ceiling. The cache was close enough to full on 2026-09-12
+that the repository could afford roughly one more entry of this size and no more,
+so the design had to be one key rather than two, keyed on something that moves
+rarely rather than on
 a lockfile hash. **Keying on `hashFiles('frontend/package-lock.json')` was the
 obvious thing and it is the wrong thing**: that hash moves when any of the
 eighteen frontend dependencies moves, so a Tailwind patch release would throw
@@ -158,5 +209,6 @@ are the place to look next.
 
 - [github-actions.md](github-actions.md) - the workflows, their triggers, the weights cache key, and the platform limits behind the ceiling.
 - [measurements.md](measurements.md) - the instrument log, including the cache reading taken across the 2026-08-27 model swap.
+- [benchmarks/what-a-bench-dispatch-costs.md](benchmarks/what-a-bench-dispatch-costs.md) - what a cache restore is worth against the 188.5 minutes a bench dispatch takes.
 - [../how-to/run-the-gates.md](../how-to/run-the-gates.md) - which gates run where, and what CI is authoritative for.
-- [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #2 (the runner budget, including the 10 GB ceiling) and Guardrail #10 (measured, not estimated).
+- [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #2 (the runner budget, including the 10 GB cache ceiling and the 500 MB artifact ceiling) and Guardrail #10 (measured, not estimated).

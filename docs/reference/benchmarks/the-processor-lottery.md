@@ -1,6 +1,6 @@
 # What processor a run draws, and what it does to a reading
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-17
 
 GitHub gives a job whatever machine is free. This page is the record of what that
 choice is worth, measured over seventeen bench dispatches between 2026-08-23 and
@@ -222,11 +222,85 @@ against 2,048 on each EPYC case, 17 percent more, and still finished that item i
 worth at least what the ratio shows and not less. What it is worth exactly, these
 three runs cannot say.
 
-**It does not follow the decode reading.** `llama-bench` puts Gemma's decode
-within 0.014 tokens a second on the two machines - 10.226 on the EPYC 7763 in
-this very dispatch, and 10.212 on a Xeon 8573C drawn by `35011547415` on another
-day - while prefill differs by 2.9 times, 20.4 against 59.3. The wall clock still
-halved. Whatever it is tracking, decode alone is not it.
+**It follows decode, but only when decode is read off the machine that did the
+work.** `llama-bench` puts Gemma's decode within 0.014 tokens a second on the two
+machines - 10.226 on the EPYC 7763 in this very dispatch, and 10.212 on a Xeon
+8573C drawn by `35011547415` on another day, a ratio of 1.0014. On that reading
+the halving is unexplained, and until 2026-09-17 this page said so.
+
+**It said so because `llama-bench` did not run on the machine that wrote these
+summaries.** The server's own counters, taken inside the `runtime` job, read 7.94
+tokens a second a decode on the EPYC 7763 and 14.66 on the Xeon - **1.85 times,
+against a wall-clock ratio of 1.86 to 1.88.** The next section is why the two
+instruments disagree and which one to believe.
+
+That still does not close it. The Xeon case wrote 17 percent more tokens on the
+longest item, so a full accounting has to divide the extra work out first, and
+three runs cannot do that.
+
+### The instrument is split across two machines, and one of its halves is the wrong one
+
+**The `llm` job and the `runtime` job of one dispatch landed on different
+processors in 3 of the 4 dispatches on 2026-09-16** - 9V45 against 7763, 7763
+against Xeon 8573C, and 7763 against 9V74.
+
+That is not only a fact about placement. It is a defect in what the bench
+publishes. In `35086409972` the emitted dossier attributes its prefill and decode
+rates to an EPYC 7763, while the seconds-an-item table printed beside them came
+from an Intel Xeon 8573C. On the server's own counters that Xeon reads **2.27
+times faster** - 43.58 tokens a second against 19.20. **So the published rate and
+the published wall clock in that dossier describe two different machines.**
+
+**The right machine's rates are already free.** The `runtime` job writes its own
+server counters, so no new run is needed to fix this - only a different column to
+read.
+
+| Run | The `runtime` job drew | Server prefill | Server decode |
+| --- | --- | ---: | ---: |
+| `35086403868` | AMD EPYC 7763 | 19.20 tok/s | 7.94 tok/s |
+| `35086407071` | AMD EPYC 7763 | 19.20 tok/s | 7.93 tok/s |
+| `35086409972` | Intel Xeon 8573C | 43.58 tok/s | 14.66 tok/s |
+
+Each is the median of three repeats, and the three agreed to **0.05 percent on
+prefill and 0.25 percent on decode**.
+
+**And the server's rate travels between dispatches, so it is usable.** Prefill
+falls only **4.2 percent over a 6.6-times change in prompt length** - 20.48
+tokens a second at 730 tokens against 19.61 at 4,850 - so two dispatches over
+different articles are still comparable to within a few percent. That is far
+tighter than the **127 percent** machine gap the reading has to resolve, which is
+what makes the server counter the right instrument and `llama-bench` on the other
+job the wrong one.
+
+### What the lottery costs in dispatches
+
+A median's standard error is about `1.2533 * sd / sqrt(n)`, so the dispatches
+needed to resolve a difference `d` is `ceil((1.2533 * cv / d) ** 2)`, where `cv`
+is the coefficient of variation - the spread as a share of the reading. Two
+samples give two values of `cv`, and both are on this page:
+
+- **Gemma prefill on the synthetic bench: 64.9 percent**, n = 10, every Gemma row
+  of [Every draw](#every-draw) above, 2026-08-23 to 2026-09-16.
+- **Gemma `runtime` job wall clock: 32.0 percent**, n = 3, the three Gemma
+  dispatches of 2026-09-16 at 161.0, 160.6 and 85.5 minutes.
+
+| Difference to resolve | Dispatches at 32.0% | Dispatches at 64.9% | Runner hours at 188.5 min a dispatch |
+| --- | ---: | ---: | ---: |
+| 20 percent | 5 | 17 | 16 to 53 h |
+| 10 percent | 17 | 67 | 53 to 210 h |
+| 5.3 percent, the draft-head difference already settled | 58 | 236 | 182 to 741 h |
+| Any of those, **paired inside one job** | **1** | **1** | **3.1 h** |
+
+**The sentence that matters**: the bench already alternates both cases inside one
+job, and for the differences this project actually has to resolve - 10 percent,
+and the 5.3 percent draft head - that pairing is worth a factor of **17 to 236**
+against comparing two dispatches.
+
+So a change that makes a dispatch cheaper does not automatically make the
+measurement cheaper. **A dispatch made 33 percent cheaper that then has to be
+repeated 17 times is 11 times more expensive, not cheaper.** Where a dispatch's
+time actually goes is [what a bench dispatch
+costs](what-a-bench-dispatch-costs.md).
 
 ## The hypotheses, and what would settle each
 
@@ -236,10 +310,11 @@ the next person spends their runner time on the question that is still open
 rather than on one somebody already closed.
 
 **All six were checked against the four dispatches of 2026-09-16 and none was
-settled.** H3 is the only one the day moved, and it moved from open to narrower.
-The reason four of the six could not move is worth stating once rather than six
-times: **the readings H3, H4, H5 and H6 wait on are fingerprint columns, and a
-bench dispatch does not write a fingerprint row.** Only `digest.yml` runs
+settled. H3 is the only one those dispatches moved, and re-reading them on
+2026-09-17 moved it a second time - by retiring its verdict rather than
+narrowing it.** The reason four of the six could not move is worth stating once
+rather than six times: **the readings H3, H4, H5 and H6 wait on are fingerprint
+columns, and a bench dispatch does not write a fingerprint row.** Only `digest.yml` runs
 `idhazh fingerprint`, so no bench artifact carries a bandwidth rate, an uptime, a
 machine size or a region - the four bench artifacts of 2026-09-16 carry none of
 them. Each verdict sits with its hypothesis below.
@@ -293,10 +368,13 @@ figure. **This one is now instrumented**: every job records a large-block copy
 rate, so the next several runs build the scatter this needs
 ([telemetry.md](../../concepts/telemetry.md)).
 
-**2026-09-16: narrowed, not settled.** Gemma's wall clock halved between an EPYC
-7763 and a Xeon 8573C whose decode readings differ by 0.014 tokens a second, so
-decode alone does not explain the wall clock. The bandwidth figure that would say
-what does is a fingerprint column, and these four artifacts carry none - the
+**2026-09-17: still open, and the verdict it carried is retired.** This page read
+the 2026-09-16 halving as evidence that decode does not explain the wall clock.
+That rested on a decode figure taken by `llama-bench` on the other job's machine.
+On the server's own counters the two machines differ by **1.85 times at decode
+against a wall clock of 1.86 to 1.88**, so decode does explain the wall clock and
+always did. What is still missing is the bandwidth figure that would say why
+decode differs, and that is a fingerprint column no bench artifact carries - the
 scatter has to come from daily runs.
 
 ### H4. L3 size is why the two Intel parts read fast
@@ -408,6 +486,7 @@ is a figure that stops existing on a date nobody chose.
 ## See also
 
 - [../models.md](../models.md) - one row a model, and what each dossier holds.
+- [what-a-bench-dispatch-costs.md](what-a-bench-dispatch-costs.md) - where a dispatch's 188.5 minutes go, and why cutting the non-model part buys almost nothing.
 - [what-the-draft-head-is-worth.md](what-the-draft-head-is-worth.md) - the worked example of a difference two dispatches could not establish and one paired job settled.
 - [../host-metrics.md](../host-metrics.md) - what every job now records about the machine it drew.
 - [../models/gemma-4-e4b-qat.md](../models/gemma-4-e4b-qat.md) - Gemma's draws and what its draft head is worth.
