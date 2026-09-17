@@ -555,10 +555,10 @@ Rows #1 to #17. These close the collision that destroyed 303 rows on 2026-09-16.
   - `backend/idhazh/stages/compact.py` - new
   - `backend/idhazh/cli.py` - the `compact` stage
   - `backend/idhazh/stages/assemble.py` - call before `dispatch.publish_all`
-  - `backend/idhazh/run_context.py` - read `GITHUB_RUN_ATTEMPT`
+  - `backend/idhazh/run_context.py` - **new**; reads `GITHUB_RUN_ATTEMPT`. Nothing in `backend/` reads that variable today, so this row writes the first reader (2.3)
   - `.gitattributes` - the `-merge` line from 2.6 (the two deletions wait for #12)
-  - `.github/workflows/digest.yml` - stage `state/segments`, add it to `REFRESH_PATHS` on both assemble commits, and call `idhazh compact` in the `plan` job as the catch-up
-  - `backend/tests/workflows/_harness.py` - `COMMIT_REFRESH_PATHS` at line 914 and `COMMIT_STAGED_PATHS` are **closed-world sets**; the assert at `test_daily_commit_steps.py` line 213 reads them, so editing the assert without the list is a guaranteed red
+  - `.github/workflows/digest.yml` - add `state/segments` to `REFRESH_PATHS` on `Commit the day`, which is the one step in the file that carries that setting; stage `state` whole in `Commit what the plan saw`; and call `idhazh compact` in the `plan` job as the catch-up
+  - `backend/tests/workflows/_harness.py` - `COMMIT_REFRESH_PATHS` and `COMMIT_STAGED_PATHS` are **closed-world sets**; the assert in `test_daily_commit_steps.py::test_only_assemble_rebuilds_and_it_rebuilds_with_its_own_publish_command` reads them, so editing the assert without the list is a guaranteed red
   - `state/segments/.gitkeep`
   - `backend/tests/pipeline/test_compact.py` - new
   - `backend/tests/workflows/test_daily_commit_steps.py`
@@ -569,12 +569,14 @@ Rows #1 to #17. These close the collision that destroyed 303 rows on 2026-09-16.
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | Segments live at `state/segments/<ledger>/`, outside every ledger root | Fowler - `day_partition.py` line 70 raises on an unplaceable name, and a skip clause in the one walk that skips nothing is how a new writer arrives unnoticed |
-| 2 | The compaction adds no workflow step and no commit; it rides `Commit the day` | Carmack - `digest.yml` line 1212 already stages `state` whole, so `git add state` records the deletions with no path-list change |
+| 2 | On the `assemble` side the compaction adds no workflow step and no commit; it rides `Commit the day` | Carmack - that step already stages `state` whole, so `git add state` records the deletions with no path-list change. It says nothing about the `plan` job, which names its paths one at a time - see decision 9 |
 | 3 | `state/segments` joins `REFRESH_PATHS` | Carmack - a lost push hands the heads back to the tip and re-runs the compaction against it, including segments a sibling pushed while this run built |
 | 4 | Ship inert first | Fowler - an empty-directory compaction proves the staging path, the deletions, the ordering against the site build, and Carmack's sub-second estimate, with zero rows at risk |
 | 5 | The compaction routes by the row's `date` cell, not today's date | Fowler - it is the whole recovery path for a day `assemble` died on |
 | 6 | The catch-up caller is the `plan` job, NEVER `prune.yml` | Carmack - `prune.yml` commits nothing on 29 of 30 wakes, stages only `corpus` on the day it is due, and ends in `git push --force origin main`. A compaction there deletes every waiting segment from a runner that throws itself away, and on the due day discards whatever a shard pushed since its own checkout. `plan` runs five times a day, already sits in the `digest` concurrency group, and already commits through `commit-and-push.sh` |
 | 7 | **Two head-writers are safe here because of the concurrency group `digest.yml` ALREADY carries, not the one Row #6 adds** | Carmack, 2026-09-17. `digest.yml` lines 64-66 already set `concurrency: group: digest, cancel-in-progress: false`, so `plan` of the next run cannot start before `assemble` of this one finished and two compactions can never interleave. Row #6 WIDENS that group to cover `validate` and `measure`; it does not create the guarantee this row rests on. **That is why this row is safe to ship before Row #6**, and why section 2.2's one-writer rule survives naming a second caller |
+| 8 | The `GITHUB_RUN_ATTEMPT` reader is a new `backend/idhazh/run_context.py` | Owner, 2026-09-17. The row named the module and no such file exists. The two modules that already read runner environment answer narrower questions - `fingerprint.runtime_build` the determinism stamp, `telemetry.host.runner_name` the machine - and which attempt is running is neither |
+| 9 | **The `plan` job stages `state` whole rather than naming `state/segments`** | Owner, 2026-09-17. A catch-up compaction writes ledger HEADS as well as deleting segments, and `Commit what the plan saw` names five paths rather than `state`. Staging only `state/segments` would commit the deletions and throw the heads away with the runner - a catch-up that loses the rows it caught. `Commit the day` and `Commit the folded telemetry` already stage `state` whole against this same hazard: a writer whose output path is not known before it runs |
 
 - **Rejected alternatives:**
 
