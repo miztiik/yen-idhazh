@@ -62,6 +62,7 @@ from ._harness import (
     _normalize_condition,
     _runtime_cache_keys,
     _script,
+    _stage_invocations,
     _step,
     _steps,
     _string_list,
@@ -549,34 +550,23 @@ def test_no_bench_stage_can_reach_the_production_state_root() -> None:
     by a production day that came up short. `budgets` and `batched` run no
     stage at all - they time a server and read its counters - which is why they
     reach no ledger and need no redirect.
+
+    The walk itself is `_stage_invocations`, because `Model validation` asks the
+    same question of its own jobs and two copies of one walker drift.
     """
     workflow = _load_workflows()["measure.yml"]
-    jobs = _mapping(workflow.get("jobs"), "measure.yml jobs")
 
     invocations = []
-    for job_name in sorted(jobs):
-        for step in _steps(workflow, job_name):
-            script = step.get("run")
-            if not isinstance(script, str):
-                continue
-            # An Actions expression is not shell, so it is blanked before the
-            # line is split. What the platform puts there cannot turn a stage
-            # invocation into a different one.
-            joined = re.sub(r"\$\{\{.*?\}\}", "expression", script, flags=re.DOTALL)
-            for line in joined.replace("\\\n", " ").splitlines():
-                if not re.search(r"\bpython3?\s+-m\s+idhazh\b", line):
-                    continue
-                words = shlex.split(line)
-                stage = words[words.index("idhazh") + 1]
-                assert BENCH_CONFIG_FLAG in words, (
-                    f"measure.yml/{job_name}/{step.get('name')} runs `idhazh {stage}` "
-                    "without --config, so its ledgers land in production's state root"
-                )
-                assert words[words.index(BENCH_CONFIG_FLAG) + 1] == BENCH_CANDIDATE_CONFIG, (
-                    f"measure.yml/{job_name}/{step.get('name')} reads a config that is "
-                    f"not {BENCH_CANDIDATE_CONFIG}"
-                )
-                invocations.append((job_name, stage))
+    for job_name, step_name, stage, words in _stage_invocations(workflow, "measure.yml"):
+        assert BENCH_CONFIG_FLAG in words, (
+            f"measure.yml/{job_name}/{step_name} runs `idhazh {stage}` "
+            "without --config, so its ledgers land in production's state root"
+        )
+        assert words[words.index(BENCH_CONFIG_FLAG) + 1] == BENCH_CANDIDATE_CONFIG, (
+            f"measure.yml/{job_name}/{step_name} reads a config that is "
+            f"not {BENCH_CANDIDATE_CONFIG}"
+        )
+        invocations.append((job_name, stage))
 
     assert sorted(invocations) == [
         (BENCH_SERVER_JOB, "fingerprint"),
