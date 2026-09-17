@@ -2,7 +2,7 @@
   "$defs": {
     "ReferenceLabels": {
       "additionalProperties": false,
-      "description": "One reading of one article. Every field is empty when the set is built.\n\nThe vocabularies are `config/taxonomy.json`, so nothing here enumerates a\nmember: a label is a slug the taxonomy names, and adding a word to the\ntaxonomy may not be a schema change (plan 23 section 0.1). Three of the five\nlabel fields name a vocabulary `config/taxonomy.json` does not carry yet -\n`article_kind`, `stances` and `sentiment` - so the 2026-09-13 pass took them\nfrom plan 23 rows #8, #10 and #11, and `backend/utilities/\nlabel_reference_dataset.py` is where that list sits until those rows land.\n\n**`stances` is keyed and valued in slugs, which the plan's own spelling is\nnot.** `Slug` admits the hyphen and refuses the underscore, so the axis is\n`stance-on-change` and the decline is `not-applicable`. Plan 23 row #10\nwrites both with underscores and row #9's token measurement was taken on\nthat spelling; one of the two has to move, and it is not this one.\n\n`reference_summary` **has a writer from 2026-09-13** and it is the labeller.\nIt is a reference for classification labels and is **never** a faithfulness\nreference - the human faithfulness ledger was dropped and only its contract\nkept (plan 23 row #P2 decision 6, owner, 2026-09-10).",
+      "description": "One reading of one article. Every field is empty when the set is built.\n\nThe vocabularies are `config/taxonomy.json`, so nothing here enumerates a\nmember: a label is a slug the taxonomy names, and adding a word to the\ntaxonomy may not be a schema change. Three of the five\nlabel fields name a vocabulary `config/taxonomy.json` does not carry yet -\n`article_kind`, `stances` and `sentiment` - so the 2026-09-13 pass took them\nfrom `backend/utilities/label_reference_dataset.py`, which is where that\nlist sits until the taxonomy carries them.\n\n**`stances` is keyed and valued in slugs, which the labelling vocabulary's\nown spelling is not.** `Slug` admits the hyphen and refuses the underscore,\nso the axis is `stance-on-change` and the decline is `not-applicable`. The\nunderscore spelling is what the token measurement was taken on; one of the\ntwo has to move, and it is not this one.\n\n`reference_summary` **has a writer from 2026-09-13** and it is the labeller.\nIt is a reference for classification labels and is **never** a faithfulness\nreference - the human faithfulness ledger was dropped and only its contract\nkept (owner, 2026-09-10).",
       "properties": {
         "article_kind": {
           "anyOf": [
@@ -93,7 +93,7 @@
             }
           ],
           "default": null,
-          "description": "The labeller's own summary of the article. A reference for classification labels, never a faithfulness reference - plan 23 row #P2 decision 6.",
+          "description": "The labeller's own summary of the article. A reference for classification labels, never a faithfulness reference - the human faithfulness ledger was dropped and only its contract kept.",
           "title": "Reference Summary"
         },
         "sentiment": {

@@ -15,7 +15,7 @@ from ._days import (
 
 
 def test_a_day_where_every_story_reads_ai_still_publishes_five_desks() -> None:
-    """The first half of row #7's oracle, and the day is not one story shorter.
+    """The ceiling holds, and the day is not one story shorter.
 
     Forty stories, every one filed on `ai` by whatever read them. The ceiling
     sends the surplus back to the desk whose feed carried the story, and the

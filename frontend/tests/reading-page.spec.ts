@@ -12,23 +12,23 @@
  * several hundred stories. What it asserts is the shape, never a count written
  * here.
  *
- * Four questions, and each one needs two rows to have disagreed to fail:
+ * Four questions, and each one needs two changes to have disagreed to fail:
  *
- * - **Every story carries its own time, and the page names the zone once.** Row
- *   16 put the time in the item's eyebrow, row 17 took it out and gave it a
- *   shared rail, and plan 25 row #5 deleted the rail and gave the time back to
+ * - **Every story carries its own time, and the page names the zone once.** The
+ *   time was in the item's eyebrow, then taken out and given a
+ *   shared rail, then the rail was deleted and the time given back to
  *   the story. What survived all three is the caption: `Times shown in UTC.`,
  *   once per page, which is what makes a bare clock readable.
  * - **The aside and the sticky filter panel keep out of each other's way.** Two
- *   rows put two things in the same 1400px screen: row 18's 18rem aside and row
- *   7's panel that sticks from 1024px. Neither knows about the other.
- * - **A day that half arrives is still a designed page.** Rows 25 and 26 made
- *   the dated routes seed and fetch; row 14 designed what a reader meets when
+ *   changes put two things in the same 1400px screen: an 18rem aside and a
+ *   panel that sticks from 1024px. Neither knows about the other.
+ * - **A day that half arrives is still a designed page.** The dated routes seed
+ *   and fetch; a separate design says what a reader meets when
  *   the fetch fails. The three cases below break the fetch at the network and
  *   count what they broke - a case that intercepted nothing has proved that a
  *   page loads, which it would have done anyway.
- * - **The offline reader changes nothing a reader can see.** Row 28 put a
- *   worker in front of the same requests rows 25 and 26 make. A day out of the
+ * - **The offline reader changes nothing a reader can see.** A worker sits in
+ *   front of the same requests the seed and fetch make. A day out of the
  *   device and a day off the network have to be the same page.
  *
  * Several cases cannot run on a day shorter than `ui.shell_seed_items`, because
@@ -739,7 +739,7 @@ test.describe('with the offline reader installed', () => {
 });
 
 /**
- * Plan 29 row #5's oracle: one card per story, and every publisher on it is a
+ * The publisher card's oracle: one card per story, and every publisher on it is a
  * way in.
  *
  * The day's grouping has been computed, persisted and deliberately withheld from

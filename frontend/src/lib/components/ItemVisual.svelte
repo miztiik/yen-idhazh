@@ -39,7 +39,7 @@
 	 * string a model cut out of a stranger's page lands as a text node rather
 	 * than as markup (Guardrail #11).
 	 *
-	 * **The drawing takes the width the card gives it** (plan 12 row #2). The
+	 * **The drawing takes the width the card gives it.** The
 	 * figure's content box is measured first and every mark is placed in it, so
 	 * one drawn unit is one CSS pixel and there is no scale factor between what a
 	 * token says and what a reader sees. Before this the drawing was laid out at

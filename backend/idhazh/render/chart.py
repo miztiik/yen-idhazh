@@ -16,9 +16,9 @@ nowhere (Fowler, 2026-09-13).
 
 `compile_bar` takes one validated `VisualPlan` and one article's element table
 and returns what a reader gets: the sentence a screen reader hears, and the
-marks a browser draws. It compiles **one type**. A second type is plan 12's, and
-a type this build cannot compile is refused by name rather than approximated - a
-chart that is nearly the plan is a chart nobody asked for.
+marks a browser draws. It compiles **one type**. The rest of the vocabulary is
+unwritten, and a type this build cannot compile is refused by name rather than
+approximated - a chart that is nearly the plan is a chart nobody asked for.
 """
 
 from __future__ import annotations
@@ -109,7 +109,7 @@ def compile_bar(plan: VisualPlan, table: ElementTable, *, visuals: VisualsConfig
     reader's page runs the same check over what it fetched.
 
     **One type, and a second is refused by name.** `bar` is what this build
-    compiles; the rest of the vocabulary is plan 12's. Compiling a `line` plan
+    compiles; the rest of the vocabulary has no compiler. Compiling a `line` plan
     into bars because bars are what we have would publish a picture nobody
     planned.
 

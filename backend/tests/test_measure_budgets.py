@@ -554,9 +554,10 @@ def test_the_ratio_is_the_retaken_one() -> None:
 def test_this_surface_writes_nothing_a_commit_would_carry() -> None:
     """`read` prints and saves where the caller says; it never reaches for a repo path.
 
-    The rejected option on row #13 was a workflow writing a measurement into a
-    commit. The defence is that nothing here has a committed destination: every
-    write goes to a `--readings` or `--page` path the caller names.
+    A workflow writing a measurement into a commit was rejected: it would be a
+    workflow deciding a number. The defence is that nothing here has a committed
+    destination - every write goes to a `--readings` or `--page` path the caller
+    names.
     """
     source = read_text(REPO_ROOT / "backend" / "utilities" / "measure_budgets.py")
 

@@ -48,7 +48,7 @@ class DraftConfig(Model):
     produced, so the text is the text the target would have written alone. That
     is why this block is priced on cost and on how hard it is to revert rather
     than waiting on a quality measurement: there is no quality to measure
-    (Guardrail #10, and plan 28's row 2a).
+    (Guardrail #10).
 
     What it can do is waste time. A draft the target keeps rejecting costs a
     forward pass per rejected token and returns nothing, so the acceptance rate
@@ -237,8 +237,8 @@ class ModelEntry(ModelRef):
 #: inherited numbers measured against the other. There is no lift onto the
 #: entries, because the lift IS the inheritance: it would hand a swapped entry
 #: the previous weights' numbers and raise nothing. `visual_planner` and its
-#: older spelling `route` named the small model plan 11 row #6 retired; the two
-#: calls on `summarize` replaced it, so nothing answers for them.
+#: older spelling `route` named the retired small model; the two calls on
+#: `summarize` replaced it, so nothing answers for them.
 SUPERSEDED_MODELS_NAMES: Final[Mapping[str, str]] = MappingProxyType(
     {"inference": "models.<role>.inference", "route": "", "visual_planner": ""}
 )
@@ -279,9 +279,9 @@ class ModelsConfig(Contract):
     own llama-server process, and one block over two roles is a measurement
     about one of them quietly applied to the other.
 
-    One role is left. Plan 11 row #6 retired the small visual planner: the two
-    calls the work stage now makes per item run on these weights, so the picture
-    is decided by the same model that wrote the summary.
+    One role is left. The small visual planner is retired: the two calls the
+    work stage now makes per item run on these weights, so the picture is
+    decided by the same model that wrote the summary.
 
     It is a file rather than a block of `config/idhazh.json` because everything
     in it is a fact about one set of weights - the repository, the digest, the

@@ -203,9 +203,9 @@ class TestTheWorkStageDispatchesBothCalls:
     ) -> None:
         """The reader's side of the retirement, and the only test that asks it.
 
-        Plan 11 row #6 deletes the small model, its job and its prompt, and the
-        two calls become the only thing that draws. Its rejected alternative 1 is
-        "let row #6 delete the 4B now" - refused because it takes the digest from
+        Deleting the small model takes its job and its prompt with it, and the
+        two calls become the only thing that draws. Deleting it before the two
+        calls drew was refused, because it takes the digest from
         17 charts a day to none. The sibling above proves an item carries a
         *decision*; a decision is not a picture, and every route to `none` also
         writes one. Nothing asserted that a file lands, so the whole of what
@@ -541,7 +541,7 @@ class TestTheSequenceIsWalkedItemMajor:
         position is exactly the failure: a title line or a date stamp inserted
         above the turn leaves every character of it intact and saves nothing.
 
-        This is what row #8 inherits. When the definition sentences move into
+        This is what the definition sentences inherit. When they move into
         this turn they are cached for the whole run on the strength of this
         property, and they cost one prefill each if it stops holding.
         """

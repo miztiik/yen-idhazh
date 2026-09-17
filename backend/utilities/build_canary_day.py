@@ -460,7 +460,7 @@ def desk_for(index: int) -> str | None:
 
     `item_id` is addressed `ai-` and `vertical` says `ai`, because both are the
     carrying feed's word and neither moves. The day publishes this one under
-    Energy, which is the case the whole of row #6 exists for - and without it
+    Energy, which is the case the desk fallback exists for - and without it
     the browser suite renders eight stories whose desk and vertical agree, which
     proves the fallback and nothing else.
 

@@ -7,7 +7,7 @@ import { dayShell, homeShell, loadDay, publishedDates, wholeDay } from '../src/l
 import type { DigestDay, DigestItem, SeededVisual } from '../src/lib/payload/types';
 
 /**
- * Row #23's oracle, as a function rather than as a build, and row #25's seed
+ * The seam's oracle, as a function rather than as a build, and the seed
  * rules beside it.
  *
  * The reading routes load a day in two halves - the facts that do not grow with

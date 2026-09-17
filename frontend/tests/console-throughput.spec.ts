@@ -8,7 +8,8 @@ import { daysBetween } from '../src/lib/charts/viewport';
  * The throughput trend, held to the contract the timing trend above it holds.
  *
  * Two charts stacked on one page that hover differently cost the operator a
- * second guess, so this file asserts the same three things row #4 asserts of
+ * second guess, so this file asserts the same three things the timing trend
+ * asserts of
  * `Time per item, by stage`, against `Model tokens per second`: a date per
  * column, a mark on every plotted point, and a readout that cannot cover the
  * marks it explains.
@@ -164,7 +165,7 @@ test('every plotted day carries a mark to aim at, in every series', async ({ pag
 		);
 	expect(series.length, 'no series drew').toBeGreaterThan(0);
 
-	// Days times series, the same count row #4 asserts of the timing trend.
+	// Days times series, the same count the timing trend asserts.
 	await expect(page.locator('[data-candle]')).toHaveCount(drawn.length * series.length);
 
 	// A candle carries a middle-half box, so a day cannot draw a bare whisker and

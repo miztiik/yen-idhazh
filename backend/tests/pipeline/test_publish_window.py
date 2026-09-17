@@ -641,7 +641,7 @@ def test_an_item_whose_summary_is_not_written_yet_is_not_recorded(
 def test_a_shard_commits_what_its_model_server_counted(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    """The Oracle for row 9: the second instrument survives the job that read it.
+    """The second instrument survives the job that read it.
 
     Every timing on the item-health ledger is a field copied out of one model
     reply. The server counts the same work for itself, and until this stage

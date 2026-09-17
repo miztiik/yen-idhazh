@@ -28,9 +28,9 @@ class CallKind(StrEnum):
     vocabulary rather than beside it. `summarize` and `visual_plan` are what the
     pipeline dispatches today, on two different models in two different jobs.
     `label` and `summarize_and_plan` are the pair `idhazh.classify.calls` builds,
-    which plan 11 row #5b wires in behind a flag and row #6 then makes the only
-    pair. A reading that spans the flip needs all four names, or the step change
-    in every series reads as a regression rather than as the design change it is.
+    which lands behind a flag first and then becomes the only pair. A reading
+    that spans the flip needs all four names, or the step change in every series
+    reads as a regression rather than as the design change it is.
     """
 
     #: Today's summarizer call: one article in, one summary out.

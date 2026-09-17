@@ -64,8 +64,9 @@ EncoderRef = Annotated[
 
 # The measured eval-row columns this record aggregates one at a time in
 # `instruments`, matching the frontend's `DRAWN_BY` map. Recorded here so the
-# model documents which columns row 23 pairs against; the set is not validated,
-# so a column added to EvalRow later gains an instrument without a schema break.
+# model documents which columns an instrument pairs against; the set is not
+# validated, so a column added to EvalRow later gains an instrument without a
+# schema break.
 INSTRUMENT_COLUMNS: frozenset[str] = frozenset(
     {
         "hhem",

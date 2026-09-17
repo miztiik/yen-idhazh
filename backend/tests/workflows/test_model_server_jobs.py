@@ -548,19 +548,19 @@ def test_the_counters_step_and_the_row_agree_on_what_it_reads() -> None:
 
 
 def test_a_counters_row_that_cannot_say_which_job_wrote_it_is_refused() -> None:
-    """The Oracle for row #P4. A row with no job name proves nothing.
+    """A row with no job name proves nothing.
 
     Two jobs of the daily run used to stand a llama-server up and they served
     different weights - `work` the summarizer at Qwen3.5-9B, `visuals` the
     planner at Qwen3-4B - and both spelled shard 0 of the same run. So
     `(date, run_id, shard)` names one record and described two servers, and a
-    reader pooling them reports a rate that belongs to no model. Plan 11 row #6
-    retired the second job; the committed ledger still holds its rows, so the
+    reader pooling them reports a rate that belongs to no model. The second job
+    is retired; the committed ledger still holds its rows, so the
     reader still has to tell them apart.
 
     Driven from a two-row fixture rather than from `state/runtime-counters.csv`,
     which a run appends to five times a day (Guardrail #12). The fixture also carries
-    a case the committed ledger cannot: until row #P4 landed, every row in it came
+    a case the committed ledger cannot: until the job name was recorded, every row in it came
     from `work`.
 
     Three assertions, because three things can go wrong. The reader has to

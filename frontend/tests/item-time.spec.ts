@@ -1,5 +1,5 @@
 /**
- * Plan 25 row #5's oracle, the half that needs no browser: every story prints
+ * The oracle for a story's own time, the half that needs no browser: every story prints
  * its own published time beside its heading, and every time it prints is one
  * the payload can vouch for.
  *

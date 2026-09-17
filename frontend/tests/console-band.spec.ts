@@ -379,7 +379,7 @@ test('THE ORACLE: the band is the same three facts on every route, and no window
 
 	// One band, derived once in the shared layout and drawn above all five route
 	// panels. Five routes deriving their own would eventually disagree about which
-	// one of them is worst, which is the whole reason it is derived once (row 24).
+	// one of them is worst, which is the whole reason it is derived once.
 	//
 	// The three routes with panels, because `hydrated` waits for a window control
 	// and `/console/judgement/` and `/console/voices/` have none - they fetch
@@ -395,7 +395,7 @@ test('THE ORACLE: the band is the same three facts on every route, and no window
 
 	// The band is deliberately not windowed: a route's control governs the panels
 	// below it, never the standing band above it. Moving the control to another
-	// preset may not move the three facts (row 24 decision 2). This is also the
+	// preset may not move the three facts. This is also the
 	// guardrail on the read change - a band sourced from the newest day cannot have
 	// quietly become a windowed read.
 	await page.goto('/console/model/');

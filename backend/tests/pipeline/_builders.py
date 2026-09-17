@@ -138,7 +138,7 @@ def drawable_article_fetch(_url: str) -> FetchResult:
     `article.html` states three figures in three units - dollars, megawatts and
     customers - so every bar the validator would accept from it mixes units and
     `units_convertible` refuses it. That is correct behaviour and it makes that
-    page unable to answer the one question plan 11 row #6 turns on, which is
+    page unable to answer the question the two-call stage turns on, which is
     whether the two calls still put a picture on disk. This page states four
     figures in one unit, which is the shape `tests/fixtures/visual-validator/`
     already keeps as the plan that passes.

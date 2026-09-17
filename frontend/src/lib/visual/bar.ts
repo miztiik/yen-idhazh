@@ -101,8 +101,8 @@ function figureOf(mark: VisualMark): number {
  * bar chart whose axis starts anywhere else exaggerates every difference on it,
  * which is the one way a chart drawn from true figures can still lie. A
  * negative figure draws no bar rather than a bar pointing the wrong way: the
- * compiler can publish one, and plan 12 has no row that says what it should
- * look like, so nothing is drawn until one does.
+ * compiler can publish one, and nothing has ruled on what it should
+ * look like, so nothing is drawn until something does.
  *
  * **`room` is the width the caller measured, in CSS pixels, and every number
  * this returns is placed inside it.** There is no canvas: the name sits on its

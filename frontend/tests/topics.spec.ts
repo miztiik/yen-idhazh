@@ -185,7 +185,7 @@ test('a lead under the margin moves nothing, and that is the whole rule', () => 
 });
 
 test('a curated desk is never folded away, and an auto-created one may be', () => {
-	// Auto-created verticals arrive from plan 23 row #16 and do not exist today,
+	// Auto-created verticals do not exist today,
 	// so the branch is driven here. `energy` holds more of the day than `india`
 	// and folds anyway, which is the rule: the fold asks who put the desk there,
 	// the order asks how much it holds.
@@ -210,9 +210,9 @@ test('the desk the reader is on stays on the row even when it was proposed', () 
 });
 
 test('the frontend names every auto-discovered desk the vocabulary declares', () => {
-	// The handoff to plan 23 row #16, as a failing check rather than a note in a
-	// plan-doc nobody will open. It reads one fixed-size config file and no
-	// collection a run appends to (`CLAUDE.md` section 13), and it is the same
+	// The handoff to whatever proposes an auto-discovered desk, as a failing
+	// check rather than a note nobody will open. It reads one fixed-size config file
+	// and no collection a run appends to (`CLAUDE.md` section 13), and it is the same
 	// shape as the lens drift test `lenses.ts` cites.
 	const taxonomy = JSON.parse(
 		readFileSync(resolve(process.cwd(), '..', 'config', 'taxonomy.json'), 'utf8')

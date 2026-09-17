@@ -211,7 +211,7 @@ def test_a_committed_table_re_slices_against_the_text_its_spans_describe() -> No
 
 
 def test_a_same_width_excerpt_passes_the_shape_and_fails_the_re_slice() -> None:
-    """What row 4 adds over row 1, in one comparison.
+    """What the re-slice adds over the width check, in one comparison.
 
     `1,200 Mw` is exactly as wide as `1,200 MW`, so the width check has nothing
     to say about it and the element loads. It is still not the characters the

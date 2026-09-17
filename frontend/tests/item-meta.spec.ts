@@ -18,7 +18,7 @@
  *    disclaimer on nothing. Document order rather than paint order, because the
  *    footer moves into a side column at the side-rail breakpoint and the promise
  *    is about the reading order rather than about the geometry.
- * 3. **Plan 25 row #5: the fourth and last of those four is WHEN, and on a day
+ * 3. **The fourth and last of those four is WHEN, and on a day
  *    page it is the story's own published time.** The time sat on a shared rail
  *    from 2026-09-02 to 2026-09-12, where hour-grouping left 86.3 percent of
  *    stories with no time at all (1,218 markers over 8,922 committed stories,
@@ -278,7 +278,7 @@ test.describe('the item splits its facts above the title and below the summary',
 
 test.describe('the item names the speaker only where the speaker has a stake', () => {
 	test('four kinds, each with copy, and never the one that is most of the tree', () => {
-		// Decision 4 of row #16. `government` is a ministry announcing its own
+		// Four kinds carry copy. `government` is a ministry announcing its own
 		// policy and `research` is a paper nobody has reviewed - both a speaker
 		// with something to gain, both arriving in a reporter's typeface until
 		// 2026-09-01.

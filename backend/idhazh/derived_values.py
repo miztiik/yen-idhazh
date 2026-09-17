@@ -14,11 +14,11 @@ this module's own imports to keep it that way.
 
 ## What the resolver reaches today, and what it does not
 
-Three of the four functions are reached by resolving a plan. `convert` closes the
-seam row 3 named: a channel measuring one thing in three spellings passes every
-validator check and is not drawable, because an axis drawn from those characters
-puts 4,200 beside 4.2. `share_of_declared_whole` is what a pie slice *is*, and
-`count` is what a histogram bar is.
+Three of the four functions are reached by resolving a plan. `convert` closes a
+seam the validator leaves open: a channel measuring one thing in three spellings
+passes every validator check and is not drawable, because an axis drawn from
+those characters puts 4,200 beside 4.2. `share_of_declared_whole` is what a pie
+slice *is*, and `count` is what a histogram bar is.
 
 `sum` is the fourth and nothing displays one, because no type in the vocabulary
 draws a total. It is here, tested and complete, and the resolver reaches it on the
@@ -403,7 +403,7 @@ def bin_edges(values: Sequence[Decimal], *, bins: int) -> list[Decimal]:
     throughout and a value on an internal edge is counted twice, and the counts
     stop adding up to the marks.
 
-    How many bins is a `config/` knob and never the model's (row 45). Where the
+    How many bins is a `config/` knob and never the model's. Where the
     edges fall is arithmetic and is here, stamped by `DERIVED_VALUE_VERSION`.
 
     A set with no spread is refused. Every value in one bin and the rest empty is

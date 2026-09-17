@@ -50,7 +50,7 @@
       "type": "object"
     },
     "CallKind": {
-      "description": "Which model call these numbers came from.\n\nFour members and not two, because the call structure moves under this\nvocabulary rather than beside it. `summarize` and `visual_plan` are what the\npipeline dispatches today, on two different models in two different jobs.\n`label` and `summarize_and_plan` are the pair `idhazh.classify.calls` builds,\nwhich plan 11 row #5b wires in behind a flag and row #6 then makes the only\npair. A reading that spans the flip needs all four names, or the step change\nin every series reads as a regression rather than as the design change it is.",
+      "description": "Which model call these numbers came from.\n\nFour members and not two, because the call structure moves under this\nvocabulary rather than beside it. `summarize` and `visual_plan` are what the\npipeline dispatches today, on two different models in two different jobs.\n`label` and `summarize_and_plan` are the pair `idhazh.classify.calls` builds,\nwhich lands behind a flag first and then becomes the only pair. A reading\nthat spans the flip needs all four names, or the step change in every series\nreads as a regression rather than as the design change it is.",
       "enum": [
         "summarize",
         "visual_plan",

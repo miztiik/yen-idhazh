@@ -117,7 +117,7 @@ def test_every_tokenizer_reading_names_the_weights_the_config_still_names() -> N
     pinned = [record for record in EVERY_MEASURED if isinstance(record, TokenizerMeasured)]
     assert len(pinned) == 6, (
         "six of the eight records are token counts. If a record moved between the two "
-        "classes, say which and why here; if row #13 added one, raise this count"
+        "classes, say which and why here; if a reading was added, raise this count"
     )
 
     refuse_a_reading_taken_against_other_weights(

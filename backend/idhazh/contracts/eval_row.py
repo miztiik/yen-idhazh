@@ -331,7 +331,7 @@ class EvalRow(Contract):
             "to_summary makes, read at the same distinctness ceiling, so a key point "
             "that counts here is exactly one the drop keeps. The instrument for whether "
             "the key-point prompt finds facts or paraphrases the summary. Lexical, and "
-            "the element table (plan 08) supersedes it with span-anchored ids that "
+            "the element table supersedes it with span-anchored ids that "
             "carry no false positive. Recorded only - no band reads it, and best-of-N "
             "against it is the Goodhart form of the number. Null on a row scored before "
             "the column existed; 0.0 only on a scored reply whose every key point "

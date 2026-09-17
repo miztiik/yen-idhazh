@@ -14,9 +14,9 @@ import { resolve } from 'node:path';
  * the right edge, so a run an operator looked at yesterday moved a column left
  * every time a day published.
  *
- * The alignment half was answered twice. Left, in row #6, while the strip drew
+ * The alignment half was answered twice. Left, while the strip drew
  * only the days that carried a run - the room on the right really was the days
- * that had not happened yet. Centred, in the chart-craft plan's row #11, once
+ * that had not happened yet. Centred, once
  * the strip drew the window's own calendar: its last column is today, so there
  * is nothing to the right of it and spare room there reads as a run that
  * stopped.
@@ -295,7 +295,7 @@ test('the dates label the axis from below the grid', async ({ page }) => {
 test('the strip says which window it is drawing', async ({ page }) => {
 	await openConsole(page, 'light');
 
-	// The section joined the shared window in this row, so it owes row #1's
+	// The section joined the shared window, so it owes the same
 	// contract: the attribute AND the sentence, because an attribute nobody
 	// renders is a promise to a test rather than to an operator.
 	const section = page.locator('[data-windowed="run-health"]');

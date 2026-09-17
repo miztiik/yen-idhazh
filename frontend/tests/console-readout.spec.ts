@@ -414,7 +414,7 @@ test.describe('the readout is the default', () => {
 		const absent = page.locator('[data-readout-fetched] [data-readout-day]');
 		expect(await absent.count(), 'a strip printed a column with no rows behind it').toBe(0);
 		// And the panel does NOT say the ledger holds no failure, because a blocked
-		// month is not an empty one. Since row 12 it holds its reserved shape and
+		// month is not an empty one. It holds its reserved shape and
 		// the sentence above the panels names the month that did not arrive.
 		await expect(page.locator('[data-mix-empty]')).toHaveCount(0);
 		await expect(page.locator('[data-reserved="failure-mix"]')).toHaveCount(1);

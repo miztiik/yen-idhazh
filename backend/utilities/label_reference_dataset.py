@@ -54,9 +54,8 @@ DATASET_RELPATH: Final = "corpus/reference-dataset-1"
 TAXONOMY_RELPATH: Final = "config/taxonomy.json"
 WATCHLIST_RELPATH: Final = "config/watchlist.json"
 
-#: The three vocabularies plan 23 declares and has not yet committed to
-#: `config/taxonomy.json` - rows #8, #10 and #11 move them there, and this block
-#: is deleted in whichever of the three lands last.
+#: The three labelling vocabularies `config/taxonomy.json` does not carry yet.
+#: This block is deleted once the taxonomy declares all three.
 ARTICLE_KINDS: Final = ("report", "analysis", "research", "announcement", "opinion")
 SENTIMENTS: Final = ("positive", "negative", "neutral")
 STANCES: Final[Mapping[str, tuple[str, ...]]] = {
@@ -68,10 +67,9 @@ STANCES: Final[Mapping[str, tuple[str, ...]]] = {
 }
 DECLINE: Final = "not-applicable"
 
-#: Which article kinds let the political gate open (plan 23 row #10 decision 1).
-#: A company announcement is never one of them, and this file cannot tell a
-#: government announcement from a company one - so `announcement` is admitted
-#: and the labeller carries that half.
+#: Which article kinds let the political gate open. A company announcement is
+#: never one of them, and this file cannot tell a government announcement from a
+#: company one - so `announcement` is admitted and the labeller carries that half.
 GATE_OPENS_ON: Final = ("opinion", "analysis", "announcement")
 
 #: Why a row leaves the set. Four defects a builder's shape checks cannot see,

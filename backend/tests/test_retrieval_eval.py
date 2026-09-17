@@ -417,7 +417,7 @@ def test_the_measurement_is_precise_enough_to_see_a_regression(
 def test_the_reader_facing_number_is_reported_with_its_coverage(
     report: RetrievalReport,
 ) -> None:
-    """No assertion on the level - this row measures it, row #11 moves it.
+    """No assertion on the level - this measures it, and moving it is a separate job.
 
     What is asserted is that the two failures stay separable. If every gold item
     were reachable the distinction would collapse and the instrument would stop

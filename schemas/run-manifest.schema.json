@@ -25,7 +25,7 @@
     },
     "DraftConfig": {
       "additionalProperties": false,
-      "description": "A second, much smaller set of weights that guesses ahead of the first.\n\n**Speculative decoding is output-identical by construction.** The target\nmodel verifies every drafted token and rejects any it would not have\nproduced, so the text is the text the target would have written alone. That\nis why this block is priced on cost and on how hard it is to revert rather\nthan waiting on a quality measurement: there is no quality to measure\n(Guardrail #10, and plan 28's row 2a).\n\nWhat it can do is waste time. A draft the target keeps rejecting costs a\nforward pass per rejected token and returns nothing, so the acceptance rate\nis the number that says whether it paid. `llama-server` publishes it:\n`llamacpp:spec_decode_num_accepted_tokens_total` over\n`llamacpp:spec_decode_num_draft_tokens_total`, both already in the\n`/metrics` body a shard reads at job end.",
+      "description": "A second, much smaller set of weights that guesses ahead of the first.\n\n**Speculative decoding is output-identical by construction.** The target\nmodel verifies every drafted token and rejects any it would not have\nproduced, so the text is the text the target would have written alone. That\nis why this block is priced on cost and on how hard it is to revert rather\nthan waiting on a quality measurement: there is no quality to measure\n(Guardrail #10).\n\nWhat it can do is waste time. A draft the target keeps rejecting costs a\nforward pass per rejected token and returns nothing, so the acceptance rate\nis the number that says whether it paid. `llama-server` publishes it:\n`llamacpp:spec_decode_num_accepted_tokens_total` over\n`llamacpp:spec_decode_num_draft_tokens_total`, both already in the\n`/metrics` body a shard reads at job end.",
       "properties": {
         "byte_count": {
           "anyOf": [
@@ -692,7 +692,7 @@
         },
         "items_prefiltered": {
           "default": 0,
-          "description": "Items the retired visual planner decided without asking the model, because no enabled visual kind could survive the checks. Counted separately so a chart rate is never quoted against items_routed alone. **Zero on every run since plan 11 row #6**: the summarize-and-plan call writes the summary and the plan in one reply, so the model is asked on every item and the gate then decides what to do with the plan. Kept because the committed archive carries non-zero values a reader of an older day still needs.",
+          "description": "Items the retired visual planner decided without asking the model, because no enabled visual kind could survive the checks. Counted separately so a chart rate is never quoted against items_routed alone. **Zero on every run since the planner retired**: the summarize-and-plan call writes the summary and the plan in one reply, so the model is asked on every item and the gate then decides what to do with the plan. Kept because the committed archive carries non-zero values a reader of an older day still needs.",
           "minimum": 0,
           "title": "Items Prefiltered",
           "type": "integer"

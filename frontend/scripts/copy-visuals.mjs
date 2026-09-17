@@ -203,7 +203,7 @@ stageIndexes();
 // byte difference, and swept by `reconcile` so a month the producer pruned
 // leaves the bundle with it.
 //
-// Two of these are fetched by a browser since row 10 landed on 2026-09-09 -
+// Two of these are fetched by a browser since 2026-09-09 -
 // `console/band.json` by `console/+layout.ts` at build time, and
 // `telemetry/<month>.csv` on mount - and both are capped by
 // `page_weight.payload_ceilings_bytes`, which `bundle-gate.mjs` reads off this

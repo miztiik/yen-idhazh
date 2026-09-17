@@ -58,7 +58,7 @@ TWO_PERIODS: Final = (
     "It held at 40 percent growth in 2025, the company said."
 )
 
-#: One built run for row 4's oracle: five articles, one span each, so a span
+#: One built run for the span-drift oracle: five articles, one span each, so a span
 #: that stops pointing where it did degrades exactly one of them.
 RUN_BODIES: Final = (
     "The plant produced 1,200 MW last year.",
@@ -252,7 +252,7 @@ def test_the_pass_keeps_what_a_chart_reader_is_right_to_drop(
 ) -> None:
     """A magnitude at or below two, and a bare year. Both are candidates here.
 
-    The number pattern is unchanged by row 3 and still matches a bare year. The
+    The number pattern still matches a bare year. The
     table is where that claim loses to the date pass, not this function.
     """
     assert [element.span_excerpt for element in kept(text)] == excerpts

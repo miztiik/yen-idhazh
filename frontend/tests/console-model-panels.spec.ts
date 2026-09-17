@@ -204,9 +204,9 @@ test.describe('what one summary cost, as a distribution', () => {
 		page
 	}) => {
 		// `console-window.spec.ts` holds an exact sorted list of every surface that
-		// declares `data-windowed`, and six rows of two plans are in flight against
+		// declares `data-windowed`, and several panels are in flight against
 		// that one line. These panels honour the control and assert it here
-		// instead, which is the precedent row #4 set.
+		// instead, which is the precedent the other panels set.
 		const config = JSON.parse(
 			readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
 		) as { console?: { window_presets?: number[]; default_window_days?: number } };

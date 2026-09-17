@@ -8,8 +8,8 @@ much room is left" without opening a single month file.
 
 **The months list rides along and that is the point.** A shell cannot ask for a
 month until it knows which months exist, so a band that left the list out would
-make the list a second serial hop and the first month a third (row 10, decision
-1). It is here because it is the cheapest place a fetch can learn it.
+make the list a second serial hop and the first month a third. It is here
+because it is the cheapest place a fetch can learn it.
 
 **Sentences, not raw ledgers.** Every string on this shape is one the pipeline
 wrote about its own work - a verdict, a route's worst state, a size. None of it

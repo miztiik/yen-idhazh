@@ -21,7 +21,7 @@
  *    letters repeat the source name printed beside it.
  *
  * The overflow assertion at 360px belongs to `layout-overflow.spec.ts`, which
- * row 3 creates. It is repeated inline here rather than left to it: this row
+ * does not exist yet. It is repeated inline here rather than left to it: this
  * puts a new column on the leading edge of every item at the narrowest width,
  * which is exactly the change that pushes a page sideways, and the gate that
  * would catch it does not exist yet.
@@ -358,15 +358,15 @@ test.describe('the monogram carries the read state', () => {
 	}
 
 	test('the leading column never pushes a reading route sideways', async ({ page }) => {
-		// Row 3 owns `layout-overflow.spec.ts` and has not landed. This is the
-		// same property, on the routes this row's files reach: a new column at
+		// `layout-overflow.spec.ts` does not exist yet. This is the
+		// same property, on the routes these files reach: a new column at
 		// the narrowest width is exactly the change that pushes a page sideways.
 		//
 		// `/archive/` is out for a reason worth writing down: measured
 		// 2026-08-31 at 360px, its own day list already pushes the document to
-		// 368px with no item on the page at all. That defect belongs to rows 3
-		// and 13, and asserting it here would fail this row for someone else's
-		// file.
+		// 368px with no item on the page at all. That defect belongs to the
+		// archive page, and asserting it here would fail this file for someone
+		// else's.
 		for (const theme of THEMES) {
 			for (const route of ['/', `/${DAY}/`]) {
 				await open(page, theme, { read: [ITEMS[0].item_id], route, width: 360 });

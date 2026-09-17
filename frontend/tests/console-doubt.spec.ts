@@ -355,7 +355,7 @@ test.describe('the ranked list, on the built console', () => {
 	}) => {
 		// `console-window.spec.ts` holds an exact sorted list of every surface
 		// that declares `data-windowed`. This one honours the control and asserts
-		// it here instead, which is the precedent row #4 set.
+		// it here instead, which is the precedent the other panels set.
 		await page.goto('/console/model/');
 		const fallback = Number(
 			(await page.locator('[data-window-control]').getAttribute('data-window-days')) ?? 30

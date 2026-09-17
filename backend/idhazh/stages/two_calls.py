@@ -242,11 +242,11 @@ def _drawn(
 ) -> VisualDecision:
     """One drafted plan becomes a picture on disk, or the reason it did not.
 
-    The order is row #4's: validate, and only a plan no depth of the ladder can
+    The order is validate first, and only a plan no depth of the ladder can
     rescue is refused. `published_marks` is empty because the depth-0 population
-    the floors read is a ledger no row has built, and row #4 decision 8 already
-    rules what that means - a floor that cannot be computed is not cleared, so
-    the ladder is wired and inert rather than wired and lenient.
+    the floors read is a ledger nothing has built, and a floor that cannot be
+    computed is not cleared - so the ladder is wired and inert rather than wired
+    and lenient.
     """
     visuals = settings.app.visuals
     rejections = validate_plan(plan, table, visuals=visuals)

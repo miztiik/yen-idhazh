@@ -249,9 +249,9 @@ def test_a_config_written_before_observability_existed_still_reads() -> None:
     ],
 )
 def test_a_config_still_spelling_a_retired_knob_is_refused_by_name(block: str, knob: str) -> None:
-    """Section 11's read-side migration for plan 11 row #6, one key at a time.
+    """Section 11's read-side migration for the retired visual planner, one key at a time.
 
-    Six spellings died with the visual planner: the four keys the row deleted,
+    Six spellings died with the visual planner: the four keys that went with it,
     and the two older names that used to be read as two of them. A rename onto a
     deleted key is worse than no migration at all - it takes an operator's
     number, files it under a key nothing reads, and raises nothing - so the

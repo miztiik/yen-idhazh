@@ -12,7 +12,7 @@ import { join, resolve } from 'node:path';
  * rather than in the gate script.
  *
  * **The ceiling is four, and it is a design decision rather than a measurement**
- * (Carmack, row 10 decision 2, `docs/architecture/publishing/console-payloads.md`).
+ * (Carmack, `docs/architecture/publishing/console-payloads.md`).
  * Measured 2026-09-10 on the real build, Intel Core i7-1265U / Windows 11 /
  * node 24.12.0, against `vite preview`: a cold `/console/` load makes 47
  * requests in **three** serial hops - the document and everything a
@@ -37,7 +37,7 @@ import { join, resolve } from 'node:path';
  * page put its telemetry fetches beside the module wave on one run and behind
  * it on another, which moved a chain of three to a chain of five with no source
  * change at all. A ceiling that answers differently on a fast laptop and a slow
- * runner is not a ceiling. What row 10 decided, and what this holds, is how many
+ * runner is not a ceiling. What the ceiling bounds, and what this holds, is how many
  * payload round trips the console may need before it can show a row.
  *
  * **Grouping the requests into waves was tried first and it is wrong.** It laid

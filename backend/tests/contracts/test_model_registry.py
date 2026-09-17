@@ -30,7 +30,7 @@ pytestmark = pytest.mark.contract
 
 
 def test_swapping_the_model_is_one_line_and_reverting_is_the_same_line(tmp_path: Path) -> None:
-    """The Oracle for row #6: the pointer is the whole swap, both ways.
+    """The pointer is the whole swap, both ways.
 
     Before 2026-09-14 a swap was eleven lines edited in place in the file every
     other knob lives in, and a revert had to rebuild the previous model's
@@ -146,7 +146,7 @@ def test_the_closing_marker_is_the_whole_declaration_that_reasoning_is_wanted() 
 
     `thinks` is read all over the pipeline - the render, the budget, the chat
     keyword and three refusals - and every one of them reads this field. A
-    second switch beside it is what row #10 retired.
+    second switch beside it was retired for that reason.
     """
     quiet = ModelsConfig.model_validate(entry_with())
     loud = ModelsConfig.model_validate(entry_with(thinking_close="</think>"))

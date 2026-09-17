@@ -124,8 +124,8 @@ def test_every_contract_can_be_read_through_the_stamped_boundary() -> None:
 def test_every_console_read_resolves_to_exactly_one_committed_schema() -> None:
     """The inventory's whole job: no dataset without a shape, no shape twice.
 
-    A dataset the console fetches with no schema file is the gap row 8 exists to
-    close - the producer, the consumer and the drift gate would each work out
+    A dataset the console fetches with no schema file is the gap this closes -
+    the producer, the consumer and the drift gate would each work out
     their own answer. Two files for one shape is the other failure, and it is
     the one that lets a committed shard stop validating.
     """
@@ -253,7 +253,7 @@ def test_every_published_month_payload_has_a_non_null_retention_knob() -> None:
     `item_health_aggregate_keep_months` and `score_archive_keep_months` are null
     today and each says in its own description why. Nothing minted for the
     console may join them: a null default that spreads stops reading as a
-    decision (CLAUDE.md Guardrail #12, and row 8's decision 3).
+    decision (CLAUDE.md Guardrail #12).
     """
     observability = ObservabilityConfig()
     monthly = {

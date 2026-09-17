@@ -124,7 +124,7 @@ def test_the_two_counts_answer_two_questions() -> None:
 
 
 def test_a_second_desk_that_repeats_the_first_is_refused() -> None:
-    """A story names at most two desks, which is the oracle of plan 25 row #8.
+    """A story names at most two desks, and this is the oracle for it.
 
     One name written twice reads as two desks to anything counting them and is
     one desk to a reader. The rule is stated against the desk the day FILED the

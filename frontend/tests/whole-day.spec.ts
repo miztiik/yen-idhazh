@@ -37,7 +37,7 @@
  * asserted rather than assumed, because a zero there is a null result and not a
  * pass.
  *
- * **The colour oracle is row 1's, applied to every drawing rather than to one.**
+ * **The colour oracle is applied to every drawing rather than to one.**
  * A probe element is given the same custom property the stylesheet routes each
  * mark to, and what the document computed for it is compared against what the
  * document painted. The two themes give those properties different values, so

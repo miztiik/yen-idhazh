@@ -324,7 +324,7 @@
 	   aside (app.css). The frame's content box holds a 68-character measure plus
 	   exactly ONE trailing column: measured 2026-09-02, keeping both leaves the
 	   summary 570 CSS px against a measure of 659.81. So where the page has
-	   claimed the column, the footer returns to where row 16 put it, under the
+	   claimed the column, the footer returns to under the
 	   summary it is a claim about.
 
 	   A day with no leading block has no aside - every committed day before

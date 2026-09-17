@@ -151,7 +151,7 @@
 	 *
 	 * **This list is the difference between a broken fetch and a quiet
 	 * pipeline.** Without it both draw an unmarked gap, which is the one pair of
-	 * facts this page exists to tell apart (Susan, plan row #12). */
+	 * facts this page exists to tell apart (Susan). */
 	let refused = $state<string[]>([]);
 	/** False until a browser has run this page. The control cannot do anything
 	 * before that, so it says so rather than pretending. */

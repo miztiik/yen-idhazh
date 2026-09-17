@@ -66,7 +66,8 @@ the article never writes "100 percent" - the unit declares the whole instead of
 the sentence. **It is measured and it is not part of the definition.** Under 600
 characters it finds fewer articles than its own null does, and treating an
 unwritten 100 as declared is the planner asserting exhaustiveness the article did
-not, which is plan 16's own escalation trigger reached by a side door. It stays
+not - which is the thing a composition plan must escalate rather than assume,
+reached by a side door. It stays
 in the instrument so a later reader can check that refusal rather than take it on
 trust (Editor, 2026-09-13).
 
@@ -129,7 +130,7 @@ FENCE_OPEN: Final = "<<<UNTRUSTED_SOURCE_TEXT>>>"
 FENCE_CLOSE: Final = "<<<END_UNTRUSTED_SOURCE_TEXT>>>"
 
 #: Five parts or fewer, because beyond that an angle is unreadable and `pie` is
-#: refused anyway (plan 16 row #3, `docs/architecture/publishing/visuals.md`).
+#: refused anyway (`docs/architecture/publishing/visuals.md`).
 MAX_PARTS: Final = 5
 
 #: Two or more, because one part and a total is not a composition.

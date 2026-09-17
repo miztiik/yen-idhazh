@@ -973,12 +973,12 @@ def test_publish_opens_only_the_shards_that_hold_the_selected_dates(
 def test_a_calendar_window_undercounts_the_census_a_recorded_selection_restores(
     tmp_path: Path,
 ) -> None:
-    """The exact defect this row closes, beside the query that replaces it.
+    """The exact defect this closes, beside the query that replaces it.
 
     A gap leaves a `keep`-day calendar window holding fewer than `keep` recorded
     dates, so the census it drove was short and its per-source counts with it.
     Selecting the dates the ledger holds preserves both, and calendar subtraction
-    is not an equivalent query for them (Fowler, plan row 20).
+    is not an equivalent query for them (Fowler).
     """
     state = tmp_path / "state"
     _write_item_health(state, _gap_items())

@@ -124,9 +124,9 @@ TYPE_RULES: Final[dict[VisualType, TypeRules]] = {
 #: `table` and `flow` to the composition and diagram vocabularies, and the five
 #: infographic forms to theirs. Naming them here rather than leaving them out is
 #: the whole point - a type in neither set would be waved through by the two
-#: per-type checks and drawn with nothing having ruled on it. Until their plans
-#: land, a plan naming one is refused and plan 11's ladder downgrades it to a
-#: nearer neighbour, which is what "declarable is not renderable" means.
+#: per-type checks and drawn with nothing having ruled on it. Until those rules
+#: are written, a plan naming one is refused and the downgrade ladder moves it to
+#: a nearer neighbour, which is what "declarable is not renderable" means.
 UNRULED_TYPES: Final[frozenset[VisualType]] = frozenset(
     {_T.TABLE, _T.FLOW, _T.COMPARISON, _T.CALLOUT, _T.QUOTECARD, _T.WHOWHAT, _T.KEYFACTS}
 )

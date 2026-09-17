@@ -218,7 +218,7 @@ test('dayMetrics reads the band counts from bands.low and items_truncated', () =
 	try {
 		// A full record, as the producer writes it: the band's `notSure` is the low
 		// confidence band and its `readInPart` is the cut count, both distinct-
-		// published (row 24).
+		// published.
 		writeRecord(
 			root,
 			'2026-08-21',

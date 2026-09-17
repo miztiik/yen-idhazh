@@ -1,11 +1,12 @@
 """Assembling one day more than once, and the vectors that have to survive it.
 
-The oracle for Row #2: a day assembled twice with disjoint item sets carries a
+The oracle for the per-run vector merge: a day assembled twice with disjoint item
+sets carries a
 vector for every item it published, not only for the last run's. Each run
 encodes the items it summarized, so a block that replaced its predecessor left
 the committed 2026-08-24 day with 145 vectors for 731 items.
 
-It also holds the encoder alarm (plan 23 row #13): the committed label vectors,
+It also holds the encoder alarm: the committed label vectors,
 what refuses a stale one, and the two assertions that say an alarm shipped
 rather than a second classifier.
 
@@ -240,7 +241,7 @@ class TestTheMerge:
         assert merged.vectors == {"ai-02": vector(0.5)}
 
 
-# --- the encoder alarm, plan 23 row #13 --------------------------------------
+# --- the encoder alarm ---------------------------------------------------------
 
 TAXONOMY: Final = Taxonomy.read(CONFIG_DIR / "taxonomy.json")
 STALE_VECTORS: Final = FIXTURES_DIR / "taxonomy" / "vectors-stale-digest.bin"
