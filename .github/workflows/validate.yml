@@ -165,10 +165,35 @@ jobs:
           done
           echo "matrix=$(seq 0 $((SHARDS - 1)) | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
 
+      # Why the copy differs in one line and nothing else is written down once,
+      # in the action. `trial_state` is the second line and it is not a control
+      # on the measurement: it says where this run's own ledgers land, not what
+      # the run measures. `pipeline-tests` is the directory the bench and the
+      # pipeline test rig already write to, so "not a production day" is one
+      # place in `state/` rather than three.
+      - name: Build the candidate config
+        uses: ./.github/actions/candidate-config
+        with:
+          models_file: ${{ steps.candidate.outputs.models_file }}
+          trial_state: pipeline-tests
+
       # The addresses only. A plan carries URLs and rank metadata, never an
       # article body, so it is the one thing that may cross a job boundary here.
+      #
+      # `--config backend/var/candidate-config` is what keeps this step out of
+      # the ledgers a published day is built from. `plan` appends to the seen
+      # store, feed health, feed retirements and the counterfactual scores, and
+      # without the flag it loads the committed config - which names no trial
+      # directory, so a qualification would mark real addresses seen. Nothing
+      # in this job is committed today, so the rows die with the runner; the
+      # flag is here because a job that CAN reach the production state root is
+      # one commit step away from doing it, and this workflow already holds
+      # `contents: write` and commits `state` from `decide`.
       - name: Read the feeds
-        run: python -m idhazh plan --date "${{ steps.decide.outputs.date }}"
+        run: |
+          python -m idhazh plan \
+            --config backend/var/candidate-config \
+            --date "${{ steps.decide.outputs.date }}"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -207,10 +232,17 @@ jobs:
       # line and you have run the swap; move it back and you have run the
       # revert, so a candidate is qualified through the exact line an adoption
       # would later touch.
+      #
+      # `trial_state` matches the plan job's copy. `qualify` writes no ledger
+      # today - it freezes bytes under `backend/var/` and replays them - so the
+      # redirect changes nothing this dispatch does. It is here so that the two
+      # copies of one config say the same thing, and so a stage added to this
+      # job later inherits the redirect rather than discovering it is missing.
       - name: Build the candidate config
         uses: ./.github/actions/candidate-config
         with:
           models_file: ${{ needs.plan.outputs.candidate_models_file }}
+          trial_state: pipeline-tests
 
       # Keyed on the candidate bytes, not on its filename: two builds of one
       # model share a name, and a key that cannot tell them apart serves the
