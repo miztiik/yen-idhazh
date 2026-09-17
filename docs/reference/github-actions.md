@@ -535,7 +535,7 @@ flowchart TB
 
  subgraph BENCH["Measure - measure.yml, target llm"]
   FILE --> RAW["raw throughput<br/>llama-bench"]
-  RAW --> SERVER["real server<br/>five fixed articles"]
+  RAW --> SERVER["real server<br/>the fixed bench corpus"]
   SERVER --> DOSSIER["dossier body,<br/>ready to paste"]
  end
 
@@ -578,7 +578,7 @@ flowchart TB
 
 **The scratch config differs from the committed tree in the line an adoption moves.** Both workflows copy `config/`, move `models_file`, and change no control - so every setting the numbers are read under is the committed one by construction, and a candidate is measured through the exact line an adoption later moves. Until 2026-09-14 the step rebuilt the entry field by field and copied the incumbent's `inference` and `turns` blocks across with their digests overwritten, which asserted that numbers measured for one model held for another.
 
-**The bench copy carries one more key, and it is not a control.** `run.trial_state_dirname` says where that run's own ledgers land, not what the run measures. The bench passes `pipeline-tests`, so every ledger the dispatch writes goes under `state/pipeline-tests/` and none of it is beside the rows the console reads. `Model validation` and the budget retake pass nothing and build exactly the copy they always did. Why the rows are split rather than filtered is on [host-metrics.md](host-metrics.md#design-rationale).
+**The bench copy carries one more key, and it is not a control.** `run.trial_state_dirname` says where that run's own ledgers land, not what the run measures. The bench passes `pipeline-tests`, so every ledger the dispatch writes goes under `state/pipeline-tests/` and none of it is beside the rows the console reads - which has been true of every stage the bench runs since 2026-09-17, and of the `plan` step only since then ([Design rationale](#what-a-validation-or-bench-run-must-never-share-with-production)). `Model validation` and the budget retake pass nothing and build exactly the copy they always did. Why the rows are split rather than filtered is on [host-metrics.md](host-metrics.md#design-rationale).
 
 Each Measurements dispatch selects exactly one target:
 
@@ -587,7 +587,7 @@ Each Measurements dispatch selects exactly one target:
 | `llm` | GGUF download timing and `llama-bench` throughput | `models`, `threads` |
 | `image` | CPU image-model candidates | none |
 | `corpus` | Live article-length sampling | `corpus_links` |
-| `runtime` | Fixed-shard llama-server candidate sweep | `runtime_candidate`; `runtime_repeats`; `runtime_threads` for `threads`; `runtime_threads_batch` for `threads_batch` |
+| `runtime` | Fixed-shard llama-server candidate sweep over `bench.corpus_items` articles | `runtime_candidate`; `runtime_repeats`; `runtime_threads` for `threads`; `runtime_threads_batch` for `threads_batch` |
 | `batched` | `llama-batched-bench` aggregate decode at parallel levels 1, 2 and 4, three repeats on one host | none; the bench parameters are pinned in the workflow and the context and threading knobs come from `config/idhazh.json` |
 
 The form keeps all target-specific inputs visible. A job reads only the inputs
@@ -599,27 +599,12 @@ file, and takes every candidate fact from there. It names no model of its own.
 [Swap the Summarizer Model](../how-to/evaluate-new-summarizer-model.md) owns the
 procedure and the acceptance requirements.
 
-### The cache across the model swap, measured 2026-08-27
-
-Read with `gh cache list` on either side of the 2026-08-27 summarizer swap,
-against the 10 GB repository ceiling in Guardrail #2. `n=1` - a cache listing is a
-state, not a sample, so there is no spread.
-
-| Moment | Bytes | Of the 10 GB cap |
-| --- | --- | --- |
-| Before: the visual planner's `llm-Qwen3-4B-Q4_K_M.gguf-b10598-v4` 2,438,761,586, a stale `qualify-03b74727...-b10598` 5,614,108,894, python and node about 0.59 GB | 8.05 GB | 81% |
-| After deleting the stale qualification copy | 3,031,429,559 | 30% |
-| After the production fill of 5,680,522,464 for the configured summarizer | **8,711,952,023** | **87%** |
-
-**There was no retired-incumbent Qwen3-8B weights cache to delete.** PR #135
-moved the cache key
-to `-v4`, and the retired incumbent never filled under that key, so the whole
-transition was one deletion of a qualification artifact rather than a swap of two
-five-gigabyte entries. The cache key is
-`llm-<file>-<revision>-<llama.cpp build>-v4`, built from the plan job's outputs,
-so a model change moves the key and an old entry ages out rather than being
-restored under a new alias
-([measurements.md](measurements.md#the-cache-transition-measured-2026-08-27)).
+**What a swap costs the 10 GB cache is a reading, and it lives in the instrument
+log.** This page carried a second copy of the 2026-08-27 table until 2026-09-17;
+the fuller one, with the headroom left over, is
+[The cache transition](measurements.md#the-cache-transition-measured-2026-08-27),
+and the standing rule about which caches earn their bytes is
+[ci-caches.md](ci-caches.md).
 
 Pages publication builds only committed data and uploads a static bundle. It
 does not run the producer or a model, and the published site has no runtime
@@ -777,6 +762,113 @@ in these two workflows.
 47 lines shorter and there is one new file a reader has to open, plus 36 lines
 of test machinery that teaches the harness to read a composite action. It does
 not remove a check; it removes the second place the step could be edited.
+
+## Design rationale
+
+### What the model workflows share, and what they must not
+
+Answered 2026-09-17. `measure.yml` and `validate.yml` both stand a candidate
+model up on a runner, and the open question was how much of that they should
+hold in common. `.github/actions/candidate-config` was the first block; the
+rest was open.
+
+**The rule, in one sentence: share a block when the copies have to be
+byte-identical for the system to be correct, and duplicate it when they have to
+be allowed to differ.** The scratch config passes that outright. A control the
+bench holds fixed and the qualification does not is not a control, so the two
+copies had to be one file or the two answers were about different things.
+
+**For the middle cases, count inputs against callers.** An action with more
+inputs than callers is a function with a mode flag, and a mode flag is the
+duplication wearing a shared name. `candidate-config` has two inputs and three
+call sites, so it is a block. A shared corpus step would need an input per
+calling workflow, so it is not.
+
+#### The runtime pin is the next block, and nothing holds it together today
+
+Fetching the inference runtime and the weights and proving the digests is **249
+substantive lines across 23 steps in five workflows** - `digest.yml`,
+`idhazh-pipeline-tests.yaml`, `measure.yml`, `probe.yml` and `validate.yml`.
+Counted on 2026-09-17 over every step whose shell names `llama.tar.gz`,
+`huggingface.co/` or `sha256sum --check`; `ci.yml`'s browser cache is not a
+model runtime and is not in it.
+
+The pin itself - `LLAMA_CPP_BUILD`, its asset name and its SHA-256 - is spelled
+in **13 places that have to change together**: five `env:` blocks and eight
+fetch steps.
+
+```powershell
+git grep -c 'LLAMA_CPP_BUILD:' -- .github/workflows
+git grep -c 'releases/tags/${LLAMA_CPP_BUILD}' -- .github/workflows
+```
+
+Those two counts are a reading of this tree, not a constant - the numbers went
+up when `idhazh-pipeline-tests.yaml` landed. **The property is what matters and
+it does not move: every copy of the pin has to change at once, and nothing in
+the tree compares them.** Change twelve of the thirteen and a qualification
+runs on a runtime production does not run, with every gate green, because no
+check can tell. That is what makes it worth a block rather than a rule somebody
+remembers.
+
+#### What stays duplicated, and why
+
+Checkout, Python setup, `LLAMA_PORT` and artifact upload stay copied. Each is
+one or two lines, each workflow's copy is already correct, and a block that
+saved two lines would cost a file to open.
+
+**The corpus build looks the most shareable and is the one that must not be.**
+Five workflows build a corpus five ways, and each way is a different sampling
+contract:
+
+| Workflow | What its corpus is chosen to answer |
+| :--- | :--- |
+| `digest.yml` | What runs today - the day's ranked plan, for readers |
+| `measure.yml`, target `corpus` | What article lengths the open web really has |
+| `measure.yml`, target `bench` | What `bench.corpus_items` articles cost on this machine |
+| `validate.yml` | Is this model good enough on text that cannot move under it |
+| `idhazh-pipeline-tests.yaml` | What this code change cost on the same drawn pair |
+
+A shared step would take a mode, and the mode would be the whole of the
+difference between them.
+
+#### No workflow takes prompt text as an input
+
+**The prompt is shipped code, never a dispatch argument.** No workflow, script
+or utility in this repository accepts prompt text, a prompt path or a prompt
+override, and none may gain one. Both model paths already read the shipped
+prompt by construction: the summariser and the classifier resolve their prompt
+file from `__file__`, and the scratch config is a copy of `config/`, where no
+prompt lives. So a measurement is taken under the prompt production runs, and a
+dispatch cannot quietly change what was asked. Written down here so it stays
+true when somebody adds the sixth workflow.
+
+#### What a validation or bench run must never share with production
+
+Six things, and they are the whole list: the published site under
+`frontend/public/`, the committed `config/models/<name>.json` the incumbent
+points at, the production ledgers under `state/`, the seen store inside them,
+the run id and the date a production day is keyed on, and article text, which
+never leaves the job that fetched it.
+
+**One of those six was open until 2026-09-17 and is now closed for the bench.**
+`run.trial_state_dirname` moves a run's whole state root, and the bench passes
+`pipeline-tests` - but its `plan` step ran without `--config`, so it loaded the
+committed config, which redirects nothing. `plan` appends to the seen store,
+feed health, feed retirements and the counterfactual scores, so every bench
+dispatch wrote four production ledgers, and the seen store is the one that
+bites: a marked address makes the next production day skip that story with
+nothing in the log to say why. The step now reads the scratch config, and
+`test_no_bench_stage_can_reach_the_production_state_root` asserts it for every
+stage any job in that file runs, present or future.
+
+**`validate.yml`'s plan job still has it, and that is a decision rather than an
+oversight.** Its `Read the feeds` step runs `plan` against the committed config
+in a job that builds no scratch config at all. Redirecting it is two lines, and
+the cost is not two lines: `plan` reads the seen store as well as writing it, so
+a redirected qualification would plan from an empty one and draw different
+articles. That changes which corpus a qualification is judged on, which is the
+evaluation owner's call and not a workflow edit's. What settles it is one
+dispatch each way, comparing the drawn addresses.
 
 ## What is not on this page
 

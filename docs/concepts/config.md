@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-17
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Guardrail #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -22,6 +22,7 @@ Knobs, by the surface they tune:
 - **Summarize** - the length bands, each carrying its own key-point range, plus the title range and quote cap.
 - **Evaluation** - the confidence band thresholds, the brief compression ceiling, the copy reject ceiling, the word gate, the faithfulness window and its overlap, and the spot-check sample size ([evaluation.md](evaluation.md)).
 - **Run shape** - the safety ceiling, the batch size, per-job timeouts, and concurrency ([pipeline-loop.md](pipeline-loop.md)).
+- **Bench** - how many articles one runtime-sweep repeat reads. One knob, `bench.corpus_items`, and it is a fit against the job timeout rather than a taste ([../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md#why-the-bench-corpus-is-three-articles)).
 - **Retention** - the image age window, the dry-run switch, the deletion fuse, the published-site alarm point and the published-site cap ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)). `retention.site_budget_mb` and `retention.pages_hard_cap_mb` are read by `idhazh site-weight`, which runs after the site is built and measures the built bundle - never the committed payload tree, which is a different tree eighteen times smaller. The alarm point warns; the cap fails the job.
 - **Drift** - the window and per-domain sample floors and the length/copying
  alert thresholds. The workflow owns the schedule and its date-window inputs
