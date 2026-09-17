@@ -22,7 +22,7 @@ Knobs, by the surface they tune:
 - **Summarize** - the length bands, each carrying its own key-point range, plus the title range and quote cap.
 - **Evaluation** - the confidence band thresholds, the brief compression ceiling, the copy reject ceiling, the word gate, the faithfulness window and its overlap, and the spot-check sample size ([evaluation.md](evaluation.md)).
 - **Run shape** - the safety ceiling, the batch size, per-job timeouts, and concurrency ([pipeline-loop.md](pipeline-loop.md)).
-- **Bench** - how many articles one runtime-sweep repeat reads. One knob, `bench.corpus_items`, and it is a fit against the job timeout rather than a taste ([../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md#why-the-bench-corpus-is-three-articles)).
+- **Bench** - how many articles one runtime-sweep repeat reads, and whether a bench dispatch measures the model's raw speed first. `bench.corpus_items` is a fit against the job timeout rather than a taste ([../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md#why-the-bench-corpus-is-three-articles)). `bench.run_model_speed_case` is true by default; false skips the `llama-bench` job and leaves the rest of the dispatch running, which is what to set when the flow is being exercised rather than a model measured ([../reference/github-actions.md](../reference/github-actions.md#design-rationale)).
 - **Retention** - the image age window, the dry-run switch, the deletion fuse, the published-site alarm point and the published-site cap ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)). `retention.site_budget_mb` and `retention.pages_hard_cap_mb` are read by `idhazh site-weight`, which runs after the site is built and measures the built bundle - never the committed payload tree, which is a different tree eighteen times smaller. The alarm point warns; the cap fails the job.
 - **Drift** - the window and per-domain sample floors and the length/copying
  alert thresholds. The workflow owns the schedule and its date-window inputs
@@ -1214,7 +1214,7 @@ disagree. None of them reaches the prerendered `/archive/` document.
 
 Not everything variable is tunable. Two categories stay out of `config/`:
 
-- **Facts, not preferences.** The runner's core count, the 6 h job cap and the 10 GB cache ceiling are properties of the platform (Guardrail #2). Making them configurable would imply they can be chosen.
+- **Facts, not preferences.** The runner's core count, the 6 h job cap and the 10 GB cache allowance are properties of the platform (Guardrail #2). Making them configurable would imply they can be chosen.
 - **Identifiers.** Stage names, event names, visual kinds and score-band names are schema-validated enums defined in the contracts. Code references them; they never change to match a label. Which word a new key takes is [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md).
 
 The distinction matters because a value in `config/` reads as an invitation to change it.

@@ -300,6 +300,19 @@ copies of the same facts can disagree, which means benching one set of bytes and
 adopting another with every gate green. They now take the models file and read
 the rest out of it, which is the same string the swap itself writes.
 
+**Case one can be turned off, and a model evaluation never turns it off.** Add
+`-f model_speed_case=skip` and the `llama-bench` job does not run: the dispatch
+loses the prefill and decode rates, the `bench-raw` artifact, and the raw-case
+block of the dossier, and case two runs on regardless and says in the dossier
+that the block is missing and why. That is between a tenth and a third of the
+dispatch - 9.1 to 87.6 minutes of the four measured on 2026-09-16
+([../reference/benchmarks/what-a-bench-dispatch-costs.md](../reference/benchmarks/what-a-bench-dispatch-costs.md)).
+It exists so somebody changing the workflow can exercise the flow without paying
+for a measurement nobody will read. A candidate adopted on a dossier with no
+raw-case block has not been measured on the axis this step exists to measure, so
+leave the box alone here. `bench.run_model_speed_case` in `config/idhazh.json` is
+the same switch for every dispatch.
+
 **Case one, artifact `bench-raw`** - raw prefill and decode with nothing else in
 the process:
 
