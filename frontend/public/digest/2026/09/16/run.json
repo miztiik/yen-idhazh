@@ -664,6 +664,172 @@
           "published": 0
         }
       ]
+    },
+    {
+      "charts_drafted": 39,
+      "commit_sha": "74dd94f1ef53b55ebd065b990bf7b6cab85ba14d",
+      "completed_at": "2026-09-17T00:20:05Z",
+      "config_digests": [
+        {
+          "path": "config/idhazh.json",
+          "sha256": "9f1ab481af2ce34ff87735b6d958e58f25e723307106f323bc2bbf80800dacad"
+        },
+        {
+          "path": "config/models/qwen3.5-9b-q4km.json",
+          "sha256": "1b9598c06a77cd0f48b75d800948683b216e6153e6582ab7d4defe1397d62d0a"
+        },
+        {
+          "path": "config/sources.json",
+          "sha256": "2193df45bf3cf9382a56408c1d7fcdca0c328748c5a83fdac3ea8815c92f3536"
+        },
+        {
+          "path": "config/taxonomy.json",
+          "sha256": "088edce9b28fdd2c3572859234b827319bfa05e177d29cd3c4483098a129f724"
+        },
+        {
+          "path": "config/watchlist.json",
+          "sha256": "f11d1aa2d876f2507a695fa6088ba5581b1ea7df578673fb66747b191210572f"
+        }
+      ],
+      "determinism_violations": 0,
+      "evaluation_enabled": true,
+      "evaluation_sample_rate": 1.0,
+      "evaluation_sampled": true,
+      "inputs": {
+        "chat_template_sha256": "7f0e529032c25183bcd66c7f238da2d377f43be754a94e2725a58c4e16d2ed67",
+        "extractor_version": "trafilatura-2.2.0-idhazh-3",
+        "model_sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+        "n_batch": 512,
+        "n_ctx": 65536,
+        "n_threads": 4,
+        "n_ubatch": 512,
+        "output_schema_sha256": "e5a6eb610a4e094877251d43575eaa55f41f7e4f1d1da6a061b95d851e8e6e3f",
+        "prompt_sha256": "82039f016a1a38c9c41c0b6feaba60d1d472266ce43d6646de6d587430e32d8c",
+        "quantisation": "Q4_K_M",
+        "runner_class": "github-hosted/linux/x64",
+        "runtime_build": "b10598",
+        "runtime_flags": "cache_type_k=runtime-default;cache_type_v=runtime-default;flash_attention=on;n_parallel=1;n_threads_batch=runtime-default",
+        "sampling": "temperature=0.0000;top_p=1.0000;seed=0;max_answer_tokens=900;max_think_tokens=256",
+        "sanitizer_version": "idhazh-sanitizer-3",
+        "truncation_cap_tokens": 20000,
+        "turn_markers_sha256": "762ef1bd1526d444b4def9594b3e5b59b9645030a1a3f405a8d3c72518e79e6d"
+      },
+      "items_failed": 6,
+      "items_planned": 80,
+      "items_prefiltered": 0,
+      "items_routed": 74,
+      "items_skipped": 0,
+      "items_succeeded": 74,
+      "models": [
+        {
+          "model_ref": {
+            "byte_count": 5680522464,
+            "draft": null,
+            "file": "Qwen3.5-9B-Q4_K_M.gguf",
+            "hf_base_repo": "Qwen/Qwen3.5-9B",
+            "id": "qwen3-5-9b-q4-k-m",
+            "inference": {
+              "cache_type_k": null,
+              "cache_type_v": null,
+              "declared_for": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+              "flash_attention": "on",
+              "load_mode": null,
+              "log_verbosity": 4,
+              "max_answer_tokens": 900,
+              "max_think_tokens": 256,
+              "metrics": true,
+              "n_batch": 512,
+              "n_ctx": 65536,
+              "n_parallel": 1,
+              "n_threads": 4,
+              "n_threads_batch": null,
+              "n_ubatch": 512,
+              "poll": null,
+              "priority": null,
+              "request_timeout_minutes": 22.1,
+              "seed": 0,
+              "startup_warmup": true,
+              "temperature": 0.0,
+              "top_p": 1.0
+            },
+            "quantisation": "Q4_K_M",
+            "repo": "unsloth/Qwen3.5-9B-GGUF",
+            "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
+            "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8"
+          },
+          "role": "summarize"
+        }
+      ],
+      "n": 5,
+      "note": null,
+      "rank_version": "idhazh-rank-6",
+      "route_ms": 24,
+      "run_id": "2026-09-16-35152132574",
+      "runner": "ubuntu-latest",
+      "scorer_version": "hhem-2.1-open@8e4a2e6e;weights-841b70e0;metrics-3;window=900/150/anchored;bands=0.80/0.50;lead=0.30",
+      "site_bytes": 26299073,
+      "site_files": 54,
+      "source_list_stale": false,
+      "started_at": "2026-09-16T21:24:07Z",
+      "status": "partial",
+      "verticals": [
+        {
+          "below_feed_floor": false,
+          "eligible_feeds": 51,
+          "feed_floor": 35,
+          "id": "ai",
+          "planned": 18,
+          "published": 15
+        },
+        {
+          "below_feed_floor": false,
+          "eligible_feeds": 23,
+          "feed_floor": 21,
+          "id": "energy",
+          "planned": 7,
+          "published": 7
+        },
+        {
+          "below_feed_floor": false,
+          "eligible_feeds": 24,
+          "feed_floor": 21,
+          "id": "business-economy",
+          "planned": 11,
+          "published": 9
+        },
+        {
+          "below_feed_floor": false,
+          "eligible_feeds": 30,
+          "feed_floor": 21,
+          "id": "world",
+          "planned": 21,
+          "published": 20
+        },
+        {
+          "below_feed_floor": false,
+          "eligible_feeds": 22,
+          "feed_floor": 21,
+          "id": "india",
+          "planned": 23,
+          "published": 23
+        },
+        {
+          "below_feed_floor": true,
+          "eligible_feeds": 0,
+          "feed_floor": 21,
+          "id": "science",
+          "planned": 0,
+          "published": 0
+        },
+        {
+          "below_feed_floor": true,
+          "eligible_feeds": 0,
+          "feed_floor": 21,
+          "id": "climate",
+          "planned": 0,
+          "published": 0
+        }
+      ]
     }
   ],
   "version": "2026-09-15T12:30"
