@@ -31,7 +31,8 @@
     "similarity_floor": 0.35
   },
   "bench": {
-    "corpus_items": 3
+    "corpus_items": 3,
+    "run_model_speed_case": true
   },
   "collect": {
     "availability_rest_runs": 5,
@@ -142,6 +143,7 @@
     "prose_sentence_words_min": 8,
     "reject_boilerplate": false,
     "reject_not_prose": false,
+    "reject_too_short": false,
     "request_timeout_seconds": 20.0,
     "truncation_cap_tokens": 20000,
     "user_agent": "yen-idhazh/1.0 (+https://github.com/miztiik/yen-idhazh)"
@@ -217,6 +219,19 @@
     "head_items": 20,
     "head_no_repeat": 10,
     "max_desk_in_head": 5
+  },
+  "prune": {
+    "collections": {
+      "workflow-artifacts": {
+        "max_deletes_per_run": 50,
+        "retain_days": 30
+      },
+      "workflow-runs": {
+        "max_deletes_per_run": 50,
+        "retain_days": 90
+      }
+    },
+    "dry_run": true
   },
   "reference_dataset": {
     "article_words_min": 120,

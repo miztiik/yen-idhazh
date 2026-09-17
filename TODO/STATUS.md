@@ -35,14 +35,15 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 16 | 12 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 11 |
-| [20260914-29-found-once-plan.md](20260914-29-found-once-plan.md) | 17 | 13 | 4 | 3 |
+| [20260914-29-found-once-plan.md](20260914-29-found-once-plan.md) | 17 | 14 | 3 | 2 |
+| [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 28 | 0 | 27 | 5 |
 
 ## In flight - 0
 
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 34
+## Ready now - 38
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -83,9 +84,13 @@ section 3 is where it is answered.
 | #11 | 27 | E | Two articles, three arms, one runner | 4 |
 | #12 | 29 | - | Label the sheet, then set the weights | - |
 | #16 | 29 | - | Refuse boilerplate, on a week of evidence | 13 |
-| #17 | 29 | - | Does a short extraction publish at all | - |
+| #1 | 33 | A | Segment store and the `compact` stage, shipped inert | - |
+| #5 | 33 | A | Machine page stops lying about a day with no rows | - |
+| #6 | 33 | A | One concurrency group for `digest`, `validate`, `measure` | - |
+| #7 | 33 | A | OS memory and load, per item | - |
+| #18 | 33 | H | Chart-craft doctrine - the thirteen rules, written once | - |
 
-## Waiting on another row - 49
+## Waiting on another row - 71
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -138,6 +143,28 @@ section 3 is where it is answered.
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
 | #15 | 29 | - | The weights and the 0.88 floor | 12 is PENDING |
+| #2 | 33 | B | `host-fingerprint` writes segments | 1 is PENDING |
+| #3 | 33 | B | `item-health`, `scores`, `score-index` write segments | 2 is PENDING |
+| #4 | 33 | B | `span-rollup` writes segments | 3 is PENDING |
+| #17 | 33 | B | `runtime-counters` writes segments | 4 is PENDING |
+| #10 | 33 | C | `model_load_ms` and `job_seconds` join `host-fingerprint` | 2 is PENDING |
+| #12 | 33 | D | Delete the merge machinery | 2 is PENDING; 3 is PENDING; 4 is PENDING; 17 is PENDING |
+| #13 | 33 | D | Compaction lag and free swap on the console band | 1 is PENDING; 5 is PENDING; 7 is PENDING; 12 is PENDING |
+| #11 | 33 | E | Delete `runtime-counters` and everything that reads it | 7 is PENDING; 10 is PENDING; 17 is PENDING |
+| #15 | 33 | F | Generated TypeScript contracts replace the hand-written ones | 10 is PENDING; 11 is PENDING |
+| #16 | 33 | G | Docs, and the orphan sweep | all names no row |
+| #28 | 33 | H | Pipeline panels: the share track goes, Extraction gains a trend | 18 is PENDING |
+| #19 | 33 | I | The shard board | 11 is PENDING; 18 is PENDING |
+| #21 | 33 | I | Memory and load, three grains - ABSORBS Row #14 | 5 is PENDING; 7 is PENDING; 15 is PENDING; 19 is PENDING |
+| #23 | 33 | I | What a run reads against what it writes, in tokens and in seconds | 21 is PENDING |
+| #25 | 33 | I | Outside the model call, as range marks | 23 is PENDING |
+| #22 | 33 | I | Platform mix as grouped bars | 25 is PENDING |
+| #24 | 33 | I | Counterfactual cost gets a shape | 22 is PENDING |
+| #20 | 33 | I | Timing panels merge and move to Pipeline | 24 is PENDING |
+| #26 | 33 | I | Machine cards: L3 and bandwidth as bars - AMENDS Row #5 | 5 is PENDING; 11 is PENDING; 18 is PENDING |
+| #27 | 33 | K | Route grouping and panel order | 20 is PENDING; 26 is PENDING |
+| #14 | 33 | - | The per-item machine load panel | - |
+| #8 | 33 | - | Memory split by prefill and decode | - |
 
 ## Finished - 18 plans with no live row
 

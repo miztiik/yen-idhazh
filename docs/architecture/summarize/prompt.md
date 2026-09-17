@@ -187,12 +187,14 @@ is nothing at all. So length may not be the property that silently removes a
 story.
 
 **There is no retry, on purpose.** Asking the model again is the obvious fourth
-outcome, and here it is dead code: `models.summarize.inference` pins
-`temperature=0.0` and `top_p=1.0`, and the `seed` field's own description says it
-is dead under greedy decoding. An identical payload returns an identical reply,
-so a retry loop would spend a second inference call on the tail of every run to
-receive the same words. It can be built the day decoding stops being greedy, and
-not before.
+outcome. It was dead code until 2026-09-17, when every entry moved to
+`temperature=0.2`: at 0.0 an identical payload returned an identical reply, so a
+retry loop would have spent a second inference call on the tail of every run to
+receive the same words. At 0.2 a retry would return something different, so the
+argument that ruled it out is gone and the one that keeps it out is cost - a
+second call an item on the tail of a run, against a failure the three outcomes
+above already handle. Building it is a decision somebody makes with a
+measurement of how often the tail is reached, not a gap left by accident.
 
 ## A long summary may be two paragraphs
 
@@ -1056,10 +1058,10 @@ is decoded as two spans instead, and `models.<role>.turns.thinking_close` is the
 whole of the declaration.
 
 1. **Span one** is the same request body with the grammar taken off,
-   `n_predict` set to `max_think_tokens` and `stop` set to the declared closing
-   marker. It is derived from the answer body rather than rendered again, so
-   both spans open on one string object and the slot span one fills is the slot
-   span two continues.
+   `n_predict` set from `max_think_tokens` and `stop` set to the declared
+   closing marker. It is derived from the answer body rather than rendered
+   again, so both spans open on one string object and the slot span one fills is
+   the slot span two continues.
 2. **Span two** is that body again, with the thinking spliced onto its prompt,
    the closing marker written by us, and the schema back on. Its budget is
    `max_answer_tokens` - the declared number, never a share of a combined one.
@@ -1071,14 +1073,26 @@ exactly the channel Guardrail #11 exists to keep it out of, and it is not
 evidence of anything either.
 
 **Two budgets rather than one**, because one number over two spans cannot say
-whether a long think or a cut answer spent it. `max_think_tokens` is 256 and is
-a hard cap: a model that never closes its block would otherwise eat the window
-and be recorded as a truncated summary, which names the wrong cause.
+whether a long think or a cut answer spent it. `max_think_tokens` is **null, and
+null means no cap**: the span ends on the closing marker, and `n_predict` is sent
+as `-1`, which is llama.cpp's own word for infinity. Owner ruling, 2026-09-17 -
+it was 256 until then, and 256 was carried over from no reading of these weights.
+
+**A null cap rests the whole span on the marker.** The cap existed because a
+model that never closes its reasoning block would decode to the window and be
+recorded as a truncated summary, naming the wrong cause. Removing it does not
+remove that failure; it changes what it looks like - the answer span's prompt is
+span one's plus what span one wrote, so an unclosed block fails the item on the
+window instead. An entry that declares a marker the model does not write is
+therefore a whole-arm failure rather than a slow item, which is why the marker is
+derived from the entry's own recorded reply openings rather than guessed.
 
 **The chat route runs one span and the runtime owns the split**, because the
 model's own template writes that prompt and there is nothing of ours to stop and
-continue. Its budget is the two added together. That is the route the
-qualification harness sends.
+continue. Its budget is the two added together - and with no cap there is no sum
+to send, so the request carries no `max_tokens` at all and the server falls to
+its own default, which is the same infinity. That is the route the qualification
+harness sends.
 
 **Three refusals are conditional on the declaration, and each has both cases.** An
 inline think block and a reasoning channel both fail an item where the entry

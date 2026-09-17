@@ -86,6 +86,7 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("measure.yml", "runtime_threads"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "runtime_threads_batch"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "budget_samples"): "^[1-9][0-9]{0,4}$",
+    ("measure.yml", "model_speed_case"): DISPATCH_CHOICE,
     ("measure.yml", "target"): DISPATCH_CHOICE,
     ("measure.yml", "threads"): "^[1-9][0-9]*$",
     ("prune.yml", "force"): DISPATCH_BOOLEAN,
@@ -180,7 +181,7 @@ LLAMA_RUNTIME_WORKFLOWS: Final = frozenset(
     {"digest.yml", "idhazh-pipeline-tests.yaml", "measure.yml", "probe.yml", "validate.yml"}
 )
 
-# The shared step that installs the build, the file that decides which build,
+# The shared steps that install the build, the file that decides which build,
 # and the workflows converted onto them. A converted caller carries no copy of
 # the pin, so the two cannot disagree. Every name still outside this set spells
 # the pin out in its own `env:` block and fetches the build itself, which is the
@@ -190,9 +191,17 @@ LLAMA_RUNTIME_WORKFLOWS: Final = frozenset(
 # stops asking that workflow for an `env:` copy and starts refusing one.
 LLAMA_RUNTIME_SCRIPT: Final = "fetch-model-runtime.sh"
 
+# The runtime half on its own, for the one job that installs the binary and
+# opens no weights. `fetch-model-runtime.sh` sources it.
+LLAMA_INSTALL_SCRIPT: Final = "install-llama-runtime.sh"
+
+LLAMA_SHARED_SCRIPTS: Final = (LLAMA_RUNTIME_SCRIPT, LLAMA_INSTALL_SCRIPT)
+
 LLAMA_PIN_SCRIPT: Final = "llama-cpp-pin.sh"
 
-LLAMA_SCRIPT_CALLERS: Final = frozenset({"idhazh-pipeline-tests.yaml"})
+LLAMA_SCRIPT_CALLERS: Final = frozenset(
+    {"digest.yml", "idhazh-pipeline-tests.yaml", "probe.yml", "validate.yml"}
+)
 
 LLAMA_INLINE_RUNTIME_WORKFLOWS: Final = LLAMA_RUNTIME_WORKFLOWS - LLAMA_SCRIPT_CALLERS
 
@@ -200,6 +209,13 @@ LLAMA_INLINE_RUNTIME_WORKFLOWS: Final = LLAMA_RUNTIME_WORKFLOWS - LLAMA_SCRIPT_C
 # upgrade moves; the other two move with it and are what a half-done upgrade
 # leaves behind.
 LLAMA_PIN_NAMES: Final = ("LLAMA_CPP_BUILD", "LLAMA_CPP_ASSET", "LLAMA_CPP_SHA256")
+
+# The three values themselves, which is what a converted caller is refused. The
+# NAME is not the test: a job whose stage records which build decoded the bytes
+# has to put `LLAMA_CPP_BUILD` in that step's environment, and taking it from
+# the step that published the pin is reading the one home rather than copying
+# it. A literal is the copy, and a literal is what drifts.
+LLAMA_PIN_VALUES: Final = (PINNED_LLAMA_BUILD, PINNED_LLAMA_ASSET, PINNED_LLAMA_SHA256)
 
 # The subset that starts a server and posts to it. `probe.yml` installs the
 # same binary and asks it what it accepts, which needs no port - and a port
@@ -251,7 +267,7 @@ WEIGHTS_CHECKS: Final = {
     # nothing in this job would notice a corrupt copy, and the arm that loads it
     # is a different job on a different machine. The bench step is named below
     # as the ordering anchor, not as a reader of these bytes.
-    ("measure.yml", "llm"): (
+    ("measure.yml", "llama-bench"): (
         "Fetch the draft head",
         "Verify the draft head",
         "Benchmark the candidate",
@@ -340,9 +356,33 @@ MEASUREMENT_TARGETS: Final = frozenset({"bench", "image", "corpus", "batched", "
 #: second multi-gigabyte download inside one dispatch (Guardrail #2).
 BENCH_TARGET: Final = "bench"
 
-BENCH_RAW_JOB: Final = "llm"
+#: The job that drives the `llama-bench` binary. It was keyed `llm` until
+#: 2026-09-17, which named a whole field of software rather than the one thing
+#: the job does, and showed in the run list as a bare three-letter key because
+#: no job in this file carried a `name:`.
+BENCH_RAW_JOB: Final = "llama-bench"
+
+#: How that key is spelled inside an expression. A hyphen is subtraction there,
+#: so `needs.llama-bench.result` does not resolve and the index form is the only
+#: reading of it.
+BENCH_RAW_JOB_EXPRESSION: Final = f"needs['{BENCH_RAW_JOB}']"
 
 BENCH_SERVER_JOB: Final = "runtime"
+
+#: The dispatch input and the config knob that decide whether the speed case
+#: runs at all, and the `models` output that carries the answer to a job's `if:`.
+#: A job cannot read a step of its own job, so the decision travels as an output.
+BENCH_SPEED_INPUT: Final = "model_speed_case"
+
+BENCH_SPEED_KNOB: Final = "run_model_speed_case"
+
+BENCH_SPEED_OUTPUT: Final = f"needs.models.outputs.{BENCH_SPEED_INPUT}"
+
+BENCH_SPEED_MODULE: Final = "backend/utilities/model_speed_case.py"
+
+BENCH_SPEED_SKIP_STEP: Final = "Say what a bypassed speed case cost this dossier"
+
+BENCH_SUMMARY_STEP: Final = "Put the speed readings in the run summary"
 
 BENCH_CACHE_KEY: Final = (
     "bench-${{ needs.models.outputs.candidate_cache_key }}-${{ env.LLAMA_CPP_BUILD }}"
@@ -1269,6 +1309,41 @@ def _step(
     return matches[0]
 
 
+def _stage_invocations(
+    workflow: dict[str, object], workflow_name: str
+) -> list[tuple[str, str, str, list[str]]]:
+    """Every `python -m idhazh <stage>` a workflow runs, as (job, step, stage, words).
+
+    One reader, because two workflows ask the same question of their own jobs -
+    can a dispatch that is not a production run reach the state root a published
+    day is built from? - and a walker copied into both is a walker that drifts
+    the day one of them is edited.
+
+    Every job is walked rather than the ones that run a stage today, so a job
+    that starts running one is caught by a test rather than by a production day
+    that came up short.
+
+    An Actions expression is not shell, so it is blanked before the line is
+    split. What the platform puts there cannot turn a stage invocation into a
+    different one.
+    """
+    jobs = _mapping(workflow.get("jobs"), f"{workflow_name} jobs")
+    found: list[tuple[str, str, str, list[str]]] = []
+    for job_name in sorted(jobs):
+        for step in _steps(workflow, job_name):
+            script = step.get("run")
+            if not isinstance(script, str):
+                continue
+            blanked = re.sub(r"\$\{\{.*?\}\}", "expression", script, flags=re.DOTALL)
+            for line in blanked.replace("\\\n", " ").splitlines():
+                if not re.search(r"\bpython3?\s+-m\s+idhazh\b", line):
+                    continue
+                words = shlex.split(line)
+                stage = words[words.index("idhazh") + 1]
+                found.append((job_name, str(step.get("name")), stage, words))
+    return found
+
+
 def _strings(node: object) -> Iterator[str]:
     """Every string anywhere in a YAML subtree, so an expression cannot hide in a nest."""
     if isinstance(node, str):
@@ -1424,8 +1499,44 @@ def _normalize_condition(value: object, description: str) -> str:
 SCRIPT_CALL: Final = re.compile(r"\.github/scripts/(?P<name>[A-Za-z0-9._-]+\.sh)")
 
 
+def _called_scripts(body: str) -> list[str]:
+    """Every shipped script a shell body names outside a comment."""
+    called: list[str] = []
+    for line in body.splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        called.extend(match.group("name") for match in SCRIPT_CALL.finditer(line))
+    return called
+
+
+def _script_closure(body: str) -> str:
+    """A shell body plus every shipped script reachable from it, at any depth.
+
+    One level of following was enough while every shipped script was a leaf. It
+    stopped being enough the moment one script sourced another: a check written
+    over the one-level text goes quietly green on a fetch that moved one file
+    further away, which is the same hole the following was added to close. The
+    visited set is what keeps two scripts that name each other from recursing.
+    """
+    bodies = [body]
+    seen: set[str] = set()
+    pending = _called_scripts(body)
+    while pending:
+        name = pending.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        called = SCRIPTS_DIR / name
+        if not called.is_file():
+            continue
+        text = called.read_text(encoding="utf-8")
+        bodies.append(text)
+        pending.extend(_called_scripts(text))
+    return "\n".join(bodies)
+
+
 def _effective_shell(step: Mapping[str, object]) -> str:
-    """A step's own shell, plus the text of every shipped script it hands to bash.
+    """A step's own shell, plus the text of every shipped script it reaches.
 
     A step that calls a script runs that script's shell, so a search over `run:`
     bodies alone stops seeing a fetch the moment the fetch is extracted - and
@@ -1435,15 +1546,7 @@ def _effective_shell(step: Mapping[str, object]) -> str:
     script = step.get("run")
     if not isinstance(script, str):
         return ""
-    bodies = [script]
-    for line in script.splitlines():
-        if line.lstrip().startswith("#"):
-            continue
-        for match in SCRIPT_CALL.finditer(line):
-            called = SCRIPTS_DIR / match.group("name")
-            if called.is_file():
-                bodies.append(called.read_text(encoding="utf-8"))
-    return "\n".join(bodies)
+    return _script_closure(script)
 
 
 def _llama_fetch_scripts(workflow: dict[str, object]) -> list[tuple[str, object, str]]:
@@ -1453,6 +1556,19 @@ def _llama_fetch_scripts(workflow: dict[str, object]) -> list[tuple[str, object,
         for step in _steps(workflow, job_name)
         if "ggml-org/llama.cpp/releases" in (shell := _effective_shell(step))
     ]
+
+
+def _pin_output_name() -> str:
+    """The key the pin prints when it is run, read out of the pin rather than retyped.
+
+    A converted caller that needs the build takes it from a step that published
+    this key, so the two halves of that arrangement are held together by the
+    file itself instead of by two constants nobody diffs.
+    """
+    printed = (SCRIPTS_DIR / LLAMA_PIN_SCRIPT).read_text(encoding="utf-8")
+    match = re.search(r'echo "([a-z_]+)=\$\{LLAMA_CPP_BUILD\}"', printed)
+    assert match is not None, f"{LLAMA_PIN_SCRIPT} must print the build as key=value"
+    return match.group(1)
 
 
 def _weights_fetch_steps(

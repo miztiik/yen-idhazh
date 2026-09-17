@@ -121,7 +121,8 @@ A denied or unknown target is **not requested**. The refusal is built without an
 The extractor classifies page shape after sanitization. It records `too_short`,
 `not_prose` and `boilerplate` as signals. These are evidence, not editorial
 verdicts. By default the item still publishes, often through the brief tier. A
-curator can turn on `extract.reject_not_prose` or `extract.reject_boilerplate`,
+curator can turn on `extract.reject_not_prose`, `extract.reject_boilerplate` or
+`extract.reject_too_short`,
 but length and shape do not decide newsworthiness by themselves.
 
 **The `boilerplate` signal only started answering anything on 2026-09-17.** It

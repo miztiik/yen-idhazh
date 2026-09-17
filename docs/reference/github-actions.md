@@ -547,7 +547,75 @@ flowchart LR
  class PERSON,WEEKLY,VALIDATE,MEASURE,DRIFT,BACKFILL stage;
 ```
 
-### Testing a candidate model, end to end
+## Pages publication
+
+`pages.yml` builds only committed data and uploads a static bundle. It does not
+run the producer or a model, and the published site has no runtime backend. When
+it runs and which commit it takes are in [Trigger reference](#trigger-reference)
+above; this section is what it does once it has decided to publish.
+
+**A newer build supersedes an older one; a deploy in flight always finishes.**
+Concurrency is declared on the two jobs rather than on the workflow, because
+they want opposite answers. The `build` job groups as `pages-build` with
+`cancel-in-progress: true`: it makes a replaceable artifact, publishing is
+last-write-wins, and an older bundle that finishes is discarded the moment the
+newer one deploys. The `deploy` job keeps the group `pages` with
+`cancel-in-progress: false`, because it replaces the live site and a
+half-replaced site is worse than an old one.
+
+**Cancelling a build cannot strand a deployment, and two independent facts say
+so.** `deploy` declares `needs: build` and carries no `if:`, so its condition is
+the default `success()` - a cancelled job satisfies no `needs`, and the deploy
+never starts. Independently of how the scheduler reads a cancellation, a build
+that stopped early never finished `actions/upload-pages-artifact`, and artifacts
+are scoped to their own run, so there is nothing for that run's deploy to take.
+The site is replaced from a complete bundle or not at all.
+
+The two settings are structural rather than tunable, so they are written in the
+workflow and not in `config/` (Guardrail #6). GitHub resolves `concurrency`
+before a job starts, so no config file has been read yet; and no value a knob
+could hold would make cancelling a live deploy right. They are the same kind of
+statement as `needs:` - what each job is, not how hard it should try.
+
+### What the split actually saves, measured 2026-09-17
+
+Taken against the live API, last 100 `pages.yml` runs.
+
+| Reading | Value | What it means |
+| :--- | ---: | :--- |
+| Runs in 24 hours | 85 | CI succeeds on every merge to `main`, and each success reaches here. |
+| Of the last 60, runs that built | 28 | The other 32 stopped at `decide`: the commit touched none of `frontend/**`, `config/idhazh.json` or `state/**`, so nothing was rebuilt and no artifact was uploaded. |
+| A build that runs | 49 s median, 60 s worst | So one cancelled build returns at most a minute of runner time. |
+| A deploy | 10 s median | Short enough that queueing behind one costs little. |
+| Runs cancelled | 0 | Nothing was being cancelled before this change. |
+| Consecutive runs that overlap at all | 6 of 99 | Publication is bursty but thinly spread, so the group binds rarely. |
+
+**The saving is small and the reason to take it is not the saving.** At 6
+overlapping pairs and 49 s a build, the runner time returned is on the order of
+five minutes a day. What the old shape cost that does not show up as minutes is
+head-of-line blocking: one group over the whole run put a newer commit's build
+behind the previous run's build *and* deploy, so the freshest bundle waited on a
+bundle already known to be out of date. The change removes that, cannot make the
+published site worse, and reverts by moving five lines. That is the whole case
+for it (Guardrail #10).
+
+**What GitHub's own starter workflows say, and what they do not.** Both
+`actions/starter-workflows` Pages templates carry `concurrency: group: "pages"`
+with `cancel-in-progress: false` and the comment "do NOT cancel in-progress runs
+as we want to allow these production deployments to complete". In `static.yml`
+there is a single job that builds and deploys, so the comment can only be about
+the deploy. `jekyll-gh-pages.yml` does split `build` and `deploy` with
+`needs: build`, and still declares one group at workflow level - the comment
+still reasons about "production deployments", and the build inherits the setting
+only because a workflow-level block cannot address one job. So the guidance
+applies to the deploy job; the build is swept up by where the block sits rather
+than by an argument about builds.
+
+One thing this change does not fix, because it was already true: if CI for an
+older commit finishes after CI for a newer one, the older commit publishes last.
+Publication orders by when a verdict arrived, not by commit order.
+
+## Testing a candidate model, end to end
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
@@ -556,8 +624,8 @@ flowchart TB
   FORM["one form field<br/>candidate_models_file"] --> FILE[("config/models/NAME.json<br/>repo, commit, filename, digest,<br/>byte count, alias, quantisation")]
  end
 
- subgraph BENCH["Measure - measure.yml, target llm"]
-  FILE --> RAW["raw throughput<br/>llama-bench"]
+ subgraph BENCH["Measure - measure.yml, target bench"]
+  FILE --> RAW["model speed<br/>llama-bench"]
   RAW --> SERVER["real server<br/>the fixed bench corpus"]
   SERVER --> DOSSIER["dossier body,<br/>ready to paste"]
  end
@@ -601,26 +669,57 @@ flowchart TB
 
 **The scratch config differs from the committed tree in the line an adoption moves.** Both workflows copy `config/`, move `models_file`, and change no control - so every setting the numbers are read under is the committed one by construction, and a candidate is measured through the exact line an adoption later moves. Until 2026-09-14 the step rebuilt the entry field by field and copied the incumbent's `inference` and `turns` blocks across with their digests overwritten, which asserted that numbers measured for one model held for another.
 
-**The bench copy carries one more key, and it is not a control.** `run.trial_state_dirname` says where that run's own ledgers land, not what the run measures. The bench passes `pipeline-tests`, so every ledger the dispatch writes goes under `state/pipeline-tests/` and none of it is beside the rows the console reads - which has been true of every stage the bench runs since 2026-09-17, and of the `plan` step only since then ([Design rationale](#what-a-validation-or-bench-run-must-never-share-with-production)). `Model validation` and the budget retake pass nothing and build exactly the copy they always did. Why the rows are split rather than filtered is on [host-metrics.md](host-metrics.md#design-rationale).
+**Both candidate copies carry one more key, and it is not a control.** `run.trial_state_dirname` says where that run's own ledgers land, not what the run measures. The bench and `Model validation` both pass `pipeline-tests`, so every ledger either dispatch writes goes under `state/pipeline-tests/` and none of it is beside the rows the console reads - true of every stage the bench runs since 2026-09-17, of the bench's `plan` step only since then, and of `Model validation` since the same day ([Design rationale](#what-a-validation-or-bench-run-must-never-share-with-production)). The budget retake passes nothing and builds exactly the copy it always did. Why the rows are split rather than filtered is on [host-metrics.md](host-metrics.md#design-rationale).
 
 Each Measurements dispatch selects exactly one target:
 
-| Target | What runs | Inputs used by that target |
-| --- | --- | --- |
-| `llm` | GGUF download timing and `llama-bench` throughput | `models`, `threads` |
-| `image` | CPU image-model candidates | none |
-| `corpus` | Live article-length sampling | `corpus_links` |
-| `runtime` | Fixed-shard llama-server candidate sweep over `bench.corpus_items` articles | `runtime_candidate`; `runtime_repeats`; `runtime_threads` for `threads`; `runtime_threads_batch` for `threads_batch` |
-| `batched` | `llama-batched-bench` aggregate decode at parallel levels 1, 2 and 4, three repeats on one host | none; the bench parameters are pinned in the workflow and the context and threading knobs come from `config/idhazh.json` |
+| Target | Jobs it runs | What they measure | Inputs that target reads |
+| --- | --- | --- | --- |
+| `bench` | `llama-bench`, then `runtime` | `llama-bench` times how fast the weights read a prompt and write an answer; `runtime` then runs a real llama-server over `bench.corpus_items` articles and emits the dossier body from both halves | `candidate_models_file`; `threads` and `model_speed_case` for the first; `runtime_candidate`, `runtime_repeats`, `runtime_threads`, `runtime_threads_batch` for the second |
+| `image` | `image` | CPU image-model candidates | none |
+| `corpus` | `corpus` | Live article-length sampling | `corpus_links` |
+| `batched` | `batched` | `llama-batched-bench` aggregate decode at parallel levels 1, 2 and 4, three repeats on one host | none; the bench parameters are pinned in the workflow and the context and threading knobs come from `config/idhazh.json` |
+| `budgets` | `budgets` | The three token counts a vocabulary sizes, retaken against the candidate's own tokenizer | `candidate_models_file`, `budget_samples` |
 
 The form keeps all target-specific inputs visible. A job reads only the inputs
-for its selected target. The default target is `llm`; the default runtime
+for its selected target. The default target is `bench`; the default runtime
 candidate is `baseline`.
+
+**The model speed case can be bypassed, and the rest of the `bench` target still
+runs.** `bench.run_model_speed_case` in `config/idhazh.json` is true by default;
+the `model_speed_case` dispatch input overrules it for one run (`config` follows
+the knob, `run` and `skip` do not). Bypassing it skips the `llama-bench` job and
+nothing else: the fixed corpus, the real server over it, the machine probe and
+the committed host row all still happen. What is given up is the prefill and
+decode rates, and with them the dossier - a dossier is both halves, so a
+dispatch missing one emits the server half and a line naming the half that is
+missing. It also moves who pays for the weights, because the speed case is what
+fills the cache entry the server case restores ([ci-caches.md](ci-caches.md)).
+Measured 2026-09-16 over the four dispatches of that day on stock
+`ubuntu-latest`, the speed case took 9.1, 26.7, 27.2 and 87.6 minutes - between
+a tenth and a third of a whole dispatch
+([what a bench dispatch costs](benchmarks/what-a-bench-dispatch-costs.md)).
 
 `Model validation` reads `config/idhazh.json`, follows its pointer to the model
 file, and takes every candidate fact from there. It names no model of its own.
 [Swap the Summarizer Model](../how-to/evaluate-new-summarizer-model.md) owns the
 procedure and the acceptance requirements.
+
+**Several candidates can be dispatched at once, and until 2026-09-17 most of
+them were silently cancelled.** `Model validation` grouped every run under
+`concurrency: group: validate`, so a comparison fired four candidates wide
+queued three of them - and GitHub keeps only **one** pending run per group, each
+new one cancelling the last. The operator got the run that started, the case
+dispatched last, and two cancelled runs with no error on them. The group is now
+`validate-${{ inputs.candidate_models_file || 'the-configured-model' }}`: the
+candidate file is the whole of what makes two dispatches different questions, so
+it is what names the group. Two dispatches of one candidate still queue, which
+is right. An empty field means the configured model, and it is named rather than
+left as a bare trailing dash for every empty dispatch to collide on. `inputs` is
+a legal context on a `concurrency` key and this workflow is dispatch-only, so it
+is always populated. `measure.yml` has no `concurrency` block at all, so a bench
+was never affected. The same cancellation still applies to `digest.yml`, which
+has one group on purpose - a day has one digest.
 
 **What a swap costs the 10 GB cache is a reading, and it lives in the instrument
 log.** This page carried a second copy of the 2026-08-27 table until 2026-09-17;
@@ -628,10 +727,6 @@ the fuller one, with the headroom left over, is
 [The cache transition](measurements.md#the-cache-transition-measured-2026-08-27),
 and the standing rule about which caches earn their bytes is
 [ci-caches.md](ci-caches.md).
-
-Pages publication builds only committed data and uploads a static bundle. It
-does not run the producer or a model, and the published site has no runtime
-backend.
 
 ## Vector backfill
 
@@ -800,6 +895,51 @@ not remove a check; it removes the second place the step could be edited.
 
 ## Design rationale
 
+### The speed case is a job somebody can turn off, and turning it off must not turn off the rest
+
+Owner decision, 2026-09-17. The `llama-bench` job measures how each candidate
+performs, it is only dispatched while models are being tested, and it stays. The
+open question was what to do when somebody wants to exercise the `bench` flow
+itself and does not want to pay for it.
+
+**A bypass is worth having because the job is a real share of the dispatch, not
+a rounding error.** Over the four dispatches of 2026-09-16 on stock
+`ubuntu-latest` it took 9.1, 26.7, 27.2 and 87.6 minutes against whole dispatches
+of 170.6, 188.5, 113.6 and 287.8 - between a tenth and a third.
+
+**Two controls rather than one, because they answer different questions.**
+`bench.run_model_speed_case` is the standing answer and lives in
+`config/idhazh.json`, so changing it changes behaviour with no source edit
+(Guardrail #6). The `model_speed_case` dispatch input is one run's answer, so an
+operator needs no commit; `config` defers, and `run` or `skip` overrules. The
+decision is taken once, in the `models` job, by
+`backend/utilities/model_speed_case.py` - a job's own `if:` cannot read a step of
+that job, so the answer has to travel as an output, and putting the rule in a
+module keeps it out of a `${{ }}` expression nothing can run.
+
+**The consequence is the part worth writing down.** A GitHub job whose `if:`
+carries no status function is given an implicit `success()`, and a skipped need
+is not a success - so a skipped job skips every dependant, silently. `runtime`
+needs the speed case, so without a change it would have vanished with it and a
+bypass would have skipped half the workflow. `runtime` now lifts the implicit
+check with `!cancelled()` and puts back exactly what it was doing: `models` must
+have succeeded, and the speed case must have either succeeded or been skipped. A
+speed case that **failed** still stops it, because a candidate that cannot move a
+token has already answered the question `runtime` would spend five hours asking
+again. `budgets`, `batched`, `image` and `corpus` never needed the speed case and
+are untouched; the test walks `needs` rather than trusting that sentence.
+
+**Two steps degrade rather than fail.** The dossier is both halves by
+definition, so the artifact download and the emit step run only when the speed
+case ran, and a bypassed dispatch prints a line naming the half it does not have.
+Emitting half a page that read like a whole one would be worse than emitting
+none.
+
+**What a bypass costs beyond the rates: the weights get downloaded in a
+different job.** The speed case is what fills the cache entry the server case
+restores. Skip it and `runtime` pays for the same bytes itself, once
+([ci-caches.md](ci-caches.md)).
+
 ### What the model workflows share, and what they must not
 
 Answered 2026-09-17. `measure.yml` and `validate.yml` both stand a candidate
@@ -819,31 +959,57 @@ duplication wearing a shared name. `candidate-config` has two inputs and three
 call sites, so it is a block. A shared corpus step would need an input per
 calling workflow, so it is not.
 
-#### The runtime pin is the next block, and nothing holds it together today
+#### The runtime pin was the next block, and it was taken one caller at a time
 
-Fetching the inference runtime and the weights and proving the digests is **249
+Fetching the inference runtime and the weights and proving the digests was **249
 substantive lines across 23 steps in five workflows** - `digest.yml`,
 `idhazh-pipeline-tests.yaml`, `measure.yml`, `probe.yml` and `validate.yml`.
 Counted on 2026-09-17 over every step whose shell names `llama.tar.gz`,
 `huggingface.co/` or `sha256sum --check`; `ci.yml`'s browser cache is not a
 model runtime and is not in it.
 
-The pin itself - `LLAMA_CPP_BUILD`, its asset name and its SHA-256 - is spelled
-in **13 places that have to change together**: five `env:` blocks and eight
-fetch steps.
+The pin itself - `LLAMA_CPP_BUILD`, its asset name and its SHA-256 - was spelled
+in **13 places that had to change together**: five `env:` blocks and eight fetch
+steps. It is now in **two**: `.github/scripts/llama-cpp-pin.sh` and
+`measure.yml`'s `env:` block, which is the one caller still to convert.
 
 ```powershell
 git grep -c 'LLAMA_CPP_BUILD:' -- .github/workflows
 git grep -c 'releases/tags/${LLAMA_CPP_BUILD}' -- .github/workflows
 ```
 
-Those two counts are a reading of this tree, not a constant - the numbers went
-up when `idhazh-pipeline-tests.yaml` landed. **The property is what matters and
-it does not move: every copy of the pin has to change at once, and nothing in
-the tree compares them.** Change twelve of the thirteen and a qualification
-runs on a runtime production does not run, with every gate green, because no
-check can tell. That is what makes it worth a block rather than a rule somebody
-remembers.
+Those two counts are a reading of this tree, not a constant. **The property is
+what mattered and it did not move: every copy of the pin had to change at once,
+and nothing in the tree compared them.** Change twelve of the thirteen and a
+qualification runs on a runtime production does not run, with every gate green,
+because no check could tell. That is what made it worth a block rather than a
+rule somebody remembers. What holds it together now is a contract test that
+pins the three variables in every workflow still spelling them and refuses any
+copy of them in a workflow that has been converted; where the pinned values live
+and how a caller reads them is [ci-model-runtime.md](ci-model-runtime.md).
+
+**The conversion was a strangler, one workflow per commit, and the workflow that
+publishes went last.** Four alternatives were live.
+
+| Option | Cost | What it gives up |
+| --- | --- | --- |
+| One commit converting all five | One review, one revert | A revert takes four working conversions out with the fifth. The daily run is in that set, so the blast radius of a mistake is a published day. |
+| One commit per workflow, publisher last | Five reviews, five reverts, a window where the tree holds two shapes | Nothing, except that the census reads oddly mid-way - which is why the counts above are dated |
+| Leave the pin copied, add a test that compares the copies | No workflow moves | The test would go green on five agreeing copies and say nothing about the sixth place somebody adds next |
+| One script with an optional `WEIGHTS_FILE` | One file instead of two | Every caller's weights refusals become optional to satisfy one caller that opens no weights |
+
+The second was taken. `probe.yml` first because it opens no weights and a
+mistake there costs a dispatch nobody depends on; `validate.yml` next because a
+mistake costs a qualification that can be re-run; `digest.yml` last because it
+publishes to readers and a bad fetch there is a bad day on the site.
+
+That order is also what made the fourth option refusable rather than merely
+disliked. `probe.yml` converted first, so the question "what does a job that
+opens no weights need" had to be answered before any weights-carrying caller
+moved - and the answer was a second script, `install-llama-runtime.sh`, which
+`fetch-model-runtime.sh` sources. Had `digest.yml` gone first, the cheap answer
+would have been an optional `WEIGHTS_FILE` and the refusals would have been
+weakened for every caller.
 
 #### What stays duplicated, and why
 
@@ -885,25 +1051,49 @@ points at, the production ledgers under `state/`, the seen store inside them,
 the run id and the date a production day is keyed on, and article text, which
 never leaves the job that fetched it.
 
-**One of those six was open until 2026-09-17 and is now closed for the bench.**
-`run.trial_state_dirname` moves a run's whole state root, and the bench passes
-`pipeline-tests` - but its `plan` step ran without `--config`, so it loaded the
-committed config, which redirects nothing. `plan` appends to the seen store,
-feed health, feed retirements and the counterfactual scores, so every bench
-dispatch wrote four production ledgers, and the seen store is the one that
-bites: a marked address makes the next production day skip that story with
-nothing in the log to say why. The step now reads the scratch config, and
+**One of those six was open until 2026-09-17 and is now closed in both
+workflows.** `run.trial_state_dirname` moves a run's whole state root, and the
+bench passes `pipeline-tests` - but its `plan` step ran without `--config`, so
+it loaded the committed config, which redirects nothing. `plan` appends to the
+seen store, feed health, feed retirements and the counterfactual scores, so
+every bench dispatch wrote four production ledgers, and the seen store is the
+one that bites: a marked address makes the next production day skip that story
+with nothing in the log to say why. The step now reads the scratch config, and
 `test_no_bench_stage_can_reach_the_production_state_root` asserts it for every
 stage any job in that file runs, present or future.
 
-**`validate.yml`'s plan job still has it, and that is a decision rather than an
-oversight.** Its `Read the feeds` step runs `plan` against the committed config
-in a job that builds no scratch config at all. Redirecting it is two lines, and
-the cost is not two lines: `plan` reads the seen store as well as writing it, so
-a redirected qualification would plan from an empty one and draw different
-articles. That changes which corpus a qualification is judged on, which is the
-evaluation owner's call and not a workflow edit's. What settles it is one
-dispatch each way, comparing the drawn addresses.
+**`validate.yml` closed it the same day, and the closure changes which articles
+a qualification draws.** Its `Read the feeds` step ran `plan` against the
+committed config in a job that built no scratch copy at all. The fix is the
+bench's: the `plan` job now builds the same copy the `qualify` job does, both
+pass `pipeline-tests`, and the step reads it.
+
+**The cost is not the two lines, and it was declined once for that reason.**
+`plan` reads the seen store as well as writing it, so a redirected qualification
+plans from an empty one and draws articles a production day already covered. The
+owner took the trade on 2026-09-17, before a four-arm comparison. A
+qualification measures how well a model summarizes text; whether a reader has
+already seen the story is a publication question, and filtering on it made the
+corpus depend on what production happened to publish that week. The count does
+not move - 3 shards of 10 - only which addresses fill it.
+
+**No qualification has been shown to move a production row, and that is not what
+the fix rests on.** The `plan` job has no commit step; only `decide` runs
+`commit-and-push.sh`, from its own checkout on a different runner, so those rows
+died with the runner. The distance between a job that can reach the production
+state root and one that commits it is a single step, this workflow already holds
+`contents: write`, and a sibling job already commits `state` whole.
+
+**`qualify-decide` is deliberately not redirected, and that is the one
+exception.** It writes the run's verdict to `state/validation-<YYYY-MM-DD>.csv`,
+which is the record the dispatch exists to leave. `evals.writer.append_validation`
+is handed a path off the repository root rather than off the state root, so that
+row lands in `state/` whatever `run.trial_state_dirname` says, and its job builds
+no scratch copy for a `--config` flag to point at.
+`backend/tests/workflows/test_validation_state_root.py` holds the assertions;
+`test_no_validation_stage_can_reach_the_production_state_root` asserts the
+redirect and names this exception for every stage any job in that file runs,
+present or future.
 
 ## What is not on this page
 

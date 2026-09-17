@@ -40,6 +40,7 @@ from idhazh.contracts.knobs.models import SUPERSEDED_MODELS_NAMES, ModelsConfig,
 from idhazh.contracts.knobs.observability import LoggingConfig, ObservabilityConfig
 from idhazh.contracts.knobs.page_weight import PageWeightConfig
 from idhazh.contracts.knobs.placement import AssembleConfig, LensWeightsConfig, PlacementConfig
+from idhazh.contracts.knobs.prune import PruneConfig
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 from idhazh.contracts.knobs.retention import RetentionConfig
 from idhazh.contracts.knobs.run import RunConfig
@@ -79,24 +80,24 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-17T17:00",
+            change="extract.reject_too_short, additive, default false. Never rejects an abstract.",
+            why="Two of the three shape signals had a switch and the third did not.",
+        ),
+        ChangelogEntry(
+            version="2026-09-17T16:00",
+            change="bench.run_model_speed_case, additive, default true.",
+            why="Testing the bench flow should not cost half an hour of llama-bench.",
+        ),
+        ChangelogEntry(
+            version="2026-09-17T15:00",
+            change="The prune block, additive, dry_run true and two collections.",
+            why="GitHub holds 1 GB of artifacts that no file in this repository names.",
+        ),
+        ChangelogEntry(
             version="2026-09-17T12:00",
             change="bench.corpus_items, additive, default 3.",
             why="The bench corpus was two source literals, and at five it overran the job.",
-        ),
-        ChangelogEntry(
-            version="2026-09-17",
-            change="extract gained three chrome knobs, additive, the fold on.",
-            why="The boilerplate signal divided by an empty set and said no to every page.",
-        ),
-        ChangelogEntry(
-            version="2026-09-16T18:00",
-            change="assemble.same_story_window_hours, additive, default 36.",
-            why="A story that breaks at 23:00 and is picked up at 07:00 is one story.",
-        ),
-        ChangelogEntry(
-            version="2026-09-16T16:00",
-            change="ui.lead_rank_weight and ui.lead_also_covered_weight, additive.",
-            why="The leading block is a weighted score now, so every term needs a knob.",
         ),
         ChangelogEntry(
             version="2026-08-21",
@@ -126,6 +127,7 @@ class AppConfig(Contract):
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
     drift: DriftConfig = Field(default_factory=DriftConfig)
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
+    prune: PruneConfig = Field(default_factory=PruneConfig)
     visuals: VisualsConfig = Field(default_factory=VisualsConfig)
     assemble: AssembleConfig = Field(default_factory=AssembleConfig)
     placement: PlacementConfig = Field(default_factory=PlacementConfig)

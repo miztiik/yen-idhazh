@@ -403,12 +403,19 @@ def fits_context(
     answer, so the sum carries both. `turns` is optional because the number it
     adds is zero on an envelope that does not think, which is where a caller
     with no entry in hand sits.
+
+    **An uncapped thinking span is not reserved for, it spends the headroom.**
+    `inference.max_think_tokens` null means the span ends on the closing marker
+    or on the window, so there is no number to add and this sum reserves the
+    answer alone. What it still refuses is an article that leaves no headroom at
+    all; what it can no longer promise is that the headroom is enough.
     """
     rendered = system_prompt(
         prompt_config, source_words=article.band_source_words, brief=article.brief
     )
     overhead = len(rendered.split()) * 2
-    thinking = inference.max_think_tokens if turns is not None and turns.thinks else 0
+    thinks = turns is not None and turns.thinks
+    thinking = inference.max_think_tokens or 0 if thinks else 0
     reply = inference.max_answer_tokens + thinking
     return article.token_count + reply + overhead <= inference.n_ctx
 

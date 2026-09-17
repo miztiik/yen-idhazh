@@ -1,5 +1,9 @@
 """Turn raw llama-bench output into the numbers the pipeline design actually needs:
 seconds per article, per length bucket, and total wall-clock for a batch of URLs.
+
+`--markdown` prints the rates as a table for a run page instead. Same file, same
+parse, same grouping: a second formatter over the same JSON would be two things
+to keep agreeing about what a prefill row means (CLAUDE.md Guardrail #5).
 """
 
 from __future__ import annotations
@@ -7,7 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +37,11 @@ class Throughput:
     threads: int
     prefill: dict[int, tuple[float, float]]  # n_prompt -> (tok/s, stddev)
     decode: tuple[float, float] | None  # (tok/s, stddev)
+    # How many times llama-bench actually timed each row. A spread over one draw
+    # is not a spread, and a table that printed `+/- 0.00` for it would claim a
+    # steadiness nobody measured (CLAUDE.md Guardrail #10).
+    prefill_draws: dict[int, int] = field(default_factory=dict)
+    decode_draws: int = 0
 
 
 def load_runs(path: Path) -> list[dict[str, Any]]:
@@ -63,9 +72,19 @@ def collect(runs: list[dict[str, Any]]) -> list[Throughput]:
         sd = float(r.get("stddev_ts", 0.0))
         if int(r.get("n_prompt", 0)) > 0:
             tp.prefill[int(r["n_prompt"])] = (ts, sd)
+            tp.prefill_draws[int(r["n_prompt"])] = draws(r)
         elif int(r.get("n_gen", 0)) > 0:
             tp.decode = (ts, sd)
+            tp.decode_draws = draws(r)
     return list(by_model_and_threads.values())
+
+
+def draws(row: dict[str, Any]) -> int:
+    """How many times llama-bench timed this row, 0 where it did not say."""
+    samples = row.get("samples_ts")
+    if isinstance(samples, list):
+        return len(samples)
+    return 0
 
 
 def interpolate(prefill: dict[int, tuple[float, float]], n: int) -> tuple[float, float]:
@@ -171,11 +190,117 @@ def report(
         )
 
 
+#: What the table says when the bench produced nothing to say. It is one
+#: sentence and it names the file, because the next question a reader has is
+#: whether the measurement failed or was never asked for.
+NO_READINGS = (
+    "## Model speed\n"
+    "\n"
+    "The llama-bench speed case produced no readings. `backend/var/llm.json` is\n"
+    "missing or unreadable, so there are no rates to show here; this job's own\n"
+    "log says what happened."
+)
+
+
+def _rate(value: float, spread: float, draws_taken: int) -> str:
+    """One rate, with its spread where a spread was measured and not where it was not."""
+    if draws_taken == 1:
+        return f"{value:.2f}"
+    return f"{value:.2f} +/- {spread:.2f}"
+
+
+def _draws_cell(draws_taken: int) -> str:
+    if draws_taken == 1:
+        return "1 draw, no spread"
+    if draws_taken == 0:
+        return "not stated"
+    return str(draws_taken)
+
+
+def markdown(
+    runs: list[dict[str, Any]] | None,
+    *,
+    candidate: str = "",
+    quantisation: str = "",
+) -> str:
+    """The rates as a table a person reads on the run page.
+
+    Every number carries its unit in the column heading and its meaning in the
+    sentence above the table, and the machine is named because the same
+    dispatch's other job runs on its own host and often draws a different one
+    (`docs/reference/benchmarks/the-processor-lottery.md`).
+    """
+    if not runs:
+        return NO_READINGS
+
+    head = runs[0]
+    cpu = str(head.get("cpu_info") or "an unrecorded processor")
+    build = head.get("build_number")
+    where = f"on {cpu}" + (f", llama.cpp build b{build}" if build else "")
+    title = candidate or Path(str(head.get("model_filename", head.get("model", "?")))).name
+
+    lines = [
+        f"## Model speed: {title}",
+        "",
+        f"Measured by `llama-bench` {where}.",
+        "",
+        "Every rate below is **tokens a second, and more is faster**. Reading is how"
+        " fast the model takes a prompt in; writing is how fast it puts an answer out."
+        " A prompt is read once and an answer is written a token at a time, so the two"
+        " rates differ by an order of magnitude and that is normal.",
+        "",
+        "| Weights | Threads | What was timed | Tokens a second | Draws |",
+        "| --- | ---: | --- | ---: | --- |",
+    ]
+
+    for tp in sorted(collect(runs), key=lambda t: (t.model, t.threads)):
+        for count in sorted(tp.prefill):
+            value, spread = tp.prefill[count]
+            taken = tp.prefill_draws.get(count, 0)
+            lines.append(
+                f"| `{tp.model}` | {tp.threads} | Reading a {count:,}-token prompt "
+                f"| {_rate(value, spread, taken)} | {_draws_cell(taken)} |"
+            )
+        if tp.decode is not None:
+            value, spread = tp.decode
+            lines.append(
+                f"| `{tp.model}` | {tp.threads} | Writing an answer "
+                f"| {_rate(value, spread, tp.decode_draws)} "
+                f"| {_draws_cell(tp.decode_draws)} |"
+            )
+
+    lines += [
+        "",
+        f"Candidate `{candidate or 'unstated'}`, quantisation `{quantisation or 'unstated'}`.",
+        "",
+        "This is the machine **this job** drew. The server case of the same dispatch"
+        " runs on its own runner and has drawn a different processor in 3 of 4"
+        " measured dispatches, so the wall clock it reports is about a different"
+        " machine from these rates.",
+    ]
+    return "\n".join(lines)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("bench_json", type=Path)
     ap.add_argument("--urls", type=int, default=40)
     ap.add_argument("--parallel", type=int, default=4)
+    ap.add_argument(
+        "--markdown",
+        action="store_true",
+        help="Print the rates as a table for a run page instead of the derived timings.",
+    )
+    ap.add_argument(
+        "--candidate-id",
+        default="",
+        help="The configuration id these weights serve as, for the table's heading.",
+    )
+    ap.add_argument(
+        "--quantisation",
+        default="",
+        help="The quantisation these bytes carry, for the table's footer.",
+    )
     ap.add_argument(
         "--system-prompt-tokens",
         type=int,
@@ -196,6 +321,21 @@ def main() -> int:
     if args.urls < 1 or args.parallel < 1:
         ap.error("--urls and --parallel must be positive")
 
+    # The markdown path degrades and the text path does not, and the difference
+    # is who is reading. A run summary is written by a step that must not fail
+    # the job it is reporting on, so an absent or unreadable file becomes a
+    # sentence saying so (CLAUDE.md section 1a). A person at a terminal asked
+    # for a report and wants the error.
+    if args.markdown:
+        print(
+            markdown(
+                _runs_or_none(args.bench_json),
+                candidate=args.candidate_id,
+                quantisation=args.quantisation,
+            )
+        )
+        return 0
+
     runs = load_runs(args.bench_json)
     if not runs:
         print("no runs parsed", file=sys.stderr)
@@ -208,6 +348,15 @@ def main() -> int:
         truncation_cap_tokens=args.truncation_cap_tokens,
     )
     return 0
+
+
+def _runs_or_none(path: Path) -> list[dict[str, Any]] | None:
+    """The rows, or `None` where there are none to be had and why does not matter."""
+    try:
+        runs = load_runs(path)
+    except (OSError, ValueError):
+        return None
+    return runs or None
 
 
 if __name__ == "__main__":

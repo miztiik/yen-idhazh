@@ -300,6 +300,19 @@ copies of the same facts can disagree, which means benching one set of bytes and
 adopting another with every gate green. They now take the models file and read
 the rest out of it, which is the same string the swap itself writes.
 
+**Case one can be turned off, and a model evaluation never turns it off.** Add
+`-f model_speed_case=skip` and the `llama-bench` job does not run: the dispatch
+loses the prefill and decode rates, the `bench-raw` artifact, and the raw-case
+block of the dossier, and case two runs on regardless and says in the dossier
+that the block is missing and why. That is between a tenth and a third of the
+dispatch - 9.1 to 87.6 minutes of the four measured on 2026-09-16
+([../reference/benchmarks/what-a-bench-dispatch-costs.md](../reference/benchmarks/what-a-bench-dispatch-costs.md)).
+It exists so somebody changing the workflow can exercise the flow without paying
+for a measurement nobody will read. A candidate adopted on a dossier with no
+raw-case block has not been measured on the axis this step exists to measure, so
+leave the box alone here. `bench.run_model_speed_case` in `config/idhazh.json` is
+the same switch for every dispatch.
+
 **Case one, artifact `bench-raw`** - raw prefill and decode with nothing else in
 the process:
 
@@ -537,29 +550,39 @@ python -m idhazh qualify-decide
 ```
 
 The eleven gates and what each one refuses are in
-[../concepts/evaluation.md](../concepts/evaluation.md). Three of them are hard
-in a way worth repeating here, because they are the ones a fast model fails:
+[../concepts/evaluation.md](../concepts/evaluation.md). **A run asks ten of
+them.** `determinism` is asked only where the entry pins `temperature: 0`,
+because "did the repeats agree?" has an answer there and none above it. Every
+committed entry pins 0.2 since 2026-09-17, so the runs you are about to start
+report ten gates and a `wording_spread` diagnostic beside them. Three gates are
+hard in a way worth repeating here, because they are the ones a fast model
+fails:
 
 - **every injection canary survives**, all of them, not most (Guardrail #11);
 - **no reasoning text reaches the reply** - no non-empty `reasoning_content`, no
  inline `<think>` block, and the parser reads every block, so an empty opening
  one cannot hide a second that reasoned; and
-- **a repeat is identical** - same title, same summary, same key points, same
- `output_digest` at the deterministic sampler.
+- **the whole corpus is scored** - `scored_denominator` refuses a verdict drawn
+ from fewer items than the run planned.
 
 **Do not raise a timeout or lower a threshold to make a candidate pass.** Find
-the cause or reject the candidate.
+the cause or reject the candidate. **And do not read the missing `determinism`
+row as one of those**: the gate did not move, it was not asked, and a run that
+pins temperature 0 gets it back unchanged.
 
 **You do not have to download an artifact to read any of this.** Each qualify
-shard prints what it measured to its own job page, and `decide` prints the
-eleven gates with failures first. Both pages are rendered from the payload the
-stage already wrote, so nothing there is a second measurement that could
-disagree with the artifact - and neither page spells a model name, so it cannot
-describe a model the run did not serve.
+shard prints what it measured to its own job page, and `decide` prints the gates
+it asked with failures first, counting the ones it asked rather than the whole
+register. Both pages are rendered from the payload the stage already wrote, so
+nothing there is a second measurement that could disagree with the artifact -
+and neither page spells a model name, so it cannot describe a model the run did
+not serve.
 
 What the shard page carries that the gates do not: **which items drifted**. The
 determinism gate reports a count, and a count sends the next reader to the
-artifact to diff digests by hand. The shard page names them.
+artifact to diff digests by hand. The shard page names them - and above zero
+temperature that page is the whole of the drift story, since the gate is not
+there to report one.
 
 Both steps run under `if: always()`, on purpose. A run that died half way is
 exactly the one whose counts somebody wants, and `decide` exits non-zero on an

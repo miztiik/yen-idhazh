@@ -150,6 +150,12 @@ def main(argv: Sequence[str] | None, *, state_root: Path, digest_root: Path) -> 
         # The vocabulary and the range are the prune's own rules, so it refuses
         # and this reports the refusal the way argparse reports every other bad
         # argument: the message, the usage, and exit 2.
+        #
+        # An interrupted pass is a different answer and gets a different exit.
+        # The files it had already deleted are gone, so reporting it as a clean
+        # failure would leave an operator unable to say what happened - the
+        # record it carries is exactly that answer.
+        failed = False
         try:
             outcome = prune.prune_range(
                 state,
@@ -157,12 +163,16 @@ def main(argv: Sequence[str] | None, *, state_root: Path, digest_root: Path) -> 
                 since=args.since,
                 until=args.until,
                 dry_run=args.dry_run,
+                max_deletes=args.max_deletes,
             )
         except ValueError as refusal:
             parser.error(str(refusal))
+        except prune.PruneInterruptedError as stop:
+            outcome = prune.as_outcome(args.target, args.since, args.until, stop.so_far)
+            failed = True
         for line in prune.report(outcome):
             print(line)
-        return 0
+        return 1 if failed else 0
 
     if args.subcommand == "publish":
         target = day_dir(digest, date)

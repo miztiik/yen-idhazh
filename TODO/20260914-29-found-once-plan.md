@@ -168,7 +168,7 @@ which is the same family.
 | 14 | The composite score, proving it changed nothing | - | C | DONE | - | #799 | p29-r14 |
 | 15 | The weights and the 0.88 floor | 12, 14 | D | PENDING | - | - | - |
 | 16 | Refuse boilerplate, on a week of evidence | 13 | D | PENDING | - | - | - |
-| 17 | Does a short extraction publish at all | - | D | PENDING | - | - | - |
+| 17 | Does a short extraction publish at all | - | D | DONE | - | - | p29-r17 |
 
 **Owner decisions, 2026-09-15.** Every row carries its contract. The contracts
 are the owner's and Fowler's; a worker implements them and decides nothing.
@@ -964,18 +964,32 @@ reader gets, which is the Editor's and the owner's altitude (section 14).
 **The situation.** `extract.reject_too_short` does not exist. Roughly 200 of the
 206 cards in row #6's table were `too_short` and published anyway, because
 **Owner override O3** says a shape signal records and lets the item continue.
-The structural half is already clean: an abstract-form feed gets `brief=True,
+It is one knob and one branch beside two that exist.
+
+**The premise this row shipped with was wrong, and the correction is the whole
+value of the row.** It said "an abstract-form feed gets `brief=True,
 failure_code=None` while an article-form feed with 35 words gets `brief=True,
 failure_code=TOO_SHORT`, so the two facts are already distinguishable and no
-contract change is needed. It is one knob and one branch beside two that exist.
+contract change is needed". Measured 2026-09-17 on a developer machine, three
+prose sentences totalling 34 words: **both forms carry `too_short`.** The signal
+does not read the declared form at all. A `reject_too_short` built on the stated
+premise would have silently rejected every feed a curator registered as
+`abstract` - the feeds that are short because a person declared them so.
 
-**What it costs to take.** It overturns O3, which must be amended in the same
-commit (section 0). Row #6 has already removed the measured benefit by retiring
-the four hosts, so what remains is a rule for the next host that does it - and a
-cost of roughly **386 genuine short items** dropped.
+**What shipped, 2026-09-17.** The knob, defaulting **false**, so nothing about
+today's output moved and O3 stands. The branch is guarded on the declared form:
+a registered `abstract` is never rejected by it whatever it is set to, because
+short is the property that feed was registered for. The signal is still recorded
+either way - the item IS short and the census says so; the form changes the
+consequence, never the fact.
 
-**This row is a decision request, not an implementation.** It does not start
-until the Editor and the owner rule.
+**What is still a decision, and it is smaller than the row thought.** Whether to
+set `reject_too_short` true. That overturns O3 and must amend it in the same
+commit (section 0). Row #6 already removed the measured benefit by retiring the
+four hosts, so what remains is a rule for the next host that does it, against a
+cost of roughly **386 genuine short items** dropped. The guard means abstracts
+are not part of that cost any more. It is an Editor and owner call (section 14).
+
 
 ## Rejected
 

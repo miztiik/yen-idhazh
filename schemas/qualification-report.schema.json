@@ -103,7 +103,7 @@
       "type": "object"
     },
     "GateName": {
-      "description": "The eleven gates that block adoption. Closed set, never free text.",
+      "description": "The eleven gates that block adoption. Closed set, never free text.\n\nEvery run asks ten of them. `OPTIONAL_GATES` below names the one a run may\nleave unevaluated, and says when and why.",
       "enum": [
         "reasoning_leakage",
         "schema_validity",
@@ -344,6 +344,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "gates may omit determinism, and no other gate.",
+      "version": "2026-09-17",
+      "why": "Above temperature 0 that gate has no question to ask."
+    },
+    {
       "change": "inputs gains turn_markers_sha256, optional.",
       "version": "2026-09-14T04:00",
       "why": "The verdict records the same controls the shard beside it does."
@@ -445,7 +450,7 @@
       "$ref": "#/$defs/ScorerIdentity"
     },
     "version": {
-      "default": "2026-09-14T04:00",
+      "default": "2026-09-17",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -468,5 +473,5 @@
   ],
   "title": "QualificationReport",
   "type": "object",
-  "version": "2026-09-14T04:00"
+  "version": "2026-09-17"
 }

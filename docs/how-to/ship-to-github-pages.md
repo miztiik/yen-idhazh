@@ -1,6 +1,6 @@
 # How To Ship To GitHub Pages
 
-**Last Updated**: 2026-08-20
+**Last Updated**: 2026-09-17
 
 The runbook for deploying a static site to GitHub Pages, and for changing anything that has to keep working under a project base path: routing, asset URLs, deep links, and the deployment workflow itself.
 
@@ -40,7 +40,7 @@ Prefer the first-party Pages deployment path - build in a job, upload the built 
 Two workflow-level things to get right:
 
 - **Permissions**: the deploy job needs `pages: write` and `id-token: write`. Grant them on the job, not the whole workflow.
-- **Concurrency**: a single Pages concurrency group so two runs cannot race a deploy.
+- **Concurrency**: put the group on each job, not on the workflow, because the two jobs want opposite answers. The deploy needs one group that never cancels, so a deploy in flight always finishes and the site is never half-replaced. The build wants its own group that *does* cancel, because publishing is last-write-wins and an older bundle that finishes is thrown away the moment the newer one deploys. Cancelling the build is safe exactly while the deploy depends on it: a cancelled job satisfies no dependency, and a build that stopped early uploaded no artifact for its deploy to take. One group over the whole workflow cannot say both, and what it ends up saying is the deploy's answer applied to the build.
 
 The published directory is a build output and is gitignored. What is committed is the source and any data payload the site renders.
 
