@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import datetime
+import re
 from pathlib import Path
 from typing import cast
 
 import pytest
+from conftest import CONFIG_DIR
 
 from ._harness import (
     CONTENT_REFRESH_UTC_HOURS,
@@ -30,6 +32,8 @@ from ._harness import (
 )
 
 pytestmark = pytest.mark.workflow
+
+_DISPATCH_FALLBACK = re.compile(r"^inputs\.(?P<input>[a-z_]+) \|\| '(?P<fallback>[^']+)'$")
 
 
 def test_workflow_names_and_trigger_classes_are_pinned() -> None:
@@ -139,6 +143,65 @@ def test_every_dispatch_input_is_shaped_before_anything_acts_on_it() -> None:
         )
         assert any(f"=~ {shape}" in body for body in _run_bodies(workflow)), (
             f"{where} must be matched against {shape} before anything acts on it"
+        )
+
+
+def _render_concurrency_group(group: str, dispatched: dict[str, str]) -> str:
+    """Substitute a group's one expression the way GitHub would, or refuse to guess.
+
+    Only the `inputs.<name> || '<literal>'` form is understood. Anything else
+    raises rather than rendering something GitHub would not, because a test that
+    quietly renders an expression wrong reports a distinctness that does not
+    exist on the platform.
+    """
+    spans = re.findall(r"\$\{\{(.*?)\}\}", group)
+    if not spans:
+        return group
+    rendered = group
+    for span in spans:
+        matched = _DISPATCH_FALLBACK.match(span.strip())
+        assert matched, f"a concurrency group this test cannot evaluate: ${{{{{span}}}}}"
+        name = matched.group("input")
+        assert name in dispatched, f"the group names an input the dispatch form has no {name}"
+        rendered = rendered.replace(f"${{{{{span}}}}}", dispatched[name] or matched.group("fallback"))
+    return rendered
+
+
+def test_two_candidates_dispatched_together_are_two_qualifications_and_not_one() -> None:
+    """One group per candidate, because two candidates are two questions.
+
+    `group: validate` admitted one run. GitHub keeps only ONE pending run per
+    group and a newer pending run cancels the older one, so a comparison fired
+    several candidates wide kept the run that started and the case dispatched
+    last, and cancelled every case between them - no error anywhere, only a
+    cancelled run.
+
+    The candidate list is read off `config/models/`, so a model added later is
+    covered without anybody remembering this test.
+    """
+    concurrency = _mapping(_load_workflows()["validate.yml"]["concurrency"], "validate.yml")
+    assert str(concurrency["cancel-in-progress"]) != "true", (
+        "a queued qualification waits; cancelling one throws away an hour of runner time"
+    )
+    group = str(concurrency["group"])
+
+    candidates = [f"models/{path.name}" for path in sorted(CONFIG_DIR.glob("models/*.json"))]
+    assert candidates, "config/models is where a candidate is written down"
+    # The empty field is the incumbent, which is a candidate like any other.
+    dispatched = [*candidates, ""]
+    groups = {
+        value: _render_concurrency_group(group, {"candidate_models_file": value})
+        for value in dispatched
+    }
+
+    assert len(set(groups.values())) == len(dispatched), (
+        f"two candidates share a concurrency group, so GitHub cancels one of them: {groups}"
+    )
+    for value, rendered in groups.items():
+        assert rendered.strip(), f"the group for {value or 'the configured model'!r} is empty"
+        assert not rendered.endswith("-"), (
+            f"the group for {value or 'the configured model'!r} ends in a bare dash, "
+            "which every dispatch that fills nothing in would collide on"
         )
 
 
