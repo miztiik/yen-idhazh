@@ -102,8 +102,9 @@ fi
 # do not fail). Discard the noise, and print it so the run log names whatever
 # produced it.
 #
-# Untracked files are left alone: they cannot block a rebase, and a later step
-# may still want them.
+# Most untracked files are left alone: nothing upstream is going to write over
+# them, and a later step may still want them. The ones the tip DOES write over
+# are cleared separately, below.
 discard_noise() {
   local noise
   noise=$(git status --porcelain --untracked-files=no) || return 1
@@ -112,6 +113,43 @@ discard_noise() {
     echo "$noise"
     git checkout -- . || return 1
   fi
+}
+
+# An untracked file CAN block a rebase, and until 2026-09-17 this script said it
+# could not. A rebase detaches HEAD onto the tip first, and that checkout refuses
+# when a file the incoming commits add is already sitting untracked in the
+# working tree: `error: The following untracked working tree files would be
+# overwritten by checkout`. The rebase never starts, so `git rebase --abort` has
+# nothing to abort, and the loop spends its whole budget on the first attempt.
+#
+# Run `35152132574` is the record. A work shard wrote
+# `state/host-fingerprint/2026/09/16.csv`, which its commit step did not stage
+# yet, so the file stayed untracked. A sibling shard pushed the same path while
+# this one was reading articles, and the rebase would not start: 303 rows over
+# six ledgers were committed locally and thrown away with the runner. The staging
+# list has since gained that path, which closes THAT collision and not the next
+# one - the list is written by hand, and a new `state/` writer has arrived
+# without it three times.
+#
+# So the tolerance is here, and it is narrow: only a file the tip is about to
+# write is removed, and each one is named in the log. A file this job did not
+# stage is a file this job is not pushing, so removing it costs nothing the push
+# was going to carry, and the rebase then lands every path that WAS staged
+# (section 1a: degrade, do not fail). Everything else untracked survives -
+# `llama-server.log` and the memory samples are read by later steps.
+clear_what_the_tip_will_write_over() {
+  local tip="$1" untracked path blocked=()
+  untracked=$(git ls-files --others --exclude-standard) || return 1
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    # Absent upstream means nothing is going to write over it.
+    git rev-parse --verify --quiet "$tip:$path" > /dev/null || continue
+    blocked+=("$path")
+  done <<< "$untracked"
+  [ "${#blocked[@]}" -gt 0 ] || return 0
+  echo "removing untracked files origin/main carries, which would block the rebase:"
+  printf '  %s\n' "${blocked[@]}"
+  rm -f -- "${blocked[@]}" || return 1
 }
 
 # Hand the rebuilt paths back to the tip the push wants, so the rebase finds no
@@ -210,6 +248,11 @@ for attempt in 1 2 3; do
   fi
   if ! git fetch origin main; then
     echo "could not read origin/main" >&2
+    break
+  fi
+  # After the fetch, because the answer is a question about the tip.
+  if ! clear_what_the_tip_will_write_over FETCH_HEAD; then
+    echo "could not clear the untracked files origin/main would write over" >&2
     break
   fi
   if [ "${#DROP_RACED[@]}" -gt 0 ]; then
