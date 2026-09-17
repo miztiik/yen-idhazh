@@ -527,12 +527,12 @@ class TestTheLabelCallShape:
         assert "place_mentions" in label_schema()["properties"]
 
     def test_a_mention_is_written_before_the_name_that_groups_it(self) -> None:
-        """Field order is decode order (row 12): the anchor first, the judgement last."""
+        """Field order is decode order: the anchor first, the judgement last."""
         group = list(label_schema()["$defs"]["NamedMentions"]["properties"])
         assert group == ["mentions", "name", "salience"]
 
     def test_what_was_found_decodes_before_what_it_means(self) -> None:
-        """Field order is decode order (row 12): the anchor first, the judgement last."""
+        """Field order is decode order: the anchor first, the judgement last."""
         label = list(label_schema()["$defs"]["ElementLabel"]["properties"])
         assert label[0] == "element_id"
         assert label[-1] == "salience"

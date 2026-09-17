@@ -1041,7 +1041,7 @@ def test_a_desks_only_story_is_never_recorded() -> None:
     """A single-carrier story scores lowest, so a naive cut would take the exclusive one.
 
     `ai` carries one story that repeats `ml`'s top story exactly. The guard is the
-    desk's item count, so the lone `ai` story is kept and never recorded (row 52).
+    desk's item count, so the lone `ai` story is kept and never recorded.
     """
     lone = _planned("ai", 1, source_id="alpha", rank_score=5.0)
     strong = _planned("ml", 1, source_id="beta", rank_score=10.0)

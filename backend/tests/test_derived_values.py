@@ -114,7 +114,7 @@ def built_plan(visual_type: VisualType, **channels: list[str]) -> VisualPlan:
 
     A histogram and a pie are the two types whose marks are arithmetic rather
     than the article's own characters, and neither has a committed fixture
-    because row 3 had no reason to write one. Building them here is what section
+    because nothing needed one before. Building them here is what section
     13 asks for: the awkward shape is the point, and a built one carries a case
     the fixtures have never produced.
     """
@@ -276,18 +276,18 @@ def test_every_displayed_value_of_a_committed_plan_resolves() -> None:
 
 def test_a_mixed_but_commensurable_channel_is_drawable_and_each_converted_mark_carries_its_chain(
 ) -> None:
-    """The seam row 3 named, closed.
+    """The seam the validator leaves open, closed.
 
     `units-convert` passes every one of the validator's nine checks and is not
     drawable: three mills reported in `tonne`, `kt` and `t`, and an axis drawn
-    from those characters puts 4,200 beside 4.2. After this row the channel
+    from those characters puts 4,200 beside 4.2. After conversion the channel
     resolves to one unit, and every mark code moved carries the chain that says
     what it moved from.
     """
     table = load_table("tonnes-and-kilotonnes")
     plan = load_plan("units-convert")
     assert validate_plan(plan, table, visuals=committed_visuals()) == [], (
-        "row 3 passes this plan; the conversion is what row 4 owes it"
+        "the validator passes this plan; the conversion is what it leaves owing"
     )
     marks = [one for one in resolve(plan, table) if one.role is EncodingRole.QUANTITY]
     assert len(marks) == 3
@@ -394,7 +394,7 @@ def test_a_pie_resolves_to_shares_of_the_slices_it_draws() -> None:
 
 
 def test_a_histogram_resolves_to_bin_counts_and_the_bins_come_from_config() -> None:
-    """Binning is versioned config, never model-chosen (row 45).
+    """Binning is versioned config, never model-chosen.
 
     The plan names the quantities and nothing else. How many bins they fall into
     is a knob the operator sets, and the model has no field that could say.
@@ -521,7 +521,7 @@ def test_the_two_rates_measure_two_different_things() -> None:
 def test_no_model_can_reach_the_arithmetic() -> None:
     """Code does the arithmetic, and the module's own imports are the proof.
 
-    The same guard row 3 wrote for the validator, for the same reason: a judge
+    The same guard the validator carries, for the same reason: a judge
     sharing the failure modes of the thing judged is not a measurement
     (`CLAUDE.md` section 0a), and here the thing judged is a figure a reader will
     read off an axis.
