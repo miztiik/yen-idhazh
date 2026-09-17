@@ -116,6 +116,7 @@ tables come from `runtime-summary.json` in the same artifact.
 ## See also
 
 - [../models/gemma-4-e4b-qat.md](../models/gemma-4-e4b-qat.md) - the model this head belongs to, and every other reading of it.
+- [../../architecture/summarize/model-boundary.md](../../architecture/summarize/model-boundary.md#a-second-smaller-model-that-guesses-ahead) - how a draft head is declared and what it was supposed to guarantee about the text. The measurement below refuses that guarantee, so read the two together.
 - [the-processor-lottery.md](the-processor-lottery.md) - why a comparison across two dispatches says nothing, and why this one had to be paired.
 - [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md) - what a model has to pass before it serves.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #10 (a number carries its hardware, date and spread).
