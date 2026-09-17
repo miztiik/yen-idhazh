@@ -151,7 +151,7 @@ here stops existing on a date nobody chose.
 
 - [the-processor-lottery.md](the-processor-lottery.md) - why the two jobs of one dispatch are two readings, and what a comparison across dispatches costs.
 - [what-the-draft-head-is-worth.md](what-the-draft-head-is-worth.md) - the paired-inside-one-job shape this page's repeat figure argues for.
-- [../ci-caches.md](../ci-caches.md) - the weights cache, the 10 GB ceiling, and the rule a new cache has to clear.
+- [../ci-caches.md](../ci-caches.md) - the weights cache, the 10 GB allowance GitHub evicts to hold, and the rule a new cache has to clear.
 - [../../architecture/summarize/throughput.md](../../architecture/summarize/throughput.md) - what prefill and decode cost the daily pipeline.
 - [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md) - how a bench dispatch is run and what it has to produce.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #2 (the runner budget) and Guardrail #10 (a number carries its hardware, date and spread).
