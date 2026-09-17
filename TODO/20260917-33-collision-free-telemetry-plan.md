@@ -275,18 +275,24 @@ One stage, its own module, invocable alone with files in and files out (CLAUDE.m
 
 **Idempotence is the contract** (ESCALATE 0b2). Running the compaction twice over the same segments produces the same head as running it once. The key merge in section 2.5 is what makes that true.
 
-**The API a worker writes to.** These four are the whole public surface. Nothing else in the codebase reaches into `state/segments/`.
+**The API a worker writes to.** These four are the surface a WRITER touches. Nothing else in the codebase reaches into `state/segments/`.
 
 ```python
 # backend/idhazh/ledger.py
 SEGMENTS_DIRNAME: Final = "segments"
 
 def segment_path(
-    state_dir: Path, ledger: str, date: str, run_id: str, attempt: int, job: str, shard: int
+    state_dir: Path,
+    ledger: SegmentLedger,
+    *,
+    run_id: str,
+    attempt: int,
+    job: ServerJob,
+    shard: int,
 ) -> Path:
     """Where this writer puts its rows. Nobody else writes this path."""
 
-def segment_files(state_dir: Path, ledger: str | None = None) -> list[Path]:
+def segment_files(state_dir: Path, ledger: SegmentLedger | None = None) -> list[Path]:
     """Every segment on disk, or one ledger's. The only listing; cost is what is
     waiting, never what the project has written."""
 
@@ -302,6 +308,10 @@ class CompactionReport:
 def stage_compact(state_dir: Path) -> CompactionReport:
     """Merge every segment into its head and remove the segment. Safe to run twice."""
 ```
+
+**Three corrections to an earlier draft of this block, taken 2026-09-17 while Row #1 was written.** `ledger` and `job` were spelled `str` here and as declared sets two paragraphs above in 2.3; 2.3 is the grammar and it wins, so both are enums. And `date` is gone: the grammar has no date element, the run id opens on the date already, and the head a row lands in is chosen by that row's own date cell - so a `date` argument would be a value every writer computes for nothing, and for `span-rollup` a wrong one, because one shard's segment can carry two dates.
+
+**The compaction needs four more names than a writer does, and they are public for that reason.** `SegmentLedger` is the declared set 2.3 requires. `parse_segment_name` reads a filename back, so the grammar is written once rather than once per reader. `segment_head` is the declared ledger-to-head table step 4 names, and `segment_contract` answers which model reads a row - asked before a head is named, because a head is chosen by a date cell and a date cell is only a date once the contract has read it.
 
 `CompactionReport` is what Row #13 reads for the band fields and what the log line in step 7 prints. It is a return value, not a persisted payload, so it gets no schema.
 
