@@ -32,6 +32,7 @@ from idhazh.contracts.item_health import (
     ItemStage,
 )
 from idhazh.contracts.run_plan import PlannedItem
+from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.elements import ExtractionHealth
 from idhazh.fetch import BLOCKED_REASONS, ROBOTS_REFUSALS
@@ -119,6 +120,7 @@ def census_row(
     date: str,
     run_id: str,
     shard: int | None = None,
+    job: ServerJob | None = None,
     extraction: ExtractionHealth | None = None,
 ) -> ItemHealthRow:
     """The row a day keeps for this item: the one its shard sealed, or a rebuild.
@@ -131,9 +133,9 @@ def census_row(
 
     `extraction` is overlaid rather than preferred because it is the one thing
     the shard did not measure - see `EXTRACTION_CELLS`. Nothing else on a
-    recorded row is touched: `shard` in particular is the worker's own number and
-    not the caller's, which is why assemble's rows now name the machine that ran
-    the item instead of leaving the cell empty.
+    recorded row is touched: `shard` and `job` in particular are the worker's own
+    pair and not the caller's, which is why assemble's rows now name the machine
+    that ran the item instead of leaving the cells empty.
 
     `recorded` is `None` for an item no shard sealed a row for - most of the plan
     on a run that died before its workers finished, and every item on a run that
@@ -148,6 +150,7 @@ def census_row(
             date=date,
             run_id=run_id,
             shard=shard,
+            job=job,
             extraction=extraction,
         )
     if extraction is None:
@@ -163,6 +166,7 @@ def classify_item(
     date: str,
     run_id: str,
     shard: int | None = None,
+    job: ServerJob | None = None,
     extraction: ExtractionHealth | None = None,
 ) -> ItemHealthRow:
     """Return the one terminal row for this planned item in this run.
@@ -174,11 +178,12 @@ def classify_item(
     column empty" for the rest is "no shard recorded this item", never "the
     census dropped it".
 
-    `shard` is the worker that produced the payloads, and it is optional because
-    only one of the two callers has one. A worker knows its own number; assemble
-    runs once for the whole day and cannot know which machine an item was for, so
-    the rows it adds leave the cell empty rather than naming a shard that may
-    never have started.
+    `shard` is the worker that produced the payloads and `job` is that worker's
+    workflow job. Both are optional because only one of the two callers has
+    them. A worker knows its own number and its own job; assemble runs once for
+    the whole day and cannot know which machine an item was for, so the rows it
+    adds leave both cells empty rather than naming a machine that may never have
+    started.
 
     `extraction` arrives already computed, because it needs two config sections
     this module has no other reason to read. It rides on every branch: an article
@@ -198,6 +203,7 @@ def classify_item(
             date=date,
             run_id=run_id,
             shard=shard,
+            job=job,
             extraction=extraction,
             stage=ItemStage.PLAN,
             outcome=ItemOutcome.FAILED,
@@ -211,6 +217,7 @@ def classify_item(
             date=date,
             run_id=run_id,
             shard=shard,
+            job=job,
             extraction=extraction,
             stage=stage,
             outcome=ItemOutcome.FAILED,
@@ -230,6 +237,7 @@ def classify_item(
                 date=date,
                 run_id=run_id,
                 shard=shard,
+                job=job,
                 extraction=extraction,
                     stage=ItemStage.PUBLISH,
                 outcome=ItemOutcome.OK,
@@ -244,6 +252,7 @@ def classify_item(
             date=date,
             run_id=run_id,
             shard=shard,
+            job=job,
             extraction=extraction,
             stage=ItemStage.SUMMARIZE,
             outcome=ItemOutcome.FAILED,
@@ -265,6 +274,7 @@ def classify_item(
             date=date,
             run_id=run_id,
             shard=shard,
+            job=job,
             extraction=extraction,
             stage=ItemStage.SUMMARIZE,
             outcome=ItemOutcome.FAILED,
@@ -294,6 +304,7 @@ def classify_item(
         date=date,
         run_id=run_id,
         shard=shard,
+        job=job,
         extraction=extraction,
         stage=ItemStage.PUBLISH,
         outcome=ItemOutcome.OK,
@@ -348,6 +359,7 @@ def _row(
     stage: ItemStage,
     outcome: ItemOutcome,
     shard: int | None = None,
+    job: ServerJob | None = None,
     code: FailureCode | None = None,
     http_status: int | None = None,
     source_chars: int | None = None,
@@ -395,6 +407,7 @@ def _row(
         source_words_before_cap=source_words_before_cap,
         truncation_cap_tokens=truncation_cap_tokens,
         shard=shard,
+        job=job,
         span_integrity=extraction.span_integrity if extraction is not None else None,
         elements_found=extraction.elements_found if extraction is not None else None,
         element_class=extraction.element_class if extraction is not None else None,
