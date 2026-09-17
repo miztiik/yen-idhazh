@@ -60,8 +60,11 @@ test('a column that moved is still the column that is read', () => {
 test('a column inserted before the ones the console reads moves nothing', () => {
 	// What a sibling writer does when it adds a cell mid-header. Every position
 	// after the insert shifts by one, and every value below must be unchanged.
-		// `shard` is a real census column this projection deliberately never carries.
-		const grown = ['shard', ...TELEMETRY_COLUMNS];
+	// `shard` is a real census column this projection deliberately never carries.
+	const grown = ['shard', ...TELEMETRY_COLUMNS];
+
+	const rows = parseTelemetryCsv(shard(grown));
+
 	expect(rows[0].cpu_model).toBe('AMD EPYC 7763 64-Core Processor');
 	expect(rows[0].date).toBe('2026-08-20');
 	expect(rows[0].item_total_ms).toBe(800);
