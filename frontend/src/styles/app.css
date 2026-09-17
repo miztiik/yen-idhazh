@@ -96,11 +96,12 @@
 	--font-data: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-/* The display face carries headings only. The body keeps the system stack: it
-   renders on the first frame at zero bytes, and the body is what the reader
-   came for. Self-hosted rather than fetched - Guardrail #1 permits a third-party
-   static asset, but the HTTP cache is partitioned per site so the shared-cache
-   argument is dead, and script-src is 'self' only.
+/* The display face carries headings - the wordmark and an item's title. The
+   body keeps the system stack: it renders on the first frame at zero bytes, and
+   the body is what the reader came for. Self-hosted rather than fetched -
+   Guardrail #1 permits a third-party static asset, but the HTTP cache is
+   partitioned per site so the shared-cache argument is dead, and script-src is
+   'self' only.
 
    `swap` because a heading a reader cannot see is worse than one in the
    fallback face for 40ms. The rule is here rather than inline in app.html so it
@@ -108,7 +109,11 @@
    preload link stays in the head, where it has to be to start the fetch early.
 
    The URL is relative to this file, which is what makes it correct under the
-   GitHub Pages project path without knowing what that path is. */
+   GitHub Pages project path without knowing what that path is.
+
+   `--font-display` itself is NOT declared here. It is generated into
+   frame.generated.css from `theme.display_face_enabled`, so turning the knob
+   off puts every heading back on the reading stack without a source edit. */
 @font-face {
 	font-family: 'InterVariable';
 	font-style: normal;
@@ -118,9 +123,6 @@
 }
 
 :root {
-	--font-display:
-		'InterVariable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-
 	/* The reading item's hairline, which is the item's whole edge now that it
 	   sits on the page ground rather than under a rule.
 
@@ -178,7 +180,13 @@ body {
    `overflow-wrap` because the text comes off the open web: one unbroken token -
    a URL, a chemical name, a German compound - is wider than the measure and
    pushes a scrollbar under the whole column. Breaking the word is the lesser
-   harm, and it is the only thing on this page allowed to break one. */
+   harm, and it is the only thing on this page allowed to break one.
+
+   One class per text element only works while those elements are the same size.
+   `--measure` is `68ch` and a `ch` belongs to the element it lands on, so a
+   heading and its paragraph both wearing this class get two different widths.
+   Where a heading and prose stack and the cap actually binds, the measure goes
+   on the block once, at the prose size - see `.prose` in DigestItem.svelte. */
 .measure {
 	max-width: var(--measure);
 	overflow-wrap: break-word;

@@ -11,6 +11,7 @@
 	--zone-aside: 18rem;
 	--dur-fast: 120ms;
 	--dur-base: 200ms;
+	--font-display: 'InterVariable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 /* The movement pair, one value per theme, in the order tokens.css declares
