@@ -156,7 +156,7 @@ section 3 is where it is answered.
 | #28 | 33 | H | Pipeline panels: the share track goes, Extraction gains a trend | 18 is PENDING |
 | #19 | 33 | I | The shard board | 11 is PENDING; 18 is PENDING |
 | #21 | 33 | I | Memory and load, three grains - ABSORBS Row #14 | 5 is PENDING; 7 is PENDING; 15 is PENDING; 19 is PENDING |
-| #23 | 33 | I | Tokens per run becomes one grouped chart | 21 is PENDING |
+| #23 | 33 | I | What a run reads against what it writes, in tokens and in seconds | 21 is PENDING |
 | #25 | 33 | I | Outside the model call, as range marks | 23 is PENDING |
 | #22 | 33 | I | Platform mix as grouped bars | 25 is PENDING |
 | #24 | 33 | I | Counterfactual cost gets a shape | 22 is PENDING |
