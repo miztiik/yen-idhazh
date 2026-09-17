@@ -1309,6 +1309,41 @@ def _step(
     return matches[0]
 
 
+def _stage_invocations(
+    workflow: dict[str, object], workflow_name: str
+) -> list[tuple[str, str, str, list[str]]]:
+    """Every `python -m idhazh <stage>` a workflow runs, as (job, step, stage, words).
+
+    One reader, because two workflows ask the same question of their own jobs -
+    can a dispatch that is not a production run reach the state root a published
+    day is built from? - and a walker copied into both is a walker that drifts
+    the day one of them is edited.
+
+    Every job is walked rather than the ones that run a stage today, so a job
+    that starts running one is caught by a test rather than by a production day
+    that came up short.
+
+    An Actions expression is not shell, so it is blanked before the line is
+    split. What the platform puts there cannot turn a stage invocation into a
+    different one.
+    """
+    jobs = _mapping(workflow.get("jobs"), f"{workflow_name} jobs")
+    found: list[tuple[str, str, str, list[str]]] = []
+    for job_name in sorted(jobs):
+        for step in _steps(workflow, job_name):
+            script = step.get("run")
+            if not isinstance(script, str):
+                continue
+            blanked = re.sub(r"\$\{\{.*?\}\}", "expression", script, flags=re.DOTALL)
+            for line in blanked.replace("\\\n", " ").splitlines():
+                if not re.search(r"\bpython3?\s+-m\s+idhazh\b", line):
+                    continue
+                words = shlex.split(line)
+                stage = words[words.index("idhazh") + 1]
+                found.append((job_name, str(step.get("name")), stage, words))
+    return found
+
+
 def _strings(node: object) -> Iterator[str]:
     """Every string anywhere in a YAML subtree, so an expression cannot hide in a nest."""
     if isinstance(node, str):

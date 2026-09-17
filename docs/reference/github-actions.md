@@ -669,7 +669,7 @@ flowchart TB
 
 **The scratch config differs from the committed tree in the line an adoption moves.** Both workflows copy `config/`, move `models_file`, and change no control - so every setting the numbers are read under is the committed one by construction, and a candidate is measured through the exact line an adoption later moves. Until 2026-09-14 the step rebuilt the entry field by field and copied the incumbent's `inference` and `turns` blocks across with their digests overwritten, which asserted that numbers measured for one model held for another.
 
-**The bench copy carries one more key, and it is not a control.** `run.trial_state_dirname` says where that run's own ledgers land, not what the run measures. The bench passes `pipeline-tests`, so every ledger the dispatch writes goes under `state/pipeline-tests/` and none of it is beside the rows the console reads - which has been true of every stage the bench runs since 2026-09-17, and of the `plan` step only since then ([Design rationale](#what-a-validation-or-bench-run-must-never-share-with-production)). `Model validation` and the budget retake pass nothing and build exactly the copy they always did. Why the rows are split rather than filtered is on [host-metrics.md](host-metrics.md#design-rationale).
+**Both candidate copies carry one more key, and it is not a control.** `run.trial_state_dirname` says where that run's own ledgers land, not what the run measures. The bench and `Model validation` both pass `pipeline-tests`, so every ledger either dispatch writes goes under `state/pipeline-tests/` and none of it is beside the rows the console reads - true of every stage the bench runs since 2026-09-17, of the bench's `plan` step only since then, and of `Model validation` since the same day ([Design rationale](#what-a-validation-or-bench-run-must-never-share-with-production)). The budget retake passes nothing and builds exactly the copy it always did. Why the rows are split rather than filtered is on [host-metrics.md](host-metrics.md#design-rationale).
 
 Each Measurements dispatch selects exactly one target:
 
@@ -1035,25 +1035,49 @@ points at, the production ledgers under `state/`, the seen store inside them,
 the run id and the date a production day is keyed on, and article text, which
 never leaves the job that fetched it.
 
-**One of those six was open until 2026-09-17 and is now closed for the bench.**
-`run.trial_state_dirname` moves a run's whole state root, and the bench passes
-`pipeline-tests` - but its `plan` step ran without `--config`, so it loaded the
-committed config, which redirects nothing. `plan` appends to the seen store,
-feed health, feed retirements and the counterfactual scores, so every bench
-dispatch wrote four production ledgers, and the seen store is the one that
-bites: a marked address makes the next production day skip that story with
-nothing in the log to say why. The step now reads the scratch config, and
+**One of those six was open until 2026-09-17 and is now closed in both
+workflows.** `run.trial_state_dirname` moves a run's whole state root, and the
+bench passes `pipeline-tests` - but its `plan` step ran without `--config`, so
+it loaded the committed config, which redirects nothing. `plan` appends to the
+seen store, feed health, feed retirements and the counterfactual scores, so
+every bench dispatch wrote four production ledgers, and the seen store is the
+one that bites: a marked address makes the next production day skip that story
+with nothing in the log to say why. The step now reads the scratch config, and
 `test_no_bench_stage_can_reach_the_production_state_root` asserts it for every
 stage any job in that file runs, present or future.
 
-**`validate.yml`'s plan job still has it, and that is a decision rather than an
-oversight.** Its `Read the feeds` step runs `plan` against the committed config
-in a job that builds no scratch config at all. Redirecting it is two lines, and
-the cost is not two lines: `plan` reads the seen store as well as writing it, so
-a redirected qualification would plan from an empty one and draw different
-articles. That changes which corpus a qualification is judged on, which is the
-evaluation owner's call and not a workflow edit's. What settles it is one
-dispatch each way, comparing the drawn addresses.
+**`validate.yml` closed it the same day, and the closure changes which articles
+a qualification draws.** Its `Read the feeds` step ran `plan` against the
+committed config in a job that built no scratch copy at all. The fix is the
+bench's: the `plan` job now builds the same copy the `qualify` job does, both
+pass `pipeline-tests`, and the step reads it.
+
+**The cost is not the two lines, and it was declined once for that reason.**
+`plan` reads the seen store as well as writing it, so a redirected qualification
+plans from an empty one and draws articles a production day already covered. The
+owner took the trade on 2026-09-17, before a four-arm comparison. A
+qualification measures how well a model summarizes text; whether a reader has
+already seen the story is a publication question, and filtering on it made the
+corpus depend on what production happened to publish that week. The count does
+not move - 3 shards of 10 - only which addresses fill it.
+
+**No qualification has been shown to move a production row, and that is not what
+the fix rests on.** The `plan` job has no commit step; only `decide` runs
+`commit-and-push.sh`, from its own checkout on a different runner, so those rows
+died with the runner. The distance between a job that can reach the production
+state root and one that commits it is a single step, this workflow already holds
+`contents: write`, and a sibling job already commits `state` whole.
+
+**`qualify-decide` is deliberately not redirected, and that is the one
+exception.** It writes the run's verdict to `state/validation-<YYYY-MM-DD>.csv`,
+which is the record the dispatch exists to leave. `evals.writer.append_validation`
+is handed a path off the repository root rather than off the state root, so that
+row lands in `state/` whatever `run.trial_state_dirname` says, and its job builds
+no scratch copy for a `--config` flag to point at.
+`backend/tests/workflows/test_validation_state_root.py` holds the assertions;
+`test_no_validation_stage_can_reach_the_production_state_root` asserts the
+redirect and names this exception for every stage any job in that file runs,
+present or future.
 
 ## What is not on this page
 
