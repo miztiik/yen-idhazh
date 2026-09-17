@@ -25,11 +25,11 @@ permissions:
   pages: write
   id-token: write
 
-# One deploy at a time, and never cancel one in flight: a half-replaced site is
-# worse than an old one.
-concurrency:
-  group: pages
-  cancel-in-progress: false
+# Concurrency is declared per job below rather than here, because the two jobs
+# want opposite answers and one group for the whole run cannot tell them apart.
+# It is not a knob either: GitHub resolves `concurrency` before a job starts, so
+# nothing has read a config file yet, and there is no value a knob could hold
+# that makes cancelling a live deploy right (Guardrail #6).
 
 jobs:
   # Which commit to publish, and whether it is worth publishing at all. GitHub
@@ -95,6 +95,14 @@ jobs:
     if: needs.decide.outputs.publish == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # A newer build supersedes an older one. Publishing is last-write-wins, so an
+    # older bundle that finishes is discarded the moment the newer one deploys,
+    # and finishing it bought nothing. Cancelling it cannot strand a deployment:
+    # `deploy` needs this job, a cancelled job satisfies no `needs`, and a run
+    # whose build stopped early uploaded no artifact for a deploy to take.
+    concurrency:
+      group: pages-build
+      cancel-in-progress: true
     steps:
       - uses: actions/checkout@v6
         with:
@@ -138,6 +146,11 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # One deploy at a time, and never cancel one in flight: a half-replaced site
+    # is worse than an old one.
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
