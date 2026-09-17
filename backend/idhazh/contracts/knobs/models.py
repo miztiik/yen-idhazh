@@ -295,6 +295,16 @@ class ModelsConfig(Contract):
     __schema_stem__: ClassVar[str] = "models-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-17T02:00",
+            change="inference.seed is the sampling control rather than dead code.",
+            why="Every entry pins temperature 0.2, where the seed decides which token is drawn.",
+        ),
+        ChangelogEntry(
+            version="2026-09-17",
+            change="inference.max_think_tokens accepts null, and null is the default.",
+            why="A cap set from no reading of these weights truncates a thought mid-sentence.",
+        ),
+        ChangelogEntry(
             version="2026-09-15T12:30",
             change="models.<role>.draft.spec_type accepts a third value, draft-mtp.",
             why="A model that predicts its own next tokens needs no second set of weights.",
@@ -303,16 +313,6 @@ class ModelsConfig(Contract):
             version="2026-09-15T10:00",
             change="console.chart_arm_rule_days, console.chart_arm_minutes_target.",
             why="`arm` came from benchmarking and reads as a limb on a reader-facing page.",
-        ),
-        ChangelogEntry(
-            version="2026-09-14T07:00",
-            change="models.<role>.draft, optional: a smaller set of weights that drafts tokens.",
-            why="Speculative decoding is a property of the model, so it belongs on the entry.",
-        ),
-        ChangelogEntry(
-            version="2026-09-14T06:00",
-            change="models.<role>.byte_count, optional: how many bytes the weights are.",
-            why="The size sat on a qualification report, which is not where a swap reads it.",
         ),
         ChangelogEntry(
             version="2026-09-14",

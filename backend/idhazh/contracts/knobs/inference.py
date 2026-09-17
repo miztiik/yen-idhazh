@@ -99,22 +99,59 @@ class InferenceConfig(Model):
             "about what it decodes, so idhazh.fingerprint leaves it out of the stamp."
         ),
     )
-    temperature: float = Field(default=0.0, ge=0.0)
-    top_p: float = Field(default=1.0, gt=0.0, le=1.0)
+    temperature: float = Field(
+        default=0.0,
+        ge=0.0,
+        description=(
+            "How far the sampler may stray from the likeliest token. The default is "
+            "0.0 for the reason n_ctx's default is conservative: a temperature is a "
+            "reading of one model's weights, and a number that suited one family "
+            "applied to weights nobody has run is a setting somebody will trust. "
+            "Every committed entry pins its own. Above 0.0 the seed stops being dead "
+            "code and becomes the control that decides which token is drawn, and the "
+            "determinism gate stops having a question to ask - "
+            "docs/architecture/contracts/determinism.md."
+        ),
+    )
+    top_p: float = Field(
+        default=1.0,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "The share of probability mass the sampler may draw from. 1.0 is the "
+            "whole distribution, which is not a second temperature and does not "
+            "contradict one: temperature reshapes the distribution and this truncates "
+            "its tail, so 1.0 leaves the truncation off and lets temperature alone "
+            "decide. Lowering both is two instruments aimed at one effect, and then "
+            "neither reading says which of them moved the words."
+        ),
+    )
     seed: int = Field(
         default=0,
-        description="Dead code under greedy decoding. Never cited as the determinism control.",
+        description=(
+            "Which sample the sampler draws. It is the whole of the repeatability "
+            "story above temperature 0: same inputs and same seed is the same reply, "
+            "same inputs and a different seed is a different one. At temperature 0 it "
+            "is dead code and nothing reads it, which is what it was until "
+            "2026-09-17. It is enumerated in the fingerprint either way, so a change "
+            "of sampler cannot move the words without moving the stamp."
+        ),
     )
-    max_think_tokens: int = Field(
-        default=256,
+    max_think_tokens: int | None = Field(
+        default=None,
         ge=1,
         description=(
-            "The thinking span's budget, and a hard cap rather than a hint. A model "
-            "that never closes its reasoning block would otherwise eat the whole "
-            "window and be recorded as a truncated summary, which names the wrong "
-            "cause. 256 tokens costs 42.6 s an item at the measured 6.01 +/- 0.11 "
-            "tokens a second (2026-08-23, ubuntu-latest, EPYC 9V74, llama.cpp b10598, "
-            "three repeats). It is read only where the entry declares "
+            "The thinking span's budget. Null means no cap: the span runs until the "
+            "model writes turns.thinking_close, and the window is the only other "
+            "thing that stops it. An integer bounds the span at that many tokens. A "
+            "cap exists at all because a model that never closes its reasoning block "
+            "would otherwise decode to n_ctx and be recorded as a truncated summary, "
+            "which names the wrong cause - the closing marker is what normally ends "
+            "the span, and the cap is what catches a model that never writes one. Set "
+            "it only from a reading taken on the weights it is set for; a number "
+            "carried over from other weights caps a thought mid-sentence, and a "
+            "truncated thought is worse than no thought at the same budget "
+            "(arxiv 2504.09858). It is read only where the entry declares "
             "turns.thinking_close; an entry that declares no closing marker spends "
             "none of it."
         ),

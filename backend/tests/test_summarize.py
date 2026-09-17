@@ -59,6 +59,7 @@ from idhazh.llm.server import (
     PROBE_ANSWER,
     PROBE_SYSTEM,
     PROBE_USER,
+    UNCAPPED_N_PREDICT,
     Completion,
     FlashAttention,
     ProbeRefusedError,
@@ -247,15 +248,19 @@ def test_the_chat_route_budget_covers_both_spans_when_the_entry_thinks() -> None
     template wrote the prompt, there is nothing of ours to continue, and a
     budget sized for the answer alone would cut the answer by whatever the
     thinking spent.
+
+    An uncapped thinking span leaves no honest sum to send, so the key goes
+    rather than carrying a number that is wrong in one direction or the other.
     """
-    inference = InferenceConfig()
+    capped = InferenceConfig(max_think_tokens=256)
+    uncapped = InferenceConfig()
     thinking = built_turns(thinking_close="</think>")
     quiet = request_payload(
         model_id="m",
         system="s",
         user="u",
         output_schema={},
-        inference=inference,
+        inference=capped,
         turns=built_turns(),
     )
     loud = request_payload(
@@ -263,12 +268,23 @@ def test_the_chat_route_budget_covers_both_spans_when_the_entry_thinks() -> None
         system="s",
         user="u",
         output_schema={},
-        inference=inference,
+        inference=capped,
+        turns=thinking,
+    )
+    unbounded = request_payload(
+        model_id="m",
+        system="s",
+        user="u",
+        output_schema={},
+        inference=uncapped,
         turns=thinking,
     )
 
-    assert quiet["max_tokens"] == inference.max_answer_tokens
-    assert loud["max_tokens"] == inference.max_answer_tokens + inference.max_think_tokens
+    assert uncapped.max_think_tokens is None, "the default is no cap, so this arm is the default"
+    assert capped.max_think_tokens is not None
+    assert quiet["max_tokens"] == capped.max_answer_tokens
+    assert loud["max_tokens"] == capped.max_answer_tokens + capped.max_think_tokens
+    assert "max_tokens" not in unbounded, "no cap is no sum, and no sum is no key"
 
 
 def test_thinking_is_off_in_the_request() -> None:
@@ -1718,7 +1734,7 @@ class TestTwoSpansOnOneCall:
 
     def test_the_answer_spans_budget_is_the_declared_one_not_a_share(self) -> None:
         """The row's oracle. One budget over two spans could not say which overran."""
-        inference = InferenceConfig()
+        inference = InferenceConfig(max_think_tokens=256)
         answer = self.answer_body()
         span = thinking_span(answer, turns=self.turns(), max_think_tokens=inference.max_think_tokens)
         second = answer_span(answer, thought="x", turns=self.turns())
@@ -1728,6 +1744,37 @@ class TestTwoSpansOnOneCall:
         assert second["n_predict"] + span["n_predict"] != second["n_predict"], (
             "the two budgets are separate numbers, not one number split"
         )
+
+    def test_an_uncapped_thinking_span_is_sent_the_runtimes_own_word_for_infinity(self) -> None:
+        """`-1` is llama.cpp's spelling, recorded in the help text this build ships.
+
+        Null is the default, so this is the arm every entry takes unless it pins
+        a number. The answer span is untouched: the two budgets stay separate
+        numbers, and only one of them went away.
+        """
+        inference = InferenceConfig()
+        answer = self.answer_body()
+        span = thinking_span(answer, turns=self.turns(), max_think_tokens=inference.max_think_tokens)
+        second = answer_span(answer, thought="x", turns=self.turns())
+
+        assert inference.max_think_tokens is None
+        assert span["n_predict"] == -1
+        assert span["stop"] == ["</think>"], "uncapped, the marker is the only thing that ends it"
+        assert second["n_predict"] == inference.max_answer_tokens
+
+    def test_the_recorded_help_text_is_where_minus_one_comes_from(self) -> None:
+        """Guardrail #10: the spelling is read off the runtime, not remembered.
+
+        The fixture is read inside the test rather than at module scope, so a
+        help text that stops carrying the line fails this one test with a
+        message naming what it wanted (`CLAUDE.md` section 13).
+        """
+        recorded = read_text(FIXTURES_DIR / "runtime" / "b10598-llama-server-help.txt")
+        predict = [line for line in recorded.splitlines() if "--n-predict" in line]
+
+        assert predict, "the recorded help stopped documenting --n-predict"
+        assert "-1 = infinity" in predict[0], predict[0]
+        assert UNCAPPED_N_PREDICT == -1
 
     def test_the_closing_marker_is_written_rather_than_trusted_to_the_reply(self) -> None:
         """llama-server excludes a stop string from the content it returns.
