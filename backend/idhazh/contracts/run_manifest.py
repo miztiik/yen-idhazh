@@ -288,6 +288,11 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-17T02:00",
+            change="The embedded ModelRef's inference.seed is the sampling control.",
+            why="It follows models-config, where every entry now pins temperature 0.2.",
+        ),
+        ChangelogEntry(
             version="2026-09-17",
             change="The embedded ModelRef's inference.max_think_tokens accepts null.",
             why="It follows models-config, which is where the budget is declared.",
@@ -301,11 +306,6 @@ class RunManifest(Contract):
             version="2026-09-14T07:00",
             change="The embedded ModelRef gained an optional draft block.",
             why="A run records the draft weights it used, or a later reader cannot repeat it.",
-        ),
-        ChangelogEntry(
-            version="2026-09-14T06:00",
-            change="The embedded ModelRef gained an optional byte_count.",
-            why="It follows models-config, which is where the size is now declared.",
         ),
         ChangelogEntry(
             version="2026-08-21",

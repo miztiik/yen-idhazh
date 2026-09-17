@@ -36,7 +36,7 @@
       "request_timeout_minutes": 22.1,
       "seed": 0,
       "startup_warmup": true,
-      "temperature": 0.0,
+      "temperature": 0.2,
       "top_p": 1.0
     },
     "quantisation": "UD-Q4_K_XL",
@@ -55,5 +55,5 @@
       "turn_opening": "<|turn>$role\n"
     }
   },
-  "version": "2026-09-17"
+  "version": "2026-09-17T02:00"
 }

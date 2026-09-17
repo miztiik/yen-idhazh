@@ -138,9 +138,10 @@ def host_cpu(cpuinfo: Path = CPUINFO) -> str:
 def sampling_spelling(inference: InferenceConfig) -> str:
     """One canonical spelling of the decoding parameters.
 
-    `seed` is enumerated as an input and is still dead code under greedy
-    decoding - it is recorded so a future move off greedy cannot change an
-    output silently, and it is never cited as the determinism control.
+    `seed` is enumerated as an input, and above temperature 0 it is the control
+    that decides which sample the sampler draws rather than dead code. It was
+    recorded from the start for exactly this move: a change of sampler cannot
+    shift the words without shifting this string.
 
     Both span budgets are here and there is no reasoning flag beside them. What
     turns reasoning on is the closing marker on the turn envelope, which arrives

@@ -187,12 +187,14 @@ is nothing at all. So length may not be the property that silently removes a
 story.
 
 **There is no retry, on purpose.** Asking the model again is the obvious fourth
-outcome, and here it is dead code: `models.summarize.inference` pins
-`temperature=0.0` and `top_p=1.0`, and the `seed` field's own description says it
-is dead under greedy decoding. An identical payload returns an identical reply,
-so a retry loop would spend a second inference call on the tail of every run to
-receive the same words. It can be built the day decoding stops being greedy, and
-not before.
+outcome. It was dead code until 2026-09-17, when every entry moved to
+`temperature=0.2`: at 0.0 an identical payload returned an identical reply, so a
+retry loop would have spent a second inference call on the tail of every run to
+receive the same words. At 0.2 a retry would return something different, so the
+argument that ruled it out is gone and the one that keeps it out is cost - a
+second call an item on the tail of a run, against a failure the three outcomes
+above already handle. Building it is a decision somebody makes with a
+measurement of how often the tail is reached, not a gap left by accident.
 
 **The decoder rail is the trap in this design.**
 `SummarizeConfig.decoder_words_max` is deliberately the loosest number in the

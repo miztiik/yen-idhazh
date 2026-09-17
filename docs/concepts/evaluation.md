@@ -249,7 +249,7 @@ These are deterministic and cost effectively nothing, which is why they are pref
 
 Every metric above compares our summary to the article, so a summary that says the same clause three times scores clean on all of them. It is the only defect here that reads *better* on every other instrument the worse it gets: a repeated sentence is still perfectly supported by the source, so faithfulness rises, and the repeat is still not copied from the article, so extractiveness does not move.
 
-Greedy decoding is what makes it possible. At temperature zero a model that falls into a loop has no sampling noise to break out of it, so it says the same clause again until the token budget runs out.
+A model in a loop is what makes it possible, and the temperature decides how a loop ends rather than whether one starts. At temperature zero a model that falls into a loop has no sampling noise to break out of it, so it says the same clause again until the token budget runs out - which is the failure Qwen's own model card names from the other side when it says of thinking mode "DO NOT use greedy decoding, as it can lead to performance degradation and endless repetitions". Every entry pins temperature 0.2 since 2026-09-17, so a loop is likelier to end on its own and this column stays exactly as useful.
 
 **`self_repetition` is the share of the summary's four-word windows that repeat a window it already used.** In plain words: how much of what you are reading, you have already read. Zero means every four-word window in the summary is different, which is what ordinary prose looks like - it is the value a good summary and a bad-but-varied summary both get, so the direction that is bad is *up*.
 

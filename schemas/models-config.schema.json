@@ -286,7 +286,7 @@
         },
         "seed": {
           "default": 0,
-          "description": "Dead code under greedy decoding. Never cited as the determinism control.",
+          "description": "Which sample the sampler draws. It is the whole of the repeatability story above temperature 0: same inputs and same seed is the same reply, same inputs and a different seed is a different one. At temperature 0 it is dead code and nothing reads it, which is what it was until 2026-09-17. It is enumerated in the fingerprint either way, so a change of sampler cannot move the words without moving the stamp.",
           "title": "Seed",
           "type": "integer"
         },
@@ -298,12 +298,14 @@
         },
         "temperature": {
           "default": 0.0,
+          "description": "How far the sampler may stray from the likeliest token. The default is 0.0 for the reason n_ctx's default is conservative: a temperature is a reading of one model's weights, and a number that suited one family applied to weights nobody has run is a setting somebody will trust. Every committed entry pins its own. Above 0.0 the seed stops being dead code and becomes the control that decides which token is drawn, and the determinism gate stops having a question to ask - docs/architecture/contracts/determinism.md.",
           "minimum": 0.0,
           "title": "Temperature",
           "type": "number"
         },
         "top_p": {
           "default": 1.0,
+          "description": "The share of probability mass the sampler may draw from. 1.0 is the whole distribution, which is not a second temperature and does not contradict one: temperature reshapes the distribution and this truncates its tail, so 1.0 leaves the truncation off and lets temperature alone decide. Lowering both is two instruments aimed at one effect, and then neither reading says which of them moved the words.",
           "exclusiveMinimum": 0.0,
           "maximum": 1.0,
           "title": "Top P",
@@ -556,6 +558,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "inference.seed is the sampling control rather than dead code.",
+      "version": "2026-09-17T02:00",
+      "why": "Every entry pins temperature 0.2, where the seed decides which token is drawn."
+    },
+    {
       "change": "inference.max_think_tokens accepts null, and null is the default.",
       "version": "2026-09-17",
       "why": "A cap set from no reading of these weights truncates a thought mid-sentence."
@@ -571,11 +578,6 @@
       "why": "`arm` came from benchmarking and reads as a limb on a reader-facing page."
     },
     {
-      "change": "models.<role>.draft, optional: a smaller set of weights that drafts tokens.",
-      "version": "2026-09-14T07:00",
-      "why": "Speculative decoding is a property of the model, so it belongs on the entry."
-    },
-    {
       "change": "Earlier changes are in this file's git history.",
       "version": "2026-09-14",
       "why": "A changelog says what moved lately; git is the archive."
@@ -587,7 +589,7 @@
       "$ref": "#/$defs/ModelEntry"
     },
     "version": {
-      "default": "2026-09-17",
+      "default": "2026-09-17T02:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -598,5 +600,5 @@
   ],
   "title": "ModelsConfig",
   "type": "object",
-  "version": "2026-09-17"
+  "version": "2026-09-17T02:00"
 }
