@@ -36,13 +36,14 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 11 |
 | [20260914-29-found-once-plan.md](20260914-29-found-once-plan.md) | 17 | 14 | 3 | 2 |
+| [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 17 | 0 | 16 | 4 |
 
 ## In flight - 0
 
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 33
+## Ready now - 37
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -83,8 +84,12 @@ section 3 is where it is answered.
 | #11 | 27 | E | Two articles, three arms, one runner | 4 |
 | #12 | 29 | - | Label the sheet, then set the weights | - |
 | #16 | 29 | - | Refuse boilerplate, on a week of evidence | 13 |
+| #1 | 33 | A | Segment store and the `compact` stage, shipped inert | - |
+| #5 | 33 | A | Machine page stops lying about a day with no rows | - |
+| #6 | 33 | A | One concurrency group for `digest`, `validate`, `measure` | - |
+| #7 | 33 | A | OS memory and load, per item | - |
 
-## Waiting on another row - 49
+## Waiting on another row - 61
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -137,6 +142,18 @@ section 3 is where it is answered.
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
 | #15 | 29 | - | The weights and the 0.88 floor | 12 is PENDING |
+| #2 | 33 | B | `host-fingerprint` writes segments | 1 is PENDING |
+| #3 | 33 | B | `item-health`, `scores`, `score-index` write segments | 2 is PENDING |
+| #4 | 33 | B | `span-rollup` writes segments | 3 is PENDING |
+| #17 | 33 | B | `runtime-counters` writes segments | 4 is PENDING |
+| #10 | 33 | C | `model_load_ms` and `job_seconds` join `host-fingerprint` | 2 is PENDING |
+| #12 | 33 | D | Delete the merge machinery | 2 is PENDING; 3 is PENDING; 4 is PENDING; 17 is PENDING |
+| #13 | 33 | D | Compaction lag on the console band | 1 is PENDING; 5 is PENDING; 12 is PENDING |
+| #11 | 33 | E | Delete `runtime-counters` and everything that reads it | 7 is PENDING; 10 is PENDING; 17 is PENDING |
+| #15 | 33 | F | Generated TypeScript contracts replace the hand-written ones | 10 is PENDING; 11 is PENDING |
+| #14 | 33 | F | The per-item machine load panel | 5 is PENDING; 7 is PENDING; 15 is PENDING |
+| #16 | 33 | G | Docs, and the orphan sweep | all names no row |
+| #8 | 33 | - | Memory split by prefill and decode | - |
 
 ## Finished - 18 plans with no live row
 
