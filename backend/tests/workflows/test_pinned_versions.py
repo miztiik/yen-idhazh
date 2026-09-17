@@ -14,10 +14,12 @@ from ._harness import (
     LLAMA_INLINE_RUNTIME_WORKFLOWS,
     LLAMA_PIN_NAMES,
     LLAMA_PIN_SCRIPT,
+    LLAMA_PIN_VALUES,
     LLAMA_PINNED_ENDPOINT,
     LLAMA_RUNTIME_SCRIPT,
     LLAMA_RUNTIME_WORKFLOWS,
     LLAMA_SCRIPT_CALLERS,
+    LLAMA_SHARED_SCRIPTS,
     PINNED_LLAMA_ASSET,
     PINNED_LLAMA_BUILD,
     PINNED_LLAMA_SHA256,
@@ -26,10 +28,13 @@ from ._harness import (
     WEIGHTS_FETCH_FORM,
     WORKFLOWS_DIR,
     _action_references,
+    _every_env,
     _llama_fetch_scripts,
     _load_workflows,
     _mapping,
+    _pin_output_name,
     _run_bodies,
+    _script_closure,
     _setup_python_versions,
     _strings,
 )
@@ -67,36 +72,65 @@ def test_the_shared_fetch_script_is_the_one_home_of_the_pin_for_every_caller_on_
     A conversion is one line in `LLAMA_SCRIPT_CALLERS`: that workflow stops
     being asked for an `env:` copy above and starts being refused one here. The
     set is not the whole runtime list yet, and this names which ones are left.
+
+    What a converted caller is refused is the VALUE, not the name. A job whose
+    stage records which build decoded the bytes has to put `LLAMA_CPP_BUILD` in
+    that step's environment, and taking it from the step that published the pin
+    reads the one home rather than copying it. Refusing the name instead would
+    have refused that, and it also missed the obvious regression: `_strings`
+    walks values, so an `env:` block reintroducing `LLAMA_CPP_BUILD: <build>`
+    was invisible to it - the key is not a value and the build does not contain
+    its own name.
     """
     pin = read_text(SCRIPTS_DIR / LLAMA_PIN_SCRIPT)
     assert f"LLAMA_CPP_BUILD={PINNED_LLAMA_BUILD}" in pin
     assert f"LLAMA_CPP_SHA256={PINNED_LLAMA_SHA256}" in pin
     assert PINNED_LLAMA_ASSET in pin.replace("${LLAMA_CPP_BUILD}", PINNED_LLAMA_BUILD)
 
-    fetch = read_text(SCRIPTS_DIR / LLAMA_RUNTIME_SCRIPT)
-    assert f".github/scripts/{LLAMA_PIN_SCRIPT}" in fetch, (
+    # Every shipped script, not just the fetch: the runtime install moved into a
+    # second file, and a check that named one file would stop covering the pin
+    # the moment a third appeared.
+    for script in sorted(SCRIPTS_DIR.glob("*.sh")):
+        if script.name == LLAMA_PIN_SCRIPT:
+            continue
+        text = read_text(script)
+        for name in LLAMA_PIN_NAMES:
+            assert f"{name}=" not in text, f"{script.name} spells {name} for itself"
+
+    reachable = _script_closure(f"bash .github/scripts/{LLAMA_RUNTIME_SCRIPT}")
+    assert f".github/scripts/{LLAMA_PIN_SCRIPT}" in reachable, (
         "the fetch reads the pin rather than repeating it"
     )
-    for name in LLAMA_PIN_NAMES:
-        assert f"{name}=" not in fetch, f"{LLAMA_RUNTIME_SCRIPT} spells {name} for itself"
 
     assert LLAMA_SCRIPT_CALLERS <= LLAMA_RUNTIME_WORKFLOWS, (
         "a caller of the fetch script installs the runtime, so it belongs to that set"
     )
     assert LLAMA_SCRIPT_CALLERS, "nothing is converted, so this is checking nothing"
 
+    published = f".outputs.{_pin_output_name()} }}}}"
     workflows = _load_workflows()
     for filename in sorted(LLAMA_SCRIPT_CALLERS):
         workflow = workflows[filename]
-        assert any(LLAMA_RUNTIME_SCRIPT in body for body in _run_bodies(workflow)), (
-            f"{filename} is converted, so it has to call {LLAMA_RUNTIME_SCRIPT}"
+        assert any(
+            shared in body for body in _run_bodies(workflow) for shared in LLAMA_SHARED_SCRIPTS
+        ), f"{filename} is converted, so it has to call one of {sorted(LLAMA_SHARED_SCRIPTS)}"
+
+        copied = sorted(
+            text for text in _strings(workflow) if any(v in text for v in LLAMA_PIN_VALUES)
         )
-        for name in LLAMA_PIN_NAMES:
-            spelt = sorted(text for text in _strings(workflow) if name in text)
-            assert not spelt, (
-                f"{filename} is converted, so the pin lives only in "
-                f"{LLAMA_PIN_SCRIPT}: it still spells {name} in {spelt}"
-            )
+        assert not copied, (
+            f"{filename} is converted, so the pin lives only in "
+            f"{LLAMA_PIN_SCRIPT}: it still writes {copied}"
+        )
+
+        for scope, env in _every_env(workflow):
+            for name, value in sorted(env.items()):
+                if name not in LLAMA_PIN_NAMES:
+                    continue
+                assert isinstance(value, str) and value.endswith(published), (
+                    f"{filename}: {scope} writes {name} as {value!r}; a converted "
+                    f"caller reads it from the step that published the pin"
+                )
 
 
 def test_every_llama_cpp_fetch_is_pinned_and_digest_checked() -> None:

@@ -11,7 +11,8 @@ a flag. The workflows that use them are in
 
 `digest.yml`, `validate.yml`, `measure.yml`, `idhazh-pipeline-tests.yaml` and
 `probe.yml` run one llama.cpp build. Each checks the archive against its digest
-before it unpacks anything.
+before it unpacks anything. `probe.yml` installs the build and stops there;
+the other four go on to download weights.
 
 | Variable | Value |
 | --- | --- |
@@ -28,34 +29,49 @@ on 2026-08-25 by downloading the 16,377,727-byte archive and hashing it.
 and it assigns all three; run it and it prints the build as `key=value`, which
 is what a cache key reads - the key names the build, the cache step runs before
 the fetch, so the pin has to be readable without downloading anything.
-`.github/scripts/fetch-model-runtime.sh` sources it, installs the build, checks
-the archive, and downloads the weights the calling step names through `env`.
 
-**Only `idhazh-pipeline-tests.yaml` is on those two.** `digest.yml`,
-`measure.yml`, `validate.yml` and `probe.yml` still declare the three variables
-in their own `env:` block and fetch the build themselves.
+Two shared scripts read it, and the split is about what a job actually needs.
+`.github/scripts/install-llama-runtime.sh` sources the pin, installs the build
+and checks the archive; that is the whole of what a job wants when it opens no
+weights. `.github/scripts/fetch-model-runtime.sh` sources that one and then
+downloads the weights the calling step names through `env`. One script that
+always downloaded a model would turn the one-minute probe below into the
+slowest question here, and a `WEIGHTS_FILE` allowed to be empty would make the
+refusals every other caller depends on optional.
 
-So the three values are written in **five places today: the pin file and four
-`env:` blocks.** It was six until 2026-09-17, and converting the other four
-takes it to one. Eight steps download the archive; seven of them still spell the
-download inline and the eighth is the shared script. `digest.yml` is the last
-and the largest conversion, because that is the workflow that publishes.
+**`digest.yml`, `idhazh-pipeline-tests.yaml`, `probe.yml` and `validate.yml` are
+on those scripts.** `measure.yml` is the one still declaring the three variables
+in its own `env:` block and fetching the build itself.
+
+So the three values are written in **two places today: the pin file and one
+`env:` block.** It was six until 2026-09-17, and converting `measure.yml` takes
+it to one.
 
 Nothing read those places against each other before. A contract test now pins
 the three variables in every workflow that still spells them and refuses any
 copy of them in a workflow that has been converted, so a conversion is one line
 in that test's `LLAMA_SCRIPT_CALLERS` set and the check tightens rather than
-being rewritten. The digest check on every fetch path and the build inside every
-runtime cache key are held by the same file.
+being rewritten. What a converted caller is refused is the VALUE, not the name:
+a job whose stage records which build decoded the bytes has to put
+`LLAMA_CPP_BUILD` in that step's environment, and taking it from the step that
+published the pin reads the one home rather than copying it. The digest check on
+every fetch path and the build inside every runtime cache key are held by the
+same file.
 
 ### What the cache key holds
 
 The weights cache key names the build: `llm-<weights>-<revision>-<build>-v4` in
 the two `digest.yml` jobs and in `idhazh-pipeline-tests.yaml`,
-`validate-<challenger>-<build>-v3` in `validate.yml`. The `digest.yml` suffix
+`qualify-<candidate>-<build>` in `validate.yml`. The `digest.yml` suffix
 moved to `v4` when the weights half stopped coming from a workflow variable, so
 the first run after that refetched once rather than restoring an entry nobody
-could attribute. `v3` was the same move for the build.
+could attribute.
+
+A converted caller reads `<build>` off the step that ran the pin, never off a
+workflow variable. In `digest.yml` and `validate.yml` that step is in the `plan`
+job and the build travels as a job output, because `needs` resolves before a
+worker's first step and `steps` does not - which is the same reason the model
+refs travel that way.
 
 **The key matters more than the pin.** The fetch step runs only on a cache
 miss. Keyed on the weights alone, the cache froze one binary and then served a
@@ -69,8 +85,10 @@ hashed key moves when a comment moves, which throws a multi-gigabyte entry away
 for an edit that changed no byte of what it holds. That is why the pin file
 prints the build rather than being hashed.
 
-The run manifest is not fixed by this. It still records `runtime_build` as the
-fixed string `llama-server-local`, so the manifest does not yet name the build.
+The run manifest records `runtime_build` as the build the `plan` job read out of
+the pin and handed to the work step, so a published day names the binary that
+decoded it. A run with nothing pinned - a developer machine - records
+`build-not-recorded` rather than inventing a tag.
 
 ### `probe.yml` asks the build what it accepts
 
@@ -85,13 +103,13 @@ downloading that artifact rather than by a second run.
 
 It is a `workflow_dispatch` with no scheduled trigger and it loads no weights,
 so it costs about a minute of runner time. It takes no input for a build,
-either: it reads the same three pinned variables the runtime arms read and is
-held to them by the same test, so its answer cannot describe a binary
+either: it installs the build `llama-cpp-pin.sh` names, through the same shared
+install step the runtime arms reach, so its answer cannot describe a binary
 production does not run. Probing a candidate build is a branch that moves the
 pin, dispatched with `--ref` - the same commit somebody would have to make to
 adopt it.
 
-The question that made it was whether `b10598` accepts the kind a Gemma
+The question that made it was whether the pinned build accepts the kind a Gemma
 multi-token head needs, and that is the shape of every question it answers:
 read the runtime's own answer rather than a release note's.
 

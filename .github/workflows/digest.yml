@@ -70,12 +70,12 @@ concurrency:
 # answer. A copy here was a second answer: the alias already came from config
 # while the weights came from this block, so one edit could serve 8B bytes under
 # a 9B alias and file every eval row under a model that never ran (Guardrail #10).
+#
+# No llama.cpp pin either. It is `.github/scripts/llama-cpp-pin.sh`, which the
+# fetch step sources and the `plan` job reads, so the build this run installs,
+# the build its cache key names and the build its run manifest records are one
+# answer and cannot drift apart.
 env:
-  # The same build the measurement harness pins, so a number measured in
-  # measure.yml describes the binary that produces the digest.
-  LLAMA_CPP_BUILD: b10598
-  LLAMA_CPP_ASSET: llama-b10598-bin-ubuntu-x64.tar.gz
-  LLAMA_CPP_SHA256: d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c
   # The one place this workflow says which port. `server_argv` binds it, every
   # probe below reads it, and `idhazh.llm.server` reads it for the address the
   # stage posts to - so the three cannot disagree (Guardrail #6).
@@ -99,6 +99,7 @@ jobs:
       draft_revision: ${{ steps.models.outputs.draft_revision }}
       draft_file: ${{ steps.models.outputs.draft_file }}
       draft_sha256: ${{ steps.models.outputs.draft_sha256 }}
+      llama_cpp_build: ${{ steps.runtime.outputs.llama_cpp_build }}
     steps:
       - uses: actions/checkout@v6
 
@@ -164,6 +165,23 @@ jobs:
         run: |
           set -euo pipefail
           python3 backend/utilities/model_refs.py configured >> "$GITHUB_OUTPUT"
+
+      # The build every worker is about to install, asked once of the file that
+      # decides it. It travels as a job OUTPUT for the same reason the model
+      # refs do: `needs` resolves before a worker's first step and `steps` does
+      # not, and the weights cache key below has to name the build it holds.
+      #
+      # Reading it from its one home is what stops this workflow carrying a
+      # second copy. Three things have to agree about which binary decoded the
+      # day - the fetch, the cache key, and the `runtime_build` the run manifest
+      # stamps - and they now agree by construction rather than by three edits
+      # landing together (Guardrail #10).
+      - id: runtime
+        name: Say which llama.cpp build this run installs
+        run: |
+          set -euo pipefail
+          bash .github/scripts/llama-cpp-pin.sh \
+            | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
       # How long a worker may take, read from the one file that says so. It
       # travels as a job OUTPUT for the same reason the model refs do: a job's
@@ -454,57 +472,32 @@ jobs:
           path: |
             backend/models
             backend/bin
-          key: llm-${{ needs.plan.outputs.summarize_file }}-${{ needs.plan.outputs.summarize_revision }}-${{ env.LLAMA_CPP_BUILD }}-v4
+          key: llm-${{ needs.plan.outputs.summarize_file }}-${{ needs.plan.outputs.summarize_revision }}-${{ needs.plan.outputs.llama_cpp_build }}-v4
 
+      # One shared step. It sources the runtime install, which sources the pin,
+      # so this workflow spells no part of either - and every value it reads
+      # arrives through `env` rather than pasted into it. The refs used to be
+      # substituted straight into the download URL, and a value pasted into a
+      # program is text before it is a value (Guardrail #11).
+      #
+      # The lookup is authenticated, because every shard asks at once and
+      # anonymous api.github.com allows 60 requests an hour - a ceiling of eight
+      # shards makes that eight askers on a cold cache, not four.
+      #
+      # Why the script names an immutable revision and why `-f` is load-bearing
+      # are written in the script, once, rather than here and in four other
+      # callers.
       - name: Fetch runtime and weights
         if: steps.weights.outputs.cache-hit != 'true'
-        # One pinned build, checked against its digest before anything runs from
-        # it. Authenticated, because every shard asks at once and anonymous
-        # api.github.com allows 60 requests an hour - a ceiling of eight shards
-        # makes that eight askers on a cold cache, not four.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          mkdir -p backend/bin backend/models
-          URL=$(curl -fsS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-            "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}" \
-            | jq -r --arg asset "$LLAMA_CPP_ASSET" \
-              'if type=="object" then ([.assets[] | select(.name == $asset)][0].browser_download_url // "") else "" end')
-          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
-            echo "pinned llama.cpp asset not found: ${LLAMA_CPP_BUILD}/${LLAMA_CPP_ASSET}" >&2
-            exit 1
-          fi
-          curl -fsSL --retry 3 --retry-all-errors -o llama.tar.gz "$URL"
-          echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256sum --check
-          mkdir -p llama && tar -xzf llama.tar.gz -C llama
-          # `cp -a`, not `find -type f`. These builds ship versioned shared
-          # objects as symlinks - libllama-common.so.0 points at the real file -
-          # and `-type f` skips a symlink, so the server died at exec on a
-          # library that had been "copied".
-          SRC=$(dirname "$(find llama -type f -name 'llama-server' | head -1)")
-          cp -a "$SRC"/. backend/bin/
-          chmod +x backend/bin/llama-server
-          # The pinned commit, never a branch. A branch hands back whatever was
-          # uploaded last, so the bytes can move under a config that still
-          # records the old sha256 - and the check below would then fail a run
-          # nobody changed.
-          #
-          # `-f` is the load-bearing letter. Without it curl writes an HTTP
-          # error body into the weights file and exits 0, and `backend/models`
-          # is a cache path, so that file is then saved under the pinned key and
-          # served to every later run until the entry is evicted.
-          curl -fsSL --retry 3 --retry-all-errors \
-            -o "backend/models/${{ needs.plan.outputs.summarize_file }}" \
-            "https://huggingface.co/${{ needs.plan.outputs.summarize_repo }}/resolve/${{ needs.plan.outputs.summarize_revision }}/${{ needs.plan.outputs.summarize_file }}?download=true"
-          # The draft head, when the entry declares one. Same pinned-commit rule
-          # and the same load-bearing `-f`, in the same step because a second
-          # fetch step is a second place for these two rules to drift apart.
-          if [ -n "${{ needs.plan.outputs.draft_file }}" ]; then
-            curl -fsSL --retry 3 --retry-all-errors \
-              -o "backend/models/${{ needs.plan.outputs.draft_file }}" \
-              "https://huggingface.co/${{ needs.plan.outputs.draft_repo }}/resolve/${{ needs.plan.outputs.draft_revision }}/${{ needs.plan.outputs.draft_file }}?download=true"
-          fi
+          WEIGHTS_REPO: ${{ needs.plan.outputs.summarize_repo }}
+          WEIGHTS_REVISION: ${{ needs.plan.outputs.summarize_revision }}
+          WEIGHTS_FILE: ${{ needs.plan.outputs.summarize_file }}
+          DRAFT_REPO: ${{ needs.plan.outputs.draft_repo }}
+          DRAFT_REVISION: ${{ needs.plan.outputs.draft_revision }}
+          DRAFT_FILE: ${{ needs.plan.outputs.draft_file }}
+        run: bash .github/scripts/fetch-model-runtime.sh
 
       # No `if:`. This runs on a cache hit as well as a miss, because a restored
       # entry is the one case where nobody watched the bytes arrive. It sits
@@ -614,6 +607,8 @@ jobs:
       # naming.
       - name: What this runner is
         if: always()
+        env:
+          LLAMA_CPP_BUILD: ${{ needs.plan.outputs.llama_cpp_build }}
         run: |
           echo "pinned llama.cpp build: ${LLAMA_CPP_BUILD}"
           grep -m1 'model name' /proc/cpuinfo || true
@@ -639,7 +634,16 @@ jobs:
             > sample-rss.log 2>&1 &
           echo "$!" > sample-rss.pid
 
+      # `LLAMA_CPP_BUILD` is what the run manifest stamps as `runtime_build`,
+      # the llama.cpp release that decoded this shard's bytes. It used to reach
+      # here as workflow `env` beside a copy of the pin; it now comes from the
+      # step that read the pin, so the build stamped and the build installed are
+      # one answer. Unset it degrades to `build-not-recorded` rather than
+      # failing, so losing it would publish a day whose manifest cannot say what
+      # decoded it (Guardrail #10).
       - name: Work the shard
+        env:
+          LLAMA_CPP_BUILD: ${{ needs.plan.outputs.llama_cpp_build }}
         run: |
           python -m idhazh work \
             --date "${{ needs.plan.outputs.date }}" \

@@ -33,8 +33,10 @@ from ._harness import (
     _load_workflows,
     _mapping,
     _normalize_condition,
+    _pin_output_name,
     _run_bodies,
     _script,
+    _script_closure,
     _step,
     _steps,
     _strings,
@@ -108,9 +110,9 @@ RUNTIME_SCRIPT: Path = SCRIPTS_DIR / LLAMA_RUNTIME_SCRIPT
 
 PIN_SCRIPT: Path = SCRIPTS_DIR / LLAMA_PIN_SCRIPT
 
-#: What the fetch step publishes for the cache key to read, and the output name
-#: the script prints it under.
-PIN_OUTPUT: str = "llama_cpp_build"
+#: What the fetch step publishes for the cache key to read, read off the pin
+#: script itself so this file cannot name an output the pin does not print.
+PIN_OUTPUT: str = _pin_output_name()
 
 FETCH_STEP: str = "Fetch runtime and weights"
 
@@ -765,10 +767,15 @@ def test_the_fetch_step_hands_the_script_every_value_it_refuses_to_run_without()
     held to - and a guard added later is one this test enforces from that commit
     without being edited.
 
+    The whole call chain, because the runtime install is now its own script: a
+    guard that moved one file further away is still a guard this step has to
+    satisfy, and reading only the top file would have gone green on a step that
+    no longer passes `GITHUB_TOKEN`.
+
     Through `env`, never pasted: a value pasted into a program is text before it
     is a value (Guardrail #11).
     """
-    required = _required_environment(read_text(RUNTIME_SCRIPT))
+    required = _required_environment(_script_closure(read_text(RUNTIME_SCRIPT)))
     assert "GITHUB_TOKEN" in required and "WEIGHTS_FILE" in required, (
         f"the script no longer guards what it needs: {sorted(required)}"
     )
