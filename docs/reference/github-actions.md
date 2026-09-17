@@ -547,6 +547,74 @@ flowchart LR
  class PERSON,WEEKLY,VALIDATE,MEASURE,DRIFT,BACKFILL stage;
 ```
 
+## Pages publication
+
+`pages.yml` builds only committed data and uploads a static bundle. It does not
+run the producer or a model, and the published site has no runtime backend. When
+it runs and which commit it takes are in [Trigger reference](#trigger-reference)
+above; this section is what it does once it has decided to publish.
+
+**A newer build supersedes an older one; a deploy in flight always finishes.**
+Concurrency is declared on the two jobs rather than on the workflow, because
+they want opposite answers. The `build` job groups as `pages-build` with
+`cancel-in-progress: true`: it makes a replaceable artifact, publishing is
+last-write-wins, and an older bundle that finishes is discarded the moment the
+newer one deploys. The `deploy` job keeps the group `pages` with
+`cancel-in-progress: false`, because it replaces the live site and a
+half-replaced site is worse than an old one.
+
+**Cancelling a build cannot strand a deployment, and two independent facts say
+so.** `deploy` declares `needs: build` and carries no `if:`, so its condition is
+the default `success()` - a cancelled job satisfies no `needs`, and the deploy
+never starts. Independently of how the scheduler reads a cancellation, a build
+that stopped early never finished `actions/upload-pages-artifact`, and artifacts
+are scoped to their own run, so there is nothing for that run's deploy to take.
+The site is replaced from a complete bundle or not at all.
+
+The two settings are structural rather than tunable, so they are written in the
+workflow and not in `config/` (Guardrail #6). GitHub resolves `concurrency`
+before a job starts, so no config file has been read yet; and no value a knob
+could hold would make cancelling a live deploy right. They are the same kind of
+statement as `needs:` - what each job is, not how hard it should try.
+
+### What the split actually saves, measured 2026-09-17
+
+Taken against the live API, last 100 `pages.yml` runs.
+
+| Reading | Value | What it means |
+| :--- | ---: | :--- |
+| Runs in 24 hours | 85 | CI succeeds on every merge to `main`, and each success reaches here. |
+| Of the last 60, runs that built | 28 | The other 32 stopped at `decide`: the commit touched none of `frontend/**`, `config/idhazh.json` or `state/**`, so nothing was rebuilt and no artifact was uploaded. |
+| A build that runs | 49 s median, 60 s worst | So one cancelled build returns at most a minute of runner time. |
+| A deploy | 10 s median | Short enough that queueing behind one costs little. |
+| Runs cancelled | 0 | Nothing was being cancelled before this change. |
+| Consecutive runs that overlap at all | 6 of 99 | Publication is bursty but thinly spread, so the group binds rarely. |
+
+**The saving is small and the reason to take it is not the saving.** At 6
+overlapping pairs and 49 s a build, the runner time returned is on the order of
+five minutes a day. What the old shape cost that does not show up as minutes is
+head-of-line blocking: one group over the whole run put a newer commit's build
+behind the previous run's build *and* deploy, so the freshest bundle waited on a
+bundle already known to be out of date. The change removes that, cannot make the
+published site worse, and reverts by moving five lines. That is the whole case
+for it (Guardrail #10).
+
+**What GitHub's own starter workflows say, and what they do not.** Both
+`actions/starter-workflows` Pages templates carry `concurrency: group: "pages"`
+with `cancel-in-progress: false` and the comment "do NOT cancel in-progress runs
+as we want to allow these production deployments to complete". In `static.yml`
+there is a single job that builds and deploys, so the comment can only be about
+the deploy. `jekyll-gh-pages.yml` does split `build` and `deploy` with
+`needs: build`, and still declares one group at workflow level - the comment
+still reasons about "production deployments", and the build inherits the setting
+only because a workflow-level block cannot address one job. So the guidance
+applies to the deploy job; the build is swept up by where the block sits rather
+than by an argument about builds.
+
+One thing this change does not fix, because it was already true: if CI for an
+older commit finishes after CI for a newer one, the older commit publishes last.
+Publication orders by when a verdict arrived, not by commit order.
+
 ## Testing a candidate model, end to end
 
 ```mermaid
@@ -643,10 +711,6 @@ the fuller one, with the headroom left over, is
 [The cache transition](measurements.md#the-cache-transition-measured-2026-08-27),
 and the standing rule about which caches earn their bytes is
 [ci-caches.md](ci-caches.md).
-
-Pages publication builds only committed data and uploads a static bundle. It
-does not run the producer or a model, and the published site has no runtime
-backend.
 
 ## Vector backfill
 
