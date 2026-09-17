@@ -34,7 +34,7 @@
 
 	/** How many of our sources carried this story, as a sentence.
 	 *
-	 * The wording is the Editor's, from row 9 of the reading-page plan. The only
+	 * The wording is the Editor's. The only
 	 * departure is the singular: the ruling reads `Also covered by N other
 	 * sources today.`, and at N of 1 that sentence is not English.
 	 *
