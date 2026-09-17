@@ -344,6 +344,65 @@ that took three weeks to fill.
 count matches the record's declared length. `max_down_step` is strictly less
 than the measured holdout margin of 0.0083.
 
+## Row #4 - nested `state/` support
+
+**This lands before the first nested file exists, and the reason is that one of
+the two defects fails silently.**
+
+`state/` root today holds 13 directories and 5 loose CSV files. Everything this
+plan writes nests under `state/story-similarity/`. `ledger.py` does not assume a
+flat layout - every path is its own function, so a second segment is a new
+function beside them. `day_partition.day_files(root)` takes any root. Both are
+additive.
+
+Two places do assume flat.
+
+| Where | What breaks | Fix |
+| --- | --- | --- |
+| `backend/idhazh/telemetry/inventory.py` | `_day_files` globs `*/YYYY/MM/DD*` - one segment. A nested store is two, so `idhazh telemetry files --date X` **omits it and says nothing about the omission**. `_month_files` has the same shape | Glob both `*/Y/M/D*` and `*/*/Y/M/D*`. Two lines, plus one unit test over a built temp tree |
+| `backend/idhazh/telemetry/prune.py` | `TARGETS` is built on "the word an operator types IS the directory name". A nested store's word would carry a slash into a closed vocabulary | Make `TARGETS` a mapping from a one-segment word to a relative path: `similarity-pairs` maps to `story-similarity/scored-pairs`. The vocabulary stays closed, so no path travels through the argument (Guardrail #11) |
+
+**`commit-and-push.sh` costs nothing and the nest buys something there.** It
+takes paths as arguments, so the workflow stages one path -
+`state/story-similarity` - which covers every file this plan adds, for ever. The
+script's own header records a new `state/` writer arriving without being staged
+three times; the nest closes that for this feature permanently.
+
+**Test tier: unit.** Driven by a built temp tree, never by the committed
+archive.
+
+## Row #5 - score and select the borderline pairs
+
+**What it does.** Reads the day's items, scores every cross-source pair inside
+the 36-hour window, keeps the ones in the band, orders them, splits them across
+the shards, and writes the day's `scored-pairs` file with no verdict on any row.
+
+**Scoring costs nothing.** It is cosine over vectors the pipeline already
+computed for the assist index. Measured on a developer machine: 1,968,171 pairs
+across 28 committed days in a few minutes of pure Python. One day's subset is a
+small fraction of that.
+
+**Selection, in order.**
+
+1. Keep pairs at or above `band_low`.
+2. Every pair at or above the current line goes in first, always, uncapped.
+   They are the entire precision measurement.
+3. Fill to `pair_budget` from below the line in content-hash order.
+4. If the budget bites, record `pairs_in_band` so the day's counts read as
+   partial rather than as a quiet truncation.
+
+**Ordering is `sha256(date, scorer_stamp, min(item_id), max(item_id))`,
+ascending.** No seed. A seed in config is a knob somebody can turn until the
+answer looks nice; a content hash is not. The same rule the label queue already
+uses.
+
+**Shard assignment is `index mod shards`**, not contiguous blocks, so a
+truncated draw still spreads evenly and the four shards are exchangeable samples
+of one population.
+
+**Test tier: unit for the ordering and the selection, integration for the day
+file.** Both driven by a fixture.
+
 ## Row #6 - the judge
 
 **The system turn is `backend/idhazh/prompts/judge_same_story.txt`**, beside the
@@ -409,7 +468,92 @@ prose - a fallback quietly re-enables the class of failure the grammar removes.
 **If the grammar was not applied, fail the shard.** Do not fall back to parsing
 prose - a fallback quietly re-enables the class of failure the grammar removes.
 
-## The console, ruled by Susan
+## Row #7 - fold the day into the record
+
+**What it does.** Reads the day's `scored-pairs` file, drops every row where
+`usable` is false, and adds each remaining verdict into the slot its score falls
+in. Writes the record back whole.
+
+**The record refuses a date it already holds.** It carries `folded_dates`, and a
+fold of a date already present is an error rather than a silent double count. A
+re-run of this row is then free instead of damaging.
+
+**The commit is a rebuild, not a record.** `score-distribution.json` is
+rewritten rather than appended, and `.gitattributes` gives `merge=union` to CSV
+only. Two racing pushes would conflict for real and the job would lose every
+path it staged. So the commit step names `REFRESH_PATHS` and a
+`REGENERATE_COMMAND`: hand the file back to origin's tip and re-fold this day
+onto it. That branch already exists in `commit-and-push.sh`.
+
+**Two commit calls, in this order**: the day files first as a recording call,
+the record second as a rebuilding call. They cannot share one call, because
+`REFRESH_PATHS` applies to everything staged and handing a `merge=union` day
+file back to the tip would discard the day's verdicts.
+
+**Test tier: unit.** A built record plus a built day, asserting the slot counts
+afterwards and asserting the second fold of one date raises.
+
+## Row #8 - fit, damp, clamp, write the day's row
+
+**What it does.** The four steps, in order, ending in a
+`fitted-thresholds/<date>.csv` row. **The knob is still not read by anything**,
+so this row changes no published output.
+
+**The gates come first.** Below `minimum_negatives`, `minimum_above_line` or
+`minimum_days`, the run writes `held_reason = sheet_too_small` with all three
+counts and stops. Same for `inputs_changed`, `judge_unstable`,
+`judge_uncertain` and `step_change`.
+
+**A row is written every day, including the days nothing moved.** A row that
+says nothing happened is what makes a silently broken judge visible.
+
+**Test tier: unit for each of the four steps separately**, because a test that
+exercises all four at once cannot say which one broke. Plus one integration
+test over a built record that walks a fortnight and asserts the line converges.
+
+## Row #9 - assemble reads the fitted line
+
+**This is the first row that changes a published day, and it is the one to take
+slowly.**
+
+`assemble.py` takes `same_story: SameStoryConfig` as an argument and reads
+`day.knobs.floor_min` off that passed value rather than off `config.load()`, so
+the seam already exists: one `model_copy(update=...)` at the single call site.
+No function signature moves.
+
+**The effective line is `max(config floor_min, fitted value)` when the fitted
+value is absent**, and the fitted value alone when it is present. On a fresh
+clone with no record, `config/idhazh.json` governs unchanged - which is what
+keeps "a fresh clone runs on the defaults" true.
+
+**The flag is `enabled`, default false**, with its removal condition on the
+line that declares it: delete the flag once this row has run 14 days.
+
+**Test tier: integration, plus the browser smoke** (CLAUDE.md section 12), and
+the day must still render when the record is absent.
+
+## Row #10 - the `LLM-JUDGES` workflow
+
+**Four matrix legs, `max-parallel: 4`, one `llama-server` per leg.** Not four
+processes on one runner - see the runner budget below for why that fails twice
+over.
+
+**It carries a `judge_shard_timeout_minutes` knob**, read the way `digest.yml`
+reads `run.shard_timeout_minutes` through `backend/utilities/shard_bound.py`,
+which asserts the value is a bare positive integer. `timeout-minutes` takes
+whatever it is handed, and an unreadable value leaves the job with no bound at
+all - the run finds out six hours later.
+
+**It is a host for later judge tasks**, so a task declares its own inputs,
+outputs and ledger, and a failing task degrades without taking its siblings
+down. `digest.yml`'s work job is the closest precedent for the shape.
+
+**The judge model is `models.summarize`**, which is what makes the measured
+9 tokens a second transfer and what keeps the weights cache key warm.
+
+**Test tier: workflow.** The existing workflow tests drive a built tree.
+
+## The console, rows #12 to #15, ruled by Susan
 
 Every number this feature writes is accounted for below. A metric with no row is
 a metric nobody sees, and this table exists so that cannot happen quietly.
@@ -476,6 +620,30 @@ How same-story detection works end to end, in prose plus a mermaid diagram: the
 score, the band, the sampling, the judging, the fit, the damping, the clamp, the
 settling, and what each store holds. It carries the throughput arithmetic below
 so the next person sizing a model task has the numbers.
+
+## Row #17 - measure a judge call on a stock runner
+
+**What it replaces.** Every timing figure in this plan rests on the owner's
+9 tokens a second read and 4 written. Those were measured at prompt lengths far
+longer than this one, so they are an estimate here rather than a reading.
+
+**What to time**, on a stock `ubuntu-latest`, with the real prompt and the real
+grammar: prefill seconds and decode seconds **separately**, over at least 20
+calls, reporting the median and the slowest. Not one call - one call measures
+the cold path that never repeats.
+
+**Two things it settles.** Whether a leg fits inside its timeout with room, and
+whether a warm prompt cache actually reads the instruction block once per leg
+rather than once per call. The second is a stopwatch question - compare the
+first call in a leg against the hundredth - and must not be assumed.
+
+**What would make the plan wrong enough to redesign.** A median call past
+150 seconds puts 200 pairs beyond a comfortable leg, and the response is fewer
+pairs or shorter summaries, not a longer timeout.
+
+**This row writes a benchmark page under `docs/reference/benchmarks/`**, named
+for what it measured. A re-run replaces that page rather than adding a second
+one.
 
 ## The runner budget
 
