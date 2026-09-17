@@ -35,7 +35,8 @@ Length:
 
 - Write one summary of $target_words_min to $target_words_max words. Do not pad
   a short article to reach the number, and do not stop early on a long one.
-- The summary is prose. $paragraph_rule
+- The summary is prose.
+$paragraph_rule
 - Write $key_points_min to $key_points_max key points, each one sentence. A key
   point that restates the summary is a wasted line.
 

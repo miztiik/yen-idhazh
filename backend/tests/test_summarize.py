@@ -2494,7 +2494,8 @@ def test_the_paragraph_rule_cannot_vary_with_the_article() -> None:
 def test_one_paragraph_max_turns_the_break_off_everywhere() -> None:
     """The knob's substitution test: change the config, change the behaviour."""
     off = paragraph_rule(SummarizeConfig(paragraphs_max=1))
-    assert off == "Write the summary as one paragraph."
+    assert off.strip() == "Write the summary as one paragraph."
+    assert "empty line" not in off
 
 
 def test_a_summary_far_over_its_ask_still_reaches_the_reader() -> None:

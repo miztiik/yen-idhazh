@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import re
+import textwrap
 from functools import lru_cache
 from pathlib import Path
 from string import Template
@@ -288,13 +289,19 @@ def paragraph_rule(ask: SummarizeConfig) -> str:
     whatever `normalize_prose` folds it into.
     """
     if ask.paragraphs_max < 2:
-        return "Write the summary as one paragraph."
-    return (
-        f"Write the summary as one paragraph, or as at most {ask.paragraphs_max} "
-        "paragraphs with one empty line between them. Use a second paragraph only "
-        f"where the summary runs to {ask.second_paragraph_from_words} words or more "
-        "and the subject turns. A break in a short summary makes two half-thoughts."
-    )
+        sentence = "Write the summary as one paragraph."
+    else:
+        sentence = (
+            f"Write the summary as one paragraph, or as at most {ask.paragraphs_max} "
+            "paragraphs with one empty line between them. Use a second paragraph only "
+            f"where the summary runs to {ask.second_paragraph_from_words} words or more "
+            "and the subject turns. A break in a short summary makes two half-thoughts."
+        )
+    # Wrapped to the width both prompt files are written at. The model does not
+    # care; the person reviewing a rendered prompt fixture does, and one
+    # 240-character line in a file of 78-character ones is where a stray edit
+    # hides.
+    return textwrap.fill(sentence, width=76, initial_indent="  ", subsequent_indent="  ")
 
 
 def system_prompt(
