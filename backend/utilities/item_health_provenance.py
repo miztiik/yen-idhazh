@@ -77,8 +77,8 @@ class Group(NamedTuple):
 GROUPS: Final[tuple[Group, ...]] = (
     Group(
         "Identity",
-        "Which item, at which address, from which feed, on which run, and "
-        "written by which worker.",
+        "Which item, at which address, from which feed, on which run, and on "
+        "whose machine.",
         (
             "version",
             "date",
@@ -89,6 +89,7 @@ GROUPS: Final[tuple[Group, ...]] = (
             "vertical",
             "source_id",
             "shard",
+            "job",
         ),
     ),
     Group(
@@ -215,7 +216,6 @@ GROUPS: Final[tuple[Group, ...]] = (
         "machine beside it is not a measurement (Guardrail #10).",
         (
             "cpu_model",
-            "runner_name",
             "cpu_busy_pct",
             "cpu_busy_max",
             "cpu_busy_min",

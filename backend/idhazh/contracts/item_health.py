@@ -30,6 +30,7 @@ from idhazh.contracts.base import (
     fits_its_column,
 )
 from idhazh.contracts.call_cost import COST_FIELDS, CallKind
+from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier
 
@@ -83,6 +84,18 @@ RETIRED_CELLS: Final[Mapping[str, str]] = MappingProxyType(
         for field in ("kind", *COST_FIELDS)
     }
 )
+
+#: Headings a day file an earlier run wrote still carries that this row no longer
+#: names and that nothing replaced. A retired cell moves to another column; a
+#: dropped one is gone, and the value it held is answered elsewhere - the host
+#: record carries `runner_name` at job grain, which an item row reaches through
+#: `job` and `shard` (`docs/reference/host-metrics.md`).
+#:
+#: **This is a contract, not a courtesy.** `ledger.migrate_header` refuses any
+#: heading that is neither a current column nor one the reader carries, rather
+#: than dropping cells silently - so a column deleted above without an entry here
+#: raises on the first append to every committed day file.
+DROPPED_CELLS: Final[frozenset[str]] = frozenset({"runner_name"})
 
 
 class ItemStage(StrEnum):
@@ -347,6 +360,16 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-17T12:00",
+            change="Retired runner_name; the host record carries it at job grain.",
+            why="Nothing read the item-row copy, and a second copy is a thing that can disagree.",
+        ),
+        ChangelogEntry(
+            version="2026-09-17",
+            change="job names the workflow job whose machine took this row's readings.",
+            why="Shard alone does not reach the host record: more than one job spells shard 0.",
+        ),
+        ChangelogEntry(
             version="2026-09-16T12:30",
             change="The three slot columns carry the item's first call.",
             why="All three were declared with no producer; the pinned build reports them.",
@@ -355,16 +378,6 @@ class ItemHealthRow(Contract):
             version="2026-09-16",
             change="label_ms and summary_ms are a stopwatch; both finish reasons may be null.",
             why="A clock that was its two neighbours summed could not see a wait.",
-        ),
-        ChangelogEntry(
-            version="2026-09-15T22:50",
-            change="time_source is typed TimeSource rather than a lowercase token.",
-            why="A closed set the pipeline mints is one a producer selects from, never spells.",
-        ),
-        ChangelogEntry(
-            version="2026-09-15T22:10",
-            change="FailureCode gained model_timed_out and shard_out_of_time.",
-            why="Both were being reported under a name that sends an operator to the wrong place.",
         ),
         ChangelogEntry(
             version="2026-08-23",
@@ -425,6 +438,16 @@ class ItemHealthRow(Contract):
             "census from one job and cannot know which machine an item was for, and "
             "every row written before 2026-08-30 predates the column. Never read an "
             "empty cell as shard 0."
+        ),
+    )
+    job: ServerJob | None = Field(
+        default=None,
+        description=(
+            "Which workflow job's machine took this row's readings - never which job "
+            "wrote the row. With `shard` this is the whole of `HOST_FINGERPRINT_KEY`, "
+            "so an item resolves to exactly one host record. Null on the same terms as "
+            "`shard`: assemble writes the day's census and cannot know whose machine an "
+            "item ran on, and every row written before this column predates it."
         ),
     )
     span_integrity: bool | None = Field(
@@ -801,11 +824,15 @@ class ItemHealthRow(Contract):
     # A throughput number with no machine beside it is not a measurement
     # (Guardrail #10). These are what let a row from a slower runner be read as
     # a slower runner rather than as a regression.
+    #
+    # `runner_name` was here until 2026-09-17 and is in `DROPPED_CELLS`. The host
+    # record carries it once a job rather than once an item, and `job` with
+    # `shard` is what reaches that record - a second copy of it here was a thing
+    # that could disagree. `cpu_model` stays, and its reason is the one thing
+    # that separates the two: it crosses to the browser as
+    # `PublicTelemetryRow.cpu_model`, and a browser cannot join.
     cpu_model: OneLine | None = Field(
         default=None, description="The CPU the runner reported, verbatim."
-    )
-    runner_name: OneLine | None = Field(
-        default=None, description="The runner label the job ran on."
     )
     cpu_busy_pct: float | None = Field(
         default=None, ge=0.0, le=100.0, description="Mean CPU busy over the item."
@@ -914,6 +941,24 @@ class ItemHealthRow(Contract):
             raise ValueError("http_status belongs only on fetch item-health rows")
         if self.code is FailureCode.UNKNOWN and self.detail is None:
             raise ValueError("unknown item-health failure must carry detail")
+        return self
+
+    @model_validator(mode="after")
+    def _a_named_job_names_a_worker_too(self) -> Self:
+        """`job` implies `shard`, and deliberately not the other way round.
+
+        The pair is `HOST_FINGERPRINT_KEY` minus the date and the run, so a job
+        with no shard points at no host record - it is half a key, and half a key
+        resolves to every shard that job ran.
+
+        **The converse is not a rule, and that is the load-bearing half.** Every
+        row written before this column carries a shard and no job; the archive is
+        read back through `from_csv_row` on the next append
+        (`ledger.append_item_health`), so `job iff shard` would refuse the whole
+        of it on the first run after this lands.
+        """
+        if self.job is not None and self.shard is None:
+            raise ValueError("a job on an item-health row names a shard as well")
         return self
 
     @model_validator(mode="after")
