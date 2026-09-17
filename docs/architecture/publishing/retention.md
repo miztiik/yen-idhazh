@@ -320,25 +320,56 @@ with `idhazh rebuild-score-index --month <YYYY-MM>`, which checks its own result
 both ways. The dry run is where that is caught, which is the second reason it is
 the default.
 
-**Atomic per store, through the rename the rest of this tree writes with.**
-Every selected file is moved into a scratch directory beside the stores - one
-rename each, on the same file system, because a cross-device move is a copy and
-neither atomic nor cheap - and only once every one has moved is that directory
-removed. A rename that fails part way puts back the ones already moved and
-raises, so the tree is exactly as it was found. The alternative is a loop of
-unlink calls, which cannot be undone: a prune that deleted three day files and
-then raised would leave an archive nobody can reason about, and the whole point
-of this shape is that no run can end there. The month and year directories a
-deleted day empties go with it, through the same `day_partition.drop_empty_day_dirs`
-the scheduled prune and the score archive use.
+**Atomic per day file, one delete at a time (2026-09-17).** Every selected file
+is removed on its own, in walk order, through the shared core in
+[../../concepts/atomic-deletes.md](../../concepts/atomic-deletes.md). A pass
+interrupted after the third file leaves three files gone and the rest exactly as
+they were, and the record it carries names the day the next pass retries. The
+month and year directories a deleted day empties go with it, through the same
+`day_partition.drop_empty_day_dirs` the scheduled prune and the score archive
+use.
+
+Until 2026-09-17 this moved the whole range into a scratch directory beside the
+stores and rolled every move back if one failed, so a failed pass removed
+nothing at all. The scratch directory is gone with that shape; what replaced it,
+and what the change cost, is on the concept page.
+
+**One pass is bounded.** `--max-deletes` names how many day files a pass may
+take before it stops and prints the day to resume at. Its default is every day
+the range names, so an operator who typed a range gets that range - a real bound
+taken from their own arithmetic rather than a number somebody picked.
 
 **What the tests settle and what they cannot.** `backend/tests/retention/test_prune_range.py`
 drives a built tree and asserts the bijection both ways - every day inside the
 range went, and every day outside it is still there with the same SHA-256 - plus
-a move failed on the third of four leaving the tree byte-identical, and both
-refusals. What no test here can settle is what the SCHEDULED prune should
-delete: that is a window in `config/`, it is a person's decision, and this
-command deliberately has no opinion about it.
+a delete failed on the third of four leaving the first two gone and the rest
+untouched, a ceiling that stops and names its resume point, and both refusals.
+What no test here can settle is what the SCHEDULED prune should delete: that is
+a window in `config/`, it is a person's decision, and this command deliberately
+has no opinion about it.
+
+## A collection GitHub holds: artifacts and workflow runs (2026-09-17)
+
+Everything above bounds a tree this repository commits. Two collections are
+bounded by nothing at all, because no file here represents them: the artifacts
+jobs upload and the workflow runs that produced them. Measured 2026-09-17 on
+`miztiik/yen-idhazh`: 612 live artifacts holding 1,063.2 MB - of which
+`github-pages` is 30 artifacts holding 1,003.1 MB, 94 percent of the bytes in 5
+percent of the count - and 3,551 workflow runs.
+
+```
+python backend/utilities/prune_artifacts.py --collection workflow-artifacts
+```
+
+The steps, the flags and what each one costs are in
+[../../how-to/prune-a-collection.md](../../how-to/prune-a-collection.md). The
+policy is `prune` in `config/idhazh.json`: one `retain_days` and one
+`max_deletes_per_run` a collection, with `dry_run` true, so a fresh clone
+reports and deletes nothing.
+
+**It is the same core the day files go through**, which is the whole reason it
+is one paragraph here and not a second retention design. A collection is three
+callables - list, describe, delete - and everything else is shared.
 
 ## `state/scores/` became a directory, and that bounds nothing on its own (2026-08-31)
 

@@ -377,6 +377,30 @@
       "title": "CollectConfig",
       "type": "object"
     },
+    "CollectionPolicy": {
+      "additionalProperties": false,
+      "description": "One collection's line: how old a member must be, and how many go in a pass.",
+      "properties": {
+        "max_deletes_per_run": {
+          "default": 50,
+          "description": "The ceiling. One pass deletes at most this many and then stops cleanly, naming where the next pass resumes. 0 surveys: it reports the first member the window holds and deletes nothing, which is how an operator sees what a window selects without committing to a number.",
+          "minimum": 0,
+          "title": "Max Deletes Per Run",
+          "type": "integer"
+        },
+        "retain_days": {
+          "description": "How many days a member is kept before a pass may take it. Whole days and never zero: a window that includes today would delete the artifact the running job just uploaded.",
+          "minimum": 1,
+          "title": "Retain Days",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "retain_days"
+      ],
+      "title": "CollectionPolicy",
+      "type": "object"
+    },
     "ConsoleConfig": {
       "additionalProperties": false,
       "description": "Knobs for the operator console's time viewport.",
@@ -1427,6 +1451,40 @@
       "title": "PlacementConfig",
       "type": "object"
     },
+    "PrunableCollection": {
+      "description": "Every collection a pass may take from, and the word an operator types.\n\nA closed vocabulary, so a word outside it is refused with the whole list\nrather than resolved against anything. The same rule `idhazh telemetry\nprune` holds for its stores: a deletion command whose destination is an\narbitrary string is a deletion primitive pointed at whatever the caller\nhappened to pass (Guardrail #11).",
+      "enum": [
+        "workflow-artifacts",
+        "workflow-runs"
+      ],
+      "title": "PrunableCollection",
+      "type": "string"
+    },
+    "PruneConfig": {
+      "additionalProperties": false,
+      "description": "The collections a pass may take from, and whether it may take anything at all.",
+      "properties": {
+        "collections": {
+          "additionalProperties": {
+            "$ref": "#/$defs/CollectionPolicy"
+          },
+          "description": "One policy per collection this may be pointed at. A collection absent from this map is refused by name: the vocabulary says the word exists and the map says whether this repository has drawn a line for it.",
+          "propertyNames": {
+            "$ref": "#/$defs/PrunableCollection"
+          },
+          "title": "Collections",
+          "type": "object"
+        },
+        "dry_run": {
+          "default": true,
+          "description": "Report what a live pass would delete and delete nothing. True by default, so a fresh clone removes nothing it was not asked twice for. The CLI's --no-dry-run is the second word.",
+          "title": "Dry Run",
+          "type": "boolean"
+        }
+      },
+      "title": "PruneConfig",
+      "type": "object"
+    },
     "ReferenceDatasetConfig": {
       "additionalProperties": false,
       "description": "The floors `corpus/reference-dataset-1/` is built to, and the manners it is built with.\n\nEvery number here is a floor or a cap rather than a measurement, and the\nbuilder refuses loudly rather than emitting a set that misses one. They are\nconfig because a dataset whose floors are literals cannot be rebuilt at a\ndifferent size without a code change (Guardrail #6).\n\nNothing here runs on the runner. `build_reference_dataset.py` reads the open\nweb once, by hand, off the daily path.",
@@ -2143,14 +2201,14 @@
       "why": "Testing the bench flow should not cost half an hour of llama-bench."
     },
     {
+      "change": "The prune block, additive, dry_run true and two collections.",
+      "version": "2026-09-17T15:00",
+      "why": "GitHub holds 1 GB of artifacts that no file in this repository names."
+    },
+    {
       "change": "bench.corpus_items, additive, default 3.",
       "version": "2026-09-17T12:00",
       "why": "The bench corpus was two source literals, and at five it overran the job."
-    },
-    {
-      "change": "extract gained three chrome knobs, additive, the fold on.",
-      "version": "2026-09-17",
-      "why": "The boilerplate signal divided by an empty set and said no to every page."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2211,6 +2269,9 @@
     },
     "placement": {
       "$ref": "#/$defs/PlacementConfig"
+    },
+    "prune": {
+      "$ref": "#/$defs/PruneConfig"
     },
     "reference_dataset": {
       "$ref": "#/$defs/ReferenceDatasetConfig"

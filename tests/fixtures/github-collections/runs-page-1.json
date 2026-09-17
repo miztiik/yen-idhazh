@@ -1,0 +1,47 @@
+{
+  "total_count": 3551,
+  "workflow_runs": [
+    {
+      "id": 34941020965,
+      "name": "CI",
+      "node_id": "WFR_kwLOAAAAAM8XvzU",
+      "head_branch": "main",
+      "head_sha": "85e876351f3d9f2a5c1b0e4a7d8c6b5a4f3e2d1c",
+      "run_number": 4471,
+      "event": "push",
+      "status": "completed",
+      "conclusion": "success",
+      "workflow_id": 99881122,
+      "created_at": "2026-06-02T04:15:09Z",
+      "updated_at": "2026-06-02T04:37:44Z"
+    },
+    {
+      "id": 34941020966,
+      "name": "Daily digest",
+      "node_id": "WFR_kwLOAAAAAM8XvzY",
+      "head_branch": "main",
+      "head_sha": "7b93a9ba2c4d6e8f0a1b3c5d7e9f1a2b4c6d8e0f",
+      "run_number": 4472,
+      "event": "schedule",
+      "status": "completed",
+      "conclusion": "success",
+      "workflow_id": 99881133,
+      "created_at": "2026-08-18T11:00:01Z",
+      "updated_at": "2026-08-18T12:14:52Z"
+    },
+    {
+      "id": 34941020967,
+      "name": "CI",
+      "node_id": "WFR_kwLOAAAAAM8Xvzc",
+      "head_branch": "main",
+      "head_sha": "aea662241b3c5d7e9f1a2b4c6d8e0f2a4b6c8d0e",
+      "run_number": 4473,
+      "event": "pull_request",
+      "status": "completed",
+      "conclusion": "failure",
+      "workflow_id": 99881122,
+      "created_at": "2026-09-16T05:10:40Z",
+      "updated_at": "2026-09-16T05:29:18Z"
+    }
+  ]
+}
