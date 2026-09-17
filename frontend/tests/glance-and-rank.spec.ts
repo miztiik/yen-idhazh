@@ -1,9 +1,8 @@
-/** The two chart builders row 13 stops sorting a whole field to read a little.
+/** Two chart builders that stopped sorting a whole field to read a little.
  *
- * Row 13 of `TODO/20260906-constant-cost-reads-plan.md` takes the full sort out
- * of two derivations that only wanted a small answer from it: `rank` sorted
- * every candidate to keep the top few, and `sizeGain` sorted every manifest to
- * subtract its two ends. Each is now one pass over the field.
+ * The full sort is out of two derivations that only wanted a small answer from
+ * it: `rank` sorted every candidate to keep the top few, and `sizeGain` sorted
+ * every manifest to subtract its two ends. Each is now one pass over the field.
  *
  * That is two claims and they share one shape. **The output does not move** -
  * the parity halves hold the new code against a byte-for-byte copy of the old,
@@ -11,8 +10,9 @@
  * get wrong on. **The work no longer grows with the field** - the counted halves
  * put a read counter on each entry, double the field sixteen-fold, and assert
  * the bounded pass reads an entry a flat number of times while the sort it
- * replaced climbs by about log2 of the field. The counted case is the red this
- * row turned green: run it against the pre-row code and the flat assertion fails.
+ * replaced climbs by about log2 of the field. The counted case is the red the
+ * change turned green: run it against the code it replaced and the flat
+ * assertion fails.
  *
  * Nothing here reads a committed ledger. A test that walks the archive costs
  * more every published day (Guardrail #12), and both shapes are reachable from a

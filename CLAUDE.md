@@ -1,6 +1,6 @@
 # CLAUDE.md - yen-idhazh Engineering Contract
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-17
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
@@ -160,6 +160,7 @@ These are boundaries rather than guardrails because each is a structural invaria
 - ASCII-only in all repo text: commit messages, docs, code comments, log strings, agent markdown, CLI output (use `-`, `->`, `>=`, and "section"). No curly quotes, em-dashes, or non-ASCII symbols.
 - **Process docs stay domain-neutral.** Everything under `docs/how-to/` that describes *how work is done*, and `docs/reference/documentation-structure.md`, are written to be copied between projects unchanged: they cite `CLAUDE.md` by section number rather than restating a project-specific rule. A process doc that cannot be stated neutrally says so and names why.
 - A decision is recorded IN the living doc it impacts, never as a standalone record. **There is no ADR file and no `decisions/` directory.** Git history is the immutable record of when it changed.
+- **Code never cites a plan. It carries the reason instead.** A comment pointing at `TODO/<plan>.md row N` tells the reader where a decision was argued, not what it was: they have to leave the file to learn anything, and once that plan is distilled and deleted they cannot learn it at all. Write the one or two lines the pointer was standing in for. An identifier is bound by the same rule - a name says what the thing is, never which row asked for it. This covers a docstring, a comment, a `Field(description=...)` and a reader-facing string equally. Owner ruling, 2026-09-17.
 - Open questions live in the active plan-doc under `TODO/`, not in this file.
 
 The tiers, the depth limit, the elements every page carries, the three tests that decide a split, where a benchmark run is written up, and what makes a sentence worth keeping are all in [`docs/reference/documentation-structure.md`](docs/reference/documentation-structure.md).

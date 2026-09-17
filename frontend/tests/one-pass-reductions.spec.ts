@@ -1,15 +1,14 @@
-/** The six build reductions row 2 replaces, and the two things that must hold.
+/** The six build reductions that became single passes, and what must hold.
  *
- * Row 2 of `TODO/20260906-constant-cost-reads-plan.md` turns repeated
- * reductions into single passes over the same input: the config accessors, the
- * date and run buckets in `model-work`, the run-to-health join in
+ * Six repeated reductions are now single passes over the same input: the config
+ * accessors, the date and run buckets in `model-work`, the run-to-health join in
  * `runtime-counters`, the per-article band ladder, the per-bin scans in
  * `distribution`, and the daily buckets in `failureSeries`.
  *
- * **Byte-identical output is the hard requirement** - this row changes no
+ * **Byte-identical output is the hard requirement** - the change moves no
  * number on any page - so half of this file compares what the reductions
  * return against `fixtures/one-pass-golden.json`, captured from the
- * implementation the row replaced. Regenerating that file is an admission that
+ * implementation they replaced. Regenerating that file is an admission that
  * the output moved and needs the reason written down:
  *
  * ```powershell

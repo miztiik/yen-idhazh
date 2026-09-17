@@ -1158,9 +1158,9 @@ def test_enforcing_cuts_the_weaker_telling() -> None:
 
 # --- Where a story publishes -----------------------------------------------
 #
-# `desk_of` is the whole of decision 8 of TODO/20260910-23-article-classification-plan.md:
-# the feed floor counts feeds, a feed declares a vertical, and a story relabelled
-# onto a name this run will not render falls back to the word its feed declared.
+# `desk_of` is the whole rule in one function: the feed floor counts feeds, a
+# feed declares a vertical, and a story relabelled onto a name this run will not
+# render falls back to the word its feed declared.
 # Every case here is built in memory; nothing reads the plan tree.
 
 

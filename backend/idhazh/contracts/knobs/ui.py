@@ -372,8 +372,8 @@ class UiConfig(Model):
             "keep in step. Thirty, because that is the span the console opens on and "
             "about the reach `assist.search_months` gives a search today, so the "
             "control ships opening on what the archive already costs. NOTHING READS "
-            "IT YET - the control that will is row 25 of "
-            "TODO/20260906-constant-cost-reads-plan.md. Read by the build alone, like "
+            "IT YET - the archive has no window control, so the span one would open "
+            "on is declared and unused. Read by the build alone, like "
             "`archive_recent_days`, so it never rides to a reader."
         ),
     )
@@ -440,9 +440,9 @@ class UiConfig(Model):
             "The ceiling is 100 MB, a little over twice the 43.2 MB the on-device "
             "search model and its runtime already take, because taking a tenth of a "
             "gigabyte of somebody's phone for a news digest is not a thing a config "
-            "edit should be able to do quietly. NOTHING READS IT YET - the eviction "
-            "rule that will is row 8 of TODO/20260906-constant-cost-reads-plan.md. "
-            "Read by the build alone, so it never rides to a reader."
+            "edit should be able to do quietly. NOTHING READS IT YET - the offline "
+            "cache evicts on `offline_days_kept` alone, so this ceiling is declared "
+            "and unenforced. Read by the build alone, so it never rides to a reader."
         ),
     )
 

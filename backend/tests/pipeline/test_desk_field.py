@@ -17,9 +17,9 @@ from ._builders import (
 )
 
 #
-# Row #6 of TODO/20260910-23-article-classification-plan.md, at the stage that
-# builds a published item and a published day. Every case is built from the
-# committed contract fixtures in memory; nothing reads the digest tree.
+# A desk sitting beside the feed's own word, at the stage that builds a published
+# item and a published day. Every case is built from the committed contract
+# fixtures in memory; nothing reads the digest tree.
 
 
 def relabelled_article() -> Article:

@@ -1,16 +1,15 @@
 /** One deterministic ledger the one-pass build reductions are measured over.
  *
- * Row 2 of `TODO/20260906-constant-cost-reads-plan.md` replaces six repeated
- * reductions with single passes and must move no number on any page. That is
- * two claims and they share one input. The parity half compares what the
- * reductions return against `../fixtures/one-pass-golden.json`, captured from
- * the implementation this row replaced. The counted half doubles the input and
- * reads how the visits grow.
+ * Six repeated reductions became single passes and must move no number on any
+ * page. That is two claims and they share one input. The parity half compares
+ * what the reductions return against `../fixtures/one-pass-golden.json`,
+ * captured from the implementation they replaced. The counted half doubles the
+ * input and reads how the visits grow.
  *
  * Every cell here comes from one seeded sequence, so the same ledger is built
  * on every machine and the golden stays comparable. Nothing reads a committed
  * ledger: a test that walks the archive costs more every published day
- * (Guardrail #12), and the shapes this row is about are reachable from a fixture.
+ * (Guardrail #12), and these shapes are reachable from a fixture.
  */
 
 import type { SummaryBand, TelemetryRow } from '../../src/lib/charts/series';

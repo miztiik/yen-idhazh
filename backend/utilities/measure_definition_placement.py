@@ -1,11 +1,11 @@
 """Price the 30 definition sentences the labelling prompt is about to carry.
 
-The placement ruling in `TODO/20260910-23-article-classification-plan.md`
-section 12a spends about 1,000 tokens of every prompt this pipeline sends, on
-every item, for ever. It is the right placement - the shared system turn costs
-1.4 minutes a shard where the user turn costs 27.3 - but the ruling answers
-where the definitions go and not whether they are worth carrying. **Nobody has
-measured what they buy.** This is the instrument that does.
+Putting the definitions in the shared system turn spends about 1,000 tokens of
+every prompt this pipeline sends, on every item, for ever. It is the right
+placement - the shared system turn costs 1.4 minutes a shard where the user turn
+costs 27.3 - but that answers where the definitions go and not whether they are
+worth carrying. **Nobody has measured what they buy.** This is the instrument
+that does.
 
 Three mechanisms are live and none of them has a reading.
 
@@ -248,16 +248,15 @@ def _agreement(rows: Sequence[dict[str, Any]], taxonomy: Taxonomy) -> Iterable[A
     """The reading, once the labelling prompt exists to take it with.
 
     **It refuses instead of guessing at the prompt.** The four variants differ
-    only in the definition text, and the turn that text rides in is the
-    labelling prompt row #8 builds. Inventing one here would measure a prompt
+    only in the definition text, and the turn that text rides in is the labelling
+    prompt, which nothing builds yet. Inventing one here would measure a prompt
     this pipeline never sends, and a number taken against the wrong prompt is
     worse than no number: it looks like evidence.
     """
     raise NotImplementedError(
         f"{len(rows)} labelled rows and {len(taxonomy.verticals)} desks are ready, and the "
-        "labelling prompt is not - row #8 of TODO/20260910-23-article-classification-plan.md "
-        "builds the turn these definitions ride in. Take this reading in that row, with "
-        "the prompt the pipeline actually sends"
+        "labelling prompt is not - nothing builds the turn these definitions ride in yet. "
+        "Take this reading once something does, with the prompt the pipeline actually sends"
     )
 
 

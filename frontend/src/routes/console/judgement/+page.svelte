@@ -4,7 +4,7 @@
 	 * **It is deliberately empty and it is deliberately here.** The strip took a
 	 * fourth and a fifth tab on 2026-09-12, and a tab naming a page nobody can
 	 * reach is worse than three tabs. So the route answers 200, carries its own
-	 * heading and prints a named absence saying which row fills it.
+	 * heading and prints a named absence saying what is still missing.
 	 *
 	 * It draws no panel and fetches nothing, which is why it has no window
 	 * control: the control governs the panels below it and there are none.
@@ -31,11 +31,9 @@
 			and ours differ.
 		</p>
 		<p class="empty-note">
-			Nothing is drawn here yet. The panels are specified by row #12 of
-			<code>TODO/20260910-25-placement-plan.md</code>, and the figures they draw are
-			produced by row #15 of
-			<code>TODO/20260910-23-article-classification-plan.md</code>. Until both land,
-			what the checker doubted is on Summaries.
+			Nothing is drawn here yet. The model does not record the desk and lenses it
+			chose or how sure it was, and the panels that would draw them are not built.
+			Until both arrive, what the checker doubted is on Summaries.
 		</p>
 	</div>
 </div>
@@ -56,11 +54,5 @@
 		font-size: var(--text-sm);
 		line-height: var(--leading-sm);
 		color: var(--color-text-secondary);
-	}
-
-	code {
-		font-family: var(--font-data);
-		font-size: 0.9em;
-		overflow-wrap: anywhere;
 	}
 </style>

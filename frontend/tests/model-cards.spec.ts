@@ -1,11 +1,10 @@
 /** One selected view feeds every model card, built in one pass.
  *
- * Row #15 of `TODO/20260906-constant-cost-reads-plan.md` (Finding 107) turns the
- * model route's per-card trend - drawn eleven times, once for each card, each
- * time re-walking the open window - into a single pass that fills every card's
- * line together. The output does not move: the arithmetic is the one the eleven
- * passes ran. What this file protects is that it stays that way, and that a card
- * reads its OWN column rather than a neighbour's.
+ * The model route's per-card trend used to be drawn eleven times, once for each
+ * card, each time re-walking the open window. It is now a single pass that fills
+ * every card's line together. The output does not move: the arithmetic is the one
+ * the eleven passes ran. What this file protects is that it stays that way, and
+ * that a card reads its OWN column rather than a neighbour's.
  *
  * The route cannot prove this against the canary day. That fixture runs one
  * model start to finish over two days, and every one of the eleven columns is
