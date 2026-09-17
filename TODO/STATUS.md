@@ -36,7 +36,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 11 |
 | [20260914-29-found-once-plan.md](20260914-29-found-once-plan.md) | 17 | 14 | 3 | 2 |
-| [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 29 | 0 | 28 | 5 |
+| [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 28 | 0 | 27 | 5 |
 
 ## In flight - 0
 
@@ -88,9 +88,9 @@ section 3 is where it is answered.
 | #5 | 33 | A | Machine page stops lying about a day with no rows | - |
 | #6 | 33 | A | One concurrency group for `digest`, `validate`, `measure` | - |
 | #7 | 33 | A | OS memory and load, per item | - |
-| #18 | 33 | H | Chart-craft doctrine - the twelve rules, written once | - |
+| #18 | 33 | H | Chart-craft doctrine - the thirteen rules, written once | - |
 
-## Waiting on another row - 72
+## Waiting on another row - 71
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -149,10 +149,9 @@ section 3 is where it is answered.
 | #17 | 33 | B | `runtime-counters` writes segments | 4 is PENDING |
 | #10 | 33 | C | `model_load_ms` and `job_seconds` join `host-fingerprint` | 2 is PENDING |
 | #12 | 33 | D | Delete the merge machinery | 2 is PENDING; 3 is PENDING; 4 is PENDING; 17 is PENDING |
-| #13 | 33 | D | Compaction lag on the console band | 1 is PENDING; 5 is PENDING; 12 is PENDING |
+| #13 | 33 | D | Compaction lag and free swap on the console band | 1 is PENDING; 5 is PENDING; 7 is PENDING; 12 is PENDING |
 | #11 | 33 | E | Delete `runtime-counters` and everything that reads it | 7 is PENDING; 10 is PENDING; 17 is PENDING |
 | #15 | 33 | F | Generated TypeScript contracts replace the hand-written ones | 10 is PENDING; 11 is PENDING |
-| #14 | 33 | F | The per-item machine load panel | 5 is PENDING; 7 is PENDING; 15 is PENDING |
 | #16 | 33 | G | Docs, and the orphan sweep | all names no row |
 | #28 | 33 | H | Pipeline panels: the share track goes, Extraction gains a trend | 18 is PENDING |
 | #19 | 33 | I | The shard board | 11 is PENDING; 18 is PENDING |
