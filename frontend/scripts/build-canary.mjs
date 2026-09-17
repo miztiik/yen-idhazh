@@ -805,9 +805,121 @@ function writeSpanRollupCanary() {
 	);
 }
 
+/** The machines the canary's jobs drew, so the machine panels have cards to draw.
+ *
+ * `build_canary_day.py` fabricates a day rather than running the pipeline, so
+ * nothing probes a processor and the panels would only ever show their empty
+ * state - which is the state that needs the least proving.
+ *
+ * **The rows are chosen for the two things a browser cannot check any other
+ * way.** One machine reports none of the watched AVX-512 entries and one
+ * reports every watched flag, so the absent chips have to be drawn rather than
+ * omitted; and one probe used a buffer smaller than that machine's L3, so the
+ * reading has to say it measured cache rather than memory.
+ *
+ * Shard 1 of the newest run is deliberately left out. Its counters row carries
+ * no processor name either, so the split panel has to give it a group of its
+ * own in the reserved grey rather than folding it into a named machine.
+ */
+function writeHostFingerprintCanary() {
+	const COLUMNS = [
+		'version', 'date', 'run_id', 'job', 'shard', 'fingerprint', 'cpu_model', 'cpu_vendor',
+		'cpu_family', 'cpu_model_number', 'cpu_stepping', 'microcode', 'cores', 'threads',
+		'l3_cache_bytes', 'mhz_max', 'mhz_at_probe', 'flags', 'boot_seconds', 'memcpy_gib_s',
+		'memcpy_probe_mib', 'vm_size', 'vm_location', 'vm_zone', 'vm_fault_domain', 'runner_name',
+		'measured_at'
+	];
+	const year = newestDirectory(ROOT);
+	const month = newestDirectory(join(ROOT, year));
+	const day = newestDirectory(join(ROOT, year, month));
+	const date = `${year}-${month}-${day}`;
+	const back = (days) => {
+		const at = new Date(`${date}T00:00:00Z`);
+		at.setUTCDate(at.getUTCDate() - days);
+		return at.toISOString().slice(0, 10);
+	};
+
+	// The EPYC reports none of the watched AVX-512 entries, which is what the
+	// fleet's most common machine really does.
+	const EPYC = {
+		fingerprint: '3a7f0b1c2d4e5f60',
+		cpu_model: 'AMD EPYC 7763 64-Core Processor',
+		cpu_vendor: 'AuthenticAMD',
+		cpu_family: 25, cpu_model_number: 1, cpu_stepping: 1, microcode: '0xa0011d3',
+		cores: 2, threads: 4, l3_cache_bytes: 33554432,
+		flags: 'avx2 f16c fma sse4_2',
+		memcpy_gib_s: 12.4, memcpy_probe_mib: 512,
+		vm_size: 'Standard_D4ads_v5', vm_location: 'eastus', vm_zone: '1', vm_fault_domain: '0'
+	};
+	// Every watched flag, and a probe buffer under its own L3 - so this card has
+	// to say the bandwidth reading measured cache rather than memory.
+	const XEON = {
+		fingerprint: 'c81d9e0a1b2c3d4e',
+		cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C',
+		cpu_vendor: 'GenuineIntel',
+		cpu_family: 6, cpu_model_number: 207, cpu_stepping: 2, microcode: '0x21000283',
+		cores: 2, threads: 4, l3_cache_bytes: 272629760,
+		flags: [
+			'amx_bf16', 'amx_int8', 'amx_tile', 'avx2', 'avx512_bf16', 'avx512_fp16',
+			'avx512_vnni', 'avx512f', 'avx_vnni', 'f16c', 'fma', 'sse4_2'
+		].join(' '),
+		memcpy_gib_s: 9.8, memcpy_probe_mib: 256,
+		vm_size: 'Standard_D4ls_v5', vm_location: 'westus2', vm_zone: '2', vm_fault_domain: '1'
+	};
+
+	const line = (cells) => COLUMNS.map((name) => cells[name] ?? '').join(',');
+	const probe = (rowDate, run, job, index, machine) =>
+		line({
+			version: '2026-09-17',
+			date: rowDate,
+			run_id: `${rowDate}-${run}`,
+			job,
+			shard: index,
+			mhz_max: 2450, mhz_at_probe: 2445,
+			boot_seconds: 410.5,
+			runner_name: `runner-${job}-${index}`,
+			measured_at: `${rowDate}T2${run}:0${index}:00Z`,
+			...machine
+		});
+
+	const rows = [
+		// The newest run: three jobs, two machines, and shard 1 recorded on neither.
+		probe(date, 2, 'plan', 0, EPYC),
+		probe(date, 2, 'work', 0, XEON),
+		probe(date, 2, 'assemble', 0, EPYC),
+		// Older runs inside the window, so the fleet count has more than one kind
+		// and a denominator. Far below the drawing threshold on purpose: that is
+		// the state the list-and-a-sentence exists for.
+		probe(date, 1, 'plan', 0, EPYC),
+		probe(date, 1, 'work', 0, EPYC),
+		probe(date, 1, 'work', 1, EPYC),
+		probe(back(1), 1, 'plan', 0, XEON),
+		probe(back(1), 1, 'work', 0, XEON),
+		probe(back(1), 1, 'assemble', 0, EPYC)
+	];
+
+	// A day tree, the shape a bounded window reads.
+	const byDay = new Map();
+	for (const row of rows) {
+		const rowDate = row.split(',')[1];
+		const held = byDay.get(rowDate);
+		if (held === undefined) byDay.set(rowDate, [row]);
+		else held.push(row);
+	}
+	for (const [rowDate, dayRows] of byDay) {
+		const at = join(STATE, 'host-fingerprint', rowDate.slice(0, 4), rowDate.slice(5, 7));
+		mkdirSync(at, { recursive: true });
+		writeFileSync(
+			join(at, `${rowDate.slice(8, 10)}.csv`),
+			[COLUMNS.join(','), ...dayRows].join('\n') + '\n'
+		);
+	}
+}
+
 writeItemHealthCanary();
 writeRuntimeCountersCanary();
 writeSpanRollupCanary();
+writeHostFingerprintCanary();
 execFileSync(
 	process.env.IDHAZH_PYTHON || 'python',
 	['-m', 'idhazh.telemetry.publish.public_telemetry', '--state', STATE, '--public', join(STATE, 'telemetry')],

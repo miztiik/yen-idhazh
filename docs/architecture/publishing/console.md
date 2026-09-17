@@ -324,20 +324,21 @@ record started later than the counters did, so the newest run it can draw is
 often not the newest run the counters hold. It names the run it found instead of
 borrowing the counters' newest, so the two are never silently conflated.
 
-Seven surfaces on Hardware declare `data-windowed`, and each one prints the day
+Eight surfaces on Hardware declare `data-windowed`, and each one prints the day
 count in its own words: the run count at the top, the prompt cache, context
-headroom, the host panel's three spans, the latency plots, tokens per run and
-the cost panel. The refused-run list follows the window without declaring it,
-because a clean span renders nothing at all and a surface that comes and goes
-cannot report a day count.
+headroom, what the platform has been giving us, the server panel's three spans,
+the latency plots, tokens per run and the cost panel. The refused-run list
+follows the window without declaring it, because a clean span renders nothing at
+all and a surface that comes and goes cannot report a day count.
 
 ## What the Hardware route draws
 
-Thirteen panels. Eleven read `state/runtime-counters.csv` and
-`state/item-health/`; one - where a shard's clock went - reads
+Fifteen panels. Eleven read `state/runtime-counters.csv` and
+`state/item-health/`; three - the two machine panels and the split - also read
+`state/host-fingerprint/`; one - where a shard's clock went - reads
 `state/span-rollup/`; one - where the run's time went, item by item - reads the
-published mirror `frontend/public/run-timeline/`. All four are read at build time
-under `$lib/server/` and nothing on the route is fetched: the three `state/`
+published mirror `frontend/public/run-timeline/`. All five are read at build time
+under `$lib/server/` and nothing on the route is fetched: the four `state/`
 ledgers add no telemetry column and no reader sees a cell of any of them, and the
 published mirror carries no address, no title and no fetched text.
 
@@ -347,14 +348,30 @@ published mirror carries no address, no title and no fetched text.
 | Where a shard's clock went | one bar a shard | How much of a shard's time went to items, and how much to overhead nobody named. |
 | Where the run's time went, item by item | one bar an item | Which item queued, which one ran long, and where in a run the time actually went. |
 | Peak memory, and how near the runner's ceiling it got | one bar a shard | How much of the runner's 16 GB one run needed. |
-| Reading against writing | the newest run | What a written token costs against a read one. |
+| Reading against writing, machine by machine | one group a machine | What a written token costs against a read one, on the machine that paid it. |
+| The machines this run drew | one card a machine | What machine this is, and what it can do. |
+| What the platform has been giving us | one row a machine kind | What kinds of machine we keep being handed. |
 | Prompt cache | one column a day | Whether a bigger cache would save wall clock. |
 | Context headroom | one mark a run | Whether raising the truncation cap is even possible. |
-| The two clocks, compared | one bar a shard | Whether the day's rates can be trusted at all. || The host under the newest run | the newest run | Which processors it drew, how busy they were, and how long the weights took to open. |
+| The two clocks, compared | one bar a shard | Whether the day's rates can be trusted at all. |
+| What the server did outside the model call | the newest run | How busy the machine was, and how long the weights took to open. |
 | How the tail moved | one plot a percentile, one mark a run | Whether the slow end of a run is moving. |
 | How long the newest run's tail was | the newest run | What the whole distribution of one run looks like at once. |
 | Tokens per run | one bar a run, twice | How much the model read and how much it wrote. |
 | What this would have cost somewhere else | the whole span | Whether the runner time was a good trade. |
+
+**A run is not a machine, and three of those panels exist because the route said
+otherwise for weeks.** Measured 2026-09-17 over the committed counters ledger -
+380 rows, 95 runs, 19 dates - **86 of the 90 runs that name a processor drew
+more than one kind of processor**: one kind on 4 runs, two on 39, three on 43
+and four on 4. Inside one run the read rate between the fastest and the slowest
+machine runs 1.00x to 6.08x, median 2.32x, and 45 of the 86 exceed 2x. The worst,
+run `2026-09-12-34689544296`, read at 59.71 tokens a second on one shard's
+machine and 9.83 on another's. Until that date the split panel summed four
+counters across every shard of a run and printed one pooled rate in bold, so the
+figure an operator was most likely to quote was a number about neither machine
+on 95.6 percent of runs. What replaced it is one group a machine and one
+headline, attributed to the machine that read the most tokens.
 
 **The shard is the unit, and that is the whole point of the route.** Measured on
 the committed ledger on 2026-08-31, the fastest shard of run `2026-08-30-5` read
@@ -402,7 +419,8 @@ the shape is [run-timeline.md](run-timeline.md) and every drawing rule is
 one published directory and nothing else, so with that directory gone the panel
 is empty by construction and the route still renders whole - measured 2026-09-16
 by rebuilding the canary console with the series moved aside: 123,122 bytes of
-HTML, all thirteen panels present, the written empty state in place of the bars.
+HTML, every panel the route then had present, the written empty state in place
+of the bars.
 
 **The board is five columns on a desktop and one card a shard at 1024px and
 under.** The column head is the only thing naming a value, so when the columns

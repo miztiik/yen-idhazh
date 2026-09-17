@@ -317,6 +317,7 @@ test('THE ORACLE: the Machine route obeys the same control over its own surfaces
 		'machine-cache',
 		'machine-context',
 		'machine-cost',
+		'machine-fleet',
 		'machine-host',
 		'machine-latency',
 		'machine-runs',
