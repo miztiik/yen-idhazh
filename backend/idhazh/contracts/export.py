@@ -15,6 +15,7 @@ from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import Contract
+from idhazh.contracts.chrome_line import ChromeLineRow
 from idhazh.contracts.console_band import ConsoleBand
 from idhazh.contracts.corpus import CorpusMeta, CorpusRow
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
@@ -76,6 +77,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     AppConfig,
     AppearanceConfig,
     Article,
+    ChromeLineRow,
     ConsoleBand,
     CorpusMeta,
     CorpusRow,

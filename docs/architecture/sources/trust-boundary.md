@@ -124,6 +124,15 @@ verdicts. By default the item still publishes, often through the brief tier. A
 curator can turn on `extract.reject_not_prose` or `extract.reject_boilerplate`,
 but length and shape do not decide newsworthiness by themselves.
 
+**The `boilerplate` signal only started answering anything on 2026-09-17.** It
+compares the page's lines against lines the same host printed on its other
+pages, and nothing ever supplied that second set - so it divided by an empty set
+and said no to every page. `state/chrome.csv` supplies it now
+([../extraction/chrome.md](../extraction/chrome.md)), and the comparison stays
+inside the trust boundary because only hashes are stored: a line is reduced and
+hashed before it is counted, so nothing in that file can carry an instruction a
+page tried to give us.
+
 `extract_text` removes embedded-player interface containers through
 Trafilatura's `prune_xpath` hook before its existing sanitization pass. The
 matched class tokens are `o-em-consent` and `o-em-adblock`: consent prompts and

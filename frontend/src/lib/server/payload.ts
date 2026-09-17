@@ -915,6 +915,17 @@ export function feedResults(days: number = LEDGER_WINDOW_DAYS): FeedResult[] {
 	return settled(found);
 }
 
+/** One source on one complete day, as the strip draws it. Mirrors `DayYield`.
+ *
+ * The two counts and not the share. A share with no denominator cannot tell a
+ * bad day from a quiet one, and 0 of 0 is a day the source offered nothing. */
+export interface DayYield {
+	date: string;
+	opportunities: number;
+	publications: number;
+	source_failures: number;
+}
+
 /** What the pipeline published about one source. Mirrors `SourceHealthRow` in
  * `backend/idhazh/contracts/source_health_view.py`, which is the shape that
  * decides what may cross - there is no field here that could hold an address,
@@ -938,6 +949,16 @@ export interface SourceHealthRow {
 	 * the default a feed with no evidence scores rather than a perfect record, and
 	 * the page draws those two differently. */
 	reliability_reads: number;
+	/** This source's share a day at a time over `dwell_dates`, oldest first. Every
+	 * date on that axis is present, so a square in one column means one day on
+	 * every row. Empty on a view written before 2026-09-17. */
+	recent_days?: DayYield[];
+	/** The unbroken run of under-the-mark days at the newest end. Read, never
+	 * recomputed: a countdown the console derives again is a second verdict. */
+	days_under_the_mark?: number;
+	/** The day the dwell completes if nothing changes, derived by the run from the
+	 * newest date it holds. Null when no dwell is live or the floors are unmet. */
+	retires_on?: string | null;
 }
 
 /** The published source-health view, as the console reads it. */
@@ -955,6 +976,19 @@ export interface SourceHealthView {
 	yield_readable: boolean;
 	first_date: string | null;
 	last_date: string | null;
+	/** The share a source has to stay at or above. Carried so the bound and the
+	 * figure come from one run. Absent on a view written before 2026-09-17. */
+	yield_alarm_point?: number;
+	/** Decisions a source needs before its share may be judged at all. */
+	yield_alarm_min_decisions?: number;
+	/** Running days under the mark that complete a retirement, and how many dates
+	 * `dwell_dates` carries. */
+	dwell_days?: number;
+	/** False means a completed dwell files nothing and the panel is watching only,
+	 * which the page says in words. */
+	auto_retire?: boolean;
+	/** The shared date axis every row's `recent_days` runs over, oldest first. */
+	dwell_dates?: string[];
 	sources: SourceHealthRow[];
 }
 

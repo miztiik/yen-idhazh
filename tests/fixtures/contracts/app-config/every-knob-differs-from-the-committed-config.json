@@ -59,6 +59,8 @@
       "too_short",
       "unsupported_form"
     ],
+    "source_quality_auto_retire": true,
+    "source_quality_dwell_days": 21,
     "source_yield_alarm_min_decisions": 20,
     "source_yield_alarm_point": 0.4,
     "source_yield_min_complete_days": 45,
@@ -134,6 +136,9 @@
     "backoff_initial_seconds": 2.0,
     "backoff_multiplier": 3.0,
     "boilerplate_ratio_max": 0.35,
+    "chrome_forget_days": 45,
+    "chrome_lines_per_host_max": 120,
+    "chrome_pages_min": 4,
     "max_body_bytes": 1000000,
     "max_retries": 2,
     "min_source_words": 60,

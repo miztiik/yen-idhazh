@@ -300,6 +300,19 @@
           "title": "Settled Failure Codes",
           "type": "array"
         },
+        "source_quality_auto_retire": {
+          "default": false,
+          "description": "Whether a completed dwell actually files a retirement row, or only draws the countdown on /console/voices/. Default false for the first release because nothing has ever retired on this measurement and the console panel is what a person reads before trusting it. REMOVAL CONDITION: delete this flag, and the branch it guards, once one real low-yield retirement has been reviewed and accepted (Guardrail #6).",
+          "title": "Source Quality Auto Retire",
+          "type": "boolean"
+        },
+        "source_quality_dwell_days": {
+          "default": 14,
+          "description": "Running days a source must stay under source_yield_alarm_point before it retires itself. **A bad week cannot retire anything** - that is the whole reason this exists, and it is why the number is two weeks rather than seven days. The run must be unbroken: one day back at or above the alarm point resets it to zero, so a source that recovers keeps its place. This is the fourth member of the yield family and extends it rather than sitting beside it: the alarm point says what counts as too low, the two evidence floors say when we may judge at all, and this says how long the answer has to hold.",
+          "minimum": 1,
+          "title": "Source Quality Dwell Days",
+          "type": "integer"
+        },
         "source_yield_alarm_min_decisions": {
           "default": 30,
           "description": "Addresses a source must have decided before its yield may raise the alarm. A low yield and a low volume are independent axes, and without this floor the alarm's first run names a source the project already ruled it keeps. Distinct from source_yield_min_complete_days, which counts days of record rather than decisions a source made, because a busy source clears this in a few days and a weekly one may never clear it - which is the correct answer for both. The cost is delay: a busy source spends those days, and the addresses it spends getting there buy the protection.",
@@ -731,6 +744,27 @@
           "maximum": 1.0,
           "title": "Boilerplate Ratio Max",
           "type": "number"
+        },
+        "chrome_forget_days": {
+          "default": 90,
+          "description": "How long a line is kept after the last page carried it. A host that rebuilt its template stops printing the old lines, and they age out rather than being carried for ever against pages that cannot match them. 90 days is long enough that a quarterly publisher's own chrome survives between its issues. The prune is what enforces it; without one the bound above is prose.",
+          "minimum": 1,
+          "title": "Chrome Forget Days",
+          "type": "integer"
+        },
+        "chrome_lines_per_host_max": {
+          "default": 200,
+          "description": "The most chrome lines one host may keep. The bound on `state/chrome.csv` is this times the hosts we read, so the file grows with the source registry and then stops - never with the archive (Guardrail #12). When a host is over it, the line seen on the FEWEST pages goes first and the oldest `last_seen` breaks the tie. Evicting the newest would throw away the template and keep the coincidences; evicting by recency alone would throw away the chrome using the very articles it is compared against. 200 is an ESTIMATE: a page template is tens of lines, not hundreds, so this is several times the largest one we expect. What would overturn it is a host whose kept lines sit at the cap while its page count still climbs.",
+          "minimum": 1,
+          "title": "Chrome Lines Per Host Max",
+          "type": "integer"
+        },
+        "chrome_pages_min": {
+          "default": 3,
+          "description": "How many of a host's DISTINCT pages must carry one line before it counts as that host's chrome. Two pages sharing a sentence is a coincidence a wire story produces every day; three is a template. Under this the line is still stored - the count has to reach three somehow - and it is not handed to the extractor as chrome.",
+          "minimum": 2,
+          "title": "Chrome Pages Min",
+          "type": "integer"
         },
         "max_body_bytes": {
           "default": 2000000,
@@ -2072,6 +2106,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "extract gained three chrome knobs, additive, the fold on.",
+      "version": "2026-09-17",
+      "why": "The boilerplate signal divided by an empty set and said no to every page."
+    },
+    {
       "change": "assemble.same_story_window_hours, additive, default 36.",
       "version": "2026-09-16T18:00",
       "why": "A story that breaks at 23:00 and is picked up at 07:00 is one story."
@@ -2085,11 +2124,6 @@
       "change": "placement gained three freshness knobs, additive, the curve on.",
       "version": "2026-09-16T15:00",
       "why": "A story planned at 02:20 held its morning freshness against the evening."
-    },
-    {
-      "change": "run.safety_ceiling_per_day, additive, default 400.",
-      "version": "2026-09-16T14:00",
-      "why": "The per-run cap bounds a worker's timeout; it never bounded the day."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2164,7 +2198,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-16T18:00",
+      "default": "2026-09-17",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2175,5 +2209,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-16T18:00"
+  "version": "2026-09-17"
 }

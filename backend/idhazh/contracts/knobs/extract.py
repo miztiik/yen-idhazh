@@ -53,6 +53,46 @@ class ExtractConfig(Model):
             "If true, a boilerplate signal rejects the item. Default records and publishes."
         ),
     )
+    chrome_pages_min: int = Field(
+        default=3,
+        ge=2,
+        description=(
+            "How many of a host's DISTINCT pages must carry one line before it counts "
+            "as that host's chrome. Two pages sharing a sentence is a coincidence a "
+            "wire story produces every day; three is a template. Under this the line "
+            "is still stored - the count has to reach three somehow - and it is not "
+            "handed to the extractor as chrome."
+        ),
+    )
+    chrome_lines_per_host_max: int = Field(
+        default=200,
+        ge=1,
+        description=(
+            "The most chrome lines one host may keep. The bound on `state/chrome.csv` "
+            "is this times the hosts we read, so the file grows with the source "
+            "registry and then stops - never with the archive (Guardrail #12). When a "
+            "host is over it, the line seen on the FEWEST pages goes first and the "
+            "oldest `last_seen` breaks the tie. Evicting the newest would throw away "
+            "the template and keep the coincidences; evicting by recency alone would "
+            "throw away the chrome using the very articles it is compared against. "
+            "200 is an ESTIMATE: a page template is tens of lines, not hundreds, so "
+            "this is several times the largest one we expect. What would overturn it "
+            "is a host whose kept lines sit at the cap while its page count still "
+            "climbs."
+        ),
+    )
+    chrome_forget_days: int = Field(
+        default=90,
+        ge=1,
+        description=(
+            "How long a line is kept after the last page carried it. A host that "
+            "rebuilt its template stops printing the old lines, and they age out "
+            "rather than being carried for ever against pages that cannot match them. "
+            "90 days is long enough that a quarterly publisher's own chrome survives "
+            "between its issues. The prune is what enforces it; without one the bound "
+            "above is prose."
+        ),
+    )
     boilerplate_ratio_max: float = Field(
         default=0.4,
         gt=0.0,

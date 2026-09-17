@@ -35,6 +35,7 @@ from typing import Final
 
 from idhazh.contracts.feed_health import FeedHealthRow, RobotsOutcome, derive_endpoint_key
 from idhazh.contracts.feed_retirement import FeedRetirementRow, RetirementCause
+from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.sources import FeedDef
 from idhazh.discover import live, settled
 
@@ -159,6 +160,58 @@ def retirements(
                 decided_by_run=run_id,
                 cause=RetirementCause.HTTP_410,
                 evidence_run_ids=record.gone_runs,
+            )
+        )
+    return filed
+
+
+def low_yield_retirements(
+    feeds: Sequence[FeedDef],
+    *,
+    view: SourceHealthView,
+    already: Collection[str],
+    date: str,
+    run_id: str,
+) -> list[FeedRetirementRow]:
+    """The addresses that have sat under the alarm point long enough to stop asking.
+
+    **The dwell is what makes this safe, and the dwell is already decided.**
+    `telemetry.publish.source_health` computed each row's unbroken run of
+    under-the-mark days and the day it completes, over the same evidence the
+    console draws. Reading it back rather than re-deriving it means the
+    countdown a person watched and the retirement that fired cannot disagree -
+    which is the whole objection to retiring on anything softer than `410 Gone`
+    (`contracts.feed_retirement`).
+
+    Three floors and a dwell, every one of them the caller's config rather than
+    a number invented here: the share, the complete days, the decisions, the
+    running days. `retires_on` is `None` on any row that misses one, so a row
+    reaching the comparison below has already cleared all three.
+
+    The evidence is days rather than run ids, because that is what the decision
+    was made on. One row per address, ever, and `already` is what the ledger
+    holds - so a run reading the same evidence tomorrow files nothing new.
+    """
+    filed: list[FeedRetirementRow] = []
+    seen = set(already)
+    judged = {row.source_id: row for row in view.sources}
+    for feed in feeds:
+        key = derive_endpoint_key(feed.url)
+        if key in seen:
+            continue
+        row = judged.get(feed.id)
+        if row is None or row.retires_on is None or row.retires_on > date:
+            continue
+        seen.add(key)
+        filed.append(
+            FeedRetirementRow(
+                version=FeedRetirementRow.schema_version(),
+                feed_id=feed.id,
+                endpoint_key=key,
+                retired_on=date,
+                decided_by_run=run_id,
+                cause=RetirementCause.LOW_YIELD,
+                evidence_dates=tuple(view.dwell_dates[-row.days_under_the_mark :]),
             )
         )
     return filed
