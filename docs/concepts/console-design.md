@@ -859,7 +859,7 @@ behind them - `day-metrics.addresses_considered` and
 `machine.cgroup_peak_bytes` - which is a different defect and a cheaper one. The
 `run-days` and `span-rollup` payloads are clean.
 
-Authority: Susan, plan 32 row #14.
+Authority: Susan, 2026-09-16.
 
 ## Design rationale
 

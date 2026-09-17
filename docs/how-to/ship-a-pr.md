@@ -58,6 +58,14 @@ The `git status --short` verification protects against the staged-then-silently-
 
 If you author the commit message in a scratch file with PowerShell, prefer `[System.IO.File]::WriteAllText($path, $content, [System.Text.UTF8Encoding]::new($false))` over `Set-Content -Encoding utf8` - the latter inserts a UTF-8 BOM that `git commit -F` treats as content.
 
+### A change carries its own deletions
+
+**The module, the test and the doc paragraph a change makes dead go in the same commit as the change.** A pull request that adds a producer and leaves the old one beside it has doubled the thing it was written to replace, and the second copy now has a reader who cannot tell which one is current.
+
+There is no deprecation step. No `_old` suffix, no compatibility shim, no commented-out block, no "kept for now". Where the old thing still has a caller, the change that removes the caller is a **dependency** of this one, not a follow-up - and a follow-up is what a deprecation always turns out to be.
+
+When a change genuinely leaves nothing dead, the PR body says so in one line. Silence reads as an omission, and the next reviewer cannot tell the two apart.
+
 ### Push + create PR
 
 ```powershell
