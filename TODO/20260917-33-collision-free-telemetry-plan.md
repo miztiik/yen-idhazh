@@ -95,7 +95,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 28 | Pipeline panels: the share track goes, Extraction gains a trend | 18 | H | PENDING | - | - | - |
 | 19 | The shard board | 11, 18 | I | PENDING | - | - | - |
 | 21 | Memory and load, three grains - ABSORBS Row #14 | 5, 7, 15, 19 | I | PENDING | - | - | - |
-| 23 | Tokens per run becomes one grouped chart | 21 | I | PENDING | - | - | - |
+| 23 | What a run reads against what it writes, in tokens and in seconds | 21 | I | PENDING | - | - | - |
 | 25 | Outside the model call, as range marks | 23 | I | PENDING | - | - | - |
 | 22 | Platform mix as grouped bars | 25 | I | PENDING | - | - | - |
 | 24 | Counterfactual cost gets a shape | 22 | I | PENDING | - | - | - |
@@ -986,7 +986,7 @@ Measured 2026-09-17 against the committed ledgers. Each replaces an argument.
 | 19A19 | What the server did outside the model call - Hardware | Whether the newest run is unusual against its span | **FAIL** - four definition rows of prose | Every one of the four figures has a value AND a low-to-high span, each written as two sentences. Nothing is comparable to anything |
 | 19A20 | How the tail moved - Hardware | Whether p99 is climbing | PASS | None. Five plots on one shared scale is correct and the note defends it |
 | 19A21 | How long the newest run's tail was - Hardware | The shape of one run's distribution | PASS | Adjacent to 19A20 with no grouping, so two questions read as one panel split in half |
-| 19A22 | Tokens per run - Hardware | Prompt against written, per run | **FAIL** - two charts, two axes | Finding 3. The note defends the split; the measured 5.26:1 does not need it |
+| 19A22 | Tokens per run - Hardware | Prompt against written, per run | **FAIL** - two charts, two axes, and one unit that inverts the answer | Finding 3. The note defends the split; the measured 5.26:1 does not need it. **And counting tokens answers the question backwards** - the read bar towers while decode owns the clock, so the panel needs the seconds grain as well as the merge |
 | 19A23 | What this would have cost somewhere else - Hardware | Whether the cost is growing | **FAIL** - four numbers, no shape | The long-standing bug. **A cost that exists only as four totals cannot show a trend, which is the only thing a counterfactual is for** |
 
 **Every failure is one of three kinds:** a chart drawn at a scale that hides its own subject (19A10); a figure written as prose when it has a comparison (19A7, 19A8, 19A19, 19A23); or a shape that answers a different question from its title (19A18, 19A22, and the missing item grain in 19A12).
@@ -1032,7 +1032,7 @@ Row #18 writes these into `docs/concepts/console-design.md` **before any panel r
 | 19C2 | 19A11 Where the run's time went | **MOVE to Pipeline and absorb 19C1 as a grain switch** | An operator on Hardware loses the item view. Hardware keeps a one-line summary and a cross-link |
 | 19C3 | 19A12 Peak memory + 19A19's memory row | **MERGE into one panel, three grains** | Nothing. The duplicated prose figure is restated inside the merged panel |
 | 19C4 | 19A19 Outside the model call | **KEEP, redrawn as four range marks**; its memory row leaves for 19C3 | Four sentences of explanation shorten to one line each |
-| 19C5 | 19A22 Tokens per run | **MERGE two panes into one grouped chart** | Each series' own axis. Measured safe at 5.26:1 |
+| 19C5 | 19A22 Tokens per run | **MERGE two panes into one grouped bar chart, and add a unit switch between tokens and seconds** | Each series' own axis, so neither can be compared to the other. Measured safe at 5.26:1 on one axis. **And the deeper defect the first draft missed: in tokens alone the chart says reading dominates the run, and it does not** - reading is batched prefill, writing is sequential decode, so the tall bar is the cheap one. Owner ruling, 2026-09-17 |
 | 19C6 | 19A5 + 19A6 Reading / Writing | **KEEP both, add one shared-axis comparison strip above them** | Nothing. The page already compares them in prose; this draws what it says |
 | 19C7 | 19A20 + 19A21 tail panels | **KEEP both, group under one heading** | Nothing. They answer two questions and the grouping says so |
 | 19C8 | 19A7 Prompt already in memory | **KEEP the counts, DELETE the share track** (Row #28) | The single two-segment bar. **A figure a panel disowns is a figure to remove** |
@@ -1177,24 +1177,38 @@ Row #18 writes these into `docs/concepts/console-design.md` **before any panel r
 | 1 | Keep the ranked list | Its title asks what is changing and a list cannot answer that | The trend question goes unanswered on the panel that asks it | Susan |
 | 2 | Add the day breakdown to `FleetKind` as a declared field | The panel derives it from `date`, which every fingerprint row already carries | A payload field nothing writes, and a second place for the day grain to disagree with itself | Fowler |
 
-## Row #23 - Tokens per run becomes one grouped chart
+## Row #23 - What a run reads against what it writes, in tokens and in seconds
 
-- **Scope:** the two panes become one grouped chart on one linear axis.
-- **Files touched:** `frontend/src/lib/charts/machine.ts`, `frontend/src/routes/console/machine/+page.svelte`, `frontend/tests/`
+- **Scope:** the two panes become ONE grouped bar chart - one group per run, a read bar and a written bar side by side, one linear axis - **with a unit switch between `tokens` and `seconds`.** The count grain sums `input_tokens` and `output_tokens`; the seconds grain sums `prefill_ms` and `decode_ms` over the same item rows.
+
+**Why the unit switch is the row rather than a nicety, and it is the owner's ruling of 2026-09-17.** A run reads about 5.26 tokens for every one it writes, so in count the read bar towers. **But reading is batched prefill and writing is sequential decode, so the tall bar is the cheap one.** A chart that draws both on one axis in one unit teaches the reader that reading dominates the run. It does not. The panel is currently arranged to be confidently wrong, which is worse than being hard to read.
+
+**The switch is the finding, not a convenience.** In tokens the read bar towers; in seconds the written bar does. **That inversion IS the answer to "where does a run's model time go", and flipping the switch shows it without a caption explaining it** - which is rule 19D13's verdict-and-break pair inside one panel, and clause 1's "against" satisfied twice.
+
+**It also retires the reshape.** The first draft said the smaller series drops to its own row past 20:1, so the panel had two shapes and the data picked which one a reader got - learn it one day, meet a different chart the next, with nothing announcing the change. In seconds the ratio sits near 1:1, so the fallback never fires on the seconds grain and the panel keeps one shape.
+
+- **Files touched:** `frontend/src/lib/charts/machine.ts`, `frontend/src/routes/console/machine/+page.svelte`, the loader Row #11 leaves in place of `frontend/src/lib/server/runtime-counters.ts`, the unit-switch component, `frontend/tests/`
 - **Acceptance gates:** as Row #19.
-- **Oracle:** the two series draw from one option with one y-axis, and a fixture at 25:1 fails the 19D4 check and splits into two rows on a shared x. **What it cannot settle:** nothing material.
+- **Oracle:** ONE builder call returns both units, and a test asserts the two arrays come from the same item rows - the count grain's row set and the seconds grain's row set are equal. **The inversion is asserted directly:** on a fixture run where reads outnumber writes and decode outlasts prefill, the read bar is the taller one in `tokens` and the written bar is the taller one in `seconds`. A run missing `prefill_ms` renders the absent state on the seconds grain and still draws the count grain. **What it cannot settle:** which unit should be the default - Susan rules on the built panel.
 - **Decisions:**
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | One axis, measured safe at 5.26:1 - the written bar draws at 19 percent | Susan, Finding 3 |
-| 2 | Past 20:1 the smaller series takes its own row, per 19D4 | Susan - at 20:1 it draws under 5 percent and reads as zero |
+| 1 | One axis per unit, measured safe at 5.26:1 - the written bar draws at 19 percent | Susan, Finding 3 |
+| 2 | **The unit switch ships with the panel, not after it** | Owner, 2026-09-17. Without it the chart is confidently wrong about which half of the run costs the time, and a panel that teaches the wrong lesson fast is worse than one that is slow to read |
+| 3 | **Both units come from ONE builder call over ONE row set** | Fowler - this is Row #24's rule applied here: two derivations of one quantity can disagree, and a panel whose two grains disagree about which runs it covered is unrecoverable |
+| 4 | **`prefill_ms` and `decode_ms` need no new column and no new payload plumbing** | `frontend/src/lib/server/model-work.ts` lines 829-830 already read both to compute read and write speed, so the columns are proven to reach the frontend. This row sums them; it adds no probe, no contract change and no schema stamp |
+| 5 | Past 20:1 on the COUNT grain the smaller series takes its own row, per 19D4 | Susan - at 20:1 it draws under 5 percent and reads as zero. **The seconds grain never fires this**, so the fallback is a count-grain rule rather than a panel-wide one |
+| 6 | **The panel is retitled to its comparison** | Clause 1 - "Tokens per run" is a subject and takes no "against". "What a run reads against what it writes" is the comparison, and the unit switch says in which currency |
 
 - **Rejected alternatives:**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | Keep two panes with their own axes | Each series fills its plot and neither can be compared to the other | The comparison the title promises | Susan |
+| 2 | Grouped bars in tokens only, as first drafted | It is the shape the owner asked for and it still answers the wrong question: it says reading dominates, and reading does not | The one finding the panel exists to deliver, and a reader who acts on prefill when decode owns the clock | Owner, 2026-09-17 |
+| 3 | A second panel for the seconds grain | Two panels for one comparison, on a route seven rows already serialise over, and the inversion stops being visible because it needs two glances | An eighth writer on the 64 KB route, and the finding split across two pictures | Fowler |
+| 4 | A stacked bar - read and written stacked per run | A stack answers "how much in total" and hides the ratio, which is the whole question | The comparison, in exchange for a total nobody asked for | Susan, 19D2 |
 
 ## Row #24 - Counterfactual cost gets a shape
 
