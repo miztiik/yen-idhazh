@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import hashlib
 from enum import StrEnum
-from typing import ClassVar, Self
+from typing import ClassVar, Final, Self
 
 from pydantic import Field, model_validator
 
@@ -45,7 +45,11 @@ from idhazh.contracts.fingerprint import PipelineInputs
 
 
 class GateName(StrEnum):
-    """The eleven gates that block adoption. Closed set, never free text."""
+    """The eleven gates that block adoption. Closed set, never free text.
+
+    Every run asks ten of them. `OPTIONAL_GATES` below names the one a run may
+    leave unevaluated, and says when and why.
+    """
 
     REASONING_LEAKAGE = "reasoning_leakage"
     SCHEMA_VALIDITY = "schema_validity"
@@ -58,6 +62,21 @@ class GateName(StrEnum):
     SCORED_DENOMINATOR = "scored_denominator"
     FAITHFULNESS_FLOOR = "faithfulness_floor"
     BRIEF_COPYING_CEILING = "brief_copying_ceiling"
+
+
+#: The gates a run may leave unevaluated, and why each one is here.
+#:
+#: `DETERMINISM` asks whether repeated calls produced identical words. That
+#: question has an answer at `temperature == 0` and none above it, where the
+#: repeats are meant to differ - so above zero the run records `wording_spread`
+#: as a diagnostic and reports no outcome for this gate (owner ruling,
+#: 2026-09-17, `docs/architecture/contracts/determinism.md`).
+#:
+#: **Optional is not weaker.** A gate listed here is held to its own bar exactly
+#: as before wherever it IS reported; what moved is the set of runs that can ask
+#: it. Every other gate is still required of every report, and a report that
+#: omits one is refused by name.
+OPTIONAL_GATES: Final = frozenset({GateName.DETERMINISM})
 
 
 class GateStatus(StrEnum):
@@ -429,6 +448,11 @@ class QualificationReport(Contract):
     __schema_stem__: ClassVar[str] = "qualification-report"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-17",
+            change="gates may omit determinism, and no other gate.",
+            why="Above temperature 0 that gate has no question to ask.",
+        ),
+        ChangelogEntry(
             version="2026-09-14T04:00",
             change="inputs gains turn_markers_sha256, optional.",
             why="The verdict records the same controls the shard beside it does.",
@@ -471,7 +495,7 @@ class QualificationReport(Contract):
         seen = [outcome.gate for outcome in self.gates]
         if len(set(seen)) != len(seen):
             raise ValueError("a gate reported twice is two answers to one question")
-        missing = sorted(set(GateName) - set(seen))
+        missing = sorted(set(GateName) - OPTIONAL_GATES - set(seen))
         if missing:
             raise ValueError(f"gates never evaluated: {[gate.value for gate in missing]}")
         return self

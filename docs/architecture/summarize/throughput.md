@@ -33,13 +33,34 @@ declared. The incumbent declares none, so every figure on this page is a
 no-thinking figure and stays comparable. What follows is what turning it on
 costs.
 
-**Priced from a committed reading.** The thinking budget is 256 tokens, hard
-capped. At the measured decode rate of **6.01 +/- 0.11 tokens a second**
-(2026-08-23, `ubuntu-latest`, EPYC 9V74, llama.cpp build b10598, three repeats)
-that is **42.6 seconds a span**. Against the 900-token answer worst case of
-149.8 seconds, one span is **28 percent more time**, which is the number the
-adoption decision is held to. The digest's own path makes two calls an item, so
-an item pays two spans: **85.2 seconds**.
+**The budget is a cap and it is not set.** `max_think_tokens` is null by default
+and every committed entry leaves it there, so the span ends where the model
+writes its closing marker and the window is the only other thing that stops it.
+Owner ruling, 2026-09-17: the 256 that used to sit here was carried over from no
+reading of any of these weights, it was below every published thinking budget we
+could find, and it landed in the band where a thought is cut rather than
+finished - which scores worse than no thought at the same budget
+([arxiv 2504.09858](https://arxiv.org/abs/2504.09858)). A cap chosen that way
+prices nothing; it only decides where the thought gets cut.
+
+**So the cost of a span is unmeasured, and that is the honest statement.** What
+is measured is the rate: **6.01 +/- 0.11 tokens a second** (2026-08-23,
+`ubuntu-latest`, EPYC 9V74, llama.cpp build b10598, three repeats). What is not
+measured is how many tokens these weights spend before closing the block, and
+that is a property of the weights rather than of a knob. Against the 900-token
+answer worst case of 149.8 seconds, every 100 tokens of thinking is **16.6
+seconds**, so the whole question is the token count. **What settles it**: one
+qualification arm with `thinking_close` declared, reading the thinking span's
+completion tokens off the dispatch log the two-call path already writes. The
+digest's own path makes two calls an item, so an item pays two spans.
+
+**The risk the null cap carries, named.** With no cap, a model that never writes
+its closing marker decodes to `n_ctx` - and the answer span's prompt is the
+thinking span's prompt plus what it wrote, so that item fails on the window
+rather than returning a cut summary. That is a louder failure than the one the
+cap prevented and a slower one. It is the reason the closing marker has to be
+the bytes the model actually writes rather than a plausible guess
+([prompt.md](prompt.md#two-spans-on-one-call)).
 
 **One part is an estimate and is labelled one** (Guardrail #10). Whether the
 answer span re-pays prefill on the thinking tokens has not been read. The slot

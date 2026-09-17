@@ -4,7 +4,7 @@
     "byte_count": 5680522464,
     "file": "Qwen3.5-9B-Q4_K_M.gguf",
     "hf_base_repo": "Qwen/Qwen3.5-9B",
-    "id": "qwen3-5-9b-q4-k-m",
+    "id": "qwen3-5-9b-q4-k-m-thinking",
     "inference": {
       "cache_type_k": null,
       "cache_type_v": null,
@@ -38,7 +38,7 @@
       "reply_opening_thinking": "<|im_start|>assistant\n<think>\n",
       "system_joiner": null,
       "system_role": "own_turn",
-      "thinking_close": null,
+      "thinking_close": "\n</think>\n\n",
       "thinking_kwarg": "enable_thinking",
       "turn_closing": "<|im_end|>\n",
       "turn_opening": "<|im_start|>$role\n"

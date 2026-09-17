@@ -59,6 +59,40 @@ a legal judgement a schema cannot make (Andre, 2026-09-13). `Architecture` is
 what llama.cpp reported when it loaded the file; the model file has no
 `arch` key today, so the value here comes from the loader's own report.
 
+**Two config files name these weights, and they are one model.**
+`qwen3.5-9b-q4km.json` runs with reasoning off; `qwen3.5-9b-q4km-thinking.json`
+is the same file with `turns.thinking_close` declared, added 2026-09-17 as an
+arm of the four-arm qualification. Both carry this page's `sha256`, so nothing
+about the identity above moves between them and this page is the dossier for
+both - one page a model, the same rule that gives Gemma's two files one page
+([../models.md](../models.md#what-earns-a-dossier)). The status line at the top
+of this page is still the only place the lifecycle is written, and there is one
+lifecycle because there is one set of weights.
+
+**What the closing marker is, and how it was derived rather than guessed.** The
+marker is `\n</think>\n\n`. It was not typed from memory: this entry's two reply
+openings were recorded from the server that applies Qwen's own template, and the
+no-reasoning one is the reasoning one with an **empty** block already closed -
+which is Qwen's documented way to turn reasoning off.
+
+| String | Value |
+| --- | --- |
+| `reply_opening_thinking` | `<\|im_start\|>assistant\n<think>\n` |
+| `reply_opening` | `<\|im_start\|>assistant\n<think>\n\n</think>\n\n` |
+| The difference, which is what closes an empty block | `\n</think>\n\n` |
+
+So `reply_opening_thinking + thinking_close == reply_opening` exactly, and a
+non-empty block closes with the same bytes an empty one does. That identity is
+checked in `backend/tests/contracts/test_turn_envelope.py` rather than left as
+an argument on this page.
+
+**What the thinking arm has not measured.** Nothing on this page was re-taken
+with reasoning on. A thinking span decodes into the same sequence, so seconds an
+item and the window headroom both move, and neither has a reading - the arm
+exists to take them. `max_think_tokens` is null on both files, so the span ends
+on the marker above or on the window and on nothing else
+([../../architecture/summarize/throughput.md](../../architecture/summarize/throughput.md#what-a-thinking-span-costs-and-the-one-part-that-is-still-an-estimate)).
+
 ## On disk, and what it costs the cache
 
 One copy of these weights is the `Bytes` row above.
