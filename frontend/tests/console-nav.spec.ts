@@ -42,18 +42,26 @@ const ROUTES = [
 	{ id: 'voices', label: 'Voices', path: '/console/voices/' }
 ] as const;
 
-/** The routes still opened with no panel of their own, and the row that fills
- * each. A strip that names a page nobody can reach is a strip that lies.
+/** The routes still opened with no panel of their own. A strip that names a
+ * page nobody can reach is a strip that lies, so the route answers, names
+ * itself, and says in plain words what is still missing.
  *
- * `Voices` was here until 2026-09-14, when row #13 moved four feed and source
- * panels onto it off Pipelines. It has a window control and four panels now, so
- * it fails every assertion below and belongs to the console suite instead. Its
+ * **It may not say that by citing a plan.** A reader of this page cannot open
+ * `TODO/`, and once a plan is distilled and deleted the pointer names nothing
+ * at all - so the absence says what is missing, and the check below refuses a
+ * plan filename or a row number instead of demanding one (owner ruling,
+ * 2026-09-17).
+ *
+ * `Voices` was here until 2026-09-14, when the feed and source panels moved
+ * onto it off Pipelines. It has a window control and four panels now, so it
+ * fails every assertion below and belongs to the console suite instead. Its
  * own absent state is still checked - `console-voices-sources.spec.ts` owns the
  * census half and `console-voices.spec.ts` owns the one-route-per-panel half.
  */
-const EMPTY_ROUTES = [
-	{ id: 'judgement', path: '/console/judgement/', rows: ['row #12', 'row #15'] }
-] as const;
+const EMPTY_ROUTES = [{ id: 'judgement', path: '/console/judgement/' }] as const;
+
+/** What an absence may not name: a plan file, or a row inside one. */
+const CITES_A_PLAN = /TODO\/\d|\brows?\s*#?\d|\bplan\s+\d/i;
 
 /** The three verdict colours, as the tokens a stylesheet would have to name. */
 const HEALTH_RAMP = ['--fill-high', '--fill-medium', '--fill-low', '--band-high', '--band-medium', '--band-low'];
@@ -280,13 +288,13 @@ for (const view of STRIP_WIDTHS) {
 
 test.describe('the routes opened empty', () => {
 	for (const route of EMPTY_ROUTES) {
-		test(`${route.path} answers, names itself and names the row that fills it`, async ({
+		test(`${route.path} answers, names itself and says what is missing`, async ({
 			page
 		}) => {
-			// A tab in a strip whose page does not exist is a strip that lies, and
-			// rows #12 and #15 land later. So the absence is named rather than
-			// blank, and it names where the specification is - which is the only
-			// part of it that stays true as those rows are written.
+			// A tab in a strip whose page does not exist is a strip that lies, and the
+			// panels land later. So the absence is named rather than blank, and it is
+			// named in words the reader can act on rather than in a pointer only the
+			// repository can resolve.
 			const errors: string[] = [];
 			page.on('console', (message) => {
 				if (message.type() === 'error') errors.push(message.text());
@@ -304,9 +312,18 @@ test.describe('the routes opened empty', () => {
 			await expect(empty, `${route.path} prints no named absence`).toHaveCount(1);
 			const said = (await empty.innerText()).replace(/\s+/g, ' ').trim();
 			expect(said.length, `${route.path} left its absence empty`).toBeGreaterThan(80);
-			for (const row of route.rows) {
-				expect(said, `${route.path} does not say which row fills it`).toContain(row);
-			}
+			expect(
+				said,
+				`${route.path} points at a plan instead of saying what is missing: ${said}`
+			).not.toMatch(CITES_A_PLAN);
+
+			// An absence a reader can do nothing with is half an answer, so the route
+			// sends them somewhere that carries something today.
+			const onward = page.locator(`[data-console-panels="${route.id}"] a[href]`);
+			expect(
+				await onward.count(),
+				`${route.path} names no page a reader can open instead`
+			).toBeGreaterThan(0);
 
 			// It fetches nothing, so it has no window control to govern nothing.
 			await expect(page.locator('[data-window-control]')).toHaveCount(0);

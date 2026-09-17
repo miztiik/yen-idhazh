@@ -188,7 +188,7 @@ def test_the_processor_reported_by_the_job_wins_and_an_unreported_one_is_read_he
 def test_one_sampler_call_reaches_both_consumers_and_they_cannot_disagree(
     tmp_path: Path,
 ) -> None:
-    """The Oracle for row 9: the item row and that shard's counters row are one reading.
+    """The item row and that shard's counters row are one reading.
 
     Two stores carry a `cpu_model` and a `cgroup_peak_bytes` column - the item
     row and `state/runtime-counters.csv`. They are separate stores on purpose:

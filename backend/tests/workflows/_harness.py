@@ -86,6 +86,7 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("measure.yml", "runtime_threads"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "runtime_threads_batch"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "budget_samples"): "^[1-9][0-9]{0,4}$",
+    ("measure.yml", "model_speed_case"): DISPATCH_CHOICE,
     ("measure.yml", "target"): DISPATCH_CHOICE,
     ("measure.yml", "threads"): "^[1-9][0-9]*$",
     ("prune.yml", "force"): DISPATCH_BOOLEAN,
@@ -266,7 +267,7 @@ WEIGHTS_CHECKS: Final = {
     # nothing in this job would notice a corrupt copy, and the arm that loads it
     # is a different job on a different machine. The bench step is named below
     # as the ordering anchor, not as a reader of these bytes.
-    ("measure.yml", "llm"): (
+    ("measure.yml", "llama-bench"): (
         "Fetch the draft head",
         "Verify the draft head",
         "Benchmark the candidate",
@@ -355,9 +356,33 @@ MEASUREMENT_TARGETS: Final = frozenset({"bench", "image", "corpus", "batched", "
 #: second multi-gigabyte download inside one dispatch (Guardrail #2).
 BENCH_TARGET: Final = "bench"
 
-BENCH_RAW_JOB: Final = "llm"
+#: The job that drives the `llama-bench` binary. It was keyed `llm` until
+#: 2026-09-17, which named a whole field of software rather than the one thing
+#: the job does, and showed in the run list as a bare three-letter key because
+#: no job in this file carried a `name:`.
+BENCH_RAW_JOB: Final = "llama-bench"
+
+#: How that key is spelled inside an expression. A hyphen is subtraction there,
+#: so `needs.llama-bench.result` does not resolve and the index form is the only
+#: reading of it.
+BENCH_RAW_JOB_EXPRESSION: Final = f"needs['{BENCH_RAW_JOB}']"
 
 BENCH_SERVER_JOB: Final = "runtime"
+
+#: The dispatch input and the config knob that decide whether the speed case
+#: runs at all, and the `models` output that carries the answer to a job's `if:`.
+#: A job cannot read a step of its own job, so the decision travels as an output.
+BENCH_SPEED_INPUT: Final = "model_speed_case"
+
+BENCH_SPEED_KNOB: Final = "run_model_speed_case"
+
+BENCH_SPEED_OUTPUT: Final = f"needs.models.outputs.{BENCH_SPEED_INPUT}"
+
+BENCH_SPEED_MODULE: Final = "backend/utilities/model_speed_case.py"
+
+BENCH_SPEED_SKIP_STEP: Final = "Say what a bypassed speed case cost this dossier"
+
+BENCH_SUMMARY_STEP: Final = "Put the speed readings in the run summary"
 
 BENCH_CACHE_KEY: Final = (
     "bench-${{ needs.models.outputs.candidate_cache_key }}-${{ env.LLAMA_CPP_BUILD }}"

@@ -10,7 +10,7 @@ is closed rather than open. The workflows that take these inputs are in
 ## Every dispatch input has a shape, and one of them decides a published address
 
 A `workflow_dispatch` form is free text unless somebody constrained it. Seven
-workflows declare 22 inputs between them. Until 2026-08-27 one of those was
+workflows declare 23 inputs between them. Until 2026-08-27 one of those was
 constrained by nothing at all, and it was the one that decides where a day is
 published.
 
@@ -41,21 +41,22 @@ under the paste is reading a script the input has already edited.
 
 ### Three shapes, and a closed list
 
-Every one of the 22 inputs is one of three things, and a contract test finds
+Every one of the 23 inputs is one of three things, and a contract test finds
 them by reading the workflow files rather than by consulting a list - so a new
 input fails the test until somebody says which one it is and the test finds the
 evidence in the file.
 
 | Shape | What it means | Count |
 | --- | --- | --- |
-| Enumerated | `type: choice` with an option list, or `type: boolean`. GitHub renders a menu or a checkbox and no other value can be submitted. | 6 |
+| Enumerated | `type: choice` with an option list, or `type: boolean`. GitHub renders a menu or a checkbox and no other value can be submitted. | 7 |
 | Read by name | The value never lands in a script. It reaches a step as an environment variable, and the program that reads it decides what it means. | 6 |
 | Matched | The workflow matches the value against an anchored pattern before anything acts on it. | 10 |
 
 The named inputs:
 
 - **Enumerated** - `backfill.commit`, `digest.faithfulness`, `digest.shards`,
- `measure.target`, `measure.runtime_candidate`, `prune.force`.
+ `measure.target`, `measure.runtime_candidate`, `measure.model_speed_case`,
+ `prune.force`.
 - **Read by name** - `measure.runtime_repeats`, `measure.runtime_threads`,
  `measure.runtime_threads_batch`, and `candidate_models_file` on
  `measure.yml`, `validate.yml` and `idhazh-pipeline-tests.yaml`. That one

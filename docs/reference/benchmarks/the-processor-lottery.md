@@ -240,7 +240,7 @@ three runs cannot do that.
 
 ### The instrument is split across two machines, and one of its halves is the wrong one
 
-**The `llm` job and the `runtime` job of one dispatch landed on different
+**The `llama-bench` job and the `runtime` job of one dispatch landed on different
 processors in 3 of the 4 dispatches on 2026-09-16** - 9V45 against 7763, 7763
 against Xeon 8573C, and 7763 against 9V74.
 
@@ -253,7 +253,9 @@ the published wall clock in that dossier describe two different machines.**
 
 **The right machine's rates are already free.** The `runtime` job writes its own
 server counters, so no new run is needed to fix this - only a different column to
-read.
+read. The speed case's own run summary now names the processor it drew and says
+in as many words that the other job may have drawn a different one, which is this
+finding turned into a line a reader sees without opening an artifact.
 
 | Run | The `runtime` job drew | Server prefill | Server decode |
 | --- | --- | ---: | ---: |

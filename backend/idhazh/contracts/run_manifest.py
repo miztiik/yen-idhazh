@@ -144,10 +144,10 @@ class RunRecord(Model):
             "Items the retired visual planner decided without asking the model, because "
             "no enabled visual kind could survive the checks. Counted separately so a "
             "chart rate is never quoted against items_routed alone. **Zero on every run "
-            "since plan 11 row #6**: the summarize-and-plan call writes the summary and the plan "
-            "in one reply, so the model is asked on every item and the gate then decides what "
-            "to do with the plan. Kept because the committed archive carries non-zero "
-            "values a reader of an older day still needs."
+            "since the planner retired**: the summarize-and-plan call writes the summary "
+            "and the plan in one reply, so the model is asked on every item and the gate "
+            "then decides what to do with the plan. Kept because the committed archive "
+            "carries non-zero values a reader of an older day still needs."
         ),
     )
     decision_ms: int | None = Field(

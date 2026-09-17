@@ -1041,7 +1041,7 @@ def test_a_desks_only_story_is_never_recorded() -> None:
     """A single-carrier story scores lowest, so a naive cut would take the exclusive one.
 
     `ai` carries one story that repeats `ml`'s top story exactly. The guard is the
-    desk's item count, so the lone `ai` story is kept and never recorded (row 52).
+    desk's item count, so the lone `ai` story is kept and never recorded.
     """
     lone = _planned("ai", 1, source_id="alpha", rank_score=5.0)
     strong = _planned("ml", 1, source_id="beta", rank_score=10.0)
@@ -1158,9 +1158,9 @@ def test_enforcing_cuts_the_weaker_telling() -> None:
 
 # --- Where a story publishes -----------------------------------------------
 #
-# `desk_of` is the whole of decision 8 of TODO/20260910-23-article-classification-plan.md:
-# the feed floor counts feeds, a feed declares a vertical, and a story relabelled
-# onto a name this run will not render falls back to the word its feed declared.
+# `desk_of` is the whole rule in one function: the feed floor counts feeds, a
+# feed declares a vertical, and a story relabelled onto a name this run will not
+# render falls back to the word its feed declared.
 # Every case here is built in memory; nothing reads the plan tree.
 
 

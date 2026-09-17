@@ -7,9 +7,9 @@ narrow: is every name a caller outside the package still reaches reachable, and
 is it the same object rather than a copy?
 
 Six of the original 37 are gone, and that is the other half of the question.
-Five of them nobody outside the package ever reached, so plan 32 row 10 cut
-them. The sixth is `record`, which a submodule of the same name now takes (plan
-32 row 4). This file is where both are recorded.
+Five of them nobody outside the package ever reached, so the split cut them. The
+sixth is `record`, which a submodule of the same name now takes. This file is
+where both are recorded.
 
 **What this cannot settle: whether the seam is in the right place.** It would
 pass just as green with all 31 names left in one file, and it would pass with
@@ -86,8 +86,8 @@ BEFORE_THE_SPLIT: Final[frozenset[str]] = frozenset(
 MODULES: Final[tuple[ModuleType, ...]] = (census, events, rollup, sinks, spans, traces)
 
 #: The one pre-split name the package cannot re-export, and why it cannot.
-#: `telemetry/record.py` owns one item's row (plan 32 row 4), and Python binds a
-#: submodule onto its package as an attribute - so a function re-exported under
+#: `telemetry/record.py` owns one item's row, and Python binds a submodule onto
+#: its package as an attribute - so a function re-exported under
 #: the same name means `telemetry.record` is the function until something
 #: imports the module and the module afterwards. That is not a name, it is an
 #: import-order bug waiting for a caller. The attribute scan behind
@@ -95,13 +95,13 @@ MODULES: Final[tuple[ModuleType, ...]] = (census, events, rollup, sinks, spans, 
 #: function is still `telemetry.events.record` where it has always been defined.
 TAKEN_BY_A_MODULE: Final[frozenset[str]] = frozenset({"record"})
 
-#: The five names plan 32 row 10 stopped re-exporting. An attribute scan of
+#: The five names the split stopped re-exporting. An attribute scan of
 #: every `.py` under `backend/` found no `telemetry.<name>` and no
 #: `from idhazh.telemetry import <name>` for any of them outside the package, so
 #: each alias named a thing only the package's own modules use (Guardrail #6).
 #: Every one of them still lives in the module that owns it, which is what the
 #: second half of the oracle below holds.
-CUT_BY_THE_DISPATCHER_ROW: Final[frozenset[str]] = frozenset(
+CUT_AS_UNREACHED_ALIASES: Final[frozenset[str]] = frozenset(
     {
         "AttrValue",
         "DEGRADED_BUT_DONE",
@@ -115,15 +115,16 @@ CUT_BY_THE_DISPATCHER_ROW: Final[frozenset[str]] = frozenset(
 #: that needs it. A public name is a promise, so one arrives here deliberately
 #: rather than by being noticed failing this test.
 #:
-#: `census_row` is plan 32 row 6. `stages.record` and `stages.assemble` both
+#: `census_row` arrived with the persisted census row. `stages.record` and
+#: `stages.assemble` both
 #: build the day's census row, and both reach it as `telemetry.census_row` -
 #: which is how they already reached `classify_item`, the function it now wraps.
 ADDED_AFTER_THE_SPLIT: Final[frozenset[str]] = frozenset({"census_row"})
 
 #: What the package re-exports today: the pre-split surface, less the five the
-#: dispatcher row cut and the one a submodule took, plus what later rows added.
+#: split cut as unreached and the one a submodule took, plus what later rows added.
 RE_EXPORTED: Final[frozenset[str]] = (
-    BEFORE_THE_SPLIT - CUT_BY_THE_DISPATCHER_ROW - TAKEN_BY_A_MODULE | ADDED_AFTER_THE_SPLIT
+    BEFORE_THE_SPLIT - CUT_AS_UNREACHED_ALIASES - TAKEN_BY_A_MODULE | ADDED_AFTER_THE_SPLIT
 )
 
 
@@ -166,7 +167,7 @@ def test_a_cut_re_export_is_gone_from_the_package_and_not_from_its_module() -> N
     Each of the five is still defined, still imported by the modules that use it,
     and simply no longer reachable as `telemetry.<name>`.
     """
-    for name in sorted(CUT_BY_THE_DISPATCHER_ROW):
+    for name in sorted(CUT_AS_UNREACHED_ALIASES):
         assert not hasattr(telemetry, name), (
             f"telemetry.{name} is still re-exported; the cut did not happen"
         )

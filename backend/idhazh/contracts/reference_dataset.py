@@ -1,25 +1,25 @@
 """One article of the frozen classification reference set, as one line of `dataset.jsonl`.
 
-`corpus/reference-dataset-1/` is the set every classification accuracy number in
-plan 23 is measured on. A row here says which article it is, where its text
+`corpus/reference-dataset-1/` is the set every classification accuracy number is
+measured on. A row here says which article it is, where its text
 lives, and what a person labelled it. It never says which split it is in: the two
 committed lists under `splits/` are the split, and a second copy of that fact on
 the row is a second thing that can disagree with the first.
 
 **The set is frozen and the splits are committed as lists.** A split recomputed
 from a seed moves when the row order moves, and then last month's number and this
-month's number were taken on different sets (plan 23 row #P2 decision 3).
+month's number were taken on different sets.
 
 **Article text lives in its own file**, `articles/<url_key>.txt`, one an article.
 Editing a label re-emits one short line rather than the whole article, which
 matters because `.github/workflows/prune.yml` rewrites this range of history on a
-schedule (`CLAUDE.md` section 8, plan 23 row #P2 decision 4). `article_sha256`
+schedule (`CLAUDE.md` section 8). `article_sha256`
 and `article_words` are what tie the line back to the file: a text somebody edited
 in place stops matching, and `build_reference_dataset.py verify` is what says so.
 
 **This repository is public, so every article text under `corpus/` is readable by
 anyone.** That cost was taken on 2026-08-28 and is restated here rather than
-assumed (`CLAUDE.md` section 0a, plan 23 row #P2 decision 8). Nothing renders
+assumed (`CLAUDE.md` section 0a). Nothing renders
 this text, links to it or serves it.
 
 **Who wrote the labels is the one fact a number taken on this set depends on, so
@@ -62,8 +62,7 @@ class ReferenceSplit(StrEnum):
 
     **There is no `train`.** A train split in the same directory invites
     fine-tuning on the measurement set, and that contamination is silent - the
-    numbers get better and nothing says why (plan 23 row #P2 decision 1, owner,
-    2026-09-10).
+    numbers get better and nothing says why (owner, 2026-09-10).
     """
 
     DEV = "dev"
@@ -75,22 +74,22 @@ class ReferenceLabels(Model):
 
     The vocabularies are `config/taxonomy.json`, so nothing here enumerates a
     member: a label is a slug the taxonomy names, and adding a word to the
-    taxonomy may not be a schema change (plan 23 section 0.1). Three of the five
+    taxonomy may not be a schema change. Three of the five
     label fields name a vocabulary `config/taxonomy.json` does not carry yet -
     `article_kind`, `stances` and `sentiment` - so the 2026-09-13 pass took them
-    from plan 23 rows #8, #10 and #11, and `backend/utilities/
-    label_reference_dataset.py` is where that list sits until those rows land.
+    from `backend/utilities/label_reference_dataset.py`, which is where that
+    list sits until the taxonomy carries them.
 
-    **`stances` is keyed and valued in slugs, which the plan's own spelling is
-    not.** `Slug` admits the hyphen and refuses the underscore, so the axis is
-    `stance-on-change` and the decline is `not-applicable`. Plan 23 row #10
-    writes both with underscores and row #9's token measurement was taken on
-    that spelling; one of the two has to move, and it is not this one.
+    **`stances` is keyed and valued in slugs, which the labelling vocabulary's
+    own spelling is not.** `Slug` admits the hyphen and refuses the underscore,
+    so the axis is `stance-on-change` and the decline is `not-applicable`. The
+    underscore spelling is what the token measurement was taken on; one of the
+    two has to move, and it is not this one.
 
     `reference_summary` **has a writer from 2026-09-13** and it is the labeller.
     It is a reference for classification labels and is **never** a faithfulness
     reference - the human faithfulness ledger was dropped and only its contract
-    kept (plan 23 row #P2 decision 6, owner, 2026-09-10).
+    kept (owner, 2026-09-10).
     """
 
     desk: Slug | None = Field(
@@ -113,8 +112,8 @@ class ReferenceLabels(Model):
         default=None,
         description=(
             "The labeller's own summary of the article. A reference for "
-            "classification labels, never a faithfulness reference - "
-            "plan 23 row #P2 decision 6."
+            "classification labels, never a faithfulness reference - the human "
+            "faithfulness ledger was dropped and only its contract kept."
         ),
     )
     labelled_by: str | None = Field(

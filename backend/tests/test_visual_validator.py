@@ -246,9 +246,9 @@ def test_every_declarable_type_has_a_rule_or_is_named_as_having_none() -> None:
 def test_a_type_whose_rules_are_not_written_yet_is_refused_rather_than_drawn() -> None:
     """Declarable is not renderable, and the ladder is what catches this.
 
-    Plans 16 to 18 own the composition, infographic and diagram families. Until
-    then a plan naming one of their types is refused here by name, and plan 11's
-    downgrade ladder re-enters this same validator with a nearer neighbour.
+    The composition, infographic and diagram families have no written rules yet.
+    Until they do, a plan naming one of their types is refused here by name, and
+    the downgrade ladder re-enters this same validator with a nearer neighbour.
     """
     plan = load_plan("passes")
     for unruled in sorted(UNRULED_TYPES, key=lambda member: member.value):
@@ -335,7 +335,7 @@ def test_a_numeral_in_reader_facing_prose_is_matched_against_the_cited_elements(
     Each is checked on its own case, because one combined case passes while two of
     the three are unread. A numeral the article's own characters carry is fine;
     a numeral from nowhere is not, and neither is one the model reached by
-    converting - code does the arithmetic, and row 4 records it when it does.
+    converting - code does the arithmetic, and it records it when it does.
     """
     plan, table, visuals = load_plan("passes"), load_table("wind"), committed_visuals()
     for field, prose in (
