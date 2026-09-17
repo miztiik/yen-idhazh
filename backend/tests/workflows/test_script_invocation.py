@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import subprocess
 from pathlib import Path
 from typing import Final
@@ -10,14 +9,9 @@ from typing import Final
 import pytest
 from conftest import REPO_ROOT
 
-from ._harness import SCRIPTS_DIR, _load_workflows, _run_bodies
+from ._harness import SCRIPT_CALL, SCRIPTS_DIR, _load_workflows, _run_bodies
 
 pytestmark = pytest.mark.workflow
-
-#: A shipped script named inside a `run:` body. A name is letters, digits and
-#: the punctuation a filename here uses, so the shellcheck step's
-#: `.github/scripts/*.sh` glob is not read as a call to anything.
-CALL: Final = re.compile(r"\.github/scripts/(?P<name>[A-Za-z0-9._-]+\.sh)")
 
 #: The words that hand a script to an interpreter, which is what makes the file
 #: mode stop deciding whether the step runs. `nohup bash <path>` ends in one of
@@ -41,7 +35,7 @@ def _calls() -> list[tuple[str, str, bool]]:
             for line in body.splitlines():
                 if line.lstrip().startswith("#"):
                     continue
-                for match in CALL.finditer(line):
+                for match in SCRIPT_CALL.finditer(line):
                     if match.start() and not line[match.start() - 1].isspace():
                         continue
                     before = line[: match.start()].split()
