@@ -12,7 +12,7 @@ import json
 import logging
 import time
 from collections import Counter
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any, Final, NamedTuple
 from urllib.error import HTTPError
@@ -21,6 +21,7 @@ from pydantic import ValidationError
 
 from idhazh import (
     assemble,
+    chrome,
     config,
     corpus,
     elements,
@@ -227,6 +228,7 @@ def _fetch_one(
     settings: config.Settings,
     read_url: Fetcher,
     tracer: telemetry.Tracer | None = None,
+    chrome_lines: Mapping[str, set[str]] | None = None,
 ) -> FetchedItem:
     """The article, the body it was cut from, and how long each step took.
 
@@ -244,6 +246,11 @@ def _fetch_one(
     result rather than being re-timed here: the handshake and the first byte are
     facts only the socket knows, and a second stopwatch round this call could
     only ever restate `fetch_ms`.
+
+    `chrome_lines` is what this host has printed on page after page, hashed, as
+    the previous runs folded it. A caller that has no store hands nothing and the
+    boilerplate signal reads 0.0, which is what every run before 2026-09-17 did -
+    it divided by an empty set and answered no on every page ever fetched.
     """
     trace = tracer if tracer is not None else silent_tracer()
     started = time.monotonic()
@@ -258,7 +265,11 @@ def _fetch_one(
     started = time.monotonic()
     with trace.span(telemetry.SpanName.EXTRACT) as span:
         article, source_text = extract.to_article_with_source(
-            item, result, config=settings.app.extract, fetched_at=assemble.utc_now()
+            item,
+            result,
+            config=settings.app.extract,
+            fetched_at=assemble.utc_now(),
+            seen_elsewhere=(chrome_lines or {}).get(chrome.host_of(item.canonical_url)),
         )
         with trace.span(telemetry.SpanName.TAG) as tag_span:
             article = tag.tagged(article, taxonomy=settings.taxonomy, watchlist=settings.watchlist)

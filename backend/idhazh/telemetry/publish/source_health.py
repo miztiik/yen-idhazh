@@ -26,7 +26,8 @@ from __future__ import annotations
 import argparse
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from datetime import date as date_type
 from pathlib import Path
 from typing import Final
 
@@ -35,6 +36,7 @@ from idhazh.contracts.feed_health import FeedHealthRow, RobotsOutcome, derive_en
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.source_health_view import (
+    DayYield,
     SourceAvailability,
     SourceHealthRow,
     SourceHealthView,
@@ -173,6 +175,68 @@ class _Census:
         lost = self._lost.get(source_id, set()) - published
         return len(planned), len(published), len(lost)
 
+    def on(self, source_id: str, dates: Sequence[str]) -> list[DayYield]:
+        """The same three counts, one date at a time, over the axis it is handed.
+
+        **Every date on the axis, including the ones this source was silent on.**
+        The page stacks these strips under one shared date axis, so a row that
+        skipped its quiet days would put two different days in one column and
+        every square below it would be a lie. A silent day is 0 of 0, which the
+        page draws as no record.
+
+        Re-sliced out of the sets this census already holds rather than read
+        again, so the day strip costs the same walk the totals did.
+        """
+        planned = self._planned.get(source_id, set())
+        published = self._published.get(source_id, set())
+        lost = self._lost.get(source_id, set()) - published
+        return [
+            DayYield(
+                date=date,
+                opportunities=sum(1 for row in planned if row[0] == date),
+                publications=sum(1 for row in published if row[0] == date),
+                source_failures=sum(1 for row in lost if row[0] == date),
+            )
+            for date in dates
+        ]
+
+
+def dwell(days: Sequence[DayYield], *, alarm_point: float) -> int:
+    """The unbroken run of under-the-mark days at the newest end.
+
+    **Unbroken is the whole rule.** One day back at or above the mark resets the
+    count to zero, so a source that recovered keeps its place and a fortnight of
+    scattered bad days retires nothing. A day the source decided nothing breaks
+    nothing and counts as nothing: it has no share, so it can neither condemn
+    the source nor clear it, and the run reads through it.
+
+    Written here rather than in the page for the reason the reliability factor
+    is: a countdown a console re-derives is a second verdict.
+    """
+    run = 0
+    for day in reversed(days):
+        share = day.day_yield
+        if share is None:
+            continue
+        if share >= alarm_point:
+            return run
+        run += 1
+    return run
+
+
+def retires_on(days: Sequence[DayYield], *, under: int, dwell_days: int) -> str | None:
+    """The day a live dwell completes, counted from the newest date on the axis.
+
+    **Never from a wall clock.** A console re-opened after midnight must not
+    move a date the run decided, and a run that crosses midnight must not print
+    two different answers for one reading. `None` where no dwell is running or
+    the axis is empty.
+    """
+    if under <= 0 or not days:
+        return None
+    left = max(dwell_days - under, 0)
+    return (date_type.fromisoformat(days[-1].date) + timedelta(days=left)).isoformat()
+
 
 def build(
     *,
@@ -216,6 +280,9 @@ def build(
     for item in items:
         if item.date in inside:
             census.add(item)
+    # The strip is the newest part of the same axis the totals read, so it opens
+    # no shard the census did not and costs one more slice of sets already held.
+    axis = dates[-collect.source_quality_dwell_days :]
 
     rows: list[SourceHealthRow] = []
     for feed in sorted(feeds, key=lambda entry: entry.id):
@@ -228,6 +295,13 @@ def build(
         )
         opportunities, publications, lost = census.of(feed.id)
         evidence = factors.get(feed.id, [])
+        days = census.on(feed.id, axis)
+        under = dwell(days, alarm_point=collect.source_yield_alarm_point)
+        judged = (
+            len(dates) >= keep
+            and publications + lost >= collect.source_yield_alarm_min_decisions
+            and key not in retired_on
+        )
         rows.append(
             SourceHealthRow(
                 source_id=feed.id,
@@ -244,6 +318,17 @@ def build(
                 source_failures=lost,
                 reliability=ledger.feed_reliability(evidence, floor=collect.reliability_floor),
                 reliability_reads=len(evidence),
+                recent_days=tuple(days),
+                days_under_the_mark=under,
+                # A countdown only where the record is deep enough to justify
+                # one. A source under its evidence floors still draws its strip -
+                # the operator can see the shape - but it gets no date, because a
+                # date is a claim the evidence cannot support yet.
+                retires_on=(
+                    retires_on(days, under=under, dwell_days=collect.source_quality_dwell_days)
+                    if judged
+                    else None
+                ),
             )
         )
 
@@ -265,6 +350,11 @@ def build(
         yield_readable=len(dates) >= keep,
         first_date=dates[0] if dates else None,
         last_date=dates[-1] if dates else None,
+        yield_alarm_point=collect.source_yield_alarm_point,
+        yield_alarm_min_decisions=collect.source_yield_alarm_min_decisions,
+        dwell_days=collect.source_quality_dwell_days,
+        auto_retire=collect.source_quality_auto_retire,
+        dwell_dates=tuple(axis),
         sources=rows,
     )
 

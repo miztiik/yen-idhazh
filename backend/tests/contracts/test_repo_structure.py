@@ -268,14 +268,15 @@ def test_the_feed_health_ledger_columns_are_defined_once() -> None:
     )
 
 
-def test_a_retirement_names_distinct_runs_and_only_one_cause() -> None:
+def test_a_retirement_names_distinct_runs_and_matches_its_cause() -> None:
     """Five failures inside one run is one run's evidence, not five runs' worth.
 
-    `http_410` is the only cause the enum admits, and that is the design rather
-    than a starting point: nothing softer than `410 Gone` says the address is
-    not coming back (docs/architecture/sources/health.md).
+    Two causes, and each fills its own evidence cell. `http_410` names the runs
+    that read the `410`; `low_yield` names the days the share stayed under the
+    alarm point, because that decision is made on days and a day the schedule
+    fired five times is still one day (docs/architecture/sources/health.md).
     """
-    assert [cause.value for cause in RetirementCause] == ["http_410"]
+    assert [cause.value for cause in RetirementCause] == ["http_410", "low_yield"]
 
     row = FeedRetirementRow.from_json(
         read_text(CONTRACT_FIXTURES_DIR / "feed-retirement-row" / "gone.json")
@@ -284,6 +285,14 @@ def test_a_retirement_names_distinct_runs_and_only_one_cause() -> None:
 
     with pytest.raises(ValidationError, match="distinct runs"):
         FeedRetirementRow.model_validate(repeated)
+
+    crossed = row.model_dump(mode="json") | {"cause": "low_yield"}
+    with pytest.raises(ValidationError, match="stayed under the mark"):
+        FeedRetirementRow.model_validate(crossed)
+
+    bare = row.model_dump(mode="json") | {"evidence_run_ids": []}
+    with pytest.raises(ValidationError, match="read the 410"):
+        FeedRetirementRow.model_validate(bare)
 
 
 def test_a_retirement_row_survives_the_ledger_round_trip() -> None:
