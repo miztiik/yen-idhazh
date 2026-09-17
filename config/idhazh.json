@@ -31,7 +31,8 @@
     "similarity_floor": 0.35
   },
   "bench": {
-    "corpus_items": 3
+    "corpus_items": 3,
+    "run_model_speed_case": true
   },
   "collect": {
     "availability_rest_runs": 5,

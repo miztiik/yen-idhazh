@@ -152,6 +152,12 @@
           "minimum": 1,
           "title": "Corpus Items",
           "type": "integer"
+        },
+        "run_model_speed_case": {
+          "default": true,
+          "description": "Does a bench dispatch measure the model's raw speed before it measures real work? Default true, and it is removed the day the speed case stops costing a dispatch time worth saving - measured 2026-09-16 over four dispatches on stock ubuntu-latest at 9.1, 26.7, 27.2 and 87.6 minutes, so today it is worth between a tenth and a third of the whole dispatch.\n\nFalse runs the rest of the flow and skips that half: the fixed corpus, the real server over it, the machine record and the committed host row all still happen. What is given up is the prefill and decode rates, and with them the dossier - a dossier is both cases, so a dispatch that skipped one emits the server half and a line saying which half is missing rather than a page that reads whole.\n\nIt also moves who pays for the weights. The speed case fills the cache entry the server case restores, so a dispatch that skips it downloads the candidate once in the server case instead - the same bytes, in a different job.\n\n`measure.yml`'s `model_speed_case` dispatch input overrules this for one run without a commit: `config` follows this knob, `run` and `skip` do not. This is operator control rather than a feature behind a flag, so there is no second implementation waiting behind it - the same jobs run either way and one of them is not dispatched.",
+          "title": "Run Model Speed Case",
+          "type": "boolean"
         }
       },
       "title": "BenchConfig",
@@ -2121,6 +2127,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "bench.run_model_speed_case, additive, default true.",
+      "version": "2026-09-17T16:00",
+      "why": "Testing the bench flow should not cost half an hour of llama-bench."
+    },
+    {
       "change": "bench.corpus_items, additive, default 3.",
       "version": "2026-09-17T12:00",
       "why": "The bench corpus was two source literals, and at five it overran the job."
@@ -2134,11 +2145,6 @@
       "change": "assemble.same_story_window_hours, additive, default 36.",
       "version": "2026-09-16T18:00",
       "why": "A story that breaks at 23:00 and is picked up at 07:00 is one story."
-    },
-    {
-      "change": "ui.lead_rank_weight and ui.lead_also_covered_weight, additive.",
-      "version": "2026-09-16T16:00",
-      "why": "The leading block is a weighted score now, so every term needs a knob."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2216,7 +2222,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-17T12:00",
+      "default": "2026-09-17T16:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2227,5 +2233,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-17T12:00"
+  "version": "2026-09-17T16:00"
 }

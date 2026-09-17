@@ -16,7 +16,7 @@ from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.telemetry import silicon
-from utilities import candidate_pointer, runtime_sweep
+from utilities import candidate_pointer, model_speed_case, runtime_sweep
 
 from ._harness import (
     BENCH_ARTIFACTS,
@@ -29,8 +29,15 @@ from ._harness import (
     BENCH_FINGERPRINT_STEP,
     BENCH_LEDGER_ROOT,
     BENCH_RAW_JOB,
+    BENCH_RAW_JOB_EXPRESSION,
     BENCH_RETENTION_DAYS,
     BENCH_SERVER_JOB,
+    BENCH_SPEED_INPUT,
+    BENCH_SPEED_KNOB,
+    BENCH_SPEED_MODULE,
+    BENCH_SPEED_OUTPUT,
+    BENCH_SPEED_SKIP_STEP,
+    BENCH_SUMMARY_STEP,
     BENCH_TARGET,
     BENCH_TRIAL_STATE,
     BUDGETS_EMIT_STEP,
@@ -82,7 +89,7 @@ def test_the_bench_is_one_target_that_runs_two_cases_in_order() -> None:
 
     for job_name in (BENCH_RAW_JOB, BENCH_SERVER_JOB):
         condition = _normalize_condition(_job(workflow, job_name).get("if"), f"{job_name} if")
-        assert condition == f"inputs.target == '{BENCH_TARGET}'", job_name
+        assert f"inputs.target == '{BENCH_TARGET}'" in condition, job_name
 
     assert _needs(workflow, BENCH_RAW_JOB) == ["models"]
     assert _needs(workflow, BENCH_SERVER_JOB) == ["models", BENCH_RAW_JOB], (
@@ -274,6 +281,151 @@ def test_the_raw_case_refuses_weights_the_dispatch_did_not_declare() -> None:
     )
     assert "--expect-sha256" in script
     assert '--expect-sha256 "$CANDIDATE_SHA256"' in script, "read by name, never pasted"
+
+
+def test_a_bypassed_speed_case_skips_that_job_and_nothing_else() -> None:
+    """The Oracle for the bypass. A bypass that skipped half the workflow is worse than none.
+
+    GitHub's rule is the whole reason this needs a test: an `if:` with no status
+    function carries an implicit `success()`, and a skipped need is not a
+    success - so every dependant of a skipped job is skipped too, silently. The
+    three properties below are that rule turned into something a file can be
+    read for.
+
+    Every one is derived from the workflow rather than from a list here. The
+    dependants are found by walking `needs`, so a sixth job that waited on the
+    speed case would be held to the same rule the day it was written.
+    """
+    workflow = _load_workflows()["measure.yml"]
+    jobs = _mapping(workflow.get("jobs"), "measure.yml jobs")
+
+    gate = _normalize_condition(_job(workflow, BENCH_RAW_JOB).get("if"), f"{BENCH_RAW_JOB} if")
+    assert f"{BENCH_SPEED_OUTPUT} == 'run'" in gate, (
+        "the speed case is not gated on the decision the models job published"
+    )
+
+    dependants = sorted(
+        name for name in jobs if BENCH_RAW_JOB in _needs(workflow, str(name)) and name != BENCH_RAW_JOB
+    )
+    assert dependants == [BENCH_SERVER_JOB], (
+        "only the server case waits on the speed case; a new dependant needs the same clause"
+    )
+
+    for name in dependants:
+        condition = _normalize_condition(_job(workflow, name).get("if"), f"{name} if")
+        assert "!cancelled()" in condition or "always()" in condition, (
+            f"{name} needs {BENCH_RAW_JOB} with no status function, so a skipped speed "
+            "case takes it with it"
+        )
+        assert f"{BENCH_RAW_JOB_EXPRESSION}.result == 'skipped'" in condition, (
+            f"{name} does not say a skipped speed case is allowed"
+        )
+        assert f"{BENCH_RAW_JOB_EXPRESSION}.result == 'success'" in condition, (
+            f"{name} would run after a speed case that failed"
+        )
+        assert "needs.models.result == 'success'" in condition, (
+            f"{name} lifted the implicit success() and did not put the models job back"
+        )
+
+    # The other three targets cannot be reached by this at all, and that is a
+    # fact about the graph rather than an assurance.
+    for name in ("image", "corpus", BUDGETS_JOB, "batched"):
+        assert BENCH_RAW_JOB not in _needs(workflow, name), name
+
+
+def test_the_server_case_asks_for_the_raw_case_only_when_there_is_one() -> None:
+    """A download of an artifact nobody wrote fails a five-hour job at its last step.
+
+    The dossier is both cases by definition, so the two steps that need the raw
+    half are gated on it having run and the run says which half is missing
+    instead of emitting a page that reads whole (section 1a).
+    """
+    workflow = _load_workflows()["measure.yml"]
+    ran = f"{BENCH_RAW_JOB_EXPRESSION}.result == 'success'"
+
+    for step in _steps(workflow, BENCH_SERVER_JOB):
+        reads_raw = str(step.get("uses", "")).startswith("actions/download-artifact") or str(
+            step.get("name") or ""
+        ) == BENCH_EMIT_STEP
+        if not reads_raw:
+            continue
+        condition = _normalize_condition(step.get("if"), f"{step.get('name') or step.get('uses')}")
+        assert condition == ran, "a step that reads the raw case is not gated on it"
+
+    told = _step(workflow, BENCH_SERVER_JOB, "name", BENCH_SPEED_SKIP_STEP)
+    assert _normalize_condition(told.get("if"), BENCH_SPEED_SKIP_STEP) == (
+        f"{BENCH_RAW_JOB_EXPRESSION}.result == 'skipped'"
+    )
+    script = _script(told, f"measure.yml/{BENCH_SERVER_JOB}/{BENCH_SPEED_SKIP_STEP}")
+    assert 'GITHUB_STEP_SUMMARY' in script
+    assert BENCH_SPEED_INPUT in script and BENCH_SPEED_KNOB in script, (
+        "the note says the two ways to get the missing half back"
+    )
+
+
+def test_whether_the_speed_case_runs_is_config_and_the_form_may_overrule_it() -> None:
+    """The substitution test. Change the knob and the answer follows it, with no source edit.
+
+    Driven through the module the workflow calls rather than through a copy of
+    its rule, over a copy of the committed tree, so a knob renamed under it
+    fails here rather than in a dispatch that quietly benched for half an hour
+    somebody had asked it not to (Guardrail #6).
+    """
+    workflow = _load_workflows()["measure.yml"]
+    declared = _mapping(
+        _declared_dispatch_inputs(workflow)[BENCH_SPEED_INPUT], f"measure.yml {BENCH_SPEED_INPUT}"
+    )
+    assert set(_string_list(declared.get("options"), "options")) == set(model_speed_case.CHOICES)
+    assert declared.get("default") == model_speed_case.FOLLOW_CONFIG
+
+    step = _step(workflow, "models", "id", "speed")
+    script = _script(step, "measure.yml/models/speed")
+    assert BENCH_SPEED_MODULE in script, "the workflow asks the module rather than spelling the rule"
+    assert '"$GITHUB_OUTPUT"' in script, "the answer has to be an output or no job can read it"
+
+    # The committed default, and the one the form can set over it.
+    assert model_speed_case.configured(None) is True
+    assert model_speed_case.decide("config", configured=True) == model_speed_case.RUN
+    assert model_speed_case.decide("config", configured=False) == model_speed_case.SKIP
+    assert model_speed_case.decide("skip", configured=True) == model_speed_case.SKIP
+    assert model_speed_case.decide("run", configured=False) == model_speed_case.RUN
+    with pytest.raises(ValueError, match=BENCH_SPEED_INPUT):
+        model_speed_case.decide("maybe", configured=True)
+
+
+def test_the_speed_case_puts_its_rates_on_the_run_page() -> None:
+    """A 90-day artifact is a download; a table on the run page is a read.
+
+    `if: always()` and a module that exits 0 on a missing file, because a step
+    reporting on a measurement must not turn one failure into two.
+    """
+    workflow = _load_workflows()["measure.yml"]
+    step = _step(workflow, BENCH_RAW_JOB, "name", BENCH_SUMMARY_STEP)
+    assert _normalize_condition(step.get("if"), BENCH_SUMMARY_STEP) == "always()"
+
+    script = _script(step, f"measure.yml/{BENCH_RAW_JOB}/{BENCH_SUMMARY_STEP}")
+    assert "backend/utilities/summarise_bench.py" in script, (
+        "a second formatter over the same JSON is two things to keep agreeing"
+    )
+    assert "--markdown" in script
+    assert '>> "$GITHUB_STEP_SUMMARY"' in script
+    for flag in ("--candidate-id", "--quantisation"):
+        assert f'{flag} "$' in script, f"{flag} is pasted rather than read by name"
+
+
+def test_every_job_in_the_measurement_workflow_says_what_it_does() -> None:
+    """A bare job key is what a run page shows, and `llm` said nothing.
+
+    The names are held to being longer than their keys rather than to a list of
+    strings here: a list would be a second copy of the workflow, and what is
+    actually wrong with a missing name is that the key is all a reader gets.
+    """
+    workflow = _load_workflows()["measure.yml"]
+    jobs = _mapping(workflow.get("jobs"), "measure.yml jobs")
+    for key in jobs:
+        name = _job(workflow, str(key)).get("name")
+        assert isinstance(name, str) and name.strip(), f"job {key} shows as its bare key"
+        assert len(name) > len(str(key)), f"job {key} is named after itself"
 
 
 def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path) -> None:
