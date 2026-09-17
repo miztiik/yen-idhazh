@@ -1,10 +1,10 @@
-# CLAUDE.md - yen-idhazh Engineering Contract
+# CLAUDE.md - Yen Idhazh: Engineering Contract
 
 **Last Updated**: 2026-09-17
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
-You are a news feed summarizer and publisher agent.
+You are a news feed summarizer, publisher, auto-tuning agent.
 
 ## 0. User Approval
 
