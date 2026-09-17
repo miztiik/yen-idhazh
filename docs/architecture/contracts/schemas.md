@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-17
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -95,13 +95,14 @@ Every other row ledger writes `version` as its first cell, because
 base contract declares. `PublicTelemetryRow` overrides that and writes nineteen
 cells, none of them `version`.
 
-The reason is on the far side of the boundary. `parseTelemetryCsv` in
-`frontend/src/lib/charts/series.ts` checks the header **position by position as a
-prefix**, so a name at position zero shifts every position the console reads and
-blanks its charts on every cached bundle. That check is written for appends and
-against inserts on purpose
-([../publishing/telemetry-series.md](../publishing/telemetry-series.md)), and a
-`version` cell is an insert at the worst possible index.
+The reason was on the far side of the boundary. Until 2026-09-16 `parseTelemetryCsv`
+in `frontend/src/lib/charts/series.ts` checked the header **position by position as
+a prefix**, so a name at position zero shifted every position the console read and
+blanked its charts on every cached bundle. It resolves every cell by its column
+name now, so an insert no longer blanks anything
+([../publishing/telemetry-series.md](../publishing/telemetry-series.md)). What
+keeps `version` off the row is what is left once that hazard is gone: a cell in
+every row of a payload the reader downloads, which no panel reads.
 
 The stamp is not lost: it is a field of the shape, and
 `schemas/public-telemetry.schema.json` is where a reader of an old shard looks it

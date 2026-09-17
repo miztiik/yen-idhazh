@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import re
 import shlex
 import subprocess
 from pathlib import Path
-from typing import Final
 
 import pytest
 from conftest import REPO_ROOT, read_text
@@ -284,98 +282,18 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
     ]
 
 
-#: Where each ledger the work stage appends to directly lands, as the staged path
-#: names it. Written out rather than derived, because `append_runtime_counters`
-#: writes a flat file and `append_span_rollup` writes a directory, so no rule
-#: turns a helper name into a path.
-WORK_STAGE_APPENDS: Final = {
-    "append_span_rollup": "state/span-rollup",
-}
+def test_every_job_that_records_a_machine_says_which_job_it_is() -> None:
+    """A row that cannot name its job is a row nobody can group by.
 
-#: The same, for the writers that are not ledger appends. `stage_work` opens a
-#: file sink straight onto the trace path, so no `ledger.append_*` call names it.
-WORK_STAGE_SINKS: Final = {
-    "committed_trace_path": "state/traces",
-}
+    The column is an enum and the value is the job's own id in this file, so a
+    step that drifts from its job id writes a row that reads as another job's.
 
-
-def test_every_ledger_the_work_stage_appends_to_is_staged_by_the_work_job() -> None:
-    """A shard's fold is worth nothing if the runner is the only place it lands.
-
-    `roll_up_spans` ran on every shard from 2026-09-06 and `append_span_rollup`
-    wrote `state/span-rollup/<YYYY-MM>.csv` into the runner's checkout. No commit
-    step named the path, so every fold died with its runner, and assemble - on
-    another machine, projecting a directory that was never there - published a
-    header row and no data for nine days. Nothing failed; the instrument simply
-    reported nothing. `state/traces`, the raw evidence the fold is taken from, was
-    missed the same way and is covered here for the same reason.
-
-    The two lists this compares are written by different people at different
-    times: one is a call in a stage, the other is an argument in a workflow. This
-    is the test that makes the second follow the first.
+    Closed-world, because a fourth job that draws a runner and records it would
+    otherwise file a `--job` value nothing here ever reads. Where its row LANDS is
+    somebody else's question: `test_ledger_staging.py` charges every job with the
+    stores the verbs in its own `run:` bodies write, so a new probing job is held
+    to staging `state/host-fingerprint` without an edit anywhere.
     """
-    source = read_text(REPO_ROOT / "backend" / "idhazh" / "stages" / "work.py")
-    expected = WORK_STAGE_APPENDS | WORK_STAGE_SINKS
-    called = set(re.findall(r"\bledger\.(append_[a-z_]+)\(", source))
-    called |= {
-        name for name in WORK_STAGE_SINKS if re.search(rf"\btelemetry\.{name}\(", source)
-    }
-    assert called, "the work stage writes no ledger - has the call moved?"
-    assert called <= set(expected), (
-        f"the work stage writes {sorted(called - set(expected))}, which this test "
-        "cannot say a staged path for. Add it to WORK_STAGE_APPENDS or "
-        "WORK_STAGE_SINKS, and to the work job's commit step."
-    )
-    assert set(WORK_STAGE_SINKS) <= called, (
-        "the trace sink is no longer opened in stage_work - if it moved, move this "
-        "entry with it rather than deleting the guard"
-    )
-    staged = set(COMMIT_STAGED_PATHS["work"])
-    for helper in sorted(called):
-        assert expected[helper] in staged, (
-            f"stage_work calls {helper} but the work job never stages "
-            f"{expected[helper]}, so the rows die with the runner"
-        )
-
-
-#: Where each ledger the fingerprint stage appends to lands, as the staged path
-#: names it. It is a separate list because the probe is its own subcommand:
-#: `silicon.stage_fingerprint` runs from `cli.py` in a step of its own, before
-#: the model server starts, so nothing in `work.py` names it and the guard above
-#: could never have seen it. Every fingerprint taken before 2026-09-16 was
-#: deleted with its runner for exactly that reason.
-FINGERPRINT_STAGE_APPENDS: Final = {
-    "append_host_fingerprint": "state/host-fingerprint",
-}
-
-#: Which label commits the rows each job's probe writes. `plan` and `work`
-#: commit their own; `assemble` has no ledger step of its own and its machine
-#: row travels in the `state` it stages whole with the day.
-FINGERPRINT_COMMITTERS: Final = {"plan": "plan", "work": "work", "assemble": "assemble"}
-
-
-def test_every_job_that_records_a_machine_commits_the_row_it_wrote() -> None:
-    """A machine nobody recorded cannot be counted next month.
-
-    The probe runs early on purpose - the bandwidth reading wants an idle host -
-    so it sits in a step of its own rather than inside `stage_work`, and the
-    guard above reads `work.py`. That is the whole reason this one exists: two
-    source files, one staged list, and a shape that already failed silently once.
-
-    Read out of the stage's own source and out of the workflow rather than
-    spelled here, so a second ledger added to the probe, or a fourth job that
-    runs it, fails this instead of dying with the runner.
-    """
-    source = read_text(REPO_ROOT / "backend" / "idhazh" / "telemetry" / "silicon.py")
-    called = set(re.findall(r"\bledger\.(append_[a-z_]+)\(", source))
-
-    assert called, "the fingerprint stage writes no ledger - has the call moved?"
-    assert called <= set(FINGERPRINT_STAGE_APPENDS), (
-        f"the fingerprint stage writes {sorted(called - set(FINGERPRINT_STAGE_APPENDS))}, "
-        "which this test cannot say a staged path for. Add it to "
-        "FINGERPRINT_STAGE_APPENDS, and to the commit step of every job that probes."
-    )
-
     workflow = _load_workflows()["digest.yml"]
     probing = {
         job_name
@@ -385,30 +303,9 @@ def test_every_job_that_records_a_machine_commits_the_row_it_wrote() -> None:
     }
     assert probing == set(FINGERPRINT_JOBS), (
         f"{sorted(probing)} record a machine but {sorted(FINGERPRINT_JOBS)} were expected - "
-        "every job that draws a runner records it, so add the new one here and "
-        "make sure its commit step stages the ledger"
+        "every job that draws a runner records it, so add the new one here"
     )
 
-    for job_name in sorted(probing):
-        staged = set(COMMIT_STAGED_PATHS[FINGERPRINT_COMMITTERS[job_name]])
-        for helper in sorted(called):
-            relative = FINGERPRINT_STAGE_APPENDS[helper]
-            covered = relative in staged or any(
-                relative.startswith(f"{path}/") or relative == path for path in staged
-            )
-            assert covered, (
-                f"the {job_name} job records a machine but nothing it stages covers "
-                f"{relative}, so the row dies with the runner"
-            )
-
-
-def test_every_job_that_records_a_machine_says_which_job_it_is() -> None:
-    """A row that cannot name its job is a row nobody can group by.
-
-    The column is an enum and the value is the job's own id in this file, so a
-    step that drifts from its job id writes a row that reads as another job's.
-    """
-    workflow = _load_workflows()["digest.yml"]
     for job_name, expected in sorted(FINGERPRINT_JOBS.items()):
         step = _step(workflow, job_name, "name", FINGERPRINT_STEP)
         script = _script(step, f"job {job_name} fingerprint step")
