@@ -1296,7 +1296,7 @@ def test_the_append_reads_the_day_file_rows_once(
 
     The header and the records this run already holds are two answers to one
     pass, and the pass that answered the second built a dict of every column -
-    113 of them on this shard - to read three cells of each row.
+    119 of them on this shard - to read three cells of each row.
 
     Two opens remain and only one of them reads rows: `_append` re-reads line 1
     on its own account, because that guard protects the eight other ledgers that

@@ -120,6 +120,10 @@ function writeItemHealthCanary() {
 	// Three days, because the chart has to tell three facts apart and each one
 	// needs a day of its own to sit on: a stage nothing timed, a stage timed at
 	// zero, and a day timed in part.
+	//
+	// The six `os_` cells are named and left empty. No committed run has written
+	// one yet, and a plausible memory figure nobody measured is worse here than
+	// a dash: this file is what the console's arithmetic is checked against.
 	const COLUMNS = [
 		'version', 'date', 'run_id', 'item_id', 'url_key', 'canonical_url', 'vertical',
 		'source_id', 'stage', 'outcome', 'code', 'http_status', 'source_chars', 'source_words',
@@ -144,7 +148,9 @@ function writeItemHealthCanary() {
 		'llama_rss_peak_bytes', 'python_rss_bytes', 'cgroup_peak_bytes', 'model_id',
 		'model_quantisation', 'n_ctx_configured', 'n_parallel', 'n_threads', 'n_batch',
 		'max_output_tokens', 'label_budget_tokens', 'summary_budget_tokens', 'run_visual_decision',
-		'temperature', 'failed_field', 'failed_rule'
+		'temperature', 'failed_field', 'failed_rule', 'os_mem_available_bytes',
+		'os_mem_total_bytes', 'os_mem_cached_bytes', 'os_swap_free_bytes', 'os_swap_total_bytes',
+		'os_mem_available_min_bytes'
 	];
 	// Named cells, so a column added to the row cannot silently shift every
 	// number one place to the left.
