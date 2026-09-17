@@ -14,7 +14,6 @@
       "load_mode": null,
       "log_verbosity": 4,
       "max_answer_tokens": 900,
-      "max_think_tokens": 256,
       "metrics": true,
       "n_batch": 512,
       "n_ctx": 65536,
@@ -46,5 +45,5 @@
       "turn_opening": "<|turn>$role\n"
     }
   },
-  "version": "2026-09-15T12:30"
+  "version": "2026-09-17"
 }

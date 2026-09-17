@@ -419,10 +419,15 @@ def context_fit(
     here would size a request nothing sent. What sizes the pair the daily run
     dispatches is `test_the_two_calls_fit_the_window_at_the_cap`, which is a
     config-level check and needs no observations.
+
+    **A null `max_think_tokens` adds nothing, because there is nothing to add.**
+    An uncapped thinking span ends on the entry's closing marker or on the
+    window, so the reserve is the answer alone and the headroom this sum leaves
+    is what the thinking gets. The gate still refuses a request with no headroom;
+    it stops promising that the headroom is enough.
     """
-    reply = inference.max_answer_tokens + (
-        inference.max_think_tokens if turns is not None and turns.thinks else 0
-    )
+    thinks = turns is not None and turns.thinks
+    reply = inference.max_answer_tokens + (inference.max_think_tokens or 0 if thinks else 0)
     overflow = [o for o in observations if o.prompt_tokens + reply > inference.n_ctx]
     under_reserved = [
         o

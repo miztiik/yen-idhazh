@@ -105,16 +105,21 @@ class InferenceConfig(Model):
         default=0,
         description="Dead code under greedy decoding. Never cited as the determinism control.",
     )
-    max_think_tokens: int = Field(
-        default=256,
+    max_think_tokens: int | None = Field(
+        default=None,
         ge=1,
         description=(
-            "The thinking span's budget, and a hard cap rather than a hint. A model "
-            "that never closes its reasoning block would otherwise eat the whole "
-            "window and be recorded as a truncated summary, which names the wrong "
-            "cause. 256 tokens costs 42.6 s an item at the measured 6.01 +/- 0.11 "
-            "tokens a second (2026-08-23, ubuntu-latest, EPYC 9V74, llama.cpp b10598, "
-            "three repeats). It is read only where the entry declares "
+            "The thinking span's budget. Null means no cap: the span runs until the "
+            "model writes turns.thinking_close, and the window is the only other "
+            "thing that stops it. An integer bounds the span at that many tokens. A "
+            "cap exists at all because a model that never closes its reasoning block "
+            "would otherwise decode to n_ctx and be recorded as a truncated summary, "
+            "which names the wrong cause - the closing marker is what normally ends "
+            "the span, and the cap is what catches a model that never writes one. Set "
+            "it only from a reading taken on the weights it is set for; a number "
+            "carried over from other weights caps a thought mid-sentence, and a "
+            "truncated thought is worse than no thought at the same budget "
+            "(arxiv 2504.09858). It is read only where the entry declares "
             "turns.thinking_close; an entry that declares no closing marker spends "
             "none of it."
         ),

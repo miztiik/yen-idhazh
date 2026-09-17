@@ -288,6 +288,11 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-17",
+            change="The embedded ModelRef's inference.max_think_tokens accepts null.",
+            why="It follows models-config, which is where the budget is declared.",
+        ),
+        ChangelogEntry(
             version="2026-09-15T12:30",
             change="The embedded draft block's spec_type accepts a third value, draft-mtp.",
             why="It follows models-config, which is where the choice is declared.",
@@ -301,11 +306,6 @@ class RunManifest(Contract):
             version="2026-09-14T06:00",
             change="The embedded ModelRef gained an optional byte_count.",
             why="It follows models-config, which is where the size is now declared.",
-        ),
-        ChangelogEntry(
-            version="2026-09-14T04:00",
-            change="inputs.turn_markers_sha256, optional: the turn envelope the prompts used.",
-            why="A moved marker renders a prompt with no turn structure and raises nothing.",
         ),
         ChangelogEntry(
             version="2026-08-21",

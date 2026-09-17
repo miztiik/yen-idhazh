@@ -176,11 +176,18 @@
           "type": "integer"
         },
         "max_think_tokens": {
-          "default": 256,
-          "description": "The thinking span's budget, and a hard cap rather than a hint. A model that never closes its reasoning block would otherwise eat the whole window and be recorded as a truncated summary, which names the wrong cause. 256 tokens costs 42.6 s an item at the measured 6.01 +/- 0.11 tokens a second (2026-08-23, ubuntu-latest, EPYC 9V74, llama.cpp b10598, three repeats). It is read only where the entry declares turns.thinking_close; an entry that declares no closing marker spends none of it.",
-          "minimum": 1,
-          "title": "Max Think Tokens",
-          "type": "integer"
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The thinking span's budget. Null means no cap: the span runs until the model writes turns.thinking_close, and the window is the only other thing that stops it. An integer bounds the span at that many tokens. A cap exists at all because a model that never closes its reasoning block would otherwise decode to n_ctx and be recorded as a truncated summary, which names the wrong cause - the closing marker is what normally ends the span, and the cap is what catches a model that never writes one. Set it only from a reading taken on the weights it is set for; a number carried over from other weights caps a thought mid-sentence, and a truncated thought is worse than no thought at the same budget (arxiv 2504.09858). It is read only where the entry declares turns.thinking_close; an entry that declares no closing marker spends none of it.",
+          "title": "Max Think Tokens"
         },
         "metrics": {
           "default": true,
@@ -549,6 +556,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "inference.max_think_tokens accepts null, and null is the default.",
+      "version": "2026-09-17",
+      "why": "A cap set from no reading of these weights truncates a thought mid-sentence."
+    },
+    {
       "change": "models.<role>.draft.spec_type accepts a third value, draft-mtp.",
       "version": "2026-09-15T12:30",
       "why": "A model that predicts its own next tokens needs no second set of weights."
@@ -564,11 +576,6 @@
       "why": "Speculative decoding is a property of the model, so it belongs on the entry."
     },
     {
-      "change": "models.<role>.byte_count, optional: how many bytes the weights are.",
-      "version": "2026-09-14T06:00",
-      "why": "The size sat on a qualification report, which is not where a swap reads it."
-    },
-    {
       "change": "Earlier changes are in this file's git history.",
       "version": "2026-09-14",
       "why": "A changelog says what moved lately; git is the archive."
@@ -580,7 +587,7 @@
       "$ref": "#/$defs/ModelEntry"
     },
     "version": {
-      "default": "2026-09-15T12:30",
+      "default": "2026-09-17",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -591,5 +598,5 @@
   ],
   "title": "ModelsConfig",
   "type": "object",
-  "version": "2026-09-15T12:30"
+  "version": "2026-09-17"
 }

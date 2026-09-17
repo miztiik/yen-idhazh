@@ -148,7 +148,7 @@ Ten of the nineteen knobs stay outside the stamp. Nine of the ten reach `server_
 | Knob | In the stamp? | Why |
 | --- | --- | --- |
 | `n_ctx`, `n_batch`, `n_ubatch`, `n_threads` | yes, under their own names | They change how the partial sums accumulate. |
-| `temperature`, `top_p`, `seed`, `max_answer_tokens`, `max_think_tokens` | yes, folded into `sampling` | One canonical spelling of the decoding parameters. Two budgets rather than one since 2026-09-14: a call is decoded as a thinking span and then the answer, and one number over two spans could not say which of them overran. |
+| `temperature`, `top_p`, `seed`, `max_answer_tokens`, `max_think_tokens` | yes, folded into `sampling` | One canonical spelling of the decoding parameters. Two budgets rather than one since 2026-09-14: a call is decoded as a thinking span and then the answer, and one number over two spans could not say which of them overran. A null thinking budget spells `uncapped` rather than the number it resolves to, because it resolves to no number. |
 | `cache_type_k`, `cache_type_v` | **no - blind spot** | A quantised KV cache changes the attention arithmetic. |
 | `flash_attention` | **no - blind spot** | Another kernel adds the same values in another order. |
 | `n_parallel` | **no - blind spot** | Slots divide the context, which changes the batch shapes. |
