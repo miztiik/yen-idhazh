@@ -879,31 +879,57 @@ duplication wearing a shared name. `candidate-config` has two inputs and three
 call sites, so it is a block. A shared corpus step would need an input per
 calling workflow, so it is not.
 
-#### The runtime pin is the next block, and nothing holds it together today
+#### The runtime pin was the next block, and it was taken one caller at a time
 
-Fetching the inference runtime and the weights and proving the digests is **249
+Fetching the inference runtime and the weights and proving the digests was **249
 substantive lines across 23 steps in five workflows** - `digest.yml`,
 `idhazh-pipeline-tests.yaml`, `measure.yml`, `probe.yml` and `validate.yml`.
 Counted on 2026-09-17 over every step whose shell names `llama.tar.gz`,
 `huggingface.co/` or `sha256sum --check`; `ci.yml`'s browser cache is not a
 model runtime and is not in it.
 
-The pin itself - `LLAMA_CPP_BUILD`, its asset name and its SHA-256 - is spelled
-in **13 places that have to change together**: five `env:` blocks and eight
-fetch steps.
+The pin itself - `LLAMA_CPP_BUILD`, its asset name and its SHA-256 - was spelled
+in **13 places that had to change together**: five `env:` blocks and eight fetch
+steps. It is now in **two**: `.github/scripts/llama-cpp-pin.sh` and
+`measure.yml`'s `env:` block, which is the one caller still to convert.
 
 ```powershell
 git grep -c 'LLAMA_CPP_BUILD:' -- .github/workflows
 git grep -c 'releases/tags/${LLAMA_CPP_BUILD}' -- .github/workflows
 ```
 
-Those two counts are a reading of this tree, not a constant - the numbers went
-up when `idhazh-pipeline-tests.yaml` landed. **The property is what matters and
-it does not move: every copy of the pin has to change at once, and nothing in
-the tree compares them.** Change twelve of the thirteen and a qualification
-runs on a runtime production does not run, with every gate green, because no
-check can tell. That is what makes it worth a block rather than a rule somebody
-remembers.
+Those two counts are a reading of this tree, not a constant. **The property is
+what mattered and it did not move: every copy of the pin had to change at once,
+and nothing in the tree compared them.** Change twelve of the thirteen and a
+qualification runs on a runtime production does not run, with every gate green,
+because no check could tell. That is what made it worth a block rather than a
+rule somebody remembers. What holds it together now is a contract test that
+pins the three variables in every workflow still spelling them and refuses any
+copy of them in a workflow that has been converted; where the pinned values live
+and how a caller reads them is [ci-model-runtime.md](ci-model-runtime.md).
+
+**The conversion was a strangler, one workflow per commit, and the workflow that
+publishes went last.** Four alternatives were live.
+
+| Option | Cost | What it gives up |
+| --- | --- | --- |
+| One commit converting all five | One review, one revert | A revert takes four working conversions out with the fifth. The daily run is in that set, so the blast radius of a mistake is a published day. |
+| One commit per workflow, publisher last | Five reviews, five reverts, a window where the tree holds two shapes | Nothing, except that the census reads oddly mid-way - which is why the counts above are dated |
+| Leave the pin copied, add a test that compares the copies | No workflow moves | The test would go green on five agreeing copies and say nothing about the sixth place somebody adds next |
+| One script with an optional `WEIGHTS_FILE` | One file instead of two | Every caller's weights refusals become optional to satisfy one caller that opens no weights |
+
+The second was taken. `probe.yml` first because it opens no weights and a
+mistake there costs a dispatch nobody depends on; `validate.yml` next because a
+mistake costs a qualification that can be re-run; `digest.yml` last because it
+publishes to readers and a bad fetch there is a bad day on the site.
+
+That order is also what made the fourth option refusable rather than merely
+disliked. `probe.yml` converted first, so the question "what does a job that
+opens no weights need" had to be answered before any weights-carrying caller
+moved - and the answer was a second script, `install-llama-runtime.sh`, which
+`fetch-model-runtime.sh` sources. Had `digest.yml` gone first, the cheap answer
+would have been an optional `WEIGHTS_FILE` and the refusals would have been
+weakened for every caller.
 
 #### What stays duplicated, and why
 
