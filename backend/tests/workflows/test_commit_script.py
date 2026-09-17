@@ -142,6 +142,55 @@ def test_the_commit_step_rebases_past_a_racing_commit(tmp_path: Path) -> None:
 
 
 @requires_bash
+@requires_space_free_paths
+def test_a_rebase_is_not_blocked_by_an_untracked_file_the_tip_carries(tmp_path: Path) -> None:
+    """Run `35152132574`: an untracked file stopped the rebase and cost a shard its rows.
+
+    A work shard wrote `state/host-fingerprint/2026/09/16.csv` at a time when its
+    commit step did not stage that path, so the file stayed untracked. A sibling
+    shard pushed the same path while this one was still reading articles, and the
+    rebase would not even detach - `untracked working tree files would be
+    overwritten by checkout`. There was no rebase left to abort, the loop broke on
+    the first of its three attempts, and 303 measured rows over six ledgers were
+    committed locally and thrown away with the runner.
+
+    The staging list has since gained that path, which closes that one collision.
+    This holds the property the list cannot, because the list is written by hand
+    and a new `state/` writer has arrived without it three times: a path this job
+    did not stage is a path it is not pushing, so the file goes and everything
+    that WAS staged still lands.
+    """
+    staged_paths, settings = _commit_call("work")
+    unstaged = "state/a-later-writer/2026/09/16.csv"
+    assert not any(unstaged == path or unstaged.startswith(f"{path}/") for path in staged_paths), (
+        "this models a writer the staging list has not caught up with"
+    )
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    _race(tmp_path, env, unstaged, "version\nthe sibling shard\n")
+    _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
+    _write(runner / unstaged, "version\nthis shard\n")
+    _write(runner / "llama-server.log", "kept\n")
+    settings = _settled_in_the_clone(settings, _seed_ledger(staged_paths[0]), "header")
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 0, result.stderr
+    assert "push rejected, rebasing (attempt 1)" in result.stdout
+    assert unstaged in result.stdout, "the log must name every file it removed"
+    assert _git(origin, env, "log", "--format=%s", "-2").splitlines() == [
+        settings["COMMIT_MESSAGE"],
+        "racing change",
+    ]
+    # What this shard staged landed.
+    assert "fresh" in _git(origin, env, "show", f"main:{_seed_ledger(staged_paths[0])}")
+    # The tip's copy of the path nobody staged is what the tree holds now, and the
+    # untracked file nothing was going to write over is untouched.
+    assert (runner / unstaged).read_text(encoding="ascii") == "version\nthe sibling shard\n"
+    assert (runner / "llama-server.log").is_file()
+
+
+@requires_bash
 def test_a_push_that_landed_first_try_reports_no_rebase(tmp_path: Path) -> None:
     """What the rebuild step reads. A clean push left the tree it was handed.
 

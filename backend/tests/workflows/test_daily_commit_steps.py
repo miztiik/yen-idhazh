@@ -40,6 +40,13 @@ def test_no_rebase_in_the_daily_run_starts_on_a_dirty_tree() -> None:
     assemble with it. The work is committed before the loop begins, so the fix is
     to drop what is left rather than to carry it into the rebase.
 
+    Run `35152132574` died the same way through the other door. An UNTRACKED file
+    also stops the rebase, whenever the incoming commits add that same path: the
+    detach refuses with `untracked working tree files would be overwritten`. A
+    work shard's own `state/host-fingerprint/2026/09/16.csv` was the file, a
+    sibling shard had just pushed it, and 303 measured rows went with the runner.
+    So the loop clears both kinds, and the untracked half is narrow.
+
     This reads the shared script and the workflow's own `run:` bodies, so an
     inline loop written back into a step is still covered.
     """
@@ -73,9 +80,26 @@ def test_no_rebase_in_the_daily_run_starts_on_a_dirty_tree() -> None:
             if "git rebase " in line and "--abort" not in line
         )
         assert discard < rebase, f"{where} must clear the tree before it rebases"
+        # A blanket clean is the wrong answer: `llama-server.log` and the memory
+        # samples are untracked, and later steps upload them. Only the untracked
+        # files the incoming tip is about to write go, because those are the ones
+        # that make the checkout refuse to detach.
         assert any(
             "--untracked-files=no" in line for line in lines
-        ), f"{where} must leave untracked files alone - they cannot block a rebase"
+        ), f"{where} must leave the untracked files nothing will write over alone"
+        clear = next(
+            (
+                index
+                for index, line in enumerate(lines)
+                if "git ls-files --others --exclude-standard" in line
+            ),
+            None,
+        )
+        assert clear is not None, (
+            f"{where} must find the untracked files the tip carries - an untracked file "
+            "the incoming commits add makes the rebase refuse to detach HEAD"
+        )
+        assert clear < rebase, f"{where} must clear those files before it rebases"
         # A rebase that cannot finish must not be left half-applied for the next
         # attempt to trip over.
         assert "git rebase --abort" in script, f"{where} must leave no rebase in progress"
