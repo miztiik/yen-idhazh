@@ -338,10 +338,33 @@ a day that plan, four shards and assemble had all finished.
 
 The work is already in a commit when the loop begins, so anything left in the
 working tree is runner noise. The loop prints what is dirty and discards it
-before the rebase. Untracked files are left alone: they cannot block a rebase,
-and a later step may still want them. `--autostash` was removed - it stashes the
-noise and then fails the step when the stash will not reapply, which is the
-failure it looks like it prevents.
+before the rebase. `--autostash` was removed - it stashes the noise and then
+fails the step when the stash will not reapply, which is the failure it looks
+like it prevents.
+
+**An untracked file stops a rebase too, and until 2026-09-17 this page said it
+could not.** A rebase detaches HEAD onto the tip first, and that checkout refuses
+when a file the incoming commits add is already sitting untracked in the working
+tree: `error: The following untracked working tree files would be overwritten by
+checkout`. The rebase never starts, so there is nothing for `git rebase --abort`
+to abort, and the loop spends all three attempts on the first one.
+
+Run `35152132574` is the record. A work shard wrote
+`state/host-fingerprint/2026/09/16.csv` at a time when its commit step did not
+stage that path, so the file stayed untracked; a sibling shard pushed the same
+path while this one was still reading articles. 303 measured rows over six
+ledgers were committed locally and thrown away with the runner, and the day's
+other three shards published without them.
+
+The staging list has since gained that path, which closes that one collision and
+not the next: the list is written by hand, and a new `state/` writer has arrived
+without it three times (`state/span-rollup` and `state/traces` on 2026-09-15,
+`state/host-fingerprint` on 2026-09-16). So the loop also clears, before each
+rebase, exactly the untracked files the tip is about to write - and names each
+one in the run log. **A path this job did not stage is a path it is not pushing**,
+so removing it costs the push nothing it was going to carry, and every path that
+WAS staged still lands. Everything else untracked survives: `llama-server.log`
+and the memory samples are untracked, and later steps upload them.
 
 **There are two ways to lose the push race, and they need different answers.**
 
