@@ -20,6 +20,18 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ### The goal the console work serves
 
+> **The console answers two questions, one screen each.**
+>
+> ***Is it working*** is a VERDICT. It covers every route, summarises each to one mark, and is answered by the band before a single panel is read. A missing subsystem makes the green a lie, so completeness is what it owes.
+>
+> ***What is broken*** is a DISCRIMINATION. It covers one subsystem, puts every candidate on one scale, and is answered by a route. Summarising it to one mark destroys it.
+>
+> **They are two questions, not one at two depths**, and they differ on three axes: the reader arrives with a suspect or without one; "complete" means every subsystem or every candidate in one subsystem; and the answer takes the central value or the extreme and the individual that owns it. **A panel serves one of the two and says which.** A verdict panel read for a break says "something in here" and stops. A break panel read for a verdict costs a scan of twenty rows where one mark would have done.
+>
+> **Every break is announced on the band and diagnosed on a route.** A break only on a route is found by luck; a break only on the band cannot be acted on.
+
+And under both, the panel-level rule:
+
 > **A console panel makes one comparison visible in under two seconds, and says how far to trust it.**
 >
 > The first half is the shape. A panel whose drawing has to be decoded has failed, and the fix is the drawing, not a longer caption.
@@ -28,9 +40,11 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 >
 > This is the only surface where this project shows its own work. A summariser nobody measures produces confident, plausible, wrong text; **a console nobody can check produces confident, plausible, wrong operations.** That is why the second half is not a footnote to the first.
 
-**The first draft said "a panel a reader has to read is a panel that failed", and Susan struck it on 2026-09-17.** It contradicted a dated owner ruling from 2026-08-30 that `docs/concepts/console-design.md` already carries - a section keeps the sentence that decides and loses the sentence that narrates, and a threshold, a denominator, a cost or an empty-state reason is KEPT. Applied literally the struck sentence would have stripped exactly those. **This goal narrows a page-level purpose the repository already states** - `docs/architecture/publishing/console.md`: "The console answers 'is it working', in one screen" - it does not replace it.
+**The two-question split is an owner ruling of 2026-09-17**, and Susan mapped what it changes the same day. `docs/architecture/publishing/console.md` today carries only the first question, in a heading: "The console answers 'is it working', in one screen." Row #18 replaces that heading and Row #27 brings the per-panel inventory current.
 
-The panel analysis at the head of Part B is where the goal is made checkable, panel by panel.
+**The first draft of the panel rule said "a panel a reader has to read is a panel that failed", and Susan struck it.** It contradicted a dated owner ruling from 2026-08-30 that `docs/concepts/console-design.md` already carries - a section keeps the sentence that decides and loses the sentence that narrates, and a threshold, a denominator, a cost or an empty-state reason is KEPT. Applied literally the struck sentence would have stripped exactly those.
+
+The panel analysis at the head of Part B is where both goals are made checkable, panel by panel.
 
 ### Table 0a - out of scope
 
@@ -73,12 +87,11 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 17 | `runtime-counters` writes segments | 4 | B | PENDING | - | - | - |
 | 10 | `model_load_ms` and `job_seconds` join `host-fingerprint` | 2 | C | PENDING | - | - | - |
 | 12 | Delete the merge machinery | 2, 3, 4, 17 | D | PENDING | - | - | - |
-| 13 | Compaction lag on the console band | 1, 5, 12 | D | PENDING | - | - | - |
+| 13 | Compaction lag and free swap on the console band | 1, 5, 7, 12 | D | PENDING | - | - | - |
 | 11 | Delete `runtime-counters` and everything that reads it | 7, 10, 17 | E | PENDING | - | - | - |
 | 15 | Generated TypeScript contracts replace the hand-written ones | 10, 11 | F | PENDING | - | - | - |
-| 14 | The per-item machine load panel | 5, 7, 15 | F | PENDING | - | - | - |
 | 16 | Docs, and the orphan sweep | all | G | PENDING | - | - | - |
-| 18 | Chart-craft doctrine - the twelve rules, written once | - | H | PENDING | - | - | - |
+| 18 | Chart-craft doctrine - the thirteen rules, written once | - | H | PENDING | - | - | - |
 | 28 | Pipeline panels: the share track goes, Extraction gains a trend | 18 | H | PENDING | - | - | - |
 | 19 | The shard board | 11, 18 | I | PENDING | - | - | - |
 | 21 | Memory and load, three grains - ABSORBS Row #14 | 5, 7, 15, 19 | I | PENDING | - | - | - |
@@ -101,7 +114,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 
 **Group I is a CHAIN, not a fan-out, and this is the plan's own medicine.** Seven console rows name `frontend/src/routes/console/machine/+page.svelte`, one file of 64,634 bytes holding all 15 panels as siblings, and four of them name `frontend/src/lib/charts/machine.ts`. Fowler found on 2026-09-17 that the console half would otherwise reproduce in the frontend the exact collision the backend half exists to remove - intent 2.1.1 says two writers never share a path, and `Rollback: None` means there is no merge driver, no key and no dedup pass for markup. **The price: the console half serialises and takes longer in wall clock.** The alternative - extracting the 15 panels into one component file each so every panel row owns a file - is a Level 3 refactor with no row here. It is priced and offered in Row #27's rejected alternatives, not assumed.
 
-**Row #9 is collapsed, not descoped.** Its useful half - `n_decode_calls` - is derivable from columns the row already carries and moved into Row #7 with no probe. Its other half is refused with a measurement. Section 11 carries the rationale.
+**Row #9 is collapsed, not descoped, and then half of what survived was struck too.** Its `n_decode_calls` half moved into Row #7 as a derived column, and Susan refused it on 2026-09-17 - a number derived from three cells on its own row cannot disagree with them. Its other half is refused with a measurement. Section 2.7 carries both refusals and what would overturn each.
 
 **Row #8 is not a row.** Carmack showed on 2026-09-17 that it cannot be built on what `ItemHealthRow` records: an item's model time is four alternating segments, not a prefill followed by a decode, and no column says when any phase started. It needs new timestamp columns first, which is ESCALATE 0b6 and a separate decision. It stays in the table so nobody re-derives it as a good idea.
 
@@ -335,17 +348,18 @@ The `state/published/**` and `state/visual-prunes/**` union lines stay. Those le
 
 ### 2.7 `ItemHealthRow` - the columns this plan adds
 
-Seven columns. **One changelog entry, one `version` stamp, paid once** - see the note at the end of this section.
+Six columns. **One changelog entry, one `version` stamp, paid once** - see the note at the end of this section.
 
-| Column | Type | Sampled | Description that ships in the Field |
-| --- | --- | --- | --- |
-| `os_mem_available_bytes` | `int \| None` | last `Watch` tick of the item | Memory the kernel says a new allocation could have, from `/proc/meminfo` `MemAvailable`. This is headroom; an RSS mark is not. |
-| `os_mem_free_bytes` | `int \| None` | last tick | Memory on no list at all, from `MemFree`. Lower than available, because the kernel counts reclaimable cache separately. |
-| `os_mem_total_bytes` | `int \| None` | last tick | What the machine has, from `MemTotal`. Constant within a job; recorded per item so a row means something on its own. |
-| `os_mem_cached_bytes` | `int \| None` | last tick | Page cache, from `Cached`. Most of the model weights sit here, so a drop is the kernel evicting what the next item has to read again. |
-| `os_swap_free_bytes` | `int \| None` | last tick | From `SwapFree`. A fall here is the machine in trouble before the cgroup kill. |
-| `os_mem_available_min_bytes` | `int \| None` | minimum over the item's MODEL window | Lowest `MemAvailable` seen while the model was working on this item. The closest this item took the machine to its limit. |
-| `n_decode_calls` | `int \| None` | derived, no probe | `llama_decode()` calls this item cost. Computed as `label_output_tokens + summary_output_tokens + model_calls` - measured across four committed runner captures, a shard's decode total exceeds its generated tokens by 30 to 44 against about 40 model calls, so this is the count to within about one call per request. |
+**Every one of the six names the panel that draws it, and Susan ruled on 2026-09-17 that a column with no named panel is not collected.** The first draft carried seven, two of which nothing drew. `os_mem_free_bytes` and `n_decode_calls` are struck below with their reasons; `os_swap_total_bytes` joins, because without it the column beside it cannot be read.
+
+| Column | Type | Sampled | Drawn by | Description that ships in the Field |
+| --- | --- | --- | --- | --- |
+| `os_mem_available_bytes` | `int \| None` | last `Watch` tick of the item | **Row #21**, the recovery end of the item range mark | Memory the kernel says a new allocation could have, from `/proc/meminfo` `MemAvailable`. This is headroom; an RSS mark is not. |
+| `os_mem_total_bytes` | `int \| None` | last tick | **Row #21**, the memory denominator | What the machine has, from `MemTotal`. Constant within a job; recorded per item so a row means something on its own. |
+| `os_mem_cached_bytes` | `int \| None` | last tick | **Row #21**, against the available floor | Page cache, from `Cached`. Most of the model weights sit here, so a drop is the kernel evicting what the next item has to read again. |
+| `os_swap_free_bytes` | `int \| None` | last tick | **Row #19** as a shard cell, **Row #13** as a band candidate | From `SwapFree`. A fall here is the machine in trouble before the cgroup kill. |
+| `os_swap_total_bytes` | `int \| None` | last tick | the denominator for the column above | From `SwapTotal`. Recorded because `SwapFree` at zero means "no swap on this box" and "swap fully consumed" equally, and only the second is an emergency. |
+| `os_mem_available_min_bytes` | `int \| None` | minimum over the item's MODEL window | **Row #21**, the floor end of the item range mark | Lowest `MemAvailable` seen while the model was working on this item. The closest this item took the machine to its limit. | runner captures, a shard's decode total exceeds its generated tokens by 30 to 44 against about 40 model calls, so this is the count to within about one call per request. |
 
 **Where the samples come from, and why the obvious answer is wrong.** Do NOT select `rss-samples.tsv` rows by `item_started_at..item_ended_at`. That interval is not an item's window: the stage fetches every item and then runs the model over them in a different order, so the median `item_ended_at - item_started_at` is 4,021 s against a median model time of 452 s - nine times longer - and a median of 19 items out of 20 have their windows open at the same instant. Selecting by it would put the JOB's minimum on almost every row, which is the exact failure this section's own rejected alternative refuses for `cgroup_peak_bytes`. Carmack measured it on 2026-09-17 against `state/item-health/2026/09/16.csv`, 400 rows over 5 runs and 20 shard-jobs.
 
@@ -357,7 +371,11 @@ Seven columns. **One changelog entry, one `version` stamp, paid once** - see the
 
 **`busy_slots_per_decode` is NOT in this plan either, and it is refused rather than deferred.** `llamacpp:n_busy_slots_per_decode` is declared `# TYPE ... gauge` in the committed captures - a lifetime average, not a counter - so two reads cannot be differenced into an interval average. And it would measure nothing if they could: 382 of 383 committed rows record `1.0`, the 383rd records `0.0` for a shard whose server never decoded. One python worker per shard sends one request at a time, and a shard's summed item model time equals its job span exactly on 16 of 20 shard-jobs, so there is never a second busy slot to count. Twenty-one days of production, one observed value.
 
-**`n_decode_calls` needs no HTTP scrape.** It is arithmetic over columns the row already carries. `runtime_counters.py` warns that "a per-request scrape would add requests to the thing it measures"; deriving the number obeys that warning instead of arguing with it.
+**`n_decode_calls` is NOT collected, and the plan's own trigger says why.** The first draft derived it as `label_output_tokens + summary_output_tokens + model_calls` - three columns sitting on the same row. **A number computed from three cells beside it cannot disagree with them, and ESCALATE 0b4's own wording is that a number that cannot disagree is not a check.** As a denominator it duplicates `output_tokens`, which the row already carries. Section 2.7a's first draft wrote that finding into its own cell as a caveat rather than acting on it. **What would overturn this:** a `server_decode_calls` column on `host-fingerprint`, scraped from the server, which would make the pair a real third instrument. Not recommended - 2.7b's prompt-side check already caught the refused-reply defect at 0.746 percent, so a decode-side check looks twice at a fault already covered. Susan, 2026-09-17.
+
+**`os_mem_free_bytes` is NOT collected either.** Nothing draws it and nothing denominates on it. `MemAvailable` minus `Cached` already shows how much of the headroom is evictable page cache, which is the number that matters here because the weights live in that cache. Its only other use is auditing whether the kernel's own `MemAvailable` estimate is honest, and Row #7's Oracle already refuses that question as the kernel's contract rather than ours. **Overturned by anyone naming a panel that needs it**; re-adding costs one line in `read_now()`.
+
+**`os_swap_total_bytes` joins for the opposite reason: without it the column beside it is not drawable.** `SwapFree` at zero reads as "this box has no swap" and "swap is fully consumed" equally, and only the second is the emergency the column exists to catch. That is the same argument this section already makes for `os_mem_total_bytes` - recorded per item so a row means something on its own - and the eighth column is free, because Row #7 pays one changelog stamp whatever the count. **If the first committed day shows the runner carries no swap at all, refuse the column** on exactly the grounds `busy_slots_per_decode` was refused: a number that reads one value on every row is not an instrument. That measurement costs one query against one day and Row #7 takes it.
 
 **The literal field shape.** Every new column follows this, so a worker writes columns, not decisions. `Contract` and the `Field` conventions are the ones already in `backend/idhazh/contracts/item_health.py`.
 
@@ -403,12 +421,12 @@ This is the row-by-row justification for what happens to D1. ESCALATE 0b4 fires 
 | `n_tokens_max` | delete | max of `item_health.input_tokens + output_tokens` |
 | `date`, `run_id`, `shard`, `job`, `version` | delete | both surviving ledgers carry them |
 | `scraped_at`, `shards` | delete | metadata about a file that no longer exists |
-| `n_decode_total` | **derive** | `item_health.n_decode_calls` (Row #7). **Its `Field` description opens with the word \"derived\"** - it restates three columns the row already carries, and the counter that used to validate that formula is going, so it must never be quoted as a count |
+| `n_decode_total` | **delete, refused** | Nothing. The first draft derived it onto `item_health` as `n_decode_calls`; Susan struck that on 2026-09-17 because a number computed from three cells on its own row cannot disagree with them, which is ESCALATE 0b4's own definition of a non-check. Section 2.7 carries the refusal and what would overturn it |r that used to validate that formula is going, so it must never be quoted as a count |
 | `n_busy_slots_per_decode` | **delete, refused** | Nothing. It is a gauge that reads `1.0` on 382 of 383 committed rows; section 2.7 carries the refusal |
 | `model_load_ms` | **move** | `host_fingerprint.model_load_ms` (Row #10) |
 | `job_seconds` | **move** | `host_fingerprint.job_seconds` (Row #10) |
 
-Twenty-three columns. Seventeen already have a home or are metadata. **Two are KEPT as the second instrument**, two more move, one is derived, and one is refused with its reason.
+Twenty-three columns. Seventeen already have a home or are metadata. **Two are KEPT as the second instrument**, two more move, and **two are refused** - `n_busy_slots_per_decode` because it reads one value on every row, `n_decode_total` because the column that would have replaced it cannot disagree with the cells it is made from. Each refusal carries what would overturn it.
 
 ### 2.7b The second instrument is KEPT, and this is why
 
@@ -689,21 +707,22 @@ Rows #1 to #17. These close the collision that destroyed 303 rows on 2026-09-16.
 | --- | --- | --- | --- | --- |
 | 1 | Let segments fix it | Segments narrow what a digest shard can lose; they do not narrow what `validate.yml` picks up when it stages `state` whole | An unbounded, rare, human-triggered corruption path left open | Carmack |
 
-## Row #7 - OS memory, load, and the derived decode count, per item
+## Row #7 - OS memory, load, and swap, per item
 
-- **Scope:** every item row records what the MACHINE had, not only what a process held, plus the one server counter worth keeping - in ONE contract commit with ONE changelog entry.
+- **Scope:** every item row records what the MACHINE had, not only what a process held - memory, load and swap - in ONE contract commit with ONE changelog entry. **Six columns, and each one names the panel that draws it.**
 - **Files touched:** `backend/idhazh/contracts/item_health.py`, `schemas/item-health-row.schema.json` (generated), `backend/idhazh/telemetry/host.py` (`Watch.read_now`), `backend/idhazh/stages/summarize.py`, `frontend/scripts/build-canary.mjs`, `backend/tests/telemetry/`, `backend/tests/contracts/`
 - **Acceptance gates:** local - ruff, mypy, `pytest backend/tests/telemetry backend/tests/contracts -n auto`, `python -m idhazh.contracts.export` then `git status --porcelain -- schemas/` empty. CI - full suite, drift gate, **and the `site` and `browser` jobs**, which are the only gates that see `build-canary.mjs`.
-- **Oracle:** a built `Watch` driven over a fixture item with known `/proc/meminfo` readings produces exactly the five whole-item columns and a `os_mem_available_min_bytes` equal to the lowest reading in the window and NOT equal to the lowest reading in the job; an item with no tick produces six nulls and no exception; and `n_decode_calls` equals `label_output_tokens + summary_output_tokens + model_calls` on a row with known values. **What it cannot settle:** whether `MemAvailable` on a GitHub runner means what the kernel documents - that is the kernel's contract, not ours.
+- **Oracle:** a built `Watch` driven over a fixture item with known `/proc/meminfo` readings produces exactly the six columns of section 2.7, with `os_mem_available_min_bytes` equal to the lowest reading in the MODEL window and NOT equal to the lowest reading in the job; an item with no tick produces six nulls and no exception; and a fixture whose `SwapTotal` is zero records the swap pair as zero rather than null, so the band can tell "no swap on this box" from "swap consumed". **What it cannot settle:** whether `MemAvailable` on a GitHub runner means what the kernel documents - that is the kernel's contract, not ours.
 - **Decisions:**
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | Sample through `host.Watch`, NOT by selecting `rss-samples.tsv` rows on `item_started_at..item_ended_at` | Carmack - that interval is nine times the item's model time and 19 of 20 items overlap, so it would stamp the JOB minimum on almost every row. `Watch` already runs per item over the model window and already produces `cpu_busy_max` and `llama_rss_peak_bytes` that way |
-| 2 | Add `/proc/meminfo` to `Watch.read_now()` - one more file read on a tick that already opens four | Carmack - about 40 ms a shard against a 183.7 min worst-case job, which is 0.0004 percent |
-| 3 | Seven columns, one commit, one changelog entry, one `version` stamp | `item_health.py` already holds five entries and the cap is five (`test_changelog_shape.py` line 60). Two rows each appending one would go red on the second, and would hand-conflict in the same block |
+| 2 | Add `/proc/meminfo` to `Watch.read_now()` - one more file read on a tick that already opens four | Carmack - about 34 ms a shard against a 183.7 min worst-case job, which is 0.0003 percent, and the tick already happens so it adds no context switch |
+| 3 | **Six columns, one commit, one changelog entry, one `version` stamp. Each one names the panel that draws it** | `item_health.py` already holds five entries and the cap is five (`test_changelog_shape.py` line 60). Two rows each appending one would go red on the second and would hand-conflict in the same block. Susan added the naming rule on 2026-09-17 - the first draft carried seven columns and nothing drew two of them |
 | 4 | An item with no tick records nulls, never zeros | CLAUDE.md section 1a - a zero here would read as a machine with no memory left |
-| 5 | `n_decode_calls` is DERIVED from columns already on the row, with no HTTP scrape | Carmack - across four committed runner captures a shard's decode total exceeds its generated tokens by 30 to 44 against about 40 model calls, so the arithmetic is the count to within about one call per request. `runtime_counters.py` warns that a per-request scrape adds requests to the thing it measures; deriving it obeys that rather than arguing with it |
+| 5 | **`n_decode_calls` and `os_mem_free_bytes` are NOT collected; `os_swap_total_bytes` is** | Susan, 2026-09-17. A number derived from three cells on its own row cannot disagree with them, which is ESCALATE 0b4's own definition of a non-check. `MemFree` has no panel and no denominator. `SwapTotal` earns its place because `SwapFree` at zero is ambiguous without it, and only one of the two readings is an emergency |
+| 6 | **Row #7 takes one measurement it does not yet have: whether the runner carries swap at all** | Susan - if `SwapTotal` reads zero on every row of the first committed day, `os_swap_free_bytes` and `os_swap_total_bytes` are both refused on the `busy_slots_per_decode` grounds, and Rows #19 and #13 lose their host cell. One query against one day settles it, and the row states the answer |
 
 - **Rejected alternatives:**
 
@@ -728,7 +747,7 @@ The user asked for `llama_rss_peak_prefill_bytes` and `llama_rss_peak_decode_byt
 
 ## Row #9 - COLLAPSED into Row #7
 
-Its two columns split three ways once Carmack measured them on 2026-09-17. `n_decode_calls` is derivable from columns the row already carries, so it moved into Row #7 with no probe at all. `busy_slots_per_decode` is refused outright - it is a gauge, so two reads cannot be differenced into an interval average, and it reads `1.0` on 382 of 383 committed rows because one python worker per shard never opens a second slot. Section 2.7 carries both rulings.
+Its two columns split three ways once Carmack measured them on 2026-09-17, and one of the three was struck again on the same day. `n_decode_calls` was to be derived from columns the row already carries; **Susan then refused it outright** - a number computed from three cells beside it cannot disagree with them, so it is not a check, and as a denominator it duplicates `output_tokens`. Section 2.7 carries the refusal and what would overturn it. The other half is refused with a measurement.probe at all. `busy_slots_per_decode` is refused outright - it is a gauge, so two reads cannot be differenced into an interval average, and it reads `1.0` on 382 of 383 committed rows because one python worker per shard never opens a second slot. Section 2.7 carries both rulings.
 
 Collapsing it also retires the changelog overflow and the five-file hand-conflict that two parallel `ItemHealthRow` rows would have had.
 
@@ -755,8 +774,10 @@ Collapsing it also retires the changelog overflow and the five-file hand-conflic
 
 ## Row #11 - Delete `runtime-counters` and everything that reads it
 
-- **Scope:** D1 through D10 and D19 through D22 of section 2.11 are gone, `ServerJob` and `WORK_JOB` move to `contracts/base.py`, and the Hardware page is rebuilt on `item-health` and `host-fingerprint`.
-- **Files touched:** every path named in D1-D10 and D19-D22, plus `backend/idhazh/contracts/base.py`, `frontend/src/routes/console/machine/+page.server.ts`, `frontend/src/lib/charts/machine-cards.ts`, `frontend/src/lib/charts/fleet.ts`, `frontend/src/lib/charts/machine.ts`, `frontend/src/lib/charts/machine-split.ts`, `frontend/scripts/build-canary.mjs`, `frontend/scripts/tests/build-state.test.mjs`, `backend/tests/workflows/_harness.py`, `backend/idhazh/telemetry/publish/machine.py`, `docs/concepts/growing-reads.md`
+- **Scope:** D1 through D10 and D19 through D22 of section 2.11 are gone, `ServerJob` and `WORK_JOB` move to `contracts/base.py`, **the console band's Hardware slice is rebuilt**, and the Hardware page is rebuilt on `item-health` and `host-fingerprint`.
+
+**`backend/idhazh/telemetry/publish/console_band.py` is the file this row nearly broke.** It reads `ledger.runtime_counters_path(state_root)` and feeds it to `machine_facts` and `machine_candidates`, which produce the band's three Hardware worst-thing candidates including "N shards of the newest run reported nothing". This row deletes that file, and the first draft named `console_band.py` in no row at all. **The band is the "is it working" screen**, so deleting its Hardware slice silently is the worst version of this plan's own failure mode. Susan found it on 2026-09-17.
+- **Files touched:** every path named in D1-D10 and D19-D22, plus `backend/idhazh/contracts/base.py`, **`backend/idhazh/telemetry/publish/console_band.py`**, `frontend/src/routes/console/machine/+page.server.ts`, `frontend/src/lib/charts/machine-cards.ts`, `frontend/src/lib/charts/fleet.ts`, `frontend/src/lib/charts/machine.ts`, `frontend/src/lib/charts/machine-split.ts`, `frontend/scripts/build-canary.mjs`, `frontend/scripts/tests/build-state.test.mjs`, `backend/tests/workflows/_harness.py`, `backend/idhazh/telemetry/publish/machine.py`, `docs/concepts/growing-reads.md`
 - **Acceptance gates:** local - ruff, mypy, `pytest backend/tests -n auto`, export then drift empty, `npm --prefix frontend run test:changed -- --list` then selected checks, `npx playwright test --project=console`. CI - full suite. Browser smoke per section 12 including the data-absent arm.
 - **Oracle:** on the built canary day, blank the five cost cells from ONE item row - which is exactly the 2026-09-13 defect from 2.7b - and assert the two-clocks panel reports `agrees === false`; restore the row and assert `agrees === true`. **This oracle has a red state only an independent instrument can enter, which is the whole point.** The first draft's oracle - "every figure recomputed from `item-health` and `host-fingerprint` matches to within float representation" - passed trivially for that panel, because under the deletion both sides became the same expression over the same rows. `frontend/scripts/build-canary.mjs` already builds its fixture 1.1 percent apart on purpose and writes the rule in one line: "Equal figures would pass a check that had never run." **What it cannot settle:** a month older than the `item-health` retention window, which `runtime-counters` could have answered and no longer can - that is the cost, named, and the retention window is the knob.
 - **Decisions:**
@@ -801,7 +822,9 @@ Collapsing it also retires the changelog overflow and the five-file hand-conflic
 
 ## Row #13 - Compaction lag on the console band
 
-- **Scope:** `band.json` carries the three fields in section 2.9 and the console renders the sentence when the lag is non-zero.
+- **Scope:** `band.json` carries the three fields in section 2.9 and the console renders the sentence when the lag is non-zero. **The band also gains free swap as a worst-thing candidate**, from `os_swap_free_bytes` (Row #7).
+
+**Why swap is announced on the band rather than drawn on Hardware.** It is not a diagnosis figure, it is a PRECURSOR - once the box swaps, read rate collapses and the shard walks towards its 200 min bound, which is ESCALATE 0b3 and already live at 91.9 percent. A break is announced on the band and diagnosed on a route, so the band names it and Row #19's shard cell is where an operator sees which shard. This row already opens the `band.json` contract, so the extra candidate pays the same `version` stamp. **The candidate stays silent where `os_swap_total_bytes` is zero or null** - a box with no swap cannot be swapping. Susan, 2026-09-17.
 - **Files touched:** `backend/idhazh/contracts/console_band.py`, `schemas/console-band.schema.json` (generated), `backend/idhazh/telemetry/publish/console_band.py`, `frontend/src/lib/console/band.ts`, `frontend/src/lib/components/ConsoleBand.svelte`, `frontend/src/contracts/`, `frontend/tests/`
 - **Acceptance gates:** local - ruff, mypy, `pytest backend/tests/telemetry backend/tests/contracts -n auto`, export then drift empty, frontend selected checks, `npx playwright test --project=console`. CI - full suite, drift gate. Browser smoke.
 - **Oracle:** with a fixture segment directory two days old holding 303 rows, the band renders a sentence naming 2 days, 303 rows and the date the Hardware page stops at; with an empty directory it renders nothing at all. **What it cannot settle:** whether an operator acts on it.
@@ -873,7 +896,13 @@ Rows #18 to #28. These make the panel analysis true on the page. Row #18 runs fi
 
 ## The panel analysis - signal from noise
 
-The goal in section 0 is made checkable here. Susan ruled this section on 2026-09-17 after reading all 23 panels, both timing components, the chart library and the committed ledgers. **Score today: 13 pass, 2 partial, 8 fail.**
+The goal in section 0 is made checkable here. Susan ruled this section on 2026-09-17 after reading all 23 panels, both timing components, the chart library and the committed ledgers.
+
+**Score today: 12 clean pass, 2 qualified pass, 1 partial, 8 fail.** The qualified two are 19A11 (correct shape, sorted by start time only) and 19A12 (correct at shard grain, silent at item grain); the partial is 19A17. **An earlier draft wrote this as "13 pass, 2 partial" and the table below never said that** - four categories were summarised into three and one pass moved. The table is authoritative.
+
+**Five of the eight failures fail on the QUESTION, not on the drawing**, and that is rule 19D13 rather than a chart-craft rule: 19A18, 19A23, 19A8, 19A7 and 19A9. The three that fail on the drawing are 19A10, 19A19 and 19A22. **The fix does not change for any of the eight** - what changes is that two of them stop reading as taste. Row #28's "Extraction keeps its four cards AND gains the trend" is not a compromise: the cards are the verdict half and the trend is the break half, and keeping both is the two questions done properly.
+
+**19A2 is the template.** Its title asks what is failing, its comparison is "which stage is failing more than it was", and its shape puts every stage on one scale against its own history. That is the shape a break panel has, and calling it "the route's best panel" now has a reason rather than a compliment.
 
 ### 19.0 The four clauses under the goal
 
@@ -883,6 +912,20 @@ The goal in section 0 is made checkable here. Susan ruled this section on 2026-0
 4. **A panel says what it does not know, in the same glance.** A dash is not a zero. A share prints its denominator. A sampled figure says it was sampled. A currency figure prints its rate and where the rate came from. **A panel that shows a confident number over an absence has failed worse than a panel that is slow to read.**
 
 **"Signal from noise" is the heading, not the rule.** Susan ruled on 2026-09-17 that the phrase decides nothing on its own, and proved it inside this plan's own table: 19A14 passes and 19A7 fails, and both restate a share the panel already prints. What separated them was clause 2's test, not the phrase - 19A7's own note tells the reader not to trust its figure, and **a figure a panel disowns is a figure to remove.** Clause 1's "against" test is what settles a fork between two panel designs.
+
+### 19.0a Which surface answers which question
+
+The console is five routes and one band. **The band is not a route** - it lives in `frontend/src/routes/console/+layout.svelte` and stands on all five.
+
+| Surface | Question | Ruling |
+| --- | --- | --- |
+| The band | **Is it working** | It already IS that screen - verdict, run squares, one worst thing ranked across five routes, size runway. Fixed size; it does not grow with the pipeline. Nothing to add but sources, which is what Rows #11 and #13 do |
+| `/console/` "At a glance" | **Is it working**, second copy | It verdicts ONE route while the band verdicts five, and its figures are windowed where the band's are whole-record. It survives on that difference, and the row that touches it says so on the page |
+| `/console/` panels | **What is broken** in the run | Correct today |
+| `/console/model/`, `/judgement/`, `/voices/` | **What is broken** in the writing, the labelling, the supply | Correct today. Outside this plan's 23 |
+| `/console/machine/` | **What is broken** on the box, and nothing else | It carries no verdict question the band does not already answer. **Its job is to discriminate** - which shard, which item, which machine, which day - which is why Row #27's three headings are right: they are three scopes of suspicion, not three topics |
+
+**Wrong route: none. Wrong position: three.** 19A4 `Run health` and 19A15 `Context headroom` and 19A16 `The two clocks, compared` are verdict panels sitting below the panels they verdict. Row #27 moves the two that matter. **What the operator loses if they stay scattered:** he reads the Hardware numbers first and only then reaches the panel that says whether the instruments agree.
 
 ### 19.1 The three findings that decided the design
 
@@ -979,7 +1022,7 @@ Row #18 writes these into `docs/concepts/console-design.md` **before any panel r
 | 19D9 | **A legend key for a series with no committed rows is deleted, not drawn empty** | `robots check` has been in the legend across 23 shard-rows that never carried it. A key for an absent series is a claim the data does not support |
 | 19D10 | **A figure with a span is drawn as a range, never written as two sentences.** Value, low, high, one track | Four figures that each have a span, each written as prose, is 19A19 - and no two of them can be compared |
 | 19D11 | **A panel whose title asks a trend question draws a time axis.** A ranked list answers "which is biggest", never "what is changing" | 19A18. The title and the shape have to agree, or one of them is wrong |
-| 19D12 | **Bar thickness comes from one place and a bar is never thickened to fill vertical room.** Room left over goes back to the panel | A thick bar reads as importance. Thickness is not a variable here, so it must not vary |
+| 19D13 | **A panel serves *is it working* or *what is broken*, and names which. A verdict panel sits ABOVE the panels it verdicts.** A verdict takes the central value or the count and covers every subsystem; a break takes the extreme and the individual that owns it, and covers every candidate in one subsystem. A panel whose title asks one and whose shape answers the other is the single commonest defect on this console | **Five of the eight failures fail on this rule, not on their drawing.** 19A18 and 19A23 draw verdict shapes under trend titles; 19A8 and 19A7 draw levels and warn the reader not to read their direction; 19A9 promises both and built one. The rule's own proof is 19A12: a per-shard maximum is the verdict reading, and the item that hit 83.1 percent of the ceiling is invisible behind it - same measurement, two questions, one built. What a scattered verdict costs: an operator reads ten Hardware panels and only then reaches the panel saying the instruments disagree |ar reads as importance. Thickness is not a variable here, so it must not vary |
 
 ### 19.5 Table 19C - consolidation
 
@@ -1007,20 +1050,20 @@ Row #18 writes these into `docs/concepts/console-design.md` **before any panel r
 | 19E2 | **How busy the machine was, item by item** | `load_1m` against 4 vCPU, with `cpu_busy_min` to `cpu_busy_max` as the range | `load_1m` at 5.49 on 4 cores is a QUEUE and no panel draws it. 19A19 draws CPU BUSY, which is near 100 on every row and carries no signal alone. **Busy and queued are different facts and neither implies the other.** Lands as a second series on Row #21 rather than its own panel - an eighth writer on the 64 KB route would be one more link in a chain seven rows already serialise over |
 | 19E3 | The two processes against the ceiling | `llama_rss_peak_bytes` plus `python_rss_bytes` against 16 GiB, per item | Folds into 19C3 as its item grain. Listed because it is the reason 19C3 exists |
 | 19E4 | What the job spent before the first item | `model_load_ms` and `job_seconds` from Row #10, per shard | Folds into 19A9's shard rows as two cells. **A per-shard number belongs on the per-shard board** |
-
+| 19E5 | **Free swap, announced not drawn** | `os_swap_free_bytes` against `os_swap_total_bytes` from Row #7 | **Row #13** as a band candidate, **Row #19** as a shard cell. It is a PRECURSOR rather than a diagnosis figure - once the box swaps, read rate collapses and the shard walks towards its 200 min bound. It is also the strongest single answer to 19A9's unanswered "work or the host" |
 **Every panel the new columns earn lands inside a panel that already exists or inside Row #21.** The route grows by nothing and loses three: `Where a shard's clock went` is deleted, `Where the run's time went` moves to Pipeline, and `Peak memory` dissolves into the merged memory panel. **15 Hardware panels become 12, and Pipeline gains 1.**
 
 ## Row #18 - Chart-craft doctrine
 
-- **Scope:** table 19D lands in `docs/concepts/console-design.md` and the sufficiency checks gain the two-second clause. No code.
-- **Files touched:** `docs/concepts/console-design.md`, `docs/concepts/design-system.md`
+- **Scope:** table 19D lands in `docs/concepts/console-design.md` as **thirteen** rules - the twelve chart-craft rules plus **19D13, the two-question split** - and the sufficiency checks gain the two-second clause. `docs/architecture/publishing/console.md` takes the two-question heading in place of "The console answers 'is it working', in one screen". No code.
+- **Files touched:** `docs/concepts/console-design.md`, `docs/concepts/design-system.md`, `docs/architecture/publishing/console.md`
 - **Acceptance gates:** local - `python backend/utilities/doc_load.py` before and after; each page pays the split test. No application suite is owed for a documentation-only row.
-- **Oracle:** every one of the twelve rules is present with its reason, and `console-design.md`'s existing no-re-shaping rule carries its widening and the reason the widening preserves. **And 19D1's four cases each name the shipped site that proves them** - a named exception with no instance is an exception nobody can check, which is why the 1 GB Pages cap was struck from the first draft's list: it is arithmetic in `glance.ts`, never a scale. **What it cannot settle:** whether a later panel obeys them - that is each row's own review.
+- **Oracle:** every one of the thirteen rules is present with its reason, and `console-design.md`'s existing no-re-shaping rule carries its widening and the reason the widening preserves. **And 19D1's four cases each name the shipped site that proves them** - a named exception with no instance is an exception nobody can check, which is why the 1 GB Pages cap was struck from the first draft's list: it is arithmetic in `glance.ts`, never a scale. **What it cannot settle:** whether a later panel obeys them - that is each row's own review.
 - **Decisions:**
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | This row runs first and alone, and blocks every panel row | Susan - twelve rules argued once beats twelve rules argued nine times |
+| 1 | This row runs first and alone, and blocks every panel row | Susan - thirteen rules argued once beats thirteen rules argued nine times |
 | 2 | The piecewise axis the owner asked for is refused, and 19D3 carries the loss | Susan, with Finding 3's measurement |
 | 3 | No code in this row | a doctrine row that also ships a panel cannot be reverted without reverting the panel |
 
@@ -1032,10 +1075,10 @@ Row #18 writes these into `docs/concepts/console-design.md` **before any panel r
 
 ## Row #19 - The shard board
 
-- **Scope:** `Shards of the newest run` answers its own claim - read and write rate per shard, memory and CPU as range marks, load and job clock, tooltips.
+- **Scope:** `Shards of the newest run` answers its own claim - read and write rate per shard, memory and CPU as range marks, load, job clock, **free swap as a host cell**, tooltips.
 - **Files touched:** `frontend/src/lib/charts/machine.ts`, the shard-board component, `frontend/src/routes/console/machine/+page.server.ts`, `frontend/src/routes/console/machine/+page.svelte`, `frontend/tests/`
 - **Acceptance gates:** local - **`npm --prefix frontend run build` FIRST**, then frontend selected checks, then `npx playwright test --project=console`. CI - full suite. Browser smoke per section 12 including the data-absent arm. **The build is not optional and nine rows inherit this line.** `verified-preview.ts` calls `assertBuild()` - it asserts a build exists and does not make one - so a worker who runs the playwright command against a stale tree gets an assertion failure and reads it as a broken test. `docs/reference/agent-notes/gates-and-builds.md` already records that trap for the canary.
-- **Oracle:** a fixture run with one shard reading at 4x its neighbour's rate renders both rates, a value domain that adapts to the 4x rather than clipping it, and a `data-` attribute carrying that domain so the assertion reads a value and not a rendered string. **What it cannot settle:** whether 20 shard rows is too many to scan - Susan rules on the built panel.
+- **Oracle:** **an operator decides work-or-host without leaving the panel.** Build a fixture run whose slow shard is slow for a HOST reason - free swap falling, load above 4, read rate collapsing - beside one whose slow shard is slow for a WORK reason - the same read rate, more items. The panel must separate them. Assert on `data-` attributes carrying the values, never on rendered strings, and assert the value domain adapts to the 4x rather than clipping it. **The first draft's oracle - "renders both rates" - passes without ever testing the discrimination the panel exists for.** Susan, 2026-09-17. **What it cannot settle:** whether 20 shard rows is too many to scan - Susan rules on the built panel.
 - **Decisions:**
 
 | # | Decision | Authority |
@@ -1100,6 +1143,8 @@ Row #18 writes these into `docs/concepts/console-design.md` **before any panel r
 | 4 | **Machine load (19E2) lands here as a second series, not as its own panel** | Fowler - a separate panel would be an eighth writer on the 64 KB route. `load_1m` at 5.49 on 4 vCPU is a QUEUE and no panel draws it; CPU busy is near 100 on every row and carries no signal alone. **Busy and queued are different facts and neither implies the other**, so both are drawn, on one panel |
 | 5 | Absence is drawn as absence, per `Reading<T>` carrying `from` and `outOf` | Susan - a figure made from three shards of sixteen may not pose as covering the run |
 | 6 | The panel says what it cannot separate: which phase of the model call costs the peak, which is escalated Row #8 | Susan - "a memory panel that stays silent about what it cannot separate invites the reader to assume it separated it" |
+| 7 | **The item range mark runs from `os_mem_available_min_bytes` to `os_mem_available_bytes` - floor to recovery, not floor alone** | Susan, 2026-09-17. The min says how close this item took the machine to its limit; the end-of-item value says whether it got back. **A machine whose floor falls and whose end also falls is leaking; one whose floor falls and whose end recovers is just working hard.** That separation exists nowhere else on the site, and it costs one more field on a series this row already builds |
+| 8 | **`os_mem_total_bytes` is the memory denominator, and it is also the tell that the other four columns are about the wrong machine** | Susan - `/proc/meminfo` is NOT namespaced, so inside a container it reports the HOST. If total does not read about 16 GiB, every reading built on the OS columns is about something else. Where drawn rows disagree on total, take the smaller and print both: **a run that drew two machine sizes is itself a finding** |
 
 - **Rejected alternatives:**
 
@@ -1210,8 +1255,8 @@ Row #18 writes these into `docs/concepts/console-design.md` **before any panel r
 
 ## Row #27 - Route grouping and panel order
 
-- **Scope:** Hardware's flat siblings group under three headings - this run, this window, the machines - and the item timeline sits lower on Pipeline.
-- **Files touched:** both console route files, `frontend/tests/console-frame.spec.ts`
+- **Scope:** Hardware's flat siblings group under three headings - this run, this window, the machines - and the item timeline sits lower on Pipeline. **The verdict panels on each route sit above the panels they verdict: `Run health` at the top of Pipeline, `The two clocks, compared` at the top of Hardware.** `docs/architecture/publishing/console.md`'s per-panel inventory is brought current in the same commit.
+- **Files touched:** both console route files, `frontend/tests/console-frame.spec.ts`, `docs/architecture/publishing/console.md`
 - **Acceptance gates:** as Row #19, plus the sufficiency checks in `docs/concepts/design-system.md`.
 - **Oracle:** the headings exist as document structure with the panels as their children, asserted on the DOM rather than on prose. **What it cannot settle:** whether the ORDER is right - Susan and Jony rule on the built page at three widths.
 - **Decisions:**
@@ -1234,6 +1279,8 @@ Row #18 writes these into `docs/concepts/console-design.md` **before any panel r
 | 2 | The share track is deleted, not fixed | Susan, 19C8 - the panel's own note tells the reader not to read its direction, and a figure a panel disowns is a figure to remove |
 | 3 | Extraction keeps its four cards AND gains the trend | Susan, 19A8 - the cards carry the levels, which are worth reading; what is missing is the direction the panel says to read |
 | 4 | This row is Pipeline-only, so it runs beside Row #18 rather than in the Hardware chain | Fowler - it shares no file with group I |
+| 5 | **Decision 3 is rule 19D13 applied, not a compromise** | Susan, 2026-09-17. The four cards are the verdict half - is extraction working - and the trend is the break half - is its yield falling. Keeping both is the two questions done properly. Read without 19D13 it looks like taste, and a later worker deletes one of the two |
+| 6 | **The row states in one line that Pipeline's share track and Hardware's `Prompt cache` were the same subject at the two questions** | Susan - Pipeline carried the level, Hardware carries the trend. After this row deletes the level, the remaining panel is the whole answer rather than a gap, and saying so stops somebody rebuilding the deleted half |
 
 - **Rejected alternatives:**
 
