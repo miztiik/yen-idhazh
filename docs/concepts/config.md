@@ -10,6 +10,18 @@ Where tunable behaviour lives, and the rule that separates a knob from an identi
 
 Config is a **persisted contract like any other**: it is version-stamped and changelogged, and a breaking change ships with its read-side migration in the same commit (`CLAUDE.md` section 11). A knob is not exempt from the contract discipline just because a human types it.
 
+### The file names every knob it owns, and a default is a floor rather than a hiding place
+
+**`config/` is the one source: the committed file names every knob it owns, at the value in force.** A default in the model keeps a fresh clone running and nothing more. It does not tell the person reading `config/` that the knob exists, and a knob nobody can see is a knob nobody tunes - which is the same failure as [a knob nothing reads](#a-knob-nothing-reads-is-deleted), arriving from the other direction.
+
+Measured 2026-09-17, before the rule was enforced: `idhazh.json` did not name **18** of the leaves it owns and `appearance.json` **2**, while the other four config files named all of theirs. Among the missing were `summarize.key_point_words_max` and `summarize.asks_for_a_visual_plan`, both load-bearing, and three `summarize.bands` entries that omitted `over_length_action` - a default nested inside a list entry, which is the shape that hides best and the reason the check reads leaf paths rather than top-level keys.
+
+**Owns, not declares, and the difference is load-bearing.** Three blocks sit on two models, and only one file is their source: `appearance.json` owns everything the published surface draws, while `idhazh.json` keeps `ui`, `console` and `assist` as the read-side migration's middle layer. Filling those legacy blocks out to their model would give one knob two answers in two files - the frontend merges the appearance block over the legacy one, so the loser is edited and nothing happens. `CONFIG_NOT_OWNED` names each side's exclusions, derived from the `MOVED_BLOCKS` and `PIPELINE_OWNED` facts that already governed it.
+
+`test_the_config_file_names_every_knob_it_owns` holds every file in `CONFIG_FILES` to this. The fix when it fails is never a hand edit: regenerate through the model, then put back what another file owns.
+
+**What this costs, stated rather than implied.** `idhazh.json` grew from 9,499 to 10,133 bytes and `appearance.json` from 2,856 to 2,911. A reader now scrolls past knobs nobody has moved off their default. That is the price of the alternative being a control surface you can only discover by reading Python.
+
 ## What belongs in a knob
 
 The test is simple: **would a reasonable operator ever want a different value without changing behaviour that is a fact rather than a preference?**

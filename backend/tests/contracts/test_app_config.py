@@ -33,7 +33,12 @@ from idhazh.measured import PROMPT_OVERHEAD_TOKENS as _PROMPT_OVERHEAD
 from idhazh.measured import SUMMARIZE_AND_PLAN_SEAM_TOKENS as _SUMMARIZE_AND_PLAN_SEAM
 from idhazh.measured import WORST_TOKENS_A_WORD as _WORST_TOKENS
 
-from ._fixtures import APP_CONFIG_EVERY_KNOB_DIFFERS, CONFIG_FILES, committed_models
+from ._fixtures import (
+    APP_CONFIG_EVERY_KNOB_DIFFERS,
+    CONFIG_FILES,
+    CONFIG_NOT_OWNED,
+    committed_models,
+)
 
 pytestmark = pytest.mark.contract
 
@@ -41,6 +46,66 @@ pytestmark = pytest.mark.contract
 @pytest.mark.parametrize("name", sorted(CONFIG_FILES), ids=lambda n: n)
 def test_config_file_validates(name: str) -> None:
     CONFIG_FILES[name].from_json(read_text(CONFIG_DIR / name))
+
+
+@pytest.mark.parametrize("name", sorted(CONFIG_FILES), ids=lambda n: n)
+def test_the_config_file_names_every_knob_it_owns(name: str) -> None:
+    """`config/` is the one source, so a knob absent from it is a knob nobody sees.
+
+    A default in a Pydantic model keeps a fresh clone running
+    (`test_a_fresh_clone_runs_on_the_defaults`); it does not tell the person
+    reading `config/` that the knob exists. Measured 2026-09-17 before this
+    landed: `idhazh.json` named 16 fewer knobs than it owns and
+    `appearance.json` 2 fewer, while the other four named all of theirs.
+    `summarize.key_point_words_max` and `summarize.asks_for_a_visual_plan` were
+    among the missing, and both are load-bearing.
+
+    **Owns, not declares.** Three blocks sit on two models and only one file is
+    their source; `CONFIG_NOT_OWNED` names the other side. Padding a legacy
+    block out to its model would give one knob two answers in two files, which
+    is exactly what `test_a_moved_block_is_declared_in_one_file_and_the_other_
+    does_not_argue` exists to refuse - it caught this test's first draft doing
+    it.
+
+    Leaf paths rather than top-level keys, because a default nested inside a
+    list entry is the shape that hides best: three `summarize.bands` entries
+    omitted `over_length_action` and no block-level check would have seen it.
+    """
+    model = CONFIG_FILES[name]
+    committed = read_text(CONFIG_DIR / name)
+    named = set(_leaf_paths(json.loads(committed)))
+    complete = set(_leaf_paths(json.loads(model.from_json(committed).to_json())))
+    not_ours = CONFIG_NOT_OWNED.get(name, frozenset())
+    owned = {path for path in complete if not _under(path, not_ours)}
+
+    assert owned <= named, (
+        f"config/{name} does not name {sorted(owned - named)}. "
+        f"Regenerate it through {model.__name__} rather than editing by hand, "
+        "and drop back anything CONFIG_NOT_OWNED says another file owns."
+    )
+
+
+def _under(path: str, prefixes: frozenset[str]) -> bool:
+    """Whether a dotted path is, or sits inside, one of the named blocks.
+
+    `[` as well as `.`, because a list element's address is `key[0]` and an
+    exclusion written for `key` has to reach it. Without that, `model_cdn_origins`
+    was excluded and `model_cdn_origins[0]` was not.
+    """
+    return any(path == p or path.startswith(f"{p}.") or path.startswith(f"{p}[") for p in prefixes)
+
+
+def _leaf_paths(node: object, path: str = "") -> list[str]:
+    """Every leaf in a payload, addressed. A list index is part of the address."""
+    if isinstance(node, dict):
+        return [
+            leaf
+            for key, value in node.items()
+            for leaf in _leaf_paths(value, f"{path}.{key}" if path else str(key))
+        ]
+    if isinstance(node, list):
+        return [leaf for i, item in enumerate(node) for leaf in _leaf_paths(item, f"{path}[{i}]")]
+    return [path]
 
 
 def test_a_fresh_clone_runs_on_the_defaults() -> None:
