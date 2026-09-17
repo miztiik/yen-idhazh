@@ -260,8 +260,9 @@ an item at a time and seals them beside the article and the summary, so both
 writers read that file and prefer it. What a rebuild can say is only what those
 two payloads carry: on the committed fixture day, 40 of the 113 columns against
 71. The 31 columns in the gap are the ones nothing downstream could ever recover
-- which machine ran the item, what its two model calls cost, how long it waited
-for the server - because the only process that could see them ended when the
+- which machine ran the item, which job's machine it was, what its two model
+calls cost, how long it waited for the server - because the only process that
+could see them ended when the
 shard did. The rebuild stays for the item no shard sealed a row for: a worker
 that died mid-item still owes the day a census line, and that line says what the
 payloads can say and no more.
@@ -439,7 +440,7 @@ Thirteen stores under `state/` is not thirteen designs. It is six grains, and th
 
 **Age is the second reason a store keeps its own file.** `item-health` is a fourteen-month census, `seen` is a ninety-day lookup, `published` is an unbounded membership test. Fold stores with different windows together and exactly one window survives: keep ninety days and the census dies, keep fourteen months and a ninety-day lookup pays for fourteen. Estimated 2026-09-15 from today's rate held forward: folding `seen` into the census would take it from a flat 34 MB to about 162 MB, for a read that never looks past day 90.
 
-**What is consolidated is the write path, not the row.** One constructor per grain, one append, one read, one fold, one projector. Where a second constructor already exists for the same grain it is a defect rather than a design, and the item grain has two. `telemetry/record.py` fills about 53 of the census columns as the work stage learns them and closes into a validated `ItemHealthRow`; `telemetry/census.py` builds the row again afterwards out of the article and the summary payloads, which carry none of those cells. Nothing keeps the recorder's row, so 70 of item-health's 113 columns are empty on every committed row and the second constructor is the one whose answer lands.
+**What is consolidated is the write path, not the row.** One constructor per grain, one append, one read, one fold, one projector. Where a second constructor already exists for the same grain it is a defect rather than a design, and the item grain has two. `telemetry/record.py` fills about 53 of the census columns as the work stage learns them and closes into a validated `ItemHealthRow`; `telemetry/census.py` builds the row again afterwards out of the article and the summary payloads, which carry none of those cells. Until 2026-09-16 nothing kept the recorder's row, so 70 of item-health's columns were empty on every committed row and the second constructor was the one whose answer landed. Both writers now prefer the sealed row, and the first day published under that rule filled 66 of them at once: measured 2026-09-17, 109 of 113 columns carry a value somewhere in the committed ledger, against 43 over the 23 days before that one.
 
 **The ladder is day, month, year, and each rung answers a different question.** Day files, because a day is the unit a prune deletes and the unit a window fetches - both stay cheap only while the file boundary is the day boundary. Month folds at `observability.item_health_full_grain_months`, because a trend over a year does not need every item. Year is unbuilt and stays unbuilt until a month fold is too big to read, which at kilobytes a month it is not.
 

@@ -31,6 +31,7 @@ from pytest import LogCaptureFixture, MonkeyPatch
 from idhazh import config
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.stages import common
 from idhazh.stages.work import stage_work
 from idhazh.telemetry import host
@@ -137,7 +138,6 @@ def test_the_file_is_the_row_the_shard_reported_cell_for_cell(
 #: them. Named once so a column added to the sampler moves one line here.
 HOST_COLUMNS: Final = (
     "cpu_model",
-    "runner_name",
     "cpu_busy_pct",
     "cpu_busy_max",
     "cpu_busy_min",
@@ -223,7 +223,26 @@ def test_the_shard_names_one_machine_on_every_row_it_records(
     written = rows(items_dir)
 
     assert len({row.cpu_model for row in written.values()}) == 1
-    assert {row.runner_name for row in written.values()} == {"ubuntu-4core-3"}
+
+
+def test_every_row_a_shard_seals_names_the_job_and_the_worker_that_read_it(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """`job` and `shard` together are the key that reaches this machine's host record.
+
+    A shard is not a key on its own: `plan`, `work` and `assemble` each draw a
+    machine and each write shard 0, so three of the four columns resolve to
+    three host records rather than one. The work stage is the only place that
+    knows both, which is why this asserts on the rows it sealed rather than on
+    the census that reads them later.
+    """
+    a_machine_that_answers(monkeypatch, tmp_path / "host")
+    _, items_dir = worked(tmp_path, monkeypatch)
+
+    written = rows(items_dir)
+
+    assert written, "no rows means the loop below asserts nothing"
+    assert {(row.job, row.shard) for row in written.values()} == {(ServerJob.WORK, 0)}
 
 
 def test_an_item_that_failed_extraction_still_leaves_a_row(

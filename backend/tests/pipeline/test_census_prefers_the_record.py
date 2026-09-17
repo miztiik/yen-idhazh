@@ -32,6 +32,7 @@ from idhazh import config, ledger, telemetry
 from idhazh.contracts.article import Article
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
+from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.contracts.summary import Summary
 from idhazh.stages.assemble import stage_assemble
 from idhazh.stages.record import stage_record
@@ -90,14 +91,19 @@ def filled(row: ItemHealthRow) -> set[str]:
 
 
 def rebuilt_from_payloads(
-    items_dir: Path, planned: PlannedItem, run_plan: RunPlan, *, shard: int | None = None
+    items_dir: Path,
+    planned: PlannedItem,
+    run_plan: RunPlan,
+    *,
+    shard: int | None = None,
+    job: ServerJob | None = None,
 ) -> ItemHealthRow:
     """What the census would have said with no sealed row to read.
 
     This is the fallback path, driven from the same payloads the run left on
     disk, so the two rows in the comparison describe one item on one run.
-    `shard` is the caller's own number, which the fallback takes and a preferred
-    row ignores in favour of the number the worker sealed.
+    `shard` and `job` are the caller's own pair, which the fallback takes and a
+    preferred row ignores in favour of what the worker sealed.
     """
     article_path = items_dir / f"{planned.item_id}.article.json"
     summary_path = items_dir / f"{planned.item_id}.summary.json"
@@ -109,6 +115,7 @@ def rebuilt_from_payloads(
         date=run_plan.date,
         run_id=run_plan.run_id,
         shard=shard,
+        job=job,
     )
 
 
@@ -211,12 +218,15 @@ def test_an_item_whose_shard_sealed_nothing_still_gets_a_census_line(
     stage_record(run_plan, settings=config.load(CONFIG_DIR))
 
     kept = committed(state, run_plan.date)
-    # `stage_record` runs as shard 0 of 1 here and stamps that on a row it
-    # rebuilt, which is the one moment the number is known.
-    rebuild = rebuilt_from_payloads(items_dir, orphan, run_plan, shard=0)
+    # `stage_record` runs as shard 0 of 1 in the `work` job here and stamps both
+    # on a row it rebuilt, which is the one moment either is known.
+    rebuild = rebuilt_from_payloads(items_dir, orphan, run_plan, shard=0, job=ServerJob.WORK)
     assert set(kept) == {item.item_id for item in run_plan.items}
     assert filled(kept[orphan.item_id]) - set(EXTRACTION_CELLS) == filled(rebuild) - set(
         EXTRACTION_CELLS
     ), "the fallback row says something the payloads cannot"
     assert kept[orphan.item_id].cpu_model is None
     assert all(kept[item.item_id].cpu_model is not None for item in run_plan.items[1:])
+    assert kept[orphan.item_id].job is ServerJob.WORK, (
+        "the stage that rebuilt the row knows which job it is, even where the shard sealed nothing"
+    )
