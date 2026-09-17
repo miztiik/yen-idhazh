@@ -2,10 +2,11 @@
 # The one home of the llama.cpp pin: which build, which asset, and the digest of
 # the archive that asset is.
 #
-# It used to live in eleven places that had to change together - four workflow
-# `env:` blocks and seven fetch steps - and nothing read them against each
-# other. Miss one on an upgrade and a case runs on a build production does not
-# run, which is a measurement about a binary nobody ships (Guardrail #10).
+# It used to be written in six places that had to change together - five
+# workflow `env:` blocks and nothing that read them against each other - and
+# eight fetch steps spelled the download. Miss one on an upgrade and a case runs
+# on a build production does not run, which is a measurement about a binary
+# nobody ships (Guardrail #10).
 #
 # Two ways to read it, and neither takes an argument.
 #   source it   assigns all three. `fetch-model-runtime.sh` does this.

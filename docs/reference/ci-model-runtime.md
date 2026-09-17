@@ -33,11 +33,13 @@ the archive, and downloads the weights the calling step names through `env`.
 
 **Only `idhazh-pipeline-tests.yaml` is on those two.** `digest.yml`,
 `measure.yml`, `validate.yml` and `probe.yml` still declare the three variables
-in their own `env:` block and fetch the build themselves. So the pin lives in
-nine places today: one script, four `env:` blocks and six fetch steps. It was
-eleven until 2026-09-17, and converting the other four takes it to one.
-`digest.yml` is the last and the largest, because that is the workflow that
-publishes.
+in their own `env:` block and fetch the build themselves.
+
+So the three values are written in **five places today: the pin file and four
+`env:` blocks.** It was six until 2026-09-17, and converting the other four
+takes it to one. Eight steps download the archive; seven of them still spell the
+download inline and the eighth is the shared script. `digest.yml` is the last
+and the largest conversion, because that is the workflow that publishes.
 
 Nothing read those places against each other before. A contract test now pins
 the three variables in every workflow that still spells them and refuses any

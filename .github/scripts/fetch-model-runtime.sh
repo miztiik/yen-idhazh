@@ -3,8 +3,9 @@
 # to open.
 #
 # The pin is `llama-cpp-pin.sh`, sourced below, and a workflow that calls this
-# carries no copy of it. Four workflows each spell that pin out and fetch the
-# build themselves; this is the step they collapse into, one caller at a time.
+# carries no copy of it. Seven steps across four other workflows still spell the
+# download themselves; this is the step they collapse into, one caller at a
+# time.
 #
 # It takes no arguments. Everything it needs arrives through the environment,
 # so no value is pasted into this program before it is a value (Guardrail #11):
