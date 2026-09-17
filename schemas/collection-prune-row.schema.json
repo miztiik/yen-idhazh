@@ -1,0 +1,141 @@
+{
+  "$defs": {
+    "StopReason": {
+      "description": "Why a pass stopped, which is what decides whether to run it again.",
+      "enum": [
+        "exhausted",
+        "ceiling",
+        "failed"
+      ],
+      "title": "StopReason",
+      "type": "string"
+    }
+  },
+  "$id": "collection-prune-row.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the collection, the window, the ceiling, where it stopped.",
+      "version": "2026-09-17",
+      "why": "Deleting one member at a time needs a record of where the next pass starts."
+    }
+  ],
+  "description": "One pass, one row.",
+  "properties": {
+    "bytes_freed": {
+      "description": "What those deletes freed, or would free. 0 is honest for a collection whose members have no size we can read - a workflow run's logs are one.",
+      "minimum": 0,
+      "title": "Bytes Freed",
+      "type": "integer"
+    },
+    "candidates_seen": {
+      "description": "Members the listing yielded before the pass stopped. Never the size of the collection: a pass that stops on its ceiling stops listing too.",
+      "minimum": 0,
+      "title": "Candidates Seen",
+      "type": "integer"
+    },
+    "collection": {
+      "description": "Which collection this pass walked. A word from a closed vocabulary - `prune.PrunableCollection` for what GitHub holds, a store name for what `state/` holds - and never a path.",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Collection",
+      "type": "string"
+    },
+    "date": {
+      "description": "The day the pass ran.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "deleted": {
+      "description": "How many this pass removed, or would have removed on a dry run. Never above the ceiling when the ceiling is above 0.",
+      "minimum": 0,
+      "title": "Deleted",
+      "type": "integer"
+    },
+    "dry_run": {
+      "description": "True when this pass was only reporting. Nothing was deleted.",
+      "title": "Dry Run",
+      "type": "boolean"
+    },
+    "max_deletes_per_run": {
+      "description": "The ceiling in force. 0 is a survey: it reports the first member the window holds and takes nothing.",
+      "minimum": 0,
+      "title": "Max Deletes Per Run",
+      "type": "integer"
+    },
+    "resume_from": {
+      "anyOf": [
+        {
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The member the next pass begins at. Empty when the collection is exhausted, which is the one cell that says the backlog is cleared.",
+      "title": "Resume From"
+    },
+    "selected": {
+      "description": "Of those, how many the window held. The rest were the wrong age.",
+      "minimum": 0,
+      "title": "Selected",
+      "type": "integer"
+    },
+    "since": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The oldest day a member could be created on and still qualify. Empty when the window has no lower end, which is what an age-based window means: everything older than the line qualifies, however old.",
+      "title": "Since"
+    },
+    "stopped_because": {
+      "$ref": "#/$defs/StopReason",
+      "description": "Why the pass ended."
+    },
+    "until": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The newest day a member could be created on and still qualify, inclusive. Empty when the window has no upper end.",
+      "title": "Until"
+    },
+    "version": {
+      "default": "2026-09-17",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "date",
+    "collection",
+    "max_deletes_per_run",
+    "dry_run",
+    "candidates_seen",
+    "selected",
+    "deleted",
+    "bytes_freed",
+    "stopped_because"
+  ],
+  "title": "CollectionPruneRow",
+  "type": "object",
+  "version": "2026-09-17"
+}

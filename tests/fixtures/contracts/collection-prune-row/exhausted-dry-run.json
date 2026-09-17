@@ -1,0 +1,15 @@
+{
+  "bytes_freed": 18422,
+  "candidates_seen": 41,
+  "collection": "item-health",
+  "date": "2026-09-17",
+  "deleted": 7,
+  "dry_run": true,
+  "max_deletes_per_run": 7,
+  "resume_from": null,
+  "selected": 7,
+  "since": "2026-07-29",
+  "stopped_because": "exhausted",
+  "until": "2026-08-04",
+  "version": "2026-09-17"
+}
