@@ -1,5 +1,14 @@
 {
   "$defs": {
+    "CardSource": {
+      "description": "Which ledger a machine card was built from.\n\nThe two answer different questions. The machine record says what a processor\ncan do; the model server's counters say only what it is called. A card that\ndid not say which it came from would let \"we never read the instruction set\"\nread as \"this machine has none of the watched flags\".",
+      "enum": [
+        "fingerprint",
+        "counters"
+      ],
+      "title": "CardSource",
+      "type": "string"
+    },
     "FleetKind": {
       "additionalProperties": false,
       "description": "One kind of machine, counted over the window.",
@@ -108,16 +117,21 @@
           "default": null
         },
         "shards_drawn": {
-          "description": "Shards of the run that drew this machine.",
+          "description": "Jobs of this run that drew this machine. A job and not a shard: the machine record files one row a job, and a work shard is a job of its own on the platform that hands them out.",
           "minimum": 1,
           "title": "Shards Drawn",
           "type": "integer"
         },
         "shards_total": {
-          "description": "Shards the run split into. The denominator.",
+          "description": "Jobs of this run that recorded a machine at all. The denominator.",
           "minimum": 0,
           "title": "Shards Total",
           "type": "integer"
+        },
+        "source": {
+          "$ref": "#/$defs/CardSource",
+          "default": "counters",
+          "description": "Which ledger built this card. The machine record carries the instruction set, the cache and the bandwidth; the model server's own counters carry only a processor name, and a card built from them says so rather than drawing twelve absent chips."
         }
       },
       "required": [

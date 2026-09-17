@@ -45,6 +45,19 @@ UNRECORDED_COLOUR_STOP: int = 8
 UNRECORDED_KEY: str = "unrecorded"
 
 
+class CardSource(StrEnum):
+    """Which ledger a machine card was built from.
+
+    The two answer different questions. The machine record says what a processor
+    can do; the model server's counters say only what it is called. A card that
+    did not say which it came from would let "we never read the instruction set"
+    read as "this machine has none of the watched flags".
+    """
+
+    FINGERPRINT = "fingerprint"
+    COUNTERS = "counters"
+
+
 class WatchedFlag(StrEnum):
     """One instruction-set flag the console draws a chip for.
 
@@ -158,6 +171,15 @@ class MachineCard(Model):
     """One machine a run drew, and what it can do."""
 
     identity: MachineIdentity
+    source: CardSource = Field(
+        default=CardSource.COUNTERS,
+        description=(
+            "Which ledger built this card. The machine record carries the "
+            "instruction set, the cache and the bandwidth; the model server's own "
+            "counters carry only a processor name, and a card built from them says "
+            "so rather than drawing twelve absent chips."
+        ),
+    )
     part: str | None = Field(
         default=None,
         description=(
@@ -199,8 +221,17 @@ class MachineCard(Model):
             "read in one sentence: a buffer at or below L3 measured cache."
         ),
     )
-    shards_drawn: int = Field(ge=1, description="Shards of the run that drew this machine.")
-    shards_total: int = Field(ge=0, description="Shards the run split into. The denominator.")
+    shards_drawn: int = Field(
+        ge=1,
+        description=(
+            "Jobs of this run that drew this machine. A job and not a shard: the "
+            "machine record files one row a job, and a work shard is a job of its "
+            "own on the platform that hands them out."
+        ),
+    )
+    shards_total: int = Field(
+        ge=0, description="Jobs of this run that recorded a machine at all. The denominator."
+    )
     placement: MachinePlacement | None = Field(default=None)
 
     @model_validator(mode="after")

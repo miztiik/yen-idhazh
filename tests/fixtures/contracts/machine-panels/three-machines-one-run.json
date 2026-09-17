@@ -95,7 +95,8 @@
         "vm_zone": "1"
       },
       "shards_drawn": 5,
-      "shards_total": 8
+      "shards_total": 8,
+      "source": "fingerprint"
     },
     {
       "flags": [
@@ -161,7 +162,8 @@
       "part": "6/207/2",
       "placement": null,
       "shards_drawn": 3,
-      "shards_total": 8
+      "shards_total": 8,
+      "source": "fingerprint"
     }
   ],
   "run_id": "2026-09-12-34689544296",

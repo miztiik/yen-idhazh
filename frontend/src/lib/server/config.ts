@@ -121,6 +121,9 @@ export interface ObservabilityConfig {
 	evaluation_enabled: boolean;
 	/** Whether a work shard scrapes the model server's own counters. */
 	runtime_counters_scrape: boolean;
+	/** Whether a job records what machine it drew. False is why three panels have
+	 * nothing, and each says so in words that never name the setting. */
+	host_fingerprint: boolean;
 	/** The share of runs the scorer is drawn for. 1.0 measures every run. */
 	sample_rate: number;
 }
@@ -367,6 +370,7 @@ const OBSERVABILITY_DEFAULTS: ObservabilityConfig = {
 	cost_output_per_million: 0.6,
 	evaluation_enabled: true,
 	runtime_counters_scrape: true,
+	host_fingerprint: true,
 	sample_rate: 1
 };
 const COLLECT_DEFAULTS: CollectConfig = { availability_strikes_before_rest: 5 };
