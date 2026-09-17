@@ -282,9 +282,13 @@ def self_repetition(summary: str) -> float:
     repeated sentence is still perfectly supported by the article. This is the
     one defect that looks more faithful the worse it gets.
 
-    Greedy decoding is what makes it possible. At temperature zero a model that
-    falls into a loop has no sampling noise to break out of it, so it says the
-    same clause again until the token budget runs out.
+    A model in a loop is what makes it possible, and the temperature decides how
+    a loop ends rather than whether one starts. At temperature 0 there is no
+    sampling noise to break out of one, so the same clause repeats until the
+    budget runs out; Qwen's own model card warns that greedy decoding "can lead
+    to performance degradation and endless repetitions" in thinking mode, which
+    is the same failure named from the other side. Above 0 a loop can still form
+    and is likelier to end on its own, so this column stays exactly as useful.
 
     Zero is a summary in which every four-word window is different, which is
     what ordinary prose looks like. The number rises toward one as more of the

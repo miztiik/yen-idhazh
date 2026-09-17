@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import pytest
 import test_qualify as built
+from pydantic import ValidationError
 
 from idhazh.contracts.qualification import (
+    OPTIONAL_GATES,
     Diagnostic,
     GateName,
     GateOutcome,
@@ -17,8 +19,10 @@ from idhazh.evals import qualification_summary
 pytestmark = pytest.mark.contract
 
 
-def a_report(*, failing: GateName | None = None) -> QualificationReport:
-    """Eleven gates, one of them optionally red. Built, never read off a run.
+def a_report(
+    *, failing: GateName | None = None, omit: GateName | None = None
+) -> QualificationReport:
+    """Eleven gates, one of them optionally red or absent. Built, never read off a run.
 
     The renderer is about what a reader is shown, so its input is composed here:
     a committed report would tie these assertions to whichever model was
@@ -35,6 +39,7 @@ def a_report(*, failing: GateName | None = None) -> QualificationReport:
             detail="mean faithfulness over the scored items",
         )
         for gate in GateName
+        if gate is not omit
     ]
     return QualificationReport(
         version=QualificationReport.schema_version(),
@@ -142,6 +147,32 @@ def test_a_clean_verdict_says_so_and_prints_no_failure_section() -> None:
     assert "ESCALATE" not in page
     assert "What failed" not in page
     assert f"{len(GateName)} of {len(GateName)} gates passed" in page
+
+
+def test_a_report_may_omit_the_determinism_gate_and_no_other() -> None:
+    """Above zero temperature that gate has no question to ask (owner ruling, 2026-09-17).
+
+    Optional is not weaker. Every other gate is still required of every report,
+    and one omitted is refused by name - which is what stops a run dropping a
+    gate it did not like and publishing the verdict anyway.
+    """
+    report = a_report(omit=GateName.DETERMINISM)
+
+    assert OPTIONAL_GATES == {GateName.DETERMINISM}
+    assert len(report.gates) == len(GateName) - 1
+    with pytest.raises(ValidationError, match="budget"):
+        a_report(omit=GateName.BUDGET)
+
+
+def test_the_verdict_counts_the_gates_it_was_given_rather_than_the_whole_enum() -> None:
+    """A run that asked ten says ten. A page that said eleven would claim a
+    number nobody measured (Guardrail #10)."""
+    page = qualification_summary.render_report(a_report(omit=GateName.DETERMINISM))
+    rows = [line for line in page.splitlines() if line.startswith(("| FAIL", "| PASS"))]
+
+    assert f"{len(GateName) - 1} of {len(GateName) - 1} gates passed" in page
+    assert len(rows) == len(GateName) - 1
+    assert "`determinism`" not in page
 
 
 def test_neither_page_writes_a_model_name_it_was_not_given() -> None:

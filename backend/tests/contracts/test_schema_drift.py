@@ -159,6 +159,44 @@ def test_a_manifest_written_before_the_two_spans_still_reads() -> None:
             assert "thinking" not in use.model_ref.inference.model_dump(mode="json")
 
 
+def test_a_manifest_that_pins_a_thinking_budget_keeps_the_number_it_pinned() -> None:
+    """Section 11's release blocker for the cap that became nullable on 2026-09-17.
+
+    Every manifest published before that date spells `max_think_tokens` as an
+    integer, and the default under it moved from 256 to null. A widening that
+    re-read a pinned number as "no cap" would rewrite what an archived run says
+    it decoded under, so both directions are asserted here off one fixture: the
+    pinned number survives, and the same payload with the key removed reads as
+    no cap rather than as the retired 256.
+
+    The key is removed from the fixture rather than read off the committed
+    archive. A test that walked `frontend/public/digest/` would cost more every
+    day the pipeline runs and would go green or red on a date nobody chose
+    (`CLAUDE.md` sections 12 and 13).
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json"))
+    pinned = 0
+    for run in payload["runs"]:
+        for use in run["models"]:
+            use["model_ref"]["inference"]["max_think_tokens"] = 256
+            pinned += 1
+    assert pinned, "the fixture stopped carrying an inference block, so this proves nothing"
+
+    manifest = RunManifest.model_validate(payload)
+    for run in manifest.runs:
+        for use in run.models:
+            assert use.model_ref.inference.max_think_tokens == 256
+
+    for run in payload["runs"]:
+        for use in run["models"]:
+            del use["model_ref"]["inference"]["max_think_tokens"]
+
+    uncapped = RunManifest.model_validate(payload)
+    for run in uncapped.runs:
+        for use in run.models:
+            assert use.model_ref.inference.max_think_tokens is None
+
+
 def test_a_settings_block_that_carries_both_budget_spellings_is_refused() -> None:
     """The case that stops the migration turning `extra=forbid` into `extra=ignore`.
 

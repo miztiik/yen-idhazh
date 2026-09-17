@@ -57,6 +57,13 @@ UNRECORDED_TEMPLATE: Final = "chat-template-not-recorded"
 #: values it might resolve to.
 RUNTIME_DEFAULT: Final = "runtime-default"
 
+#: How the stamp spells a thinking span with no cap. Not `RUNTIME_DEFAULT`: that
+#: word says the runtime chose a number we did not, and this says there is no
+#: number - the span ends on the entry's closing marker or on the window. Not
+#: `None` either, which is Python's spelling of an absent value and would put a
+#: language's vocabulary in a stamp that outlives the language.
+UNCAPPED: Final = "uncapped"
+
 #: Where Linux names the processor. `platform.processor()` answers `x86_64`
 #: there, which is the same string on every runner and so explains nothing.
 CPUINFO: Final = Path("/proc/cpuinfo")
@@ -131,14 +138,19 @@ def host_cpu(cpuinfo: Path = CPUINFO) -> str:
 def sampling_spelling(inference: InferenceConfig) -> str:
     """One canonical spelling of the decoding parameters.
 
-    `seed` is enumerated as an input and is still dead code under greedy
-    decoding - it is recorded so a future move off greedy cannot change an
-    output silently, and it is never cited as the determinism control.
+    `seed` is enumerated as an input, and above temperature 0 it is the control
+    that decides which sample the sampler draws rather than dead code. It was
+    recorded from the start for exactly this move: a change of sampler cannot
+    shift the words without shifting this string.
 
     Both span budgets are here and there is no reasoning flag beside them. What
     turns reasoning on is the closing marker on the turn envelope, which arrives
     under `turn_markers_sha256`; a flag here as well would be a second answer to
     a question the envelope already answers.
+
+    A null thinking budget spells `UNCAPPED` rather than the number it resolves
+    to, because it resolves to no number: the span ends on the marker or on the
+    window, and both of those move with fields already enumerated elsewhere.
     """
     return ";".join(
         (
@@ -146,7 +158,7 @@ def sampling_spelling(inference: InferenceConfig) -> str:
             f"top_p={inference.top_p:.4f}",
             f"seed={inference.seed}",
             f"max_answer_tokens={inference.max_answer_tokens}",
-            f"max_think_tokens={inference.max_think_tokens}",
+            f"max_think_tokens={inference.max_think_tokens or UNCAPPED}",
         )
     )
 

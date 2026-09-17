@@ -20,6 +20,7 @@ from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.qualification import (
+    OPTIONAL_GATES,
     CanaryObservation,
     CandidateIdentity,
     CorpusItem,
@@ -190,13 +191,16 @@ def a_passing_budget() -> qualify.Budget:
 
 
 def outcomes_of(
-    shard: QualificationShard, *, turns: TurnsConfig | None = None
+    shard: QualificationShard,
+    *,
+    turns: TurnsConfig | None = None,
+    inference: InferenceConfig = INFERENCE,
 ) -> dict[GateName, Any]:
     _, gates = qualify.gates(
         [shard],
         evaluation=EVALUATION,
         summarize=SUMMARIZE,
-        inference=INFERENCE,
+        inference=inference,
         run=RUN,
         budget_=a_passing_budget(),
         required_canaries=len(CANARY_NAMES),
@@ -481,6 +485,71 @@ def test_a_failed_call_is_not_counted_as_a_determinism_violation() -> None:
         a_passing_shard(), ok=False, schema_valid=False, output_digest="0" * 64
     )
     assert outcomes_of(broken)[GateName.DETERMINISM].status is GateStatus.PASSED
+
+
+# --- the one gate a run can legitimately not ask ----------------------------
+
+
+def test_above_zero_temperature_the_determinism_gate_is_not_asked() -> None:
+    """The owner set the temperature in config, so the question stops having an answer.
+
+    It is not the gate moving to let a candidate through. A shard that WOULD
+    fail the gate is used here on purpose: at temperature 0 it fails, and above
+    zero there is no outcome at all rather than a pass. The other ten are asked
+    either way.
+    """
+    drifted = with_one_bad_call(a_passing_shard(), output_digest="9" * 64)
+
+    greedy = outcomes_of(drifted, inference=InferenceConfig())
+    sampled = outcomes_of(drifted, inference=InferenceConfig(temperature=0.2))
+
+    assert greedy[GateName.DETERMINISM].status is GateStatus.FAILED
+    assert GateName.DETERMINISM not in sampled
+    assert set(sampled) == set(GateName) - {GateName.DETERMINISM}
+
+
+def test_a_report_may_omit_that_gate_and_no_other() -> None:
+    """The contract carries the same rule, so a payload cannot disagree with the run.
+
+    Asserted where the report builder lives, in
+    `backend/tests/test_qualification_summary.py`. This line is here because the
+    condition is decided in `gates` and a reader of this file needs to know the
+    payload will accept what it just produced.
+    """
+    sampled = outcomes_of(a_passing_shard(), inference=InferenceConfig(temperature=0.2))
+
+    assert OPTIONAL_GATES == {GateName.DETERMINISM}
+    assert set(GateName) - set(sampled) <= OPTIONAL_GATES
+
+
+def test_the_spread_diagnostic_counts_wordings_rather_than_violations() -> None:
+    """Above zero temperature a second wording is the sampler working.
+
+    So the number is a spread with its denominator, it is printed, and it blocks
+    nothing. Both rows carry the population the gate would have judged - only
+    items that succeeded on every repeat can be compared at all.
+    """
+    drifted = with_one_bad_call(a_passing_shard(), output_digest="9" * 64)
+    rows = qualify.wording_spread(
+        drifted.observations, inference=InferenceConfig(temperature=0.2), repeats=drifted.repeats
+    )
+
+    named = {row.name: row for row in rows}
+    counted = len({o.item_id for o in drifted.observations if o.ok})
+    assert set(named) == {"items_whose_repeats_differed", "distinct_wordings_per_item_mean"}
+    assert named["items_whose_repeats_differed"].value == f"1 of {counted} at temperature 0.2"
+    assert all(row.denominator == counted for row in rows)
+    assert not any("determinism" in row.name for row in rows), "a spread is not a violation"
+
+
+def test_at_zero_temperature_the_spread_diagnostic_says_nothing() -> None:
+    """The gate speaks there, and a softer second copy of a number somebody must
+    act on is the failure this project keeps finding."""
+    shard = a_passing_shard()
+
+    assert qualify.wording_spread(
+        shard.observations, inference=InferenceConfig(), repeats=shard.repeats
+    ) == []
 
 
 def test_a_summary_under_the_floor_fails_and_a_long_one_does_not() -> None:

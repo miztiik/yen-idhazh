@@ -317,7 +317,7 @@ def _two_spans(
     *,
     article: Article,
     turns: TurnsConfig,
-    max_think_tokens: int,
+    max_think_tokens: int | None,
     endpoint: str,
     timeout: float,
 ) -> Completion:
@@ -339,7 +339,10 @@ def _two_spans(
 
     A span one that spends its whole budget is logged as what it is. It is not
     an item failure: `answer_span` writes the closing marker itself, so the
-    block is closed either way and span two answers under its own budget.
+    block is closed either way and span two answers under its own budget. A null
+    budget cannot reach that log line at all - an uncapped span ends on the
+    marker or on the window, and the window is a request error rather than a
+    length stop.
     """
     thought = post(
         thinking_span(payload, turns=turns, max_think_tokens=max_think_tokens),
@@ -382,7 +385,7 @@ def _ask_the_model(
     run_id: str | None,
     trace: telemetry.Tracer,
     turns: TurnsConfig | None = None,
-    max_think_tokens: int = 0,
+    max_think_tokens: int | None = 0,
 ) -> tuple[Completion | None, FailureCode]:
     """One request, its reply, and the code that says why there is none.
 

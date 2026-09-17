@@ -92,6 +92,14 @@ _STOP_TYPES: Final[dict[str, str]] = {"limit": "length", "eos": "stop", "word": 
 # builds; this identifier does not, so it is what we match on.
 CONTEXT_EXCEEDED_TYPE: Final = "exceed_context_size_error"
 
+#: What `n_predict` is sent as when a span carries no cap. It is llama.cpp's own
+#: spelling, not a sentinel of ours: `--predict` documents `number of tokens to
+#: predict (default: -1, -1 = infinity)`, recorded in
+#: `tests/fixtures/runtime/b10598-llama-server-help.txt`. Omitting the key would
+#: mean the same thing, and saying it is what lets a recorded request body be
+#: read without knowing which flags the server was started with.
+UNCAPPED_N_PREDICT: Final = -1
+
 
 def is_context_exceeded(body: str) -> bool:
     """Did the runtime refuse this request because the prompt did not fit?
@@ -511,6 +519,15 @@ def request_payload(
     budget for both spans, which is why a thinking envelope sends the two
     budgets added together. The digest's own path renders its bytes and gets the
     two spans separately (`thinking_span`, `answer_span`).
+
+    **An uncapped thinking envelope sends no `max_tokens` at all.** One span
+    carries both here, so a null cap makes the sum unbounded and there is no
+    honest number to send; omitting the key is the one spelling that means
+    exactly that, because the server is started without `--predict` and its own
+    default is `-1`, infinity bounded by the window
+    (`tests/fixtures/runtime/b10598-llama-server-help.txt`). Sending
+    `max_answer_tokens` alone instead would cut the answer by whatever the
+    thinking spent.
     """
     thinking = turns.thinks
     payload: dict[str, Any] = {
@@ -522,17 +539,16 @@ def request_payload(
         "temperature": inference.temperature,
         "top_p": inference.top_p,
         "seed": inference.seed,
-        "max_tokens": (
-            inference.max_answer_tokens + inference.max_think_tokens
-            if thinking
-            else inference.max_answer_tokens
-        ),
         "stream": False,
         "response_format": {
             "type": "json_schema",
             "json_schema": {"name": schema_name, "strict": True, "schema": output_schema},
         },
     }
+    if not thinking:
+        payload["max_tokens"] = inference.max_answer_tokens
+    elif inference.max_think_tokens is not None:
+        payload["max_tokens"] = inference.max_answer_tokens + inference.max_think_tokens
     # A null keyword is a template that reads none, so the key is absent rather
     # than carrying a name no template answers to; the entry refuses that pair
     # with a closing marker declared.
@@ -594,7 +610,7 @@ def completion_payload(
 
 
 def thinking_span(
-    answer: Mapping[str, Any], *, turns: TurnsConfig, max_think_tokens: int
+    answer: Mapping[str, Any], *, turns: TurnsConfig, max_think_tokens: int | None
 ) -> dict[str, Any]:
     """Span one: this call's own prompt, decoded unconstrained and stopped at the marker.
 
@@ -606,16 +622,25 @@ def thinking_span(
 
     Two things move and nothing else: the grammar comes off, because a schema
     binds the decode from the first token and a think opener is not a legal
-    token under it; and the budget becomes the thinking budget, hard-capped. The
-    stop is the entry's own closing marker, so a model that would run on is cut
-    where its reasoning block would have ended - and llama-server excludes the
-    stop string from what it returns, which is why `answer_span` writes the
-    marker itself rather than trusting the reply to carry it.
+    token under it; and the budget becomes the thinking budget. The stop is the
+    entry's own closing marker, so a model that would run on is cut where its
+    reasoning block would have ended - and llama-server excludes the stop string
+    from what it returns, which is why `answer_span` writes the marker itself
+    rather than trusting the reply to carry it.
+
+    **A null cap is sent as `-1`, which the runtime reads as infinity.** That is
+    the spelling `--predict` documents - `number of tokens to predict (default:
+    -1, -1 = infinity)`, recorded in
+    `tests/fixtures/runtime/b10598-llama-server-help.txt` - and it is the same
+    parameter the body names. The span then ends on the marker or on the window,
+    and on nothing else.
 
     **A budget alone would not do.** A model that never closes the block would
     spend the whole cap and the failure would be recorded as a truncated
     summary, which names the wrong cause. A stop alone would not do either: a
-    block that never closes would eat the window.
+    block that never closes would eat the window - which is exactly what a null
+    cap accepts, and why an uncapped entry rests its whole weight on the marker
+    being the bytes this model actually writes.
     """
     close = turns.thinking_close
     if close is None:
@@ -624,7 +649,7 @@ def thinking_span(
             "a caller reached for one on an envelope that does not think"
         )
     span = {name: value for name, value in answer.items() if name != "json_schema"}
-    span["n_predict"] = max_think_tokens
+    span["n_predict"] = UNCAPPED_N_PREDICT if max_think_tokens is None else max_think_tokens
     span["stop"] = [close]
     return span
 
