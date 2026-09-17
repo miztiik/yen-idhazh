@@ -1,0 +1,15 @@
+{
+  "bytes_freed": 804208640,
+  "candidates_seen": 214,
+  "collection": "workflow-artifacts",
+  "date": "2026-09-17",
+  "deleted": 50,
+  "dry_run": false,
+  "max_deletes_per_run": 50,
+  "resume_from": "4529182755",
+  "selected": 51,
+  "since": null,
+  "stopped_because": "ceiling",
+  "until": "2026-08-18",
+  "version": "2026-09-17"
+}
