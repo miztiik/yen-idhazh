@@ -705,6 +705,22 @@ file, and takes every candidate fact from there. It names no model of its own.
 [Swap the Summarizer Model](../how-to/evaluate-new-summarizer-model.md) owns the
 procedure and the acceptance requirements.
 
+**Several candidates can be dispatched at once, and until 2026-09-17 most of
+them were silently cancelled.** `Model validation` grouped every run under
+`concurrency: group: validate`, so a comparison fired four candidates wide
+queued three of them - and GitHub keeps only **one** pending run per group, each
+new one cancelling the last. The operator got the first arm, the fourth arm, and
+two cancelled runs with no error on them. The group is now
+`validate-${{ inputs.candidate_models_file || 'the-configured-model' }}`: the
+candidate file is the whole of what makes two dispatches different questions, so
+it is what names the group. Two dispatches of one candidate still queue, which
+is right. An empty field means the configured model, and it is named rather than
+left as a bare trailing dash for every empty dispatch to collide on. `inputs` is
+a legal context on a `concurrency` key and this workflow is dispatch-only, so it
+is always populated. `measure.yml` has no `concurrency` block at all, so a bench
+was never affected. The same cancellation still applies to `digest.yml`, which
+has one group on purpose - a day has one digest.
+
 **What a swap costs the 10 GB cache is a reading, and it lives in the instrument
 log.** This page carried a second copy of the 2026-08-27 table until 2026-09-17;
 the fuller one, with the headroom left over, is

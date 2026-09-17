@@ -53,7 +53,26 @@ permissions:
   contents: write
 
 concurrency:
-  group: validate
+  # One group per candidate, because two candidates are two questions.
+  #
+  # `group: validate` admitted one run of this workflow at a time. A dispatch
+  # fired while another was going waited, which is the intent - but GitHub
+  # keeps only ONE pending run per group and a newer pending run cancels the
+  # older one. So dispatching a comparison, several candidates at once, kept
+  # the first arm and the last and silently cancelled every arm in between,
+  # with no error anywhere: the operator sees a cancelled run and no reason.
+  #
+  # The candidate file is the whole of what makes two dispatches different
+  # runs, so it is what names the group. Two dispatches of the SAME candidate
+  # still share a group and still queue, which is right - that is one question
+  # asked twice. An empty field means the model `config/idhazh.json` points at,
+  # which is a candidate like any other, so it gets a name rather than leaving
+  # a bare trailing dash for every empty dispatch to collide on.
+  #
+  # `inputs` is legal here: GitHub's context availability table allows
+  # `github, inputs, vars` on the `concurrency` key, and this workflow is
+  # dispatch-only, so the context is always populated.
+  group: validate-${{ inputs.candidate_models_file || 'the-configured-model' }}
   cancel-in-progress: false
 
 # No llama.cpp pin here. It is `.github/scripts/llama-cpp-pin.sh`, which the
