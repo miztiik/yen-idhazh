@@ -56,12 +56,11 @@ concurrency:
   group: validate
   cancel-in-progress: false
 
+# No llama.cpp pin here. It is `.github/scripts/llama-cpp-pin.sh`, which the
+# fetch step sources and the `plan` job reads, so this workflow cannot spell a
+# build the binary it unpacks disagrees with. A qualification on a different
+# runtime than production is not qualifying production.
 env:
-  # The build digest.yml and measure.yml pin. A qualification on a different
-  # runtime than production is not qualifying production.
-  LLAMA_CPP_BUILD: b10598
-  LLAMA_CPP_ASSET: llama-b10598-bin-ubuntu-x64.tar.gz
-  LLAMA_CPP_SHA256: d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c
   # The one place this workflow says which port. `server_argv` binds it, every
   # probe below reads it, and `idhazh.llm.server` reads it for the address the
   # stage posts to - so the three cannot disagree (Guardrail #6).
@@ -90,6 +89,7 @@ jobs:
       candidate_draft_file: ${{ steps.candidate.outputs.draft_file }}
       candidate_draft_sha256: ${{ steps.candidate.outputs.draft_sha256 }}
       candidate_cache_key: ${{ steps.candidate.outputs.cache_key }}
+      llama_cpp_build: ${{ steps.runtime.outputs.llama_cpp_build }}
     steps:
       - uses: actions/checkout@v6
 
@@ -104,6 +104,19 @@ jobs:
 
       - id: decide
         run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      # The build every shard is about to install, asked once of the file that
+      # decides it. `needs` resolves before a shard's first step and `steps`
+      # does not, so reading it here is what lets the cache key below name the
+      # build it holds - and reading it from its one home is what stops this
+      # workflow carrying a second copy that can disagree with the binary the
+      # shards actually unpack.
+      - id: runtime
+        name: Say which llama.cpp build this run qualifies on
+        run: |
+          set -euo pipefail
+          bash .github/scripts/llama-cpp-pin.sh \
+            | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
       # One place decides what the candidate is: the models file the dispatch
       # named, the pointer in `config/idhazh.json` otherwise. Every job below
@@ -210,47 +223,31 @@ jobs:
           path: |
             backend/models
             backend/bin
-          key: qualify-${{ needs.plan.outputs.candidate_cache_key }}-${{ env.LLAMA_CPP_BUILD }}
+          key: qualify-${{ needs.plan.outputs.candidate_cache_key }}-${{ needs.plan.outputs.llama_cpp_build }}
 
+      # One shared step, and one workflow still to convert onto it. It sources
+      # the runtime install, which sources the pin, so this workflow spells no
+      # part of either - and every value it reads arrives through `env` rather
+      # than pasted into it. The three candidate refs used to be substituted
+      # straight into the download URL, which is text before it is a value
+      # (Guardrail #11).
       - name: Fetch the runtime and the candidate
         if: steps.weights.outputs.cache-hit != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          DRAFT_REPO: ${{ needs.plan.outputs.candidate_draft_repo }}
-          DRAFT_REVISION: ${{ needs.plan.outputs.candidate_draft_revision }}
-          DRAFT_FILE: ${{ needs.plan.outputs.candidate_draft_file }}
-        run: |
-          set -euo pipefail
-          mkdir -p backend/bin backend/models
-          URL=$(curl -fsS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-            "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}" \
-            | jq -r --arg asset "$LLAMA_CPP_ASSET" \
-              'if type=="object" then ([.assets[] | select(.name == $asset)][0].browser_download_url // "") else "" end')
-          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
-            echo "pinned llama.cpp asset not found: ${LLAMA_CPP_BUILD}/${LLAMA_CPP_ASSET}" >&2
-            exit 1
-          fi
-          curl -fsSL --retry 3 --retry-all-errors -o llama.tar.gz "$URL"
-          echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256sum --check
-          mkdir -p llama && tar -xzf llama.tar.gz -C llama
-          # `cp -a`, not `find -type f`. These builds ship versioned shared
-          # objects as symlinks, and `-type f` skips a symlink.
-          SRC=$(dirname "$(find llama -type f -name 'llama-server' | head -1)")
-          cp -a "$SRC"/. backend/bin/
-          chmod +x backend/bin/llama-server
           # An immutable revision in the path, never a branch name. A branch
           # moves, and a candidate nobody can fetch again is a candidate nobody
           # can reproduce.
-          curl -fsSL --retry 3 --retry-all-errors \
-            -o "backend/models/${{ needs.plan.outputs.candidate_file }}" \
-            "https://huggingface.co/${{ needs.plan.outputs.candidate_repo }}/resolve/${{ needs.plan.outputs.candidate_revision }}/${{ needs.plan.outputs.candidate_file }}?download=true"
+          WEIGHTS_REPO: ${{ needs.plan.outputs.candidate_repo }}
+          WEIGHTS_REVISION: ${{ needs.plan.outputs.candidate_revision }}
+          WEIGHTS_FILE: ${{ needs.plan.outputs.candidate_file }}
           # The draft head, when the entry declares one. The server loads it at
           # start-up, so a candidate that declares one and cannot find it does
           # not serve at all.
-          if [ -n "${DRAFT_FILE}" ]; then
-            curl -fsSL --retry 3 --retry-all-errors -o "backend/models/${DRAFT_FILE}" \
-              "https://huggingface.co/${DRAFT_REPO}/resolve/${DRAFT_REVISION}/${DRAFT_FILE}?download=true"
-          fi
+          DRAFT_REPO: ${{ needs.plan.outputs.candidate_draft_repo }}
+          DRAFT_REVISION: ${{ needs.plan.outputs.candidate_draft_revision }}
+          DRAFT_FILE: ${{ needs.plan.outputs.candidate_draft_file }}
+        run: bash .github/scripts/fetch-model-runtime.sh
 
       # No `if:`. This runs on a cache hit too, because a restored entry is the
       # one case where nobody watched the bytes arrive. It sits before the
@@ -323,7 +320,16 @@ jobs:
       # Freeze, register the hashes, then replay. That ordering lives inside the
       # stage rather than in this file, so nothing can call the model before the
       # corpus is written down.
+      #
+      # `LLAMA_CPP_BUILD` is what the candidate's identity record names as the
+      # runtime that decoded the bytes. It used to reach here as workflow `env`
+      # beside a copy of the pin; it now comes from the step that read the pin,
+      # so it cannot name a build other than the one the shards installed. Unset
+      # it degrades to `build-not-recorded` rather than failing, which is a
+      # qualification whose report cannot say what ran (Guardrail #10).
       - name: Freeze the corpus and replay it
+        env:
+          LLAMA_CPP_BUILD: ${{ needs.plan.outputs.llama_cpp_build }}
         run: |
           python -m idhazh qualify \
             --config backend/var/candidate-config \
