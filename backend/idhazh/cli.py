@@ -69,6 +69,7 @@ from idhazh.stages import (
 from idhazh.stages import (
     backfill_vectors,
     common,
+    compact,
     decide,
     dedupe_ledgers,
     harvest,
@@ -114,6 +115,7 @@ STAGES: Final[tuple[str, ...]] = (
     "fingerprint",
     "assemble",
     "harvest",
+    "compact",
     "dedupe-ledgers",
     "rebuild-score-index",
     "prune-stamp",
@@ -443,7 +445,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=Path,
         default=None,
         help=(
-            "Where `validate-days` keeps its receipts. It moves with --digest-root, and "
+            "Where `validate-days` keeps its receipts and where `compact` finds the "
+            "segments waiting. For `validate-days` it moves with --digest-root, and "
             "the pairing is enforced rather than remembered: a receipt is a claim about "
             "a payload in that tree, so pointing one at a copy and leaving the other at "
             "the real state lets a day be skipped on a receipt earned by a different "
@@ -548,6 +551,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.stage == "prune-stamp":
         # Above the fetcher for the same reason: it rewrites one committed field.
         return prune_stamp.stage_prune_stamp(corpus_dir=args.corpus_dir, date=args.date or _today())
+
+    if args.stage == "compact":
+        # Above the fetcher because it reads and rewrites committed files only.
+        # It is also the catch-up for a run that died before its own assemble
+        # drained the store, so a step that opened a socket here would read the
+        # open web to decide what to fold.
+        #
+        # No --date. The head a row lands in is named by the row's own date cell,
+        # and a run three days dead is exactly the one this has to reach.
+        compact.stage_compact(common.STATE_ROOT if args.state_root is None else args.state_root)
+        return 0
 
     if args.stage == "dedupe-ledgers":
         # Above the fetcher because it reads and rewrites committed files only.

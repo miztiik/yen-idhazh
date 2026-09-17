@@ -33,6 +33,13 @@ config/*.json text eol=lf
 state/*.csv text eol=lf merge=union
 state/**/*.csv text eol=lf merge=union
 
+# A segment has one writer, so a union driver it never asked for would silently
+# stack two copies where a conflict should stop the push. Below the line above
+# rather than beside it: last match wins here, so placing it higher would leave
+# every segment inheriting the union driver - the defect, reintroduced by
+# placement.
+state/segments/**/*.csv -merge
+
 # The published day tree, named rather than left to the line above it. The
 # catch-all would already cover it, and that is the problem: a merge rule a new
 # collection inherits without anyone choosing it is nobody's decision, and this

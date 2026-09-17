@@ -77,7 +77,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Segment store and the `compact` stage, shipped inert | - | A | PENDING | - | - | - |
+| 1 | Segment store and the `compact` stage, shipped inert | - | A | IN-FLIGHT | p33a1 | - | - |
 | 5 | Machine page stops lying about a day with no rows | - | A | PENDING | - | - | - |
 | 6 | One concurrency group for `digest`, `validate`, `measure` | - | A | PENDING | - | - | - |
 | 7 | OS memory and load, per item | - | A | PENDING | - | - | - |

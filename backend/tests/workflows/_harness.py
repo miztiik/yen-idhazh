@@ -679,6 +679,11 @@ COMMIT_STEPS: Final = {
     "bench": "Commit the machine this bench drew",
 }
 
+#: The catch-up for a run whose assemble never drained the segment store. The
+#: `plan` job is its only caller, and `prune.yml` may never be: that workflow
+#: ends in a force push and commits nothing on 29 of 30 wakes.
+COMPACT_STEP: Final = "Fold any segments an earlier run left behind"
+
 COMMIT_BASE_ENV: Final = frozenset(
     {"COMMIT_MESSAGE", "NOTHING_STAGED_MESSAGE", "PUSH_FAILED_MESSAGE"}
 )
@@ -706,16 +711,13 @@ COMMIT_SCRIPT_ENV: Final = {
 }
 
 COMMIT_STAGED_PATHS: Final = {
-    # `state/host-fingerprint` joined on 2026-09-17 with this job's own probe.
-    # The work job has staged the directory since 2026-09-16; this job wrote no
-    # row into it at all until now, so the machine a run planned on was never
-    # recorded anywhere.
+    # `state` whole since 2026-09-17, where this was five paths named one at a
+    # time. The catch-up compaction runs in this job and folds a segment into
+    # whichever head that segment's own rows name, so what the job writes is not
+    # knowable when the list is written - and a hand-listed set would commit the
+    # segment deletions while leaving the heads behind.
     "plan": [
-        "state/seen",
-        "state/feed-health",
-        "state/feed-retirements.csv",
-        "state/counterfactual-scores",
-        "state/host-fingerprint",
+        "state",
     ],
     # `state/score-index` is beside `state/scores` because it is the record of
     # what those rows are, and the writer reads it instead of them. A shard
@@ -972,6 +974,7 @@ COMMIT_REFRESH_PATHS: Final = {
         "state/span-rollup",
         "state/traces",
         "state/host-fingerprint",
+        "state/segments",
     ],
 }
 

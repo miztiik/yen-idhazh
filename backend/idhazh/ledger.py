@@ -99,13 +99,16 @@ from __future__ import annotations
 import csv
 import io
 import os
-from collections.abc import Callable, Collection, Iterable, Iterator, Sequence
+import re
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from datetime import date as date_type
 from datetime import timedelta
+from enum import StrEnum
 from pathlib import Path
 from typing import Final, NamedTuple, Protocol
 
 from idhazh import day_partition, month_partition
+from idhazh.contracts.base import RUN_ID_PATTERN
 from idhazh.contracts.chrome_line import ChromeLineRow
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
@@ -118,7 +121,7 @@ from idhazh.contracts.item_health import (
     ItemOutcome,
 )
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
-from idhazh.contracts.runtime_counters import RuntimeCountersRow
+from idhazh.contracts.runtime_counters import RuntimeCountersRow, ServerJob
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow
@@ -137,6 +140,14 @@ COUNTERFACTUAL_SCORES_DIRNAME: Final = "counterfactual-scores"
 RUNTIME_COUNTERS_FILENAME: Final = "runtime-counters.csv"
 FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
 CHROME_FILENAME: Final = "chrome.csv"
+
+#: Where a writer puts its rows before a compaction folds them into a head. Not
+#: a ledger of its own: nothing reads a segment except the compaction, and a
+#: segment the compaction has read is deleted. It sits outside every ledger root
+#: on purpose - a day tree refuses a name it cannot place, and a skip clause in
+#: the one walk whose value is that it skips nothing is how a new writer arrives
+#: unnoticed.
+SEGMENTS_DIRNAME: Final = "segments"
 
 #: What makes two feed-health rows the same record. One feed, read once, in one
 #: run. The ledger always meant that - `docs/architecture/sources/health.md`
@@ -327,6 +338,16 @@ _PREFERENCES: Final[dict[tuple[str, ...], Preference]] = {
     FEED_HEALTH_KEY: FEED_HEALTH_RULE,
     CHROME_LINE_KEY: CHROME_LINE_RULE_PREFERENCE,
 }
+
+
+def preference_for(key: tuple[str, ...]) -> Preference | None:
+    """How two rows holding one key settle, where the key declares it.
+
+    One vocabulary for the question, not two: the post-merge settlement reads
+    this table and so does the compaction, so a key whose repeats can disagree
+    gives the same answer whichever pass reaches it first.
+    """
+    return _PREFERENCES.get(key)
 
 
 def seen_relpath(date: str) -> str:
@@ -569,6 +590,24 @@ def _csv_line(columns: tuple[str, ...], payload: dict[str, str]) -> str:
     csv.DictWriter(buffer, fieldnames=columns, lineterminator="\n").writerow(
         {name: payload[name] for name in columns}
     )
+    return buffer.getvalue()
+
+
+def render_file(columns: tuple[str, ...], rows: Iterable[Mapping[str, str]]) -> str:
+    """A whole ledger file as one document: the header, then every row.
+
+    Beside `_csv_line` because a head the compaction rewrites and a row an append
+    adds have to be the same bytes. Written two ways, a file the compaction
+    touched would read as changed line by line the next time anything diffed it.
+
+    Returned rather than written, so the caller owns the temp-file-plus-rename
+    and this module keeps its rule that a row is rendered in exactly one place.
+    """
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=columns, lineterminator="\n")
+    writer.writeheader()
+    for payload in rows:
+        writer.writerow({name: payload[name] for name in columns})
     return buffer.getvalue()
 
 
@@ -1352,6 +1391,234 @@ def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
             except (KeyError, ValueError):
                 continue
     return rows
+
+
+class SegmentLedger(StrEnum):
+    """Which head a segment belongs to. A closed set, and that is the whole point.
+
+    A directory under `state/segments/` naming something outside this set is a
+    writer that arrived without anyone choosing it, which is the failure the
+    segment store exists to stop. Every value is the head's own `*_DIRNAME`
+    constant rather than a string repeated here, so the transit directory and
+    the file it drains into cannot be spelled two different ways.
+
+    A ledger joins this set in the row that moves its writer, never before it.
+    """
+
+    ITEM_HEALTH = ITEM_HEALTH_DIRNAME
+    HOST_FINGERPRINT = HOST_FINGERPRINT_DIRNAME
+    SPAN_ROLLUP = SPAN_ROLLUP_DIRNAME
+
+
+class SegmentName(NamedTuple):
+    """A segment filename read back: who wrote it, and on which try.
+
+    `attempt` is the cell that is in the name and in no column. GitHub keeps the
+    run id stable across a re-run, so without it a second attempt writes the
+    path the first one took.
+    """
+
+    run_id: str
+    attempt: int
+    job: ServerJob
+    shard: int
+
+
+#: `<run_id>-<attempt>-<job>-<shard>.csv`. The run id is spelled from the
+#: contract's own pattern and the jobs from the enum, so neither is a second
+#: list to keep in step. `re.ASCII` because a `\\d` in a `str` pattern otherwise
+#: takes another script's numerals, and `int` takes them too - the name would
+#: then carry a digit no later glob matches.
+_SEGMENT_NAME: Final = re.compile(
+    rf"(?P<run_id>{RUN_ID_PATTERN[1:-1]})"
+    r"-(?P<attempt>[0-9]+)"
+    rf"-(?P<job>{'|'.join(job.value for job in ServerJob)})"
+    r"-(?P<shard>[0-9]{2})",
+    re.ASCII,
+)
+
+SEGMENT_SUFFIX: Final = ".csv"
+
+
+class SegmentHead(NamedTuple):
+    """Where one ledger's rows of one date land, and what settles two of them.
+
+    `KeyedLedger`'s three travel together here for the same reason, plus the
+    POSIX form: the compaction reports what it wrote, and a report naming an
+    absolute path is a report nobody can compare between two machines
+    (CLAUDE.md section 2).
+    """
+
+    path: Path
+    relpath: str
+    key: tuple[str, ...]
+    model: type[CsvContract]
+    carried: frozenset[str] = frozenset()
+
+
+def _span_rollup_head(state_dir: Path, date: str) -> Path:
+    return span_rollup_path(state_dir, date[:7])
+
+
+def _span_rollup_head_relpath(date: str) -> str:
+    return span_rollup_relpath(date[:7])
+
+
+class _HeadShape(NamedTuple):
+    """One ledger's answer to "which file, and what settles two of its rows"."""
+
+    path: Callable[[Path, str], Path]
+    relpath: Callable[[str], str]
+    key: tuple[str, ...]
+    model: type[CsvContract]
+    carried: frozenset[str] = frozenset()
+
+
+#: Which file a row of a given date belongs in, per ledger. A declared table
+#: rather than a rule the compaction re-derives: a month head and a day head are
+#: two shapes, and which one a ledger has is a fact about the ledger.
+_SEGMENT_HEADS: Final[dict[SegmentLedger, _HeadShape]] = {
+    SegmentLedger.ITEM_HEALTH: _HeadShape(
+        item_health_path,
+        item_health_relpath,
+        ITEM_HEALTH_KEY,
+        ItemHealthRow,
+        ITEM_HEALTH_CARRIED,
+    ),
+    SegmentLedger.HOST_FINGERPRINT: _HeadShape(
+        host_fingerprint_path,
+        host_fingerprint_relpath,
+        HOST_FINGERPRINT_KEY,
+        HostFingerprintRow,
+    ),
+    SegmentLedger.SPAN_ROLLUP: _HeadShape(
+        _span_rollup_head,
+        _span_rollup_head_relpath,
+        SPAN_ROLLUP_KEY,
+        SpanRollupRow,
+    ),
+}
+
+
+def segment_head(state_dir: Path, ledger: SegmentLedger, date: str) -> SegmentHead:
+    """The head a row of this date belongs in, with what settles two of its rows.
+
+    The date comes off the row, never off the clock. A segment a run left behind
+    three days ago compacts into that day's head, which is the whole of the
+    recovery path.
+    """
+    shape = _SEGMENT_HEADS[ledger]
+    return SegmentHead(
+        shape.path(state_dir, date),
+        shape.relpath(date),
+        shape.key,
+        shape.model,
+        shape.carried,
+    )
+
+
+def segment_contract(ledger: SegmentLedger) -> type[CsvContract]:
+    """The model that reads one of this ledger's rows.
+
+    Asked before a head is named, because the head is chosen by a row's date
+    cell and a date cell is only a date once the contract has read it. Naming a
+    file from an unread cell is how a path is built out of something nobody
+    validated.
+    """
+    return _SEGMENT_HEADS[ledger].model
+
+
+def segment_path(
+    state_dir: Path,
+    ledger: SegmentLedger,
+    *,
+    run_id: str,
+    attempt: int,
+    job: ServerJob,
+    shard: int,
+) -> Path:
+    """Where this writer puts its rows. Nobody else writes this path.
+
+    The four elements are what make one writer's file its own: the run, the try
+    at that run, the job, and the shard inside it. Two jobs of one run cannot
+    collide, and neither can two attempts - which is the difference between a
+    lost push race costing a merge and costing the rows.
+
+    There is no date element. The run id opens on the date already, and the head
+    a row lands in is chosen by the row's own date cell, so a second date here
+    would be a cell a writer fills for nothing.
+    """
+    name = f"{run_id}-{attempt}-{job.value}-{shard:02d}{SEGMENT_SUFFIX}"
+    return state_dir / SEGMENTS_DIRNAME / ledger.value / name
+
+
+def parse_segment_name(path: Path) -> SegmentName:
+    """A segment filename read back, or a refusal naming the file.
+
+    A name this cannot place is not skipped. The store holds one kind of file
+    written by one kind of writer, so a name outside the grammar means something
+    else is writing there - and a glob that passed over it would leave those rows
+    in the tree unread and unmentioned, which is how a ledger starts losing rows
+    with nobody noticing.
+    """
+    match = _SEGMENT_NAME.fullmatch(path.stem) if path.suffix == SEGMENT_SUFFIX else None
+    if match is None:
+        raise ValueError(
+            f"{path.name} is not a segment name. A segment is "
+            "<run_id>-<attempt>-<job>-<shard>.csv, and a file under "
+            f"{STATE_DIRNAME}/{SEGMENTS_DIRNAME}/ that is not one was written by "
+            "something nobody here declared."
+        )
+    return SegmentName(
+        run_id=match["run_id"],
+        attempt=int(match["attempt"]),
+        job=ServerJob(match["job"]),
+        shard=int(match["shard"]),
+    )
+
+
+def _declared_ledger(directory: Path) -> SegmentLedger:
+    try:
+        return SegmentLedger(directory.name)
+    except ValueError:
+        declared = ", ".join(sorted(item.value for item in SegmentLedger))
+        raise ValueError(
+            f"{STATE_DIRNAME}/{SEGMENTS_DIRNAME}/{directory.name} names a ledger "
+            f"nothing here declares. The declared set is {declared}. Every segment "
+            "belongs to a head, so a directory outside that set is a writer that "
+            "arrived without anyone choosing it."
+        ) from None
+
+
+def segment_files(state_dir: Path, ledger: SegmentLedger | None = None) -> list[Path]:
+    """Every segment on disk, or one ledger's, oldest name first.
+
+    The only listing there is, and its cost is what is waiting rather than what
+    the project has written: on the normal path a compaction drained the store
+    one run ago, so this reads an empty directory (Guardrail #12).
+
+    **Nothing inside a ledger's directory is skipped**, for the reason
+    `day_partition` gives. The store's own top is different and is allowed to
+    hold something that is not a segment - `state/segments/.gitkeep` is what
+    keeps the empty directory in the checkout at all.
+
+    A missing directory lists nothing, because a fresh clone has no segments and
+    that is not a fault.
+    """
+    root = state_dir / SEGMENTS_DIRNAME
+    if not root.is_dir():
+        return []
+    found: list[Path] = []
+    for entry in sorted(root.iterdir()):
+        if not entry.is_dir():
+            continue
+        declared = _declared_ledger(entry)
+        if ledger is not None and declared is not ledger:
+            continue
+        for candidate in sorted(entry.iterdir()):
+            parse_segment_name(candidate)
+            found.append(candidate)
+    return found
 
 
 def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
