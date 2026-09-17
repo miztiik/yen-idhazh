@@ -17,11 +17,11 @@
  *    relative-luminance formula over the tokens the live document resolves,
  *    because a hairline that reads 1.36:1 on the dark ground is not an edge.
  *
- * The overflow assertions have moved to `layout-overflow.spec.ts`, which row 3
- * created. They were repeated inline here while that file did not exist,
- * because this row gives the item a border, a radius and padding on both axes,
- * which is exactly the change that pushes a page sideways. The shared file
- * covers strictly more: every reader-facing route rather than the two this row
+ * The overflow assertions have moved to `layout-overflow.spec.ts`. They were
+ * repeated inline here while that file did not exist,
+ * because giving the item a border, a radius and padding on both axes is
+ * exactly the change that pushes a page sideways. The shared file
+ * covers strictly more: every reader-facing route rather than the two this file
  * reaches, at the same three widths in the same two themes.
  */
 
@@ -294,10 +294,10 @@ test.describe('the item is a low-chrome card', () => {
 				title: px(heading),
 				summary: px(summary),
 				eyebrow: px(eyebrow),
-				// Plan 25 row #5. The time is the eyebrow's own type, colour and
+				// The time is the eyebrow's own type, colour and
 				// weight - not smaller, not lighter, not a new step on any scale. A
-				// fifth typographic weight on this line is the wallpaper the row
-				// exists to avoid, and it is the one thing about this change a
+				// fifth typographic weight on this line is the wallpaper this
+				// avoids, and it is the one thing about it a
 				// screenshot cannot settle.
 				when: px(when),
 				whenColour: when ? getComputedStyle(when).color : '',

@@ -13,8 +13,7 @@
  *
  * **Telling `missing` from `unreachable` is the whole reason this file exists.**
  * Before it, both drew an unmarked gap, so a quiet pipeline and a broken fetch
- * were the same picture - which is the one thing this page is for (Susan,
- * plan row #12).
+ * were the same picture - which is the one thing this page is for (Susan).
  *
  * The sentences live here rather than in the components so that three panels
  * saying the same thing say it the same way, and so a change of wording is one

@@ -1,6 +1,6 @@
 /** How much room a chart has, and one watcher that answers for all of them.
  *
- * **The drawing takes the width it is given** (plan 12 row #2). Until this
+ * **The drawing takes the width it is given.** Until this
  * module existed the drawing was laid out at a fixed 720 units and the figure
  * took the card's width, so the browser scaled every user unit to fit - and a
  * `--text-xs` string set at 12 units resolved at 4.8 CSS px on a 390 px phone.

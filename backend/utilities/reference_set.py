@@ -2,7 +2,7 @@
 
 Two verbs and no third. This tool does not write summaries and it does not call
 a model - a person does that in their editor, with whatever expert model they
-have, and commits the result (plan row 5 decision 1).
+have, and commits the result. A reference a model wrote is not a reference.
 
     python backend/utilities/reference_set.py queue
     python backend/utilities/reference_set.py check

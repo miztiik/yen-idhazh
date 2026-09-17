@@ -155,8 +155,8 @@ class RunConfig(Model):
 
 
 #: The `run` knobs this block used to carry. Both sized or switched the visual
-#: planner stage, which plan 11 row #6 deleted with the model it ran, so there
-#: is no knob answering the same question and the value is empty.
+#: planner stage, deleted with the model it ran, so there is no knob answering
+#: the same question and the value is empty.
 #: `route_budget_minutes` is the older spelling of the budget and is refused
 #: here rather than migrated: it used to be read as `visual_planner_budget_minutes`,
 #: which would now migrate an operator's number onto a key nothing reads.

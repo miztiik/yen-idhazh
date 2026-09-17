@@ -842,7 +842,7 @@ def _branch_operands(tree: ast.AST) -> list[ast.expr]:
 
 
 def test_no_module_that_opens_a_model_branches_on_which_model_it_is() -> None:
-    """The Oracle for plan 28: a branch on a value is config, a branch on an identity is a fork.
+    """A branch on a value is config, a branch on an identity is a fork.
 
     A swap has to cost one line in `config/idhazh.json`. It cannot, if any code
     asks which model is running: the second model then needs its own case here,
@@ -955,7 +955,7 @@ def test_the_server_is_asked_to_describe_itself_only_when_configured() -> None:
 
 
 def test_every_committed_role_starts_a_server_that_names_its_own_settings() -> None:
-    """The daily run prints the lines, or the check row 3 rests on has nothing to read.
+    """The daily run prints the lines, or the settings check has nothing to read.
 
     Driven off the roles the contract declares rather than a list here, so a
     role that arrives or retires cannot leave this check naming the other set,
@@ -2833,7 +2833,7 @@ def test_a_server_that_answered_with_an_error_is_not_an_unreachable_one() -> Non
 
 
 # --- The five things the server proves before the first item ----------------
-#: The two probe documents row #5 records. Neither is a capture; each says so in
+#: The two probe documents the server check records. Neither is a capture; each says so in
 #: its own `recorded` field and explains what was constructed and why.
 LLM_PROBES: Final = FIXTURES_DIR / "llm"
 
@@ -2889,7 +2889,7 @@ def probe_fixture(name: str) -> dict[str, Any]:
 
 
 class TestTheServerProvesTheEntry:
-    """Plan 28 row #5. The entry claims; these five cases make each claim a fact.
+    """The entry claims; these five cases make each claim a fact.
 
     Every case is driven by a constructed or built value and nothing here touches
     the network (Guardrail #7). Every case has both halves: with the agreeing

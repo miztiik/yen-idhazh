@@ -12,9 +12,10 @@ from idhazh.contracts.base import Model
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 
 #: The `finetune` roles this block used to carry. `student` named the small
-#: model plan 11 row #6 retired, and re-pointing it at `summarize` would make
-#: the teacher and the student one model - a session that trains a model on its
-#: own output. Nothing read it, so it is gone rather than moved.
+#: visual planner, retired when the two calls moved onto the summarizer's
+#: weights, and re-pointing it at `summarize` would make the teacher and the
+#: student one model - a session that trains a model on its own output. Nothing
+#: read it, so it is gone rather than moved.
 SUPERSEDED_FINETUNE_NAMES: Final[Mapping[str, str]] = MappingProxyType({"student": ""})
 
 
@@ -86,9 +87,9 @@ class FinetuneConfig(Model):
     because `models.summarize` has already moved once and a knob that spells a
     model name is stale the day the config moves.
 
-    There is no `student`. It named the small visual planner, which plan 11 row
-    #6 retired, and a distillation session needs two models: with one role left,
-    the student could only be the teacher.
+    There is no `student`. It named the small visual planner, retired when the
+    two calls moved onto the summarizer's weights, and a distillation session
+    needs two models: with one role left, the student could only be the teacher.
 
     The prune knobs live here and not in `retention`. That block is about
     published-site images and its own `site_budget_mb`; putting corpus history
