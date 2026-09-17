@@ -30,7 +30,10 @@
 	import { base } from '$app/paths';
 	import Chart from '$lib/charts/Chart.svelte';
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
+	import MachineCard from '$lib/components/MachineCard.svelte';
+	import MachineSplitGroup from '$lib/components/MachineSplitGroup.svelte';
 	import Panel from '$lib/components/Panel.svelte';
+	import RankedList from '$lib/components/RankedList.svelte';
 	import RateControl from '$lib/components/RateControl.svelte';
 	import ShapeSwitch from '$lib/components/ShapeSwitch.svelte';
 	import ShardBoard from '$lib/components/ShardBoard.svelte';
@@ -596,49 +599,59 @@
 		{/if}
 	</Panel>
 
-	<Panel
-		title="Reading against writing"
-		note="Two rows over the same shards: how the model server's seconds split, and how its tokens split. Read the mismatch between them - that is the price of a written token."
+	<div
+		data-readout-none="one row per machine, no shared column"
+		data-machine-split={data.split.runId}
 	>
-		{#if data.split.empty}
-			<p class="empty" data-machine-panel-empty="reading-writing">
-				No shard of the newest run reported all four counters, so there is nothing to split.
-			</p>
-		{:else}
-			<div class="splits" data-reading-writing={data.split.runId}>
-				{#each data.split.rows as row (row.label)}
-					<div class="split-row" data-split-row={row.label} data-split-read-pct={row.readPct}>
-						<p class="split-head">
-							<span>{row.label}</span>
-							<span class="tabular-nums">{row.totalText}</span>
-						</p>
-						<div
-							class="track"
-							role="img"
-							aria-label="{row.label}: {row.readText} reading against {row.writeText} writing, {row.readPct} percent of it reading."
-						>
-							<span class="seg read" style="inline-size: {row.readWidth}"></span>
-							<span class="seg write" style="inline-size: {row.writeWidth}"></span>
-						</div>
-						<p class="split-legend">
-							<span class="key read"></span>reading {row.readText} ({row.readPct}%)
-							<span class="key write"></span>writing {row.writeText} ({100 - row.readPct}%)
-						</p>
-					</div>
-				{/each}
-			</div>
-			<p class="reads" data-reading-writing-sentence>
-				Reading took {data.split.rows[0].readPct} percent of the seconds and
-				{data.split.rows[1].readPct} percent of the tokens.
-				{#if data.split.readTokensPerSecond !== null && data.split.writeTokensPerSecond !== null}
-					Reading runs at {data.split.readTokensPerSecond.toFixed(2)} tokens a second and writing at
-					{data.split.writeTokensPerSecond.toFixed(2)}, so a written token costs
-					<strong>{(data.split.writeCostRatio ?? 0).toFixed(1)}x</strong> a read one.
+		<Panel
+			title="Reading against writing, machine by machine"
+			note="Two rows per machine: how the model server's seconds split on that machine, and how its tokens split. Read the mismatch between them - that is the price of a written token, on the machine that paid it."
+		>
+			{#if data.split.empty}
+				<p class="empty" data-machine-panel-empty="reading-writing">
+					No shard of the newest run reported all four counters, so there is nothing to split.
+				</p>
+			{:else}
+				<div class="splits">
+					{#each data.split.groups as group (group.identity.key)}
+						<MachineSplitGroup {group} />
+					{/each}
+				</div>
+
+				{#if data.split.noMachineNamed}
+					<p class="reads" data-machine-split-note="pooled">
+						No shard of this run recorded what machine it was on, so this is one figure over every
+						shard. Where a run drew more than one machine - 86 of the last 90 did - a pooled figure
+						averages two different machines.
+					</p>
+				{:else if data.split.oneMachine}
+					<p class="reads" data-machine-split-note="one-machine">
+						Every shard of this run drew the same machine, so these figures compare.
+					</p>
+				{:else if data.split.spread !== null && data.split.slowest !== null && data.split.fastest !== null}
+					<p class="reads" data-machine-split-note="spread" data-machine-spread={data.split.spread.toFixed(2)}>
+						Reading ran at {(data.split.slowest.readTokensPerSecond ?? 0).toFixed(2)} tokens a second
+						on {data.split.slowest.identity.name} and
+						{(data.split.fastest.readTokensPerSecond ?? 0).toFixed(2)} on
+						{data.split.fastest.identity.name} -
+						{data.split.spread.toFixed(1)} times, inside one run.
+					</p>
 				{/if}
-				Over {data.split.from} of the run's {data.split.outOf} shards.
-			</p>
-		{/if}
-	</Panel>
+
+				{#if data.split.headline !== null && data.split.headline.writeCostRatio !== null}
+					<p class="reads" data-machine-split-headline={data.split.headline.identity.key}>
+						On {data.split.headline.identity.name}, which read the most tokens of this run, a written
+						token cost
+						<strong>{data.split.headline.writeCostRatio.toFixed(1)}x</strong> a read one.
+					</p>
+				{/if}
+
+				<p class="reads" data-machine-split-basis>
+					Over {data.split.from} of the run's {data.split.outOf} shards.
+				</p>
+			{/if}
+		</Panel>
+	</div>
 
 	<div
 		data-windowed="machine-cache"
@@ -947,26 +960,109 @@
 		{/if}
 	</Panel>
 
+	<div
+		data-readout-none="one card per machine, nothing shared"
+		data-machine-cards={data.machines.runId}
+	>
+		<Panel
+			title="The machines this run drew"
+			note="One card per machine the newest run was given. A run is not a machine: over the committed record, 86 of the last 90 runs that named a processor drew more than one kind, and the read rate between the fastest and the slowest of them ran up to 6.1 times."
+		>
+			{#if data.machines.nothing === 'recording-off'}
+				<p class="empty" data-machine-panel-empty="machines-off">
+					What machine this job drew is not being recorded. The processor name below comes from the
+					model server's own counters.
+				</p>
+			{:else if data.machines.nothing === 'no-machine'}
+				<p class="empty" data-machine-panel-empty="machines-none">
+					No shard of this run recorded what machine it was on.
+					{#if data.machines.runId !== ''}
+						The run was {data.machines.runId}.
+					{/if}
+				</p>
+			{:else}
+				{#if !data.machines.recording}
+					<p class="empty" data-machine-panel-note="machines-off">
+						What machine this job drew is not being recorded. The processor name below comes from the
+						model server's own counters.
+					</p>
+				{/if}
+				<div class="machines">
+					{#each data.machines.cards as card (card.identity.key)}
+						<MachineCard {card} />
+					{/each}
+				</div>
+			{/if}
+		</Panel>
+	</div>
+
+	<div
+		data-windowed="machine-fleet"
+		data-window-days={windowDays}
+		data-readout-none="a ranked list has no column"
+	>
+		<Panel
+			title="What the platform has been giving us"
+			note="How often each kind of machine turned up over the last {windowDays} days. A count of what happened, never a rate: what the next job will draw is the one thing this cannot say."
+		>
+			{#if view.fleet.nothing === 'recording-off'}
+				<p class="empty" data-machine-panel-empty="fleet-off">
+					Which machine a job draws is not being recorded, so there is nothing to count.
+				</p>
+			{:else if view.fleet.nothing === 'none'}
+				<p class="empty" data-machine-panel-empty="fleet-none">
+					Nothing has recorded which machine a job drew yet. This starts counting on the first run
+					after the record ships.
+				</p>
+			{:else if view.fleet.drawBars}
+				<p class="reads" data-fleet-basis={view.fleet.placements}>
+					Over {view.fleet.placements} job placements in these {view.fleet.days} days.
+				</p>
+				<RankedList
+					caption="Machines by how often the platform gave us one"
+					ranked={view.fleet.ranked}
+					maxText="{view.fleet.ranked.max} placements"
+					unmeasuredNote="Nothing has recorded which machine a job drew yet."
+					emptyNote="No job in these {view.fleet.days} days recorded which machine it drew."
+				>
+					{#snippet glyph(row)}
+						<span
+							class="fleet-edge"
+							aria-hidden="true"
+							data-fleet-stop={view.fleet.kinds.find((kind) => kind.identity.key === row.key)
+								?.identity.colourStop ?? ''}
+							style="background: var(--chart-{view.fleet.kinds.find(
+								(kind) => kind.identity.key === row.key
+							)?.identity.colourStop ?? 8})"
+						></span>
+					{/snippet}
+				</RankedList>
+			{:else}
+				<ul class="shares" data-fleet-list={view.fleet.placements}>
+					{#each view.fleet.kinds as kind (kind.identity.key)}
+						<li data-fleet-kind={kind.identity.key} data-fleet-count={kind.placements}>
+							<strong>{kind.identity.name}</strong>: {kind.placements}
+							{kind.placements === 1 ? 'placement' : 'placements'}.
+						</li>
+					{/each}
+				</ul>
+				<p class="reads" data-fleet-under={view.fleet.minRows}>
+					{view.fleet.kinds.length}
+					{view.fleet.kinds.length === 1 ? 'machine' : 'machines'} on record,
+					{view.fleet.placements} placements over these {view.fleet.days} days. A bar chart of counts
+					this small would read as a distribution, and it is not one - this draws one at
+					{view.fleet.minRows}.
+				</p>
+			{/if}
+		</Panel>
+	</div>
+
 	<div data-windowed="machine-host" data-window-days={windowDays}>
 		<Panel
-			title="The host under the newest run"
-			note="What the machine and the server did outside the model call. Each figure carries its ceiling: a counter without one is not a measurement. Each also carries its span over the last {windowDays} days, which is what says whether the newest run was unusual."
+			title="What the server did outside the model call"
+			note="What the machine and the server spent outside the model call itself. Each figure carries its ceiling: a counter without one is not a measurement. Each also carries its span over the last {windowDays} days, which is what says whether the newest run was unusual."
 		>
 			<dl class="host">
-				<div data-host="processors">
-					<dt>Processors drawn</dt>
-					<dd>
-						{#if data.host.cpuModels === null || data.host.cpuModels.value === null}
-							<span class="absent">Not recorded on this run.</span>
-						{:else}
-							{data.host.cpuModels.value.join('; ')}
-							<span class="unit">
-								over {data.host.cpuModels.from} of {data.host.cpuModels.outOf} shards
-							</span>
-						{/if}
-					</dd>
-				</div>
-
 				<div data-host="cpu-busy" data-host-value={data.host.cpuBusy?.value ?? ''}>
 					<dt>Least busy shard</dt>
 					<dd>
@@ -1442,66 +1538,25 @@
 	}
 
 	.splits {
-		display: flex;
-		flex-direction: column;
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(var(--auto-grid-min, 20rem), 100%), 1fr));
 		gap: var(--space-4);
 	}
 
-	.split-head {
-		display: flex;
-		justify-content: space-between;
-		align-items: baseline;
-		gap: var(--space-3);
-		margin: 0 0 var(--space-1);
-		font-size: var(--text-sm);
-		color: var(--color-text-secondary);
+	.machines {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(min(var(--auto-grid-min, 20rem), 100%), 1fr));
+		gap: var(--space-4);
 	}
 
-	.track {
-		display: flex;
-		block-size: 18px;
-		border-radius: var(--radius-full);
-		background: var(--color-surface-sunken);
-		overflow: hidden;
-	}
-
-	.seg {
-		display: block;
-		block-size: 100%;
-	}
-
-	.seg.read {
-		background: var(--chart-1);
-	}
-
-	.seg.write {
-		background: var(--chart-4);
-	}
-
-	.split-legend {
-		display: flex;
-		flex-wrap: wrap;
-		align-items: center;
-		gap: var(--space-1) var(--space-3);
-		margin: var(--space-1) 0 0;
-		font-size: var(--text-xs);
-		color: var(--color-text-tertiary);
-	}
-
-	.key {
+	/* The machine's colour beside its name in the ranked list. The name is on
+	   the row in words, so this repeats a fact rather than carrying one. */
+	.fleet-edge {
 		display: inline-block;
-		inline-size: 10px;
-		block-size: 10px;
+		inline-size: 4px;
+		block-size: 1em;
 		border-radius: 2px;
-		margin-inline-end: 4px;
-	}
-
-	.key.read {
-		background: var(--chart-1);
-	}
-
-	.key.write {
-		background: var(--chart-4);
+		vertical-align: -0.15em;
 	}
 
 	.reads {

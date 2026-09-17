@@ -9,6 +9,14 @@ Read this when a number surprises you and you want to know which machine
 produced it. Why the record exists at all, and what the fleet does to a reading,
 is [the processor lottery](benchmarks/the-processor-lottery.md).
 
+**Three panels on the operator console read it, from 2026-09-17.** The machines
+one run drew, the reading-against-writing split repeated once per machine, and
+the count of what the platform has been giving us over a window. What each may
+draw and what it may never draw is
+[../concepts/console-design.md](../concepts/console-design.md). The whole column
+set is still operator-only: the console reads it at build time under
+`$lib/server/` and no cell of it crosses to a reader.
+
 ## Where it lives
 
 | | |
@@ -17,6 +25,7 @@ is [the processor lottery](benchmarks/the-processor-lottery.md).
 | Generated schema | [`schemas/host-fingerprint-row.schema.json`](../../schemas/host-fingerprint-row.schema.json) |
 | Store | `state/host-fingerprint/<YYYY>/<MM>/<DD>.csv` for the daily run; `state/pipeline-tests/host-fingerprint/<YYYY>/<MM>/<DD>.csv` for a bench dispatch |
 | Producer | `idhazh fingerprint`, through `backend/idhazh/telemetry/silicon.py` |
+| Read by | `/console/machine/`, at build time through `frontend/src/lib/server/host-fingerprint.ts` |
 | Key | `date`, `run_id`, `job`, `shard` - one row a job |
 | Switch | `observability.host_fingerprint` |
 | Committed | **from 2026-09-16.** Each job's own commit step stages its ledger; every row taken before that date was deleted with its runner |

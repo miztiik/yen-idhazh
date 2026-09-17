@@ -9,7 +9,6 @@ import {
 	peakMemory,
 	percentileChart,
 	percentileHistory,
-	readingAgainstWriting,
 	shardBoard,
 	tokenChart,
 	tokensByRun,
@@ -19,6 +18,11 @@ import {
 	type LatencyRun,
 	type RunTokens
 } from '$lib/charts/machine';
+import { splitByMachine } from '$lib/charts/machine-split';
+import { machineCards, type MachineCards } from '$lib/charts/machine-cards';
+import { machineKeys, machineRamp } from '$lib/charts/machine-colour';
+import { fleetOverWindow, type FleetView } from '$lib/charts/fleet';
+import { hostFingerprints, watchedFlags } from '$lib/server/host-fingerprint';
 import { windowOfDays } from '$lib/charts/viewport';
 import { recordingNotes, type RecordingNotes } from '$lib/console/recording';
 import {
@@ -84,6 +88,8 @@ export interface MachineWindow {
 	cpuBusySpan: FigureSpan;
 	peakRssSpan: FigureSpan;
 	modelLoadSpan: FigureSpan;
+	/** What kinds of machine the platform gave us over this span, and how often. */
+	fleet: FleetView;
 	tokens: RunTokens[];
 	tokenTotals: { input: number; output: number; items: number };
 }
@@ -140,6 +146,26 @@ export async function load() {
 	const observability = observabilityConfig();
 	const today = new Date().toISOString().slice(0, 10);
 
+	// One row a job, bounded to the same cover every other read on this route
+	// takes (Guardrail #12), and the twelve flag names out of the generated schema
+	// rather than a list typed here.
+	const fingerprints = hostFingerprints(days);
+	const flagNames = watchedFlags();
+
+	// **One ramp for the whole page, assigned over every machine any panel can
+	// show at any preset.** Assigned per panel or per span, a machine would change
+	// colour when the operator moved the window - and comparing spans is what the
+	// control is for. The key set is bounded by the widest preset, so it is fixed
+	// for a build whatever the reader does.
+	const seen = [
+		...fingerprints.map((row) => ({ fingerprint: row.fingerprint, cpuModel: row.cpuModel })),
+		...counters.runs.flatMap((run) =>
+			run.reported.map((shard) => ({ fingerprint: null, cpuModel: shard.cpuModel }))
+		)
+	];
+	const keys = machineKeys(seen);
+	const ramp = machineRamp(seen.map(keys), console_.machine_colour_stops);
+
 	const dates = [
 		...new Set([...counters.runs.map((run) => run.date), ...health.map((row) => row.date ?? '')])
 	].filter((date) => date !== '');
@@ -195,6 +221,19 @@ export async function load() {
 			cpuBusySpan: spanOf(runs.map((run) => run.lowestCpuBusyPct.value)),
 			peakRssSpan: spanOf(runs.map((run) => run.peakRssBytes.value)),
 			modelLoadSpan: spanOf(runs.map((run) => run.slowestModelLoadMs.value)),
+			// Counted once a preset here rather than in a browser, which holds no
+			// ledger to count. At most eight kinds a span, so five presets is forty
+			// small objects.
+			fleet: fleetOverWindow(fingerprints, {
+				days,
+				minRows: console_.fleet_min_rows,
+				colourStops: console_.machine_colour_stops,
+				recording: observability.host_fingerprint,
+				ramp,
+				keys,
+				start: span.start,
+				end: span.end
+			}),
 			tokens,
 			tokenTotals: tokens.reduce(
 				(carry, run) => ({
@@ -243,7 +282,29 @@ export async function load() {
 	const newest: RunCounters | null = counters.runs[0] ?? null;
 	const board = shardBoard(newest, limits.jobTimeoutSeconds);
 	const memory = peakMemory(newest);
-	const split = readingAgainstWriting(newest);
+	// One group a machine, never one figure over all of them. Measured 2026-09-17
+	// over the committed counters ledger, 86 of the 90 runs that name a processor
+	// drew more than one kind, so a pooled rate was a number about neither.
+	const newestFingerprints = fingerprints.filter((row) => row.runId === (newest?.runId ?? ''));
+	const split = splitByMachine(newest, {
+		colourStops: console_.machine_colour_stops,
+		// Two machines reporting one model name are not the same machine, so the
+		// digest is the key wherever the record reached the shard.
+		fingerprints: new Map(
+			newestFingerprints
+				.filter((row) => row.job === 'work')
+				.map((row) => [row.shard, row.fingerprint])
+		),
+		ramp,
+		keys
+	});
+	const machines: MachineCards = machineCards(newest, newestFingerprints, {
+		watchedFlags: flagNames,
+		colourStops: console_.machine_colour_stops,
+		recording: observability.host_fingerprint,
+		ramp,
+		keys
+	});
 	const clocks = clockAgreement(newest, health, CLOCKS_AGREE_WITHIN_PCT);
 	const clocksPlot = clocksChart(clocks.pairs);
 
@@ -280,10 +341,10 @@ export async function load() {
 
 	// Three cells that landed on 2026-08-30 and that no page had printed. The
 	// newest run's own reading; the span across the open window sits beside it on
-	// the page, from the object above.
+	// the page, from the object above. The processors the run drew left this
+	// object on 2026-09-17: a run is not a machine, so they are cards of their own.
 	const host = {
 		runId: newest?.runId ?? null,
-		cpuModels: newest?.cpuModels ?? null,
 		cpuBusy: newest?.lowestCpuBusyPct ?? null,
 		peakRss: newest?.peakRssBytes ?? null,
 		modelLoad: newest?.slowestModelLoadMs ?? null
@@ -325,6 +386,7 @@ export async function load() {
 		memory,
 		newestRunId: newest?.runId ?? null,
 		split,
+		machines,
 		cacheSvg: await draw(cache, chart.height_px),
 		cacheGrid: cache.grid,
 		clocks,

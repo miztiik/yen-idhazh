@@ -1,0 +1,481 @@
+{
+  "$defs": {
+    "CardSource": {
+      "description": "Which ledger a machine card was built from.\n\nThe two answer different questions. The machine record says what a processor\ncan do; the model server's counters say only what it is called. A card that\ndid not say which it came from would let \"we never read the instruction set\"\nread as \"this machine has none of the watched flags\".",
+      "enum": [
+        "fingerprint",
+        "counters"
+      ],
+      "title": "CardSource",
+      "type": "string"
+    },
+    "FleetKind": {
+      "additionalProperties": false,
+      "description": "One kind of machine, counted over the window.",
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/MachineIdentity"
+        },
+        "placements": {
+          "description": "Job placements recorded on this kind. A count of what happened, never a rate and never a probability: the share of a future draw is exactly what a lottery refuses to quote.",
+          "minimum": 0,
+          "title": "Placements",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "identity",
+        "placements"
+      ],
+      "title": "FleetKind",
+      "type": "object"
+    },
+    "MachineCard": {
+      "additionalProperties": false,
+      "description": "One machine a run drew, and what it can do.",
+      "properties": {
+        "flags": {
+          "description": "Every watched flag, present or absent, or nothing at all where the fingerprint never reached this run. Never a subset.",
+          "items": {
+            "$ref": "#/$defs/MachineFlag"
+          },
+          "title": "Flags",
+          "type": "array"
+        },
+        "flags_recorded": {
+          "default": false,
+          "description": "Whether the instruction set was read at all. False is a different fact from a machine that reported none of the watched flags, and drawing twelve absent chips for it would publish the second as the first.",
+          "title": "Flags Recorded",
+          "type": "boolean"
+        },
+        "identity": {
+          "$ref": "#/$defs/MachineIdentity"
+        },
+        "l3_cache_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "L3 Cache Bytes"
+        },
+        "memcpy_gib_s": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Large-block copy bandwidth. Absent where the probe was switched off, which is a different fact from a rate of zero.",
+          "title": "Memcpy Gib S"
+        },
+        "memcpy_probe_mib": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The buffer the probe used. It rides beside the rate so the two are read in one sentence: a buffer at or below L3 measured cache.",
+          "title": "Memcpy Probe Mib"
+        },
+        "part": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Family, model and stepping as one string - `25/1/1`. Two machines reporting one model name can differ here, and that difference is the only thing that explains a speed gap between them.",
+          "title": "Part"
+        },
+        "placement": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MachinePlacement"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "shards_drawn": {
+          "description": "Jobs of this run that drew this machine. A job and not a shard: the machine record files one row a job, and a work shard is a job of its own on the platform that hands them out.",
+          "minimum": 1,
+          "title": "Shards Drawn",
+          "type": "integer"
+        },
+        "shards_total": {
+          "description": "Jobs of this run that recorded a machine at all. The denominator.",
+          "minimum": 0,
+          "title": "Shards Total",
+          "type": "integer"
+        },
+        "source": {
+          "$ref": "#/$defs/CardSource",
+          "default": "counters",
+          "description": "Which ledger built this card. The machine record carries the instruction set, the cache and the bandwidth; the model server's own counters carry only a processor name, and a card built from them says so rather than drawing twelve absent chips."
+        }
+      },
+      "required": [
+        "identity",
+        "shards_drawn",
+        "shards_total"
+      ],
+      "title": "MachineCard",
+      "type": "object"
+    },
+    "MachineFlag": {
+      "additionalProperties": false,
+      "description": "One chip on a card: a flag, and whether this machine reported it.",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/WatchedFlag"
+        },
+        "present": {
+          "description": "Whether the host reported this flag. False draws an outlined chip rather than dropping the flag, because what a machine cannot do is the half a list of what it can do refuses to say.",
+          "title": "Present",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "present"
+      ],
+      "title": "MachineFlag",
+      "type": "object"
+    },
+    "MachineIdentity": {
+      "additionalProperties": false,
+      "description": "What names a machine on this route, and what colour it takes.\n\n`key` is the fingerprint where the fingerprint ledger reached this run, and\nthe processor's own model-name string where it did not. Colour is assigned\nascending by that key so a machine keeps its stop at every window preset -\nassigning by speed or by draw count would encode an ordering the ramp does\nnot mean, and assigning by order of first appearance would change a\nmachine's colour when the operator changes the span.",
+      "properties": {
+        "colour_stop": {
+          "description": "Which stop of the chart ramp this machine takes, 1-based. 8 is reserved for shards that recorded no machine at all.",
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Colour Stop",
+          "type": "integer"
+        },
+        "folded": {
+          "description": "The machines folded into this row once the ramp ran out, named in words. Empty on every row that is one machine. Never two machines in one colour without the page saying so.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Folded",
+          "type": "array"
+        },
+        "key": {
+          "minLength": 1,
+          "title": "Key",
+          "type": "string"
+        },
+        "name": {
+          "description": "The machine in words, on the row, always. Colour here encodes a fact, so it is semantic and may never be the only carrier of it.",
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "name",
+        "colour_stop"
+      ],
+      "title": "MachineIdentity",
+      "type": "object"
+    },
+    "MachinePlacement": {
+      "additionalProperties": false,
+      "description": "Where the platform put this machine, and which microcode it was running.\n\nThe five cells a processor detail table would have carried, kept behind the\ncard's own disclosure instead. Every one is absent on a machine whose host\nmetadata service did not answer, which is every developer machine.",
+      "properties": {
+        "cpu_model_raw": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The host's own `model name` line, unnormalised. The card's heading is a display name, and a display name that dropped a word has to be checkable against what was recorded.",
+          "title": "Cpu Model Raw"
+        },
+        "microcode": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The one cell that moves without anything else moving, so it is the only explanation left for a speed change with no other change.",
+          "title": "Microcode"
+        },
+        "vm_fault_domain": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vm Fault Domain"
+        },
+        "vm_location": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vm Location"
+        },
+        "vm_size": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vm Size"
+        },
+        "vm_zone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vm Zone"
+        }
+      },
+      "title": "MachinePlacement",
+      "type": "object"
+    },
+    "MachineSplit": {
+      "additionalProperties": false,
+      "description": "How one machine's shards split their seconds and their tokens.\n\nSum over sum within the machine, never a mean of per-shard rates: averaging\nratios weighs a shard that read twenty items like one that read forty. The\nexisting rule, now applied per machine instead of across all of them.",
+      "properties": {
+        "identity": {
+          "$ref": "#/$defs/MachineIdentity"
+        },
+        "read_seconds": {
+          "minimum": 0,
+          "title": "Read Seconds",
+          "type": "number"
+        },
+        "read_tokens": {
+          "minimum": 0,
+          "title": "Read Tokens",
+          "type": "number"
+        },
+        "read_tokens_per_second": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Read Tokens Per Second"
+        },
+        "shards": {
+          "description": "Shards of this machine that reported all four cells.",
+          "minimum": 1,
+          "title": "Shards",
+          "type": "integer"
+        },
+        "write_cost_ratio": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How many read tokens one written token costs, on this machine's shards alone. Null unless both rates are known - a ratio against an absent rate is not a ratio.",
+          "title": "Write Cost Ratio"
+        },
+        "write_seconds": {
+          "minimum": 0,
+          "title": "Write Seconds",
+          "type": "number"
+        },
+        "write_tokens": {
+          "minimum": 0,
+          "title": "Write Tokens",
+          "type": "number"
+        },
+        "write_tokens_per_second": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Write Tokens Per Second"
+        }
+      },
+      "required": [
+        "identity",
+        "shards",
+        "read_seconds",
+        "write_seconds",
+        "read_tokens",
+        "write_tokens"
+      ],
+      "title": "MachineSplit",
+      "type": "object"
+    },
+    "WatchedFlag": {
+      "description": "One instruction-set flag the console draws a chip for.\n\nThe closed set `WATCHED_FLAGS` already holds, restated as an enum so the\ngenerated schema carries the names and the frontend reads them from there\nrather than typing a second copy. The check below is what makes it a\nrestatement instead of a copy.",
+      "enum": [
+        "amx_bf16",
+        "amx_int8",
+        "amx_tile",
+        "avx2",
+        "avx512_bf16",
+        "avx512_fp16",
+        "avx512_vnni",
+        "avx512f",
+        "avx_vnni",
+        "f16c",
+        "fma",
+        "sse4_2"
+      ],
+      "title": "WatchedFlag",
+      "type": "string"
+    }
+  },
+  "$id": "machine-panels.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: machine cards, the split per machine, and the fleet count.",
+      "version": "2026-09-17",
+      "why": "A run is not a machine, and one pooled rate was wrong on 86 of 90 runs."
+    }
+  ],
+  "description": "The three machine panels of `/console/machine/`, for one run and one window.",
+  "properties": {
+    "date": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Date"
+    },
+    "fingerprint_recording": {
+      "default": true,
+      "description": "Whether the machine record is switched on. False is why a panel has nothing, and the panel says so in words that never name the setting.",
+      "title": "Fingerprint Recording",
+      "type": "boolean"
+    },
+    "fleet": {
+      "items": {
+        "$ref": "#/$defs/FleetKind"
+      },
+      "title": "Fleet",
+      "type": "array"
+    },
+    "fleet_days": {
+      "default": 0,
+      "description": "Days the fleet count covers. The window, in days.",
+      "minimum": 0,
+      "title": "Fleet Days",
+      "type": "integer"
+    },
+    "fleet_rows": {
+      "default": 0,
+      "description": "Recorded placements the fleet count was made from. It is printed as the denominator and it is what the drawing threshold is read against.",
+      "minimum": 0,
+      "title": "Fleet Rows",
+      "type": "integer"
+    },
+    "machines": {
+      "items": {
+        "$ref": "#/$defs/MachineCard"
+      },
+      "title": "Machines",
+      "type": "array"
+    },
+    "run_id": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The run the cards and the split are about.",
+      "title": "Run Id"
+    },
+    "splits": {
+      "items": {
+        "$ref": "#/$defs/MachineSplit"
+      },
+      "title": "Splits",
+      "type": "array"
+    },
+    "version": {
+      "default": "2026-09-17",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "title": "MachinePanels",
+  "type": "object",
+  "version": "2026-09-17"
+}

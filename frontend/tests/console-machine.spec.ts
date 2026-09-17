@@ -25,7 +25,6 @@ import {
 	percentileHistory,
 	pooledReadRate,
 	quantile,
-	readingAgainstWriting,
 	shardBoard,
 	tokensByRun,
 	PERCENTILES,
@@ -213,39 +212,6 @@ test.describe('the shard board', () => {
 		expect(view.empty).toBe(true);
 		expect(view.rows).toEqual([]);
 		expect(view.readSpread).toBeNull();
-	});
-});
-
-test.describe('reading against writing', () => {
-	const split = readingAgainstWriting(onlyRun(TWO_SHARDS));
-
-	test('the two rows disagree, and that disagreement is the panel', () => {
-		// Seconds: 400 reading against 600 writing, so reading is 40 percent.
-		// Tokens: 10,000 read against 2,000 written, so reading is 83 percent.
-		const [seconds, tokens] = split.rows;
-		expect(seconds.readValue).toBe(400);
-		expect(seconds.writeValue).toBe(600);
-		expect(seconds.readPct).toBe(40);
-		expect(tokens.readValue).toBe(10_000);
-		expect(tokens.writeValue).toBe(2000);
-		expect(tokens.readPct).toBe(Math.round((10_000 / 12_000) * 100));
-	});
-
-	test('the rates are summed and then divided, never averaged', () => {
-		// 10,000 tokens over 400 seconds is 25; 2,000 over 600 is 3.333...
-		expect(split.readTokensPerSecond).toBeCloseTo(25, 6);
-		expect(split.writeTokensPerSecond).toBeCloseTo(2000 / 600, 6);
-		expect(split.writeCostRatio).toBeCloseTo(25 / (2000 / 600), 6);
-		expect(split.from).toBe(2);
-		expect(split.outOf).toBe(2);
-	});
-
-	test('a run with no complete shard splits nothing rather than splitting zero', () => {
-		const bare = onlyRun([counterRow({ shard: 0 }), counterRow({ shard: 1 })]);
-		const view = readingAgainstWriting(bare);
-		expect(view.empty).toBe(true);
-		expect(view.rows).toEqual([]);
-		expect(view.writeCostRatio).toBeNull();
 	});
 });
 

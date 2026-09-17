@@ -136,7 +136,7 @@ test.describe('the page as a whole', () => {
 		// Every panel that divides says what it divided by: a rate with no
 		// denominator beside it is the defect the item-health census exists to
 		// prevent, and it is the same defect one layer up.
-		await expect(page.locator('[data-reading-writing-sentence]')).toContainText(
+		await expect(page.locator('[data-machine-split-basis]')).toContainText(
 			/of the run's \d+ shards/
 		);
 		await expect(page.locator('[data-context-run]').first()).toContainText(

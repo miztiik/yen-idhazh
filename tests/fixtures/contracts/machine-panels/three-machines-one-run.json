@@ -1,0 +1,221 @@
+{
+  "date": "2026-09-12",
+  "fingerprint_recording": true,
+  "fleet": [
+    {
+      "identity": {
+        "colour_stop": 1,
+        "folded": [],
+        "key": "3a7f0b1c2d4e5f60",
+        "name": "AMD EPYC 7763"
+      },
+      "placements": 168
+    },
+    {
+      "identity": {
+        "colour_stop": 2,
+        "folded": [],
+        "key": "c81d9e0a1b2c3d4e",
+        "name": "Intel Xeon Platinum 8573C"
+      },
+      "placements": 46
+    }
+  ],
+  "fleet_days": 30,
+  "fleet_rows": 214,
+  "machines": [
+    {
+      "flags": [
+        {
+          "name": "amx_bf16",
+          "present": false
+        },
+        {
+          "name": "amx_int8",
+          "present": false
+        },
+        {
+          "name": "amx_tile",
+          "present": false
+        },
+        {
+          "name": "avx2",
+          "present": true
+        },
+        {
+          "name": "avx512_bf16",
+          "present": false
+        },
+        {
+          "name": "avx512_fp16",
+          "present": false
+        },
+        {
+          "name": "avx512_vnni",
+          "present": false
+        },
+        {
+          "name": "avx512f",
+          "present": false
+        },
+        {
+          "name": "avx_vnni",
+          "present": false
+        },
+        {
+          "name": "f16c",
+          "present": true
+        },
+        {
+          "name": "fma",
+          "present": true
+        },
+        {
+          "name": "sse4_2",
+          "present": true
+        }
+      ],
+      "flags_recorded": true,
+      "identity": {
+        "colour_stop": 1,
+        "folded": [],
+        "key": "3a7f0b1c2d4e5f60",
+        "name": "AMD EPYC 7763"
+      },
+      "l3_cache_bytes": 33554432,
+      "memcpy_gib_s": 12.4,
+      "memcpy_probe_mib": 512,
+      "part": "25/1/1",
+      "placement": {
+        "cpu_model_raw": "AMD EPYC 7763 64-Core Processor",
+        "microcode": "0xa0011d3",
+        "vm_fault_domain": "0",
+        "vm_location": "eastus",
+        "vm_size": "Standard_D4ads_v5",
+        "vm_zone": "1"
+      },
+      "shards_drawn": 5,
+      "shards_total": 8,
+      "source": "fingerprint"
+    },
+    {
+      "flags": [
+        {
+          "name": "amx_bf16",
+          "present": false
+        },
+        {
+          "name": "amx_int8",
+          "present": false
+        },
+        {
+          "name": "amx_tile",
+          "present": false
+        },
+        {
+          "name": "avx2",
+          "present": true
+        },
+        {
+          "name": "avx512_bf16",
+          "present": true
+        },
+        {
+          "name": "avx512_fp16",
+          "present": true
+        },
+        {
+          "name": "avx512_vnni",
+          "present": true
+        },
+        {
+          "name": "avx512f",
+          "present": true
+        },
+        {
+          "name": "avx_vnni",
+          "present": true
+        },
+        {
+          "name": "f16c",
+          "present": true
+        },
+        {
+          "name": "fma",
+          "present": true
+        },
+        {
+          "name": "sse4_2",
+          "present": true
+        }
+      ],
+      "flags_recorded": true,
+      "identity": {
+        "colour_stop": 2,
+        "folded": [],
+        "key": "c81d9e0a1b2c3d4e",
+        "name": "Intel Xeon Platinum 8573C"
+      },
+      "l3_cache_bytes": 268435456,
+      "memcpy_gib_s": null,
+      "memcpy_probe_mib": 0,
+      "part": "6/207/2",
+      "placement": null,
+      "shards_drawn": 3,
+      "shards_total": 8,
+      "source": "fingerprint"
+    }
+  ],
+  "run_id": "2026-09-12-34689544296",
+  "splits": [
+    {
+      "identity": {
+        "colour_stop": 1,
+        "folded": [],
+        "key": "3a7f0b1c2d4e5f60",
+        "name": "AMD EPYC 7763"
+      },
+      "read_seconds": 1840.5,
+      "read_tokens": 110280.0,
+      "read_tokens_per_second": 59.92,
+      "shards": 5,
+      "write_cost_ratio": 2.01,
+      "write_seconds": 612.25,
+      "write_tokens": 18240.0,
+      "write_tokens_per_second": 29.79
+    },
+    {
+      "identity": {
+        "colour_stop": 2,
+        "folded": [],
+        "key": "c81d9e0a1b2c3d4e",
+        "name": "Intel Xeon Platinum 8573C"
+      },
+      "read_seconds": 930.0,
+      "read_tokens": 9142.0,
+      "read_tokens_per_second": 9.83,
+      "shards": 2,
+      "write_cost_ratio": 0.35,
+      "write_seconds": 410.0,
+      "write_tokens": 11480.0,
+      "write_tokens_per_second": 28.0
+    },
+    {
+      "identity": {
+        "colour_stop": 8,
+        "folded": [],
+        "key": "unrecorded",
+        "name": "Machine not recorded"
+      },
+      "read_seconds": 120.0,
+      "read_tokens": 2400.0,
+      "read_tokens_per_second": 20.0,
+      "shards": 1,
+      "write_cost_ratio": 0.67,
+      "write_seconds": 60.0,
+      "write_tokens": 1800.0,
+      "write_tokens_per_second": 30.0
+    }
+  ],
+  "version": "2026-09-17"
+}

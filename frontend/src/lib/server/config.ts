@@ -121,6 +121,9 @@ export interface ObservabilityConfig {
 	evaluation_enabled: boolean;
 	/** Whether a work shard scrapes the model server's own counters. */
 	runtime_counters_scrape: boolean;
+	/** Whether a job records what machine it drew. False is why three panels have
+	 * nothing, and each says so in words that never name the setting. */
+	host_fingerprint: boolean;
 	/** The share of runs the scorer is drawn for. 1.0 measures every run. */
 	sample_rate: number;
 }
@@ -208,6 +211,16 @@ export interface ConsoleConfig {
 	chart_minutes_target: number;
 	/** The share of a day's published items that must carry a chart, in whole percent. */
 	chart_coverage_pct: number;
+	/** Recorded job placements needed before the machine counts are drawn as bars.
+	 * Under it the panel lists them in words rather than drawing a distribution
+	 * that is not one. A declared estimate - see `console.py`. */
+	fleet_min_rows: number;
+	/** Distinct machine kinds that must carry a bandwidth reading before bandwidth
+	 * may be plotted against decode speed. Nothing plots it today. */
+	bandwidth_min_kinds: number;
+	/** Machines that get a colour of their own before the rest fold into one row
+	 * named in words. The eighth chart stop is reserved for an unrecorded machine. */
+	machine_colour_stops: number;
 }
 
 /** What on-device archive search reads, keeps and shows.
@@ -357,6 +370,7 @@ const OBSERVABILITY_DEFAULTS: ObservabilityConfig = {
 	cost_output_per_million: 0.6,
 	evaluation_enabled: true,
 	runtime_counters_scrape: true,
+	host_fingerprint: true,
 	sample_rate: 1
 };
 const COLLECT_DEFAULTS: CollectConfig = { availability_strikes_before_rest: 5 };
@@ -393,7 +407,10 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	timeline_bars: 120,
 	chart_rule_days: 14,
 	chart_minutes_target: 6,
-	chart_coverage_pct: 5
+	chart_coverage_pct: 5,
+	fleet_min_rows: 160,
+	bandwidth_min_kinds: 3,
+	machine_colour_stops: 7
 };
 const ASSIST_DEFAULTS: AssistConfig = {
 	similarity_floor: 0.35,

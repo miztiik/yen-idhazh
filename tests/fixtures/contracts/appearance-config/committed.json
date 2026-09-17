@@ -34,6 +34,7 @@
   },
   "console": {
     "band_outlier_rows": 10,
+    "bandwidth_min_kinds": 3,
     "chart_coverage_pct": 5.0,
     "chart_height": 220,
     "chart_minutes_target": 6.0,
@@ -43,6 +44,8 @@
     "doubt_rows": 10,
     "failure_list_max": 25,
     "feed_rows": 10,
+    "fleet_min_rows": 160,
+    "machine_colour_stops": 7,
     "max_window_days": 366,
     "min_attempts_for_rate": 5,
     "min_window_days": 7,
