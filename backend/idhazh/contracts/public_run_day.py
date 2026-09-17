@@ -9,9 +9,9 @@ so the console fetches a month of days instead of opening a day payload apiece.
 Folding the three is not a shortcut. They share a key, a window and a producer,
 and a day payload is hundreds of kilobytes where these counts are two lines - so
 splitting them would cost three fetches to answer one question about one day.
-The oracle in row 8 asks that every dataset resolve to exactly one schema file,
-and three datasets resolving to one file satisfies it: what it forbids is a
-dataset with no file, or two files for one shape.
+The rule is that every dataset resolves to exactly one schema file, and three
+datasets resolving to one file satisfies it: what it forbids is a dataset with
+no file, or two files for one shape.
 
 **Counts only, and that is the trust boundary.** A day payload holds article
 titles, addresses and summaries. Nothing on this row can hold any of them: every

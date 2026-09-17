@@ -13,8 +13,8 @@
  * | the day's aside | `--zone-aside` | the wide breakpoint, and the rail retires |
  *
  * There were five until 2026-09-12. `--zone-time` was the day stream's leading
- * column, which carried a time rail; plan 25 row #5 deleted the rail and gave
- * every story its own time in its eyebrow, so the stream is the content box
+ * column, which carried a time rail; the rail was deleted and every story got
+ * its own time in its eyebrow, so the stream is the content box
  * again at every width.
  *
  * What makes this a gate rather than a screenshot is the second pass. Every

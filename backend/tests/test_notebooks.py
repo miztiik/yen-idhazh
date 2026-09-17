@@ -1,8 +1,8 @@
 """The training notebook is executable content, so its gates are tested like any other.
 
 None of this runs the notebook - that needs a GPU and a network, and Guardrail #7
-forbids a test that fetches anything. What it does test is the four properties
-row 6 states, each of which fails silently if it ever stops holding:
+forbids a test that fetches anything. What it does test is four properties,
+each of which fails silently if it ever stops holding:
 
 - Every cell parses. A notebook nobody can run is worse than no notebook.
 - No model is named. The teacher is `finetune.teacher`, a key in `models`, so a
@@ -71,7 +71,7 @@ def test_every_code_cell_parses(code_cells: list[str]) -> None:
 
 
 def test_no_model_is_named_anywhere_in_it(every_cell: str) -> None:
-    """The teacher is a config key, so the notebook survives a model swap (row 6 decision 1)."""
+    """The teacher is a config key, so the notebook survives a model swap."""
     body = every_cell.lower()
     for tool in NOT_A_MODEL:
         body = body.replace(tool, "")
@@ -136,7 +136,7 @@ def test_it_drops_an_over_length_row_instead_of_truncating_it(code_cells: list[s
 
 
 def test_the_merge_is_not_attempted_on_the_free_tier(every_cell: str) -> None:
-    """Merging wants ~16 GB of ordinary RAM against the free tier's 12 (row 6 decision 5)."""
+    """Merging wants ~16 GB of ordinary RAM against the free tier's 12."""
     assert "llama-export-lora" in every_cell, "the notebook does not say how to merge"
     assert "merge_and_unload" not in every_cell, "it merges in Colab, which dies on the save"
 

@@ -571,8 +571,8 @@ class MachineFacts:
 
     `frontend/src/lib/server/runtime-counters.ts` builds the whole picture for
     the Hardware route and keeps doing so - it will read the published machine
-    shards after row 10. What the band needs is three numbers, so three are
-    derived here rather than the twenty the route draws.
+    shards once they are published. What the band needs is three numbers, so
+    three are derived here rather than the twenty the route draws.
     """
 
     refused: int
@@ -1238,9 +1238,9 @@ def publish(
         run=run,
         collect=collect,
         sources=sources,
-        # Plan 23 row #10 is what produces a decline rate. Until it lands there
-        # is no gating kind to read, so the two-sided rule in
-        # `dead_gate_candidates` costs nothing and fires on nothing.
+        # Nothing produces a decline rate yet. With no gating kind to read, the
+        # two-sided rule in `dead_gate_candidates` costs nothing and fires on
+        # nothing.
         decline_rates={},
     )
     target = band_path(digest_root)

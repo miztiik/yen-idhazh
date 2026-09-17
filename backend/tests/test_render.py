@@ -248,8 +248,8 @@ class TestPublishedData:
         (owner, 2026-09-13). So the check is against the serialised document:
         none of the words a drawing uses to say how wide, how tall, what colour
         or what font appears anywhere in it, and neither does the plan's own
-        title - `title` and `caption` are plan 12 row #5's, and a compiler that
-        smuggled one in would put an authored string on the wire.
+        title - `title` and `caption` are the model's authored strings, and a
+        compiler that smuggled one in would put an authored string on the wire.
         """
         document = self._compiled().to_json()
 

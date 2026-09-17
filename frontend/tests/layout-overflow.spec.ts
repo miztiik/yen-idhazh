@@ -70,7 +70,7 @@ test.describe('the topic row folds instead of scrolling', () => {
 	const MOVE_MIN = 2;
 
 	/** The five desks a person declared; the other four stand in for the
-	 * auto-created ones plan 23 row #16 will propose, which do not exist today.
+	 * auto-created ones a proposal channel will propose, which do not exist today.
 	 * Only an auto-created desk can fold, so the fold has to be driven from a
 	 * fixture rather than from `config/taxonomy.json`. */
 	const AUTO = new Set(['health', 'science', 'sport', 'tech']);
@@ -78,7 +78,7 @@ test.describe('the topic row folds instead of scrolling', () => {
 	test('a row that fits keeps every pill and opens no control', () => {
 		const split = splitPills(nine, null, 9, MOVE_MIN, AUTO);
 		// Every pill is still there and the set is unchanged - but the ORDER is now
-		// the day's, biggest desk first, which is what row #6 changed. `world` 14
+		// the day's, biggest desk first. `world` 14
 		// stays behind `business-economy` 13: a one-story lead is under the margin,
 		// so it does not take the place in front of it.
 		expect(split.shown.map((v) => v.id)).toEqual([

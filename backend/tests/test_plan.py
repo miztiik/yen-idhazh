@@ -908,7 +908,7 @@ def test_an_undated_entry_says_the_time_is_our_first_sight() -> None:
 def test_a_date_too_far_ahead_is_labelled_as_our_clock_not_the_feeds() -> None:
     """A replaced date is our time under the feed's name unless the item says so.
 
-    This is the case row 17's time rail has to be able to caption. The stamp
+    This is the case a time caption has to be able to carry. The stamp
     the reader sees is `NOW`, and without the label nothing on the payload says
     it is ours rather than the publisher's.
     """

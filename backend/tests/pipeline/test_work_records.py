@@ -280,11 +280,11 @@ def served_calls(caplog: LogCaptureFixture) -> list[dict[str, Any]]:
 def test_a_reply_that_named_no_reason_leaves_the_column_empty_and_a_cut_one_says_length(
     tmp_path: Path, monkeypatch: MonkeyPatch, caplog: LogCaptureFixture
 ) -> None:
-    """Plan 32 row #8's oracle, over a real run and two recorded replies.
+    """A missing `finish_reason` is recorded as missing, over a real run and two recorded replies.
 
     The label reply is the recorded one with its `finish_reason` deleted, which
-    is what a runtime that reports none looks like on the wire. Until this row
-    that absence was read as `stop` - so the census said the decode ended
+    is what a runtime that reports none looks like on the wire. Until this was
+    fixed that absence was read as `stop` - so the census said the decode ended
     cleanly on the strength of a field nobody had sent, and no reader could ever
     tell the two apart afterwards.
 
@@ -309,7 +309,7 @@ def test_a_reply_that_named_no_reason_leaves_the_column_empty_and_a_cut_one_says
 def test_a_call_that_waited_is_clocked_at_more_than_the_server_claimed(
     tmp_path: Path, monkeypatch: MonkeyPatch, caplog: LogCaptureFixture
 ) -> None:
-    """The other half of row #8's oracle: `label_ms` is a stopwatch, not a sum.
+    """The other half: `label_ms` is a stopwatch, not a sum.
 
     The server is held for `HELD_S` before it answers, which is a wait no field
     of the reply can report. The recorded replies carry no `timings` block at

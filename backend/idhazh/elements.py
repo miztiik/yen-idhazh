@@ -437,7 +437,7 @@ def element_table(article: Article, *, config: ElementsConfig) -> ElementTable:
     Neither pattern pass can fail it, because each cuts its excerpt at its own
     offsets - so the failure it exists for is a caller that builds elements from
     one string and a table over another, which is what happens the first time
-    somebody reaches for the pre-cap body, and what plan 11's producers risk on
+    somebody reaches for the pre-cap body, and what a producer risks on
     every article once a model proposes the location and code cuts at it.
 
     It raises rather than degrading because at this point the text is in hand
@@ -497,7 +497,7 @@ def classify(table: ElementTable, *, min_chart_points: int) -> ElementClass:
     **This is not `chart_is_reachable` and is not meant to be.** That function
     asks whether a chart could survive the planner's own drops - the sixteen-fact
     cap and the floor under a magnitude of two. This asks what the article
-    states. The gap between the two answers is what row 5 exists to report, so
+    states. The gap between the two answers is the measurement, so
     closing it here would delete the measurement.
 
     `min_chart_points` is `visuals.min_chart_points` and not a second knob
@@ -523,9 +523,9 @@ def extraction_health(
 
     O(1) in the archive: it reads one article and builds one table (Guardrail #12).
 
-    **A drifted span degrades this item and nothing else.** That is row 4's
-    ruling, and this is where it is carried out: `element_table` raises because
-    it cut those characters out of that string moments earlier, and the caller
+    **A drifted span degrades this item and nothing else.** `element_table`
+    raises because it cut those characters out of that string moments earlier,
+    and the caller
     that has to file a row for every planned item records the failure instead of
     taking the run down with it. `span_integrity_rate` is what makes the refusal
     visible - a run whose own arithmetic broke reports zero percent rather than

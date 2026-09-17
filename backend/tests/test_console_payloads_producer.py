@@ -385,7 +385,7 @@ def _publish_all(state: Path, digest: Path, *, months: set[str] | None) -> None:
 def test_the_second_run_opens_one_month_not_twenty(
     tree: tuple[Path, Path], opened: list[str]
 ) -> None:
-    """The oracle of row 9, asserted on file handles.
+    """The second run opens one month, asserted on file handles.
 
     The first run backfills - every month's target is missing, so every month is
     read. The second names the one month it appended to and reads that one,
@@ -632,7 +632,7 @@ def test_a_feed_read_only_through_a_robots_answer_is_unread_and_not_working() ->
 # Built from rows rather than read off the tree, so each case carries a state
 # the committed archive has never produced: a gate that declines everything has
 # never happened, and it is the half of the rule that was missing until
-# 2026-09-11 (`CLAUDE.md` Guardrail #12, plan 25 section 0.1).
+# 2026-09-11 (`CLAUDE.md` Guardrail #12).
 
 
 def _source(
@@ -679,13 +679,13 @@ def test_a_gate_at_either_end_of_its_decline_rate_ranks_broken() -> None:
     assert [c.severity for c in dead_high] == [console_band.BROKEN]
     assert dead_high[0].text == "desk declines everything"
     assert alive == []
-    # The fraction is null until plan 23 row #10 lands, so the rule costs
-    # nothing to carry and may not invent a verdict out of an absent one.
+    # Nothing measures the fraction yet, so the rule costs nothing to carry and
+    # may not invent a verdict out of an absent one.
     assert unmeasured == []
 
 
 def test_the_bounds_the_dead_gate_rule_reads_are_arguments_and_not_literals() -> None:
-    """Row #12 of the placement plan moves these two to `config/idhazh.json`.
+    """These two bounds move to `config/idhazh.json` when placement reads them.
 
     The rule is written here first because the band is derived once, so this
     asserts the hand-off works: a caller that passes its own floor and ceiling

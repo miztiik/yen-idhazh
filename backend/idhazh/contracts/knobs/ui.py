@@ -177,8 +177,8 @@ class UiConfig(Model):
             "subject cannot outrank a story two independent feeds carried today. A "
             "shared subject fires several times as often as a second carrier, so this "
             "weight is the smaller of the two. Re-deriving it against the step would "
-            "move the leading block's order and belongs to plan 23 row #17's per-run "
-            "loop."
+            "move the leading block's order, so it belongs to a loop that re-derives "
+            "both together each run."
         ),
     )
     lead_max_yesterday: int = Field(

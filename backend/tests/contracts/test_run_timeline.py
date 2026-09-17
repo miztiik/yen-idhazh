@@ -1,7 +1,7 @@
 """Does the run timeline's shape say what the chart will need, and only that?
 
-The producers do not exist yet - rows 5 to 8 of the plan write them and row 14
-draws from them - so everything here is asked of the shape itself: the eight
+The producers do not exist yet, and neither does the chart that draws from them -
+so everything here is asked of the shape itself: the eight
 steps it names, the two numbers it adds, the subtraction it owns, and the
 addresses it refuses to carry.
 """
