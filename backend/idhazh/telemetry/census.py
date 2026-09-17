@@ -140,7 +140,7 @@ def census_row(
     `recorded` is `None` for an item no shard sealed a row for - most of the plan
     on a run that died before its workers finished, and every item on a run that
     planned more than it reached. That item still needs a census line, so
-    `classify_item` builds what the payloads can say (decision 2, plan 32 row 6).
+    `classify_item` builds what the payloads can say.
     """
     if recorded is None:
         return classify_item(
@@ -195,7 +195,7 @@ def classify_item(
     recorded where it happens - the second call notes it on the item's own record
     - so a row rebuilt here can only be a row no call was ever made for, and a
     second derivation of it from the picture's refusal reason was two readings of
-    one number (plan 32 row 6).
+    one number.
     """
     if article is None:
         return _row(

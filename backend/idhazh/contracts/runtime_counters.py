@@ -520,8 +520,8 @@ class RuntimeCountersRow(Contract):
 
         `cgroup_peak_bytes` arrives as a number instead, because the kernel's
         peak file has two readers - this row and the item row - and one of them
-        has to be the only one that parses it. `telemetry.host` is that reader
-        (plan 32 row 9).
+        has to be the only one that parses it. `telemetry.host` is that reader,
+        so a contract never opens a host file.
         """
         values: dict[str, Any] = {}
         for line in text.splitlines():

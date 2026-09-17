@@ -7,11 +7,10 @@ the ledgers and the payloads this run has already written.
 
 **It is a move, not a second copy.** `frontend/src/lib/server/console-shell.ts`
 derives the same band at build time and serialises it into three prerendered
-documents; row 10 of the plan-doc deletes that derivation and the console
-fetches this file instead. Until it does, the two exist side by side and the
-sentences here are ported from there deliberately word for word - a band that
-said something different after the cutover would look like a pipeline change
-rather than a plumbing one.
+documents. Once the console fetches this file instead, that derivation goes.
+Until it does, the two exist side by side and the sentences here are ported from
+there deliberately word for word - a band that said something different after the
+cutover would look like a pipeline change rather than a plumbing one.
 
 **Where each fact comes from, and why.** A number is taken from the store that
 owns it, never re-derived from a wider one:
