@@ -524,7 +524,7 @@ flowchart LR
  class PERSON,WEEKLY,VALIDATE,MEASURE,DRIFT,BACKFILL stage;
 ```
 
-### Testing a candidate model, end to end
+## Testing a candidate model, end to end
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
@@ -533,8 +533,8 @@ flowchart TB
   FORM["one form field<br/>candidate_models_file"] --> FILE[("config/models/NAME.json<br/>repo, commit, filename, digest,<br/>byte count, alias, quantisation")]
  end
 
- subgraph BENCH["Measure - measure.yml, target llm"]
-  FILE --> RAW["raw throughput<br/>llama-bench"]
+ subgraph BENCH["Measure - measure.yml, target bench"]
+  FILE --> RAW["model speed<br/>llama-bench"]
   RAW --> SERVER["real server<br/>the fixed bench corpus"]
   SERVER --> DOSSIER["dossier body,<br/>ready to paste"]
  end
@@ -582,17 +582,32 @@ flowchart TB
 
 Each Measurements dispatch selects exactly one target:
 
-| Target | What runs | Inputs used by that target |
-| --- | --- | --- |
-| `llm` | GGUF download timing and `llama-bench` throughput | `models`, `threads` |
-| `image` | CPU image-model candidates | none |
-| `corpus` | Live article-length sampling | `corpus_links` |
-| `runtime` | Fixed-shard llama-server candidate sweep over `bench.corpus_items` articles | `runtime_candidate`; `runtime_repeats`; `runtime_threads` for `threads`; `runtime_threads_batch` for `threads_batch` |
-| `batched` | `llama-batched-bench` aggregate decode at parallel levels 1, 2 and 4, three repeats on one host | none; the bench parameters are pinned in the workflow and the context and threading knobs come from `config/idhazh.json` |
+| Target | Jobs it runs | What they measure | Inputs that target reads |
+| --- | --- | --- | --- |
+| `bench` | `llama-bench`, then `runtime` | `llama-bench` times how fast the weights read a prompt and write an answer; `runtime` then runs a real llama-server over `bench.corpus_items` articles and emits the dossier body from both halves | `candidate_models_file`; `threads` and `model_speed_case` for the first; `runtime_candidate`, `runtime_repeats`, `runtime_threads`, `runtime_threads_batch` for the second |
+| `image` | `image` | CPU image-model candidates | none |
+| `corpus` | `corpus` | Live article-length sampling | `corpus_links` |
+| `batched` | `batched` | `llama-batched-bench` aggregate decode at parallel levels 1, 2 and 4, three repeats on one host | none; the bench parameters are pinned in the workflow and the context and threading knobs come from `config/idhazh.json` |
+| `budgets` | `budgets` | The three token counts a vocabulary sizes, retaken against the candidate's own tokenizer | `candidate_models_file`, `budget_samples` |
 
 The form keeps all target-specific inputs visible. A job reads only the inputs
-for its selected target. The default target is `llm`; the default runtime
+for its selected target. The default target is `bench`; the default runtime
 candidate is `baseline`.
+
+**The model speed case can be bypassed, and the rest of the `bench` target still
+runs.** `bench.run_model_speed_case` in `config/idhazh.json` is true by default;
+the `model_speed_case` dispatch input overrules it for one run (`config` follows
+the knob, `run` and `skip` do not). Bypassing it skips the `llama-bench` job and
+nothing else: the fixed corpus, the real server over it, the machine probe and
+the committed host row all still happen. What is given up is the prefill and
+decode rates, and with them the dossier - a dossier is both halves, so a
+dispatch missing one emits the server half and a line naming the half that is
+missing. It also moves who pays for the weights, because the speed case is what
+fills the cache entry the server case restores ([ci-caches.md](ci-caches.md)).
+Measured 2026-09-16 over the four dispatches of that day on stock
+`ubuntu-latest`, the speed case took 9.1, 26.7, 27.2 and 87.6 minutes - between
+a tenth and a third of a whole dispatch
+([what a bench dispatch costs](benchmarks/what-a-bench-dispatch-costs.md)).
 
 `Model validation` reads `config/idhazh.json`, follows its pointer to the model
 file, and takes every candidate fact from there. It names no model of its own.
@@ -776,6 +791,51 @@ of test machinery that teaches the harness to read a composite action. It does
 not remove a check; it removes the second place the step could be edited.
 
 ## Design rationale
+
+### The speed case is a job somebody can turn off, and turning it off must not turn off the rest
+
+Owner decision, 2026-09-17. The `llama-bench` job measures how each candidate
+performs, it is only dispatched while models are being tested, and it stays. The
+open question was what to do when somebody wants to exercise the `bench` flow
+itself and does not want to pay for it.
+
+**A bypass is worth having because the job is a real share of the dispatch, not
+a rounding error.** Over the four dispatches of 2026-09-16 on stock
+`ubuntu-latest` it took 9.1, 26.7, 27.2 and 87.6 minutes against whole dispatches
+of 170.6, 188.5, 113.6 and 287.8 - between a tenth and a third.
+
+**Two controls rather than one, because they answer different questions.**
+`bench.run_model_speed_case` is the standing answer and lives in
+`config/idhazh.json`, so changing it changes behaviour with no source edit
+(Guardrail #6). The `model_speed_case` dispatch input is one run's answer, so an
+operator needs no commit; `config` defers, and `run` or `skip` overrules. The
+decision is taken once, in the `models` job, by
+`backend/utilities/model_speed_case.py` - a job's own `if:` cannot read a step of
+that job, so the answer has to travel as an output, and putting the rule in a
+module keeps it out of a `${{ }}` expression nothing can run.
+
+**The consequence is the part worth writing down.** A GitHub job whose `if:`
+carries no status function is given an implicit `success()`, and a skipped need
+is not a success - so a skipped job skips every dependant, silently. `runtime`
+needs the speed case, so without a change it would have vanished with it and a
+bypass would have skipped half the workflow. `runtime` now lifts the implicit
+check with `!cancelled()` and puts back exactly what it was doing: `models` must
+have succeeded, and the speed case must have either succeeded or been skipped. A
+speed case that **failed** still stops it, because a candidate that cannot move a
+token has already answered the question `runtime` would spend five hours asking
+again. `budgets`, `batched`, `image` and `corpus` never needed the speed case and
+are untouched; the test walks `needs` rather than trusting that sentence.
+
+**Two steps degrade rather than fail.** The dossier is both halves by
+definition, so the artifact download and the emit step run only when the speed
+case ran, and a bypassed dispatch prints a line naming the half it does not have.
+Emitting half a page that read like a whole one would be worse than emitting
+none.
+
+**What a bypass costs beyond the rates: the weights get downloaded in a
+different job.** The speed case is what fills the cache entry the server case
+restores. Skip it and `runtime` pays for the same bytes itself, once
+([ci-caches.md](ci-caches.md)).
 
 ### What the model workflows share, and what they must not
 

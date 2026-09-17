@@ -87,7 +87,7 @@ answered here.
 | --- | --- | --- | --- | --- |
 | Summariser weights and runtime | `llm-<file>-<revision>-<llama.cpp build>-v4` | `digest.yml` `work` | every `work` shard of every run | 5.23 GB |
 | Candidate weights and runtime | `qualify-<candidate sha256>-<llama.cpp build>` | `validate.yml` `qualify` | the other shards of the same run | transient, none live |
-| Bench weights and runtime | `bench-<candidate sha256>-<llama.cpp build>` | `measure.yml` `llm` | the `runtime` job of the same dispatch | transient, 6.19 GB and 3.78 GB live |
+| Bench weights and runtime | `bench-<candidate sha256>-<llama.cpp build>` | `measure.yml` `llama-bench`, or `runtime` when the speed case was bypassed | the `runtime` job of the same dispatch | transient, 6.19 GB and 3.78 GB live |
 | pip download cache, 3.12 | `setup-python` default, hashed from `pyproject.toml` | any 3.12 job | `gates`, `site`, `browser`, `robots`, every `digest.yml` job, `measure.yml` `corpus` and `runtime`, `drift.yml`, `prune.yml`, `validate.yml`, `backfill.yml` | 203 MB |
 | pip download cache, 3.14 | same scheme, 3.14 | `robots` | `robots` | 183 MB |
 | npm download cache | `setup-node` default, hashed from `frontend/package-lock.json` | any job running `npm ci` | `site`, `browser`, `whole-day`, `pages.yml`, `digest.yml` `assemble`, `backfill.yml` | 164 MB |

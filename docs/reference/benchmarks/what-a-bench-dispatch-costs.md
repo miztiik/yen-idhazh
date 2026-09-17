@@ -81,7 +81,7 @@ and no figure on this page is a reading of it.
 All four were dispatched at 10:42 UTC with a warm cache, 3 repeats and the same
 5 articles.
 
-| Run | Model | `llm` job processor / `runtime` job processor | `llm` job | `runtime` job | Dispatch |
+| Run | Model | `llama-bench` job processor / `runtime` job processor | `llama-bench` job | `runtime` job | Dispatch |
 | --- | --- | --- | ---: | ---: | ---: |
 | `35086403868` | Gemma 4 E4B | EPYC 7763 / EPYC 7763 | 26.7 min | 161.0 min | 188.5 min |
 | `35086407071` | Gemma 4 E4B | EPYC 9V45 / EPYC 7763 | 9.1 min | 160.6 min | 170.6 min |
@@ -95,10 +95,18 @@ draft head - so its wall clock differs by the weights as well as by the machine.
 Each dispatch runs about 0.7 to 0.9 minutes longer than its two jobs added
 together. That gap is the queue between them.
 
-**Two jobs, two machines.** Three of these four put the `llm` job and the
+**Two jobs, two machines.** Three of these four put the `llama-bench` job and the
 `runtime` job on different processors. What that does to a reading is [the
 processor lottery](the-processor-lottery.md), and it is the reason this page
 names a processor per job rather than per dispatch.
+
+**What the speed case is worth skipping.** Those four `llama-bench` columns are
+9.1, 26.7, 27.2 and 87.6 minutes against whole dispatches of 170.6, 188.5, 113.6
+and 287.8 - between a tenth and a third. That is the size of what
+`bench.run_model_speed_case` and the `model_speed_case` dispatch input buy back
+when somebody is exercising the flow rather than measuring a model
+([github-actions.md](../github-actions.md#design-rationale)). The job was keyed
+`llm` until 2026-09-17; older run pages show that name.
 
 ## Two readings about the instrument itself
 
