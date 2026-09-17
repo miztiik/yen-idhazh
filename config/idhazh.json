@@ -220,6 +220,19 @@
     "head_no_repeat": 10,
     "max_desk_in_head": 5
   },
+  "prune": {
+    "collections": {
+      "workflow-artifacts": {
+        "max_deletes_per_run": 50,
+        "retain_days": 30
+      },
+      "workflow-runs": {
+        "max_deletes_per_run": 50,
+        "retain_days": 90
+      }
+    },
+    "dry_run": true
+  },
   "reference_dataset": {
     "article_words_min": 120,
     "domains_per_split_min": 20,

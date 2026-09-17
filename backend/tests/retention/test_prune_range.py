@@ -3,14 +3,20 @@
 `idhazh telemetry prune` is the manual half of retention: the scheduled pass
 deletes what a window has aged out, and this deletes what a person names. The
 two properties it has to hold are both about what it did NOT do - the days
-outside the range are still there, byte for byte, and a run that fails part way
-has removed nothing at all.
+outside the range are still there, byte for byte, and a pass that fails part way
+has removed only the days it had already reached.
+
+That second property changed on 2026-09-17. Until then the prune moved a whole
+range into a scratch directory and rolled every move back if one failed, so a
+failed pass removed nothing at all. It deletes one day file at a time now
+through `idhazh.prune.one_at_a_time`, so a failed pass keeps what it had
+deleted and the record says where the next pass resumes.
 
 Every tree here is BUILT (CLAUDE.md section 13). The committed archive grows, so
 a test that read it would cost more every month for the same answer
 (Guardrail #12) - and a built tree carries the cases the archive has never
 produced: a day either side of a boundary, a store whose month directory is
-emptied exactly, and a move that fails on the third file of four.
+emptied exactly, and a delete that fails on the third file of four.
 """
 
 from __future__ import annotations
@@ -334,30 +340,37 @@ def test_a_dry_run_names_every_file_and_removes_none(tmp_path: Path) -> None:
     assert "--no-dry-run" in lines[-1]
 
 
-def test_a_move_that_fails_part_way_leaves_the_tree_as_it_was(
+def test_a_delete_that_fails_part_way_keeps_what_it_already_removed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The whole point of the staging directory, driven by a real mid-way failure.
+    """Four files are selected and the third delete raises: two are gone, two remain.
 
-    Four files are selected and the third move raises. A prune that unlinked as
-    it went would leave two of the four gone and an archive nobody can reason
-    about; this one puts back what it had moved and re-raises, so the tree is
-    byte-identical to the one it was handed.
+    This is what atomic means here, and it is not what this test asserted before
+    2026-09-17. Until then the prune moved a whole range into a scratch
+    directory and put every file back if one move failed, so the property was
+    "the tree is exactly as you found it". The owner replaced that shape with
+    short atomic deletes, so the property moved with it: one `unlink` is the
+    unit, it either happened or it did not, and an interruption after the second
+    file leaves two files gone and no rollback to get wrong.
+
+    The record is what makes the difference workable. An operator whose pass
+    stopped reads which files went and which one to retry, where a rollback only
+    ever told them to start again.
     """
     state = a_census(tmp_path / "state")
-    before = fingerprints(state)
-    moves = 0
+    deletes = 0
+    real_delete = prune._delete
 
-    def fail_on_the_third(day: Path, parked: Path) -> None:
-        nonlocal moves
-        moves += 1
-        if moves == 3:
+    def fail_on_the_third(day: Path) -> None:
+        nonlocal deletes
+        deletes += 1
+        if deletes == 3:
             raise OSError("the file system said no")
-        day.rename(parked)
+        real_delete(day)
 
-    monkeypatch.setattr(prune, "_park", fail_on_the_third)
+    monkeypatch.setattr(prune, "_delete", fail_on_the_third)
 
-    with pytest.raises(OSError, match="said no"):
+    with pytest.raises(prune.PruneInterruptedError) as stop:
         prune.prune_range(
             state,
             target=ledger.ITEM_HEALTH_DIRNAME,
@@ -366,14 +379,70 @@ def test_a_move_that_fails_part_way_leaves_the_tree_as_it_was(
             dry_run=False,
         )
 
-    assert moves == 3, "the prune kept moving after a failure"
-    assert fingerprints(state) == before, "a failed prune left the tree changed"
-    assert dates_on_disk(state, ledger.ITEM_HEALTH_DIRNAME) == list(DAYS)
-    assert not list(state.glob(".prune-*")), "the staging directory outlived the failure"
+    assert deletes == 3, "the prune kept deleting after a failure"
+    assert stop.value.so_far.taken == (
+        ledger.item_health_relpath(DAYS[1]),
+        ledger.item_health_relpath(DAYS[2]),
+    )
+    assert stop.value.so_far.resume_from == ledger.item_health_relpath(DAYS[3]), (
+        "the next pass has to retry the day that failed"
+    )
+    assert dates_on_disk(state, ledger.ITEM_HEALTH_DIRNAME) == [
+        DAYS[0],
+        DAYS[3],
+        DAYS[4],
+        DAYS[5],
+        DAYS[6],
+    ], "a day after the failure went, or a day before it came back"
 
 
-def test_the_staging_directory_does_not_outlive_a_prune(tmp_path: Path) -> None:
-    """Nothing is left under `state/` for a commit to pick up."""
+def test_a_ceiling_stops_a_pass_and_names_the_day_to_resume_at(tmp_path: Path) -> None:
+    """A range wider than the bite an operator wants is taken in bites.
+
+    The point of the ceiling on a store's day files is the same as on a
+    collection of 612 artifacts: one command, a bounded cost, and a record that
+    says whether there is more.
+    """
+    state = a_census(tmp_path / "state")
+
+    outcome = prune.prune_range(
+        state,
+        target=ledger.ITEM_HEALTH_DIRNAME,
+        since=DAYS[0],
+        until=DAYS[4],
+        dry_run=False,
+        max_deletes=2,
+    )
+
+    assert outcome.removed == (
+        ledger.item_health_relpath(DAYS[0]),
+        ledger.item_health_relpath(DAYS[1]),
+    )
+    assert outcome.more_to_do
+    assert outcome.resume_from == ledger.item_health_relpath(DAYS[2])
+    assert dates_on_disk(state, ledger.ITEM_HEALTH_DIRNAME) == list(DAYS[2:])
+    assert any("run it again" in line for line in prune.report(outcome))
+
+
+def test_the_range_an_operator_typed_is_its_own_ceiling(tmp_path: Path) -> None:
+    """With no `--max-deletes`, a range of n days deletes at most n files.
+
+    A real bound rather than a number somebody picked: the arithmetic is the
+    operator's own, so the default cannot silently take less than was asked for.
+    """
+    state = a_census(tmp_path / "state")
+
+    outcome = prune.prune_range(
+        state, target=ledger.ITEM_HEALTH_DIRNAME, since=DAYS[0], until=DAYS[6], dry_run=False
+    )
+
+    assert len(outcome.removed) == len(DAYS)
+    assert outcome.resume_from is None, "the range was taken whole, so nothing is left"
+    assert dates_on_disk(state, ledger.ITEM_HEALTH_DIRNAME) == []
+
+
+def test_nothing_is_left_under_state_for_a_commit_to_pick_up(tmp_path: Path) -> None:
+    """No scratch directory, because there is no longer a phase that needs one."""
     state = a_census(tmp_path / "state")
 
     prune.prune_range(
@@ -381,6 +450,7 @@ def test_the_staging_directory_does_not_outlive_a_prune(tmp_path: Path) -> None:
     )
 
     assert [entry.name for entry in state.iterdir()] == [ledger.ITEM_HEALTH_DIRNAME]
+    assert not list(state.glob(".prune-*")), "a scratch directory appeared from somewhere"
 
 
 def test_a_range_with_no_day_in_it_says_so(tmp_path: Path) -> None:

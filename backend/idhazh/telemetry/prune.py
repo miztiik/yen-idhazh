@@ -27,29 +27,31 @@ three days, and `--since X --until X` is one. That is the arithmetic
 `day_partition.days_in_window` already uses, where a cover of `n` days returns
 `n + 1` dates, and the two agree on purpose.
 
-**Atomic per store, through the rename the rest of this repository writes with.**
-Every selected file is moved into a scratch directory beside the stores - one
-rename each, on the same file system - and only once every one has moved is that
-directory removed. A rename that fails part way puts back the ones already
-moved and raises, so the tree is exactly as it was found. A prune that deleted
-three day files and then raised would have left an archive nobody can reason
-about, which is the state this shape exists to make unreachable.
+**Atomic per day file, one delete at a time.** Every selected file is removed on
+its own, oldest first, through `idhazh.prune.one_at_a_time` - the same core the
+GitHub collections are pruned with. A pass interrupted after the third file
+leaves three files gone and the rest exactly as they were. Nothing is half-done,
+because one `unlink` is the unit and a file is either there or it is not.
 
-The scratch directory is created and removed inside one call, in a `finally`,
-whether the moves succeeded or were rolled back. Its name starts with a dot, so
-a leftover from a process somebody killed reads as scratch rather than as a
-store nobody recognises.
+Until 2026-09-17 this collected the whole range, renamed every file into a
+scratch directory beside the stores, and removed that directory once every
+rename had worked - all of them or none of them, with a rollback if a rename
+failed. The scratch directory is gone with it. What that shape bought was "the
+tree is exactly as you found it" after a failure; what it cost was a second
+write path that could itself fail while undoing, and a range that had to be
+collected before the first file could move. An operator who now has to re-run a
+pass reads which files went from the record, which is a cheaper answer than a
+rollback nobody could test in production.
 
-**Bounded by the range it is handed** (Guardrail #12). The walk is one store's
-day tree, and the work is the days inside the range - neither grows because
-another store did.
+**Bounded by the range it is handed, and by a ceiling inside it** (Guardrail
+#12). The walk is one store's day tree, and a pass deletes at most the days the
+range names, or the `--max-deletes` an operator asked for. When a ceiling stops
+a pass, the report says which day the next pass resumes at.
 """
 
 from __future__ import annotations
 
 import argparse
-import shutil
-import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date as date_type
@@ -58,6 +60,12 @@ from typing import Final
 
 from idhazh import day_partition, ledger
 from idhazh.evals import writer as score_writer
+from idhazh.prune import one_at_a_time
+
+#: The core's own interruption, named here so a caller of this module imports
+#: one thing. A delete that failed raises it, and the record it carries says
+#: which day files had already gone.
+PruneInterruptedError = one_at_a_time.PruneInterruptedError
 
 #: Every store this command may delete from, alphabetically.
 #:
@@ -133,10 +141,16 @@ class Outcome:
     kept: int
     bytes_freed: int
     dry_run: bool
+    resume_from: str | None = None
 
     @property
     def changed(self) -> bool:
         return bool(self.removed) and not self.dry_run
+
+    @property
+    def more_to_do(self) -> bool:
+        """Whether a ceiling stopped this pass with days still inside the range."""
+        return self.resume_from is not None
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:
@@ -173,6 +187,17 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
         help="The newest day to remove. Both ends are named, so --since X --until X is one day.",
     )
     parser.add_argument(
+        "--max-deletes",
+        type=int,
+        default=None,
+        metavar="COUNT",
+        help=(
+            "How many day files this pass may delete before it stops and says which "
+            "day the next one resumes at. Defaults to every day the range names, so "
+            "the range an operator typed is its own ceiling."
+        ),
+    )
+    parser.add_argument(
         "--dry-run",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -189,20 +214,13 @@ def resolve(target: str) -> str:
     """The store this target names, or a refusal that says why.
 
     One place the vocabulary is checked, so the parser, the body and any later
-    caller cannot disagree about which words are stores.
+    caller cannot disagree about which words are stores. The distinction between
+    an unknown word and a refused one is drawn by `one_at_a_time.refuse_by_name`,
+    which the GitHub collections use as well - two vocabularies, one rule about
+    what a refusal owes the person reading it.
     """
-    if target in TARGETS:
-        return target
-    if target in REFUSED:
-        raise ValueError(
-            f"--target {target} is refused: {REFUSED[target]}. "
-            f"The stores this prunes are {', '.join(TARGETS)}"
-        )
-    raise ValueError(
-        f"--target takes the name of a store, not {target!r}. A path is never a "
-        f"target here, because a deletion primitive pointed at the repository is "
-        f"the one accident nobody can undo. The stores this prunes are "
-        f"{', '.join(TARGETS)}; {', '.join(REFUSED)} are refused by name"
+    return one_at_a_time.refuse_by_name(
+        target, allowed=TARGETS, refused=REFUSED, noun="store"
     )
 
 
@@ -223,13 +241,16 @@ def _day(value: str, flag: str) -> str:
     return value
 
 
-def _park(day: Path, parked: Path) -> None:
-    """Move one day file out of its store, so that removing it is a rename.
+def _delete(day: Path) -> None:
+    """Remove one day file, and the month and year directory it may have emptied.
 
-    The one place a file moves, so the rollback below has one thing to undo and
-    a test has one place to fail the move from.
+    The one place a file goes, so a test has one place to fail a delete from and
+    the core above has one call to make. `unlink` is the whole of it: a file is
+    either there or it is not, which is what makes a pass resumable without a
+    rollback.
     """
-    day.rename(parked)
+    day.unlink()
+    day_partition.drop_empty_day_dirs(day)
 
 
 def _relpath(state_root: Path, day: Path) -> str:
@@ -244,6 +265,31 @@ def _relpath(state_root: Path, day: Path) -> str:
     return f"{ledger.STATE_DIRNAME}/{day.relative_to(state_root).as_posix()}"
 
 
+def day_collection(state_root: Path, store: str) -> one_at_a_time.Collection[Path]:
+    """One store's day tree, as the three callables the core deletes through.
+
+    The listing is `day_partition.day_files`, which is a generator, so a store
+    of any size is walked one path at a time and never held. `day_files` also
+    refuses a name it cannot place, which means a store holding something this
+    walk cannot read stops the pass at that file rather than deleting round it.
+    """
+
+    def describe(day: Path) -> one_at_a_time.Member:
+        return one_at_a_time.Member(
+            id=_relpath(state_root, day),
+            day=day_partition.date_of(day),
+            size_bytes=day.stat().st_size,
+            label=day.name,
+        )
+
+    return one_at_a_time.Collection(
+        name=store,
+        listing=lambda: day_partition.day_files(state_root / store),
+        describe=describe,
+        delete=_delete,
+    )
+
+
 def prune_range(
     state_root: Path,
     *,
@@ -251,13 +297,15 @@ def prune_range(
     since: str,
     until: str,
     dry_run: bool = True,
+    max_deletes: int | None = None,
 ) -> Outcome:
-    """Remove one store's day files between two days, both ends named.
+    """Remove one store's day files between two days, both ends named, one at a time.
 
-    Selection first, then the move, and nothing in between. `day_files` refuses
-    a name it cannot place, so a store holding something this walk cannot read
-    stops the prune before a single file has moved - which is the right way
-    round: a tree nobody can describe is not a tree to start deleting from.
+    `max_deletes` defaults to every day the range names, so an operator who
+    typed a range gets that range and a caller who wants a smaller bite asks for
+    one. That default is a real bound rather than a number somebody picked: a
+    range of `n` days cannot delete more than `n` files, so the ceiling is the
+    operator's own arithmetic.
     """
     store = resolve(target)
     first = _day(since, "--since")
@@ -268,65 +316,34 @@ def prune_range(
             "Both ends are named, so the oldest day comes first"
         )
 
-    chosen: list[Path] = []
-    kept = 0
-    for day in day_partition.day_files(state_root / store):
-        if first <= day_partition.date_of(day) <= last:
-            chosen.append(day)
-        else:
-            kept += 1
+    days_named = (date_type.fromisoformat(last) - date_type.fromisoformat(first)).days + 1
+    outcome = one_at_a_time.take(
+        day_collection(state_root, store),
+        window=one_at_a_time.Window(since=first, until=last),
+        ceiling=days_named if max_deletes is None else max_deletes,
+        dry_run=dry_run,
+    )
+    return as_outcome(store, first, last, outcome)
 
-    # Weighed before anything moves, so a dry run reports the bytes a live run
-    # frees rather than the bytes it happens to have reached.
-    freed = sum(day.stat().st_size for day in chosen)
-    removed = tuple(_relpath(state_root, day) for day in chosen)
 
-    if chosen and not dry_run:
-        _remove(state_root, chosen)
+def as_outcome(store: str, first: str, last: str, taken: one_at_a_time.Pass) -> Outcome:
+    """The core's record in the words this command has always used.
 
+    `kept` is the day files the walk saw and the range did not hold. A pass that
+    stopped on its ceiling stopped walking too, so the number is what this pass
+    read rather than what the store holds - which is the honest reading, and the
+    reason the resume point is printed beside it.
+    """
     return Outcome(
         target=store,
         since=first,
         until=last,
-        removed=removed,
-        kept=kept,
-        bytes_freed=freed,
-        dry_run=dry_run,
+        removed=taken.taken,
+        kept=taken.seen - taken.selected,
+        bytes_freed=taken.bytes_freed,
+        dry_run=taken.dry_run,
+        resume_from=taken.resume_from,
     )
-
-
-def _remove(state_root: Path, chosen: list[Path]) -> None:
-    """Move every chosen file out, then drop them together - or put them all back.
-
-    Two phases, because a loop of `unlink` calls cannot be undone. A rename
-    inside one file system is atomic and reversible, so the first phase is
-    reversible and the second phase cannot half-happen: by the time the scratch
-    directory is removed, the store no longer holds any of these files.
-
-    The scratch directory sits beside the stores rather than in the system
-    temporary directory, so every move is a rename within one file system - a
-    cross-device move is a copy, which is neither atomic nor cheap. The `finally`
-    removes it whichever way the moves went, and its name starts with a dot so
-    that one left by a killed process reads as scratch rather than as a store.
-    """
-    staging = Path(tempfile.mkdtemp(prefix=".prune-", dir=state_root))
-    moved: list[tuple[Path, Path]] = []
-    try:
-        for index, day in enumerate(chosen):
-            # Numbered, because two stores' day files share a name and a flat
-            # staging directory would have one overwrite the other.
-            parked = staging / f"{index:04d}-{day.name}"
-            _park(day, parked)
-            moved.append((day, parked))
-    except BaseException:
-        for day, parked in reversed(moved):
-            parked.rename(day)
-        raise
-    finally:
-        shutil.rmtree(staging, ignore_errors=True)
-
-    for day, _parked in moved:
-        day_partition.drop_empty_day_dirs(day)
 
 
 def report(outcome: Outcome) -> list[str]:
@@ -350,6 +367,11 @@ def report(outcome: Outcome) -> list[str]:
         f"{outcome.bytes_freed} bytes, keeping {outcome.kept} outside the range"
     ]
     lines += [f"  {relpath}" for relpath in outcome.removed]
+    if outcome.more_to_do:
+        lines.append(
+            f"  the ceiling stopped this pass at {outcome.resume_from} - there is more "
+            "in the range, so run it again"
+        )
     if outcome.dry_run:
         lines.append("  nothing was removed - pass --no-dry-run to delete these")
     return lines
