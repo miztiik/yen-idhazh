@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-17
 
 The console's interactive charts read a published projection of item health. They
 never read `state/item-health/` directly.
@@ -66,8 +66,9 @@ because the panel it feeds cannot be drawn from a subtraction
 **A shard published before 2026-09-15 still loads.** The first call's cells were
 headed `call_1_*` then; `PublicTelemetryRow.from_csv_row` reads a retired heading
 into the column that replaced it, one direction only. The six new cells are
-appended at the end, so the positional prefix `parseTelemetryCsv` reads is
-unchanged and a cached bundle keeps working.
+appended at the end, so a cached bundle keeps working - an append moves no cell
+`parseTelemetryCsv` reads, under the positional prefix it used then or the column
+names it uses now ([below](#the-reader-finds-a-cell-by-its-name-so-a-column-can-move)).
 
 **`read_shard` checks the header as a prefix too, since 2026-09-15.** It used to
 demand equality, which made every widening a release blocker for exactly the file

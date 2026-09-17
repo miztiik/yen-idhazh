@@ -1,6 +1,6 @@
-"""Is every ledger `idhazh.ledger` declares wired into the run that writes it?
+"""Is every store the pipeline commits wired into the run that writes it?
 
-Two halves of one question. A ledger the writing job never stages is deleted with
+Two halves of one question. A store the writing job never stages is deleted with
 the runner, and a keyed ledger nothing settles keeps every row a retried job wrote
 twice. Both failures are silent: the pipeline logs a row it wrote, the step that
 would have carried it says nothing, and the next reader sees a shorter file than
@@ -11,10 +11,16 @@ shipped and staged by nothing, so every row went to the bin with the runner.
 `state/span-rollup` was both halves at once: nine days written and discarded, then
 staged but missing from the settlement registry.
 
-Nothing here names a ledger. Both sides are derived - the ledger side from the
-`*_relpath` helpers `idhazh.ledger` already exports, the job side from the CLI's
+Nothing here names a store. Both sides are derived - the store side from the
+`*_relpath` helpers the store modules already export, the job side from the CLI's
 own dispatch and the workflow's own `run:` bodies - because a hand-written list of
 ledger names is the thing that went missing in the first place.
+
+A store is filled two ways and both count here. A ledger takes an `append_*` or a
+`write_*` call; the trace tree takes a file sink opened on its own path helper, and
+a sink is still something a run writes and a job must stage. The three hand-written
+lists this replaced were each scoped to one source file, so a second writer in a
+second file bought a third list rather than failing anything.
 
 Nothing here opens a file under `state/`. Every path is computed from a fixed date,
 so what these tests cost does not move when the archive grows (CLAUDE.md
@@ -34,6 +40,7 @@ from typing import Any, Final
 import pytest
 
 from idhazh import cli, ledger
+from idhazh.telemetry import sinks, traces
 
 from ._harness import (
     COMMIT_JOBS,
@@ -60,53 +67,92 @@ DAILY_WORKFLOW: Final = "digest.yml"
 # a year or a month.
 OTHER_DATE: Final = "2027-01-02"
 
+# Every module that declares a committed store, each by exporting a `*_relpath`
+# helper for one. `idhazh.ledger` holds the CSV ledgers; `idhazh.telemetry.traces`
+# holds the trace tree beside them, which a sink writes rather than a writer
+# function - which is why every guard that looked for a writer missed it.
+STORE_MODULES: Final = (ledger, traces)
+
 # The package the pipeline lives in, and the name its modules import the ledger as.
 PACKAGE: Final = ledger.__name__.split(".")[0]
 LEDGER_ALIAS: Final = ledger.__name__.rsplit(".", 1)[-1]
 WRITER_CALL: Final = re.compile(rf"\b{LEDGER_ALIAS}\.((?:append|write)_[a-z_]+)\(")
 
+# A sink that takes a path is a thing that writes a file, so the sink classes are
+# read out of the module that declares them rather than named here: a second one
+# joins this derivation on the day it is written.
+SINK_CLASSES: Final = tuple(
+    sorted(
+        name
+        for name, value in vars(sinks).items()
+        if isinstance(value, type)
+        and not name.startswith("_")
+        and "path" in getattr(value, "__annotations__", {})
+    )
+)
+SINK_CALL: Final = re.compile(
+    rf"\b(?:{'|'.join(SINK_CLASSES)})\(\s*[A-Za-z_][\w.]*\.([a-z_]+_path)\("
+)
 
-def _ledger_publics(
+
+def _store_publics(
     *, suffix: str = "", prefixes: tuple[str, ...] = ()
 ) -> dict[str, Callable[..., Any]]:
-    """The public callables `idhazh.ledger` exports under a suffix or a prefix."""
+    """The public callables the store modules export under a suffix or a prefix."""
     found: dict[str, Callable[..., Any]] = {}
-    for name, value in sorted(vars(ledger).items()):
-        if name.startswith("_") or not callable(value):
-            continue
-        if suffix and not name.endswith(suffix):
-            continue
-        if prefixes and not name.startswith(prefixes):
-            continue
-        found[name] = value
+    for module in STORE_MODULES:
+        for name, value in sorted(vars(module).items()):
+            if name.startswith("_") or not callable(value):
+                continue
+            if suffix and not name.endswith(suffix):
+                continue
+            if prefixes and not name.startswith(prefixes):
+                continue
+            assert name not in found, (
+                f"{module.__name__} and {found[name].__module__} both export {name}, and "
+                "this test keys a store by the bare helper name. Rename one of them."
+            )
+            found[name] = value
     return found
 
 
+def _helper_arguments(date: str) -> dict[str, object]:
+    """What to pass a path helper, named by the parameter that asks for it.
+
+    A store filed by something other than a date says so in its own signature - the
+    trace tree files by run and by shard - so the value follows the parameter's name
+    rather than the helper's.
+    """
+    return {"date": date, "month": date, "run_id": f"{date}-1", "shard": 0}
+
+
 def _relpath_for(name: str, helper: Callable[..., Any], date: str) -> str:
-    """One ledger path for one date, from the helper the module already exports."""
+    """One store path for one date, from the helper the module already exports."""
+    supplied = _helper_arguments(date)
     required = [
-        parameter
+        parameter.name
         for parameter in inspect.signature(helper).parameters.values()
         if parameter.default is inspect.Parameter.empty
     ]
-    assert len(required) <= 1, (
-        f"idhazh.ledger.{name} takes {len(required)} arguments with no default. This "
-        "test calls every *_relpath helper with a date or with nothing, so a helper "
-        "that needs more has to say here what to pass it."
+    unnamed = sorted(set(required) - set(supplied))
+    assert not unnamed, (
+        f"{helper.__module__}.{name} asks for {unnamed}, which this test has no value "
+        "for. Name the parameter in _helper_arguments, so every *_relpath helper can "
+        "still be called from one date."
     )
-    produced = helper(date) if required else helper()
-    assert isinstance(produced, str), f"idhazh.ledger.{name} must return a path string"
+    produced = helper(**{parameter: supplied[parameter] for parameter in required})
+    assert isinstance(produced, str), f"{helper.__module__}.{name} must return a path string"
     return produced
 
 
 def _stores() -> dict[str, str]:
-    """Every store the ledger module declares: helper name -> the path a job stages.
+    """Every store the store modules declare: helper name -> the path a job stages.
 
     The staged path is the longest prefix two dates share, so a dated ledger reduces
     to its own directory and an undated one stays the file it is.
     """
     found: dict[str, str] = {}
-    for name, helper in _ledger_publics(suffix="_relpath").items():
+    for name, helper in _store_publics(suffix="_relpath").items():
         first = _relpath_for(name, helper, SUBSTITUTED_DATE).split("/")
         second = _relpath_for(name, helper, OTHER_DATE).split("/")
         shared: list[str] = []
@@ -114,7 +160,7 @@ def _stores() -> dict[str, str]:
             if left != right:
                 break
             shared.append(left)
-        assert shared, f"idhazh.ledger.{name} returns two paths with nothing in common"
+        assert shared, f"{helper.__module__}.{name} returns two paths with nothing in common"
         found[name] = "/".join(shared)
     return found
 
@@ -127,7 +173,7 @@ def _writer_stores() -> dict[str, str]:
     """
     stores = _stores()
     resolved: dict[str, str] = {}
-    for name, writer in _ledger_publics(prefixes=("append_", "write_")).items():
+    for name, writer in _store_publics(prefixes=("append_", "write_")).items():
         source = inspect.getsource(writer)
         stems = [
             call.removesuffix("_path").removesuffix("_relpath")
@@ -136,11 +182,48 @@ def _writer_stores() -> dict[str, str]:
         stems.append(name.split("_", 1)[1])
         helper = next((f"{stem}_relpath" for stem in stems if f"{stem}_relpath" in stores), None)
         assert helper is not None, (
-            f"idhazh.ledger.{name} writes a store this test cannot name: it calls no "
-            "path helper it shares a name with. Add a `<store>_relpath()` helper beside "
-            f"the others and call it from {name}."
+            f"{writer.__module__}.{name} writes a store this test cannot name: it calls "
+            "no path helper it shares a name with. Add a `<store>_relpath()` helper "
+            f"beside the others and call it from {name}."
         )
         resolved[name] = stores[helper]
+    return resolved
+
+
+def _package_sources() -> dict[str, str]:
+    """Every module in the pipeline package: its dotted name -> its source text.
+
+    The package's own files and nothing else, so what this reads grows with the code
+    rather than with the archive (CLAUDE.md Guardrail #12).
+    """
+    package_dir = Path(inspect.getfile(ledger)).parent
+    return {
+        path.relative_to(package_dir.parent).with_suffix("").as_posix().replace("/", "."): (
+            path.read_text(encoding="utf-8")
+        )
+        for path in sorted(package_dir.rglob("*.py"))
+    }
+
+
+def _sink_stores() -> dict[str, str]:
+    """Every path helper a file sink is opened on, and the store it fills.
+
+    Read out of the package's own source, because a sink has no `append_*` name to be
+    found by: the call site is the only place that says which store it writes.
+    """
+    stores = _stores()
+    opened = {
+        helper for source in _package_sources().values() for helper in SINK_CALL.findall(source)
+    }
+    resolved: dict[str, str] = {}
+    for helper in sorted(opened):
+        stem = helper.removesuffix("_path")
+        assert f"{stem}_relpath" in stores, (
+            f"a file sink is opened on {helper}(), and no store module exports a "
+            f"{stem}_relpath() helper for it. Add one beside the path helper, so this "
+            "test can say which store the sink fills and which job has to stage it."
+        )
+        resolved[helper] = stores[f"{stem}_relpath"]
     return resolved
 
 
@@ -152,7 +235,7 @@ def _declared_keys() -> dict[str, tuple[str, ...]]:
     """
     stores = _writer_stores()
     declared: dict[str, tuple[str, ...]] = {}
-    for name, writer in _ledger_publics(prefixes=("append_", "write_")).items():
+    for name, writer in _store_publics(prefixes=("append_", "write_")).items():
         tree = ast.parse(inspect.getsource(writer).lstrip())
         used = sorted(
             {
@@ -161,11 +244,13 @@ def _declared_keys() -> dict[str, tuple[str, ...]]:
                 if isinstance(node, ast.Name) and node.id.endswith("_KEY")
             }
         )
-        assert len(used) <= 1, f"idhazh.ledger.{name} names {used}; one writer, one key"
+        assert len(used) <= 1, f"{writer.__module__}.{name} names {used}; one writer, one key"
         if not used:
             continue
-        key = getattr(ledger, used[0])
-        assert isinstance(key, tuple), f"idhazh.ledger.{used[0]} must be a tuple of columns"
+        key = getattr(inspect.getmodule(writer), used[0], None)
+        assert isinstance(key, tuple), (
+            f"{writer.__module__}.{used[0]} must be a tuple of columns"
+        )
         declared[stores[name]] = key
     return declared
 
@@ -241,20 +326,38 @@ def _writers_called_by(module: ModuleType) -> set[str]:
     return set(WRITER_CALL.findall(inspect.getsource(module)))
 
 
-def _verb_stores() -> dict[str, dict[str, str]]:
-    """CLI verb -> store -> the sentence that says why that verb writes it.
+def _sinks_opened_by(module: ModuleType) -> set[str]:
+    """The store path helpers this module's source hands to a file sink."""
+    return set(SINK_CALL.findall(inspect.getsource(module)))
+
+
+def _reachable_modules() -> dict[str, set[ModuleType]]:
+    """CLI verb -> the modules its own branch enters, and the ones those call.
 
     One hop past the dispatched stage, because a stage that hands the writing to a
     helper module still owes the run the rows: the fold writes its months through
     `retention`, and the probe writes its row through `telemetry.silicon`.
     """
-    stores = _writer_stores()
-    charged: dict[str, dict[str, str]] = {}
+    reachable: dict[str, set[ModuleType]] = {}
     for verb, dispatched in _dispatched_modules().items():
-        reachable: set[ModuleType] = set()
+        entered: set[ModuleType] = set()
         for module in dispatched:
-            reachable.add(module)
-            reachable |= _calls_into(module)
+            entered.add(module)
+            entered |= _calls_into(module)
+        reachable[verb] = entered
+    return reachable
+
+
+def _verb_stores() -> dict[str, dict[str, str]]:
+    """CLI verb -> store -> the sentence that says why that verb writes it.
+
+    A ledger writer and a file sink are both writes, and a store filled either way
+    is a store the job that runs the verb has to stage.
+    """
+    stores = _writer_stores()
+    sunk = _sink_stores()
+    charged: dict[str, dict[str, str]] = {}
+    for verb, reachable in _reachable_modules().items():
         for module in sorted(reachable, key=lambda entered: entered.__name__):
             for writer in sorted(_writers_called_by(module)):
                 assert writer in stores, (
@@ -265,6 +368,11 @@ def _verb_stores() -> dict[str, dict[str, str]]:
                 charged.setdefault(verb, {})[stores[writer]] = (
                     f"`python -m idhazh {verb}` reaches {module.__name__}, "
                     f"which calls ledger.{writer}"
+                )
+            for opener in sorted(_sinks_opened_by(module)):
+                charged.setdefault(verb, {})[sunk[opener]] = (
+                    f"`python -m idhazh {verb}` reaches {module.__name__}, "
+                    f"which opens a file sink on {opener}()"
                 )
     return charged
 
@@ -293,59 +401,77 @@ def _covers(staged: str, store: str) -> bool:
     return store == staged or store.startswith(f"{staged}/")
 
 
-def test_every_ledger_writer_resolves_to_one_store_this_test_can_check() -> None:
+def test_every_store_is_filled_by_a_writer_this_test_can_follow() -> None:
     """The derivation must not answer an empty question.
 
-    Both assertions below read the same two lists. A store nothing writes would
-    shrink one of them in silence and leave a green test asserting nothing about the
-    ledger that went missing.
+    Every assertion below reads a list the staging check also reads. A store nothing
+    writes, a sink class nothing matches, or a writer nothing calls would each shrink
+    one of them in silence and leave a green test saying nothing at all about the
+    store that went missing.
     """
     stores = _stores()
-    written = set(_writer_stores().values())
+    written = set(_writer_stores().values()) | set(_sink_stores().values())
 
-    assert stores, "idhazh.ledger exports no *_relpath helper, so nothing here is checked"
+    assert stores, "the store modules export no *_relpath helper, so nothing here is checked"
+    assert SINK_CLASSES, (
+        f"{sinks.__name__} declares no sink class that takes a path, so the sink half of "
+        "the derivation matches nothing and a store written by one is checked by nobody."
+    )
     unwritten = sorted(set(stores.values()) - written)
     assert not unwritten, (
-        f"{', '.join(unwritten)} has a path helper in idhazh.ledger and no public writer. "
-        "Either the writer is private - make it public, so the staging test can see it - "
-        "or the helper is dead and a commit step is staging a directory nothing fills."
+        f"{', '.join(unwritten)} has a path helper and nothing public fills it. Either the "
+        "writer is private - make it public, so the staging test can see it - or the "
+        "helper is dead and a commit step is staging a directory nothing fills."
+    )
+
+    called = {
+        writer
+        for reachable in _reachable_modules().values()
+        for module in reachable
+        for writer in _writers_called_by(module)
+    }
+    uncalled = sorted(set(_writer_stores()) - called)
+    assert not uncalled, (
+        f"{', '.join(uncalled)} is exported as a writer and no module a `python -m idhazh "
+        "<verb>` reaches calls it, so its store is charged to no job and the staging check "
+        "below says nothing about it. Call it from the stage that fills the store, or "
+        "delete it and the path helper beside it."
     )
 
 
-def test_every_module_that_writes_a_ledger_is_reached_by_a_cli_verb() -> None:
-    """A writer no verb reaches is a ledger no job can be asked to stage.
+def test_every_module_that_writes_a_store_is_reached_by_a_cli_verb() -> None:
+    """A writer no verb reaches is a store no job can be asked to stage.
 
     This is the hole the staging assertion would otherwise fall through. A stage that
     writes rows from a module the CLI never enters is charged to no job, so the
     parity check stays green while the rows go nowhere.
     """
-    reached: set[str] = set()
-    for dispatched in _dispatched_modules().values():
-        for module in dispatched:
-            reached.add(module.__name__)
-            reached |= {called.__name__ for called in _calls_into(module)}
-
-    package_dir = Path(inspect.getfile(ledger)).parent
+    reached = {
+        module.__name__
+        for reachable in _reachable_modules().values()
+        for module in reachable
+    }
     writing = {
-        path.relative_to(package_dir.parent).with_suffix("").as_posix().replace("/", ".")
-        for path in sorted(package_dir.rglob("*.py"))
-        if WRITER_CALL.search(path.read_text(encoding="utf-8"))
+        name
+        for name, source in _package_sources().items()
+        if WRITER_CALL.search(source) or SINK_CALL.search(source)
     }
 
     stranded = sorted(writing - reached - {ledger.__name__})
     assert not stranded, (
-        f"{', '.join(stranded)} calls a ledger writer and no `python -m idhazh <verb>` "
-        "reaches it, so no job can be held to staging what it writes. Dispatch it from a "
-        "verb in backend/idhazh/cli.py, or call it from a module a verb already enters."
+        f"{', '.join(stranded)} writes a store and no `python -m idhazh <verb>` reaches "
+        "it, so no job can be held to staging what it writes. Dispatch it from a verb in "
+        "backend/idhazh/cli.py, or call it from a module a verb already enters."
     )
 
 
-def test_every_ledger_is_staged_by_the_job_whose_stage_writes_it() -> None:
-    """A ledger no job stages is written on a runner and deleted with it.
+def test_every_store_is_staged_by_the_job_whose_stage_writes_it() -> None:
+    """A store no job stages is written on a runner and deleted with it.
 
-    `state/host-fingerprint` was written and staged by nobody until 2026-09-16, and
-    `state/span-rollup` until 2026-09-15. Neither broke a test: the ledger side was
-    in Python, the staging side was in YAML, and nothing read both.
+    `state/host-fingerprint` was written and staged by nobody until 2026-09-16,
+    `state/span-rollup` until 2026-09-15, and `state/traces` beside it. None of them
+    broke a test: the writing side was in Python, the staging side was in YAML, and
+    nothing read both.
 
     A job is credited only for its own commit steps. The assemble job stages `state`
     whole and that is worth nothing to a work shard - the shard runs on its own
@@ -377,9 +503,25 @@ def test_every_ledger_is_staged_by_the_job_whose_stage_writes_it() -> None:
     assert not missing, "\n".join(missing)
     assert set(credited) == set(commit_calls), (
         f"the {sorted(set(commit_calls) - set(credited))} job commits in "
-        f".github/workflows/{DAILY_WORKFLOW} and this test charged it with no ledger at "
+        f".github/workflows/{DAILY_WORKFLOW} and this test charged it with no store at "
         "all, so nothing above was checked for it."
     )
+
+
+def _rewritten_stores() -> set[str]:
+    """The stores a writer replaces whole, rather than appends a row to.
+
+    `append_*` adds to the file and `write_*` replaces it - the convention the module
+    already spells in its own names, and the one `_store_publics` already splits on.
+    A writer that replaces settles nothing as it writes, so it names no key. The
+    post-merge key is still right for it: the file is `merge=union`, so two runs'
+    folds stack in the merged copy and the settler is the only thing that can take
+    one of them back out again. `state/chrome.csv` is the case (`ledger.write_chrome`).
+    """
+    stores = _writer_stores()
+    replaced = {store for name, store in stores.items() if name.startswith("write_")}
+    appended = {store for name, store in stores.items() if name.startswith("append_")}
+    return replaced - appended
 
 
 def test_every_ledger_that_declares_a_key_is_registered_for_settlement() -> None:
@@ -389,6 +531,9 @@ def test_every_ledger_that_declares_a_key_is_registered_for_settlement() -> None
     The two sides are compared as sets rather than as a subset, so a ledger that
     declares no key must also be absent from the registry - which is what
     `keyed_paths` says about the one ledger it deliberately leaves out.
+
+    A store whose writer replaces the file is the exception, and it is derived rather
+    than named: see `_rewritten_stores`.
 
     `keyed_paths` is asked for one named date, so it returns that day's cover instead
     of globbing the tree, and this test reads no committed file.
@@ -413,11 +558,12 @@ def test_every_ledger_that_declares_a_key_is_registered_for_settlement() -> None
         "dropped. Add it to keyed_paths() in backend/idhazh/ledger.py."
     )
 
-    keyless = sorted(set(registered) - set(declared))
+    keyless = sorted(set(registered) - set(declared) - _rewritten_stores())
     assert not keyless, (
-        f"{', '.join(keyless)} is registered for settlement and its writer names no key, "
-        "so the settler has a key the writer does not use. Name the key in the writer in "
-        "backend/idhazh/ledger.py, or take the ledger out of keyed_paths()."
+        f"{', '.join(keyless)} is registered for settlement, its writer appends rows, and "
+        "that writer names no key - so the settler has a key the writer does not use. Name "
+        "the key in the writer in backend/idhazh/ledger.py, or take the ledger out of "
+        "keyed_paths()."
     )
 
     for store, key in sorted(declared.items()):
