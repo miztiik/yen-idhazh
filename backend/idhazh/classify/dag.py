@@ -105,12 +105,11 @@ def _summary_output_tokens(ask: SummarizeConfig) -> int:
     return calls.summarize_and_plan_budget_tokens(ask, plan=ask.asks_for_a_visual_plan)
 
 
-#: The sequence, in order. **This tuple is the contract.** Adding to it is
-#: ESCALATE trigger 6 of `TODO/20260910-23-article-classification-plan.md`
-#: section 12a: a labelling row adds a field to the label call's reply shape, never a
-#: node here. A third call would be paid twice over - once as its own decode and
-#: again inside every prompt behind it - and `sequence_tokens` is where that
-#: shows up.
+#: The sequence, in order. **This tuple is the contract.** Adding to it is a
+#: design change a person signs off, never a quiet edit: a labelling change adds
+#: a field to the label call's reply shape, not a node here. A third call would
+#: be paid twice over - once as its own decode and again inside every prompt
+#: behind it - and `sequence_tokens` is where that shows up.
 NODES: Final[tuple[CallNode, ...]] = (
     CallNode(CallName.LABEL, _label_output_tokens),
     CallNode(CallName.SUMMARIZE_AND_PLAN, _summary_output_tokens),

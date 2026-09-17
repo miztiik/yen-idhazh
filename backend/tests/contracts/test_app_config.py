@@ -277,9 +277,9 @@ def test_the_sequence_is_two_calls_and_growing_it_is_an_escalation() -> None:
 
     The import-time guard in `classify.dag` fires first and says the same thing.
     This test exists because a guard inside the module a change is editing is a
-    guard that change can edit; a row that adds a node has to come here and say
-    so as well, which is the point at which ESCALATE trigger 6 of
-    `TODO/20260910-23-article-classification-plan.md` section 12a has fired.
+    guard that change can edit; a change that adds a node has to come here and
+    say so as well, which is the point at which it stops being a quiet edit and
+    becomes a design decision a person signs off.
 
     **A labelling row does not add a node.** It adds a field to the label call's reply
     shape, and `label_budget_tokens` re-derives the budget from the shape's
@@ -520,8 +520,8 @@ def test_the_windows_and_the_reading_marks_are_the_spans_the_committed_config_na
     assert legacy.console.min_window_days == drawn.console.min_window_days
     assert legacy.console.max_window_days == drawn.console.max_window_days
 
-    # The two knobs this row minted. Nothing reads either yet - rows 8 and 25 of
-    # TODO/20260906-constant-cost-reads-plan.md do - so the committed value and
+    # Two knobs nothing reads yet - the offline cache evicts on a day count
+    # alone, and the archive has no window control - so the committed value and
     # the bounds either side of it are the whole of what can be checked today.
     assert drawn.digest.offline_bytes_kept == 20_000_000
     assert drawn.digest.archive_window_days in drawn.console.window_presets
@@ -553,12 +553,11 @@ def test_the_offline_cache_takes_a_byte_ceiling_that_can_still_hold_one_day() ->
 def test_the_archive_window_names_a_span_the_console_presets_already_offer() -> None:
     """One list of spans in the contract, not two.
 
-    The archive gets a window control in row 25 of
-    TODO/20260906-constant-cost-reads-plan.md, and it reuses the console's
-    presets. So `archive_window_days` names a member of that list rather than
-    declaring a second list of day counts, and both documents refuse a file
-    where it does not - which is the same rule `console.default_window_days`
-    has had since 2026-08-29.
+    When the archive gets a window control it reuses the console's presets. So
+    `archive_window_days` names a member of that list rather than declaring a
+    second list of day counts, and both documents refuse a file where it does
+    not - which is the same rule `console.default_window_days` has had since
+    2026-08-29.
 
     Both documents are exercised, because a check on only one of them would pass
     on the file the console does not read. The cost is stated rather than
