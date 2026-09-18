@@ -15,16 +15,21 @@ Do not remove factual detail or uncertainty to make the wording stronger.
 Paraphrase unless the exact words matter. Each quotation must be exact,
 at most $max_verbatim_words words, with its speaker in the same sentence.
 
+The summary.
+
 "title" - a new title of $title_words_min to $title_words_max words naming
 the main actor and action. Do not copy or repair the source headline.
 
+"key_points" - one sentence each, at most $key_point_words_max words. A key
+point that restates the summary is a wasted line.
+
 "summary" - coherent prose explaining the main event, its basis and any
-response or limitation needed to understand it accurately.  Cover the key point
+response or limitation needed to understand it accurately.
 Follow the question below for length and key-point count. Do not pad.
 
 $paragraph_rule
 
-For all three: keep every figure exactly as the item wrote it. 
+For all three: keep every figure exactly as the item wrote it.
 A quotation is at most $max_verbatim_words words, in double
 quotes, with the speaker in the same sentence.
-Plain third-person English,neutral verbs, no address to the reader.
+Plain third-person English, neutral verbs, no address to the reader.
