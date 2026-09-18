@@ -207,20 +207,28 @@ def _waiting_rows(
 def _compact_ledger(
     state_dir: Path, which: SegmentLedger, paths: list[Path]
 ) -> tuple[list[str], int, int]:
-    """Fold one ledger's segments into every head their own rows name."""
-    by_date: dict[str, list[_Waiting]] = {}
+    """Fold one ledger's segments into every head their own rows name.
+
+    Grouped by the head each row's date names rather than by the date itself,
+    because the two stopped being the same thing when the span fold started
+    writing segments: a month head takes every date of its month, so grouping by
+    date would read and rewrite one file once per day in it and report the same
+    path that many times. The routing rule is unchanged - the date comes off the
+    row and the head comes off the date.
+    """
+    grouped: dict[str, tuple[ledger.SegmentHead, list[_Waiting]]] = {}
     rows_waiting = _waiting_rows(
         paths,
         ledger.segment_contract(which),
         dates_from_run=ledger.segment_dates_from_run(which),
     )
     for row in rows_waiting:
-        by_date.setdefault(row.date, []).append(row)
+        head = ledger.segment_head(state_dir, which, row.date)
+        grouped.setdefault(head.relpath, (head, []))[1].append(row)
     written: list[str] = []
     merged = 0
     superseded = 0
-    for date, rows in sorted(by_date.items()):
-        head = ledger.segment_head(state_dir, which, date)
+    for _, (head, rows) in sorted(grouped.items()):
         columns = head.model.csv_columns()
         prefers = ledger.preference_for(head.key)
         held: dict[tuple[str, ...], _Held] = {}
