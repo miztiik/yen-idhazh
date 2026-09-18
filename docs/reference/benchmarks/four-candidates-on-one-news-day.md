@@ -125,7 +125,7 @@ and these dispatches did not write one.
 
 ## Prefill and decode, which this run did not record
 
-**`QualificationObservation` has no prefill field and no decode field.** It keeps
+**`ItemObservation` has no prefill field and no decode field.** It keeps
 `prompt_tokens`, `completion_tokens` and one `summarize_seconds` for the whole
 call. The production path records the split - `ItemHealthRow.summary_prefill_ms`
 and `summary_decode_ms` are filled from the server's own `timings` by the
@@ -151,7 +151,7 @@ different processors, so a cross-arm comparison of these rates is the lottery
 again.
 
 **The measurement that would settle it** is passing an `ItemRecorder` into the
-qualify call, or adding the two timing fields to `QualificationObservation`. The
+qualify call, or adding the two timing fields to `ItemObservation`. The
 server already returns them on every reply; nothing has to be re-run to start
 collecting them.
 
