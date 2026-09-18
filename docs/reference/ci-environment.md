@@ -162,6 +162,7 @@ Verified 2026-08-20.
 ## See also
 
 - [github-actions.md](github-actions.md) - which workflows exist, when each runs, and what each does.
+- [../architecture/publishing/committing.md](../architecture/publishing/committing.md) - how the jobs that push to `main` win the race against each other.
 - [../how-to/analyze-a-pipeline-artifact.md](../how-to/analyze-a-pipeline-artifact.md) - how to read the one artifact that outlives the day it describes.
 - [../architecture/publishing/retention.md](../architecture/publishing/retention.md) - what the committed record keeps once the artifacts are gone.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #2, which states the ceilings this page explains the behaviour behind.
