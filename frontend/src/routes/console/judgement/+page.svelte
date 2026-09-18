@@ -17,6 +17,7 @@
 	import { onMount } from 'svelte';
 	import { windowOfDays } from '$lib/charts/viewport';
 	import WindowControl from '$lib/components/WindowControl.svelte';
+	import MergeLinePlot from './MergeLinePlot.svelte';
 	import MergedStoriesPanel from './MergedStoriesPanel.svelte';
 
 	let { data } = $props();
@@ -80,6 +81,17 @@
 		height={data.console.chart_height}
 		width={data.console.chart_width}
 		tickDensity={data.chart.tick_density}
+	/>
+
+	<MergeLinePlot
+		days={data.lines}
+		knobs={data.similarity}
+		{viewport}
+		height={data.console.chart_height}
+		width={data.console.chart_width}
+		tickDensity={data.chart.tick_density}
+		readoutMaxShare={data.chart.readout_max_share}
+		configuredLine={data.configuredLine}
 	/>
 
 	<h2 class="console-h2">What the model made of each article</h2>
