@@ -100,7 +100,7 @@ The planning step scores every story before a single model loads ([../sources/di
 
 `time_source` earns its place because the fallback it names is silent. `published_at` is the feed's own date where the feed gave a usable one, and our first sight of the address where it did not ([../sources/freshness.md](../sources/freshness.md)). Both are the same kind of string, so a page printing the time cannot say whose it is without this field. Measured 2026-08-31 on the committed 2026-08-30 payload - the newest day that had finished publishing - 431 items: 305 distinct `HH:mm` values, and 5 stamps, 1.2 percent, within two minutes of a run stamp. **That last figure is an upper bound on the fallback and not a count of it**, because until this field shipped nothing committed recorded the choice, and a feed's own stamp can land near a run by chance. The fallback is rare either way, which is exactly why it needs naming: a reader has no way to spot the 1 percent.
 
-### The item's own stamp is what reads it, and what it can and cannot say (2026-09-12)
+### The item's own stamp is what reads it, and what it can and cannot say
 
 The day's stream orders by `published_at`, newest first, and every story prints its own stamp beside its heading. So `time_source` stopped being a field with no reader and became the thing that decides how a story's stamp is drawn ([../../concepts/ui-shell.md](../../concepts/ui-shell.md)). Re-counted 2026-09-12 on a developer machine / Python 3.14.2 over every committed day - 22 days, 8,922 stories:
 
@@ -111,11 +111,11 @@ The day's stream orders by `published_at`, newest first, and every story prints 
 | `unknown` | 0 | 0 | nothing - there is no number to print |
 | absent | 3,733 | 41.8 percent | the clock, unattributed and unmarked |
 
-**Two of those four numbers moved and the third did not, and the difference is the point.** The absent count is **frozen at 3,733** - every day published since the field landed carries it, so that column cannot grow - while its *share* falls with every run: 79.2 percent when this table was first written on 2026-09-02, 41.8 percent now. A share read off this table more than a few days old is a reading of that morning.
+**Two of those four numbers move and the third does not, and the difference is the point.** The absent count is **frozen at 3,733** - every day published since the field landed carries it, so that column cannot grow - while its *share* falls with every run. A share read off this table more than a few days old is a reading of that morning.
 
 The item prints digits only, from 2026-09-06: a clock, and a date in front of it when the stamp is not from the day being read. The mark is what carries the `first_seen` case now that no word does.
 
-**Where the stamp is drawn, from 2026-09-12.** It was on a shared rail down the stream's leading edge from 2026-09-02; the rail is deleted. It grouped stories into hour-wide runs and drew one marker per run, so 86.3 percent of stories carried no time at all - 1,218 markers over these 8,922 stories at the 60-minute default. The stamp is now the **fourth and last child of the item's eyebrow**, in the eyebrow's own type, and on a dated page it takes the slot the day link held. A search result keeps the day link there and draws no clock: that list spans days, and two dates on a line capped at four things is a duplicate.
+**Where the stamp is drawn.** The stamp is the **fourth and last child of the item's eyebrow**, in the eyebrow's own type, and on a dated page it takes the slot the day link held. A search result keeps the day link there and draws no clock: that list spans days, and two dates on a line capped at four things is a duplicate. A shared rail down the stream's leading edge was the alternative and it is not used: it grouped stories into hour-wide runs and drew one marker per run, so most stories carried no time at all.
 
 Three things follow from that table and each one moved the design.
 
@@ -488,7 +488,7 @@ A ceiling with no revisit point is how the last one was set wrong. Two numbers f
 
 **Why 8 MB for the vectors.** Only a reader who searches downloads them, and that reader has already accepted the encoder: 22.97 MB on disk, 16.22 MB on the wire. 8 MB is half of what they already said yes to, and 40 percent above the ceiling projection.
 
-**The 300 KB figure this was planned against is retired.** It was written before anything was measured, and the measurement says no shape gets under it: the leanest entry that still browses - date lifted to a key, vertical dropped because it is already the item id's prefix - is 41.51 bytes, and a month is still over at every rate. 300 KB buys about 6,000 real entries, which is 17 days at the observed rate and 7 at the ceiling. The numbers above replace it.
+**No month shard gets under 300 KB, so that figure is not a candidate ceiling.** The leanest entry that still browses - date lifted to a key, vertical dropped because it is already the item id's prefix - is 41.51 bytes, and a month is over 300 KB at every rate measured. 300 KB buys about 6,000 real entries, which is 17 days at the observed rate and 7 at the ceiling.
 
 ### The shard is derived, so retention needs nothing
 
@@ -498,15 +498,18 @@ The rebuild costs one pass over the month's committed payloads: **88 to 122 mill
 
 The obligation that does need stating: **every writer of a committed day payload owes its month a rebuild.** There are three - the assemble stage, the one-shot `backfill-vectors` command, and `backend/utilities/build_canary_day.py`, which writes twenty fixture days for the browser suite to browse. A fourth would have to.
 
-### The suite rewrote the shard it was meant to project (2026-08-27)
+### An output path is derived at the call site, never held as a constant
 
-The writer was right from its first commit and the shard on `main` was not. It held **one** entry - `ai-01`, "Example Lab releases a smaller model" - against six committed days holding 2,237 items, and no published day holds that item at all. A rebuild over the committed tree produces 2,237 entries and 2,235 vectors, so the arithmetic was never in question.
-
-The cause was the path. `stages.assemble.stage_assemble` took the index root from a module constant while every pipeline test redirects `PUBLIC_ROOT` at a temporary tree, so **running the backend suite rebuilt the published shard out of fixture days**, on any machine that ran it. Nothing failed; the file was simply wrong afterwards, and it was committed that way.
-
-The fix is the shape `public_telemetry` already had: the index root is derived from the digest root at the call site rather than kept as a constant of its own, so a caller that moves the days moves the index with them. Two tests hold it - one that the derived root follows a redirected `PUBLIC_ROOT` out of the repository, and one that the shard on disk names exactly the days on disk. The second is the reader-facing half: the archive lists what that file holds, so a shard that disagrees with the tree is a page listing the wrong stories.
-
-**The general shape is worth more than the instance.** A constant that names an output path is safe only until a caller redirects a *sibling* path, and the failure is silent by construction: the code runs, the file is written, and the only symptom is in a file nobody re-reads.
+The index root comes off the digest root where it is used, the shape
+`public_telemetry` already had, so a caller that moves the days moves the index
+with them. **A constant that names an output path is safe only until a caller
+redirects a sibling path**, and the failure is silent by construction: the code
+runs, the file is written, and the only symptom is in a file nobody re-reads.
+Two tests hold it - one that the derived root follows a redirected `PUBLIC_ROOT`
+out of the repository, and one that the shard on disk names exactly the days on
+disk. The second is the reader-facing half: the archive lists what that file
+holds, so a shard that disagrees with the tree is a page listing the wrong
+stories.
 
 ### How it reaches a browser
 
@@ -560,7 +563,7 @@ The per-day figures are the three mature days only - 2026-08-24, -25 and -26, at
 
 **The staged tree does not fall to nothing, and the floor is pictures.** 1,055,600 bytes of it is 87 rendered SVGs that the day pages fetch at runtime, and a projection must not touch those. The `digest.json` half went 5,921,207 -> 2,564,775 bytes, which is 56.7 percent off.
 
-### The served day is a contract, and its address stops being movable (2026-08-31)
+### The served day is a contract, and its address stops being movable
 
 The staged file is now [../../../schemas/digest-view.schema.json](../../../schemas/digest-view.schema.json), generated from [../../../backend/idhazh/contracts/digest_view.py](../../../backend/idhazh/contracts/digest_view.py), and every staged day carries its `version`. Until this commit the shape was a thirteen-name array in a build script. That was honest while the only reader was our own archive page rendering a search result: both halves shipped in one build, so a widening could not surprise anybody.
 
@@ -592,7 +595,7 @@ All nine together are +107.42 bytes an item rather than the +109.42 those nine s
 
 That is what this row spends. What it buys is the migration, and one day priced on a build of this branch says how much: **2026-08-30 is twelve prerendered documents totalling 8,822,134 bytes raw and 2,528,812 gzipped, against one served payload of 717,709 raw and 194,016 gzipped.** Twelve times the bytes, after this row grew the payload by 62 percent. The documents are the six HTML pages and their six `__data.json` twins, and every one of them carries the whole item list.
 
-### The dated documents stop being written (2026-09-09)
+### The dated documents stop being written
 
 The two rows above moved the item list out of a dated document and left the document. This row deletes the document. **116 of them**: 20 for the published days and 96 for their topics, each with a `__data.json` twin, all rebuilt on every run because a document holding a seed of a day changes when the day does. `adapter-static`'s fallback, `404.html`, answers every dated address; the client router resolves the route out of the URL; the page fetches the served day.
 
@@ -611,11 +614,11 @@ Measured on a real build, a developer machine, 2026-09-09, `BUILD_VERSION` pinne
 
 **Two entries left [../../concepts/growing-reads.md](../../concepts/growing-reads.md) and nothing replaced them.** Both dated routes' `entries` carried a `-1` because a cover on the list of pages a build writes stops writing them past it. There is no list of pages now, so the uncovered read did not move somewhere cheaper - it stopped existing, which is the only way one of those entries is meant to leave that page.
 
-### The topic routes spend it (2026-09-01)
+### The topic routes spend it
 
 A topic route is the day filtered to one desk, and until 2026-09-01 the filter ran at build time in five documents a day. Each of those documents carried the **whole** day so a client-side filter could throw most of it away. Now the document carries the head of its own desk - `ui.shell_seed_items` stories - and a browser fetches the served day for the rest.
 
-**The seed is the head of the desk's list, never of the day's.** The day publishes one order per run over the stories that run added ([../../concepts/placement.md](../../concepts/placement.md)), so the head of the whole day is the morning run's best stories rather than one desk's - and a topic route seeded from it would open on a screen holding almost none of its own. **Until 2026-09-13 the reason was a different one and it was stronger**: the published order was desk-blocked, so the head of the day was literally one desk and every other topic route would have opened holding nothing at all. The decision outlived the reason.
+**The seed is the head of the desk's list, never of the day's.** The day publishes one order per run over the stories that run added ([../../concepts/placement.md](../../concepts/placement.md)), so the head of the whole day is the morning run's best stories rather than one desk's - and a topic route seeded from it would open on a screen holding almost none of its own.
 
 **The seed is also the head UNION anything the document has to be able to anchor.** A prefix cannot hold a leading story: the reading-page plan's lead block picks across the whole day, and its five leads on the 601-story case sat at positions 249, 285, 337, 344 and 493. A lead link into a document that carries only a prefix lands on nothing until the fetch arrives, and on nothing at all when it fails. `dayShell` therefore takes a set of ids to keep whatever their position, and the union is what it seeds.
 
@@ -637,7 +640,7 @@ Measured 2026-09-01 on a developer machine / / node 24.12.0, over the 11 committ
 
 **The day route and the home page did not move**, which is the control: `/<date>/` read 350,435 against 350,427 gzipped bytes and `/` read 285,598 against 285,595, both inside the build noise. `/<date>/<topic>/` read 348,607 against 19,362 for the HTML alone.
 
-### The day routes spend the rest of it (2026-09-01)
+### The day routes spend the rest of it
 
 `/<date>/` was the last reading route inlining its whole day, and it is the one a shared link actually names. One document per published day, growing with the day it published: the twelve committed days carried 4,203 item payloads across twelve documents, and a reader who opens one day paid for the day they opened. It now carries the head of the day plus every story its leading block points at, and the browser fetches the served day for the rest.
 
@@ -679,35 +682,27 @@ Almost all of that is the rate rather than the level: the 18.6 MB taken off the 
 
 **The sixth document a day followed the same day, and the dated trees are done.** `/<date>/` was the last reading route inlining its whole day. Over the 12 committed days and 4,203 items on the same instrument, **the site went 101.7 MB to 88.1 MB and the runway went 238 published days to 279** (180 to 212 to the alarm). Reading the two rows together, the reading routes cost the site 168.6 MB and now cost 88.1, and the runway went 130 published days to 279 - it more than doubled. **Nothing about that removes the cap**, because the two directories that do not shrink are the ones that dominate: `assist/` at 43.2 MB and `_app/` at 22.4 MB are 74.5 percent of what is left, and neither grows with a day, so both are charged to the items and both make the runway a floor. **The next lever is retention (below), and there is no third document trick left to play.**
 
-## What the composed page got wrong, and what shipped (2026-09-02)
+## Two rules a reading page owes an address
 
-Twenty-one rows rebuilt this page, each green on its own. `frontend/tests/reading-page.spec.ts` reads the whole thing against a real published day, and it found two things nobody had looked at whole. Both were on a reader's screen. Both are fixed, and the two cases that named them are ordinary assertions now rather than cases written to fail.
+**A day notice prints a count it is handed, never one it takes off the list in
+hand.** A seeded list grows as the browser fetches, so a count read off it ticks
+up while the reader watches, and with script off it freezes at the seed - four
+lines above a topic row stating the real total. The figure is the day's total
+across `day.verticals`, or one desk's `count` on a topic route: a bounded fact
+that does not grow with the seed. A topic page states its own desk, because the
+reader chose that desk and the whole day is one pill away on the same row.
 
-Measured 2026-09-02 on a developer machine / / node 24.12.0 and Chromium at 1536x900. The count is read on the 2026-09-01 day, 627 stories over five desks with five leads; the pager is priced on the busiest day the site serves, 2026-08-24 at 731 stories, which is the worst case the committed corpus holds.
-
-### The dated document states the day's count, not the list in its hand
-
-`/2026-09-01/` printed **"20 stories."** as the first line under the date on a day that published **627**, and `/2026-09-01/ai/` printed **"15 stories."**. Twenty is the seed of fifteen plus the day's five leads, so the sentence counted the list `DayNotice` was handed rather than the day the page is about. With script on the number ticked from 20 to 627 while the reader was looking at it. With script off - which this page is built to survive - it stayed at 20 for ever, four lines above a topic row reading `All 627` on the same screen. `/` was always right, because it is the one reading route that still reassembles the whole day into its document.
-
-**`DayNotice` now prints a count it is handed and never one it takes off `day.items`.** `DigestList` had already solved exactly this for the topic row, and its own comment names the hazard: a count taken off the list in hand "would print a number that ticks up while the reader watches". That figure - the day's total across `day.verticals`, or one desk's `count` on a topic route - is a bounded fact that does not grow with the seed, and it is now the number both halves of the same screen state.
-
-**A topic page states its own desk.** The same component draws on `/`, on a dated route, on a topic route and on a day that published nothing, so which number a topic route owes the reader was a content decision rather than a repair. A page about one desk owes that desk's number: the reader chose the desk, the stories under the sentence are that desk's, and the whole day is one pill away on the same row.
-
-Measured after the fix on the same day: `/2026-09-01/` states 627 before hydration and 627 after, and `/2026-09-01/ai/` states 55 against that desk's own published 55. The prerendered figure is the one that mattered - it is what a reader with no script gets and never sees change.
-
-### A story's own address lands wherever it sits in the day
-
-`layout.md` publishes `/<YYYY-MM-DD>/#<item id>` as a canonical reader address, and `restoreAnchor` scrolls and focuses it. On the 2026-09-01 day it resolved for **17 of 627** stories. The stream pages at twelve and the leading block adds its five, whose stories sit at positions 59, 111, 117, 166 and 206 of the reading order, so those seventeen resolved from a cold load. Every other story - 610 of 627 - was not an element on the page when the fragment was read, so the browser did nothing, `restoreAnchor` returned false, and the reader landed at the top of the day with no story focused and no message.
-
-**This was never the seed-and-fetch migration.** The pager predates it and the whole day was never in the document either, so this address had never reached past the pager. What the migration changed is who notices: rows 15 and 26 both made a fragment work for the stories they own, which made the other 610 look like they worked too.
-
-**The pager now reaches the story the address named.** `DigestList` reads the fragment on mount and on `hashchange`, finds that story's position in the order it is drawing, and pages far enough to draw it - then restores the anchor once, after the element exists. Everything else is untouched: with no fragment the reach is zero, so the prerendered document draws the same twelve it always drew and so does every reader who followed an ordinary link. A lead is zero too, because the seed already carries it and paging the stream down to its position is work a click never needed.
-
-**Nothing about the published documents moved.** A control build of `main`'s source beside this one, both on the same tree back to back with `BUILD_VERSION` pinned so the two are comparable: the busiest committed day, `/2026-08-24/` at 731 stories, drew **twelve stories in the document on both cases**, and its `__data.json` twin was byte-identical at 29,278. The document itself read 74,187 raw bytes against 74,189 - **two bytes**, and the two decompose exactly. The live region the fix adds is 73 characters; 71 come back because the reading page now carries 25 preload links rather than 26, since `DigestList` imports the day loader its own route was already loading and a chunk merged. Gzipped at level 9 the document read 15,408 against 15,434. The seed-and-fetch saving above is intact, because none of this runs at build time.
-
-**What it costs is one visit, and only the visit that asked for it.** Following a link to the last story of that 731-story day draws the whole day rather than twelve. Three alternated visits each in a fresh browser context: a plain visit settles in **235 ms** (399, 235, 230) drawing 12 stories on a 5,550 px page, and the deep-linked visit scrolls and focuses in **818 ms** (850, 818, 811) drawing 731 on a 310,781 px page. About six tenths of a second more, on the longest day the corpus holds, for the one reader who followed the link - and nothing at all for anybody else.
-
-**A fragment naming a story the day never held now says so.** `PayloadState` was the state to check first and it does not cover this: it is about the day's arrival, and it lives on the two dated routes, so `/` would still have had no way to say anything. The sentence is one line in `DigestList`'s own live region, and it waits until the list in hand is the whole list - a story still on its way is not a story that was never here.
+**A fragment names a story anywhere in the day, so the pager reaches it.**
+`/<YYYY-MM-DD>/#<item id>` is a canonical reader address, and the stream pages,
+so most stories are not elements on the page when the fragment is read.
+`DigestList` reads the fragment on mount and on `hashchange`, finds that story's
+position in the order it is drawing, pages far enough to draw it, then restores
+the anchor once the element exists. With no fragment the reach is zero, so an
+ordinary link draws what it always drew. The cost is one visit and only the
+visit that asked: the deep link draws the whole day rather than a page of it.
+A fragment naming a story the day never held says so, in a live region, and it
+waits until the list in hand is the whole list - a story still on its way is not
+a story that was never here.
 
 ## The frontend stack
 
@@ -725,7 +720,7 @@ That is why the plain address is the moving one and dated addresses are the froz
 
 The engineering half is driven by arithmetic rather than preference. Segmented date directories were chosen over a flat layout because a flat directory of tens of thousands of entries rewrites a large tree object on every commit. One file per day was chosen over per-item files because compression works far better across a whole day than across many small bodies, and because a per-item file buys nothing an already-fetched day payload does not have.
 
-### The served day carries the day's own facts (2026-09-09)
+### The served day carries the day's own facts
 
 A dated URL used to be answered by a document a build wrote for that date, and the day's own facts rode in it: the date, the desks and their counts, the leading block, the run list, and the counts the day notice reads. The served day carried the stories and nothing else, and that was enough while a page already holding the facts was the only thing fetching it.
 
@@ -749,7 +744,7 @@ What it buys is the 116 dated and topic documents this row deletes, and the `__d
 
 **The contract keeps every check `DigestDay` holds over the facts it now carries.** `partial` is exactly whether anything failed, published plus failed cannot exceed planned, a desk's count agrees with the stories under it, and a lead names a story the payload holds. Each clause is skipped when the payload does not carry what it needs, so an older file is not failed for being older. A narrowing that keeps a fact and drops the rule on it is a weaker contract than the one it narrows, and this is the copy a browser reads.
 
-### The two revision fields stay, unwritten (2026-08-26)
+### The two revision fields stay, unwritten
 
 This page used to say "A revision is visible or it does not happen", which reads as a description of shipped code and is not one. No run can revise an item, so nothing has ever had the chance to be visible or silent. The sentence is now what the system does, with the promise kept as the rule a revision would have to meet.
 
@@ -761,7 +756,7 @@ This page used to say "A revision is visible or it does not happen", which reads
 
 Retention was demoted to third lever after the byte arithmetic showed that encoding and the existing visual rule together move the ceiling from months to years. A policy that deletes a reader's archive to reclaim a fraction of a percent of the bytes would have been solving the wrong problem.
 
-### The vectors are projected out, not moved out (2026-08-27)
+### The vectors are projected out, not moved out
 
 Two copies of every day carried a block no browser opens, and there were two ways to end that.
 
@@ -775,7 +770,7 @@ So (b) is a persisted-contract change that buys a cleaner diagram and zero bytes
 
 **The field that nearly came off the list is `source_url`.** A narrower set of title, summary, source name and band renders a result that looks complete and has no way out to the original. That is the reader's only means of checking what we wrote, so a projection that drops it trades their trust for about ten bytes an item.
 
-### Two append paths, and only one of them deduplicates (2026-08-27)
+### Two append paths, and only one of them deduplicates
 
 `idhazh.ledger._append` writes every row it is handed. `idhazh.evals.writer.append` refuses a row whose address, inputs, words and scorer version it already holds. That looked like one of them being wrong, and it is not: **the two write different kinds of row.** An eval row is a measurement, so re-measuring an item nothing changed about has nothing new to say. A state row is a fact about a run - this feed answered at this hour, this item finished - and a run that runs twice did happen twice. Collapsing those would turn a count of runs into a count of days.
 
@@ -785,96 +780,89 @@ So the blind path stays blind, and each caller that owns a repeat is now named n
 
 **One path was not safe, and that one was fixed.** The day's run reference counted what the current attempt added rather than what the number introduced, so a replay after a lost manifest write built a payload its own contract rejects - `run 1 items_added disagrees with the items it introduced` - and the day was lost rather than doubled. The count now comes from the assembled day, which is the definition the contract validates against.
 
-### The site alarm watched a tree eighteen times smaller than the site (2026-08-27)
+### The weight gate measures the built bundle, not the payload tree
 
-The 1 GB cap is on the **built bundle** - `frontend/build/`, the directory the Pages deploy uploads. The alarm measured `frontend/public/digest/`, which is what the pipeline writes. Measured 2026-08-27 on this checkout: **7,027,075 bytes against 128,064,853**, eighteen times apart, and twenty-one times apart the day before. At the rate the payload tree grows, an alarm point of 800 MB on it could not have been reached until the site was already about six times past the cap. **The alarm ran every pipeline run, cost real seconds, and would never have warned anybody.** That is worse than no alarm, because a green light is read as safety.
+The 1 GB cap is on `frontend/build/`, the directory the Pages deploy uploads -
+not on `frontend/public/digest/`, which is what the pipeline writes. The two are
+an order of magnitude apart and grow at different rates, so neither can stand in
+for the other, and an alarm on the smaller one would have run every pipeline
+run, cost real seconds and never warned anybody. **That is worse than no alarm,
+because a green light is read as safety.**
 
-The recorded arithmetic had the same units error and it is corrected in [../../reference/measurements-site.md](../../reference/measurements-site.md#days-to-the-1-gb-pages-ceiling): the site crosses 1 GB on about **2026-10-22, 56 published days from 2026-08-27**, not the 593 or 516 days that page carried.
+**So the measurement runs where the site exists.** The bundle does not exist
+while `assemble` runs, so `idhazh site-weight --site-tree build` is its own step
+in every job that builds the site - `ci.yml`'s `site` job, `digest.yml`'s
+`assemble` job, and `backfill.yml` - before the commit that publishes a day.
 
-**Re-derived 2026-08-29 at the close of the design-system reset, and the number moved for a reason worth stating.** The built site is 143,717,288 B and the cap is about 94 published days out, near 2026-11-30. That is not the reset making the site smaller - the reset made every route slightly larger. It is that the two most recent days carried 117 and 212 items where the days behind them carried 731, and a day rate averaged over whatever days are on disk moves when the item mix moves. The stable unit is **24,378 B per published item, spread 23,066 to 26,538** over the seven mature days. Divide that by the item ceiling in force to get a day rate, rather than averaging days. Full working in [../../reference/measurements.md](../../reference/measurements.md).
+**The tree has no default**, because a default is how the old call came to name
+the wrong one. The workflow names it at the call site, and a contract test reads
+the path back off `pages.yml`'s own upload step.
 
-**The fix is to measure where the site exists.** The bundle does not exist while `assemble` runs - it is built by a later step - so the measurement moved out of the assemble stage and became its own step, `idhazh site-weight --site-tree build`, in every job that builds the site: `ci.yml`'s `site` job, `digest.yml`'s `assemble` job, and `backfill.yml`. It runs before the commit that publishes a day, so a day that would break the site never lands.
+**Two lines, and only one of them fails a build.** Over `retention.site_budget_mb`
+the step prints a warning and passes; past `retention.pages_hard_cap_mb` it
+fails. Failing at the budget would stop publishing while there was still room,
+and a reader would lose a working site to a number we chose. Past the cap the
+bytes cannot be published at all.
 
-**The tree has no default.** A default is how the old call came to name the wrong one. The workflow names it at the call site, and a contract test reads the path back off `pages.yml`'s own upload step - so the thing measured and the thing published are pinned to be one directory, and pointing the gate anywhere else fails the suite rather than being noticed a month later.
+**The cap is a knob in one direction only.** It is a config field bounded
+`le=1024`: an operator can name a smaller cap and the schema refuses a larger
+one. Lowering it buys an earlier and louder failure while there is headroom to
+act; no value buys more room, because the 1 GB is GitHub's. The console's site
+band draws against the platform's 1 GB rather than the configured cap - it
+reports the ceiling that exists, not the one this run chose to stop at.
 
-**Two lines, and only one of them fails a build.** Over `retention.site_budget_mb` (800 MB) the step prints an Actions warning and passes; past `retention.pages_hard_cap_mb` (1024 MB) it fails. Failing at 800 MB would stop publishing about two weeks before it had to, and a reader would lose a working site to a budget that still had room. Past the cap the bytes cannot be published at all, and failing in the job that measured them names the cause - a deploy that refuses them names nothing.
+**`site_bytes` on the run manifest is the committed payload tree**, which is
+genuinely useful about repository growth. It now says which tree it holds, so
+nobody reads it as the site ([../contracts/schemas.md](../contracts/schemas.md)).
 
-**The cap is a knob in one direction only.** It was a `Final` in `backend/idhazh/retention.py` until 2026-09-06, which made Guardrail #2's "the budget is the platform, not a preference" true only for as long as nobody edited the constant. It is now a config field bounded `le=1024`: an operator can name a smaller cap and the schema refuses a larger one, with a message naming the bound. Lowering it is the reason it is here - it buys an earlier and louder failure while there is still headroom to act in - and there is no value that buys more room, because the 1 GB is GitHub's and not ours. The console's site band still draws against the platform's own 1 GB rather than the configured cap: it reports the ceiling that exists, not the one this run chose to stop at.
+**The deploy is not gated.** Every byte that reaches `main` passes through the
+`assemble` job or through `ci.yml`, and both measure it before the push. Gating
+the deploy would stop the deploy, leaving the reader on yesterday's digest until
+somebody looked - the same trade this page settles below, the same way.
 
-**`site_bytes` on the run manifest stays what it always was.** It is the committed payload tree, six days of published manifests carry it, and changing what it means would be a contract break for a number that is genuinely useful about repository growth. What changed is that it now says which tree it holds, so nobody reads it as the site again ([../contracts/schemas.md](../contracts/schemas.md)).
+**`BASE_PATH` does not move what CI measures.** `pages.yml` builds with a
+repository sub-path and `ci.yml` does not, so on paper they measure different
+documents. The sub-path is a short repeated string and gzip charges almost
+nothing for a repeat: the largest per-route move measured is under one percent,
+on the smallest page, inside the spread between two plain builds of one tree.
 
-**The deploy is not gated.** `pages.yml` prints `du -sb build` and always did. Adding the check there would need a Python install on the deploy path for no new coverage: every byte that reaches `main` passes through the `assemble` job or through `ci.yml`, and both now measure it before the push rather than after.
+### A bad day is stopped before the commit; the weight ratchet is not
 
-**`bundle-gate` was weighed for the deploy on 2026-09-10 and left out, and this time "no new coverage" is a measurement rather than an argument.** It needs no Python, and `pages.yml` already runs `npm ci` and `npm run build`, so the cost is a couple of seconds - the Python objection above does not apply to it at all. What made the case worth reopening is that `pages.yml` builds with `BASE_PATH=/<repo>` and `ci.yml` does not, so on paper CI measures a different document from the one the reader is served. Measured on a developer machine / / node 24.12.0, one `BASE_PATH` build against the heaviest of five plain builds, `gzip -5` per route: `/404` +19 B, `/archive/` +5 B, `/evals/` +3 B, `/console/` +3 B, `/` +8 B, `/console/machine/` -2 B, `/console/model/` -5 B. **The largest move is 19 bytes and 0.88 percent, on the smallest page; every other route moves less than the 16-byte spread between two plain builds of the same tree.** The sub-path is eleven repeated characters and gzip charges almost nothing for a repeat. So the document CI measures is the document the reader gets, and the ceilings carry 11 percent headroom over a difference of 0.9 percent at worst.
+Two failures with nothing in common used to be welded into one step before the commit that publishes, and only one of them is worth a day.
 
-**And the cost of being wrong is not symmetric.** A gate on the deploy job stops the deploy, so a ceiling crossed on a Tuesday would leave the reader on Monday's digest until somebody looked - which is the trade this page already settled the other way three paragraphs down: a digest that never arrives is the larger failure. A non-fatal copy was rejected for the reason a warning was rejected there: nobody reads it.
+**An invalid payload is caught before the commit, and the build is not what catches it.** A reading document carries a seed and the browser fetches the rest, so no build opens the stories past the seed. `idhazh validate-days` opens all of them, against the committed shape the build reads and the served shape a browser fetches, and it runs immediately before `npm run build` in both publishing jobs. That day is broken, it must not publish, and both checks run before the commit. The guarantee's name is the part worth stating: **a broken day can no longer be merged**, and the publishing step is what keeps the pipeline's own pushes inside it - `ci.yml` never starts from a push the pipeline made ([frontend.md](frontend.md)).
 
-### A bad day is stopped before the commit; the weight ratchet is not (2026-08-29)
+**A weight failure is a number we wrote down ourselves.** `page_weight.ceilings_bytes` in `config/idhazh.json` says how heavy each named page's prerendered HTML may get. Past it the page still reads correctly - what grew is the document, not the meaning. So the gate runs after the commit, in `digest.yml` and in `backfill.yml` alike, and it names only `/404` and `/evals/`, which move when a person edits source and never when a run publishes ([../../how-to/run-the-gates.md](../../how-to/run-the-gates.md)).
 
-`digest.yml`'s `assemble` job ran `npm run build` and `npm run bundle-gate` in one step, before the commit that publishes. Two failures with nothing in common were welded together, and only one of them is worth a day.
+**Leaving it before the commit was the alternative, and it was rejected on the trade rather than on the principle.** It buys something real: `main` stays green, and the ceiling is discussed before any reader sees the heavy page. It buys that by spending a published day and the runner budget that produced it (Guardrail #2) on a page nobody would have complained about. A digest that never arrives is the larger failure.
 
-**An invalid payload is caught before the commit, and since 2026-09-01 the build is no longer what catches it.** Prerendering used to serialise every story a day published into a document, so a payload that failed its contract failed the build. A reading document carries a seed now and the browser fetches the rest, so no build ever opens the stories past the seed. `idhazh validate-days` opens all of them, against the committed shape the build reads and the served shape a browser fetches, and it runs immediately before `npm run build` in both publishing jobs. That day is broken, it must not publish, and both checks still run before the commit. **What did change is the guarantee's name: a broken day can no longer be built became a broken day can no longer be merged**, and the publishing step is what keeps the pipeline's own pushes inside it - `ci.yml` never starts from a push the pipeline made ([frontend.md](frontend.md)).
+**It stays fatal, and that costs something.** The day publishes, then the `assemble` job goes red. A page-weight number crossed on a Tuesday leaves `main` red until somebody looks at it. That is the price of the trade and it is not hidden. The property the four deleted ceilings stood in for is asserted by `frontend/tests/payload-weight.spec.ts` with no number in it ([../../how-to/run-the-gates.md](../../how-to/run-the-gates.md#the-console-has-no-page-number)). A warning was rejected for the same reason a green light on a broken alarm was: nobody reads it.
 
-**A weight failure is a number we wrote down ourselves.** `page_weight.ceilings_bytes` in `config/idhazh.json` says how heavy each named page's prerendered HTML may get. Past it the page still reads correctly - what grew is the document, not the meaning. The run that hit it lost the whole day and the two to three hours of runner time that produced it, and the reader lost a digest that was fine. So the gate moved after the commit, in `digest.yml` and in `backfill.yml` alike. Since 2026-09-10 it names only `/404` and `/evals/`, which move when a person edits source and never when a run publishes, so a published day cannot cross one at all ([../../how-to/run-the-gates.md](../../how-to/run-the-gates.md)).
+**"At the next CI run" is not "at the next push", and the difference is a delay.** `ci.yml` triggers on every push to `main`, but the pipeline's own pushes never start it: GitHub does not begin a workflow from a push made with the job's `GITHUB_TOKEN`. So the red job the pipeline produces is the `assemble` job inside the digest run, and `main`'s own CI stays green until the next merge somebody pushes. **Read a red `site` job as a page that has been over its ceiling since some earlier publish**, not as something the merge in front of you did.
 
-**Leaving it before the commit was the alternative, and it was rejected on the trade rather than on the principle.** It does buy something real: `main` stays green, and the ceiling is discussed before any reader sees the heavy page. It buys that by spending a published day and a runner budget (Guardrail #2) on a page nobody would have complained about. A digest that never arrives is the larger failure.
-**It stays fatal, and that costs something.** The day publishes, then the `assemble` job goes red, and `main` goes red with it at the next CI run. Stated plainly: a page-weight number crossed on a Tuesday leaves `main` red until somebody looks at it. That is the price of the trade and it is not hidden. Since 2026-09-10 only two routes carry such a number - `/404` and `/evals/`, which move when a person edits source and never when a run publishes - so a published day can no longer cross one at all. The four that could were deleted rather than raised, and the property they stood in for is asserted by `frontend/tests/payload-weight.spec.ts` with no number in it ([../../how-to/run-the-gates.md](../../how-to/run-the-gates.md#the-console-has-no-page-number)). A warning was rejected for the same reason a green light on a broken alarm was: nobody reads it.
+**The gate reads a build made after the last commit step.** A lost push is retried by rebuilding the day against origin's new tip, so a build made before the commit can describe a tree the retry has already replaced - and the gate would then weigh one tree's pages against another tree's records. The rebuild is `npm run build` alone, 17 s against a run of 164 to 184 min. `npm ci` is deliberately not repeated with it: the lockfile moves rarely and `frontend/src` moves several times a day, so a reinstall would delete `node_modules` every run to cover the rarer case, and `npm ci` has its own partial-extract failure mode.
 
-**"At the next CI run" is not "at the next push", and the difference is a delay.** `ci.yml` triggers on every push to `main`, but the pipeline's own pushes never start it: GitHub does not begin a workflow from a push made with the job's `GITHUB_TOKEN`. Measured 2026-08-29 - six `work:` and `digest:` commits on `main` carry **zero** check runs between them, while the two pull-request merges either side of them carry two each. So the red job the pipeline itself produces is the `assemble` job inside the digest run, and `main`'s own CI stays green until the next merge somebody pushes. Anyone diagnosing a red `site` job should read it as a page that has been over its ceiling since some earlier publish, not as something the merge in front of them did.
-
-**The old position was never the guarantee its comment claimed, and moving the step did not close it either.** `Commit the day` retries a lost push by rebuilding the day against origin's new tip, and until 2026-08-30 nothing rebuilt the site afterwards. So the gate read the build made before the commit wherever the step sat, and a pass recorded before the push could describe a tree the retry had already replaced.
-
-**That gap fired, and it cost a green job rather than a day.** Run `33270983446` published `2026-08-29` and deployed it, then went red at the gate: `/console/` measured 78,484 B against a recorded 79,230, which is 746 B under a tolerance of 64. Neither number was wrong and no page had changed. Ten commits landed on `main` while the run worked, three of them frontend source and one of them `frontend/bundle-baseline.json`, so the retry rebased onto a tip whose record was 79,230 while `frontend/build` still held the build made from the tip whose record was 78,479 - which that build cleared by 5 B. The gate weighed one tree's pages against another tree's records. The printed remedy is what makes it worth fixing rather than tolerating: the gate offers a copy-pasteable `78,484`, and recording it would file a number measured from the old source as the record for the new one, leaving the next real regression room to land inside the error.
-
-**So a build runs after the last commit step, and the gate reads that one.** It is `npm run build` alone, measured at 17 s in that job's own steps against a run of 164 to 184 min. `npm ci` is deliberately not repeated with it: `frontend/package-lock.json` moved 8 times in 60 days while `frontend/src` and the baseline moved about 8 times a day, so a reinstall would delete `node_modules` on every run to cover the rarer of the two, and `npm ci` has its own partial-extract failure mode. The residual case is a race that carries a lockfile change, where the rebuild uses the dependency set already installed; that is no worse than what the gate read before, and CI on the next merge is the instrument for it. `backend/tests/workflows/` holds the order for both publishing jobs.
-
-**Re-running the failed job is not the repair, and it looks like one.** A re-run checks out the original commit, so it rebuilds the old source, compares it with the old record and passes - green for a tree that is no longer `main`. Re-run granularity and what it does and does not repeat are in [../../reference/ci-environment.md](../../reference/ci-environment.md#platform-limits-that-shape-the-workflows).
+**Re-running the failed job is not the repair, and it looks like one.** A re-run checks out the original commit, so it rebuilds the old source, compares it with the old record and passes - green for a tree that is no longer `main` ([../../reference/ci-environment.md](../../reference/ci-environment.md#platform-limits-that-shape-the-workflows)).
 
 **`site-weight` did not move.** The 1 GB Pages cap is the platform's limit, not our record of our own bytes, and past it the deploy fails whatever we do - so refusing to publish is the honest answer there and it still runs before the commit.
 
-### The size instrument printed a level, and a level has no date in it (2026-08-30)
+### The size instrument reports a runway, not a level
 
-`site-weight` printed a megabyte figure and a headroom figure. Both are levels. **Neither is a rate, so neither could answer the only question anyone asks a size instrument: when does this stop working?** The date existed - it was worked out by hand in [../../reference/measurements-site.md](../../reference/measurements-site.md#days-to-the-1-gb-pages-ceiling) three separate times, and got the wrong answer twice - while the step that had all the inputs printed two numbers that could not produce it.
-
-Three things were added and none of them fails a build.
+A megabyte figure and a headroom figure are both levels. **Neither is a rate, so neither answers the only question anyone asks a size instrument: when does this stop working?** Three things were added and none of them fails a build.
 
 **`by_directory` - the top-level children of `build/`.** One total cannot say whether the visuals grew or the telemetry did, so the day the total moves is the day somebody starts guessing. The split is asserted to sum exactly to the total, because a split that quietly loses bytes names the wrong directory on the one occasion it is used to decide what to cut.
 
-**`bytes_per_published_item` - the unit that holds still.** A rate per day is not stable here: measured 2026-08-29, the day rate moved by a factor of six across seven mature days, because two of them published 117 and 212 items where the ones behind them published 731. The per-item figure over the same days was 24,378 bytes, spread 23,066 to 26,538. So the day rate is derived - per-item times `run.safety_ceiling_per_run`, the ceiling in force - rather than averaged over whichever days happen to be on disk. That is a worst-case day by construction, which is what a runway needs (Guardrail #10).
+**`bytes_per_published_item` - the unit that holds still.** A rate per day is not stable here: the day rate moves with the item mix, where the per-item figure holds. So the day rate is derived - per-item times `run.safety_ceiling_per_run`, the ceiling in force - rather than averaged over whichever days happen to be on disk. That is a worst-case day by construction, which is what a runway needs (Guardrail #10). The readings are in [../../reference/measurements-site.md](../../reference/measurements-site.md#days-to-the-1-gb-pages-ceiling).
 
-**`days_to_alarm` and `days_to_cap` - the runway.** Headroom divided by that rate, in published days rather than calendar days. It is printed on every run, including the runs that are nowhere near either line, because the day the alarm fires is not the day anybody wanted to first learn the date.
+**`days_to_alarm` and `days_to_cap` - the runway.** Headroom divided by that rate, in published days rather than calendar days. It is printed on every run, including the runs nowhere near either line, because the day the alarm fires is not the day anybody wanted to first learn the date.
 
-**The count comes from the tree that was measured, and that is not a detail.** Items are read from the day payloads staged under `build/digest/`, never from `frontend/public/digest/` and never from a run manifest. Bytes and items have to come from one corpus or the rate divides a numerator by somebody else's denominator - which is exactly the shape of the defect in the section above, one level down.
+**The count comes from the tree that was measured, and that is not a detail.** Items are read from the day payloads staged under `build/digest/`, never from `frontend/public/digest/` and never from a run manifest. Bytes and items have to come from one corpus, or the rate divides a numerator by somebody else's denominator - which is the shape of the defect the section above exists to refuse, one level down.
 
-**It reports and it gates nothing new.** `npm run bundle-gate` already fails a build on a crossed per-route ceiling, and `cap_breach` already fails one past the platform's. A third gate would be a third thing to keep green for coverage that already exists. A gate on one directory's share was rejected outright: the cap is on the whole tree, and one directory's share of it is not a date.
+**It reports and it gates nothing new.** `npm run bundle-gate` already fails a build on a crossed per-route ceiling and `cap_breach` already fails one past the platform's. A third gate would be a third thing to keep green for coverage that exists.
 
-**A runway from nothing raises rather than returning a comfortable number.** Zero published items divides into an infinite runway, and an infinite runway reads exactly like a healthy site - the same failure as the green light on the wrong tree, one function along. So the per-item property raises on an empty tree, the CLI checks before it asks, and a tree carrying no day payloads prints `runway: unknown` instead. The zero-file tree still fails outright, as it already did.
+**A runway from nothing raises rather than returning a comfortable number.** Zero published items divides into an infinite runway, and an infinite runway reads exactly like a healthy site. So the per-item property raises on an empty tree, the CLI checks before it asks, and a tree carrying no day payloads prints `runway: unknown` instead.
 
-**What it printed the first time, 2026-08-30 at `76cdc72`:** 141.1 MB in 311 files, 883 MB of headroom, 48,457 B a published item, 7.39 MB a published day, and **119 published days to the cap**. The rate is an average over the whole tree, so it charges the on-device encoder and the JavaScript bundle - 46.5 percent of the site, and neither of them grows with a day - to every future item. **That makes the printed runway a floor: at least 119 days, and about 223 once the fixed directories are taken out.** It prints the conservative one on purpose, and `by_directory` is on the same output so a reader can do that subtraction rather than take the floor as the answer. Full working in [../../reference/measurements-site.md](../../reference/measurements-site.md#days-to-the-1-gb-pages-ceiling).
-
-### The state prunes were already constant-cost, and the premise that said otherwise was wrong (2026-09-08)
-
-A plan row asked for the dated-directory walk [row 14 gave the visual tree](retention.md#what-bounds-the-committed-state-tree) to be given to the state prunes as well, on the premise that `retention.month_shards` and the prune inventories "list and sort every partition directory across every store, on every maintenance pass, including passes where nothing is due". Re-measured before anything was changed, that premise does not hold, so the performance work was not done. Guardrail #10: when a measurement contradicts the design, the design changes.
-
-Counted rather than timed, because a timing is flaky and says nothing about what was read. `os.scandir`, `os.listdir`, `os.stat` and `os.lstat` were counted around one pass of `prune_seen`, `prune_feed_health`, `prune_telemetry` and `prune_scores` over a built state tree - every store filled through its own real appender - on an CPython 3.14.2, 2026-09-08:
-
-| Tree | Ages in force | Directory opens | Shard stats |
-| --- | --- | --- | --- |
-| 3 months in every store | raised, nothing due | 5 | 0 |
-| 140 months in every store | raised, nothing due | 5 | 0 |
-| 3 months in every store | shipped | 5 | 0 |
-| 14 months in every store | shipped | 5 | 11 |
-| 140 months in every store | shipped | 5 | 389 |
-
-Counting a syscall is deterministic, so the spread is zero.
-
-**Five opens, and the five do not move when the tree holds forty-six times more.** They are one listing each of `state/seen/`, `state/feed-health/`, `state/item-health/`, `state/scores/` and `frontend/public/telemetry/` - one per store, never one per month. **A month partition is a file, not a directory**, so there is no partition directory to open and nothing for a dated walk to skip. The sort the premise objected to is a sort of names already in hand from that one listing: 140 strings, in memory, no I/O. The visual tree really is `<YYYY>/<MM>/<DD>/`, which is why row 14's walk was worth building there and buys nothing here.
-
-**Four of those five stores became directory trees on 2026-09-13, and this count has not been re-taken.** Plan 24's rows #5, #6, #7 and #8 moved `state/item-health/`, `state/feed-health/`, `state/seen/` and `state/scores/` to `<YYYY>/<MM>/<DD>.csv`, so their prunes walk a year directory and a month directory each through `day_partition.day_files` rather than listing one flat directory. `frontend/public/telemetry/` is the one of the five still filing by month. The opens are no longer five and the sentence above is a record of what was true on 2026-09-08, not a claim about today. **What would settle it is the same count over the same built trees** - `os.scandir`, `os.listdir`, `os.stat` and `os.lstat` around one pass of the four prunes - and it belongs in a benchmark record of its own with its own date. No number is quoted here in the meantime, because an unmeasured one would be an estimate dressed as a reading (Guardrail #10). What has not changed is the shape the section argues: the cost still rises with the work outstanding rather than with what an earlier run appended, because a day nothing is due for is still a name in a listing rather than a file opened.
-
-**What does move is the backlog, and that is already the shape row 14 landed.** Nothing due costs nothing, at 3 months and at 140 alike. The 11 stats at fourteen months are `state/seen/` on its own, whose window is 90 days rather than fourteen months, so 11 of its 14 shards are past it. The 389 at 140 months are exactly the due shards - 137 seen, 126 feed-health, 126 scores - each read once for the `bytes_freed` figure the committed result carries. A pass that has caught up reads nothing. So the cost already answers Guardrail #12 the right way: it rises with the work outstanding, never with what an earlier run appended, and it falls as the policy works.
-
-**The row was not empty, because the same measurement found a real defect underneath it.** Three month-name recognisers disagreed, so `2025-13.csv` was left alone in one store and deleted from another. That is [what counts as a month name](../../concepts/partitions.md#what-counts-as-a-month-name) in the concept doc, and the fix is one shared rule in `idhazh.month_partition`.
+**The printed runway is a floor, not an estimate of the date.** The rate averages the whole tree, so it charges the on-device encoder and the JavaScript bundle - neither of which grows with a day - to every future item. `by_directory` is on the same output so a reader can take them out rather than read the floor as the answer.
 
 ## Rejected alternatives
 

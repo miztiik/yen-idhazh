@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-18
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
 
@@ -767,7 +767,7 @@ two severities. An invalid payload means the day is broken, so `idhazh
 validate-days` and then `npm run build` run first and stop the commit; a page
 over its recorded weight still reads correctly, so `npm run bundle-gate` runs
 after the commit and fails the job without costing the repair
-([../architecture/publishing/layout.md](../architecture/publishing/layout.md#a-bad-day-is-stopped-before-the-commit-the-weight-ratchet-is-not-2026-08-29)).
+([../architecture/publishing/layout.md](../architecture/publishing/layout.md#a-bad-day-is-stopped-before-the-commit-the-weight-ratchet-is-not)).
 `digest.yml` carries the same order for the same reason. **The validate step is
 there because the build stopped answering for it**: a reading document has
 carried a seed rather than its whole day since 2026-09-01, so a build never
