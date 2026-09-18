@@ -12,15 +12,22 @@
 import { expect, test } from '@playwright/test';
 
 import {
+	agreementCorridor,
 	clampEnvelope,
 	clampNote,
 	corridorOf,
+	foldDays,
+	gateNeeds,
+	heldInWords,
 	heldNote,
 	mergeCountsOf,
 	mergeNote,
 	mergeRate,
 	mergeState,
 	mergeTotals,
+	rateWithDenominator,
+	silentTail,
+	type JudgeDay,
 	type LineDay,
 	type MergeDay,
 	type MergeItem
@@ -228,6 +235,100 @@ test.describe('where the merge line sits', () => {
 		// learn that nothing happened is a sentence that should not be there.
 		expect(heldNote(LINE, 30)).toBe('Nothing was fitted on 1 of these 30 days.');
 		expect(heldNote(LINE.slice(0, 3), 30)).toBeNull();
+	});
+});
+
+test.describe('the judge, and what the record still needs', () => {
+	function judgeDay(date: string, over: Partial<JudgeDay> = {}): JudgeDay {
+		return {
+			date,
+			disagreementRate: 0.05,
+			unclearRate: 0.1,
+			pairsJudged: 20,
+			negativesOnRecord: 40,
+			aboveLineOnRecord: 6,
+			daysOnRecord: 3,
+			heldReason: 'sheet_too_small',
+			...over
+		};
+	}
+
+	test('the agreement axis is zero to the looser of the two limits', () => {
+		// Not 0 to 1: neither rate can reach 1 without the run holding first, so
+		// half the plot would be a region the data cannot enter. Not fitted to the
+		// data either - a healthy two percent drawn full height says the judge is
+		// in trouble when it is not.
+		expect(agreementCorridor({ disagreementMax: 0.15, unclearMax: 0.35 })).toEqual([0, 0.35]);
+		expect(agreementCorridor({ disagreementMax: 0.4, unclearMax: 0.35 })).toEqual([0, 0.4]);
+	});
+
+	test('a record with nothing in it still draws three bars at zero', () => {
+		// The panel's best day, not its worst. A panel that waits for data before
+		// it draws anything teaches an operator the measurement does not exist.
+		const needs = gateNeeds(null, {
+			minimumNegatives: 200,
+			minimumDays: 10,
+			minimumAboveLine: 30
+		});
+
+		expect(needs).toHaveLength(3);
+		expect(needs.map((need) => need.value)).toEqual([0, 0, 0]);
+		expect(needs.map((need) => need.target)).toEqual([200, 10, 30]);
+		for (const need of needs) {
+			expect(need.targetText, 'a bar was drawn with no words under its marker').not.toBe('');
+		}
+	});
+
+	test('a held day while the gates are unfilled is not a warning', () => {
+		// Ten amber squares on the panel's first fortnight would burn the colour
+		// before it ever meant anything.
+		const dates = ['2026-09-16', '2026-09-17', '2026-09-18'];
+		const filling = foldDays(dates, [judgeDay('2026-09-17')], false);
+		const settled = foldDays(dates, [judgeDay('2026-09-17')], true);
+
+		expect(filling.map((square) => square.state)).toEqual(['silent', 'filling', 'silent']);
+		expect(settled.map((square) => square.state)).toEqual(['silent', 'held', 'silent']);
+		// And every square says what it is, so the hue is never the only signal.
+		for (const square of filling) expect(square.title).toContain(square.date);
+	});
+
+	test('a fitted day is fitted whether or not the gates are met', () => {
+		const square = foldDays(['2026-09-17'], [judgeDay('2026-09-17', { heldReason: 'none' })], false);
+
+		expect(square[0].state).toBe('fitted');
+		expect(square[0].title).toContain('a line was fitted');
+	});
+
+	test('the strip counts only the silent days at its newest end', () => {
+		// Staleness is about the tail. A gap in the middle is a day that went
+		// missing; a gap at the end is a record that has stopped filling.
+		const squares = foldDays(
+			['2026-09-15', '2026-09-16', '2026-09-17', '2026-09-18'],
+			[judgeDay('2026-09-15'), judgeDay('2026-09-16')],
+			false
+		);
+
+		expect(silentTail(squares)).toBe(2);
+		expect(silentTail(squares.slice(0, 2))).toBe(0);
+	});
+
+	test('no hold reason reaches a page in the ledger own word', () => {
+		for (const reason of [
+			'sheet_too_small',
+			'inputs_changed',
+			'judge_unstable',
+			'judge_uncertain',
+			'legs_missing'
+		]) {
+			expect(heldInWords(reason), `${reason} reached a page as itself`).not.toContain('_');
+		}
+	});
+
+	test('a share under the attempts floor is not a share at all', () => {
+		// A share over four pairs is not a measurement, and printing one invites a
+		// decision the evidence cannot carry. The counts still print elsewhere.
+		expect(rateWithDenominator(1, 4, 5)).toBeNull();
+		expect(rateWithDenominator(1, 20, 5)).toBe('5% of 20 pairs');
 	});
 });
 

@@ -221,3 +221,170 @@ export function heldNote(days: readonly LineDay[], windowDays: number): string |
 	if (held === 0) return null;
 	return `Nothing was fitted on ${held} of these ${windowDays} days.`;
 }
+
+// --- Whether the judge agrees with itself, and what the record still needs ------
+
+/** One day's judge health and one day's record fill, off the same fitted row. */
+export interface JudgeDay {
+	date: string;
+	/** What share of the judged pairs the two readings disagreed about. */
+	disagreementRate: number;
+	/** What share of the agreed readings were UNCLEAR. */
+	unclearRate: number;
+	/** How many pairs a judging leg actually read. The denominator both rates
+	 * are a share of, so a panel can print it in the same sentence. */
+	pairsJudged: number;
+	negativesOnRecord: number;
+	aboveLineOnRecord: number;
+	daysOnRecord: number;
+	heldReason: string;
+}
+
+/** The two limits that hold a run, as the chart draws them. */
+export interface AgreementLimits {
+	disagreementMax: number;
+	unclearMax: number;
+}
+
+/** The three gates, as the count they hold and the count they need. */
+export interface GateNeed {
+	label: string;
+	value: number;
+	target: number;
+	/** The phrase under the marker. Words, never the knob's own name. */
+	targetText: string;
+}
+
+/** The agreement axis: zero to the looser of the two limits, never the data.
+ *
+ * Both rates are bounded by the two knobs that hold the run, and the looser of
+ * the two carries both series and both markers. Not 0 to 1: neither rate can
+ * reach 1 without the run holding first, so half the plot would be a region the
+ * data cannot enter. Not fitted to the data either - a rate of 0.02 drawn full
+ * height says the judge is in trouble when it is not.
+ */
+export function agreementCorridor(limits: AgreementLimits): [number, number] {
+	return [0, Math.max(limits.disagreementMax, limits.unclearMax)];
+}
+
+/** The three bars, in the order the record fills them.
+ *
+ * The negatives first, because it is the one that takes longest. The days next,
+ * because it is the one a reader can predict. The pairs above the line last,
+ * because it is the one that moves when the line moves.
+ */
+export function gateNeeds(
+	newest: JudgeDay | null,
+	gates: { minimumNegatives: number; minimumDays: number; minimumAboveLine: number }
+): GateNeed[] {
+	return [
+		{
+			label: 'Readings the record holds',
+			value: newest?.negativesOnRecord ?? 0,
+			target: gates.minimumNegatives,
+			targetText: `${gates.minimumNegatives} needed before a line may be fitted`
+		},
+		{
+			label: 'Days the record has folded',
+			value: newest?.daysOnRecord ?? 0,
+			target: gates.minimumDays,
+			targetText: `${gates.minimumDays} needed, so one fortnight of one kind of news cannot set the line`
+		},
+		{
+			label: 'Pairs judged at or above the line',
+			value: newest?.aboveLineOnRecord ?? 0,
+			target: gates.minimumAboveLine,
+			targetText: `${gates.minimumAboveLine} needed - these are the whole precision reading`
+		}
+	];
+}
+
+/** What one square on the strip says about one date. */
+export type FoldState = 'fitted' | 'filling' | 'held' | 'silent';
+
+export interface FoldSquare {
+	date: string;
+	state: FoldState;
+	/** The sentence the square carries, so colour is never the only signal. */
+	title: string;
+}
+
+/** One square a date across the window, including the dates nothing recorded.
+ *
+ * Every date is present whether or not a run wrote a row, because a gap is the
+ * fact the strip exists to show - a strip built from the rows would draw a
+ * shorter, tidier picture of a record that had stopped filling.
+ *
+ * **A held day while the gates are still unfilled is not a warning.** It is the
+ * design working. Painting it amber would put ten amber squares on the panel's
+ * first fortnight and burn the colour before it ever meant anything, so the
+ * warning fill arrives only once the gates are met and a hold stops being
+ * expected.
+ */
+export function foldDays(
+	dates: readonly string[],
+	rows: readonly JudgeDay[],
+	gatesMet: boolean
+): FoldSquare[] {
+	const byDate = new Map(rows.map((row) => [row.date, row]));
+	return dates.map((date) => {
+		const row = byDate.get(date);
+		if (row === undefined) {
+			return { date, state: 'silent', title: `${date}: no run recorded anything.` };
+		}
+		if (row.heldReason === 'none') {
+			return { date, state: 'fitted', title: `${date}: a line was fitted.` };
+		}
+		if (!gatesMet) {
+			return { date, state: 'filling', title: `${date}: the record was still filling.` };
+		}
+		return {
+			date,
+			state: 'held',
+			title: `${date}: nothing was fitted. ${heldInWords(row.heldReason)}.`
+		};
+	});
+}
+
+/** A hold reason as a reader reads it. The ledger's own word never reaches a page. */
+export function heldInWords(reason: string): string {
+	switch (reason) {
+		case 'sheet_too_small':
+			return 'The record did not hold enough to fit on';
+		case 'inputs_changed':
+			return 'The encoder or the ask moved, so the record was started again';
+		case 'judge_unstable':
+			return 'The two readings disagreed too often to trust';
+		case 'judge_uncertain':
+			return 'Too many readings could not tell';
+		case 'legs_missing':
+			return 'One of the judging legs did not report';
+		default:
+			return 'The run held the line';
+	}
+}
+
+/** How many days at the newest end of the strip recorded nothing at all. */
+export function silentTail(squares: readonly FoldSquare[]): number {
+	let count = 0;
+	for (let index = squares.length - 1; index >= 0; index -= 1) {
+		if (squares[index].state !== 'silent') break;
+		count += 1;
+	}
+	return count;
+}
+
+/** A share as a whole percent with the denominator it is a share of.
+ *
+ * Null under `min_attempts_for_rate`: a share over four pairs is not a
+ * measurement, and printing one invites a decision the evidence cannot carry.
+ * The counts still print - that is the rule `FailurePanels` already runs on.
+ */
+export function rateWithDenominator(
+	numerator: number,
+	denominator: number,
+	floor: number
+): string | null {
+	if (denominator < floor) return null;
+	return `${Math.round((numerator / denominator) * 100)}% of ${denominator} pairs`;
+}
