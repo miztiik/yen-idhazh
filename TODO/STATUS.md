@@ -37,6 +37,8 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 11 |
 | [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 29 | 6 | 22 | 0 |
 | [20260917-34-similarity-autotune-plan.md](20260917-34-similarity-autotune-plan.md) | 4 | 0 | 4 | 0 |
+| [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
+| [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 11 | 0 | 11 | 0 |
 
 ## In flight - 6
 
@@ -49,7 +51,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | #10 | 33 | C | `model_load_ms` and `job_seconds` join `host-fingerprint` | p33c10 |
 | #29 | 33 | J | `prune.yml` wakes outside the digest window | p33j29 |
 
-## Ready now - 31
+## Ready now - 35
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -88,8 +90,12 @@ section 3 is where it is answered.
 | #9 | 27 | D | A cut reply keeps its summary | 1 |
 | #10 | 27 | D | A killed shard keeps the work it finished | - |
 | #11 | 27 | E | Two articles, three arms, one runner | 4 |
+| #1 | 35 | A / cap | Raise `truncation_cap_tokens` to 30000, pin to `n_ctx` (+ fingerprint move, C5) | - |
+| #5 | 35 | A / search | Live-day search - instant + semantic (+ frontend `key_points` owner, C2) | - |
+| #7 | 35 | A / eval-core | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - |
+| #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
 
-## Waiting on another row - 68
+## Waiting on another row - 83
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -161,6 +167,21 @@ section 3 is where it is answered.
 | #12 | 34 | - | Console: the holdout panel. **The merge count landed in #874; this is the other half** | 2 names no row; 8 names no row |
 | #15 | 34 | - | Console: the confusion matrix | 7 names no row; 8 names no row; 12 is PENDING |
 | #16 | 34 | - | The design document. **Mostly overtaken - see below** | 9 names no row |
+| #6 | 35 | A / eval-core | Remove `new_fact_rate` + `key_point_weight` (+#34 field, judge stages, C3) | #34 names no row |
+| #2 | 35 | B / chart | Redesign + re-label the faithfulness chart; docs glyph-link | 8 is PENDING |
+| #3 | 35 | B / chart | Reword recorded-only copy; relabel `compression` | 8 is PENDING |
+| #4 | 35 | B / retire | Retire `key_points` completely (published + internal + corpus + `output_digest`) | 5 is PENDING; 6 is PENDING; 7 is PENDING |
+| #1 | 36 | W1 / fit-core | Extract the fit core, direction-parameterised | 34-fit merged names no row |
+| #3 | 36 | W1 / eval-columns | `EvalRow`: `geval`, `publish_decision`, `withheld_reason` | 35-EvalRow merged names no row |
+| #2 | 36 | W2 / metric-fold-fit | The two contracts + the per-metric knob block, inert | 1 is PENDING |
+| #4 | 36 | W2 / metric-fold-fit | The fold: per-metric distributions (HHEM sub-identity key, G7) | 2 is PENDING; 3 is PENDING |
+| #5 | 36 | W2 / metric-fold-fit | The fit + seed faithfulness (symmetric damping, bounded fixture) | 1 is PENDING; 2 is PENDING; 4 is PENDING |
+| #6 | 36 | W2 / geval-leg | G-Eval fluency judge in the council (estimate x margin timeout) | 3 is PENDING |
+| #7 | 36 | W3 / publish-gate | The veto-chain publish gate, record-only | 2 is PENDING; 3 is PENDING; 5 is PENDING |
+| #10 | 36 | W3 / geval-measure (alone) | Measure a real G-Eval call; replace the estimate | 6 is PENDING |
+| #11 | 36 | W1 / coherence-ram (alone) | 3-model RAM: measure peak, sequential-eviction fallback, shard timeout 220 | 35 coherence names no row |
+| #9 | 36 | W3 / console-panels | Console: the quality bands + the not-published/withhold panel | 5 is PENDING; 7 is PENDING |
+| #8 | 36 | W4 / apply-gate (alone) | Flip the flag: withhold = absent + item-health telemetry (E7 placement) | 7 is PENDING |
 
 ## Finished - 19 plans with no live row
 
