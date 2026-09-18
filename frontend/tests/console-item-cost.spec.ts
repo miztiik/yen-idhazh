@@ -500,6 +500,31 @@ test.describe('the section on the built console', () => {
 		}
 	});
 
+	test('THE ORACLE: the share is carried by figures, and no track is drawn', async ({ page }) => {
+		// The two-segment track that used to draw this share was one flat bar on
+		// no time axis, and the note under it told the reader not to read its
+		// direction. It is asserted gone through the named state that replaced it
+		// rather than through a sentence: a panel holds exactly one carrier for
+		// this share, and a rebuilt track either takes that name - and fails the
+		// value - or stands beside it and fails the count.
+		await page.goto('/console/');
+		const panel = page.locator('[data-console-panel="How much of each prompt was already in memory"]');
+		await expect(panel).toBeVisible();
+
+		const carrier = panel.locator('[data-item-cost-share]');
+		await expect(carrier, 'the share has no carrier, or has grown a second one').toHaveCount(1);
+		await expect(carrier).toHaveAttribute('data-item-cost-share', 'figures');
+
+		// The counts the row kept. Each is a printed figure inside that carrier.
+		for (const name of [
+			'data-item-cost-read-tokens',
+			'data-item-cost-reused-tokens',
+			'data-item-cost-reused-pct'
+		]) {
+			await expect(carrier.locator(`[${name}]`), `${name} left the panel`).toHaveCount(1);
+		}
+	});
+
 	test('the section names the window it drew, at every preset', async ({ page }) => {
 		// It honours the shared control without claiming a pan it does not follow,
 		// so the day count it prints has to be the one the control set.
