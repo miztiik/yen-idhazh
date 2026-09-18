@@ -1,10 +1,16 @@
-import { chartConfig, consoleConfig } from '$lib/server/config';
-import { mergeCountsOf, type MergeDay } from '$lib/console/merge-line';
+import {
+	chartConfig,
+	committedFloor,
+	consoleConfig,
+	similarityConfig
+} from '$lib/server/config';
+import { mergeCountsOf, type LineDay, type MergeDay } from '$lib/console/merge-line';
 import { loadDay, publishedDates } from '$lib/server/payload';
+import { fittedLines } from '$lib/server/similarity-ledger';
 
 export const prerender = true;
 
-export type { MergeDay };
+export type { LineDay, MergeDay };
 
 /** What Judgement reads, and what it costs.
  *
@@ -35,6 +41,24 @@ export function load() {
 	return {
 		// Oldest first, the order every chart on this console draws a day axis in.
 		merges,
+		// Seven numbers and two words a day at the widest preset, so the window
+		// control filters an array that is already here and no preset costs a fetch.
+		lines: fittedLines(widestDays).map(
+			(row): LineDay => ({
+				date: row.date,
+				previous: row.previous,
+				proposed: row.proposed,
+				applied: row.applied,
+				clampKind: row.clampKind,
+				heldReason: row.heldReason,
+				maxDownStep: row.maxDownStep
+			})
+		),
+		// The band and the daily step the chart draws against, read off config so
+		// the axis is the range a line MAY take rather than the range it has taken.
+		similarity: similarityConfig(),
+		// What the newest day was built with when no fit has ever run.
+		configuredLine: committedFloor(),
 		console,
 		// How many date labels the day axis may carry - `chart.tick_density`.
 		chart: chartConfig(),
