@@ -1,6 +1,6 @@
 # What a bench dispatch costs
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-18
 
 Where the time in a bench dispatch goes, and whether any of it is a slow path
 worth fixing.
@@ -132,8 +132,9 @@ restore (38 to 95 seconds) and the download (median 75 seconds) are within
 seconds of each other, and the slowest restore measured is slower than the median
 download.
 
-**The cache is not on this workflow for speed.** What it is for, and the ceiling
-it competes for, are in [ci-caches.md](../ci-caches.md).
+**The cache is not on this workflow for speed.** It is there because the
+dispatch's own second job restores what its first job downloaded; the entry ages
+out unread within the week ([../ci-environment.md](../ci-environment.md#platform-limits-that-shape-the-workflows)).
 
 ## What this does not settle
 
@@ -159,7 +160,7 @@ here stops existing on a date nobody chose.
 
 - [the-processor-lottery.md](the-processor-lottery.md) - why the two jobs of one dispatch are two readings, and what a comparison across dispatches costs.
 - [what-the-draft-head-is-worth.md](what-the-draft-head-is-worth.md) - the paired-inside-one-job shape this page's repeat figure argues for.
-- [../ci-caches.md](../ci-caches.md) - the weights cache, the 10 GB allowance GitHub evicts to hold, and the rule a new cache has to clear.
+- [../ci-environment.md](../ci-environment.md) - the 7-day rule and the eviction this dispatch's weights entry lives under.
 - [../../architecture/summarize/throughput.md](../../architecture/summarize/throughput.md) - what prefill and decode cost the daily pipeline.
 - [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md) - how a bench dispatch is run and what it has to produce.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #2 (the runner budget) and Guardrail #10 (a number carries its hardware, date and spread).

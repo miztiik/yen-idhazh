@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-18
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -554,6 +554,16 @@ slower there - and both cases pass, so the local result reads as a clean win and
 is not one. Raise it locally only on an idle box, and never read a local worker
 figure as a runner figure.
 
+**Do not drop the font packages from the browser install.** `npx playwright
+install --with-deps chromium` spends much of its time in `apt-get`, and every
+package it downloads there is a font: Japanese, Chinese, Thai, Cyrillic and
+Unifont, plus the X font utilities. The digest publishes English, so they look
+removable. They are not: `layout-overflow.spec.ts` measures text against its
+container, and a missing font changes what fontconfig substitutes and therefore
+what the browser measures. What that risks is a check that goes on passing in CI
+while disagreeing with a developer box. Nobody has measured the swap, so it
+stays as it is (Guardrail #10).
+
 Every skip reads a fact the fixture owns rather than a locator
 count - the canary day is eight stories on one desk, so it cannot fill a leading
 block and it never fetches. The
@@ -903,6 +913,6 @@ precisely when an operator needs it.
 - [ship-a-pr.md](ship-a-pr.md) - the neutral PR lifecycle these commands serve.
 - [run-the-pipeline.md](run-the-pipeline.md) - running the producer itself, which these gates do not do.
 - [../reference/agent-notes.md](../reference/agent-notes.md) - environment quirks that make a command lie about its result.
-- [../reference/ci-caches.md](../reference/ci-caches.md) - what CI downloads once and keeps, and why a gate job is not always as slow as its step list looks.
+- [../reference/ci-environment.md](../reference/ci-environment.md) - what CI downloads once and keeps, and why a gate job is not always as slow as its step list looks.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - what the drift gate compares.
 - [../../CLAUDE.md](../../CLAUDE.md) - sections 9, 12, and 13.
