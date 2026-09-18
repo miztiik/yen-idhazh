@@ -3,11 +3,17 @@
 from __future__ import annotations
 
 import json
+import shutil
+from pathlib import Path
 
 import pytest
 from conftest import REPO_ROOT, read_text
 
+from idhazh import config
 from idhazh.contracts.app_config import AppConfig
+from idhazh.evals.golden import GoldenResult
+from idhazh.stages import common, decide
+from utilities import candidate_pointer
 
 from ._harness import (
     BENCH_CANDIDATE_CONFIG,
@@ -15,6 +21,7 @@ from ._harness import (
     BENCH_CONFIG_STEP,
     BENCH_TRIAL_STATE,
     CANDIDATE_CONFIG_ACTION,
+    MODELS_POINTER_KEY,
     _load_workflows,
     _mapping,
     _stage_invocations,
@@ -29,9 +36,11 @@ pytestmark = pytest.mark.workflow
 #: ledgers the next production run draws from.
 VALIDATION_WORKFLOW = "validate.yml"
 
-#: The step that builds the scratch config, in each job that runs a stage. Both
-#: copies say the same two things, which is what stops one of them drifting.
-VALIDATION_CONFIG_JOBS = ("plan", "qualify")
+#: The step that builds the scratch config, in each job that runs a stage. All
+#: three copies say the same two things, which is what stops one of them
+#: drifting. `decide` joined on 2026-09-18, when its verdict stopped being built
+#: off the repository root.
+VALIDATION_CONFIG_JOBS = ("plan", "qualify", "decide")
 
 #: The step the redirect exists for. `plan` appends to the seen store, feed
 #: health, feed retirements and the counterfactual scores; without the flag it
@@ -39,20 +48,22 @@ VALIDATION_CONFIG_JOBS = ("plan", "qualify")
 #: qualification marks real addresses seen.
 VALIDATION_PLAN_STEP = "Read the feeds"
 
+#: The three steps of the decide job, in the order they have to run: the gates
+#: write a segment, the fold turns it into the day file, and the commit stages
+#: what the fold wrote.
+VALIDATION_GATES_STEP = "Run the gates"
+
+VALIDATION_COMPACT_STEP = "Fold the verdict into its day"
+
+VALIDATION_COMMIT_STEP = "Commit the validation ledger"
+
 #: Every stage this dispatch runs, and the job that runs it.
 VALIDATION_STAGES = (
+    ("decide", "compact"),
     ("decide", "qualify-decide"),
     ("plan", "plan"),
     ("qualify", "qualify"),
 )
-
-#: The one stage that is deliberately not redirected. `qualify-decide` writes the
-#: run's own verdict, which is the record the dispatch exists to leave, and
-#: `writer.append_validation` is handed a path off the repository root rather
-#: than off the state root - so that row lands in `state/` whatever
-#: `run.trial_state_dirname` says. Its job builds no scratch copy, so there is
-#: nothing a `--config` flag could point at.
-VALIDATION_UNREDIRECTED = frozenset({("decide", "qualify-decide")})
 
 
 def test_no_validation_stage_can_reach_the_production_state_root() -> None:
@@ -61,10 +72,9 @@ def test_no_validation_stage_can_reach_the_production_state_root() -> None:
     `cli` moves the state root off `run.trial_state_dirname`, and only the
     scratch copy carries it. `Read the feeds` was invoked without `--config`
     until 2026-09-17, so a qualification appended to the four ledgers `plan`
-    writes. Nothing in that job is committed, so the rows died with the runner -
-    but the job could reach the production root, this workflow holds
-    `contents: write`, and `decide` already commits `state`, so the distance
-    between the two was one step somebody would add without reading this far.
+    writes. `qualify-decide` was the last one out, on 2026-09-18: it built its
+    verdict's path off the repository root, so no config could move it and a
+    trial dispatch wrote the tree a published day is built from.
 
     Asserted over every job in the file rather than over the three that run a
     stage today, so a fourth job that adds one is caught here rather than by a
@@ -75,12 +85,6 @@ def test_no_validation_stage_can_reach_the_production_state_root() -> None:
     invocations = []
     for job_name, step_name, stage, words in _stage_invocations(workflow, VALIDATION_WORKFLOW):
         invocations.append((job_name, stage))
-        if (job_name, stage) in VALIDATION_UNREDIRECTED:
-            assert BENCH_CONFIG_FLAG not in words, (
-                f"{VALIDATION_WORKFLOW}/{job_name}/{step_name} carries --config, and its job "
-                "builds no scratch copy for the flag to point at"
-            )
-            continue
         assert BENCH_CONFIG_FLAG in words, (
             f"{VALIDATION_WORKFLOW}/{job_name}/{step_name} runs `idhazh {stage}` "
             "without --config, so its ledgers land in production's state root"
@@ -104,8 +108,8 @@ def test_no_validation_stage_can_reach_the_production_state_root() -> None:
 def test_both_halves_of_a_qualification_name_one_trial_directory() -> None:
     """The flag redirects nothing unless the copy it names carries the trial directory.
 
-    Two jobs build the scratch copy and both pass the same directory, so the
-    dispatch has one answer to "where did this run's rows go" rather than two.
+    Three jobs build the scratch copy and all pass the same directory, so the
+    dispatch has one answer to "where did this run's rows go" rather than three.
     """
     workflow = _load_workflows()[VALIDATION_WORKFLOW]
 
@@ -133,3 +137,88 @@ def test_the_feeds_are_read_through_the_config_the_job_just_built() -> None:
     workflow = _load_workflows()[VALIDATION_WORKFLOW]
     names = [step.get("name") for step in _steps(workflow, "plan")]
     assert names.index(BENCH_CONFIG_STEP) < names.index(VALIDATION_PLAN_STEP)
+
+
+def test_the_gates_are_run_through_the_config_the_job_just_built() -> None:
+    """The same ordering, in the job whose verdict is the record this dispatch leaves."""
+    workflow = _load_workflows()[VALIDATION_WORKFLOW]
+    names = [step.get("name") for step in _steps(workflow, "decide")]
+    assert names.index(BENCH_CONFIG_STEP) < names.index(VALIDATION_GATES_STEP)
+    assert names.index(VALIDATION_GATES_STEP) < names.index(VALIDATION_COMPACT_STEP), (
+        "the fold turns the gates' segment into the day file, so it runs after them"
+    )
+    assert names.index(VALIDATION_COMPACT_STEP) < names.index(VALIDATION_COMMIT_STEP), (
+        "a commit before the fold stages a segment and no head"
+    )
+
+
+def _golden(root: Path, model_id: str, measured: float) -> None:
+    """One model's golden-set result, as `stage_decide` reads them back."""
+    result = GoldenResult(
+        model_id=model_id,
+        leaderboard_hhem=0.75,
+        scores=[measured] * 20,
+        attempted=20,
+    )
+    (root / f"{model_id}.json").write_text(result.to_json(), encoding="utf-8")
+
+
+def test_a_decide_run_on_a_trial_config_writes_nothing_outside_its_own_tree(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The row's oracle, other half. Every path the stage wrote, listed and placed.
+
+    `evals.golden.ledger_relpath` returned `state/validation-<date>.csv` and both
+    callers joined it to `config.REPO_ROOT`, so `run.trial_state_dirname` could
+    not move it and a qualification wrote the tree a published day is built from.
+    The verdict comes off the state root now, and the state root is the one the
+    config names.
+
+    Asserted by diffing the whole fixture tree either side of the call rather
+    than by reading the one path the test expected: a stage that started writing
+    somewhere else entirely would pass the second kind of check.
+    """
+    scratch = tmp_path / "candidate-config"
+    shutil.copytree(REPO_ROOT / "config", scratch)
+    committed = json.loads((scratch / "idhazh.json").read_text(encoding="utf-8"))
+    candidate_pointer.point_at(
+        committed[MODELS_POINTER_KEY], scratch=scratch, trial_state=BENCH_TRIAL_STATE
+    )
+    settings = config.load(scratch)
+    assert settings.app.run.trial_state_dirname == BENCH_TRIAL_STATE
+
+    golden_root = tmp_path / "var" / "validation"
+    golden_root.mkdir(parents=True)
+    _golden(golden_root, settings.models.summarize.id, measured=0.90)
+    _golden(golden_root, "a-challenger-that-lost", measured=0.50)
+    monkeypatch.setattr(common, "VALIDATION_ROOT", golden_root)
+    # Exactly what `cli` does when the config names a trial directory, and the
+    # reason it is repeated rather than imported: the redirect is the thing under
+    # test, so a test that called the router would be asking the router.
+    production_root = tmp_path / "state"
+    monkeypatch.setattr(
+        common, "STATE_ROOT", production_root / settings.app.run.trial_state_dirname
+    )
+    before = {path for path in tmp_path.rglob("*") if path.is_file()}
+
+    decide.stage_decide(
+        settings=settings,
+        date="2026-09-17",
+        run_id="2026-09-17-900000001",
+        commit_sha="c" * 40,
+        runner="ubuntu-latest",
+    )
+
+    written = sorted(
+        path.relative_to(tmp_path).as_posix()
+        for path in tmp_path.rglob("*")
+        if path.is_file() and path not in before
+    )
+    assert written, "the stage recorded no verdict at all, so this proves nothing"
+    trial_tree = f"state/{BENCH_TRIAL_STATE}/"
+    assert [path for path in written if not path.startswith(trial_tree)] == [], (
+        f"a stage on a trial config wrote outside {trial_tree}: {written}"
+    )
+    assert not (production_root / "validation").exists(), (
+        "the production tree gained a validation ledger"
+    )

@@ -129,6 +129,15 @@ class ServerJob(StrEnum):
     until 2026-09-13, when the small model, its job and its flag were retired
     together. Six committed counters rows still carry the value, and a member
     with no producer left is the only thing that can read them back.
+
+    **`decide` is here for a filename and not for a column.** `validate.yml`'s
+    gate job writes the validation ledger's segment, and the segment grammar
+    names its writer from this set - so the job belongs here. No row of the three
+    ledgers that carry a `job` column can hold it: that job stands no server up,
+    records no machine and reads no item. Their generated schemas list it because
+    one enum answers "which workflow job" for the whole repository, which is why
+    none of the three is version-stamped for it - a stamp says a shape moved, and
+    theirs did not.
     """
 
     # digest.yml, in the order a run reaches them.
@@ -141,6 +150,10 @@ class ServerJob(StrEnum):
     # corpus `bench.corpus_items` sizes, and the one measurement job that writes
     # a run plan.
     RUNTIME = "runtime"
+    # validate.yml. The job that runs the gates and files the candidate's
+    # verdict. It stands no server up and records no machine, so it names a
+    # writer of the validation ledger and of nothing else here.
+    DECIDE = "decide"
 
 
 #: The default, and it is a reading rather than a guess: until 2026-09-12 exactly
