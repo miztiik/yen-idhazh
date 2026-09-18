@@ -456,7 +456,7 @@ two severities. An invalid payload means the day is broken, so `idhazh
 validate-days` and then `npm run build` run first and stop the commit; a page
 over its recorded weight still reads correctly, so `npm run bundle-gate` runs
 after the commit and fails the job without costing the repair
-([../architecture/publishing/layout.md](../architecture/publishing/layout.md#a-bad-day-is-stopped-before-the-commit-the-weight-ratchet-is-not-2026-08-29)).
+([../architecture/publishing/layout.md](../architecture/publishing/layout.md#a-bad-day-is-stopped-before-the-commit-the-weight-ratchet-is-not)).
 `digest.yml` carries the same order for the same reason. **The validate step is
 there because the build stopped answering for it**: a reading document carries a
 seed rather than its whole day, so a build never opens the stories past it.
