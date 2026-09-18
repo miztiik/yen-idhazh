@@ -36,18 +36,19 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 11 |
 | [20260914-29-found-once-plan.md](20260914-29-found-once-plan.md) | 17 | 14 | 1 | 1 |
-| [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 28 | 0 | 27 | 2 |
+| [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 28 | 0 | 27 | 1 |
 | [20260917-34-similarity-autotune-plan.md](20260917-34-similarity-autotune-plan.md) | 17 | 2 | 15 | 1 |
 
-## In flight - 3
+## In flight - 4
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
 | #1 | 33 | A | Segment store and the `compact` stage, shipped inert | p33a1 |
 | #5 | 33 | A | Machine page stops lying about a day with no rows | p33r5 |
+| #7 | 33 | A | OS memory and load, per item | p33r7b |
 | #18 | 33 | H | Chart-craft doctrine - the thirteen rules, written once | p33r18 |
 
-## Ready now - 35
+## Ready now - 34
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -88,7 +89,6 @@ section 3 is where it is answered.
 | #11 | 27 | E | Two articles, three arms, one runner | 4 |
 | #16 | 29 | - | Refuse boilerplate, on a week of evidence | 13 |
 | #6 | 33 | A | One concurrency group for `digest`, `validate`, `measure` | - |
-| #7 | 33 | A | OS memory and load, per item | - |
 | #2 | 34 | - | The four contracts, shipped inert with header-only files | - |
 
 ## Waiting on another row - 84
@@ -149,13 +149,13 @@ section 3 is where it is answered.
 | #17 | 33 | B | `runtime-counters` writes segments | 4 is PENDING |
 | #10 | 33 | C | `model_load_ms` and `job_seconds` join `host-fingerprint` | 2 is PENDING |
 | #12 | 33 | D | Delete the merge machinery | 2 is PENDING; 3 is PENDING; 4 is PENDING; 17 is PENDING |
-| #13 | 33 | D | Compaction lag and free swap on the console band | 1 is IN-FLIGHT; 5 is IN-FLIGHT; 7 is PENDING; 12 is PENDING |
-| #11 | 33 | E | Delete `runtime-counters` and everything that reads it | 7 is PENDING; 10 is PENDING; 17 is PENDING |
+| #13 | 33 | D | Compaction lag and free swap on the console band | 1 is IN-FLIGHT; 5 is IN-FLIGHT; 7 is IN-FLIGHT; 12 is PENDING |
+| #11 | 33 | E | Delete `runtime-counters` and everything that reads it | 7 is IN-FLIGHT; 10 is PENDING; 17 is PENDING |
 | #15 | 33 | F | Generated TypeScript contracts replace the hand-written ones | 10 is PENDING; 11 is PENDING |
 | #16 | 33 | G | Docs, and the orphan sweep | all names no row |
 | #28 | 33 | H | Pipeline panels: the share track goes, Extraction gains a trend | 18 is IN-FLIGHT |
 | #19 | 33 | I | The shard board | 11 is PENDING; 18 is IN-FLIGHT |
-| #21 | 33 | I | Memory and load, three grains - ABSORBS Row #14 | 5 is IN-FLIGHT; 7 is PENDING; 15 is PENDING; 19 is PENDING |
+| #21 | 33 | I | Memory and load, three grains - ABSORBS Row #14 | 5 is IN-FLIGHT; 7 is IN-FLIGHT; 15 is PENDING; 19 is PENDING |
 | #23 | 33 | I | What a run reads against what it writes, in tokens and in seconds | 21 is PENDING |
 | #25 | 33 | I | Outside the model call, as range marks | 23 is PENDING |
 | #22 | 33 | I | Platform mix as grouped bars | 25 is PENDING |
