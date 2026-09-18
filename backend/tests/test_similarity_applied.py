@@ -286,4 +286,3 @@ def test_the_manifest_records_the_line_the_day_was_grouped_at() -> None:
     again = RunManifest.from_json(grouped_at.to_json())
 
     assert again.runs[-1].same_story_floor_applied == pytest.approx(0.9375)
-
