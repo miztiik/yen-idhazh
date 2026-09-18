@@ -35,21 +35,15 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 16 | 12 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 11 |
-| [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 28 | 0 | 27 | 1 |
+| [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 28 | 6 | 21 | 3 |
 | [20260917-34-similarity-autotune-plan.md](20260917-34-similarity-autotune-plan.md) | 17 | 2 | 15 | 1 |
 
-## In flight - 6
+## In flight - 0
 
-| Row | Plan | Group | Title | Worktree |
-| --- | --- | --- | --- | --- |
-| #1 | 33 | A | Segment store and the `compact` stage, shipped inert | p33a1 |
-| #5 | 33 | A | Machine page stops lying about a day with no rows | p33r5 |
-| #7 | 33 | A | OS memory and load, per item | p33r7b |
-| #2 | 33 | B | `host-fingerprint` writes segments | p33b2 |
-| #18 | 33 | H | Chart-craft doctrine - the thirteen rules, written once | p33r18 |
-| #28 | 33 | H | Pipeline panels: the share track goes, Extraction gains a trend | p33h28 |
+Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
+dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 33
+## Ready now - 35
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -89,9 +83,11 @@ section 3 is where it is answered.
 | #10 | 27 | D | A killed shard keeps the work it finished | - |
 | #11 | 27 | E | Two articles, three arms, one runner | 4 |
 | #6 | 33 | A | One concurrency group for `digest`, `validate`, `measure` | - |
+| #3 | 33 | B | `item-health`, `scores`, `score-index` write segments | 2 |
+| #10 | 33 | C | `model_load_ms` and `job_seconds` join `host-fingerprint` | 2 |
 | #2 | 34 | - | The four contracts, shipped inert with header-only files | - |
 
-## Waiting on another row - 82
+## Waiting on another row - 80
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -143,23 +139,21 @@ section 3 is where it is answered.
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
-| #3 | 33 | B | `item-health`, `scores`, `score-index` write segments | 2 is IN-FLIGHT |
 | #4 | 33 | B | `span-rollup` writes segments | 3 is PENDING |
 | #17 | 33 | B | `runtime-counters` writes segments | 4 is PENDING |
-| #10 | 33 | C | `model_load_ms` and `job_seconds` join `host-fingerprint` | 2 is IN-FLIGHT |
-| #12 | 33 | D | Delete the merge machinery | 2 is IN-FLIGHT; 3 is PENDING; 4 is PENDING; 17 is PENDING |
-| #13 | 33 | D | Compaction lag and free swap on the console band | 1 is IN-FLIGHT; 5 is IN-FLIGHT; 7 is IN-FLIGHT; 12 is PENDING |
-| #11 | 33 | E | Delete `runtime-counters` and everything that reads it | 7 is IN-FLIGHT; 10 is PENDING; 17 is PENDING |
+| #12 | 33 | D | Delete the merge machinery | 3 is PENDING; 4 is PENDING; 17 is PENDING |
+| #13 | 33 | D | Compaction lag and free swap on the console band | 12 is PENDING |
+| #11 | 33 | E | Delete `runtime-counters` and everything that reads it | 10 is PENDING; 17 is PENDING |
 | #15 | 33 | F | Generated TypeScript contracts replace the hand-written ones | 10 is PENDING; 11 is PENDING |
 | #16 | 33 | G | Docs, and the orphan sweep | all names no row |
-| #19 | 33 | I | The shard board | 11 is PENDING; 18 is IN-FLIGHT |
-| #21 | 33 | I | Memory and load, three grains - ABSORBS Row #14 | 5 is IN-FLIGHT; 7 is IN-FLIGHT; 15 is PENDING; 19 is PENDING |
+| #19 | 33 | I | The shard board | 11 is PENDING |
+| #21 | 33 | I | Memory and load, three grains - ABSORBS Row #14 | 15 is PENDING; 19 is PENDING |
 | #23 | 33 | I | What a run reads against what it writes, in tokens and in seconds | 21 is PENDING |
 | #25 | 33 | I | Outside the model call, as range marks | 23 is PENDING |
 | #22 | 33 | I | Platform mix as grouped bars | 25 is PENDING |
 | #24 | 33 | I | Counterfactual cost gets a shape | 22 is PENDING |
 | #20 | 33 | I | Timing panels merge and move to Pipeline | 24 is PENDING |
-| #26 | 33 | I | Machine cards: L3 and bandwidth as bars - AMENDS Row #5 | 5 is IN-FLIGHT; 11 is PENDING; 18 is IN-FLIGHT |
+| #26 | 33 | I | Machine cards: L3 and bandwidth as bars - AMENDS Row #5 | 11 is PENDING |
 | #27 | 33 | K | Route grouping and panel order | 20 is PENDING; 26 is PENDING |
 | #14 | 33 | - | The per-item machine load panel | - |
 | #8 | 33 | - | Memory split by prefill and decode | - |
