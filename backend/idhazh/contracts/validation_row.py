@@ -1,4 +1,4 @@
-"""One row of the model validation ledger (`state/validation-<date>.csv`).
+"""One row of the model validation ledger, filed on the day the run measured.
 
 The leaderboard's ranking is a better prior than a guess. It is not evidence
 about this pipeline, because three variables sit between their number and ours:
@@ -9,11 +9,11 @@ side by side so the gap is a fact rather than an argument.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import ClassVar, Self
+from typing import Any, ClassVar, Self
 
 from pydantic import Field, model_validator
 
-from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, Sha256, Slug
+from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, RunId, Sha256, Slug
 
 
 class ValidationVerdict(StrEnum):
@@ -44,6 +44,11 @@ class ValidationRow(Contract):
 
     __schema_stem__: ClassVar[str] = "validation-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-18",
+            change="Renamed `measured_on` to `date` and appended `run_id`.",
+            why="The head is named by the row's date cell, and two runs of a day are two verdicts.",
+        ),
         ChangelogEntry(
             version="2026-08-26",
             change="leaderboard_hhem may be null beside a leaderboard_provenance of not_reported.",
@@ -79,7 +84,10 @@ class ValidationRow(Contract):
     articles: int = Field(
         ge=1, description="How many golden articles produced the mean. A mean of one is not one."
     )
-    measured_on: DateStamp
+    date: DateStamp = Field(description="The day this was measured, and the day file it lands in.")
+    run_id: RunId = Field(
+        description="Which execution measured it. Two dispatches of one candidate are two verdicts."
+    )
     commit_sha: Sha256 | str = Field(
         min_length=7, description="The tree the measurement ran against."
     )
@@ -114,3 +122,17 @@ class ValidationRow(Contract):
     def csv_columns(cls) -> tuple[str, ...]:
         """The ledger's column order. One definition, so a writer cannot invent its own."""
         return tuple(cls.model_fields)
+
+    def csv_row(self) -> dict[str, str]:
+        """Every cell a string. A model nobody published a score for is an empty cell."""
+        payload = self.model_dump(mode="json")
+        return {name: "" if payload[name] is None else str(payload[name]) for name in payload}
+
+    @classmethod
+    def from_csv_row(cls, row: dict[str, str]) -> Self:
+        """The inverse. An empty leaderboard cell is an unknown prior, never a zero."""
+        payload: dict[str, Any] = {name: row[name] for name in cls.model_fields}
+        for name, field in cls.model_fields.items():
+            if field.default is None and payload[name] == "":
+                payload[name] = None
+        return cls.model_validate(payload)
