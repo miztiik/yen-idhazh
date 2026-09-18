@@ -70,6 +70,7 @@ class JudgeServer:
         sent: list[dict[str, Any]] = []
         served: list[int] = []
         words = dict(vocabulary or {})
+        arrival = threading.Lock()
 
         class Handler(BaseHTTPRequestHandler):
             protocol_version = "HTTP/1.1"
@@ -80,12 +81,17 @@ class JudgeServer:
             def do_POST(self) -> None:
                 raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
                 asked = json.loads(raw)
-                sent.append({"path": self.path, **asked})
+                with arrival:
+                    sent.append({"path": self.path, **asked})
                 if self.path.endswith("/tokenize"):
                     self._answer(json.dumps(words[asked["content"]]).encode("utf-8"))
                     return
-                self._answer(replies[len(served) % len(replies)])
-                served.append(1)
+                # The turn is claimed before the reply goes out: this server is threaded, and
+                # counting after the write lets the next request read a count that is one short.
+                with arrival:
+                    turn = len(served)
+                    served.append(1)
+                self._answer(replies[turn % len(replies)])
 
             def _answer(self, body: bytes) -> None:
                 self.send_response(200)
