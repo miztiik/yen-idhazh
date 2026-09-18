@@ -79,7 +79,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Segment store and the `compact` stage, shipped inert | - | A | DONE | p33a1 | #862 | - |
 | 5 | Machine page stops lying about a day with no rows | - | A | DONE | p33r5 | #864 | - |
-| 6 | One concurrency group for `digest`, `validate`, `measure` | - | A | PENDING | - | - | - |
+| 6 | The validation ledger leaves the root of `state/` | - | A | PENDING | - | - | - |
 | 7 | OS memory and load, per item | - | A | DONE | p33r7b | #865 | - |
 | 2 | `host-fingerprint` writes segments | 1 | B | DONE | p33b2 | #866 | - |
 | 3 | `item-health`, `scores`, `score-index` write segments | 2 | B | IN-FLIGHT | p33b3 | - | - |
@@ -102,6 +102,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 20 | Timing panels merge and move to Pipeline | 24 | I | PENDING | - | - | - |
 | 26 | Machine cards: L3 and bandwidth as bars - AMENDS Row #5 | 5, 11, 18 | I | PENDING | - | - | - |
 | 27 | Route grouping and panel order | 20, 26 | K | PENDING | - | - | - |
+| 29 | `prune.yml` wakes outside the digest window | - | J | PENDING | - | - | - |
 | 14 | The per-item machine load panel | - | - | **ABSORBED into #21** | - | - | - |
 | 9 | Server batching counters, per item | - | - | **COLLAPSED into #7** | - | - | - |
 | 8 | Memory split by prefill and decode | - | - | **ESCALATED - not dispatchable** | - | - | - |
@@ -699,25 +700,51 @@ Rows #1 to #17. These close the collision that destroyed 303 rows on 2026-09-16.
 | --- | --- | --- | --- | --- |
 | 1 | Leave it; the page just draws fewer points | It does not draw fewer points, it prints a false sentence - `machine-cards.ts` line 191 falls back to `source: 'counters'` and the card then says the record had not begun | The operator keeps losing the difference between a missing instrument and destroyed rows | Susan |
 
-## Row #6 - One concurrency group for `digest`, `validate`, `measure`
+## Row #6 - The validation ledger leaves the root of `state/`
 
-- **Scope:** the three workflows that commit `state/` cannot run at the same time.
-- **Files touched:** `.github/workflows/digest.yml`, `.github/workflows/validate.yml`, `.github/workflows/measure.yml`, `backend/tests/workflows/`
-- **Acceptance gates:** local - `pytest backend/tests/workflows -n auto`, plus `shellcheck` is CI-only (not installed locally). CI - full suite.
-- **Oracle:** a test reads the three workflow files and asserts all three declare the same `concurrency.group` and that `cancel-in-progress` is false on each. **What it cannot settle:** whether a dispatched run now waits too long - that is a human's patience, not a gate.
+- **Scope:** `state/validation-<date>.csv` is deleted. The qualification verdict is written under the state root the config points at, on the project's `YYYY/MM/DD` day tree, through the segment store - so two candidates dispatched together cannot share a filename. `validate.yml` stages only what it writes. **The shared concurrency group this row used to ask for is refused, and decision 5 records why.**
+- **Files touched:** `backend/idhazh/evals/golden.py`, `backend/idhazh/stages/decide.py`, `backend/idhazh/stages/qualify_decide.py`, `backend/idhazh/ledger.py` (a `SegmentLedger` member and its head-shape entry), `.github/workflows/validate.yml`, `backend/tests/workflows/_harness.py`, `backend/tests/workflows/test_staged_paths.py`, `backend/tests/pipeline/test_compact.py`, `state/validation-2026-08-22.csv` (deleted), `docs/concepts/adaptive-pruning.md`, `docs/architecture/contracts/schemas.md`, `docs/architecture/contracts/determinism.md`
+- **Acceptance gates:** local - ruff, mypy, the drift gate, `pytest backend/tests -n auto`. CI - full suite.
+- **Oracle:** two candidates dispatched on one date write two segments whose names differ, one compaction folds both into one day head at `<state root>/validation/<YYYY>/<MM>/<DD>.csv`, and that head carries both rows. And a stage run under a config that names `run.trial_state_dirname` creates no file outside `state/<that dirname>/` - asserted by listing every path the stage wrote under a fixture root, not by reading the one path the test expected. **What it cannot settle:** whether two real dispatches on two runners produce the same result - the first live pair is the check.
 - **Decisions:**
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | One shared group across the three | Carmack - `measure.yml` has no `concurrency` block at all, and `validate.yml` stages `state` whole with no dedup command; a qualification overlapping a digest run is the live exposure |
-| 2 | `backfill.yml` is not included | Carmack - it stages `frontend/public/digest` and `frontend/public/assist/index` and no `state/` at all |
-| 3 | Independent of the segment work; run it in parallel | Carmack - two lines in two files, and it retires a class on its own |
+| 1 | **The old file is deleted outright. No migration, no read-side shim** | Owner, 2026-09-18 - git is the archive (CLAUDE.md section 8). Nothing reads it: `adaptive-pruning.md` still records it as having no writer at all, and no reader exists under `backend/` or `frontend/`. It holds four rows from 2026-08-22 and the project has moved past them |
+| 2 | **The path comes from the state root the config points at, never from `config.REPO_ROOT`** | Owner, 2026-09-18 - `decide.py` and `qualify_decide.py` build it from `REPO_ROOT` today, which is the whole reason `run.trial_state_dirname` cannot move it. Guardrail #6's substitution test is the bar: change the config, the path moves, no source edit |
+| 3 | **The head is a `<YYYY>/<MM>/<DD>` day tree, not a dated filename at the top of `state/`** | Owner, 2026-09-18 - every other dated ledger here files that way, `day_partition` already walks it, and taking a day back is one `rm` |
+| 4 | Two candidates get two filenames through the segment store, not one file and a merge driver | Owner - `merge=union` is the only thing stopping the two from hard-conflicting today, and Row #12 deletes it |
+| 5 | **The shared concurrency group is REFUSED** | Carmack, 2026-09-18. GitHub holds one waiting run per group name and a newer arrival deletes the older, so a shared name deletes runs instead of queueing them - that is what discarded three of four candidates before PR #858. Measured: a digest run takes 164-184 min and fires every 240 min (`docs/reference/github-actions.md`); a validate dispatch takes 2 h 02 to 4 h 34, n=4, 2026-09-16. **What the reader loses by not having it: nothing the filename does not already give back.** A group stops two runs being alive at once; the filename stops them colliding, and colliding is the failure that has actually happened here |
+| 6 | A longer wall clock for `validate` and `measure` is not a cost this project pays | Owner, 2026-09-18 - neither is on a schedule and neither was ever meant to be, so nothing queues behind them |
 
 - **Rejected alternatives:**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | Let segments fix it | Segments narrow what a digest shard can lose; they do not narrow what `validate.yml` picks up when it stages `state` whole | An unbounded, rare, human-triggered corruption path left open | Carmack |
+| 1 | One shared concurrency group across the three workflows | Decision 5 - it deletes runs rather than queueing them | The four-candidate dispatch PR #858 restored, and whole scheduled digest days | Carmack |
+| 2 | Keep the file at the top of `state/` and only give it a per-writer name | It still writes production state from a trial run, which the owner refused | The rule that only `digest.yml` writes production `state/` stays untrue | Owner |
+| 3 | Move the four committed rows to the new path | Nothing reads them and git holds them | A read-side migration written for a file with no reader | Owner |
+
+## Row #29 - `prune.yml` wakes outside the digest window
+
+- **Scope:** the scheduled force-push moves off the hours a digest run occupies. It keeps its own workflow and its own group.
+- **Files touched:** `.github/workflows/prune.yml`, `backend/tests/workflows/`
+- **Acceptance gates:** local - `pytest backend/tests/workflows -n auto`. CI - full suite.
+- **Oracle:** a test reads both workflow files and asserts `prune.yml`'s cron hour falls outside the span a digest run occupies, derived from the digest cron list rather than typed in. **What it cannot settle:** a digest run that starts late enough to reach the new hour anyway.
+- **Decisions:**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Prune keeps its own workflow and its own group `corpus-prune` | Owner, 2026-09-18 - it is the one workflow with a standing force-push exception (CLAUDE.md section 8) and it shares no path with the others |
+| 2 | The cron moves into the idle gap | Carmack, 2026-09-18 - it fires `20 4 * * *`, inside the 02:20 run's 03:00-06:34 span, and ends in `git push --force origin main`, so it can discard any push a digest job made in that window. One line |
+| 3 | **This lowers the odds; it does not close the hole** | Carmack - start drift of 40-70 minutes is measured, and once 2.5 h, so a late digest run can still reach the new hour. What would close it is a lock across workflows, which GitHub does not offer and decision 5 of Row #6 prices |
+
+- **Rejected alternatives:**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | Put `prune` in the `digest` concurrency group | Row #6 decision 5 - the group deletes waiting runs, and a prune that is deleted never bounds the repository | The corpus window growing past `finetune.corpus_rows` unnoticed | Carmack |
+| 2 | Leave the cron where it is | The force-push lands inside the digest window nearly every day | One line against a daily chance of discarding a pushed digest | Carmack |
 
 ## Row #7 - OS memory, load, and swap, per item
 
