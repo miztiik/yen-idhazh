@@ -789,6 +789,21 @@
           "title": "Runner",
           "type": "string"
         },
+        "same_story_floor_applied": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The merge line this run grouped the day at. Without it a reader of a committed run.json cannot tell a day grouped at 0.94 from a day grouped at 0.937, and the grouping is the thing the fitted line moves. Empty on a run that published before the line could move, which is every run before 2026-09-18.",
+          "title": "Same Story Floor Applied"
+        },
         "scorer_version": {
           "anyOf": [
             {
@@ -941,6 +956,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "A run records the merge line it grouped the day at.",
+      "version": "2026-09-18",
+      "why": "The line moves now, so a published day has to say which one shaped it."
+    },
+    {
       "change": "The embedded ModelRef's inference.seed is the sampling control.",
       "version": "2026-09-17T02:00",
       "why": "It follows models-config, where every entry now pins temperature 0.2."
@@ -954,11 +974,6 @@
       "change": "The embedded draft block's spec_type accepts a third value, draft-mtp.",
       "version": "2026-09-15T12:30",
       "why": "It follows models-config, which is where the choice is declared."
-    },
-    {
-      "change": "The embedded ModelRef gained an optional draft block.",
-      "version": "2026-09-14T07:00",
-      "why": "A run records the draft weights it used, or a later reader cannot repeat it."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -982,7 +997,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-17T02:00",
+      "default": "2026-09-18",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -994,5 +1009,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-09-17T02:00"
+  "version": "2026-09-18"
 }

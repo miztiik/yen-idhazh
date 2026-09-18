@@ -257,6 +257,18 @@ class RunRecord(Model):
     )
 
     config_digests: list[ConfigDigest] = Field(default_factory=list)
+    same_story_floor_applied: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "The merge line this run grouped the day at. Without it a reader of a "
+            "committed run.json cannot tell a day grouped at 0.94 from a day grouped at "
+            "0.937, and the grouping is the thing the fitted line moves. Empty on a run "
+            "that published before the line could move, which is every run before "
+            "2026-09-18."
+        ),
+    )
     note: str | None = None
 
     @model_validator(mode="before")
@@ -288,6 +300,11 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-18",
+            change="A run records the merge line it grouped the day at.",
+            why="The line moves now, so a published day has to say which one shaped it.",
+        ),
+        ChangelogEntry(
             version="2026-09-17T02:00",
             change="The embedded ModelRef's inference.seed is the sampling control.",
             why="It follows models-config, where every entry now pins temperature 0.2.",
@@ -301,11 +318,6 @@ class RunManifest(Contract):
             version="2026-09-15T12:30",
             change="The embedded draft block's spec_type accepts a third value, draft-mtp.",
             why="It follows models-config, which is where the choice is declared.",
-        ),
-        ChangelogEntry(
-            version="2026-09-14T07:00",
-            change="The embedded ModelRef gained an optional draft block.",
-            why="A run records the draft weights it used, or a later reader cannot repeat it.",
         ),
         ChangelogEntry(
             version="2026-08-21",

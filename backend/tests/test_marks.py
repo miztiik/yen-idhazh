@@ -123,6 +123,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_search_index",
         "test_seen_days",
         "test_silicon",
+        "test_similarity_applied",
         "test_similarity_draw",
         "test_similarity_fit",
         "test_similarity_fold",
