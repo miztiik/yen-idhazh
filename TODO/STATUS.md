@@ -35,15 +35,16 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 16 | 12 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 11 |
-| [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 28 | 6 | 21 | 3 |
+| [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 28 | 6 | 21 | 2 |
 | [20260917-34-similarity-autotune-plan.md](20260917-34-similarity-autotune-plan.md) | 17 | 2 | 15 | 1 |
 
-## In flight - 0
+## In flight - 1
 
-Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
-dispatches a row, so an empty table here and a busy worktree disagree.
+| Row | Plan | Group | Title | Worktree |
+| --- | --- | --- | --- | --- |
+| #10 | 33 | C | `model_load_ms` and `job_seconds` join `host-fingerprint` | p33c10 |
 
-## Ready now - 35
+## Ready now - 34
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -84,7 +85,6 @@ section 3 is where it is answered.
 | #11 | 27 | E | Two articles, three arms, one runner | 4 |
 | #6 | 33 | A | One concurrency group for `digest`, `validate`, `measure` | - |
 | #3 | 33 | B | `item-health`, `scores`, `score-index` write segments | 2 |
-| #10 | 33 | C | `model_load_ms` and `job_seconds` join `host-fingerprint` | 2 |
 | #2 | 34 | - | The four contracts, shipped inert with header-only files | - |
 
 ## Waiting on another row - 80
@@ -143,8 +143,8 @@ section 3 is where it is answered.
 | #17 | 33 | B | `runtime-counters` writes segments | 4 is PENDING |
 | #12 | 33 | D | Delete the merge machinery | 3 is PENDING; 4 is PENDING; 17 is PENDING |
 | #13 | 33 | D | Compaction lag and free swap on the console band | 12 is PENDING |
-| #11 | 33 | E | Delete `runtime-counters` and everything that reads it | 10 is PENDING; 17 is PENDING |
-| #15 | 33 | F | Generated TypeScript contracts replace the hand-written ones | 10 is PENDING; 11 is PENDING |
+| #11 | 33 | E | Delete `runtime-counters` and everything that reads it | 10 is IN-FLIGHT; 17 is PENDING |
+| #15 | 33 | F | Generated TypeScript contracts replace the hand-written ones | 10 is IN-FLIGHT; 11 is PENDING |
 | #16 | 33 | G | Docs, and the orphan sweep | all names no row |
 | #19 | 33 | I | The shard board | 11 is PENDING |
 | #21 | 33 | I | Memory and load, three grains - ABSORBS Row #14 | 15 is PENDING; 19 is PENDING |
