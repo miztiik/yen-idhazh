@@ -727,24 +727,18 @@ COMMIT_STAGED_PATHS: Final = {
     "plan": [
         "state",
     ],
-    # `state/score-index` is beside `state/scores` because it is the record of
-    # what those rows are, and the writer reads it instead of them. A shard
-    # committed without its index is a month the next run cannot recognise, so
-    # it would append every measurement in it a second time.
-    #
     # `state/span-rollup` joined on 2026-09-15. A shard is the only thing that
     # writes it, and until that day nothing staged it, so nine days of folded
     # spans were measured and then thrown away with the runner. `state/traces`
     # is the raw evidence the fold is taken from and was missed the same way.
     #
-    # `state/segments` replaced `state/host-fingerprint` on 2026-09-17. The
-    # machine probe used to append to the day file that ten jobs of one run all
-    # opened; it now writes its own segment and `assemble` folds them in, so this
-    # job stages the segment store and no longer stages a head it does not write.
+    # `state/segments` replaced `state/host-fingerprint` on 2026-09-17, and
+    # `state/item-health`, `state/scores` and `state/score-index` followed it on
+    # 2026-09-18. Each of those heads used to be appended to by up to eight work
+    # shards and by assemble; every writer now writes its own segment and
+    # `assemble` folds them in, so this job stages the segment store and no
+    # longer stages a head it does not write.
     "work": [
-        "state/item-health",
-        "state/scores",
-        "state/score-index",
         "state/runtime-counters.csv",
         "state/span-rollup",
         "state/traces",

@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
+from conftest import seed_item_health
 
 from idhazh import day_partition, ledger
 from idhazh.contracts.item_health import ItemStage
@@ -82,7 +83,7 @@ def a_census(state_root: Path, days: Iterable[str] = DAYS) -> Path:
     writes, and a tree assembled by hand could be a shape no run produces.
     """
     for number, day in enumerate(days):
-        ledger.append_item_health(
+        seed_item_health(
             state_root,
             day,
             [health_row(day=day, run=1, number=number, stage=ItemStage.PUBLISH)],

@@ -807,10 +807,12 @@ jobs:
       #
       # Appending the same row twice is the one thing that would make this worse
       # than the loss it fixes, because `public_telemetry` copies every row into
-      # the file the console reads. Each of the three ledgers keys a row -
-      # `ledger.append_item_health` by run and item, `evals.writer.append` by
-      # observation, `ledger.append_runtime_counters` by run and shard - so
-      # assemble's copy of these rows lands once.
+      # the file the console reads. The two ledgers left here key a row -
+      # `ledger.append_runtime_counters` by run and shard, `roll_up_spans` by run,
+      # shard and span - so assemble's copy of these rows lands once. The item
+      # census and the eval rows are no longer in that position: each writer puts
+      # them in its own segment and the fold settles two of them by key, which is
+      # what `state/segments` below is.
       #
       # Those filters read the checkout, which is frozen at the commit this run
       # was triggered at, so a SECOND ATTEMPT at this same shard cannot see the
@@ -819,10 +821,10 @@ jobs:
       # the merge, on the merged file - the only place the two attempts have ever
       # been together.
       #
-      # `--date` is what it settles. This run appended to one item-health day
-      # file and one score day file, so those are the only files a repeat can be
-      # in, and naming them is what keeps the pass costing the same however many
-      # days the archive holds (Guardrail #12).
+      # `--date` is what it settles. This run appended to the files its own date
+      # routes to, so those are the only files a repeat can be in, and naming
+      # them is what keeps the pass costing the same however many days the
+      # archive holds (Guardrail #12).
       #
       # `state/span-rollup` is staged here because a shard is the only thing that
       # writes it. `roll_up_spans` folds the shard's spans and appends the month
@@ -838,18 +840,19 @@ jobs:
       # path and no merge driver is needed - unlike the four ledgers above, which
       # is why `merge=union` covers `state/**/*.csv` and not this.
       #
-      # `state/segments` is the newest of that kind, and it is where this shard's
-      # machine row now goes. The step `What machine this job drew` above used to
-      # append to `state/host-fingerprint/<YYYY>/<MM>/<DD>.csv`, which ten jobs of
-      # one run opened at once; on 2026-09-16 that race left the day header-only.
-      # Each job writes its own
-      # `state/segments/host-fingerprint/<run>-<attempt>-<job>-<shard>.csv`
-      # instead, so two writers never share a path, and `assemble` folds them
-      # into the head. The head is no longer staged here because this job no
-      # longer writes it.
+      # `state/segments` is where everything this shard measured now goes, and
+      # it is the only ledger path left in the list below. The machine row moved
+      # there on 2026-09-17; the item census, the eval rows and the record of
+      # what those rows are followed on 2026-09-18. Each of those three used to
+      # be appended to a day file that up to eight work shards and assemble all
+      # opened, and each writer now takes
+      # `state/segments/<ledger>/<run>-<attempt>-<job>-<shard>.csv` instead, so
+      # two writers never share a path. `assemble` folds them into the heads,
+      # and the heads are no longer staged here because this job no longer
+      # writes them.
       #
       # `.gitattributes` gives that path `-merge` rather than the union driver
-      # the four ledgers above carry, for the reason `state/traces` is outside
+      # the remaining ledgers carry, for the reason `state/traces` is outside
       # it: a segment is named for one shard of one run, so there is nothing for
       # a merge driver to settle and a union of two would silently stack copies
       # of a file that is meant to have one writer.
@@ -864,8 +867,7 @@ jobs:
             python -m idhazh dedupe-ledgers --date ${{ needs.plan.outputs.date }}
         run: >-
           bash .github/scripts/commit-and-push.sh
-          state/item-health state/scores state/score-index state/runtime-counters.csv
-          state/span-rollup state/traces state/segments
+          state/runtime-counters.csv state/span-rollup state/traces state/segments
 
       - name: Prompt cache log summary
         if: always()
