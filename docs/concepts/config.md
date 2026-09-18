@@ -497,7 +497,7 @@ The two window figures that used to sit here are both superseded, and by one run
 8,192.** One item on that run reached **8,741 input tokens**, which the old 8,192
 window would have refused outright, and the busiest request held 9,082 of the
 16,384 cells - **55 percent of the window in use, 45 percent spare**
-([The window raise was load-bearing on the first run](../reference/measurements.md#the-window-raise-was-load-bearing-on-the-first-run-and-nothing-predicted-that)).
+([The window raise was load-bearing on the first run](../reference/benchmarks/a-run-at-the-doubled-window-and-cap.md#the-window-raise-was-load-bearing-on-the-first-run-and-nothing-predicted-that)).
 
 **And the summarizer does not peak at 82 percent of the runner's memory.** That
 figure is llama-server's own resident-set high-water mark read as though it were
@@ -507,7 +507,7 @@ is withdrawn. The same run measured free memory directly instead.
 `MemAvailable` never fell below **6.84 GiB**, with per-shard lows of 6.84, 7.36,
 7.44 and 7.46 GiB over 846 samples. The escalation trigger asks for 1.0 GiB, so
 the run finished with 6.8 times the bar
-([MemAvailable went up by 1.21 GiB](../reference/measurements.md#memavailable-went-up-by-121-gib-and-the-runner-is-why)).
+([MemAvailable went up by 1.21 GiB](../reference/benchmarks/a-run-at-the-doubled-window-and-cap.md#memavailable-went-up-by-121-gib-and-the-runner-is-why)).
 
 ### A model swap can no longer inherit settings nothing declared for it
 

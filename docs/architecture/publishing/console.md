@@ -562,7 +562,7 @@ weight pages the kernel can evict. So the panel says which shard ran nearest the
 track, and nothing more. What decides whether a bigger model fits is free
 memory, and the run of 2026-09-09 is the first to measure it: `MemAvailable`
 bottomed out at 6.84 GiB
-([MemAvailable went up by 1.21 GiB](../../reference/measurements.md#memavailable-went-up-by-121-gib-and-the-runner-is-why)).
+([MemAvailable went up by 1.21 GiB](../../reference/benchmarks/a-run-at-the-doubled-window-and-cap.md#memavailable-went-up-by-121-gib-and-the-runner-is-why)).
 
 **No tint and no band.** Nobody has agreed how near 16 GB is too near, and a
 colour would publish a threshold that does not exist. Authority: Susan.
