@@ -27,6 +27,7 @@ from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.models import ModelRef
 from idhazh.contracts.run_plan import PlannedItem
+from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import SourceTier
 from idhazh.corpus import Published
@@ -73,6 +74,48 @@ def seed_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]) 
     for row in rows:
         cells = row.csv_row()
         key = tuple(cells[name] for name in ledger.ITEM_HEALTH_KEY)
+        if key in held:
+            continue
+        held.add(key)
+        kept.append(cells)
+    if not kept:
+        return 0
+    path.parent.mkdir(parents=True, exist_ok=True)
+    exists = path.exists()
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        out = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
+        if not exists:
+            out.writeheader()
+        out.writerows({name: cells[name] for name in columns} for cells in kept)
+    return len(kept)
+
+
+def seed_span_rollup(state_dir: Path, date: str, rows: Iterable[SpanRollupRow]) -> int:
+    """Put a month's span fold on disk the way a finished run leaves it.
+
+    The same fixture builder as `seed_item_health`, for the same reason: a work
+    shard writes its fold to a segment and `stage_compact` merges it into the
+    month head, so no one call reaches a settled month file any more. A caller
+    here wants the month ALREADY folded - it is checking what a listing, a
+    projection or a prune does with the record - so the fold itself stays in
+    `tests/pipeline/test_compact.py` and this puts the finished file there.
+
+    Settled means what the compaction means by it: the first row for a
+    `SPAN_ROLLUP_KEY` wins, because the row is a fold of one shard's spans and a
+    second row for one key adds a count to itself rather than recording a new
+    fact.
+
+    Returns the rows the file gained, so a caller that asserted on the old
+    writer's count asserts on the same number.
+    """
+    path = ledger.span_rollup_path(state_dir, date[:7])
+    columns = SpanRollupRow.csv_columns()
+    ledger.settle_header(path, columns, ledger.refiler(SpanRollupRow))
+    held = ledger.recorded_span_rollup(path)
+    kept: list[dict[str, str]] = []
+    for row in rows:
+        cells = row.csv_row()
+        key = tuple(cells[name] for name in ledger.SPAN_ROLLUP_KEY)
         if key in held:
             continue
         held.add(key)
@@ -148,13 +191,14 @@ def no_tracing_host(monkeypatch: pytest.MonkeyPatch) -> None:
 def isolate_committed_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """No test writes the repository's own state/ tree, whatever stage it runs.
 
-    Tracing is on in the committed config (2026-09-06), so `stage_work` folds a
-    span rollup into `state/span-rollup/` and both it and `stage_visual_planner`
-    write a raw trace under `state/traces/` - committed paths keyed off
-    `common.STATE_ROOT`. A stage test that only redirected `VAR_ROOT` would otherwise
-    write real committed files. This points `STATE_ROOT` at the test's own tree; a
-    test that sets it itself still wins, because its `monkeypatch` call runs after
-    this fixture and the last write to an attribute is the one that holds.
+    Tracing is on in the committed config (2026-09-06), so `stage_work` writes a
+    span fold under `state/segments/span-rollup/` and both it and
+    `stage_visual_planner` write a raw trace under `state/traces/` - committed
+    paths keyed off `common.STATE_ROOT`. A stage test that only redirected
+    `VAR_ROOT` would otherwise write real committed files. This points
+    `STATE_ROOT` at the test's own tree; a test that sets it itself still wins,
+    because its `monkeypatch` call runs after this fixture and the last write to
+    an attribute is the one that holds.
     """
     monkeypatch.setattr(common, "STATE_ROOT", tmp_path / "state")
 

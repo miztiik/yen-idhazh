@@ -42,12 +42,14 @@ from idhazh.contracts.item_health import (
     ItemStage,
 )
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
+from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.summary import Summary
 from idhazh.elements import ExtractionHealth
 from idhazh.fetch import BLOCKED_REASONS, FetchResult, refused
 from idhazh.llm.server import Completion, parse_completion
 from idhazh.stages.common import _log_no_reply
+from idhazh.stages.compact import stage_compact
 from idhazh.telemetry.census import EXTRACTION_CELLS
 
 
@@ -1437,7 +1439,15 @@ def test_a_span_the_shard_never_opened_gets_no_row() -> None:
 
 def test_the_fold_writes_one_month_shard_and_a_re_run_adds_nothing(tmp_path: Path) -> None:
     """The shard's fold lands once. A re-run recomputes the same numbers, and the
-    append filters them against the grain rather than doubling every count."""
+    compaction settles them against the grain rather than doubling every count.
+
+    Through the two calls the pipeline makes rather than through a seed, because
+    the claim in the name is now shared between them: the shard writes its fold
+    to a segment named for its own attempt, and `stage_compact` merges the
+    segments into the month the rows name. A second attempt writes a second
+    segment, so the only thing standing between a re-run and a doubled count is
+    `SPAN_ROLLUP_KEY`.
+    """
     state = tmp_path / "state"
     spans = [
         a_span(telemetry.SpanName.ITEM, 900),
@@ -1447,8 +1457,20 @@ def test_the_fold_writes_one_month_shard_and_a_re_run_adds_nothing(tmp_path: Pat
     rows = telemetry.roll_up_spans(
         spans, date="2026-08-21", run_id="2026-08-21-1", shard=0, wall_clock_ms=1000
     )
-    assert ledger.append_span_rollup(state, "2026-08-21", rows) == 3
-    assert ledger.append_span_rollup(state, "2026-08-21", rows) == 0
+    for attempt in (1, 2):
+        assert (
+            ledger.write_segment(
+                state,
+                ledger.SegmentLedger.SPAN_ROLLUP,
+                rows,
+                run_id="2026-08-21-1",
+                attempt=attempt,
+                job=ServerJob.WORK,
+                shard=0,
+            )
+            == 3
+        )
+    assert stage_compact(state).heads_written == (ledger.span_rollup_relpath("2026-08"),)
 
     shard = ledger.span_rollup_path(state, "2026-08")
     written = [

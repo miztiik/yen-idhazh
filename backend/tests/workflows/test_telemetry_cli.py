@@ -26,7 +26,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text, seed_item_health
+from conftest import CONTRACT_FIXTURES_DIR, read_text, seed_item_health, seed_span_rollup
 
 from idhazh import assemble, cli, ledger
 from idhazh.contracts.digest_day import DigestDay
@@ -121,7 +121,7 @@ def _a_published_day(tmp_path: Path) -> tuple[Path, Path, str]:
     span = SpanRollupRow.from_json(
         read_text(next((CONTRACT_FIXTURES_DIR / "span-rollup-row").glob("*.json")))
     )
-    ledger.append_span_rollup(
+    seed_span_rollup(
         state_root, day.date, [span.model_copy(update={"date": day.date, "run_id": run_id})]
     )
     return state_root, digest_root, day.date

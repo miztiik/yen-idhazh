@@ -17,6 +17,7 @@ from idhazh import (
     config,
     extract,
     ledger,
+    run_context,
     summarize,
     telemetry,
 )
@@ -680,7 +681,20 @@ def stage_work(
             shard=shard,
             wall_clock_ms=int((time.monotonic() - shard_started) * 1000),
         )
-        landed = ledger.append_span_rollup(common.STATE_ROOT, plan.date, rows)
+        # Into this shard's own segment, not into the month head every other
+        # shard opens. Eight shards folding one month file is the collision the
+        # segment store exists to stop, and the attempt is in the name, so a
+        # re-run corrects its first try rather than adding a second fold of the
+        # same spans. `stage_compact` merges them into the month the rows name.
+        landed = ledger.write_segment(
+            common.STATE_ROOT,
+            ledger.SegmentLedger.SPAN_ROLLUP,
+            rows,
+            run_id=plan.run_id,
+            attempt=run_context.run_attempt(),
+            job=ServerJob.WORK,
+            shard=shard,
+        )
         LOG.info("rolled up spans shard=%s span_rows=%s", shard, landed)
 
 

@@ -49,14 +49,17 @@ flowchart TD
   sinks --> rollup
   record --> census
 
-  census --> ih["state/item-health/ (day)"]
-  rollup --> sr["state/span-rollup/ (month)"]
+  census --> ih["state/segments/item-health/ (one per writer)"]
+  rollup --> sr["state/segments/span-rollup/ (one per writer)"]
   traces --> tr["state/traces/ (day)"]
   health --> fh["state/feed-health/ (day)"]
 
+  ih --> head_ih["state/item-health/ (day)"]
+  sr --> head_sr["state/span-rollup/ (month)"]
+
   subgraph state["state/ - committed, append-only, day-sharded"]
-    ih
-    sr
+    head_ih
+    head_sr
     tr
     fh
     other["day-metrics/ and scores/ and published/ and seen/<br/>runtime-counters.csv and day-validations.csv"]
@@ -205,6 +208,8 @@ Two things the host sink does not do, measured against Langfuse 4.14.4 rather th
 ## The committed rollup
 
 The span tree is evidence and expires with the run. One summary of it is a record and is committed: `state/span-rollup/<YYYY-MM>.csv`, one row per `(date, run_id, shard, span_name)`, carrying how many spans of that name the shard opened and how long they took added together. The fold lives in `telemetry.roll_up_spans` and the row is `SpanRollupRow`.
+
+**A shard writes its fold to a segment, not to the month file.** Up to eight work shards fold one month head, so from 2026-09-18 each one writes `state/segments/span-rollup/<run>-<attempt>-work-<shard>.csv` - a name no second writer can take - and `idhazh compact` inside `assemble` merges the segments into the month each row's own `date` cell names. The month head has one writer per run. The routing is the row's date and not the compaction's clock, which is what carries the one night a month when a run starting at 23:59 UTC is read by a compaction running in the next month ([partitions.md](partitions.md)).
 
 **It commits five span names, not the eleven the tracer opens**, and the five are the steps no ledger column already times:
 

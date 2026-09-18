@@ -305,7 +305,7 @@ than about this read ([run-the-pipeline.md](../how-to/run-the-pipeline.md#turnin
 | --- | --- | --- |
 | `series.published_months` | one listing of a published directory | the directory's own knob, so at most `keep_months` entries - except `telemetry`, per the paragraph above |
 | `scores.publish`, `feed_health.publish` | the `state/` day files of the month named | the month the run appended to, which is at most 31 files. Both ledgers file by day and both mirrors stay monthly, so the publisher is where the two grains meet |
-| `span_rollup.publish` | the state shard for the month named | the month the run appended to |
+| `span_rollup.publish` | the state shard for the month named | the month the run's own rows name, which the compaction folded before this read |
 | `public_telemetry.publish` | the `state/item-health/` days of the months the caller names, or every day when it names none | **the month the run appended to**, which is what `stages.assemble.stage_assemble` passes; `months=None` is unbounded on purpose |
 | `day_metrics.publish_public` | one month of `state/day-metrics/<YYYY>/<MM>/` | one month, which is at most 31 records for ever |
 | `run_days.publish` | one month of committed `run.json` and `digest.json` | one month, which is at most 31 days for ever |

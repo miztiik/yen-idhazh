@@ -807,12 +807,12 @@ jobs:
       #
       # Appending the same row twice is the one thing that would make this worse
       # than the loss it fixes, because `public_telemetry` copies every row into
-      # the file the console reads. The two ledgers left here key a row -
-      # `ledger.append_runtime_counters` by run and shard, `roll_up_spans` by run,
-      # shard and span - so assemble's copy of these rows lands once. The item
-      # census and the eval rows are no longer in that position: each writer puts
-      # them in its own segment and the fold settles two of them by key, which is
-      # what `state/segments` below is.
+      # the file the console reads. The one ledger left here keys a row -
+      # `ledger.append_runtime_counters` by run and shard - so assemble's copy of
+      # those rows lands once. The item census, the eval rows and the span fold
+      # are no longer in that position: each writer puts them in its own segment
+      # and the compaction settles them by key, which is what `state/segments`
+      # below is.
       #
       # Those filters read the checkout, which is frozen at the commit this run
       # was triggered at, so a SECOND ATTEMPT at this same shard cannot see the
@@ -826,26 +826,28 @@ jobs:
       # them is what keeps the pass costing the same however many days the
       # archive holds (Guardrail #12).
       #
-      # `state/span-rollup` is staged here because a shard is the only thing that
-      # writes it. `roll_up_spans` folds the shard's spans and appends the month
-      # file into this runner's checkout; until 2026-09-15 no list named the path,
-      # so the fold died with the runner and assemble published a header row over
-      # an absent directory. Every span this project has ever opened was measured,
-      # folded and thrown away by one missing path.
+      # `state/span-rollup` was staged here from 2026-09-15 because a shard was
+      # the only thing that wrote it. `roll_up_spans` folds the shard's spans and
+      # the fold used to be appended to the month file in this runner's checkout;
+      # until that day no list named the path, so each fold died with the runner
+      # and assemble published a header row over an absent directory. Every span
+      # this project had ever opened was measured, folded and thrown away by one
+      # missing path. The fold goes to a segment now and the head is written by
+      # the compaction, so the path left this list on 2026-09-18.
       #
       # `state/traces` is the same shape and was missed the same way. `stage_work`
       # opens a file sink at `state/traces/<YYYY>/<MM>/<DD>-<run>-<shard>.jsonl` on
       # this runner whenever tracing is on, which it has been since 2026-09-06. A
       # trace file is named for one shard of one run, so two shards never write one
-      # path and no merge driver is needed - unlike the four ledgers above, which
+      # path and no merge driver is needed - unlike the counters file above, which
       # is why `merge=union` covers `state/**/*.csv` and not this.
       #
       # `state/segments` is where everything this shard measured now goes, and
       # it is the only ledger path left in the list below. The machine row moved
-      # there on 2026-09-17; the item census, the eval rows and the record of
-      # what those rows are followed on 2026-09-18. Each of those three used to
-      # be appended to a day file that up to eight work shards and assemble all
-      # opened, and each writer now takes
+      # there on 2026-09-17; the item census, the eval rows, the record of what
+      # those rows are, and the span fold followed on 2026-09-18. Each of those
+      # used to be appended to a file that up to eight work shards and assemble
+      # all opened, and each writer now takes
       # `state/segments/<ledger>/<run>-<attempt>-<job>-<shard>.csv` instead, so
       # two writers never share a path. `assemble` folds them into the heads,
       # and the heads are no longer staged here because this job no longer
@@ -867,7 +869,7 @@ jobs:
             python -m idhazh dedupe-ledgers --date ${{ needs.plan.outputs.date }}
         run: >-
           bash .github/scripts/commit-and-push.sh
-          state/runtime-counters.csv state/span-rollup state/traces state/segments
+          state/runtime-counters.csv state/traces state/segments
 
       - name: Prompt cache log summary
         if: always()
