@@ -1190,7 +1190,7 @@ def _header_and_keys(
     """The file's own header and every record it already holds, in one pass.
 
     One `csv.reader` rather than a `DictReader`, and one open rather than two.
-    `DictReader` builds a dict of every column for each row, which is 113 keys on
+    `DictReader` builds a dict of every column for each row, which is 119 keys on
     an item-health shard to read three cells; the positions are taken off the
     header once and the cells are read by index after that.
 

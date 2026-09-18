@@ -125,7 +125,7 @@ def census_row(
 ) -> ItemHealthRow:
     """The row a day keeps for this item: the one its shard sealed, or a rebuild.
 
-    **A recorded row wins, and it wins whole.** The work stage validated 113
+    **A recorded row wins, and it wins whole.** The work stage validated 119
     cells for this item and left them on disk (`record.persist`); the article and
     the summary payloads between them carry 40. Rebuilding from the payloads when
     the shard's own row is right there is how 58 columns came to be computed on
