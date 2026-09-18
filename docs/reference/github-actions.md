@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-18
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
 
@@ -701,7 +701,7 @@ the committed host row all still happen. What is given up is the prefill and
 decode rates, and with them the dossier - a dossier is both halves, so a
 dispatch missing one emits the server half and a line naming the half that is
 missing. It also moves who pays for the weights, because the speed case is what
-fills the cache entry the server case restores ([ci-caches.md](ci-caches.md)).
+fills the cache entry the server case restores.
 Measured 2026-09-16 over the four dispatches of that day on stock
 `ubuntu-latest`, the speed case took 9.1, 26.7, 27.2 and 87.6 minutes - between
 a tenth and a third of a whole dispatch
@@ -731,9 +731,7 @@ has one group on purpose - a day has one digest.
 **What a swap costs the 10 GB cache is a reading, and it lives in the instrument
 log.** This page carried a second copy of the 2026-08-27 table until 2026-09-17;
 the fuller one, with the headroom left over, is
-[The cache transition](measurements.md#the-cache-transition-measured-2026-08-27),
-and the standing rule about which caches earn their bytes is
-[ci-caches.md](ci-caches.md).
+[The cache transition](measurements.md#the-cache-transition-measured-2026-08-27).
 
 ## Vector backfill
 
@@ -944,8 +942,7 @@ none.
 
 **What a bypass costs beyond the rates: the weights get downloaded in a
 different job.** The speed case is what fills the cache entry the server case
-restores. Skip it and `runtime` pays for the same bytes itself, once
-([ci-caches.md](ci-caches.md)).
+restores. Skip it and `runtime` pays for the same bytes itself, once.
 
 ### What the model workflows share, and what they must not
 
@@ -1119,7 +1116,6 @@ behaviour, and each has its own page.
 - [ci-model-runtime.md](ci-model-runtime.md) - the runtime pin, the cache key, the weight digests, and where the production model ref is written.
 - [ci-dispatch-inputs.md](ci-dispatch-inputs.md) - the three input shapes, and the one that decides a published address.
 - [ci-environment.md](ci-environment.md) - the repository settings these workflows need, and the platform limits that shape them.
-- [ci-caches.md](ci-caches.md) - every cache these workflows keep, what it costs against the 10 GB ceiling, and when a new job earns one.
 - [../how-to/analyze-a-pipeline-artifact.md](../how-to/analyze-a-pipeline-artifact.md) - how to read what the model was asked and what it answered, out of the `captures-<shard>` artifact.
 - [../architecture/overview.md](../architecture/overview.md) - how CI, committed payloads, and the static site fit together.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - what each pipeline stage owns.
