@@ -20,7 +20,12 @@
 	import { bandwidthSentence, cacheWords, type MachineCard } from '$lib/charts/machine-cards';
 	import { isUnrecorded, machineColour } from '$lib/charts/machine-colour';
 
-	let { card }: { card: MachineCard } = $props();
+	/** True where this run's day published articles and the record kept no row.
+	 *
+	 * A card with no flags has two causes and they send an operator to opposite
+	 * places: the record had not begun yet, or it ran and what it wrote is gone.
+	 */
+	let { card, lost = false }: { card: MachineCard; lost?: boolean } = $props();
 
 	const where = $derived(card.where);
 	const placed = $derived(
@@ -74,9 +79,15 @@
 			{/each}
 		</ul>
 	{:else}
-		<p class="note" data-machine-flags="none">
-			Only the processor name was recorded for this run. Instruction-set flags, cache and bandwidth
-			start on the day the machine record ran.
+		<p class="note" data-machine-flags="none" data-machine-flags-why={lost ? 'lost' : 'not-started'}>
+			{#if lost}
+				Only the processor name survived for this run. The machine record ran on this day and the
+				rows it wrote are gone, so the instruction-set flags, the cache and the bandwidth it measured
+				cannot be recovered.
+			{:else}
+				Only the processor name was recorded for this run. Instruction-set flags, cache and bandwidth
+				start on the day the machine record ran.
+			{/if}
 		</p>
 	{/if}
 

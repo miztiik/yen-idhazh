@@ -259,6 +259,64 @@ test.describe('the machines this run drew', () => {
 	});
 });
 
+/** Which of the record's states the page is in, said in an attribute.
+ *
+ * **The assertion may not be a negative one about prose.** "The page contains
+ * no sentence claiming the record starts later" passes the day somebody renames
+ * that sentence, while the page goes on printing the lie - so the state is an
+ * attribute that is always set, and every sentence the panel can print is tied
+ * to the value it belongs to. A state that stops being set takes this red with
+ * it.
+ *
+ * The three states themselves are asserted over built rows in
+ * `console-machine-cards.spec.ts`. The canary holds one of them - a day the
+ * record answered for - and it is the arm that proves the binding.
+ */
+test.describe('the machine record names which state it is in', () => {
+	const STATES = ['recorded', 'off', 'lost', 'none'];
+
+	test('the panel carries one of the four names, and its note matches it', async ({ page }) => {
+		await page.goto('/console/machine/');
+		const panel = page.locator('[data-machine-record]');
+		await expect(panel).toHaveCount(1);
+		const state = await panel.getAttribute('data-machine-record');
+		expect(STATES, 'the panel named a state nobody declared').toContain(state);
+
+		// Every sentence the panel can print, tied to the state that owns it. A
+		// note printed under the wrong state is the defect this exists to catch,
+		// in either direction.
+		const lostNotes = await panel.locator('[data-machine-panel-empty="machines-lost"], [data-machine-panel-note="machines-lost"]').count();
+		const offNotes = await panel.locator('[data-machine-panel-empty="machines-off"], [data-machine-panel-note="machines-off"]').count();
+		const quietNotes = await panel.locator('[data-machine-panel-empty="machines-none"]').count();
+		expect(lostNotes > 0, `state ${state} printed the loss note`).toBe(state === 'lost');
+		expect(offNotes > 0, `state ${state} printed the switched-off note`).toBe(state === 'off');
+		if (state !== 'none') expect(quietNotes).toBe(0);
+
+		// A card with no instruction set says WHICH of the two reasons it is, and
+		// the reason agrees with the panel.
+		const why = await page
+			.locator('[data-machine-flags-why]')
+			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-machine-flags-why')));
+		for (const reason of why) expect(reason).toBe(state === 'lost' ? 'lost' : 'not-started');
+	});
+
+	test('the canary is a day the record answered for, so a loss is never claimed', async ({
+		page
+	}) => {
+		// The control. The canary's newest run recorded its machines, and one of
+		// its earlier days has a record file with a header and no rows on a day
+		// that published nothing - a quiet day, not an incident. Neither may
+		// reach the reader as a loss.
+		await page.goto('/console/machine/');
+		await expect(page.locator('[data-machine-record]')).toHaveAttribute(
+			'data-machine-record',
+			'recorded'
+		);
+		await expect(page.locator('[data-recording="machine-destroyed"]')).toHaveCount(0);
+		await expect(page.locator('[data-machine-panel-empty="fleet-lost"]')).toHaveCount(0);
+	});
+});
+
 test.describe('what the platform has been giving us', () => {
 	test('under the threshold it lists the counts and draws no bar', async ({ page }) => {
 		await page.goto('/console/machine/');

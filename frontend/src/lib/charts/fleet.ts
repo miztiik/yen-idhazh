@@ -17,6 +17,7 @@
  */
 
 import type { HostFingerprint } from '$lib/server/host-fingerprint';
+import type { LostDay } from '$lib/console/recording';
 import {
 	machineKeys,
 	machineRamp,
@@ -40,8 +41,13 @@ export interface FleetView {
 	minRows: number;
 	/** True at or above the threshold. Below it the panel lists and draws no bar. */
 	drawBars: boolean;
-	/** Why there is nothing. Null where there is something. */
-	nothing: 'recording-off' | 'none' | null;
+	/** Why there is nothing. Null where there is something.
+	 *
+	 * `record-lost` and `none` are the two the panel could not tell apart until
+	 * 2026-09-17: a window whose every recorded day published articles and kept
+	 * no row is a window that lost its count, not one waiting for a first run.
+	 */
+	nothing: 'recording-off' | 'record-lost' | 'none' | null;
 }
 
 /** Machine kinds over the window, ranked by how often the platform gave us one. */
@@ -59,6 +65,9 @@ export function fleetOverWindow(
 		/** Rows outside the open span are dropped before they are counted. */
 		start?: string;
 		end?: string;
+		/** Days in this span that published articles and that the record kept no
+		 * row of. Only their presence is read here; the sentence is the route's. */
+		lost?: readonly LostDay[];
 	}
 ): FleetView {
 	const inWindow = rows.filter(
@@ -105,6 +114,12 @@ export function fleetOverWindow(
 		days: options.days,
 		minRows: options.minRows,
 		drawBars: inWindow.length >= options.minRows,
-		nothing: !options.recording ? 'recording-off' : inWindow.length === 0 ? 'none' : null
+		nothing: !options.recording
+			? 'recording-off'
+			: inWindow.length > 0
+				? null
+				: (options.lost ?? []).length > 0
+					? 'record-lost'
+					: 'none'
 	};
 }

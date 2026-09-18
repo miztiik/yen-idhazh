@@ -14,15 +14,16 @@
  */
 
 import { expect, test } from '@playwright/test';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import {
 	bandwidthSentence,
 	cacheWords,
 	machineCards
 } from '../src/lib/charts/machine-cards';
 import { UNRECORDED_STOP } from '../src/lib/charts/machine-colour';
-import { watchedFlags } from '../src/lib/server/host-fingerprint';
+import { hostFingerprints, machineRecordDays, watchedFlags } from '../src/lib/server/host-fingerprint';
 import type { HostFingerprint } from '../src/lib/server/host-fingerprint';
 import {
 	machineCounters,
@@ -296,5 +297,99 @@ test.describe('when there is nothing to draw', () => {
 		expect(view.nothing).toBe('no-machine');
 		// And the reserved stop stays reserved.
 		expect(UNRECORDED_STOP).toBe(8);
+	});
+});
+
+test.describe('a day that published and kept no machine row', () => {
+	/** The state that destroyed 303 rows on 2026-09-16, built rather than read.
+	 *
+	 * The digest for the day carries articles and the record's own day file
+	 * holds only its header. The archive holds this today and will not hold it
+	 * for ever, so the case is built here (`CLAUDE.md` section 13).
+	 */
+	const LOST = { date: '2026-09-12', articles: 431 };
+
+	test('a loss is a different state from a record that had not begun', () => {
+		const quiet = machineCards(RUN, [], {
+			watchedFlags: FLAGS,
+			colourStops: STOPS,
+			recording: true
+		});
+		const lost = machineCards(RUN, [], {
+			watchedFlags: FLAGS,
+			colourStops: STOPS,
+			recording: true,
+			lost: LOST
+		});
+		// Same cards either way - they come off the counters ledger - so the only
+		// thing that can tell an operator which day he is looking at is the state.
+		expect(lost.cards.length).toBe(quiet.cards.length);
+		expect(quiet.record).toBe('none');
+		expect(lost.record).toBe('lost');
+		expect(quiet.lostNote).toBeNull();
+		expect(lost.lostNote).toContain('did not survive');
+		expect(lost.lost).toEqual(LOST);
+	});
+
+	test('a run with no placement at all names the loss before the quiet day', () => {
+		const blank = onlyRun([counterRow({ shard: 0 }), counterRow({ shard: 1 })]);
+		expect(
+			machineCards(blank, [], { watchedFlags: FLAGS, colourStops: STOPS, recording: true }).nothing
+		).toBe('no-machine');
+		expect(
+			machineCards(blank, [], {
+				watchedFlags: FLAGS,
+				colourStops: STOPS,
+				recording: true,
+				lost: LOST
+			}).nothing
+		).toBe('record-lost');
+	});
+
+	test('recording switched off outranks a loss, because nothing was there to lose', () => {
+		const view = machineCards(RUN, [], {
+			watchedFlags: FLAGS,
+			colourStops: STOPS,
+			recording: false,
+			lost: LOST
+		});
+		expect(view.record).toBe('off');
+	});
+
+	test('a recorded day says so, so the page attribute cannot fail open', () => {
+		// The state is always set. A page that said which state it was in only by
+		// which sentence it printed could be checked only by looking for a
+		// sentence, and an assertion that a sentence is absent passes as happily
+		// when it was renamed as when the defect was fixed.
+		const view = cardsFor([fingerprint({ job: 'work', shard: 0 })]);
+		expect(view.record).toBe('recorded');
+		expect(view.lost).toBeNull();
+		expect(view.lostNote).toBeNull();
+	});
+
+	test('a day file with a header and no rows is a day the record RAN', () => {
+		// The fact the rows cannot carry, and the one the whole join turns on. A
+		// fixture tree, because the archive's own example of this ages out of every
+		// window and a test timed to go red on a date nobody set is a fuse
+		// (`CLAUDE.md` section 13).
+		const root = mkdtempSync(join(tmpdir(), 'idhazh-record-'));
+		const at = join(root, 'host-fingerprint', '2026', '09');
+		mkdirSync(at, { recursive: true });
+		const header = 'version,date,run_id,job,shard,fingerprint,cpu_model';
+		writeFileSync(join(at, '16.csv'), `${header}\n`);
+		writeFileSync(
+			join(at, '17.csv'),
+			`${header}\n2026-09-17,2026-09-17,2026-09-17-1,work,0,3a7f0b1c2d4e5f60,AMD EPYC 7763\n`
+		);
+
+		// Both days opened a file; only one kept a row. 15 September opened none at
+		// all, and that is the day the record had not begun on.
+		expect(machineRecordDays(-1, root)).toEqual(['2026-09-16', '2026-09-17']);
+		expect(hostFingerprints(-1, root).map((row) => row.date)).toEqual(['2026-09-17']);
+	});
+
+	test('a ledger that was never written reports no days rather than throwing', () => {
+		const root = mkdtempSync(join(tmpdir(), 'idhazh-record-'));
+		expect(machineRecordDays(-1, root)).toEqual([]);
 	});
 });

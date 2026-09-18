@@ -143,6 +143,31 @@ test.describe('the window and the switch', () => {
 		expect(view([...draws(3, {})]).nothing).toBeNull();
 	});
 
+	test('a window that lost its rows is a different state from one waiting for its first', () => {
+		// "This starts counting on the first run after the record ships" is the
+		// sentence a window before the record gets, and until 2026-09-17 it was
+		// also the sentence a window that lost every row got. They send an
+		// operator to opposite places.
+		const lost = fleetOverWindow([], {
+			days: 30,
+			minRows: MIN_ROWS,
+			colourStops: STOPS,
+			recording: true,
+			lost: [{ date: '2026-09-16', articles: 431 }]
+		});
+		expect(lost.nothing).toBe('record-lost');
+		// A loss never outranks a count: a window with rows in it has something to
+		// draw whatever an earlier day did.
+		const counted = fleetOverWindow([...draws(3, {})], {
+			days: 30,
+			minRows: MIN_ROWS,
+			colourStops: STOPS,
+			recording: true,
+			lost: [{ date: '2026-09-16', articles: 431 }]
+		});
+		expect(counted.nothing).toBeNull();
+	});
+
 	test('a job that recorded no processor name still counts as a placement', () => {
 		// Its fingerprint is what the record was built for, and a machine with no
 		// name is still a machine the platform gave us.
