@@ -41,6 +41,19 @@ export interface FittedLine {
 	heldReason: string;
 	/** The furthest the line could fall that day, so the band can be drawn. */
 	maxDownStep: number;
+	/** What share of the judged pairs the two readings disagreed about. */
+	disagreementRate: number;
+	/** What share of the agreed readings were UNCLEAR. */
+	unclearRate: number;
+	/** How many pairs a judging leg read. The denominator both rates share, so a
+	 * panel can print it in the same sentence as the share. */
+	pairsJudged: number;
+	/** Agreed NO readings the whole record holds. The slowest gate to fill. */
+	negativesOnRecord: number;
+	/** Judged pairs at or above the applied line. The precision reading. */
+	aboveLineOnRecord: number;
+	/** How many dates the record has folded. */
+	daysOnRecord: number;
 }
 
 function text(cell: string | undefined): string | null {
@@ -89,7 +102,13 @@ export function fittedLines(
 			clampKind: text(row.clamp_kind) ?? 'none',
 			clampMovement: figure(row.clamp_movement) ?? 0,
 			heldReason: text(row.held_reason) ?? 'none',
-			maxDownStep: figure(row.max_down_step) ?? 0
+			maxDownStep: figure(row.max_down_step) ?? 0,
+			disagreementRate: figure(row.disagreement_rate) ?? 0,
+			unclearRate: figure(row.unclear_rate) ?? 0,
+			pairsJudged: figure(row.pairs_judged) ?? 0,
+			negativesOnRecord: figure(row.negatives_on_record) ?? 0,
+			aboveLineOnRecord: figure(row.above_line_on_record) ?? 0,
+			daysOnRecord: figure(row.days_on_record) ?? 0
 		});
 	}
 	return [...newest.values()].sort((left, right) => left.date.localeCompare(right.date));

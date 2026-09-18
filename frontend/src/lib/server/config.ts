@@ -192,6 +192,16 @@ export interface SimilarityConfig {
 	 * holds the line. On the row rather than on the chart, so a reader comparing
 	 * two days is comparing one question. */
 	step_change_multiple: number;
+	/** How often the two orders may disagree before the run holds. The lower of
+	 * the two markers on the agreement plot. */
+	disagreement_max: number;
+	/** What share of readings may be UNCLEAR before the run holds. The top of the
+	 * agreement axis, so a rate cannot leave the chart. */
+	unclear_max: number;
+	/** The three gates, as the counts the record has to reach. */
+	minimum_negatives: number;
+	minimum_above_line: number;
+	minimum_days: number;
 }
 
 export interface ConsoleConfig {
@@ -381,7 +391,12 @@ const SIMILARITY_DEFAULTS: SimilarityConfig = {
 	band_low: 0.88,
 	band_high: 1.0,
 	max_down_step: 0.005,
-	step_change_multiple: 5
+	step_change_multiple: 5,
+	disagreement_max: 0.15,
+	unclear_max: 0.35,
+	minimum_negatives: 200,
+	minimum_above_line: 30,
+	minimum_days: 10
 };
 // `SameStoryConfig.floor_min`'s own default, for a checkout with no config file.
 const SAME_STORY_FLOOR = 0.94;
