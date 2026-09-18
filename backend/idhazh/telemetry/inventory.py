@@ -32,9 +32,14 @@ def _day_files(state_root: Path, date: str) -> list[Path]:
     ledger writes `<store>/<YYYY>/<MM>/<DD>` with its own suffix - `.csv` for the
     ledgers, `.json` for day-metrics, `<DD>-<ordinal>-<shard>.jsonl` for a
     committed trace - so the stem is the whole of what they share.
+
+    **Two depths, because a store may nest.** A one-segment glob misses
+    `<group>/<store>/<YYYY>/<MM>/<DD>` and says nothing about the miss, so a
+    nested store would be absent from an inventory that reported success.
     """
     year, month, day = date.split("-")
-    return sorted(set(state_root.glob(f"*/{year}/{month}/{day}*")))
+    stem = f"{year}/{month}/{day}*"
+    return sorted(set(state_root.glob(f"*/{stem}")) | set(state_root.glob(f"*/*/{stem}")))
 
 
 def _month_files(state_root: Path, date: str) -> list[Path]:
@@ -44,8 +49,11 @@ def _month_files(state_root: Path, date: str) -> list[Path]:
     the day tree and deliberately so: a store keeps its month fold in its own
     directory rather than beside day shards a walker would read as the same
     shape.
+
+    Two depths, for the reason `_day_files` gives.
     """
-    return sorted(set(state_root.glob(f"*/{month_of(date)}.*")))
+    stem = f"{month_of(date)}.*"
+    return sorted(set(state_root.glob(f"*/{stem}")) | set(state_root.glob(f"*/*/{stem}")))
 
 
 def files(state_root: Path, *, date: str) -> list[str]:
