@@ -74,6 +74,7 @@ from idhazh.stages import (
     decide,
     dedupe_ledgers,
     harvest,
+    judge_draw,
     judge_shard,
     prune_stamp,
     prune_state,
@@ -131,6 +132,7 @@ STAGES: Final[tuple[str, ...]] = (
     "backfill-vectors",
     "site-weight",
     "validate-days",
+    "judge-draw",
     "judge-shard",
     # Listed so `--help` names every verb, and never parsed: `main` hands the
     # line to the telemetry package before this parser is built.
@@ -464,6 +466,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="The training window `harvest` rolls. Never the reference set.",
     )
     parser.add_argument(
+        "--out-dir",
+        type=Path,
+        default=common.JUDGE_ROOT,
+        help=(
+            "Where `judge-draw` leaves the day's draw, one directory per date. It is "
+            "uploaded as an artifact and never committed: the legs rewrite the rows "
+            "they judge, and a committed rewrite would stack two versions of one row."
+        ),
+    )
+    parser.add_argument(
         "--force",
         action="store_true",
         help="Harvest even when finetune.harvest_every_days says it is not due yet.",
@@ -559,6 +571,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         state_dir = common.STATE_ROOT if args.state_root is None else args.state_root
         return validate_days.stage_validate_days(args.digest_root, args.day, state_dir=state_dir)
+
+    if args.stage == "judge-draw":
+        # Above the fetcher because it reads two committed files and scores what
+        # they already carry. It calls no model either: the draw says which pairs
+        # are worth a model's time, and a later step is what spends it.
+        judge_draw.stage_judge_draw(
+            args.date or _today(),
+            settings=settings,
+            digest_root=args.digest_root,
+            out_dir=args.out_dir,
+        )
+        return 0
 
     if args.stage == "prune-stamp":
         # Above the fetcher for the same reason: it rewrites one committed field.
