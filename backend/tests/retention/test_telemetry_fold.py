@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
+from conftest import seed_item_health
 
 from idhazh import day_partition, ledger
 from idhazh.contracts.item_health import ItemStage
@@ -104,7 +105,7 @@ def test_the_fold_keeps_a_repeated_row_rather_than_deciding_for_a_reader(
     day = "2024-01-04"
     state = tmp_path / "state"
     rows = [health_row(day=day, run=run, number=7, stage=ItemStage.PUBLISH) for run in (1, 2)]
-    ledger.append_item_health(state, day, rows)
+    seed_item_health(state, day, rows)
 
     folded = fold_month(ledger.load_item_health_shard(ledger.item_health_path(state, day)))
 
@@ -119,7 +120,7 @@ def test_a_group_that_timed_nothing_says_so_rather_than_saying_zero(tmp_path: Pa
     """An instrument that did not run writes an empty cell. Empty is not zero."""
     day = "2024-01-04"
     state = tmp_path / "state"
-    ledger.append_item_health(
+    seed_item_health(
         state, day, [health_row(day=day, run=1, number=1, stage=ItemStage.PLAN)]
     )
 
@@ -257,7 +258,7 @@ def test_the_prune_takes_the_expired_day_and_keeps_the_day_beside_it(tmp_path: P
     kept_day = f"{keep_from}-09"
     assert expired_day[:7] < keep_from <= kept_day[:7], "the fixture must straddle the boundary"
     for day in (expired_day, kept_day):
-        ledger.append_item_health(
+        seed_item_health(
             state, day, [health_row(day=day, run=1, number=1, stage=ItemStage.PUBLISH)]
         )
     expired_path = ledger.item_health_path(state, expired_day)

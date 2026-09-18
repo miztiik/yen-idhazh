@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
+from conftest import seed_item_health
 
 from idhazh import ledger
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
@@ -73,7 +74,7 @@ def census(tmp_path: Path) -> Path:
     shard at all.
     """
     state = tmp_path / "state"
-    ledger.append_item_health(
+    seed_item_health(
         state,
         DAY,
         [

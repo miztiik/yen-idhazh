@@ -27,6 +27,7 @@ from idhazh.fetch import FetchResult
 from idhazh.stages import common
 from idhazh.stages.assemble import _published_rows, stage_assemble
 from idhazh.stages.common import _item_payloads, _load_manifest, shard_of
+from idhazh.stages.compact import stage_compact
 from idhazh.stages.plan import _next_run_n, stage_plan
 from idhazh.stages.record import stage_record
 from idhazh.stages.work import stage_work
@@ -435,6 +436,10 @@ def test_a_run_that_dies_before_assemble_keeps_what_its_workers_measured(
     `items-<shard>` artifact that expires in a day and is skipped entirely when
     the job is cancelled. A run stopped here had measured every item and
     recorded none of it.
+
+    The shard leaves them in its own segment, which it commits. The fold that
+    puts them in the head is `assemble`'s, and the next run's `plan` job runs the
+    same fold for exactly this case - a run that died before its assemble.
     """
     run_plan = plan()
     settings = config.load(CONFIG_DIR)
@@ -449,6 +454,11 @@ def test_a_run_that_dies_before_assemble_keeps_what_its_workers_measured(
         model_endpoint=closed_loopback_endpoint(),
     )
     recorded, _ = stage_record(run_plan, settings=settings)
+
+    assert ledger.segment_files(state, ledger.SegmentLedger.ITEM_HEALTH), (
+        "the shard committed nothing, so the catch-up fold would have nothing to read"
+    )
+    stage_compact(state)
 
     rows = health_rows(state, run_plan.date)
     assert recorded == len(rows) == len(run_plan.items)
@@ -481,6 +491,7 @@ def test_the_assemble_that_follows_appends_nothing_the_worker_already_recorded(
         model_endpoint=closed_loopback_endpoint(),
     )
     stage_record(run_plan, settings=settings)
+    stage_compact(state)
     after_the_worker = health_rows(state, run_plan.date)
 
     stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
@@ -514,11 +525,12 @@ def test_replaying_a_day_the_worker_already_recorded_appends_no_duplicate(
         model_endpoint=closed_loopback_endpoint(),
     )
     stage_record(run_plan, settings=settings)
+    stage_compact(tmp_path / "state")
     after_one_run = committed.read_bytes()
 
-    replayed, _ = stage_record(run_plan, settings=settings)
+    stage_record(run_plan, settings=settings)
+    stage_compact(tmp_path / "state")
 
-    assert replayed == 0
     assert committed.read_bytes() == after_one_run
 
 
@@ -607,6 +619,7 @@ def test_a_shard_records_its_own_items_and_nobody_else_s(
     )
 
     stage_record(run_plan, settings=settings, shard=0, shards=2)
+    stage_compact(tmp_path / "state")
 
     mine = [item.item_id for item in shard_of(run_plan, shard=0, shards=2)]
     assert [row.item_id for row in health_rows(tmp_path / "state", run_plan.date)] == mine
@@ -630,6 +643,7 @@ def test_an_item_whose_summary_is_not_written_yet_is_not_recorded(
     (items_dir / f"{interrupted.item_id}.summary.json").unlink()
 
     recorded, _ = stage_record(run_plan, settings=config.load(CONFIG_DIR))
+    stage_compact(tmp_path / "state")
 
     settled = [item.item_id for item in run_plan.items if item.item_id != interrupted.item_id]
     assert recorded == len(settled)
@@ -719,6 +733,7 @@ def test_the_two_ledgers_agree_about_which_shards_ran(
             run_plan, state_root=common.STATE_ROOT, metrics_path=capture, shard=shard, shards=2
         )
 
+    stage_compact(state)
     rows = health_rows(state, run_plan.date)
     counted = ledger.load_runtime_counters(state, run_id=run_plan.run_id)
 
