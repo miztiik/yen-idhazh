@@ -1,6 +1,6 @@
 # Documentation Structure
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-18
 How `docs/` is organised, and where a new statement of project knowledge belongs. Companion to [CLAUDE.md](../../CLAUDE.md) section 5 (Documentation Discipline) - this doc defines the _placement rules_; CLAUDE.md section 5 defines the _constraints_ (ASCII, single source of truth, no duplicate definitions).
 
 This reference is **domain-neutral** so it can be copied between projects unchanged (CLAUDE.md section 5).
@@ -228,8 +228,14 @@ whose removal changes only what somebody knows rather than what they do goes.
 
 **A rejected alternative is a fence, not a story.** It exists so nobody reopens a
 settled gate, and a fence needs a name and a reason rather than the minutes of
-the argument. The form is one sentence with four clauses - the rule now in
-force, the alternative named, the cost it would carry, and who decided and when.
+the argument. The form is one sentence with three clauses - the rule now in
+force, the alternative named, and the cost it would carry.
+
+**Who decided, and when, is not one of them.** Git holds both, and a fence that
+names its author argues from authority where the cost is what settles it. A
+guardrail exception still carries the name and the dated line that granted it,
+and is listed below among the classes never cut.
+
 An alternative that was built and measured keeps its number and that number's
 conditions; one that was only argued keeps one clause. Safe to lose as a class:
 the sequence of the argument, every option nobody built, restatements of the
