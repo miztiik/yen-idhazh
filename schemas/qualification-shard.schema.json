@@ -247,6 +247,20 @@
           "title": "Completion Tokens",
           "type": "integer"
         },
+        "decode_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Milliseconds spent writing the reply, summed over the item's calls.",
+          "title": "Decode Ms"
+        },
         "failure_code": {
           "anyOf": [
             {
@@ -292,6 +306,20 @@
           "title": "Output Digest",
           "type": "string"
         },
+        "prefill_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Milliseconds the runtime spent reading the prompt, summed over the item's calls. Null where the runtime reported no timings. Kept apart from decode because one scales with the article and the other with the summary, so a single rate over both describes neither.",
+          "title": "Prefill Ms"
+        },
         "prompt_tokens": {
           "description": "The complete rendered request, as counted by the runtime.",
           "minimum": 0,
@@ -318,6 +346,7 @@
           "type": "boolean"
         },
         "summarize_seconds": {
+          "description": "The item's whole wall clock, the seam between its calls included. It is wider than prefill plus decode and is not their sum.",
           "minimum": 0.0,
           "title": "Summarize Seconds",
           "type": "number"
@@ -613,6 +642,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "An observation gains prefill_ms and decode_ms, both optional.",
+      "version": "2026-09-18",
+      "why": "The runtime reports the split on every reply and the shard was dropping it."
+    },
+    {
       "change": "An observation's finish_reason is nullable.",
       "version": "2026-09-16",
       "why": "A reply that named no reason no longer reaches this row as a clean stop."
@@ -626,11 +660,6 @@
       "change": "inputs gains turn_markers_sha256, optional.",
       "version": "2026-09-14T04:00",
       "why": "The turn envelope is a control, so a verdict has to record which one it ran."
-    },
-    {
-      "change": "Removed pipeline_fingerprint.",
-      "version": "2026-09-13T22:00",
-      "why": "`inputs` beside it records the same controls by name."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -742,7 +771,7 @@
       "type": "integer"
     },
     "version": {
-      "default": "2026-09-16",
+      "default": "2026-09-18",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -763,5 +792,5 @@
   ],
   "title": "QualificationShard",
   "type": "object",
-  "version": "2026-09-16"
+  "version": "2026-09-18"
 }

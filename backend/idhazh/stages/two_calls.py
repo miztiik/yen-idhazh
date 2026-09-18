@@ -19,6 +19,7 @@ import json
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Final, NamedTuple
 
 from pydantic import ValidationError
@@ -383,6 +384,7 @@ def _kept_call(
     prompt: str,
     reply: Completion | None,
     split: calls.DecodeSplit | None = None,
+    capture_root: Path | None = None,
 ) -> None:
     """Measure one call's text, keep whichever halves the flags allow, and say so.
 
@@ -390,12 +392,15 @@ def _kept_call(
     it did, because a call that timed out is exactly the call whose prompt is
     worth reading - and `reply=None` is what tells the two apart in the record.
 
-    The root is derived from the run directory rather than from the repository,
-    so a test that redirects `VAR_ROOT` redirects this with it - the same root
-    every other output of this stage is written under.
+    The default root is derived from the run directory rather than from the
+    repository, so a test that redirects `VAR_ROOT` redirects this with it - the
+    same root every other output of this stage is written under. A caller that
+    reads one article several times hands in its own, because the file is named
+    for the item and the call and a second reading would otherwise overwrite the
+    first.
     """
     kept = capture.of(
-        root=_run_dir(date) / common.CAPTURES_DIRNAME,
+        root=capture_root if capture_root is not None else _run_dir(date) / common.CAPTURES_DIRNAME,
         item_id=article.item_id,
         call=call,
         prompt=prompt,
@@ -424,6 +429,7 @@ def two_calls_one_item(
     run_id: str | None = None,
     tracer: telemetry.Tracer | None = None,
     recorder: ItemRecorder | None = None,
+    capture_root: Path | None = None,
 ) -> _TwoCalls:
     """One article read once, labelled, summarized and drawn - in two adjacent calls.
 
@@ -573,6 +579,7 @@ def two_calls_one_item(
                     kind=CallKind.LABEL,
                     prompt=rendered,
                     reply=None,
+                    capture_root=capture_root,
                 )
                 return failed(no_reply)
             so_far.one = one
@@ -585,6 +592,7 @@ def two_calls_one_item(
                 kind=CallKind.LABEL,
                 prompt=rendered,
                 reply=one,
+                capture_root=capture_root,
             )
             if one.hit_the_budget:
                 LOG.warning(
@@ -668,6 +676,7 @@ def two_calls_one_item(
                     kind=CallKind.SUMMARIZE_AND_PLAN,
                     prompt=second_rendered,
                     reply=None,
+                    capture_root=capture_root,
                 )
                 return failed(no_reply, one)
             so_far.two = two
@@ -686,6 +695,7 @@ def two_calls_one_item(
                 prompt=second_rendered,
                 reply=two,
                 split=split,
+                capture_root=capture_root,
             )
 
             with trace.span(telemetry.SpanName.PARSE_REPLY) as span:

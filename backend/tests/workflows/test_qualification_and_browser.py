@@ -39,13 +39,23 @@ def test_the_candidate_bytes_are_verified_before_the_server_starts() -> None:
     assert step.get("if") is None, "a restored cache entry is checked as well"
 
 
-def test_the_qualification_uploads_no_article_body() -> None:
-    """This repository is public. A frozen corpus is hashes and measurements;
-    the article text stays on the runner that captured it and dies with it.
+def test_every_artifact_leaving_the_qualification_is_named_here() -> None:
+    """Three artifacts leave the shard, and one of them carries article text.
 
-    Two artifacts now leave the shard, and neither carries a body: the payload
-    of hashes and counts, and our own summaries for a person to read. The
-    article is still only hashed and the source is still only a link.
+    **Owner decision, 2026-09-18: the captures artifact ships prompts.** A gate
+    verdict names a count, and a count cannot say what the model was asked - so
+    a bad score could not be told from a moved prompt without the text, and the
+    text does not survive the runner unless it is uploaded. `digest.yml` had
+    already made that trade for the daily run; this is the same trade on the
+    same repository rather than a new one.
+
+    **What that costs, stated rather than implied.** This repository is public
+    and GitHub requires only read access to download an artifact, so a prompt
+    here is readable by anyone, not by maintainers alone. It is bounded by
+    `logging.capture_prompts` and by a 30-day retention.
+
+    The frozen corpus payloads still stay on the runner: they are the whole
+    article as extracted, indexed for replay, and nothing needs them off the box.
     """
     workflow = _load_workflows()["validate.yml"]
     uploads = [
@@ -58,9 +68,10 @@ def test_the_qualification_uploads_no_article_body() -> None:
     assert paths == [
         "backend/var/qualification/samples-*.json",
         "backend/var/qualification/shard-*.json",
-    ], "a third artifact left the shard without anybody saying what is in it"
+        "backend/var/run/${{ needs.plan.outputs.date }}/captures/",
+    ], "an artifact left the shard without anybody saying what is in it"
     for path in paths:
-        assert "items" not in path, "the frozen article payloads stay on the runner"
+        assert "/items" not in path, "the frozen article payloads stay on the runner"
 
 
 def test_both_qualification_pages_survive_the_run_that_needed_them() -> None:

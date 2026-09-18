@@ -51,6 +51,8 @@ def a_reply(
     finish_reason: str = "stop",
     prompt_tokens: int = 0,
     completion_tokens: int = 0,
+    prefill_ms: int = 0,
+    decode_ms: int = 0,
 ) -> Completion:
     """One reply carrying only the fields an observation reads."""
     return Completion(
@@ -59,6 +61,8 @@ def a_reply(
         finish_reason=finish_reason,
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
+        prefill_ms=prefill_ms,
+        decode_ms=decode_ms,
     )
 
 
@@ -179,3 +183,36 @@ def test_a_shard_written_before_the_switch_reads_as_one_call() -> None:
     del payload["calls_per_item"]
 
     assert QualificationShard.model_validate(payload).calls_per_item == 1
+
+
+def test_an_observation_keeps_prefill_and_decode_apart() -> None:
+    """One rate over both describes neither: prefill scales with the article and
+    decode with the summary. The pair is summed, because the item paid for both."""
+    observation = folded(
+        a_reply(prefill_ms=4000, decode_ms=1000),
+        a_reply(prefill_ms=500, decode_ms=9000),
+    )
+
+    assert observation.prefill_ms == 4500
+    assert observation.decode_ms == 10000
+
+
+def test_a_runtime_that_reported_no_timings_leaves_them_null() -> None:
+    """A zero would read as a call that took no time to prefill. Null says unknown."""
+    observation = folded(a_reply())
+
+    assert observation.prefill_ms is None
+    assert observation.decode_ms is None
+
+
+def test_a_shard_written_before_the_split_still_reads() -> None:
+    """The read-side migration, proved by leaving the keys out rather than by
+    counting how many committed payloads still lack them."""
+    payload = built.a_passing_shard().model_dump(mode="json")
+    for observation in payload["observations"]:
+        del observation["prefill_ms"]
+        del observation["decode_ms"]
+
+    restored = QualificationShard.model_validate(payload)
+
+    assert all(o.prefill_ms is None and o.decode_ms is None for o in restored.observations)

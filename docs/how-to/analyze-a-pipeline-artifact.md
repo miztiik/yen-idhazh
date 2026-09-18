@@ -1,6 +1,6 @@
 # How to analyze a pipeline artifact
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-18
 
 How to find out what the model was asked about one story, what it answered, what
 that cost, and whether the summary it wrote is any good.
@@ -10,6 +10,14 @@ The run records each model call's rendered prompt and raw reply to the
 turns one item's calls into a markdown document. Read that document, not the
 capture files: one capture is a single JSON object holding a 15,000-character
 prompt on one line, so a text editor shows a wall.
+
+**Two workflows write captures.** `digest.yml` writes one per call per item, for
+90 days. `validate.yml` writes one per call per item **per repeat**, for 30 days,
+because a qualification reads each article several times - so its captures sit in
+`repeat-1/`, `repeat-2/` and so on under the artifact. The analyzer walks the
+tree, so pointing it at the downloaded directory finds all of them. On the pair,
+the second prompt replays the first call's reply, so two repeats of one article
+do not share a prompt and neither copy is redundant.
 
 ## When to run it
 
@@ -22,8 +30,8 @@ prompt on one line, so a text editor shows a wall.
 
 | Input | Where it comes from | Needed |
 | :--- | :--- | :--- |
-| A run id | `gh run list --workflow digest.yml` | Always |
-| The `captures-<shard>` artifact | `gh run download`, kept 90 days | Always |
+| A run id | `gh run list --workflow digest.yml`, or `--workflow validate.yml` for a qualification | Always |
+| The `captures-<shard>` artifact | `gh run download`. 90 days from a digest run, 30 from a qualification | Always |
 | The day's item-health ledger | `state/item-health/<yyyy>/<mm>/<dd>.csv`, committed | Only for a capture written before 2026-09-15 |
 
 ## Steps
