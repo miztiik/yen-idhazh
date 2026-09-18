@@ -19,7 +19,7 @@ Then read the one page that owns the thing you are changing.
 | --- | --- |
 | A persisted shape - a payload, a ledger, a config, a schema | `CLAUDE.md` section 11, then the model under `backend/idhazh/contracts/` |
 | A published page | [`../concepts/design-system.md`](../concepts/design-system.md), and the surface's own code |
-| Whether two items are the same story, or why one ran twice | [`../architecture/publishing/layout.md`](../architecture/publishing/layout.md) - the flowchart under "The same story from several sources says so" is the whole rule |
+| Whether two items are the same story, or why one ran twice | [`../architecture/publishing/same-story.md`](../architecture/publishing/same-story.md) - the flowchart near the top is the whole rule |
 | A prompt, or anything fetched text reaches | `CLAUDE.md` Guardrail #11, then `docs/architecture/summarize/` |
 | Which model runs, or a figure that belongs to one | [`../reference/models.md`](../reference/models.md) - one row a model, pointing at its dossier |
 | What a column on the eval row means | [`../concepts/summary-metrics.md`](../concepts/summary-metrics.md) - arrive holding the column name |
@@ -27,6 +27,7 @@ Then read the one page that owns the thing you are changing.
 | Swapping the summarizer, or putting the old one back | [`../how-to/evaluate-new-summarizer-model.md`](../how-to/evaluate-new-summarizer-model.md) - the swap is one line in `config/idhazh.json` and the revert is the same line back |
 | A workflow, a gate, or what CI runs | [`../how-to/run-the-gates.md`](../how-to/run-the-gates.md) |
 | Anything whose cost grows as the repository grows | [`../concepts/growing-reads.md`](../concepts/growing-reads.md) |
+| A rough item on a to-do list that is not a plan yet | [`../how-to/take-an-item-to-plan.md`](../how-to/take-an-item-to-plan.md) - intent, then the way, then the contracts, then the sequence |
 | Anything you cannot place | [`../reference/documentation-structure.md`](../reference/documentation-structure.md) says who owns what |
 
 [`CLAUDE.md`](../../CLAUDE.md) is the contract. Read the section that bears on
@@ -52,6 +53,7 @@ seven and what each one rules are in `CLAUDE.md` section 14.
 
 ## See also
 
+- [`../how-to/take-an-item-to-plan.md`](../how-to/take-an-item-to-plan.md) - one item to a settled intent, way and contract.
 - [`../how-to/author-a-plan.md`](../how-to/author-a-plan.md) - authoring a plan-doc.
 - [`../how-to/execute-a-plan.md`](../how-to/execute-a-plan.md) - the execution contract.
 - [`../how-to/run-the-gates.md`](../how-to/run-the-gates.md) - what to run locally and what to leave to CI.

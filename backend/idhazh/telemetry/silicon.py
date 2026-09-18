@@ -1,8 +1,13 @@
-"""What silicon did this job draw, and what can it do?
+"""What silicon did this job draw, what can it do, and what did the job cost?
 
 `host.py` answers what the machine is DOING and changes every second. This
 answers what the machine IS and is fixed for the length of the job, so it is
 read once rather than sampled.
+
+Two steps write it, because two of its cells are only knowable at opposite ends
+of a job: `stage_fingerprint` probes the machine before the heaviest step, and
+`stage_job_clock` records the clock and the weight-load cost after the last item.
+Both go to the job's own segment and `stages.compact` unites them.
 
 Every reading here degrades to nothing. None of these files or services exists
 on a developer machine, and a missing instrument records an empty cell rather
@@ -24,6 +29,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from idhazh import ledger, run_context
+from idhazh.contracts import runtime_counters
 from idhazh.contracts.host_fingerprint import WATCHED_FLAGS, HostFingerprintRow
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.runtime_counters import WORK_JOB, ServerJob
@@ -351,3 +357,81 @@ def stage_fingerprint(
         ),
     )
     return row
+
+
+def stage_job_clock(
+    plan: RunPlan,
+    *,
+    settings: config.Settings,
+    state_root: Path,
+    shard: int = 0,
+    job: ServerJob = WORK_JOB,
+    job_started_at: int | None = None,
+    server_log_path: Path | None = None,
+) -> HostFingerprintRow | None:
+    """What the job cost, recorded onto the host row the probe opened.
+
+    The other end of `stage_fingerprint`. Two cells of that row are only knowable
+    once the job is over - the wall clock it spent, and what opening the weights
+    cost before the first item - and moving the probe to job end to collect them
+    would destroy `mhz_at_probe` and `boot_seconds`, which want an idle machine.
+    So this writes them as a second row of the same key, into the same segment,
+    filling nothing the probe already filled.
+
+    `stages.compact` is what unites the two. Neither row is ever edited: the
+    probe's cells and these two are disjoint, so the fold takes the union and the
+    day file holds one row a job.
+
+    A job that dies between the probe and this step leaves a usable half-row with
+    two empty cells, which is the degrade path rather than a failure. So is a
+    stamp that never arrived: an empty cell says the reading was not taken, where
+    a zero would claim a job that took no time.
+    """
+    knobs = settings.app.observability
+    if not knobs.host_fingerprint:
+        LOG.info("job clock off job=%s shard=%s run=%s", job, shard, plan.run_id)
+        return None
+    scraped_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    row = HostFingerprintRow(
+        version=HostFingerprintRow.schema_version(),
+        date=plan.date,
+        run_id=plan.run_id,
+        job=job,
+        shard=shard,
+        model_load_ms=runtime_counters.model_load_ms(_text_if_readable(server_log_path)),
+        job_seconds=runtime_counters.job_seconds(scraped_at, job_started_at),
+    )
+    attempt = run_context.run_attempt()
+    landed = ledger.extend_segment(
+        state_root,
+        ledger.SegmentLedger.HOST_FINGERPRINT,
+        [row],
+        run_id=plan.run_id,
+        attempt=attempt,
+        job=job,
+        shard=shard,
+    )
+    LOG.info(
+        "job clock job=%s shard=%s run=%s job_seconds=%s model_load_ms=%s rows=%s segment=%s",
+        job,
+        shard,
+        plan.run_id,
+        row.job_seconds,
+        row.model_load_ms,
+        landed,
+        ledger.segment_relpath(
+            ledger.SegmentLedger.HOST_FINGERPRINT,
+            run_id=plan.run_id,
+            attempt=attempt,
+            job=job,
+            shard=shard,
+        ),
+    )
+    return row
+
+
+def _text_if_readable(path: Path | None) -> str | None:
+    """A log the job may never have written is absent text, never a failed stage."""
+    if path is None:
+        return None
+    return _text(path)

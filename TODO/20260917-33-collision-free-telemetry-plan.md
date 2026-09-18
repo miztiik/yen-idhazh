@@ -64,7 +64,7 @@ An escalation STOPS that row and reports. It does not stop the plan; other rows 
 | --- | --- | --- |
 | 0b1 | A row must widen `.gitattributes` beyond the two lines section 2.6 names, or must keep `merge=union` on any path. | The whole plan rests on no path having two writers. Needing a merge driver means the shape is wrong, not that the driver is needed. |
 | 0b2 | Compaction cannot be made idempotent for a ledger - running it twice produces a different head than running it once. | Section 2.4 is the contract every recovery path depends on. |
-| 0b3 | A `work` shard's measured wall clock passes 190 min of its 200 min `run.shard_timeout_minutes` bound. | **This is the job at risk, and it is at risk today.** Twenty shard-jobs on 2026-09-16 ran 114.8 to 183.7 min - the worst is 91.9 percent of the bound, 16.3 min spare. `docs/reference/measurements.md` sized the bound in advance and predicted 155 min worst case, so the prediction was 28 min optimistic. A killed work job uploads nothing. **This is a standing watch on the plan, not a guard on any row.** Carmack ruled on 2026-09-17 that pinning it to Row #7 was wrong: Row #7 costs about 34 ms and this trigger fires at 10 minutes, six orders of magnitude apart, so it can never fire BECAUSE of Row #7 - it could only stop Row #7 for a cause Row #7 did not create. **A guard that cannot be tripped by the thing it guards is a tripwire in the wrong corridor.** No row in this plan adds real work to the work shard. |
+| 0b3 | A `work` shard's measured wall clock passes 190 min of its 200 min `run.shard_timeout_minutes` bound. | **This is the job at risk, and it is at risk today.** Twenty shard-jobs on 2026-09-16 ran 114.8 to 183.7 min - the worst is 91.9 percent of the bound, 16.3 min spare. `docs/reference/pipeline-cost.md` sized the bound in advance and predicted 155 min worst case, so the prediction was 28 min optimistic. A killed work job uploads nothing. **This is a standing watch on the plan, not a guard on any row.** Carmack ruled on 2026-09-17 that pinning it to Row #7 was wrong: Row #7 costs about 34 ms and this trigger fires at 10 minutes, six orders of magnitude apart, so it can never fire BECAUSE of Row #7 - it could only stop Row #7 for a cause Row #7 did not create. **A guard that cannot be tripped by the thing it guards is a tripwire in the wrong corridor.** No row in this plan adds real work to the work shard. |
 | 0b4 | A runtime-counters column in section 2.7a turns out to be derivable ONLY from the ledger it was created to check. | **Not "not derivable" - that is the trigger that misses.** Every column is derivable by arithmetic; what can vanish is its INDEPENDENCE. A number that can only be recomputed from the thing it was measuring cannot disagree with it, and a number that cannot disagree is not a check (Guardrail #10). Andre found the first draft's wording blind to exactly this on 2026-09-17. |
 | 0b5 | The Machine page read over its 426-day cover passes 120 s in the `assemble` job. | Measured 2.6 s for 24 committed days and 12,837 rows (best of 3, this workspace, 2026-09-17), which projects to about 46 s and 228,000 rows at 426 days. That is 14 percent of assemble's 1200 s bound and fine; a reading four times higher is a design question. |
 | 0b6 | Any row needs a new timestamp column on `ItemHealthRow` to make a phase measurement possible. | Section 2.7's note on the phase split. Adding instrumentation to make a measurement possible is a different piece of work from moving a measurement that exists. |
@@ -77,22 +77,22 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Segment store and the `compact` stage, shipped inert | - | A | IN-FLIGHT | p33a1 | - | - |
-| 5 | Machine page stops lying about a day with no rows | - | A | IN-FLIGHT | p33r5 | - | - |
-| 6 | One concurrency group for `digest`, `validate`, `measure` | - | A | PENDING | - | - | - |
-| 7 | OS memory and load, per item | - | A | IN-FLIGHT | p33r7b | - | - |
-| 2 | `host-fingerprint` writes segments | 1 | B | IN-FLIGHT | p33b2 | - | - |
-| 3 | `item-health`, `scores`, `score-index` write segments | 2 | B | PENDING | - | - | - |
-| 4 | `span-rollup` writes segments | 3 | B | PENDING | - | - | - |
-| 17 | `runtime-counters` writes segments | 4 | B | PENDING | - | - | - |
-| 10 | `model_load_ms` and `job_seconds` join `host-fingerprint` | 2 | C | PENDING | - | - | - |
+| 1 | Segment store and the `compact` stage, shipped inert | - | A | DONE | p33a1 | #862 | - |
+| 5 | Machine page stops lying about a day with no rows | - | A | DONE | p33r5 | #864 | - |
+| 6 | The validation ledger leaves the root of `state/` | - | A | PENDING | - | - | - |
+| 7 | OS memory and load, per item | - | A | DONE | p33r7b | #865 | - |
+| 2 | `host-fingerprint` writes segments | 1 | B | DONE | p33b2 | #866 | - |
+| 3 | `item-health`, `scores`, `score-index` write segments | 2 | B | IN-FLIGHT | p33b3 | - | - |
+| 4 | `span-rollup` writes segments | 3 | B | IN-FLIGHT | p33b4 | - | - |
+| 17 | `runtime-counters` writes segments | 4 | B | IN-FLIGHT | p33b17 | - | - |
+| 10 | `model_load_ms` and `job_seconds` join `host-fingerprint` | 2 | C | IN-FLIGHT | p33c10 | #887 | - |
 | 12 | Delete the merge machinery | 2, 3, 4, 17 | D | PENDING | - | - | - |
 | 13 | Compaction lag and free swap on the console band | 1, 5, 7, 12 | D | PENDING | - | - | - |
 | 11 | Delete `runtime-counters` and everything that reads it | 7, 10, 17 | E | PENDING | - | - | - |
 | 15 | Generated TypeScript contracts replace the hand-written ones | 10, 11 | F | PENDING | - | - | - |
 | 16 | Docs, and the orphan sweep | all | G | PENDING | - | - | - |
-| 18 | Chart-craft doctrine - the thirteen rules, written once | - | H | IN-FLIGHT | p33r18 | - | - |
-| 28 | Pipeline panels: the share track goes, Extraction gains a trend | 18 | H | PENDING | - | - | - |
+| 18 | Chart-craft doctrine - the thirteen rules, written once | - | H | DONE | p33r18 | #863 | - |
+| 28 | Pipeline panels: the share track goes, Extraction gains a trend | 18 | H | DONE | p33h28 | #867 | - |
 | 19 | The shard board | 11, 18 | I | PENDING | - | - | - |
 | 21 | Memory and load, three grains - ABSORBS Row #14 | 5, 7, 15, 19 | I | PENDING | - | - | - |
 | 23 | What a run reads against what it writes, in tokens and in seconds | 21 | I | PENDING | - | - | - |
@@ -102,6 +102,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 20 | Timing panels merge and move to Pipeline | 24 | I | PENDING | - | - | - |
 | 26 | Machine cards: L3 and bandwidth as bars - AMENDS Row #5 | 5, 11, 18 | I | PENDING | - | - | - |
 | 27 | Route grouping and panel order | 20, 26 | K | PENDING | - | - | - |
+| 29 | `prune.yml` wakes outside the digest window | - | J | PENDING | - | - | - |
 | 14 | The per-item machine load panel | - | - | **ABSORBED into #21** | - | - | - |
 | 9 | Server batching counters, per item | - | - | **COLLAPSED into #7** | - | - | - |
 | 8 | Memory split by prefill and decode | - | - | **ESCALATED - not dispatchable** | - | - | - |
@@ -444,7 +445,7 @@ Twenty-three columns. Seventeen already have a home or are metadata. **Two are K
 
 | What the second instrument caught | Size | What changed because of it |
 | --- | --- | --- |
-| The ledger counted cached tokens as read (before 2026-08-27) | **11.09 tok/s against 19.96 on run `2026-08-25-1` - 80 percent wrong** | The definition of a read prompt token moved to one place. Recorded in `docs/reference/measurements.md` and `backend/utilities/reconcile_prefill.py` |
+| The ledger counted cached tokens as read (before 2026-08-27) | **11.09 tok/s against 19.96 on run `2026-08-25-1` - 80 percent wrong** | The definition of a read prompt token moved to one place. Recorded in `docs/reference/pipeline-cost.md` and `backend/utilities/reconcile_prefill.py` |
 | A refused model reply counted by the server and missing from the ledger (2026-09-13) | **0.746 percent on run `2026-09-12-34717684802`** - one article eating 15 percent of the 5 percent tolerance; 93 of 93 failed summarize rows carried no cost at all | `backend/idhazh/summarize.py` now hands the reply to the failure path and the census row carries the five cost cells. Recorded in `docs/architecture/summarize/throughput.md` |
 
 A 0.746 percent drift caused by one article is the size of signal only a second instrument can see - far below anything a trend line shows, far above rounding. The instrument did not sit silent; two of its three recorded readings are disagreements.
@@ -511,7 +512,7 @@ No technical debt. Every artifact below is deleted by the row named, in the same
 | D3 | `schemas/runtime-counters-row.schema.json` | #11 | - |
 | D4 | The `counters` CLI stage and its parser block in `backend/idhazh/cli.py` | #11 | the per-item sample reader |
 | D5 | `host.stage_counters` and every helper only it calls | #11 | - |
-| D6 | `ledger.append_runtime_counters`, `ledger.load_runtime_counters`, `RUNTIME_COUNTERS_KEY` | #11 | - |
+| D6 | `ledger.load_runtime_counters`, `ledger.recorded_runtime_counters`, `RUNTIME_COUNTERS_KEY`, and the `RUNTIME_COUNTERS` member of `SegmentLedger` with its head-shape entry | #11 | - |
 | D7 | `backend/idhazh/telemetry/publish/machine.py` whole-file read, `months_on_file`, and the module docstring accepting it | #11 | **a read scoped by `series.months_to_write` over a 426-day cover** of `item-health` and `host-fingerprint`. The module's stated exception - its source is one unsharded file, so there is no month boundary to inherit - dies with the file, and the publisher becomes an ordinary month-scoped producer |
 | D8 | `frontend/src/lib/server/runtime-counters.ts` | #11 | a reader over the two surviving ledgers, keeping `server_prompt_tokens` and `server_prompt_seconds` as the second clock |
 | D9 | Every test naming `runtime_counters`, `RuntimeCountersRow`, the `counters` stage, **or the frontend spelling `RunCounters`** | #11 | tests for the new columns. **The underscore spelling alone misses six browser specs and `frontend/tests/support/reduction-input.ts`** |
@@ -699,25 +700,51 @@ Rows #1 to #17. These close the collision that destroyed 303 rows on 2026-09-16.
 | --- | --- | --- | --- | --- |
 | 1 | Leave it; the page just draws fewer points | It does not draw fewer points, it prints a false sentence - `machine-cards.ts` line 191 falls back to `source: 'counters'` and the card then says the record had not begun | The operator keeps losing the difference between a missing instrument and destroyed rows | Susan |
 
-## Row #6 - One concurrency group for `digest`, `validate`, `measure`
+## Row #6 - The validation ledger leaves the root of `state/`
 
-- **Scope:** the three workflows that commit `state/` cannot run at the same time.
-- **Files touched:** `.github/workflows/digest.yml`, `.github/workflows/validate.yml`, `.github/workflows/measure.yml`, `backend/tests/workflows/`
-- **Acceptance gates:** local - `pytest backend/tests/workflows -n auto`, plus `shellcheck` is CI-only (not installed locally). CI - full suite.
-- **Oracle:** a test reads the three workflow files and asserts all three declare the same `concurrency.group` and that `cancel-in-progress` is false on each. **What it cannot settle:** whether a dispatched run now waits too long - that is a human's patience, not a gate.
+- **Scope:** `state/validation-<date>.csv` is deleted. The qualification verdict is written under the state root the config points at, on the project's `YYYY/MM/DD` day tree, through the segment store - so two candidates dispatched together cannot share a filename. `validate.yml` stages only what it writes. **The shared concurrency group this row used to ask for is refused, and decision 5 records why.**
+- **Files touched:** `backend/idhazh/evals/golden.py`, `backend/idhazh/stages/decide.py`, `backend/idhazh/stages/qualify_decide.py`, `backend/idhazh/ledger.py` (a `SegmentLedger` member and its head-shape entry), `.github/workflows/validate.yml`, `backend/tests/workflows/_harness.py`, `backend/tests/workflows/test_staged_paths.py`, `backend/tests/pipeline/test_compact.py`, `state/validation-2026-08-22.csv` (deleted), `docs/concepts/adaptive-pruning.md`, `docs/architecture/contracts/schemas.md`, `docs/architecture/contracts/determinism.md`
+- **Acceptance gates:** local - ruff, mypy, the drift gate, `pytest backend/tests -n auto`. CI - full suite.
+- **Oracle:** two candidates dispatched on one date write two segments whose names differ, one compaction folds both into one day head at `<state root>/validation/<YYYY>/<MM>/<DD>.csv`, and that head carries both rows. And a stage run under a config that names `run.trial_state_dirname` creates no file outside `state/<that dirname>/` - asserted by listing every path the stage wrote under a fixture root, not by reading the one path the test expected. **What it cannot settle:** whether two real dispatches on two runners produce the same result - the first live pair is the check.
 - **Decisions:**
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | One shared group across the three | Carmack - `measure.yml` has no `concurrency` block at all, and `validate.yml` stages `state` whole with no dedup command; a qualification overlapping a digest run is the live exposure |
-| 2 | `backfill.yml` is not included | Carmack - it stages `frontend/public/digest` and `frontend/public/assist/index` and no `state/` at all |
-| 3 | Independent of the segment work; run it in parallel | Carmack - two lines in two files, and it retires a class on its own |
+| 1 | **The old file is deleted outright. No migration, no read-side shim** | Owner, 2026-09-18 - git is the archive (CLAUDE.md section 8). Nothing reads it: `adaptive-pruning.md` still records it as having no writer at all, and no reader exists under `backend/` or `frontend/`. It holds four rows from 2026-08-22 and the project has moved past them |
+| 2 | **The path comes from the state root the config points at, never from `config.REPO_ROOT`** | Owner, 2026-09-18 - `decide.py` and `qualify_decide.py` build it from `REPO_ROOT` today, which is the whole reason `run.trial_state_dirname` cannot move it. Guardrail #6's substitution test is the bar: change the config, the path moves, no source edit |
+| 3 | **The head is a `<YYYY>/<MM>/<DD>` day tree, not a dated filename at the top of `state/`** | Owner, 2026-09-18 - every other dated ledger here files that way, `day_partition` already walks it, and taking a day back is one `rm` |
+| 4 | Two candidates get two filenames through the segment store, not one file and a merge driver | Owner - `merge=union` is the only thing stopping the two from hard-conflicting today, and Row #12 deletes it |
+| 5 | **The shared concurrency group is REFUSED** | Carmack, 2026-09-18. GitHub holds one waiting run per group name and a newer arrival deletes the older, so a shared name deletes runs instead of queueing them - that is what discarded three of four candidates before PR #858. Measured: a digest run takes 164-184 min and fires every 240 min (`docs/reference/github-actions.md`); a validate dispatch takes 2 h 02 to 4 h 34, n=4, 2026-09-16. **What the reader loses by not having it: nothing the filename does not already give back.** A group stops two runs being alive at once; the filename stops them colliding, and colliding is the failure that has actually happened here |
+| 6 | A longer wall clock for `validate` and `measure` is not a cost this project pays | Owner, 2026-09-18 - neither is on a schedule and neither was ever meant to be, so nothing queues behind them |
 
 - **Rejected alternatives:**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | Let segments fix it | Segments narrow what a digest shard can lose; they do not narrow what `validate.yml` picks up when it stages `state` whole | An unbounded, rare, human-triggered corruption path left open | Carmack |
+| 1 | One shared concurrency group across the three workflows | Decision 5 - it deletes runs rather than queueing them | The four-candidate dispatch PR #858 restored, and whole scheduled digest days | Carmack |
+| 2 | Keep the file at the top of `state/` and only give it a per-writer name | It still writes production state from a trial run, which the owner refused | The rule that only `digest.yml` writes production `state/` stays untrue | Owner |
+| 3 | Move the four committed rows to the new path | Nothing reads them and git holds them | A read-side migration written for a file with no reader | Owner |
+
+## Row #29 - `prune.yml` wakes outside the digest window
+
+- **Scope:** the scheduled force-push moves off the hours a digest run occupies. It keeps its own workflow and its own group.
+- **Files touched:** `.github/workflows/prune.yml`, `backend/tests/workflows/`
+- **Acceptance gates:** local - `pytest backend/tests/workflows -n auto`. CI - full suite.
+- **Oracle:** a test reads both workflow files and asserts `prune.yml`'s cron hour falls outside the span a digest run occupies, derived from the digest cron list rather than typed in. **What it cannot settle:** a digest run that starts late enough to reach the new hour anyway.
+- **Decisions:**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Prune keeps its own workflow and its own group `corpus-prune` | Owner, 2026-09-18 - it is the one workflow with a standing force-push exception (CLAUDE.md section 8) and it shares no path with the others |
+| 2 | The cron moves into the idle gap | Carmack, 2026-09-18 - it fires `20 4 * * *`, inside the 02:20 run's 03:00-06:34 span, and ends in `git push --force origin main`, so it can discard any push a digest job made in that window. One line |
+| 3 | **This lowers the odds; it does not close the hole** | Carmack - start drift of 40-70 minutes is measured, and once 2.5 h, so a late digest run can still reach the new hour. What would close it is a lock across workflows, which GitHub does not offer and decision 5 of Row #6 prices |
+
+- **Rejected alternatives:**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | Put `prune` in the `digest` concurrency group | Row #6 decision 5 - the group deletes waiting runs, and a prune that is deleted never bounds the repository | The corpus window growing past `finetune.corpus_rows` unnoticed | Carmack |
+| 2 | Leave the cron where it is | The force-push lands inside the digest window nearly every day | One line against a daily chance of discarding a pushed digest | Carmack |
 
 ## Row #7 - OS memory, load, and swap, per item
 
@@ -741,7 +768,7 @@ Rows #1 to #17. These close the collision that destroyed 303 rows on 2026-09-16.
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | Keep using `cgroup_peak_bytes` as the machine-level number | cgroup `memory.peak` never resets, so on an item row it is the job's peak so far, not this item's | Every per-item memory chart would be monotonic and say nothing | Carmack |
-| 2 | Sum the two RSS marks and subtract from 16 GB | Already retracted in this repository - it double-counts shared pages, counts evictable weight pages, and reserves nothing for the kernel or the runner agent. `docs/reference/measurements.md` carries the retraction | Re-publishing a number the project already withdrew | Carmack |
+| 2 | Sum the two RSS marks and subtract from 16 GB | Already retracted in this repository - it double-counts shared pages, counts evictable weight pages, and reserves nothing for the kernel or the runner agent. `docs/reference/pipeline-cost.md` carries the retraction | Re-publishing a number the project already withdrew | Carmack |
 | 3 | Read the samples out of `rss-samples.tsv` by item window | Decision 1 - measured wrong on production data | The plan's own rejected alternative 1, rebuilt with a different instrument | Carmack |
 | 4 | `busy_slots_per_decode` as a per-item delta | `llamacpp:n_busy_slots_per_decode` is declared a gauge - a lifetime average, not a counter - so two reads cannot be differenced. And it reads `1.0` on 382 of 383 committed rows, because one python worker per shard sends one request at a time | Nothing buys it. The number does not vary and the mechanism does not support the arithmetic | Carmack, correcting his own earlier ruling |
 
@@ -885,7 +912,7 @@ Fowler collapsed it on 2026-09-17 against the plan's own test: **a row is one ou
 ## Row #16 - Docs, and the orphan sweep
 
 - **Scope:** every page that describes the old shape describes the new one, `retention.fold_month` is renamed, and the sweep in section 2.11 returns empty.
-- **Files touched:** `docs/reference/github-actions.md`, `docs/concepts/telemetry.md`, `docs/concepts/growing-reads.md`, `docs/concepts/partitions.md`, `docs/concepts/adaptive-pruning.md`, `docs/architecture/contracts/schemas.md`, `docs/reference/repository-layout.md`, `docs/reference/measurements.md`, `backend/idhazh/retention.py`, `AGENTS.md`, any module `AGENTS.md` whose invariants moved
+- **Files touched:** `docs/reference/github-actions.md`, `docs/concepts/telemetry.md`, `docs/concepts/growing-reads.md`, `docs/concepts/partitions.md`, `docs/concepts/adaptive-pruning.md`, `docs/architecture/contracts/schemas.md`, `docs/reference/repository-layout.md`, `docs/reference/pipeline-cost.md`, `backend/idhazh/retention.py`, `AGENTS.md`, any module `AGENTS.md` whose invariants moved
 - **Acceptance gates:** local - `python backend/utilities/doc_load.py` before and after, ruff, mypy, `pytest backend/tests -n auto`. CI - full suite, drift gate. No application suite is owed for the documentation-only part.
 - **Oracle:** `git grep -in 'runtime.counters\|runtime_counters\|merge=union\|DROP_REPEATED_ROWS\|dedupe.ledgers\|fold_month'` across the repository returns only the two surviving `state/published/**` and `state/visual-prunes/**` union lines. **What it cannot settle:** a doc that describes the old shape without using any of those words - read `docs/concepts/telemetry.md` and `docs/reference/github-actions.md` end to end rather than trusting the grep.
 - **Decisions:**

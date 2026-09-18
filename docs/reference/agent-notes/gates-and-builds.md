@@ -21,6 +21,14 @@ npm --prefix frontend run test:changed -- --fresh --python '<abs path to python.
 
 The same variable is needed for any Playwright spec that runs a backend command. `malformed-day.spec.ts` shells out to `idhazh validate-days` and resolves `$IDHAZH_PYTHON`, then a `.venv` at the repository root, then bare `python` - so a borrowing worktree misses the last two and the suite returns `1 failed, 1008 passed` with `No module named idhazh`, which reads as a broken validator rather than a `PATH` problem.
 
+**A half-finished `npm ci` reports itself as a missing dependency.** `npm ci` deletes `node_modules` before it installs, so an `EPERM: operation not permitted, unlink` on a native `.node` file - `lightningcss` and `@tailwindcss/oxide` are the two that bite, both held open by any live vite or Playwright process on the box - leaves the tree part-deleted and exits `-4048`. The next `test:changed` then stops with `Missing @huggingface/transformers; run npm ci in frontend before checking`, which names a package nobody removed on purpose and reads as a broken checkout. **`npm install` is the repair, not another `npm ci`**: it is incremental, so it never unlinks the locked file. Check the lockfile afterwards, because `install` may move it and `ci` never does. Seen 2026-09-18.
+
+```powershell
+npm install --no-audit --no-fund; git status --porcelain -- package-lock.json
+```
+
+**An exit code of `-1` or `4294967295` is a killed process, not a failing check.** The two are the same number read signed or unsigned, and the box runs several worktrees' suites at once behind one gate lock. `malformed-day.spec.ts` reported `oneStoryTheViewRefuses exit 4294967295` against an expected `1` on 2026-09-18, which reads as a validator that accepted a bad day; the validator never finished. The tell is in the log above the failure: a `gate_lock waiting for the gate lock, held by pid ... held for 356 s` run is queueing, not testing. Re-run when the box is quiet, or let CI settle it - it has a runner to itself.
+
 **`test:changed` REUSES a cached failed run.** A re-run prints `Reusing completed run <hash>: exit 1. Use --fresh to rerun unchanged inputs.` and exits 1 in two seconds, which reads as "still broken" when nothing ran. The record is keyed on the input tree, so an environmental flake stays cached until the tree changes. Pass `--fresh`; a green re-run then overwrites the record.
 
 **`test:changed` can exit 1 with every test green, and it now says which file did it.** `malformed-day.spec.ts` used to run `idhazh validate-days` with `--digest-root` at a scratch tree and no `--state-root`, so it appended a row to the tracked `state/day-validations.csv` for any day lacking a receipt under the current rules. That file is inside the fingerprint the selector re-checks after the browser groups, so the run ended `The canary build has stale inputs` under a list where all 1,009 tests passed (seen 2026-09-09). Fixed 2026-09-13: `validate-days` refuses a `--digest-root` that is not the committed tree unless `--state-root` is named too, and the spec names one. The class survives the instance, so `The <mode> build has stale inputs` and `Inputs changed during the checks` now carry `Changed in the working tree: <paths>` - the file a run dirtied under itself, by name. If that sentence names something you never touched, the answer is at whatever wrote it, not in the fingerprint.
@@ -197,7 +205,7 @@ A throwaway spec under `frontend/tests/` would be swept up by the shared selecto
 
 **`trafilatura` drops a repeated paragraph**, so a page built to a chosen length by repetition comes out short - about 150 words whether the page holds 30 copies or 3,000, and nothing errors. Give each copy an ordinal, and count the prefix you added: 320 unique 12-word sentences extracted to 3,783 words against 3,840 asked for, where the identical-sentence version of the same page gave 121 (2026-08-26).
 
-**Every performance number carries the hardware, the date and the spread** (`CLAUDE.md` Guardrail #10). Where the working matters, it lives in [../measurements.md](../measurements.md), not here.
+**Every performance number carries the hardware, the date and the spread** (`CLAUDE.md` Guardrail #10). Where the working matters, it lives in [../pipeline-cost.md](../pipeline-cost.md), not here.
 
 ## A clean merge is not a working merge
 
@@ -244,4 +252,4 @@ A total of zero on a push to `main` means no workflow was created. The recovery 
 - [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md) - the gate commands themselves.
 - [browser.md](browser.md) - the browser suite's own failure modes.
 - [git-and-github.md](git-and-github.md) - reading a CI run and merging.
-- [../measurements.md](../measurements.md) - the numbers and their working.
+- [../pipeline-cost.md](../pipeline-cost.md) - the numbers and their working.

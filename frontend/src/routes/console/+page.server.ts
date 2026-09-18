@@ -1,6 +1,7 @@
 import type { StageTiming, StageTimingDay } from '$lib/charts/series';
 import { windowOfDays } from '$lib/charts/viewport';
 import { chartFlow } from '$lib/charts/chart-flow';
+import type { ExtractionDay } from '$lib/charts/extraction-trend';
 import { itemCost, type ItemCost } from '$lib/console/item-cost';
 import { extraction, type Extraction } from '$lib/console/extraction';
 import { pipelineChanges, wasCut } from '$lib/server/model-work';
@@ -298,6 +299,17 @@ export async function load() {
 			days
 		);
 	});
+	// The same records again, kept per day rather than summed, because the
+	// direction the panel's own text tells the operator to read is not in a sum.
+	// Two counts a day over the widest preset, which is 90 numbers at the cap.
+	const extractionDays: ExtractionDay[] = chartDates
+		.filter((date) => date >= widestSpan.start && date <= widestSpan.end)
+		.flatMap((date) => {
+			const block = recordsByDate.get(date)?.extraction;
+			return block === undefined || block === null
+				? []
+				: [{ date, chartable: block.chartable, charted: block.chartableCharted }];
+		});
 	return {
 		timingDays,
 		manifests,
@@ -337,6 +349,10 @@ export async function load() {
 		// so the cost is the widest preset - 90 files - however many days the archive
 		// holds behind it (`CLAUDE.md` Guardrail #12).
 		extractionByWindow,
+		// The direction behind those sums, one row a measured day. The panel slices
+		// it to the open preset, so the trend and the cards can never be drawn over
+		// two different spans.
+		extractionDays,
 		// **No telemetry rows.** The page fetches its months, and the list of which
 		// months exist rides on the band the layout already fetched. Inlined they
 		// were 3,414,043 of this document's 3,880,361 bytes - 88 percent of what an

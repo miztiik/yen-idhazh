@@ -44,52 +44,37 @@ window would be the wrong shape here as well as a cheaper one
 from __future__ import annotations
 
 import csv
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Final, NamedTuple
 
-from idhazh import day_partition
+from idhazh import day_partition, ledger
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.observation_index import ObservationIndexRow
+from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.contracts.validation_row import ValidationRow
 from idhazh.evals import archive
-from idhazh.ledger import STATE_DIRNAME, require_matching_header
 from idhazh.ledger import read_header as _read_header
+from idhazh.ledger import require_matching_header
 
-LEDGER_DIRNAME: Final = "scores"
-LEDGER_RELDIR: Final = f"{STATE_DIRNAME}/{LEDGER_DIRNAME}"
+#: The store, its POSIX prefix, and where one date's rows go. All four are
+#: `idhazh.ledger`'s, spelled once there: the compaction's head table has to name
+#: the file a segment drains into, and that table cannot import this module
+#: without a cycle. The names below are this module's own vocabulary for them.
+LEDGER_DIRNAME: Final = ledger.SCORES_DIRNAME
+LEDGER_RELDIR: Final = f"{ledger.STATE_DIRNAME}/{LEDGER_DIRNAME}"
+ledger_relpath = ledger.scores_relpath
+ledger_path = ledger.scores_path
 
-INDEX_DIRNAME: Final = "score-index"
-INDEX_RELDIR: Final = f"{STATE_DIRNAME}/{INDEX_DIRNAME}"
+INDEX_DIRNAME: Final = ledger.SCORE_INDEX_DIRNAME
+INDEX_RELDIR: Final = f"{ledger.STATE_DIRNAME}/{INDEX_DIRNAME}"
+index_relpath = ledger.score_index_relpath
+index_path = ledger.score_index_path
 
-#: What makes two rows the same measurement. The address says which article, the
-#: digest says which words came out, and the scorer version says which instrument
-#: read them. Change any one and the row is a new measurement worth keeping.
-#: `item_id` is deliberately absent: it is a slot on a page, not an identity. The
-#: pipeline stamp left this key on 2026-09-12 - it stopped being written, so
-#: keeping it would have left a constant empty component in every digest.
-OBSERVATION_KEY: Final = ("url_key", "output_digest", "scorer_version")
-
-
-def ledger_relpath(date: str) -> str:
-    """`state/scores/<YYYY>/<MM>/<DD>.csv` - the POSIX form, for a log line."""
-    return f"{LEDGER_RELDIR}/{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
-
-
-def ledger_path(state_dir: Path, date: str) -> Path:
-    """The day file one date's rows belong in, the way `ledger.py` locates its own files.
-
-    A day rather than a month, for the reason `ledger.published_path` gives: a
-    run writes one day, two runs collide on a file only when they are the same
-    day, and taking a day back is one `rm` rather than an edit inside a shared
-    shard, which `merge=union` cannot express. Nothing mirrors this store into
-    `frontend/public/`.
-
-    A caller passes the directory and the date and never the file name, so a
-    second writer - the canary fixture builder is one - cannot spell the layout
-    differently from the pipeline and have both be right.
-    """
-    return state_dir / LEDGER_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+#: What makes two rows the same measurement. `idhazh.ledger.OBSERVATION_KEY` is
+#: the definition and this is the name this module has always called it; the
+#: compaction settles a day's segments on the same tuple.
+OBSERVATION_KEY: Final = ledger.OBSERVATION_KEY
 
 
 def ledger_days(state_dir: Path) -> list[Path]:
@@ -172,21 +157,6 @@ def recorded_observations(state_dir: Path) -> set[str]:
     """
     refresh_index(state_dir)
     return indexed_observations(state_dir) | archive.archived_observations(state_dir)
-
-
-def index_relpath(date: str) -> str:
-    """`state/score-index/<YYYY>/<MM>/<DD>.csv` - the POSIX form, for a log line."""
-    return f"{INDEX_RELDIR}/{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
-
-
-def index_path(state_dir: Path, date: str) -> Path:
-    """The index beside one day's rows. A caller passes the date, never the name.
-
-    The same grain as `ledger_path` and filed by the same date, because
-    `refresh_index` fills a partition with no index from the partition beside it
-    - two grains in one relationship would be a mapping somebody maintains.
-    """
-    return state_dir / INDEX_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
 
 
 def index_days(state_dir: Path) -> list[Path]:
@@ -477,15 +447,11 @@ def append(state_dir: Path, rows: Iterable[EvalRow]) -> int:
     already = recorded_observations(state_dir)
     fresh: dict[str, list[dict[str, object]]] = {}
     minted: dict[str, list[str]] = {}
-    for row in pending:
+    for row, digest in _unrecorded(pending, already):
         payload = row.model_dump(mode="json")
-        key = observation_digest(payload)
-        if key in already:
-            continue
-        already.add(key)
         date = str(payload["date"])[:10]
         fresh.setdefault(date, []).append(payload)
-        minted.setdefault(date, []).append(key)
+        minted.setdefault(date, []).append(digest)
     if not fresh:
         return 0
 
@@ -509,6 +475,93 @@ def append(state_dir: Path, rows: Iterable[EvalRow]) -> int:
         _append_index(index_path(state_dir, date), minted[date])
         landed += len(payloads)
     return landed
+
+
+def _unrecorded(rows: Sequence[EvalRow], already: set[str]) -> list[tuple[EvalRow, str]]:
+    """The measurements the ledger does not already hold, each with its digest.
+
+    One filter for both writers, so the head and the segment admit exactly the
+    same rows. `already` is added to as it goes, because a run can hand the same
+    measurement in twice and the second one is not new either.
+    """
+    fresh: list[tuple[EvalRow, str]] = []
+    for row in rows:
+        digest = observation_digest(row.model_dump(mode="json"))
+        if digest in already:
+            continue
+        already.add(digest)
+        fresh.append((row, digest))
+    return fresh
+
+
+def append_segment(
+    state_dir: Path,
+    rows: Iterable[EvalRow],
+    *,
+    run_id: str,
+    attempt: int,
+    job: ServerJob,
+    shard: int,
+) -> int:
+    """Put this writer's measurements in its own segment, for the compaction to fold.
+
+    Two jobs of one run measure items - a work shard as each item settles, and
+    assemble over the whole day afterwards - so neither may open the day file.
+    Each writes `state/segments/scores/<run>-<attempt>-<job>-<shard>.csv` and the
+    index beside it, and `stage_compact` folds both into the heads. Two writers
+    never share a path, so a lost push race costs a merge rather than the rows,
+    and a re-run's second attempt corrects its first try instead of colliding
+    with it.
+
+    **The dedupe still reads the heads, and what it cannot see is settled later.**
+    A measurement already in a committed day is skipped here exactly as it is on
+    the head path. A measurement this run's other writer put in a segment
+    minutes ago is invisible - the segment is not a head and nothing reads one
+    but the compaction - so both writers mint it, and the fold settles the pair
+    against `OBSERVATION_KEY`. That is the same answer by a later route, which is
+    what makes it safe to run a second time.
+
+    **Nothing here checks a head's header.** The head path fails early on a
+    header the contract no longer names, because it is about to append under it.
+    This writes no head; the compaction reads one, and it re-files a stale header
+    through `ledger.settle_header` before it merges a row into it.
+
+    Returns how many measurements went into the segment, so a caller can log the
+    count.
+    """
+    pending = list(rows)
+    if not pending:
+        return 0
+    fresh = _unrecorded(pending, recorded_observations(state_dir))
+    if not fresh:
+        return 0
+    stamp = ObservationIndexRow.schema_version()
+    written = ledger.write_segment(
+        state_dir,
+        ledger.SegmentLedger.SCORES,
+        [row for row, _ in fresh],
+        run_id=run_id,
+        attempt=attempt,
+        job=job,
+        shard=shard,
+    )
+    # The rows first, then the index, for the reason `append` gives: a crash
+    # between the two leaves a measurement recorded and not indexed, which the
+    # next run mints again and the fold settles. The other order leaves a digest
+    # whose row was never written.
+    ledger.write_segment(
+        state_dir,
+        ledger.SegmentLedger.SCORE_INDEX,
+        [
+            ObservationIndexRow.model_validate({"version": stamp, "observation_digest": digest})
+            for _, digest in fresh
+        ],
+        run_id=run_id,
+        attempt=attempt,
+        job=job,
+        shard=shard,
+    )
+    return written
 
 
 def append_validation(path: Path, rows: Iterable[ValidationRow]) -> int:

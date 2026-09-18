@@ -99,6 +99,27 @@ def test_a_score_outside_the_band_lands_nowhere() -> None:
     assert fold.slot_index(0.621, record=record) is None
 
 
+def test_an_exact_slot_edge_on_the_shipped_band_is_that_slot() -> None:
+    """`(0.950 - 0.88) / 0.001` is 69.99999999999995, and an untoleranced walk files 69.
+
+    Driven on the band the pipeline actually ships rather than this module's
+    twelve-slot one, because the defect only appears at edges where the division
+    lands a hair short - and the shipped band has 120 of them. The fit reads the
+    merge line off a slot edge, so filing one slot low is a whole bin of error on
+    the one number this feature exists to set.
+    """
+    record = fold.empty_record(
+        SimilarityThresholdConfig(), scorer=a_scorer(), judge=a_judge()
+    )
+
+    for score in (0.900, 0.930, 0.950, 0.970, 0.990):
+        index = fold.slot_index(score, record=record)
+        assert index is not None
+        assert record.slots[index].bin_low == pytest.approx(score), (
+            f"{score} is a slot's own lower edge and belongs in that slot"
+        )
+
+
 def test_an_unusable_row_is_counted_nowhere() -> None:
     """A verdict nobody can vouch for still moves the line if it is counted."""
     record = a_record()

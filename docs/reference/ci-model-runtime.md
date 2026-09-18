@@ -1,6 +1,6 @@
 # The model on a runner
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-18
 
 How a job gets the inference runtime and the weights, and how it proves it got
 the ones it asked for. Every value here is exact: a pin, a cache key, a digest,
@@ -89,6 +89,13 @@ The run manifest records `runtime_build` as the build the `plan` job read out of
 the pin and handed to the work step, so a published day names the binary that
 decoded it. A run with nothing pinned - a developer machine - records
 `build-not-recorded` rather than inventing a tag.
+
+**The only way this entry costs a run is by being absent.** Two things remove
+it: the digest not running for 7 days, which deletes it outright; or the entry
+sitting unread while newer saves push the repository past its cache limit, since
+eviction takes the oldest last-access first. Either way the next run refetches
+the weights and reinstalls the runtime, on the publishing path. Both rules are
+in [ci-environment.md](ci-environment.md#platform-limits-that-shape-the-workflows).
 
 ### `probe.yml` asks the build what it accepts
 
@@ -223,7 +230,7 @@ removed is the literal DEFAULT behind it. A dispatch that fills nothing in now
 measures, or re-qualifies, the model config names.
 
 The values for a model under adoption live in
-[measurements.md](measurements.md), where a target is declared - not in a
+[pipeline-cost.md](pipeline-cost.md), where a target is declared - not in a
 workflow file, where nothing would ever check them against the run.
 
 ### Every download names a commit
@@ -283,8 +290,7 @@ recorded inputs do not move.
 ## See also
 
 - [github-actions.md](github-actions.md) - which workflows exist, when each runs, and what each does.
-- [ci-caches.md](ci-caches.md) - the cache entry the runtime and the weights fill, and what it costs against the 10 GB ceiling.
-- [ci-environment.md](ci-environment.md) - the platform behaviour behind the cache and download limits.
+- [ci-environment.md](ci-environment.md) - the platform behaviour behind the cache and download limits, and who owns the cache size limit.
 - [models.md](models.md) - every candidate model, and the dossier behind each one's figures.
 - [../how-to/test-models-locally.md](../how-to/test-models-locally.md) - how to run the same runtime on a developer box.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #2 on the runner budget these pins have to fit.

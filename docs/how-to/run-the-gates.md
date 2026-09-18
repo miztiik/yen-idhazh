@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-18
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -329,7 +329,7 @@ share, the same suite spans a factor of three depending on who else is working,
 and `-n auto` can read slower than serial because two performance cores shared
 six ways have nothing to hand a second worker. The figure that decides anything
 is the runner's, and it is in
-[../reference/measurements.md](../reference/measurements.md).
+[../reference/pipeline-cost.md](../reference/pipeline-cost.md).
 
 **A test may not walk a collection a run appends to**, because its cost then
 grows with every published day rather than with the code it checks (Guardrail #12 and
@@ -416,7 +416,7 @@ Naming no day checks every committed day, which is what a push to `main` does.
 run over nothing - a workflow typo must not read as a pass. Opening a published
 day costs a fraction of a second, so a year of them is about a hundred seconds a
 run, which is the reason the scope step decides
-([../reference/measurements.md](../reference/measurements.md)).
+([../reference/pipeline-cost.md](../reference/pipeline-cost.md)).
 
 `site-weight` is the fourth, and it is the only one that measures the whole
 site rather than one page. It sums `frontend/build/` - the directory the Pages
@@ -462,7 +462,7 @@ failing it.
 understates the wire - on a number meant to catch growth, by more growth than the
 number is watching for. `-5` lands within a fraction of a percent of what the
 Pages origin serves; the readings are in
-[../reference/measurements-site.md](../reference/measurements-site.md).
+[../reference/site-weight.md](../reference/site-weight.md).
 
 **The payload guardrail bounds a file a browser fetches**, which no page
 guardrail can see. `page_weight.payload_ceilings_bytes` maps a build-relative
@@ -489,7 +489,7 @@ outcome is a bigger number catches nothing.
 drifts loose above the page it bounds, so a check that cannot tell correct from
 far-too-loose is not an instrument, and no value of the constant fixes that. The
 readings are in
-[../reference/measurements-site.md](../reference/measurements-site.md#the-page-guardrails-and-what-each-route-weighs-2026-09-10).
+[../reference/site-weight.md](../reference/site-weight.md#the-page-guardrails-and-what-each-route-weighs-2026-09-10).
 
 **What stands in their place checks the cause instead of the symptom.** The one
 regression this surface has ever had is a layout inlining a day payload, and that
@@ -543,7 +543,7 @@ npm run test:browser
 
 **Read the ratio rather than the seconds**, because a developer box shares its
 cores with whatever else is running. The readings are in
-[../reference/measurements.md](../reference/measurements.md).
+[../reference/pipeline-cost.md](../reference/pipeline-cost.md).
 
 **`PLAYWRIGHT_WORKERS` sets how many run at once: one locally, four in CI, and
 the two machines disagree about which is right.** A runner is 4 vCPU with
@@ -553,6 +553,16 @@ checkouts has no spare capacity to hand a second worker, so the same change runs
 slower there - and both cases pass, so the local result reads as a clean win and
 is not one. Raise it locally only on an idle box, and never read a local worker
 figure as a runner figure.
+
+**Do not drop the font packages from the browser install.** `npx playwright
+install --with-deps chromium` spends much of its time in `apt-get`, and every
+package it downloads there is a font: Japanese, Chinese, Thai, Cyrillic and
+Unifont, plus the X font utilities. The digest publishes English, so they look
+removable. They are not: `layout-overflow.spec.ts` measures text against its
+container, and a missing font changes what fontconfig substitutes and therefore
+what the browser measures. What that risks is a check that goes on passing in CI
+while disagreeing with a developer box. Nobody has measured the swap, so it
+stays as it is (Guardrail #10).
 
 Every skip reads a fact the fixture owns rather than a locator
 count - the canary day is eight stories on one desk, so it cannot fill a leading
@@ -586,7 +596,7 @@ Remove-Item Env:IDHAZH_TEST_BUILD
 Run it before `build:canary`, which overwrites the same `build/`
 directory. **Two of its cases are expected to fail and are annotated
 `test.fail`**, because the composed page has two defects nobody has decided
-how to fix ([../architecture/publishing/layout.md](../architecture/publishing/layout.md#what-the-composed-page-got-wrong-and-what-shipped-2026-09-02)).
+how to fix ([../architecture/publishing/layout.md](../architecture/publishing/layout.md#two-rules-a-reading-page-owes-an-address)).
 An expected failure turns the suite red the day it starts passing, which is
 when the annotation comes off.
 
@@ -903,6 +913,6 @@ precisely when an operator needs it.
 - [ship-a-pr.md](ship-a-pr.md) - the neutral PR lifecycle these commands serve.
 - [run-the-pipeline.md](run-the-pipeline.md) - running the producer itself, which these gates do not do.
 - [../reference/agent-notes.md](../reference/agent-notes.md) - environment quirks that make a command lie about its result.
-- [../reference/ci-caches.md](../reference/ci-caches.md) - what CI downloads once and keeps, and why a gate job is not always as slow as its step list looks.
+- [../reference/ci-environment.md](../reference/ci-environment.md) - what CI downloads once and keeps, and why a gate job is not always as slow as its step list looks.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - what the drift gate compares.
 - [../../CLAUDE.md](../../CLAUDE.md) - sections 9, 12, and 13.

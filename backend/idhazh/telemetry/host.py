@@ -11,6 +11,8 @@ things that write it down:
 - **`state/runtime-counters.csv`**, through `stage_counters`, at shard grain.
   That store is the independent check on the census's own timings, so it stays a
   separate store: a check folded into the thing it checks stops being a check.
+  The row goes to this job's own segment and `stage_compact` folds it into that
+  head, so two model-server jobs of one run never open one path.
 
 The two grains are the point and they are not the same number. `cpu_busy_pct` on
 an item row is that item's window; on the shard row it is the whole job,
@@ -23,7 +25,7 @@ those come from one `host_facts()` call.
 peak file - one `open()` each, against a median 475,890 ms of model time.
 `psutil` would be a dependency, its install time and its shipped bytes for
 arithmetic that is four lines (Guardrail #8). What one reading costs is in
-`docs/reference/measurements.md`.
+`docs/reference/pipeline-cost.md`.
 
 **The arithmetic is not written twice.** `contracts.runtime_counters` already
 differences two `/proc/stat` captures into a busy share, and this module calls
@@ -46,7 +48,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from idhazh import assemble, ledger
+from idhazh import assemble, ledger, run_context
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.runtime_counters import (
     WORK_JOB,
@@ -536,7 +538,7 @@ def stage_counters(
     metrics_path: Path,
     shard: int = 0,
     shards: int = 1,
-    job: str = WORK_JOB,
+    job: ServerJob = WORK_JOB,
     job_started_at: int | None = None,
     cpu_model_reported: str | None = None,
     cpu_stat_at_start: str | None = None,
@@ -572,6 +574,13 @@ def stage_counters(
     `job` is which of the two model-server jobs this is. It is on the row because
     the two serve different weights, so nothing downstream can pool them and
     nothing can tell them apart without it.
+
+    The row goes to this job's own segment, never to the head. Two model-server
+    jobs of one run each scrape their own counters, so both would be appending to
+    one file from two runners; `stage_compact` inside `assemble` folds the
+    segments into the head, and the attempt is in the segment's name so a re-run
+    corrects its first try rather than adding a second cumulative total for one
+    shard.
     """
     read = (
         host_facts(
@@ -597,11 +606,20 @@ def stage_counters(
         server_log=_text_if_readable(server_log_path),
         cgroup_peak_bytes=read.cgroup_peak_bytes,
     )
-    landed = ledger.append_runtime_counters(state_root, [row])
+    attempt = run_context.run_attempt()
+    landed = ledger.write_segment(
+        state_root,
+        ledger.SegmentLedger.RUNTIME_COUNTERS,
+        [row],
+        run_id=plan.run_id,
+        attempt=attempt,
+        job=job,
+        shard=shard,
+    )
     LOG.info(
         "counted job=%s shard=%s/%s run=%s read_tokens=%s read_seconds=%s job_seconds=%s "
         "cpu=%s cpu_busy_pct=%s peak_rss_bytes=%s model_load_ms=%s n_ctx_configured=%s "
-        "python_peak_rss_bytes=%s cgroup_peak_bytes=%s rows=%s",
+        "python_peak_rss_bytes=%s cgroup_peak_bytes=%s rows=%s segment=%s",
         row.job,
         shard,
         shards,
@@ -617,6 +635,13 @@ def stage_counters(
         row.python_peak_rss_bytes,
         row.cgroup_peak_bytes,
         landed,
+        ledger.segment_relpath(
+            ledger.SegmentLedger.RUNTIME_COUNTERS,
+            run_id=plan.run_id,
+            attempt=attempt,
+            job=job,
+            shard=shard,
+        ),
     )
     return row
 

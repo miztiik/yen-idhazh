@@ -7,7 +7,7 @@ name: Model validation
 # weights on this runner. Andre ruled the consequence: re-basing the dropped
 # comparisons on the committed 8B history would be confounded, so the gates
 # that survived read their thresholds from config, from the adoption target in
-# docs/reference/measurements.md, and from this dispatch's own job bound.
+# docs/reference/pipeline-cost.md, and from this dispatch's own job bound.
 #
 # The corpus is frozen, not replanned. Each shard fetches and extracts its own
 # slice exactly once, hashes the bytes, writes the hashes down, and only then

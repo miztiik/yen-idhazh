@@ -325,7 +325,7 @@ the 117 real evidence pairs of run
 `33179908136`, a three-window article scores **0.3986 lower** than the same
 article read whole, and a two-window article 0.2178 lower, while the one-window
 control reads exactly 0.0000 on 91 of 91
-([../../reference/measurements.md](../../reference/measurements.md)). The high
+([../../reference/pipeline-cost.md](../../reference/pipeline-cost.md)). The high
 band starts at 0.80 and the medium at 0.50, so a 0.40 drop is wider than the
 whole medium band. Every rung-3 article is at least three windows by
 construction, because 2,000 words at `evaluation.chunk_words` of 900 cannot be
@@ -744,7 +744,7 @@ which is 245. One real row already reaches 256. So a menu at its cap costs
 article in twenty.
 
 **What the window costs is memory, and memory is not what chose it.**
-[`../../reference/measurements.md`](../../reference/measurements.md) carries the
+[`../../reference/pipeline-cost.md`](../../reference/pipeline-cost.md) carries the
 cases; the short version is that KV runs 32 KiB a token over 8 attention layers
 of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB whatever the
 window is - so 65,536 is 2,048.00 MiB of KV against 512.00 at 16,384, and 1,584
@@ -1368,7 +1368,7 @@ a rate.
 ## Cost
 
 **Measured 2026-08-23**, `llama-tokenize` against `Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record), LF line endings. Tokenization is deterministic, so the spread is zero. Recorded in
-[`../../reference/measurements.md`](../../reference/measurements.md).
+[`../../reference/pipeline-cost.md`](../../reference/pipeline-cost.md).
 
 | Quantity | Value |
 | --- | --- |
@@ -1513,5 +1513,5 @@ restamping and no committed `output_digest` stopped verifying (section 11).
 - [`../../concepts/digest.md`](../../concepts/digest.md) - the title as a reader-facing element.
 - [`../sources/trust-boundary.md`](../sources/trust-boundary.md) - why article text, including its headline, is data.
 - [`../contracts/determinism.md`](../contracts/determinism.md) - the recorded input manifest this prompt is part of.
-- [`../../reference/measurements.md`](../../reference/measurements.md) - the token cost.
+- [`../../reference/pipeline-cost.md`](../../reference/pipeline-cost.md) - the token cost.
 - [`../../../.github/agents/andre.agent.md`](../../../.github/agents/andre.agent.md) - the persona who owns prompt strategy.

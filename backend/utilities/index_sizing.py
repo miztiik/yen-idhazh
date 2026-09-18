@@ -2,7 +2,7 @@
 
 The archive page inlines every committed day so the on-device search can see the
 whole corpus, and that page is now 1.68 MB gzipped
-(`docs/reference/measurements.md`). Splitting it into month shards needs four
+(`docs/reference/pipeline-cost.md`). Splitting it into month shards needs four
 numbers that were estimates: how well the committed int8 vectors compress, how
 many items a month actually carries, what a browse entry costs, and what the
 ranking loop costs at a scope a reader would wait for. This tool measures all
@@ -21,7 +21,7 @@ Three traps, all found by running it:
    compression at all. The edge's own gzip of the committed 22,972,370-byte
    encoder landed on 16,222,259 bytes, which is `gzip -5` to the byte. So this
    tool sizes a transfer at level 5 and reports level 9 beside it, because level
-   9 is the unit every page-weight number in `docs/reference/measurements.md`
+   9 is the unit every page-weight number in `docs/reference/pipeline-cost.md`
    already uses. Brotli is reported for the record and is not what transfers.
 3. **The ranking cost has to run on V8 or it means nothing.** A Python loop over
    the same arithmetic is a different machine. The harness below is a deliberate
@@ -64,7 +64,7 @@ WORKFLOW_RELPATH: Final = ".github/workflows/digest.yml"
 # this is what a reader downloads.
 GZIP_EDGE_LEVEL: Final = 5
 
-# The level every page-weight number in docs/reference/measurements.md uses.
+# The level every page-weight number in docs/reference/pipeline-cost.md uses.
 # Reported beside the edge level so the two pages can be read against each other.
 GZIP_GATE_LEVEL: Final = 9
 

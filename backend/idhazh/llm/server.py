@@ -333,7 +333,7 @@ def flash_attention_state(server_log: str) -> FlashAttention:
     `REFUSED`. That distinction is the whole point: a reader that took a missing
     line for "off" would turn a forgotten verbosity into a finding about
     attention. Measured 2026-09-09, three runs a case and zero spread -
-    `docs/reference/measurements.md`.
+    `docs/reference/pipeline-cost.md`.
     """
     asked = FLASH_ASKED.search(server_log)
     if asked is None:

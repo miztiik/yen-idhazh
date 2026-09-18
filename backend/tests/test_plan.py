@@ -23,7 +23,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, FIXTURES_DIR, read_text, seed_item_health
 
 from idhazh import cli, config, fetch, ledger
 from idhazh.contracts.app_config import AppConfig
@@ -600,7 +600,7 @@ def test_the_day_ceiling_binds_with_every_run_still_under_its_own(
     desk = [LAB, TRADE, COMMUNITY]
 
     first = plan(desk, state=state, day_ceiling=99)
-    ledger.append_item_health(state, DATE, [_carried(item) for item in first.items])
+    seed_item_health(state, DATE, [_carried(item) for item in first.items])
     room = 2
 
     again = plan(desk, state=state, run_n=2, day_ceiling=len(first.items) + room)
@@ -618,7 +618,7 @@ def test_a_full_day_refuses_the_next_run_outright() -> None:
     desk = [LAB, TRADE, COMMUNITY]
 
     first = plan(desk, state=state, day_ceiling=99)
-    ledger.append_item_health(state, DATE, [_carried(item) for item in first.items])
+    seed_item_health(state, DATE, [_carried(item) for item in first.items])
 
     again = plan(desk, state=state, run_n=2, day_ceiling=len(first.items))
 
@@ -631,7 +631,7 @@ def test_a_day_under_its_ceiling_is_untouched() -> None:
     desk = [LAB, TRADE, COMMUNITY]
 
     first = plan(desk, state=state, day_ceiling=99)
-    ledger.append_item_health(state, DATE, [_carried(item) for item in first.items])
+    seed_item_health(state, DATE, [_carried(item) for item in first.items])
 
     again = plan(desk, state=state, run_n=2, day_ceiling=99)
     loose = plan(desk, state=state, run_n=3, day_ceiling=10_000)
@@ -1039,7 +1039,7 @@ def test_an_address_that_failed_today_behind_a_paywall_is_not_planned_again_toda
     state = Path(tempfile.mkdtemp())
     first = plan([LAB, TRADE, COMMUNITY], state=state)
     blocked = first.items[0]
-    ledger.append_item_health(state, DATE, [_settled(blocked, FailureCode.PAYWALLED)])
+    seed_item_health(state, DATE, [_settled(blocked, FailureCode.PAYWALLED)])
 
     again = plan([LAB, TRADE, COMMUNITY], state=state, run_n=2)
 
@@ -1057,7 +1057,7 @@ def test_an_address_that_hit_a_rate_limit_today_is_planned_again_today() -> None
     state = Path(tempfile.mkdtemp())
     first = plan([LAB, TRADE, COMMUNITY], state=state)
     throttled = first.items[0]
-    ledger.append_item_health(state, DATE, [_settled(throttled, FailureCode.HTTP_RATE_LIMITED)])
+    seed_item_health(state, DATE, [_settled(throttled, FailureCode.HTTP_RATE_LIMITED)])
 
     again = plan([LAB, TRADE, COMMUNITY], state=state, run_n=2)
 
@@ -1071,7 +1071,7 @@ def test_yesterdays_paywall_does_not_bind_today() -> None:
     first = plan([LAB, TRADE, COMMUNITY], state=state)
     blocked = first.items[0]
     yesterday = "2026-08-20"
-    ledger.append_item_health(
+    seed_item_health(
         state, yesterday, [_settled(blocked, FailureCode.PAYWALLED, date=yesterday)]
     )
 
@@ -1085,7 +1085,7 @@ def test_an_empty_settled_code_list_plans_the_failure_again() -> None:
     state = Path(tempfile.mkdtemp())
     first = plan([LAB, TRADE, COMMUNITY], state=state)
     blocked = first.items[0]
-    ledger.append_item_health(state, DATE, [_settled(blocked, FailureCode.PAYWALLED)])
+    seed_item_health(state, DATE, [_settled(blocked, FailureCode.PAYWALLED)])
 
     assert ledger.load_settled_failures(state, DATE, codes=()) == set()
     assert ledger.load_settled_failures(
@@ -1140,7 +1140,7 @@ def test_a_feed_that_filled_its_share_of_today_takes_less_of_the_next_run() -> N
     first = plan(DESK, state=state, source_share=CROWDED_SHARE)
     lab_first = [item for item in first.items if item.source_id == "lab-blog"]
     assert lab_first, "the fixture desk must give the lab something to fill the day with"
-    ledger.append_item_health(state, DATE, [_carried(item) for item in lab_first])
+    seed_item_health(state, DATE, [_carried(item) for item in lab_first])
 
     again = plan(DESK, state=state, run_n=2, source_share=CROWDED_SHARE)
 
@@ -1174,7 +1174,7 @@ def test_the_ceiling_yields_rather_than_costing_the_day_a_story() -> None:
     thin = [LAB, TRADE, COMMUNITY]
     first = plan(thin, state=state, source_share=CROWDED_SHARE)
     lab_first = [item for item in first.items if item.source_id == "lab-blog"]
-    ledger.append_item_health(state, DATE, [_carried(item) for item in lab_first])
+    seed_item_health(state, DATE, [_carried(item) for item in lab_first])
 
     again = plan(thin, state=state, run_n=2, source_share=CROWDED_SHARE)
 

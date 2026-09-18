@@ -303,7 +303,7 @@ them stand at 120.7 MiB for ever - 11.8 percent of the 1 GiB ceiling - and with
 no window at all they would take 3,308 published days, about nine years, to fill
 the cap on their own. The reading, its spread and the two-hop argument that lets
 a payload-tree rate be spent against a built-site cap are
-[measurements-site.md](../reference/measurements-site.md#what-a-published-day-adds-in-rendered-visuals-2026-09-13).
+[site-weight.md](../reference/site-weight.md#what-a-published-day-adds-in-rendered-visuals-2026-09-13).
 
 **Between 12, 13 and 14 months the byte budget does not choose.** They stand
 111.4, 120.7 and 130.0 MiB apart-to-end, so the whole range is 18.6 MiB, 1.8
@@ -400,7 +400,7 @@ measurement, and evidence does not expire.
   ledgers that fold, and what each is evidence of.
 - [../reference/repository-layout.md](../reference/repository-layout.md) - where
   a directory lives, where this page is what happens to what is in it over time.
-- [../reference/measurements.md](../reference/measurements.md) - the instrument
+- [../reference/pipeline-cost.md](../reference/pipeline-cost.md) - the instrument
   log the site-size figures are quoted from.
 - [../architecture/publishing/console-payloads.md](../architecture/publishing/console-payloads.md) -
   the published copies and the windows the console draws over them.

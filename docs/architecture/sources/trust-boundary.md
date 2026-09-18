@@ -1,6 +1,6 @@
 # The Trust Boundary
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-18
 
 Where a stranger's bytes stop being instructions and become data, what actually enforces that, and the planted attacks that assert it on every change. This is the operational home of Guardrail #11.
 
@@ -65,7 +65,7 @@ It asks two questions, because either alone lets a marker through. **Is the mark
 
 `untrusted_block` is the only way source text is ever handed to a model. It applies sanitization itself rather than trusting a caller to have done it earlier, and sanitization removes the fence markers - so the text inside can never close the fence around it.
 
-The version string, `SANITIZER_VERSION`, is a pipeline-fingerprint input ([../contracts/determinism.md](../contracts/determinism.md)). Changing the transformation without bumping it would leave every prior summary looking current.
+The version string, `SANITIZER_VERSION`, is a recorded pipeline input ([../contracts/determinism.md](../contracts/determinism.md)). Changing the transformation without bumping it would leave every prior summary looking current.
 
 ## The address is untrusted before the text is
 
@@ -89,7 +89,7 @@ This is Guardrail #11 applied one step earlier than it is usually read. "Fetched
 
 `classify_status` already draws that line - 429 and 5xx are transient because they are worth asking again, and the other 4xx are permanent because they are not - so the policy is one branch over an outcome, not a second table of status codes.
 
-Treating every failure as a refusal was measured on `ubuntu-latest` on 2026-08-23 to cost **17 feeds**, by running the same day twice against the same feed list: 115 feeds read on the old policy, 132 on the new one. Ten of the recovered hosts serve no `robots.txt` at all. That is a rule we invented and the host never wrote. The genuine refusals still refuse - 14 feeds remain refused, including two disallowed by a served file and one host that resets the connection. Numbers and method in [../../reference/measurements.md](../../reference/measurements.md).
+Treating every failure as a refusal was measured on `ubuntu-latest` on 2026-08-23 to cost **17 feeds**, by running the same day twice against the same feed list: 115 feeds read on the old policy, 132 on the new one. Ten of the recovered hosts serve no `robots.txt` at all. That is a rule we invented and the host never wrote. The genuine refusals still refuse - 14 feeds remain refused, including two disallowed by a served file and one host that resets the connection. Numbers and method in [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md).
 
 **A permanent status is recorded and skipped, never retried.** Retrying a 404 burns the budget the transient failures need, and on a shared runner that budget is wall-clock the rest of the matrix is waiting on.
 
@@ -97,7 +97,7 @@ Treating every failure as a refusal was measured on `ubuntu-latest` on 2026-08-2
 
 A control that answers differently on two runners is not a control. Until 2026-09-02 this one did: `urllib.robotparser` disagrees with itself across the range `pyproject.toml` declares. Python 3.12 takes the first group whose agent matches and the first rule inside it that matches; Python 3.14 merges every group for one agent and applies longest-match with `*` and `$`. One committed file can therefore be read as permitted on one runner and refused on another, and which pages this crawler may read is not allowed to depend on which machine picked up the job.
 
-`protego` replaces it - one implementation of RFC 9309 for the whole range, from the Scrapy organisation, BSD-3-Clause, with no dependencies of its own. Its cost is in [../../reference/measurements.md](../../reference/measurements.md), and it is the smallest thing in the manifest. It is pinned exactly rather than floored, for the reason `onnxruntime` is: the answer is a permission, and a patch release that changed one precedence rule would silently move which pages a run may read.
+`protego` replaces it - one implementation of RFC 9309 for the whole range, from the Scrapy organisation, BSD-3-Clause, with no dependencies of its own. Its cost is in [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md), and it is the smallest thing in the manifest. It is pinned exactly rather than floored, for the reason `onnxruntime` is: the answer is a permission, and a patch release that changed one precedence rule would silently move which pages a run may read.
 
 Ten captured files under `tests/fixtures/robots/` carry the cases the two implementations disagree about - a group naming this crawler, a group naming somebody else, repeated groups, longest match, allow on a tie, `*`, a terminal `$`, percent encoding and a file full of malformed lines. CI runs them on **3.12 and 3.14**, and the whole grid of ten files against nineteen paths reduces to one digest, so a disagreement about a single rule fails the build rather than changing what a run may read.
 
@@ -125,14 +125,13 @@ curator can turn on `extract.reject_not_prose`, `extract.reject_boilerplate` or
 `extract.reject_too_short`,
 but length and shape do not decide newsworthiness by themselves.
 
-**The `boilerplate` signal only started answering anything on 2026-09-17.** It
-compares the page's lines against lines the same host printed on its other
-pages, and nothing ever supplied that second set - so it divided by an empty set
-and said no to every page. `state/chrome.csv` supplies it now
-([../extraction/chrome.md](../extraction/chrome.md)), and the comparison stays
-inside the trust boundary because only hashes are stored: a line is reduced and
-hashed before it is counted, so nothing in that file can carry an instruction a
-page tried to give us.
+**The `boilerplate` signal has never answered anything.** It compares the page's
+lines against lines the same host printed on its other pages, and nothing
+supplies that second set - so it divides by an empty set and says no to every
+page. A store that supplied it shipped on 2026-09-17 and was reverted the same
+day, on the measurement rather than on the risk: over a full run it moved the
+signal zero times. Anything that revives it stores hashes rather than lines, so
+nothing in that file can carry an instruction a page tried to give us.
 
 `extract_text` removes embedded-player interface containers through
 Trafilatura's `prune_xpath` hook before its existing sanitization pass. The

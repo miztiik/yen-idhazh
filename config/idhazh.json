@@ -1,5 +1,6 @@
 {
   "assemble": {
+    "group_identical_titles": true,
     "same_story": {
       "adaptive_dedup_threshold": {
         "applied_lookback_days": 7,
@@ -136,6 +137,9 @@
     "chunk_overlap_words": 150,
     "chunk_words": 900,
     "golden_set_size": 20,
+    "label_draw_per_decile": 6,
+    "label_min_run_days": 10,
+    "labellers": [],
     "lead_coverage_min": 0.3,
     "qualification_pool_multiple": 6,
     "spot_checks_per_week": 10,
@@ -148,9 +152,6 @@
     "backoff_initial_seconds": 1.0,
     "backoff_multiplier": 2.0,
     "boilerplate_ratio_max": 0.4,
-    "chrome_forget_days": 90,
-    "chrome_lines_per_host_max": 200,
-    "chrome_pages_min": 3,
     "max_body_bytes": 2000000,
     "max_retries": 3,
     "min_source_words": 60,
@@ -206,6 +207,8 @@
     "cost_output_per_million": 0.6,
     "evaluation_enabled": true,
     "feed_health_keep_months": 14,
+    "host_fingerprint": true,
+    "host_fingerprint_bandwidth_mib": 512,
     "item_health_aggregate_keep_months": null,
     "item_health_full_grain_months": 14,
     "public_day_metrics_keep_months": 14,
@@ -268,23 +271,29 @@
     "image_months": 13,
     "max_deletes_per_run": 200,
     "pages_hard_cap_mb": 1024,
-    "site_budget_mb": 800
+    "site_budget_mb": 800,
+    "trial_state_days": 90
   },
   "run": {
     "judge_shard_timeout_minutes": 200,
     "max_parallel": 4,
+    "qualify_on_the_production_path": true,
     "safety_ceiling_per_day": 400,
     "safety_ceiling_per_run": 80,
     "shard_size": 5,
     "shard_timeout_minutes": 200,
-    "success_floor_pct": 70
+    "shard_wrap_up_minutes": 12,
+    "success_floor_pct": 70,
+    "trial_state_dirname": null
   },
   "summarize": {
+    "asks_for_a_visual_plan": true,
     "bands": [
       {
         "key_points_max": 1,
         "key_points_min": 1,
         "min_source_words": 0,
+        "over_length_action": "trim",
         "target_words_max": 45,
         "target_words_min": 30
       },
@@ -292,6 +301,7 @@
         "key_points_max": 2,
         "key_points_min": 1,
         "min_source_words": 60,
+        "over_length_action": "trim",
         "target_words_max": 80,
         "target_words_min": 45
       },
@@ -299,6 +309,7 @@
         "key_points_max": 3,
         "key_points_min": 2,
         "min_source_words": 700,
+        "over_length_action": "trim",
         "target_words_max": 130,
         "target_words_min": 70
       },
@@ -320,6 +331,7 @@
       }
     ],
     "key_point_restatement_ceiling": 0.5,
+    "key_point_words_max": 80,
     "length_policy": {
       "absolute_floor_words": 25,
       "floor_applies_above_source_words": 700,
@@ -328,6 +340,8 @@
       "undershoot_ratio": 0.3
     },
     "max_verbatim_words": 20,
+    "paragraphs_max": 2,
+    "second_paragraph_from_words": 90,
     "title_words_max": 14,
     "title_words_min": 6
   },
@@ -363,11 +377,13 @@
       "chart"
     ],
     "histogram_bins": 3,
+    "lead_words": 150,
     "max_chart_points": 8,
     "max_diagram_steps": 6,
     "max_facts": 16,
     "max_output_tokens": 400,
     "min_chart_points": 3,
-    "min_diagram_steps": 3
+    "min_diagram_steps": 3,
+    "request_timeout_minutes": 2.0
   }
 }

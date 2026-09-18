@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+import csv
 import json
 import threading
 import time
+from collections.abc import Iterable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Final
 
 import pytest
 
-from idhazh import config
+from idhazh import config, ledger
 from idhazh.classify.calls import build_label_request
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
@@ -20,10 +22,13 @@ from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.models import ModelRef
 from idhazh.contracts.run_plan import PlannedItem
+from idhazh.contracts.runtime_counters import RuntimeCountersRow
+from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import SourceTier
 from idhazh.corpus import Published
@@ -41,10 +46,137 @@ FIXTURES_DIR: Final = REPO_ROOT / "tests" / "fixtures"
 CONTRACT_FIXTURES_DIR: Final = FIXTURES_DIR / "contracts"
 
 
+def seed_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]) -> int:
+    """Put an item census on disk the way a finished run leaves it.
+
+    A fixture builder and not a copy of a writer. The pipeline no longer appends
+    to this head: a work shard and `assemble` each write a segment and
+    `stage_compact` folds them in, so there is no longer one call a test can make
+    to reach a settled day file. Every caller of this helper wants the day
+    ALREADY settled - it is checking what the planner, the fold or a projection
+    does with a census, not how the census got written - so this leaves the fold
+    itself to `tests/pipeline/test_compact.py` and puts the finished file there.
+
+    Settled means what the compaction means by it. A day file carrying a heading
+    from an earlier build is re-filed onto the current one first, through the
+    contract's own reader, and then the first row for an `ITEM_HEALTH_KEY` wins:
+    a row repeating a key already in the file is dropped rather than appended.
+
+    Returns the rows the file gained, so a caller that asserted on the old
+    writer's count asserts on the same number.
+    """
+    path = ledger.item_health_path(state_dir, date)
+    columns = ItemHealthRow.csv_columns()
+    ledger.settle_header(
+        path, columns, ledger.refiler(ItemHealthRow), carried=ledger.ITEM_HEALTH_CARRIED
+    )
+    held = ledger.recorded_item_health(path)
+    kept: list[dict[str, str]] = []
+    for row in rows:
+        cells = row.csv_row()
+        key = tuple(cells[name] for name in ledger.ITEM_HEALTH_KEY)
+        if key in held:
+            continue
+        held.add(key)
+        kept.append(cells)
+    if not kept:
+        return 0
+    path.parent.mkdir(parents=True, exist_ok=True)
+    exists = path.exists()
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        out = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
+        if not exists:
+            out.writeheader()
+        out.writerows({name: cells[name] for name in columns} for cells in kept)
+    return len(kept)
+
+
+def seed_span_rollup(state_dir: Path, date: str, rows: Iterable[SpanRollupRow]) -> int:
+    """Put a month's span fold on disk the way a finished run leaves it.
+
+    The same fixture builder as `seed_item_health`, for the same reason: a work
+    shard writes its fold to a segment and `stage_compact` merges it into the
+    month head, so no one call reaches a settled month file any more. A caller
+    here wants the month ALREADY folded - it is checking what a listing, a
+    projection or a prune does with the record - so the fold itself stays in
+    `tests/pipeline/test_compact.py` and this puts the finished file there.
+
+    Settled means what the compaction means by it: the first row for a
+    `SPAN_ROLLUP_KEY` wins, because the row is a fold of one shard's spans and a
+    second row for one key adds a count to itself rather than recording a new
+    fact.
+
+    Returns the rows the file gained, so a caller that asserted on the old
+    writer's count asserts on the same number.
+    """
+    path = ledger.span_rollup_path(state_dir, date[:7])
+    columns = SpanRollupRow.csv_columns()
+    ledger.settle_header(path, columns, ledger.refiler(SpanRollupRow))
+    held = ledger.recorded_span_rollup(path)
+    kept: list[dict[str, str]] = []
+    for row in rows:
+        cells = row.csv_row()
+        key = tuple(cells[name] for name in ledger.SPAN_ROLLUP_KEY)
+        if key in held:
+            continue
+        held.add(key)
+        kept.append(cells)
+    if not kept:
+        return 0
+    path.parent.mkdir(parents=True, exist_ok=True)
+    exists = path.exists()
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        out = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
+        if not exists:
+            out.writeheader()
+        out.writerows({name: cells[name] for name in columns} for cells in kept)
+    return len(kept)
+
+
+def seed_runtime_counters(state_dir: Path, rows: Iterable[RuntimeCountersRow]) -> int:
+    """Put a settled counters head on disk the way a finished run leaves it.
+
+    The same fixture builder as `seed_span_rollup`, for the same reason: each
+    model-server job writes its scrape to a segment and `stage_compact` folds it
+    into this head, so no one call reaches the settled file any more. A caller
+    here wants the head ALREADY settled - it is checking what an audit, the
+    post-merge pass or a projection does with a snapshot - so the fold itself
+    stays in `tests/pipeline/test_compact.py`.
+
+    Settled means what the compaction means by it: the first row for a
+    `RUNTIME_COUNTERS_KEY` wins, because the cells are cumulative totals for one
+    server process and a second row for a shard adds that shard's tokens to
+    themselves.
+
+    Returns the rows the file gained, so a caller that asserted on the old
+    writer's count asserts on the same number.
+    """
+    path = ledger.runtime_counters_path(state_dir)
+    columns = RuntimeCountersRow.csv_columns()
+    held = ledger.recorded_runtime_counters(path)
+    kept: list[dict[str, str]] = []
+    for row in rows:
+        cells = row.csv_row()
+        key = tuple(cells[name] for name in ledger.RUNTIME_COUNTERS_KEY)
+        if key in held:
+            continue
+        held.add(key)
+        kept.append(cells)
+    if not kept:
+        return 0
+    path.parent.mkdir(parents=True, exist_ok=True)
+    exists = path.exists()
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        out = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
+        if not exists:
+            out.writeheader()
+        out.writerows({name: cells[name] for name in columns} for cells in kept)
+    return len(kept)
+
+
 def read_text(path: Path) -> str:
     """Read without newline translation, so a CRLF drift fails the comparison."""
     return path.read_bytes().decode("utf-8")
-
 
 def llama_server_flags() -> frozenset[str]:
     """Every flag `server_argv` can emit, taken from `server_argv`.
@@ -100,13 +232,14 @@ def no_tracing_host(monkeypatch: pytest.MonkeyPatch) -> None:
 def isolate_committed_state(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """No test writes the repository's own state/ tree, whatever stage it runs.
 
-    Tracing is on in the committed config (2026-09-06), so `stage_work` folds a
-    span rollup into `state/span-rollup/` and both it and `stage_visual_planner`
-    write a raw trace under `state/traces/` - committed paths keyed off
-    `common.STATE_ROOT`. A stage test that only redirected `VAR_ROOT` would otherwise
-    write real committed files. This points `STATE_ROOT` at the test's own tree; a
-    test that sets it itself still wins, because its `monkeypatch` call runs after
-    this fixture and the last write to an attribute is the one that holds.
+    Tracing is on in the committed config (2026-09-06), so `stage_work` writes a
+    span fold under `state/segments/span-rollup/` and both it and
+    `stage_visual_planner` write a raw trace under `state/traces/` - committed
+    paths keyed off `common.STATE_ROOT`. A stage test that only redirected
+    `VAR_ROOT` would otherwise write real committed files. This points
+    `STATE_ROOT` at the test's own tree; a test that sets it itself still wins,
+    because its `monkeypatch` call runs after this fixture and the last write to
+    an attribute is the one that holds.
     """
     monkeypatch.setattr(common, "STATE_ROOT", tmp_path / "state")
 

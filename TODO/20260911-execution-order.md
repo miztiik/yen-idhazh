@@ -137,7 +137,7 @@ Derived 2026-09-11 in a worktree at `origin/main`, by parsing each row's own `Fi
 
 | Wave | Rows | Sub-waves needed | The clique that forces it |
 | --- | --- | --- | --- |
-| 1 | 19 | 5 | `backend/idhazh/cli.py`, `backend/tests/test_marks.py`, `docs/reference/measurements.md`, and plan 23 row #1a against nine siblings |
+| 1 | 19 | 5 | `backend/idhazh/cli.py`, `backend/tests/test_marks.py`, `docs/reference/pipeline-cost.md`, and plan 23 row #1a against nine siblings |
 | 2 | 9 | 3 | `config/idhazh.json` and `schemas/app-config.schema.json` across 23 #1b, 23 #21, 25 #2 |
 | 3 | 9 | 4 | **Plan 24 rows #5, #6, #7 and #8 all write `retention.py`, `ledger.py` and `cli.py`.** Four rows, every pair collides, so four sub-waves and no arrangement does better |
 | 4 | 7 | 4 | 23 #6 collides with four of the other six |
