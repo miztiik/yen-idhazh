@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-18
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -56,13 +56,16 @@ The shapes, and where each one lives once written:
 | `PublishedRow` | `published-row` | one appended row of `state/published/YYYY/MM/DD.csv` |
 | `FeedHealthRow` | `feed-health-row` | one appended row of `state/feed-health/<YYYY>/<MM>/<DD>.csv` |
 | `FeedRetirementRow` | `feed-retirement-row` | one appended row of `state/feed-retirements.csv` |
-| `ChromeLineRow` | `chrome-line-row` | one row of `state/chrome.csv` - a host, a line's hash, and how many of that host's pages carried it |
 | `ItemHealthRow` | `item-health-row` | one appended row of `state/item-health/<YYYY>/<MM>/<DD>.csv` |
 | `PublicTelemetryRow` | `public-telemetry` | one row of `frontend/public/telemetry/<YYYY-MM>.csv`, the browser-safe projection of the row above |
 | `TelemetryAggregateRow` | `telemetry-aggregate-row` | one row of `state/telemetry-aggregate/<YYYY-MM>.csv`, rewritten whole |
 | `ScoreArchive` | `score-archive` | `state/score-archive/<YYYY-MM>.json`, one whole document per archived score month |
 | `DayMetrics` | `day-metrics` | `state/day-metrics/<YYYY>/<MM>/<DD>.json`, one whole document per published day, rewritten when that day is corrected |
 | `RuntimeCountersRow` | `runtime-counters-row` | one appended row of `state/runtime-counters.csv` |
+| `StorySimilarityPair` | `story-similarity-pair` | one appended row of `state/story-similarity/scored-pairs/<YYYY>/<MM>/<DD>.csv` - one borderline pair, what it scored, and what a judge said in both orders. The same shape holds the day's draw under `backend/var/judge/<date>/draw.csv` before a judging leg reads it |
+| `StorySimilarityDistribution` | `story-similarity-distribution` | the whole of `state/story-similarity/score-distribution.json`, rewritten - a fixed row of slots and three counts each, so the fit reads one file of a size that never changes (Guardrail #12) |
+| `FittedSimilarityThreshold` | `fitted-similarity-threshold` | one appended row of `state/story-similarity/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` - what the merge line was, what the evidence proposed, and what the run applied |
+| `SimilarityHoldoutPair` | `similarity-holdout-pair` | one row of `state/story-similarity/holdout-pairs.csv`, typed by a person - two addresses, two headlines, and whether they are one story |
 | `ValidationRow` | `validation-row` | one appended row of `state/validation-<date>.csv` |
 | `RunManifest` | `run-manifest` | `.../<DD>/run.json`, append-only per date |
 | `DigestDay` | `digest-day` | `.../<DD>/digest.json` and each `run-<N>.json` |
@@ -87,6 +90,8 @@ That is not "pre-creating an empty module for later" (`CLAUDE.md` section 10). T
 The training corpus ships the same way and for the same reason: `corpus/corpus.jsonl` is committed empty, `corpus/corpus.meta.json` holds a zero census, and `corpus/holdout.txt` is empty. A test asserts all three are tracked.
 
 `state/feed-retirements.csv` is the third, committed as a header and no rows on 2026-09-02 - one commit before the plan stage started writing it. It is also registered in `ledger.keyed_paths`, keyed on `endpoint_key` alone, so the post-merge settlement already covers it: `state/**/*.csv` is `merge=union`, and two stale checkouts each appending the same retirement would otherwise leave one address retired twice. Registering the key with the shape rather than with the first writer is what makes the settlement true from the first row rather than from the second.
+
+`state/story-similarity/holdout-pairs.csv` is the fourth, committed as a header on 2026-09-18, and it needs one more than the others do: a person types it, so on a fresh clone it holds nothing but its header for as long as nobody has sat down to mark a pair. It is the one `state/` CSV that is `merge=text` rather than `merge=union` - two edits of it are two people disagreeing about the same rows, and a union merge of a disagreement silently keeps both marks.
 
 ### The one row contract whose CSV omits `version`
 
@@ -151,10 +156,13 @@ mirrors the digest tree its rows are derived from.
 | `state/score-archive/` | monthly documents | what did a month past `scores_full_grain_months` do, in totals and distributions - and which measurements did it hold? | it inherits the shard boundary of the file it replaces |
 | `state/runtime-counters.csv` | one file | what did the model server itself count? | no - the audit reads one run |
 | `state/feed-retirements.csv` | one file | is this address gone for good? | no - a retirement is permanent for one endpoint |
-| `state/chrome.csv` | one file | what does this host print on every page? | no - chrome learned in August is chrome in September, so every partition would be opened anyway. It is bounded by `extract.chrome_lines_per_host_max` times the hosts we read, and pruned past `extract.chrome_forget_days` ([../extraction/chrome.md](../extraction/chrome.md)). **The one ledger whose writer rewrites rather than appends**, because a row is a running count and appending two would make a reader add a count to itself |
 | `state/day-validations.csv` | one file | which frozen days have passed, and against what? | no - a receipt file, read once a run |
 | `state/day-metrics/` | day files | what did one published day do, in totals? | it is addressed by day: the site opens the dates a page names and walks nothing |
 | `state/visual-prunes/` | day files | is the picture backlog shrinking? | no, and the layout saves this read nothing - see below |
+| `state/story-similarity/scored-pairs/` | day files | what did the judge say about this day's borderline pairs? | no - a fold reads one named date and never opens that file again |
+| `state/story-similarity/fitted-thresholds/` | day files | what was the merge line, and what moved it? | yes - the step-change guard takes a median over the newest `step_change_window_rows` written rows, and `assemble` looks back `applied_lookback_days` for a line |
+| `state/story-similarity/holdout-pairs.csv` | one file | which pairs did a person judge, and how? | no - a mark taken in August is still a mark in September, and the file grows with how many pairs somebody has marked rather than with the archive |
+| `state/story-similarity/score-distribution.json` | one document | what has the judge said, slot by slot, across the whole band? | no - **it is not a ledger at all.** It is rewritten whole, and its size is the band and the slot width rather than the history. That is the point: the fit reads it instead of sorting every pair ever judged (Guardrail #12) |
 
 A window turns a partition into a skipped file open. `day_partition.days_in_window`
 names both ends of a day cover, so a plan run opens the days it names and no

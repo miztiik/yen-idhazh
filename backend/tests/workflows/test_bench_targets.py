@@ -15,6 +15,7 @@ from idhazh import config, ledger
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.runtime_counters import ServerJob
+from idhazh.stages import compact as compact_stage
 from idhazh.telemetry import silicon
 from utilities import candidate_pointer, model_speed_case, runtime_sweep
 
@@ -22,6 +23,8 @@ from ._harness import (
     BENCH_ARTIFACTS,
     BENCH_CACHE_KEY,
     BENCH_CANDIDATE_CONFIG,
+    BENCH_COMPACT_COMMAND,
+    BENCH_COMPACT_STEP,
     BENCH_CONFIG_FLAG,
     BENCH_CONFIG_STEP,
     BENCH_CORPUS_STEP,
@@ -479,6 +482,14 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
     silicon.stage_fingerprint(
         plan, settings=settings, state_root=production_root, shard=0, job=ServerJob.WORK
     )
+    # The probe writes a segment now, and each state root is drained by its own
+    # caller: the bench by the step after its probe, production by `assemble`. A
+    # compaction of one root must not reach the other, and the two calls below
+    # are how that is asked rather than assumed - the bench root is INSIDE the
+    # production root, so a store built one directory higher would fold the
+    # bench's row into the ledger the console reads.
+    compact_stage.stage_compact(bench_root)
+    compact_stage.stage_compact(production_root)
 
     written = {
         path.relative_to(tmp_path).as_posix()
@@ -489,6 +500,8 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
         f"{BENCH_LEDGER_ROOT}/{ledger.HOST_FINGERPRINT_DIRNAME}/2026/09/17.csv",
         f"{ledger.STATE_DIRNAME}/{ledger.HOST_FINGERPRINT_DIRNAME}/2026/09/17.csv",
     }
+    assert not ledger.segment_files(bench_root), "the bench's own compaction drained it"
+    assert not ledger.segment_files(production_root)
 
     staged = COMMIT_STAGED_PATHS["bench"]
     assert staged == [f"{BENCH_LEDGER_ROOT}/{ledger.HOST_FINGERPRINT_DIRNAME}"]
@@ -496,6 +509,15 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
         assert not path.startswith(f"{BENCH_LEDGER_ROOT}/"), (
             f"a production job stages {path}, which is under the bench's own tree"
         )
+    # Two production jobs stage `state` whole, so the clause above cannot see
+    # the bench tree for them. What keeps them out is upstream of staging: the
+    # redirect comes from a config only `measure.yml` names, so a daily job
+    # writes nothing under the bench tree to stage in the first place.
+    daily = (REPO_ROOT / ".github" / "workflows" / "digest.yml").read_text(encoding="utf-8")
+    assert BENCH_CANDIDATE_CONFIG not in daily, (
+        f"digest.yml names {BENCH_CANDIDATE_CONFIG}, so a daily job would redirect its "
+        f"ledgers under {BENCH_LEDGER_ROOT}/ and stage them with `state`"
+    )
     assert (REPO_ROOT / staged[0]).is_dir(), (
         "`git add` on a path that is not there aborts the whole step, so the bench "
         "ledger ships with a header and no rows"
@@ -534,6 +556,33 @@ def test_the_bench_reads_its_own_config_when_it_records_the_machine() -> None:
     assert with_block.get("trial_state") == BENCH_TRIAL_STATE
 
 
+def test_the_bench_folds_its_own_segment_before_it_commits_the_row() -> None:
+    """The probe writes a segment, and this workflow has no `assemble` to drain it.
+
+    Without the fold the commit step stages a day file the dispatch never wrote,
+    reports `no machine recorded`, and the segment goes to the bin with the
+    runner - the same loss the segment store exists to stop, arriving from the
+    one workflow that has no second caller to catch it.
+
+    It sits before the sweep rather than beside the commit because the commit is
+    `if: always()` and this is not: a fold further down would be skipped on
+    exactly the dispatch whose machine record is worth having.
+    """
+    workflow = _load_workflows()["measure.yml"]
+    names = [step.get("name") for step in _steps(workflow, BENCH_SERVER_JOB)]
+    assert names.index(BENCH_FINGERPRINT_STEP) < names.index(BENCH_COMPACT_STEP)
+    assert names.index(BENCH_COMPACT_STEP) < names.index("Measure runtime candidate")
+
+    step = _step(workflow, BENCH_SERVER_JOB, "name", BENCH_COMPACT_STEP)
+    script = _script(step, f"measure.yml/{BENCH_SERVER_JOB}/{BENCH_COMPACT_STEP}")
+    assert BENCH_COMPACT_COMMAND in script
+    words = shlex.split(script)
+    assert words[words.index(BENCH_CONFIG_FLAG) + 1] == BENCH_CANDIDATE_CONFIG, (
+        "without the candidate config the fold reads the production state root, so it "
+        "drains segments the daily run is still waiting to commit"
+    )
+
+
 def test_no_bench_stage_can_reach_the_production_state_root() -> None:
     """Every pipeline stage a bench runs is told the config that redirects it.
 
@@ -569,6 +618,7 @@ def test_no_bench_stage_can_reach_the_production_state_root() -> None:
         invocations.append((job_name, stage))
 
     assert sorted(invocations) == [
+        (BENCH_SERVER_JOB, "compact"),
         (BENCH_SERVER_JOB, "fingerprint"),
         (BENCH_SERVER_JOB, "plan"),
     ], "a job started running a pipeline stage, or one stopped"

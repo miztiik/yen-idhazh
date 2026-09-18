@@ -37,6 +37,7 @@ EXPECTED_WORKFLOWS: Final = {
     "digest.yml": ("Content refresh", frozenset({"schedule", "workflow_dispatch"})),
     "drift.yml": ("Drift review", frozenset({"schedule", "workflow_dispatch"})),
     "idhazh-pipeline-tests.yaml": ("Pipeline tests", frozenset({"workflow_dispatch"})),
+    "llm-judges.yml": ("LLM-JUDGES", frozenset({"schedule", "workflow_dispatch"})),
     "measure.yml": ("Measurements", frozenset({"workflow_dispatch"})),
     "pages.yml": (
         "Pages publication",
@@ -76,6 +77,9 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("drift.yml", "baseline_days"): "^[0-9]{1,4}$",
     ("drift.yml", "recent_days"): "^[0-9]{1,4}$",
     ("idhazh-pipeline-tests.yaml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
+    # The judge's own date, shaped by the same pattern and for the same reason:
+    # it becomes the address the judged rows and the fitted row file under.
+    ("llm-judges.yml", "date"): "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$",
     ("measure.yml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "corpus_links"): "^[1-9][0-9]{0,4}$",
     ("measure.yml", "runtime_candidate"): DISPATCH_CHOICE,
@@ -178,7 +182,14 @@ PINNED_LLAMA_SHA256: Final = "d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b
 # asserted over: a second build downloaded anywhere is a second binary, and a
 # number measured on one of them describes the other (Guardrail #10).
 LLAMA_RUNTIME_WORKFLOWS: Final = frozenset(
-    {"digest.yml", "idhazh-pipeline-tests.yaml", "measure.yml", "probe.yml", "validate.yml"}
+    {
+        "digest.yml",
+        "idhazh-pipeline-tests.yaml",
+        "llm-judges.yml",
+        "measure.yml",
+        "probe.yml",
+        "validate.yml",
+    }
 )
 
 # The shared steps that install the build, the file that decides which build,
@@ -200,7 +211,7 @@ LLAMA_SHARED_SCRIPTS: Final = (LLAMA_RUNTIME_SCRIPT, LLAMA_INSTALL_SCRIPT)
 LLAMA_PIN_SCRIPT: Final = "llama-cpp-pin.sh"
 
 LLAMA_SCRIPT_CALLERS: Final = frozenset(
-    {"digest.yml", "idhazh-pipeline-tests.yaml", "probe.yml", "validate.yml"}
+    {"digest.yml", "idhazh-pipeline-tests.yaml", "llm-judges.yml", "probe.yml", "validate.yml"}
 )
 
 LLAMA_INLINE_RUNTIME_WORKFLOWS: Final = LLAMA_RUNTIME_WORKFLOWS - LLAMA_SCRIPT_CALLERS
@@ -250,6 +261,12 @@ WEIGHTS_CHECKS: Final = {
         '["summarize"]["sha256"]',
     ),
     ("idhazh-pipeline-tests.yaml", "cases"): (
+        "Fetch runtime and weights",
+        "Verify the weights",
+        "Start the model",
+        '["summarize"]["sha256"]',
+    ),
+    ("llm-judges.yml", "judge"): (
         "Fetch runtime and weights",
         "Verify the weights",
         "Start the model",
@@ -434,6 +451,14 @@ BENCH_CORPUS_STEP: Final = "Build the fixed bench corpus"
 
 BENCH_FINGERPRINT_STEP: Final = "What machine this bench drew"
 
+#: The step that turns the probe's segment into the row the bench commits. The
+#: probe writes `state/pipeline-tests/segments/host-fingerprint/...`, and this
+#: workflow has no `assemble` to drain it - so without this step the bench stages
+#: a day file nothing wrote and records no machine at all.
+BENCH_COMPACT_STEP: Final = "Fold the machine record into its day"
+
+BENCH_COMPACT_COMMAND: Final = "python -m idhazh compact"
+
 #: The one composite action in this repository. The step above was byte-identical
 #: in two workflows apart from the job it read the models file from, and a step
 #: duplicated across two files is a step that drifts the day one of them is
@@ -487,6 +512,7 @@ SERVER_STARTERS: Final[dict[tuple[str, str], tuple[tuple[str, str | None], ...]]
         ("Start the model", "backend/var/cases/baseline/config"),
         ("Restart the model with two slots", "backend/var/cases/parallel-2/config"),
     ),
+    ("llm-judges.yml", "judge"): (("Start the model", "config"),),
     ("measure.yml", "budgets"): (("Start the tokenizer", "backend/var/candidate-config"),),
     ("validate.yml", "qualify"): (("Start the candidate", "backend/var/candidate-config"),),
 }
@@ -679,6 +705,11 @@ COMMIT_STEPS: Final = {
     "bench": "Commit the machine this bench drew",
 }
 
+#: The catch-up for a run whose assemble never drained the segment store. The
+#: `plan` job is its only caller, and `prune.yml` may never be: that workflow
+#: ends in a force push and commits nothing on 29 of 30 wakes.
+COMPACT_STEP: Final = "Fold any segments an earlier run left behind"
+
 COMMIT_BASE_ENV: Final = frozenset(
     {"COMMIT_MESSAGE", "NOTHING_STAGED_MESSAGE", "PUSH_FAILED_MESSAGE"}
 )
@@ -706,39 +737,30 @@ COMMIT_SCRIPT_ENV: Final = {
 }
 
 COMMIT_STAGED_PATHS: Final = {
-    # `state/host-fingerprint` joined on 2026-09-17 with this job's own probe.
-    # The work job has staged the directory since 2026-09-16; this job wrote no
-    # row into it at all until now, so the machine a run planned on was never
-    # recorded anywhere.
+    # `state` whole since 2026-09-17, where this was five paths named one at a
+    # time. The catch-up compaction runs in this job and folds a segment into
+    # whichever head that segment's own rows name, so what the job writes is not
+    # knowable when the list is written - and a hand-listed set would commit the
+    # segment deletions while leaving the heads behind.
     "plan": [
-        "state/seen",
-        "state/feed-health",
-        "state/feed-retirements.csv",
-        "state/counterfactual-scores",
-        "state/host-fingerprint",
+        "state",
     ],
-    # `state/score-index` is beside `state/scores` because it is the record of
-    # what those rows are, and the writer reads it instead of them. A shard
-    # committed without its index is a month the next run cannot recognise, so
-    # it would append every measurement in it a second time.
+    # `state/span-rollup` joined on 2026-09-15 and left on 2026-09-18. A shard is
+    # the only thing that writes the fold, and until the first of those days
+    # nothing staged it, so nine days of folded spans were measured and then
+    # thrown away with the runner. `state/traces` is the raw evidence the fold is
+    # taken from and was missed the same way.
     #
-    # `state/span-rollup` joined on 2026-09-15. A shard is the only thing that
-    # writes it, and until that day nothing staged it, so nine days of folded
-    # spans were measured and then thrown away with the runner. `state/traces`
-    # is the raw evidence the fold is taken from and was missed the same way.
-    #
-    # `state/host-fingerprint` joined on 2026-09-16 and had been missed since the
-    # probe shipped: it is written by its own subcommand rather than from inside
-    # `stage_work`, so the guard that reads the stage's own ledger calls never
-    # saw it, and `git ls-files` found not one committed fingerprint.
+    # `state/segments` replaced `state/host-fingerprint` on 2026-09-17, and
+    # `state/item-health`, `state/scores`, `state/score-index` and
+    # `state/span-rollup` followed it on 2026-09-18. Each of those heads used to
+    # be appended to by up to eight work shards and by assemble; every writer now
+    # writes its own segment and `assemble` folds them in, so this job stages the
+    # segment store and no longer stages a head it does not write.
     "work": [
-        "state/item-health",
-        "state/scores",
-        "state/score-index",
         "state/runtime-counters.csv",
-        "state/span-rollup",
         "state/traces",
-        "state/host-fingerprint",
+        "state/segments",
     ],
     "assemble": [
         "frontend/public/digest",
@@ -886,10 +908,18 @@ CLOCK_STEP: Final = "Stamp the shard clock and the host"
 
 CLOCK_VARIABLES: Final = ("JOB_STARTED_AT", "CPU_MODEL", "CPU_STAT_AT_START")
 
+# The other end of `FINGERPRINT_STEP`. The probe runs before the model server so
+# the bandwidth reading gets an idle machine; the job's own clock and what the
+# weights cost to open are only knowable once the job is over. Both halves go to
+# the one segment this job owns and the fold unites them.
+JOB_CLOCK_STEP: Final = "What this job cost"
+
+JOB_CLOCK_COMMAND: Final = "python -m idhazh job-clock"
+
 # Neither of the work job's two steps may fail the shard. See the comment above
 # them in the workflow for which loss is the cheaper one. `BaseLoader` keeps
 # every scalar a string, so the value to compare is the word, not the boolean.
-WORK_LEDGER_STEPS: Final = (RECORD_STEP, COUNTERS_STEP, COMMIT_STEPS["work"])
+WORK_LEDGER_STEPS: Final = (RECORD_STEP, COUNTERS_STEP, JOB_CLOCK_STEP, COMMIT_STEPS["work"])
 
 TOLERATED: Final = "true"
 
@@ -972,6 +1002,7 @@ COMMIT_REFRESH_PATHS: Final = {
         "state/span-rollup",
         "state/traces",
         "state/host-fingerprint",
+        "state/segments",
     ],
 }
 

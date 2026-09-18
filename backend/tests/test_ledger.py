@@ -14,7 +14,14 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from conftest import (
+    CONFIG_DIR,
+    CONTRACT_FIXTURES_DIR,
+    FIXTURES_DIR,
+    read_text,
+    seed_item_health,
+    seed_span_rollup,
+)
 
 from idhazh import cli, config, day_partition, ledger
 from idhazh.contracts.base import derive_url_key
@@ -22,6 +29,7 @@ from idhazh.contracts.call_cost import COST_FIELDS, CallKind
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
+from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import (
     RETIRED_CELLS,
@@ -34,9 +42,11 @@ from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
+from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.evals import writer
 from idhazh.evals.writer import OBSERVATION_KEY
+from idhazh.stages import compact as compact_stage
 from idhazh.stages.dedupe_ledgers import stage_dedupe_ledgers
 from utilities import split_published_ledger as split_ledger
 from utilities import split_visual_prunes as split_prunes
@@ -150,6 +160,29 @@ def fingerprint_row(*, on: str = DATE, shard: int = 0, cpu: str = "one") -> Host
     )
 
 
+def a_fingerprint_day(
+    state_dir: Path, rows: list[HostFingerprintRow], *, attempt: int = 1
+) -> None:
+    """The machine day built the way production builds it: a segment each, then the fold.
+
+    Nothing appends to this head any more. Ten jobs of one run each draw a
+    machine and each write their own segment, and the compaction is the one
+    writer of the day file - so a test that wants a day asks for it the same way
+    rather than reaching past the writer that no longer exists.
+    """
+    for row in rows:
+        ledger.write_segment(
+            state_dir,
+            ledger.SegmentLedger.HOST_FINGERPRINT,
+            [row],
+            run_id=row.run_id,
+            attempt=attempt,
+            job=row.job,
+            shard=row.shard,
+        )
+    compact_stage.stage_compact(state_dir)
+
+
 def span_fold_row(*, on: str = DATE, shard: int = 0, total_ms: int = 16) -> SpanRollupRow:
     """One shard's fold of one span name. `total_ms` is the cell a repeat could double."""
     return SpanRollupRow(
@@ -160,6 +193,28 @@ def span_fold_row(*, on: str = DATE, shard: int = 0, total_ms: int = 16) -> Span
         span_name=RollupSpan.TAG,
         count=20,
         total_ms=total_ms,
+    )
+
+
+def pair_row(*, on: str = DATE) -> StorySimilarityPair:
+    """One judged pair, read from the committed contract fixture and re-dated.
+
+    Read inside the helper rather than at module scope, so a fixture that stops
+    parsing fails the test that asked for a row instead of the whole file
+    (CLAUDE.md section 13).
+    """
+    raw = json.loads(
+        read_text(
+            CONTRACT_FIXTURES_DIR / "story-similarity-pair" / "judged-the-same-in-both-orders.json"
+        )
+    )
+    return StorySimilarityPair.model_validate(
+        raw
+        | {
+            "version": StorySimilarityPair.schema_version(),
+            "date": on,
+            "run_id": f"{on}-1",
+        }
     )
 
 
@@ -987,7 +1042,7 @@ def test_a_day_file_that_carries_two_headers_is_refiled_by_the_settlement(
         newline="",
     )
 
-    assert ledger.append_item_health(state, DATE, [carried_row(3, source_id="wire")]) == 1
+    assert seed_item_health(state, DATE, [carried_row(3, source_id="wire")]) == 1
     assert stage_dedupe_ledgers(state_dir=state, date=DATE) == 0
 
     rows = _committed_rows(path)
@@ -1025,7 +1080,7 @@ def test_the_older_generation_is_refiled_whichever_block_the_merge_put_first(
         newline="",
     )
 
-    assert ledger.append_item_health(state, DATE, []) == 0, "no rows to add, only a file to settle"
+    assert seed_item_health(state, DATE, []) == 0, "no rows to add, only a file to settle"
 
     read_back = ledger.load_item_health_shard(path)
     assert [row.csv_row() for row in read_back] == [stranded.csv_row(), settled.csv_row()]
@@ -1046,7 +1101,7 @@ def test_a_day_file_under_a_retired_header_alone_is_appendable_again(tmp_path: P
         a_generation(A_RETIRED_GENERATION, [stranded]), encoding="utf-8", newline=""
     )
 
-    assert ledger.append_item_health(state, DATE, [carried_row(2, source_id="wire")]) == 1
+    assert seed_item_health(state, DATE, [carried_row(2, source_id="wire")]) == 1
 
     assert _committed_rows(path)[0] == list(ItemHealthRow.csv_columns())
     read_back = ledger.load_item_health_shard(path)
@@ -1080,7 +1135,7 @@ def test_a_dropped_heading_is_carried_and_its_cell_goes(tmp_path: Path) -> None:
     out.writerow([cells[name] for name in header])
     path.write_text(buffer.getvalue(), encoding="utf-8", newline="")
 
-    assert ledger.append_item_health(state, DATE, [carried_row(2, source_id="wire")]) == 1
+    assert seed_item_health(state, DATE, [carried_row(2, source_id="wire")]) == 1
 
     assert _committed_rows(path)[0] == list(ItemHealthRow.csv_columns())
     assert "runner_name" not in path.read_text(encoding="utf-8")
@@ -1127,32 +1182,41 @@ def test_a_day_file_already_under_the_current_header_is_left_byte_identical(
 ) -> None:
     """A pass with nothing to do leaves no diff, so a run never rewrites a settled day."""
     state = tmp_path / "state"
-    assert ledger.append_item_health(state, DATE, [timed_row(1)]) == 1
+    assert seed_item_health(state, DATE, [timed_row(1)]) == 1
     path = ledger.item_health_path(state, DATE)
     before = path.read_bytes()
 
-    assert ledger.append_item_health(state, DATE, []) == 0
+    assert seed_item_health(state, DATE, []) == 0
     assert path.read_bytes() == before
 
 
-def test_a_refiled_row_is_the_bytes_an_append_would_have_written(tmp_path: Path) -> None:
+def test_a_refiled_row_is_the_bytes_the_contract_would_have_written(tmp_path: Path) -> None:
     """Two ways of writing one row have to agree, or the file disagrees with itself.
 
     A migration that serialized a row its own way would leave a day file whose
     older half and newer half differ in quoting, and every byte-level check over
     the archive would then be reading that difference rather than the data.
+
+    The comparison is against `render_file`, which is what the fold writes a head
+    with. It used to be against the head writer, and that writer is gone.
     """
     state = tmp_path / "state"
     migrated = ledger.item_health_path(state, DATE)
     migrated.parent.mkdir(parents=True, exist_ok=True)
     row = timed_row(1)
     migrated.write_text(a_generation(A_RETIRED_GENERATION, [row]), encoding="utf-8", newline="")
-    assert ledger.append_item_health(state, DATE, []) == 0
 
-    appended = tmp_path / "fresh"
-    assert ledger.append_item_health(appended, DATE, [row]) == 1
+    moved, complaints = ledger.settle_header(
+        migrated,
+        ItemHealthRow.csv_columns(),
+        ledger.refiler(ItemHealthRow),
+        carried=ledger.ITEM_HEALTH_CARRIED,
+    )
 
-    assert migrated.read_bytes() == ledger.item_health_path(appended, DATE).read_bytes()
+    assert (moved, complaints) == (1, [])
+    assert migrated.read_text(encoding="utf-8") == ledger.render_file(
+        ItemHealthRow.csv_columns(), [row.csv_row()]
+    )
 
 
 def test_a_file_wider_than_this_checkout_is_refused_and_left_byte_identical(
@@ -1171,7 +1235,7 @@ def test_a_file_wider_than_this_checkout_is_refused_and_left_byte_identical(
     place the columns an earlier generation named.
     """
     state = tmp_path / "state"
-    assert ledger.append_item_health(state, DATE, [timed_row(1)]) == 1
+    assert seed_item_health(state, DATE, [timed_row(1)]) == 1
     path = ledger.item_health_path(state, DATE)
     before = path.read_bytes()
     narrow = A_RETIRED_GENERATION
@@ -1190,7 +1254,7 @@ def test_the_settlement_refuses_the_same_direction_without_raising(tmp_path: Pat
     file, so the refusal is a log line and a byte-identical file.
     """
     state = tmp_path / "state"
-    assert ledger.append_item_health(state, DATE, [timed_row(1)]) == 1
+    assert seed_item_health(state, DATE, [timed_row(1)]) == 1
     path = ledger.item_health_path(state, DATE)
     before = path.read_bytes()
 
@@ -1278,7 +1342,7 @@ def test_the_header_check_reads_one_line_whatever_the_file_holds(
     """
     state = tmp_path / "state"
     rows = [carried_row(number, source_id="wire") for number in range(50)]
-    assert ledger.append_item_health(state, DATE, rows) == 50
+    assert seed_item_health(state, DATE, rows) == 50
     path = ledger.item_health_path(state, DATE)
     _, lines = counted_reads(monkeypatch, path)
 
@@ -1289,29 +1353,29 @@ def test_the_header_check_reads_one_line_whatever_the_file_holds(
     assert lines[0] == 1, f"the header check read {lines[0]} lines of a 51-line file"
 
 
-def test_the_append_reads_the_day_file_rows_once(
+def test_the_records_a_day_already_holds_are_read_in_one_pass(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Two full passes over one file, back to back, is one pass too many.
 
-    The header and the records this run already holds are two answers to one
-    pass, and the pass that answered the second built a dict of every column -
-    113 of them on this shard - to read three cells of each row.
+    The header and the records a run already holds are two answers to one pass,
+    and the pass that answered the second built a dict of every column - 119 of
+    them on this shard - to read three cells of each row.
 
-    Two opens remain and only one of them reads rows: `_append` re-reads line 1
-    on its own account, because that guard protects the eight other ledgers that
-    reach it without a header question of their own.
+    `recorded_item_health` is what asks the question now. The head writer that
+    used to ask it is gone: a run writes a segment, and the fold settles the
+    day on the same key without re-reading it per row.
     """
     state = tmp_path / "state"
     rows = [carried_row(number, source_id="wire") for number in range(20)]
-    assert ledger.append_item_health(state, DATE, rows) == 20
+    assert seed_item_health(state, DATE, rows) == 20
     path = ledger.item_health_path(state, DATE)
     opens, lines = counted_reads(monkeypatch, path)
 
-    assert ledger.append_item_health(state, DATE, [carried_row(99, source_id="wire")]) == 1
+    assert len(ledger.recorded_item_health(path)) == len(rows)
 
-    assert opens[0] == 2, "one pass for the records, one line for the append's own guard"
-    assert lines[0] == len(rows) + 2, (
+    assert opens[0] == 1, "one open for every record the day holds"
+    assert lines[0] == len(rows) + 1, (
         f"{lines[0]} lines read over a 21-line file; the rows are read once"
     )
 
@@ -1331,7 +1395,7 @@ def test_the_settlement_repairs_a_torn_row_and_keeps_what_it_cannot_read(
     scan of the archive wearing a repair's clothes (CLAUDE.md section 13).
     """
     state = tmp_path / "state"
-    assert ledger.append_item_health(state, DATE, [carried_row(1, source_id="wire")]) == 1
+    assert seed_item_health(state, DATE, [carried_row(1, source_id="wire")]) == 1
     path = ledger.item_health_path(state, DATE)
     columns = ItemHealthRow.csv_columns()
     torn = ",".join(carried_row(2, source_id="wire").csv_row()[name] for name in columns[:11])
@@ -1355,7 +1419,7 @@ def test_the_settlement_stage_returns_zero_on_a_file_it_cannot_fully_repair(
 ) -> None:
     """An abort here costs the run every ledger row staged beside this one."""
     state = tmp_path / "state"
-    assert ledger.append_item_health(state, DATE, [carried_row(1, source_id="wire")]) == 1
+    assert seed_item_health(state, DATE, [carried_row(1, source_id="wire")]) == 1
     path = ledger.item_health_path(state, DATE)
     before = path.read_text(encoding="utf-8")
     with path.open("a", encoding="utf-8", newline="") as handle:
@@ -1374,7 +1438,7 @@ def test_the_day_count_is_what_each_feed_put_in_front_of_a_reader(tmp_path: Path
     somebody else locked.
     """
     state = tmp_path / "state"
-    ledger.append_item_health(
+    seed_item_health(
         state,
         DATE,
         [
@@ -1397,9 +1461,9 @@ def test_one_story_recorded_twice_is_counted_once(tmp_path: Path) -> None:
     no reason a reader could see.
     """
     state = tmp_path / "state"
-    ledger.append_item_health(state, DATE, [carried_row(1, source_id="wire")])
+    seed_item_health(state, DATE, [carried_row(1, source_id="wire")])
     twice = carried_row(1, source_id="wire")
-    ledger.append_item_health(state, DATE, [twice.model_copy(update={"run_id": f"{DATE}-2"})])
+    seed_item_health(state, DATE, [twice.model_copy(update={"run_id": f"{DATE}-2"})])
 
     assert ledger.load_source_counts(state, DATE) == {"wire": 1}
 
@@ -1408,8 +1472,8 @@ def test_yesterdays_share_is_not_todays(tmp_path: Path) -> None:
     """The window is the day. A feed that filled yesterday starts today empty."""
     state = tmp_path / "state"
     yesterday = "2026-08-22"
-    ledger.append_item_health(state, yesterday, [carried_row(1, source_id="wire", date=yesterday)])
-    ledger.append_item_health(state, DATE, [carried_row(2, source_id="wire")])
+    seed_item_health(state, yesterday, [carried_row(1, source_id="wire", date=yesterday)])
+    seed_item_health(state, DATE, [carried_row(2, source_id="wire")])
 
     assert ledger.load_source_counts(state, yesterday) == {"wire": 1}
     assert ledger.load_source_counts(state, DATE) == {"wire": 1}
@@ -1434,8 +1498,8 @@ def test_the_item_health_read_stops_at_the_window(tmp_path: Path) -> None:
     """
     state = tmp_path / "state"
     old = "2026-05-14"
-    ledger.append_item_health(state, old, [carried_row(1, source_id="ancient", date=old)])
-    ledger.append_item_health(state, DATE, [carried_row(2, source_id="recent")])
+    seed_item_health(state, old, [carried_row(1, source_id="ancient", date=old)])
+    seed_item_health(state, DATE, [carried_row(2, source_id="recent")])
 
     inside = ledger.load_item_health(state, today=DATE, within_days=30)
     assert {row.source_id for row in inside} == {"recent"}
@@ -1525,6 +1589,73 @@ def test_the_retirement_ledger_is_named_where_the_commit_step_stages_it() -> Non
     """
     assert ledger.feed_retirements_relpath() == "state/feed-retirements.csv"
     assert ledger.feed_retirements_path(Path("state")) == Path("state/feed-retirements.csv")
+
+
+def test_the_hand_marked_holdout_is_named_where_the_commit_step_stages_it() -> None:
+    """The third seeded header, and it needs one for the reason the retirements do.
+
+    A person types this file, so on a fresh clone it holds nothing but its
+    header - and `git add` on a path that is not there aborts the commit step and
+    takes every ledger staged in the same call with it. Whether the checkout
+    carries the file is `backend/utilities/check_seeded_stores.py`'s question
+    (`CLAUDE.md` section 13); what stays here is the path the commit step is
+    handed.
+    """
+    assert ledger.similarity_holdout_relpath() == "state/story-similarity/holdout-pairs.csv"
+    assert ledger.similarity_holdout_path(Path("state")) == Path(
+        "state/story-similarity/holdout-pairs.csv"
+    )
+
+
+def test_the_judged_pairs_are_filed_under_the_day_they_were_drawn_from() -> None:
+    """One nested segment more than every other day tree, and the relpath says so.
+
+    The whole feature hangs off `state/story-similarity/`, so the commit step
+    can stage one prefix. That makes this the first store whose day file sits two
+    directories below `state/` rather than one, and a helper that quietly dropped
+    the nest would write a tree nothing else in this file can find.
+    """
+    date = "2026-09-18"
+    state = Path("state")
+
+    assert (
+        ledger.scored_pairs_relpath(date)
+        == "state/story-similarity/scored-pairs/2026/09/18.csv"
+    )
+    assert ledger.scored_pairs_path(state, date) == Path(
+        "state/story-similarity/scored-pairs/2026/09/18.csv"
+    )
+
+
+def test_the_fitted_line_is_filed_under_the_day_it_was_fitted_for() -> None:
+    """Its sibling's layout, because the guard reads a window of days across both.
+
+    The step-change guard takes a median over the newest fourteen written rows,
+    which `day_partition` answers by walking days backwards. A month file would
+    make that read open weeks it did not ask for.
+    """
+    date = "2026-09-18"
+    state = Path("state")
+
+    assert (
+        ledger.fitted_thresholds_relpath(date)
+        == "state/story-similarity/fitted-thresholds/2026/09/18.csv"
+    )
+    assert ledger.fitted_thresholds_path(state, date) == Path(
+        "state/story-similarity/fitted-thresholds/2026/09/18.csv"
+    )
+
+
+def test_the_score_record_is_one_file_that_never_grows_with_the_archive() -> None:
+    """Not a ledger: it is rewritten, and its size is the band rather than the history.
+
+    That is the whole reason the fit reads it instead of the day tree
+    (Guardrail #12), so the path carries no date and there is nothing here for a
+    partition to place.
+    """
+    assert ledger.score_distribution_path(Path("state")) == Path(
+        "state/story-similarity/score-distribution.json"
+    )
 
 
 def test_the_cleanup_record_is_a_day_tree_and_needs_no_seeded_header() -> None:
@@ -1809,26 +1940,35 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     else here says what makes two of its rows one record, and everything that
     says so is settled.
 
-    Both covers name the same eight ledgers on a tree with one day of each in it.
+    Both covers name the same eleven ledgers on a tree with one day of each in it.
     What separates them is what a second day would add: to the operator's pass, a
     file; to a run's pass, nothing. The span fold is the exception that proves
     the shape - it files by month, so a second day adds nothing to either cover
     and a second month adds one file to the operator's.
+
+    `state/story-similarity/fitted-thresholds/` is registered before anything
+    writes it, which is why it is built here by hand rather than by an append
+    call. Its sibling `scored-pairs/` has a writer and is filled by one.
     """
     ledger.append_seen(tmp_path, DATE, [seen_row()])
     ledger.append_health(tmp_path, DATE, [health_row()])
     ledger.append_runtime_counters(tmp_path, [counters_row(0)])
     ledger.append_visual_prunes(tmp_path, DATE, [prune_row(on=DATE)])
     ledger.append_counterfactual_scores(tmp_path, DATE, [counterfactual_row()])
-    ledger.append_host_fingerprint(tmp_path, DATE, [fingerprint_row()])
-    ledger.append_span_rollup(tmp_path, DATE, [span_fold_row()])
+    a_fingerprint_day(tmp_path, [fingerprint_row()])
+    seed_span_rollup(tmp_path, DATE, [span_fold_row()])
+    ledger.append_story_similarity_pairs(tmp_path, DATE, [pair_row()])
     item_health = ledger.item_health_path(tmp_path, DATE)
     item_health.parent.mkdir(parents=True, exist_ok=True)
     item_health.write_text(",".join(ItemHealthRow.csv_columns()) + "\n", encoding="utf-8")
+    fitted = ledger.fitted_thresholds_path(tmp_path, DATE)
+    fitted.parent.mkdir(parents=True, exist_ok=True)
+    fitted.write_text(
+        ",".join(FittedSimilarityThreshold.csv_columns()) + "\n", encoding="utf-8"
+    )
     named = [
         ("runtime-counters.csv", ledger.RUNTIME_COUNTERS_KEY),
         ("feed-retirements.csv", ledger.FEED_RETIREMENT_KEY),
-        ("chrome.csv", ledger.CHROME_LINE_KEY),
         (f"visual-prunes/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv", ledger.VISUAL_PRUNE_KEY),
         (
             f"counterfactual-scores/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
@@ -1839,6 +1979,14 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
         (
             f"host-fingerprint/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
             ledger.HOST_FINGERPRINT_KEY,
+        ),
+        (
+            f"story-similarity/fitted-thresholds/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
+            ledger.STORY_SIMILARITY_THRESHOLD_KEY,
+        ),
+        (
+            f"story-similarity/scored-pairs/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
+            ledger.STORY_SIMILARITY_PAIR_KEY,
         ),
         (f"span-rollup/{DATE[:7]}.csv", ledger.SPAN_ROLLUP_KEY),
     ]
@@ -1866,7 +2014,7 @@ def test_a_repeated_fingerprint_is_settled_inside_the_day_that_holds_it(
     attempt pushed, so it appends its own. The first row wins.
     """
     state = tmp_path / "state"
-    ledger.append_host_fingerprint(state, DATE, [fingerprint_row(cpu="first")])
+    a_fingerprint_day(state, [fingerprint_row(cpu="first")])
     path = ledger.host_fingerprint_path(state, DATE)
     clean = path.read_text(encoding="utf-8")
     second_attempt = clean.splitlines()[1].replace(",first,", ",second,")
@@ -1891,7 +2039,7 @@ def test_a_repeated_span_fold_is_settled_inside_the_month_that_holds_it(
     a run appends under one date, and one date is in one month.
     """
     state = tmp_path / "state"
-    ledger.append_span_rollup(state, DATE, [span_fold_row(total_ms=16)])
+    seed_span_rollup(state, DATE, [span_fold_row(total_ms=16)])
     path = ledger.span_rollup_path(state, DATE[:7])
     clean = path.read_text(encoding="utf-8")
     second_attempt = clean.splitlines()[1].replace(",20,16,", ",20,999,")
@@ -1918,8 +2066,8 @@ def test_the_full_pass_reaches_a_fingerprint_day_and_a_fold_month_no_run_named(
     """
     state = tmp_path / "state"
     older = "2026-07-04"
-    ledger.append_host_fingerprint(state, older, [fingerprint_row(on=older)])
-    ledger.append_span_rollup(state, older, [span_fold_row(on=older)])
+    a_fingerprint_day(state, [fingerprint_row(on=older)])
+    seed_span_rollup(state, older, [span_fold_row(on=older)])
 
     every = {target.path: target.key for target in ledger.keyed_paths(state, date=None)}
     this_run = {target.path for target in ledger.keyed_paths(state, date=DATE)}
@@ -2207,7 +2355,7 @@ def _month_of_history(state: Path, date: str) -> tuple[Path, Path, Path]:
     pass it is measuring (Guardrail #12, section 13).
     """
     ledger.append_health(state, date, [account(FetchOutcome.OK, items=1)])
-    ledger.append_item_health(state, date, [carried_row(1, source_id="wire", date=date)])
+    seed_item_health(state, date, [carried_row(1, source_id="wire", date=date)])
     scores = writer.ledger_path(state, date)
     scores.parent.mkdir(parents=True, exist_ok=True)
     scores.write_text(_scores(date=date), encoding="utf-8", newline="")

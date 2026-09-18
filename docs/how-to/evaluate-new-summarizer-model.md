@@ -1,6 +1,6 @@
 # Swap the Summarizer Model
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-18
 The swap is one line in `config/idhazh.json`:
 
 ```json
@@ -793,6 +793,6 @@ and health before normal workers resume.
 - [../concepts/config.md](../concepts/config.md) - model and runtime knobs.
 - [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - rendered bands, decoder rails and prompt controls.
 - [../architecture/summarize/throughput.md](../architecture/summarize/throughput.md) - read/write rates and prompt reuse.
-- [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md) - the fingerprint contract.
+- [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md) - what a run records about its own inputs.
 - [../reference/measurements.md](../reference/measurements.md) - runner numbers and open measurements.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrails #2, #3, #6, #9, #10 and #11.

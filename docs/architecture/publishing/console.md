@@ -1,6 +1,6 @@
 # Published Console
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-17
 The operator's surface: which panel is on which route, the question each one
 answers, and the ruling behind its shape. `/console/` tells the owner what
 happened to the pipeline, where the digest tells a reader what happened in the
@@ -25,9 +25,21 @@ what it owes instead is legibility - a figure readable at a glance, a table that
 fits the screen it is on, and a page that can be scanned in one pass
 ([../../concepts/vision.md](../../concepts/vision.md)).
 
-## The console answers "is it working", in one screen
+## The console answers two questions, and every panel names which
 
-`/console/` is the operator's surface. The digest tells a reader what happened in the world; the console tells the owner what happened to the pipeline. It is instrumentation: it takes no ornament and spends no reader attention, and what it owes instead is legibility - a figure readable at a glance, a table that fits the screen it is on, and a page that can be scanned in one pass ([../../concepts/vision.md](../../concepts/vision.md)).
+**Is it working** and **what is broken** are two questions rather than one, and a panel that asks the first in its title while drawing the second is the commonest defect this surface has. A verdict panel takes the central value or the count and covers every subsystem. A break panel takes the extreme and the individual that owns it, and covers every candidate inside one subsystem. **A verdict panel sits above the panels it verdicts**, or the operator reads ten readings before he reaches the line that tells him whether to trust them.
+
+| Surface | Which question it answers |
+| --- | --- |
+| the standing band | is it working - one verdict across all five routes, at a size that does not grow with the pipeline |
+| `/console/` "At a glance" | is it working - for this route alone, and over the open window where the band's figures are whole-record |
+| `/console/` panels | what is broken in the run |
+| `/console/model/`, `/console/judgement/`, `/console/voices/` | what is broken in the writing, the labelling and the supply |
+| `/console/machine/` | what is broken on the box, and nothing else - it carries no verdict the band does not already give |
+
+The band is not a route. It stands on all five, which is why it is the surface that can verdict five.
+
+How a panel obeying this is allowed to draw is [../../concepts/console-design.md](../../concepts/console-design.md), whose thirteen chart rules carry it as the last and widest of them. Susan, 2026-09-17.
 
 `/evals/` remains a published entry point for old bookmarks. It carries a
 prerendered meta refresh, a canonical link and a plain link to `/console/`.
@@ -90,10 +102,38 @@ absence and drawing no panel: a tab in a strip whose page does not exist is a
 strip that lies, and the pages that fill them are specified by rows #12 and #13
 of the placement plan and row #15 of the classification plan.
 
-**Voices filled on 2026-09-14 and Judgement is still empty.** Row #13 was a
-split rather than an addition: four panels moved onto Voices off Pipelines and
-Pipelines kept none of them. Judgement still names the rows that will fill it on
-the page, so a reader of the strip can find the specification.
+**Voices filled on 2026-09-14 and Judgement took its first panel on 2026-09-17.**
+Row #13 was a split rather than an addition: four panels moved onto Voices off
+Pipelines and Pipelines kept none of them.
+
+**Judgement's first panel is `Stories the day merged`, and it draws no model
+verdict.** One column a day is the stories that day folded behind another
+because the grouping pass read them as the same story; the dot on the column is
+the biggest group that day, counting the one that was kept. Both are counts of
+stories, so they share one axis. It reads `same_story_as` off the published day
+and nothing else - the scores and the vectors that decided the grouping are
+dropped from the published payload, so a page that re-derived them would be a
+second opinion about a decision already taken. The route's `load`
+([../../../frontend/src/routes/console/judgement/+page.server.ts](../../../frontend/src/routes/console/judgement/+page.server.ts))
+works out the widest window preset before it opens the first day file, so the
+read is bounded by a knob in `config/` rather than by how much the archive has
+accumulated (Guardrail #12). The arithmetic sits in
+[../../../frontend/src/lib/console/merge-line.ts](../../../frontend/src/lib/console/merge-line.ts)
+so a test can drive it from a written-down array instead of a day off the
+archive.
+
+**The panel did not close Judgement's named absence, and the two now sit one
+above the other.** They answer different questions: the panel counts what a day
+folded, and the absence is about the desk and the lenses the model chose, which
+it still does not record. So the route draws a figure AND still says in plain
+words what is missing - an absence that disappears the first time any panel
+lands on the route would take the promise with it.
+
+There is no rate line on the panel. A day publishes a few hundred stories and
+folds a handful, so the share runs at a few percent: on a 0 to 100 axis that is
+a flat line two pixels off the floor, and on an axis fitted to it the noise
+becomes drama. The share is in type under the chart with the denominator it is a
+share of, and a real measurement that rounds away prints `<1` rather than `0`.
 
 **Every panel title on the five routes is a noun phrase**, and that rule is
 mechanical so it can be checked: no trailing question mark, and no opening
@@ -349,7 +389,7 @@ published mirror carries no address, no title and no fetched text.
 | Where the run's time went, item by item | one bar an item | Which item queued, which one ran long, and where in a run the time actually went. |
 | Peak memory, and how near the runner's ceiling it got | one bar a shard | How much of the runner's 16 GB one run needed. |
 | Reading against writing, machine by machine | one group a machine | What a written token costs against a read one, on the machine that paid it. |
-| The machines this run drew | one card a machine | What machine this is, and what it can do. |
+| The machines this run drew | one card a machine | What machine this is, and what it can do, and whether its record survived the day. |
 | What the platform has been giving us | one row a machine kind | What kinds of machine we keep being handed. |
 | Prompt cache | one column a day | Whether a bigger cache would save wall clock. |
 | Context headroom | one mark a run | Whether raising the truncation cap is even possible. |
@@ -1090,9 +1130,9 @@ and what to do when one fires is in
 ## What one item cost the model is two clocks, drawn apart
 
 `What one item cost the model` is a section of the Pipelines route with two
-distributions and one split bar. It answers what a run total cannot: how long
-the model spent on **one** article, split into the part it spent reading and the
-part it spent writing.
+distributions and seven printed figures. It answers what a run total cannot: how
+long the model spent on **one** article, split into the part it spent reading and
+the part it spent writing.
 
 The Hardware route already pools both quantities per run and per shard, out of
 the model server's own counters. That is a different measurement of a different
@@ -1130,22 +1170,36 @@ linearly would suggest a spread the measurement does not have. `fetch_ms`, whose
 worst is 43,627 ms against a middle of 567, is not in this section at all - it is
 a stage clock and `Time per item, by stage` above already draws it per day.
 
-### The prompt cache is a share, and the share is deliberately not a trend
+### The prompt cache is a share, and the share is printed rather than drawn
 
-The split bar's geometry is **absolute prompt tokens** - the ones the model read
-against the ones it did not - and the share is printed beside it as whole
-percent. Four figures sit under it: the middle prompt, the middle summary, the
-middle item's own share, and how many items were read whole with nothing held
-over.
+The panel prints **absolute prompt tokens** - the ones the model read against the
+ones it did not - and the share beside them as whole percent. Four more figures
+sit under those three: the middle prompt, the middle summary, the middle item's
+own share, and how many items were read whole with nothing held over.
 
-**A falling share here does not mean the cache got worse, and the panel says
-so.** Measured 2026-09-05 over the same 6,104 items, `cached_tokens` is nearly a
-constant: the middle item kept **922** tokens and the widest kept **941**, while
-`input_tokens` runs from a middle of 1,688 to a worst of 7,093. So the share
-moves almost entirely because the denominator moves. Drawn as a line over time
-it would fall on a week of long articles and read as a cache regression, which is
-the one wrong thing an operator could act on. The share is a number and the token
-counts are the picture.
+**It drew the split as a two-segment track until 2026-09-17, and the track is
+gone.** One flat bar on no time axis, under a note telling the reader not to
+read its direction: a figure a panel disowns is a figure to remove. **What the
+reader loses, named:** the picture of the split, which is now three printed
+counts instead. What the split was ever worth was the counts it was built from,
+and the track carried no fact they do not. Susan, 2026-09-17.
+
+**The deleted track and the Hardware route's `Prompt cache` panel were one
+subject at the two questions.** This panel carried the level - how much of the
+window's prompt the model already held - and `Prompt cache` carries the
+direction, one column a day. With the level deleted the Hardware panel is the
+whole answer rather than half of one, so the gap a later reader sees here is a
+subject already covered and not a figure to rebuild.
+
+**A falling share here does not mean the cache got worse, and the panel still
+says so.** Measured 2026-09-05 over the same 6,104 items, `cached_tokens` is
+nearly a constant: the middle item kept **922** tokens and the widest kept
+**941**, while `input_tokens` runs from a middle of 1,688 to a worst of 7,093. So
+the share moves almost entirely because the denominator moves. Drawn as a line
+over time it would fall on a week of long articles and read as a cache
+regression, which is the one wrong thing an operator could act on. That sentence
+is the reason a figure is missing, which is the kind of sentence this console
+keeps.
 
 **The plan's own illustrative range did not survive the measurement.** Plan 03
 Row #2 decision 1 quotes `0.72 to 0.90`. Measured over the committed projection
@@ -1205,6 +1259,47 @@ as two rules.
 Authority: Carmack (Engine & Runtime) on the two clocks and the axis, Fowler
 (Architecture) on one binning shared by four panels, Reader on the sentence
 beside the share; plan 03 Row #2, 2026-09-05.
+
+## Extraction answers both questions, and labels which half is which
+
+`Extraction` is a Pipelines panel in two halves, and it is the console's worked
+example of a panel that serves *is it working* and *what is broken* at once
+rather than choosing.
+
+The **verdict half** is four cards: articles the reading found enough figures of
+one kind in, the share of published chartable articles that went out with no
+chart, the share of articles whose every fact still cuts its own characters, and
+the facts kept over the window. Four levels, covering the whole reading. They
+carry `data-extraction-question="is it working"`.
+
+The **break half** is one chart, `Whether the yield is falling`, carrying
+`data-extraction-question="what is broken"`. Two of the cards' own lines tell the
+operator to read the direction rather than the level, and until 2026-09-17 the
+panel drew no direction at all. It plots one point a day: articles the reading
+found enough figures in, against published articles carrying a chart. That pair
+is the discrimination the panel exists for - the planner stopping and the
+extractor stopping look identical in the published chart count alone, and they
+have different fixes ([../../concepts/evaluation.md](../../concepts/evaluation.md)).
+
+**Both series count articles, so they share one value domain**, and the panel
+prints the ratio it measured. Measured 2026-09-17 over the nine committed day
+records that carry an extraction block: `chartable` peaks at 225 and
+`chartable_charted` at 20, which is **11.3 times** and inside the 20 a shared
+axis holds. The domain is taken from the days drawn rather than fixed - there is
+no ceiling here to measure distance from, so a fixed maximum would only waste the
+plot on a quiet day.
+
+**A window with one measured day draws that day as a point, not an empty plot**,
+and says in words that a single day has a level and no direction. A window with
+no measured day draws no axis at all and says so: an axis over nothing is a claim
+the data does not support.
+
+Authority: Susan, 2026-09-17. The four rules this panel is built to - a panel
+names which of the two questions it serves, a title that asks a trend question
+draws a time axis, two series share one axis under twenty times with the ratio
+printed, and a value domain is fixed only where a ceiling is the comparison -
+are in
+[../../concepts/console-design.md](../../concepts/console-design.md#thirteen-rules-hold-for-every-chart-on-this-console).
 
 ## The chart drawing is a flow, and every drop leaves it as a named branch
 
@@ -1725,31 +1820,36 @@ is what the per-article chart now answers directly.
 
 ### Design rationale
 
-**`/console/judgement/` fails the "does it use the screen it is on" sufficiency
-check, and it ships anyway.** It is a heading, two sentences and one bordered
-panel; at 1440px most of the frame is empty. The other three checks pass and are
-inherited rather than invented - figure separates from ground through the shared
-`.console-panel` border, surface and shadow; the panel is the only block in the
-route's own content, so there is one thing the eye lands on; and the route takes
-the page title, the five-tab strip and the standing band from the layout before
-it draws anything of its own.
+**`/console/judgement/` failed the "does it use the screen it is on"
+sufficiency check until 2026-09-17, and shipped anyway for five days.** It was a
+heading, two sentences and one bordered panel; at 1440px most of the frame was
+empty. The other three checks passed and were inherited rather than invented -
+figure separated from ground through the shared `.console-panel` border, surface
+and shadow; the panel was the only block in the route's own content, so there
+was one thing the eye landed on; and the route took the page title, the five-tab
+strip and the standing band from the layout before it drew anything of its own.
+
+**`Stories the day merged` is what cleared it.** The route now draws a chart the
+full width of the console frame with a window control above it, so the screen
+carries a figure rather than a promise.
 
 `/console/voices/` was the other half of this entry until 2026-09-14. It passes
-the check now: row #13 moved four panels onto it, two of which draw a chart.
+the check too: row #13 moved four panels onto it, two of which draw a chart.
 
-The check cannot be passed. The only way to fill the frame of a page with no
-data is to put something on it that is not a measurement, on the one surface
-whose doctrine is that it takes no ornament and spends no reader attention. The
-alternative considered was a list of the figures each page will carry, drawn
-empty - refused because it is a promise the page cannot keep: the moment rows
-#12 and #15 change a panel the list is a lie and nothing fails. What the
-operator gets instead is the row id, which stays true and costs no maintenance.
+**The check could not have been passed before a figure existed.** The only way
+to fill the frame of a page with no data is to put something on it that is not a
+measurement, on the one surface whose doctrine is that it takes no ornament and
+spends no reader attention. The alternative considered was a list of the figures
+each page would carry, drawn empty - refused because it is a promise the page
+cannot keep: the moment a panel changes the list is a lie and nothing fails.
 
 The alternative to shipping empty was landing the strip and both tab rows
 together, which would have put three rows on `ConsoleNav.svelte` in one parallel
 group - and a strip that names a page nobody can reach is worse than three tabs.
-**This entry is deleted when rows #12 and #15 land**, which is why it names them.
-Authority: Susan, 2026-09-12.
+**This entry is deleted when Judgement's named absence goes**, which is the day
+the model records the desk and the lenses it chose. The merge panel did not do
+it: it answers a different question and the absence is still on the page.
+Authority: Susan, 2026-09-12; sufficiency cleared 2026-09-17.
 
 **The fifth tab is a split, not an addition, and Pipelines keeps none of the
 four panels.** Row #13 of the placement plan. The four are the census, the

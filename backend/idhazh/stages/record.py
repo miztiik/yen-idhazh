@@ -9,6 +9,7 @@ from __future__ import annotations
 from idhazh import (
     config,
     ledger,
+    run_context,
     telemetry,
 )
 from idhazh.contracts.eval_row import EvalRow
@@ -42,7 +43,7 @@ def stage_record(
     and this ledger has no way to correct a row once it is in.
 
     **The row is the one the shard sealed wherever there is one.** The work stage
-    validates 113 cells an item and leaves them beside the article and the
+    validates 119 cells an item and leaves them beside the article and the
     summary; rebuilding from those two payloads carries 40 of them. So this reads
     the shard's own row and only falls back to `telemetry.classify_item` for an
     item no shard sealed one for - which on a healthy run is none of them, and is
@@ -54,6 +55,13 @@ def stage_record(
     machine an item was for, so the rows it adds leave both cells empty. The pair
     is `HOST_FINGERPRINT_KEY` minus the date and the run, so it is what takes an
     item to the `state/host-fingerprint/` row for the machine that read it.
+
+    **Both ledgers go to this shard's own segments, never to the day file.** Up
+    to eight work shards and assemble all record the same day, so nine writers
+    would be appending to one path; each writes
+    `state/segments/<ledger>/<run>-<attempt>-work-<shard>.csv` instead, and
+    `assemble` folds them in. The attempt is in the name, so a re-run corrects
+    its first try rather than colliding with it.
 
     Returns the item-health rows and the eval rows that landed.
     """
@@ -83,13 +91,31 @@ def stage_record(
         )
         if payload.eval_path.exists():
             rows.append(EvalRow.read(payload.eval_path))
-    recorded = ledger.append_item_health(common.STATE_ROOT, plan.date, health)
-    scored = writer.append(common.STATE_ROOT, rows)
+    attempt = run_context.run_attempt()
+    recorded = ledger.write_segment(
+        common.STATE_ROOT,
+        ledger.SegmentLedger.ITEM_HEALTH,
+        health,
+        run_id=plan.run_id,
+        attempt=attempt,
+        job=ServerJob.WORK,
+        shard=shard,
+    )
+    scored = writer.append_segment(
+        common.STATE_ROOT,
+        rows,
+        run_id=plan.run_id,
+        attempt=attempt,
+        job=ServerJob.WORK,
+        shard=shard,
+    )
     LOG.info(
-        "recorded shard=%s/%s run=%s settled=%s rebuilt=%s item_health_rows=%s eval_rows=%s",
+        "recorded shard=%s/%s run=%s attempt=%s settled=%s rebuilt=%s item_health_rows=%s "
+        "eval_rows=%s",
         shard,
         shards,
         plan.run_id,
+        attempt,
         len(health),
         rebuilt,
         recorded,

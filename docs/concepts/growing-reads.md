@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-18
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**
@@ -216,7 +216,7 @@ of nineteen and looked finished, and its own upkeep grew with the other
 seventeen. Read the rows below to see the three answers in service. Do not read
 them as the set of places the rule applies.
 
-**Twenty-seven reads over a collection a run appends to**, each with the cover or
+**Twenty-six reads over a collection a run appends to**, each with the cover or
 the bound its own code declares. A helper that opens one named file is not
 listed: its cover is its argument. These are `backend/`'s;
 [the site's are below](#the-site-reads-the-same-collections-2026-09-09).
@@ -253,7 +253,6 @@ listed: its cover is its argument. These are `backend/`'s;
 | Read | What it opens | Why no cover |
 | --- | --- | --- |
 | `ledger.load_retirements` | `state/feed-retirements.csv` | a retirement is permanent; forget one and the run asks a dead server again |
-| `ledger.load_chrome` | `state/chrome.csv` | chrome learned in August is chrome in September, so a window in days would forget a template that is still on the page. **Bounded by the file rather than by a clock**: `extract.chrome_lines_per_host_max` lines a host, pruned past `extract.chrome_forget_days`, so it grows with the source registry and stops. `state/traces/` is the precedent. Streamed, so the read costs the answer rather than the file. Both callers - the fold in `stages.assemble` and the shard's one read in `stages.work` - go through it |
 | `ledger.load_visual_prunes` | `state/visual-prunes.csv` | the report is about the whole series |
 | `corpus.read_rows` | `corpus/corpus.jsonl` | already rolling, capped at `finetune.corpus_rows` |
 | `contracts.base.Contract.read` | one payload | a validator cannot skip what it has not read |
@@ -306,7 +305,7 @@ than about this read ([run-the-pipeline.md](../how-to/run-the-pipeline.md#turnin
 | --- | --- | --- |
 | `series.published_months` | one listing of a published directory | the directory's own knob, so at most `keep_months` entries - except `telemetry`, per the paragraph above |
 | `scores.publish`, `feed_health.publish` | the `state/` day files of the month named | the month the run appended to, which is at most 31 files. Both ledgers file by day and both mirrors stay monthly, so the publisher is where the two grains meet |
-| `span_rollup.publish` | the state shard for the month named | the month the run appended to |
+| `span_rollup.publish` | the state shard for the month named | the month the run's own rows name, which the compaction folded before this read |
 | `public_telemetry.publish` | the `state/item-health/` days of the months the caller names, or every day when it names none | **the month the run appended to**, which is what `stages.assemble.stage_assemble` passes; `months=None` is unbounded on purpose |
 | `day_metrics.publish_public` | one month of `state/day-metrics/<YYYY>/<MM>/` | one month, which is at most 31 records for ever |
 | `run_days.publish` | one month of committed `run.json` and `digest.json` | one month, which is at most 31 days for ever |
@@ -630,9 +629,7 @@ to is a sort of names already in hand. Guardrail #10 says the design changes whe
 measurement contradicts it, so the optimisation was not written. The row shipped
 the defect the measurement uncovered instead: three month-name recognisers
 disagreed, and one was deleting files the other two protected. The rule they now
-share is [what counts as a month name](partitions.md#what-counts-as-a-month-name),
-and the full working is
-[in the layout doc](../architecture/publishing/layout.md#the-state-prunes-were-already-constant-cost-and-the-premise-that-said-otherwise-was-wrong-2026-09-08).
+share is [what counts as a month name](partitions.md#what-counts-as-a-month-name).
 
 Both are worth more on this page than a clean sweep would have been. A rule whose
 inventory only records the reads that bent to it teaches nothing about the ones

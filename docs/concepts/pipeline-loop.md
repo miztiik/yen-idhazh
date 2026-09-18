@@ -1,6 +1,6 @@
 # Pipeline Loop
 
-**Last Updated**: 2026-09-08
+**Last Updated**: 2026-09-18
 
 The stages one article passes through, what each stage owns, and the rule that they talk in payloads rather than calls. This is the build-time equivalent of a product's core loop: it is the thing that happens over and over, and every other concept doc hangs off it.
 
@@ -93,6 +93,39 @@ Four invariants hold regardless of how the batches are sized:
  failed and introduced. Its `verticals[].published` count is the number of
  items introduced by that run for that vertical, not the accumulated day total.
 
+## The judge runs on its own clock
+
+**`LLM-JUDGES` is a second loop, once a night at 22:00 UTC, and it reads
+yesterday.** It draws the day's borderline same-story pairs, asks a model which
+of them are one story, folds the answers into a fixed-size record and fits the
+merge line off it. Four legs judge in parallel, one `llama-server` each, and
+none of them commits anything: a `fold` job downloads every leg's verdicts and
+makes the writes, so two processes never share a path.
+
+**It is a separate workflow because of the budget the design permits, not the
+day the pipeline usually has.** At the configured cap of 200 pairs, judged in
+both orders, 400 calls at 77.6 seconds is 8.6 hours of model time serially -
+past the 6 h job ceiling, where GitHub kills the job and nothing is written
+(Guardrail #2). Today's median day of 33 pairs would fit inside `digest.yml`
+comfortably, which is exactly why sizing the shape off the median is the wrong
+move: the first busy day crosses the ceiling and writes nothing.
+
+**A leg that dies costs its own pairs and nothing else.** `fail-fast` is off and
+the fold runs anyway, appending every row the surviving legs produced. What it
+will not do is fold a day with a leg missing into the record: the record counts
+a date once and refuses a second fold, so three legs of four would make the
+fourth leg's verdicts unreachable for ever. The day's fitted row says
+`legs_missing` instead, and re-dispatching that date folds it cleanly.
+
+**It adds zero bytes to the cache.** The `judge` job writes the same weights key
+the daily run's work job writes, so it restores what is already there - and the
+throughput reading this feature is sized against was taken on those same
+weights.
+
+Nothing it writes reaches a reader until
+`assemble.same_story.adaptive_dedup_threshold.enabled` is turned on
+([../architecture/publishing/layout.md](../architecture/publishing/layout.md)).
+
 ## What one run leaves for the next
 
 There is no database (Guardrail #1), so anything a later run must read has to survive
@@ -113,6 +146,29 @@ Three rules hold for all of them:
 - **Append, never rewrite.** A mutable flag would turn an append into a read-modify-write over the whole history, and two runs racing on that lose rows. It is also why an address that has gone is a new row rather than a status field on the source: the retirement ledger is appended, and `config/sources.json` stays a file a person owns.
 - **The stage that can honestly answer is the stage that writes.** Assemble writes the published ledger, not Collect - until a digest is committed, nothing was published, and a run that dies mid-way must not leave a claim that it finished. It is also why the worker writes the item-health row for an item it settled, as soon as it settles: it can answer for that item, and by the time Assemble runs the answer may already have been thrown away with the run. A row is one planned item on one run, so the two writers cannot count the same item twice.
 - **Nothing under `state/` is ever served.** The console reads it at build time and bakes the numbers into the page. A reader gets the figures, never the file.
+
+**A ledger more than one job writes gets its rows through `state/segments/`.** A
+writer writes one file named for its run, its attempt at that run, its job and
+its shard, so no two writers of one ledger ever share a path - which is what a
+lost push race needs in order to cost a merge rather than the rows. `idhazh
+compact` folds each waiting segment into the head its own rows name and deletes
+it. Two callers: `assemble`, before it publishes anything, and the next run's
+`plan` job, which is the only thing that reaches a segment left by a run that
+died before its assemble.
+
+`state/host-fingerprint/` is the first ledger through it, from 2026-09-17. Ten
+jobs of one run each draw a machine and each record it, and on 2026-09-16 those
+ten pushes raced and left the day file with nothing but its header.
+
+The three item-grain ledgers followed on 2026-09-18 - `state/item-health/`,
+`state/scores/` and `state/score-index/`. Up to eight work shards and assemble
+all record the same day there, which is the same race with more writers in it,
+and the item census is the one where a repeat is visible to a reader: the count
+of rows in a day feeds a feed's share of the day and the day's own metrics.
+
+The compaction is the one writer here that rewrites a head rather than appending
+to it, and the segment store is what makes that safe: a rewrite is a race only
+when two jobs can do it, and only the compaction can.
 
 See [../architecture/sources/freshness.md](../architecture/sources/freshness.md) for the first two and [../architecture/sources/health.md](../architecture/sources/health.md) for the third.
 
@@ -140,12 +196,11 @@ be news, and a long article can be empty. Extract therefore records `too_short`,
 paywall, an unsupported form, or genuine missing text stops the item. Authority:
 Owner override O3.
 
-`boilerplate` was inert until 2026-09-17: it compares a page against lines the
-same host printed elsewhere, and nothing supplied that comparison, so it said no
-to every page the pipeline ever fetched. Assemble now folds each host's repeated
-lines into `state/chrome.csv` and the next run's shards read it
-([../architecture/extraction/chrome.md](../architecture/extraction/chrome.md)).
-The default is unchanged: the signal is recorded and the item publishes.
+`boilerplate` is inert: it compares a page against lines the same host printed
+elsewhere, and nothing supplies that comparison, so it says no to every page the
+pipeline fetches. A store that supplied it shipped on 2026-09-17 and was reverted
+the same day - over a full run it moved the signal zero times, so it was cost
+with no reader on the other end.
 
 ## See also
 

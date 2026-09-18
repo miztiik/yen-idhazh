@@ -12,7 +12,7 @@ import json
 import logging
 import time
 from collections import Counter
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any, Final, NamedTuple
 from urllib.error import HTTPError
@@ -21,7 +21,6 @@ from pydantic import ValidationError
 
 from idhazh import (
     assemble,
-    chrome,
     config,
     corpus,
     elements,
@@ -74,6 +73,19 @@ VALIDATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "validation"
 
 
 QUALIFICATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "qualification"
+
+
+#: Where a day's judging leaves its draw and its verdicts. A sibling of
+#: `VAR_ROOT` rather than a child: a judging leg is not a work shard, it
+#: downloads none of the run artifacts, and the two trees are uploaded and
+#: retained separately. Nothing here is ever committed - a drawn row carries no
+#: verdict yet and the legs rewrite it, while a row reaches `state/` once,
+#: already judged, and is never edited afterwards. `state/**/*.csv` merges by
+#: union, so committing a row that is later rewritten would stack both versions
+#: with nothing to say which is current. The relative spelling is the one a log
+#: line prints, so the path written and the path reported cannot drift apart.
+JUDGE_ROOT_RELPATH: Final = "backend/var/judge"
+JUDGE_ROOT: Final = config.REPO_ROOT / JUDGE_ROOT_RELPATH
 
 
 #: A sibling of `VAR_ROOT` rather than a child, because the run never reads it
@@ -228,7 +240,6 @@ def _fetch_one(
     settings: config.Settings,
     read_url: Fetcher,
     tracer: telemetry.Tracer | None = None,
-    chrome_lines: Mapping[str, set[str]] | None = None,
 ) -> FetchedItem:
     """The article, the body it was cut from, and how long each step took.
 
@@ -246,11 +257,6 @@ def _fetch_one(
     result rather than being re-timed here: the handshake and the first byte are
     facts only the socket knows, and a second stopwatch round this call could
     only ever restate `fetch_ms`.
-
-    `chrome_lines` is what this host has printed on page after page, hashed, as
-    the previous runs folded it. A caller that has no store hands nothing and the
-    boilerplate signal reads 0.0, which is what every run before 2026-09-17 did -
-    it divided by an empty set and answered no on every page ever fetched.
     """
     trace = tracer if tracer is not None else silent_tracer()
     started = time.monotonic()
@@ -265,11 +271,7 @@ def _fetch_one(
     started = time.monotonic()
     with trace.span(telemetry.SpanName.EXTRACT) as span:
         article, source_text = extract.to_article_with_source(
-            item,
-            result,
-            config=settings.app.extract,
-            fetched_at=assemble.utc_now(),
-            seen_elsewhere=(chrome_lines or {}).get(chrome.host_of(item.canonical_url)),
+            item, result, config=settings.app.extract, fetched_at=assemble.utc_now()
         )
         with trace.span(telemetry.SpanName.TAG) as tag_span:
             article = tag.tagged(article, taxonomy=settings.taxonomy, watchlist=settings.watchlist)

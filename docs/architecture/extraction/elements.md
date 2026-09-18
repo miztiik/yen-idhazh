@@ -1,6 +1,6 @@
 # Elements: every fact in an article, with the characters that prove it
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-18
 
 The extraction subsystem's fact table. This page owns the element shape - the
 six kinds, the two tiers, and the span that makes a drawn figure checkable - the
@@ -75,7 +75,7 @@ one caller in the run: it is called from `telemetry.classify_item`, which builds
 the item-health census row, and it writes `span_integrity`, `elements_found` and
 `element_class` on that row. It lands there rather than beside the visual
 decision because two writers append that ledger and the earlier one runs in the
-`work` job, hours before a plan exists - `append_item_health` keeps the first row
+`work` job, hours before a plan exists - `stage_compact` settles the row
 for a key, so a cell only `assemble` could fill would be empty for every item a
 shard had already recorded. `ElementClass` is declared in
 [`backend/idhazh/contracts/item_health.py`](../../../backend/idhazh/contracts/item_health.py)

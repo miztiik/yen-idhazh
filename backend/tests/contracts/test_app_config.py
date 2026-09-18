@@ -12,18 +12,25 @@ from pydantic import ValidationError
 
 from idhazh.classify import dag
 from idhazh.classify.calls import label_budget_tokens, summarize_and_plan_budget_tokens
+from idhazh.contracts import story_similarity_distribution
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig, ChartConfig
 from idhazh.contracts.call_cost import CallKind
+from idhazh.contracts.knobs import placement
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.observability import LoggingConfig, LogLevel, ObservabilityConfig
+from idhazh.contracts.knobs.placement import SameStoryConfig, SimilarityThresholdConfig
 from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB, RetentionConfig
 from idhazh.contracts.knobs.ui import UiConfig, VisualSide
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
+from idhazh.contracts.story_similarity_distribution import (
+    ScoreSlot,
+    StorySimilarityDistribution,
+)
 from idhazh.extract import TOKENS_PER_WORD
 from idhazh.fingerprint import NOT_DIGESTED, digested_inference_fields
 from idhazh.measured import LABEL_BODY_TOKENS_A_WORD as _LABEL_A_WORD
@@ -1077,3 +1084,133 @@ def test_every_flag_but_the_permanent_one_names_the_reading_that_retires_it() ->
 
     level = LoggingConfig.model_fields["level"].description or ""
     assert "Unrelated to the flags" in level, "the level is a volume dial, not a sixth flag"
+
+
+def test_a_band_that_does_not_divide_into_whole_slots_is_refused() -> None:
+    """A part-slot at one end holds counts drawn from a smaller catchment than its neighbours.
+
+    The fit would read that as a dip in the judge's verdicts rather than as an
+    artefact of the arithmetic. Refused at the config rather than left to the
+    record, because the record's own validator fires hours later in CI with
+    nothing saying which of three knobs to move.
+    """
+    with pytest.raises(ValidationError, match="does not divide into whole slots"):
+        SimilarityThresholdConfig(bin_width=0.0007)
+
+    assert SimilarityThresholdConfig().bin_width == 0.001, "the committed width still divides"
+
+
+def test_a_band_that_opens_above_todays_floor_is_refused() -> None:
+    """A band above the floor can only ever judge pairs the pass already merges.
+
+    The record then fills with confirmations and the line can never come down,
+    while every number in the file still looks legal. This is the one knob
+    combination that makes a downward move impossible without failing anything.
+    """
+    with pytest.raises(ValidationError, match="could only ever rise"):
+        SameStoryConfig(
+            floor_min=0.94,
+            adaptive_dedup_threshold=SimilarityThresholdConfig(band_low=0.95),
+        )
+
+    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).assemble.same_story
+    assert committed.adaptive_dedup_threshold.band_low < committed.floor_min
+
+
+def test_a_daily_step_larger_than_the_measured_margin_is_refused() -> None:
+    """One step may not carry the line past the closest pair a person marked apart.
+
+    The margin is 0.0083 - a floor of 0.94 against a marked pair at 0.9317,
+    measured 2026-09-01. The owner proposed 0.010, which is larger than that, so
+    its first step would have crossed.
+    """
+    for crossing in (0.0083, 0.010):
+        with pytest.raises(ValidationError):
+            SimilarityThresholdConfig(max_down_step=crossing)
+
+    assert SimilarityThresholdConfig(max_down_step=0.005).max_down_step == 0.005
+
+
+def test_a_pair_budget_that_cannot_finish_inside_a_leg_is_refused() -> None:
+    """A leg GitHub kills uploads nothing, so the day's whole draw is lost.
+
+    A literal ceiling cannot see the timeout, so the bound is arithmetic over
+    two blocks. The bite proof is the trade the message names: raise the timeout
+    and the refused budget starts validating.
+    """
+    with pytest.raises(ValidationError, match="judge_shard_timeout_minutes"):
+        AppConfig.model_validate(
+            {"assemble": {"same_story": {"adaptive_dedup_threshold": {"pair_budget": 1000}}}}
+        )
+
+    def with_budget(budget: int, *, minutes: int = 200) -> AppConfig:
+        return AppConfig.model_validate(
+            {
+                "run": {"judge_shard_timeout_minutes": minutes},
+                "assemble": {"same_story": {"adaptive_dedup_threshold": {"pair_budget": budget}}},
+            }
+        )
+
+    assert with_budget(308) is not None
+    with pytest.raises(ValidationError, match="pair_budget 309"):
+        with_budget(309)
+    assert with_budget(309, minutes=210) is not None
+
+
+def test_the_two_contract_modules_share_one_grid_tolerance() -> None:
+    """Two literals for one rule drift the first time somebody loosens one.
+
+    The config and the record have to agree exactly, or a band the knob block
+    accepts is a band the record refuses - hours later, in CI, on the first fold.
+    """
+    assert placement.GRID_TOLERANCE is story_similarity_distribution.GRID_TOLERANCE
+
+
+def test_the_committed_defaults_build_a_record_the_contract_accepts() -> None:
+    """The knob block and the record are two shapes, and neither may read the other's file.
+
+    So the agreement is held here: the three band knobs, turned into a record the
+    way the fold will turn them, produce something the record's own validators
+    accept. A test rather than a field rule, because a field rule would need one
+    of the two shapes to import the other's on-disk value.
+    """
+    knobs = SimilarityThresholdConfig()
+    slots = round((knobs.band_high - knobs.band_low) / knobs.bin_width)
+
+    record = StorySimilarityDistribution(
+        version=StorySimilarityDistribution.schema_version(),
+        band_low=knobs.band_low,
+        band_high=knobs.band_high,
+        bin_width=knobs.bin_width,
+        slots=tuple(
+            ScoreSlot(bin_low=round(knobs.band_low + i * knobs.bin_width, 3))
+            for i in range(slots)
+        ),
+    )
+
+    assert slots == 120
+    assert len(record.slots) == 120
+    assert record.folded_dates == ()
+
+
+def test_the_feature_ships_off_and_a_fresh_clone_publishes_what_it_always_did() -> None:
+    """Guardrail #6: a feature in development ships behind a flag, default agreed.
+
+    Nothing reads this block yet, so the switch is the whole of the promise: a
+    clone that has never heard of the fitted line publishes exactly the groups
+    `floor_min` produced before the block existed.
+    """
+    fresh = AppConfig.model_validate({}).assemble.same_story.adaptive_dedup_threshold
+    committed = AppConfig.from_json(
+        read_text(CONFIG_DIR / "idhazh.json")
+    ).assemble.same_story.adaptive_dedup_threshold
+
+    assert fresh.enabled is False
+    assert committed.enabled is False
+    assert fresh == committed, "the committed file spells the defaults it ships"
+
+    for name in ("enabled", "step_change_guard_enforced"):
+        described = SimilarityThresholdConfig.model_fields[name].description or ""
+        assert "Removal condition" in described, (
+            f"adaptive_dedup_threshold.{name} has no removal condition on its own line"
+        )

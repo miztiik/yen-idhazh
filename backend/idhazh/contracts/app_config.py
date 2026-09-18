@@ -1,7 +1,7 @@
 """`config/idhazh.json` - the one tree every block hangs from, and the rules that cross two of them.
 
 One block's knobs live in `idhazh.contracts.knobs.<block>`. This file holds the
-aggregate and the five validators no single block can run, because each of them
+aggregate and the six validators no single block can run, because each of them
 reads two.
 
 A knob is something a reasonable operator might want set differently without
@@ -39,7 +39,12 @@ from idhazh.contracts.knobs.finetune import FinetuneConfig, ReferenceDatasetConf
 from idhazh.contracts.knobs.models import SUPERSEDED_MODELS_NAMES, ModelsConfig, ModelsFile
 from idhazh.contracts.knobs.observability import LoggingConfig, ObservabilityConfig
 from idhazh.contracts.knobs.page_weight import PageWeightConfig
-from idhazh.contracts.knobs.placement import AssembleConfig, LensWeightsConfig, PlacementConfig
+from idhazh.contracts.knobs.placement import (
+    SECONDS_A_CALL,
+    AssembleConfig,
+    LensWeightsConfig,
+    PlacementConfig,
+)
 from idhazh.contracts.knobs.prune import PruneConfig
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 from idhazh.contracts.knobs.retention import RetentionConfig
@@ -80,24 +85,24 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-18T11:00",
+            change="The three extract.chrome_* knobs, removed with the store they governed.",
+            why="Over a full run the store moved the boilerplate signal zero times.",
+        ),
+        ChangelogEntry(
+            version="2026-09-18T10:00",
+            change="adaptive_dedup_threshold.judge_temperature, additive, default 0.0.",
+            why="The swap reads position bias only while the sampler adds no noise of its own.",
+        ),
+        ChangelogEntry(
+            version="2026-09-18T09:00",
+            change="adaptive_dedup_threshold and run.judge_shard_timeout_minutes, additive.",
+            why="The merge line was set by one reading and nothing re-read it.",
+        ),
+        ChangelogEntry(
             version="2026-09-17T17:00",
             change="extract.reject_too_short, additive, default false. Never rejects an abstract.",
             why="Two of the three shape signals had a switch and the third did not.",
-        ),
-        ChangelogEntry(
-            version="2026-09-17T16:00",
-            change="bench.run_model_speed_case, additive, default true.",
-            why="Testing the bench flow should not cost half an hour of llama-bench.",
-        ),
-        ChangelogEntry(
-            version="2026-09-17T15:00",
-            change="The prune block, additive, dry_run true and two collections.",
-            why="GitHub holds 1 GB of artifacts that no file in this repository names.",
-        ),
-        ChangelogEntry(
-            version="2026-09-17T12:00",
-            change="bench.corpus_items, additive, default 3.",
-            why="The bench corpus was two source literals, and at five it overran the job.",
         ),
         ChangelogEntry(
             version="2026-08-21",
@@ -217,4 +222,29 @@ class AppConfig(Contract):
             months_a_window_can_touch(self.console.max_window_days),
             window_days=self.console.max_window_days,
         )
+        return self
+
+    @model_validator(mode="after")
+    def _a_day_of_judging_fits_inside_one_leg(self) -> Self:
+        """A budget a leg cannot finish is a job GitHub kills with nothing uploaded.
+
+        Checked here because it reads `assemble.same_story` and `run`, which are
+        two blocks, and `AppConfig` is the lowest model holding both. The
+        refusal prints the arithmetic rather than a bare comparison: a person
+        raising the budget has three knobs to choose between, and the message
+        has to say which.
+        """
+        knobs = self.assemble.same_story.adaptive_dedup_threshold
+        a_leg = math.ceil(knobs.pair_budget / knobs.shards)
+        seconds = a_leg * 2 * SECONDS_A_CALL
+        bound = self.run.judge_shard_timeout_minutes * 60
+        if seconds > bound:
+            raise ValueError(
+                f"pair_budget {knobs.pair_budget} over {knobs.shards} legs is {a_leg} pairs "
+                f"a leg, which is {a_leg * 2} calls at {SECONDS_A_CALL} s, which is "
+                f"{seconds:.0f} s against run.judge_shard_timeout_minutes of "
+                f"{self.run.judge_shard_timeout_minutes} ({bound} s). Lower pair_budget, "
+                "raise shards, or raise the timeout - which may not go past GitHub's 6 h "
+                "job ceiling"
+            )
         return self

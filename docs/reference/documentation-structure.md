@@ -1,6 +1,6 @@
 # Documentation Structure
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-18
 How `docs/` is organised, and where a new statement of project knowledge belongs. Companion to [CLAUDE.md](../../CLAUDE.md) section 5 (Documentation Discipline) - this doc defines the _placement rules_; CLAUDE.md section 5 defines the _constraints_ (ASCII, single source of truth, no duplicate definitions).
 
 This reference is **domain-neutral** so it can be copied between projects unchanged (CLAUDE.md section 5).
@@ -228,8 +228,14 @@ whose removal changes only what somebody knows rather than what they do goes.
 
 **A rejected alternative is a fence, not a story.** It exists so nobody reopens a
 settled gate, and a fence needs a name and a reason rather than the minutes of
-the argument. The form is one sentence with four clauses - the rule now in
-force, the alternative named, the cost it would carry, and who decided and when.
+the argument. The form is one sentence with three clauses - the rule now in
+force, the alternative named, and the cost it would carry.
+
+**Who decided, and when, is not one of them.** Git holds both, and a fence that
+names its author argues from authority where the cost is what settles it. A
+guardrail exception still carries the name and the dated line that granted it,
+and is listed below among the classes never cut.
+
 An alternative that was built and measured keeps its number and that number's
 conditions; one that was only argued keeps one clause. Safe to lose as a class:
 the sequence of the argument, every option nobody built, restatements of the
@@ -241,6 +247,23 @@ failure it describes is now refused by a schema, a gate or a type, the code says
 it earlier and better and the correction goes. Where a later reader would meet
 something that looks wrong on sight and "fix" it back, the correction stays - in
 one sentence, beside the thing that looks wrong, never in a history section.
+
+**An incident is not a rule.** A run id, a stack trace, a timeline of what broke
+at which minute: none of it constrains the next change. What constrains is the
+rule the incident produced, and that rule is true whether or not a reader knows
+where it came from. Write the rule and let git hold the day it was learned. Where
+the failure is still reachable, the clause above already keeps one sentence for
+it - that is a trap kept, not a licence for the story.
+
+**A page does not describe its own past.** "Until <date> this page said X" is a
+sentence about the document rather than about the system, so no reader acts
+differently for having read it. Correct the page and let the diff carry the
+correction.
+
+**A rationale carries its reason, not its byline.** A `## Design rationale` entry
+states what is true and why. Who decided it, and on what day, is in git. The one
+exception is the one the never-cut list names below: a guardrail adapted or
+excepted keeps the name and the dated line that granted it.
 
 **Six classes are not cut at any budget**: a stated commitment to a reader or an
 operator, the reason an absence or a zero is correct, a measurement's
@@ -278,7 +301,7 @@ none of the benefit.
 | `~tok` | the bootstrap load, against the working set you still have to hold |
 | `top h2` | the largest section as a share of the page. One section holding most of a page usually holds several answers - open it and ask the **split test** whether you can act on one section without another |
 | `from` | how many other pages link here. `1` means one page is the only way in, so the **merge test** asks whether that page owns this as a section; `0` is the same question, louder |
-| `super` | sections saying a later one corrects them. Each is a **delete test** candidate and never a verdict: keep the correction whose trap a reader can still walk into, cut the one the correction closed |
+| `super` | sections saying a later one corrects them. Each is a **delete test** candidate and never a verdict: keep the correction whose trap a reader can still walk into, cut the one the correction closed. A section correcting the page rather than the system is not a candidate - it is a cut |
 
 Its token figure is about four characters a token - a declared estimate rather
 than a measurement (Guardrail #10), which is enough to compare pages and not enough to

@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-18
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -24,9 +24,9 @@ writes the whole day's census afterwards. A worker also leaves its own copy of
 the row beside the item's other payloads, which is
 [the file below](#the-row-on-the-shard-before-the-ledger-has-it).
 
-The row carries 113 columns. `ItemHealthRow.csv_columns` in
+The row carries 119 columns. `ItemHealthRow.csv_columns` in
 `backend/idhazh/contracts/item_health.py` is the list, and this page does not
-restate it - a second copy of 113 names is a second thing to keep in step, and
+restate it - a second copy of 119 names is a second thing to keep in step, and
 it drifts. [item-health-columns.md](item-health-columns.md) is the generated
 answer to "where does this cell come from": every column, the eight questions
 they group into, which module puts a value under each name, whether that value
@@ -178,9 +178,11 @@ is no second call to account for.
 because a rate needs its denominator beside its numerator.
 
 **A row is one planned item on one run.** `(date, run_id, item_id)` is the
-identity, and `ledger.append_item_health` filters on it before it writes. That is
-what lets two stages write the file: the second one to see an item has nothing
-new to say.
+identity, and the fold settles the day on it. That is what lets two stages
+record the same item: each writes its own segment, and `stage_compact` keeps one
+row for the key. Where the two rows disagree the one that names a job wins, for
+the reason the next section gives - `assemble` runs once for the whole day and
+cannot say which machine an item was for.
 
 **That filter reads a frozen file, so it is only half the guarantee.**
 `actions/checkout` pins a job to the commit its run was triggered at, so a second
@@ -245,7 +247,7 @@ the same temp-file-then-rename every per-item payload uses. The payload is
 `ItemHealthRow` and nothing else, so there is no second shape to version.
 
 **It exists because the row used to die with the shard.** The recorder validates
-all 113 cells an item at a time, and until 2026-09-15 the only place they went
+all 119 cells an item at a time, and until 2026-09-15 the only place they went
 was a log line - a CI artifact with its own expiry. The durable row was rebuilt
 afterwards from the article and the summary payloads, which between them cannot
 carry most of those cells, so a cell the shard measured correctly still reached
@@ -355,9 +357,49 @@ of the run. The item row could spell three of the four and stopped there.
 **The rule is one-directional: a row that names a job names a shard too, and not
 the converse.** A job with no shard is half a key and resolves to every shard
 that job ran, so the contract refuses it. A shard with no job is what every row
-written before 2026-09-17 holds, and `ledger.append_item_health` reads those
-rows back through `from_csv_row` before it appends - so a two-directional rule
-would refuse the whole archive on the first run after the column landed.
+written before 2026-09-17 holds, and every reader of this ledger takes those
+rows back through `from_csv_row` - so a two-directional rule would refuse the
+whole archive on the first run after the column landed.
+
+**The pair is also what settles a contested row.** The key has no `job` cell, so
+a work shard and `assemble` recording one item are the same record to the fold.
+Segments are read in filename order and `assemble` sorts before `work`, so
+without a rule the row that knows neither cell would win. `ledger.ITEM_HEALTH_RULE`
+is that rule: a row naming a job beats a row that does not.
+
+### What the machine had, against what a process held
+
+Eight memory and processor cells on this row are about a PROCESS - the model
+server's resident set, the worker's, the job's cgroup peak. **None of them can
+say what was left.** llama.cpp maps the weights with no `-lm`, so their resident
+pages are file-backed and evictable and count in every RSS figure, and a page
+two processes share is counted twice. Adding the marks up and subtracting from
+16 GB is a number this project has already withdrawn
+([../../reference/measurements.md](../../reference/measurements.md)).
+
+Six `os_` columns are the kernel's own account instead, read from
+`/proc/meminfo` by the same watch that fills `cpu_busy_max`:
+
+| Column | What it is |
+| --- | --- |
+| `os_mem_available_bytes` | What the kernel says a new allocation could have, at the end of the item. This is headroom |
+| `os_mem_total_bytes` | What the machine has. Constant inside a job, recorded per item so a row means something alone |
+| `os_mem_cached_bytes` | Page cache. Most of the weights sit here, so a fall is the kernel evicting what the next item re-reads |
+| `os_swap_free_bytes` | Swap left. A fall here is the machine in trouble before the cgroup kill |
+| `os_swap_total_bytes` | Swap the machine has. Without it a free figure of zero says "no swap here" and "swap consumed" equally |
+| `os_mem_available_min_bytes` | The lowest headroom seen while the model worked on THIS item |
+
+**The last one is the only cell taken over a window rather than at an instant,
+and the window is the reason it is worth having.** The watch opens when the
+model starts on an item and closes when it stops. Selecting samples on
+`item_started_at .. item_ended_at` instead would be the queue window, which
+measured nine times longer, with 19 items of 20 open at the same instant - so
+almost every row would carry the whole job's low-water mark rather than its own
+(Carmack, 2026-09-17, against `state/item-health/2026/09/16.csv`).
+
+**An item whose machine never answered records six nulls, never six zeros.**
+`/proc/meminfo` does not exist on the machines this project is written on, and a
+zero in the headroom cell would read as a machine with no memory left.
 
 ## Stages and outcomes
 
@@ -455,27 +497,26 @@ that happens, and what a change in either rate is allowed to prove, is
 
 ## What counts against a source
 
-Eighteen codes never count against a source:
+Nineteen codes never count against a source:
 
 `not_attempted`, `robots_denied`, `robots_unreachable`, `blocked_address`,
-`http_rate_limited`, `too_short`, `not_prose`,
+`http_rate_limited`, `boilerplate`, `too_short`, `not_prose`,
 `model_unreachable`, `model_refused`, `model_timed_out`, `shard_out_of_time`,
 `context_exceeded`, `output_truncated`,
 `labels_truncated`, `bad_shape`, `length_out_of_range`, `copied_source`,
 `leaked_address`
 
-`boilerplate` left that list on 2026-09-17, and it is the only code that ever
-has. It was neutral because it could not be anything else: nothing fed the
-comparison, so the ratio divided by an empty set and answered 0.0 on every page
-we ever fetched - zero `boilerplate` cells in 12,277 committed rows.
-`state/chrome.csv` gives the comparison its other side
-([../extraction/chrome.md](../extraction/chrome.md)), and once the signal can
-fire it is a fact about the source: this host served a page that was mostly its
-own furniture.
+`boilerplate` left that list on 2026-09-17 and came back the same day, and it is
+the only code that has ever moved. It went when a store started feeding the
+comparison it rests on. Over one full run that store changed the signal exactly
+zero times - 12,917 committed rows, no `boilerplate` cell among them - so the
+store was reverted and the ratio is back to dividing by an empty set. A signal
+that cannot fire must not count against a publisher, because the only thing it
+could do then is be wrong.
 
-The remaining nine can count against the source:
+The remaining eight can count against the source:
 
-`boilerplate`, `http_client_error`, `http_server_error`, `network_error`,
+`http_client_error`, `http_server_error`, `network_error`,
 `no_text`, `no_title`, `paywalled`, `unsupported_form`, `unknown`
 
 The contract carries this as data on the enum side, not as prose only, because a
@@ -539,8 +580,8 @@ the width alone would have called it clean.
 
 That is a failed scheduled run, not a failed lint. **This is the one ledger that
 migrates itself, and the reason is that it is the one that has retired a
-heading.** `ledger.append_item_health` reads line 1 before it writes; where the
-header is not the contract's it calls `ledger.migrate_header`, which re-files
+heading.** `stage_compact` reads the head's line 1 before it folds a row into
+it, and calls `ledger.settle_header`, which re-files
 every row through `ItemHealthRow.from_csv_row` and writes the file back under
 the current column list. The migration ships in the same commit as the contract
 (`CLAUDE.md` section 11) because that function IS the migration, not because a
@@ -666,11 +707,13 @@ your copy, which drops the rows the pipeline wrote while the branch was open.
 
 ## Scaling
 
-Measured 2026-09-17 on the committed repository. The row still carries 113
-columns: `job` arrived and `runner_name` went, so the count is unchanged and
-the names are not. The previous reading was taken on 2026-09-15 against the
-113-column row this one replaced; the shape has moved since, so it was a stale
-reading rather than history and has been replaced (Guardrail #10).
+Measured 2026-09-17 on the committed repository, and the row moved again the
+same day: six `os_` columns landed, so it carries **119**. Every byte figure
+below was taken against the 113-column row, which makes each one a floor rather
+than a reading of today's width - what the six add is on its own line under the
+table. The previous reading was taken on 2026-09-15 against a row that has since
+moved twice, so it was a stale reading rather than history and has been replaced
+(Guardrail #10).
 
 | Quantity | Value | How |
 | --- | --- | --- |
@@ -680,7 +723,7 @@ reading rather than history and has been replaced (Guardrail #10).
 | Widest day, `2026/08/25.csv` | 1,000 rows, 396,015 bytes | `stat` |
 | Rows on a full day | **800** | 5 runs x the 160-item `safety_ceiling_per_run` |
 | A full day at the current width | **~351 KB** | 800 x 439.3 |
-| Published projection `frontend/public/telemetry/2026-09.csv` | 1,373,976 bytes, 49 of the 113 columns | `stat` |
+| Published projection `frontend/public/telemetry/2026-09.csv` | 1,373,976 bytes, 49 of the 119 columns | `stat` |
 | Mean published row | 180.5 bytes raw, **41.3 bytes gzipped** (4.4x) | gzip at maximum level |
 
 What the 2026-09-17 column change costs the archive, one time, on the first
@@ -691,6 +734,12 @@ append to each day file:
 | `job` added | **+12,933** | one comma on each of 12,837 rows, plus `,job` on 24 headers |
 | `runner_name` dropped | **-23,194** | 12,837 commas, 399 filled values totalling 10,069 characters, and `,runner_name` off 24 headers |
 | Net | **-10,261 bytes** | the row gets narrower, not wider |
+
+The six `os_` columns are the next one-time cost, measured the same day against
+a ledger one run wider - 25 day files and 13,157 rows: **+82,267 bytes**, six
+commas on each row plus the six names on each header. Every cell is empty until
+a run writes one, so this is the cost of the columns existing rather than the
+cost of what they hold.
 
 Projected forward at the current cadence and ceiling:
 
@@ -705,7 +754,7 @@ Three limits, in the order they will actually bite:
 1. **The reader's download, first.** The console fetches a whole month shard.
  991 KB gzipped at the end of a busy month is far more than the rest of the
  page. The lever is the projection, not the ledger: the served file carries 49
- of the row's 113 columns and could carry fewer, or become a pre-aggregated
+ of the row's 119 columns and could carry fewer, or become a pre-aggregated
  day-grain file with the per-item rows kept for the operator only. Nothing
  here is measured against a slow connection yet, so that is the next
  measurement rather than the next change.

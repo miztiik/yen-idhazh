@@ -14,10 +14,10 @@ from typing import Any, NamedTuple
 
 from idhazh import (
     assemble,
-    chrome,
     config,
     extract,
     ledger,
+    run_context,
     summarize,
     telemetry,
 )
@@ -269,7 +269,7 @@ def _failure_detail(recorder: ItemRecorder, summary: Summary) -> str | None:
 def _slowest(finished: list[ItemHealthRow]) -> dict[str, Any] | None:
     """The item that cost the shard most, and enough to find it again.
 
-    Four cells and not the row: a shard record carrying 113 columns of one item
+    Four cells and not the row: a shard record carrying 119 columns of one item
     buries the totals beside it, and the item's own completion record is already
     in the log for anyone who wants the rest.
 
@@ -352,14 +352,6 @@ def stage_work(
     # 80 scans for an answer that cannot change inside a shard.
     server_pid = host.llama_server_pid()
     shard_facts = host.host_facts(job=ServerJob.WORK)
-    # Read once per shard for the same reason: what a host prints on every page
-    # cannot change inside a shard, and the file is capped by the source registry
-    # rather than by the archive (Guardrail #12, `ledger.chrome_path`). A fresh
-    # clone has no store and every line reads as this page's own, which is what
-    # every run did before the fold existed.
-    chrome_lines = chrome.by_host(
-        ledger.load_chrome(common.STATE_ROOT), pages_min=settings.app.extract.chrome_pages_min
-    )
     shard_cells = _shard_cells(
         settings, shard=shard, shard_item_count=len(mine), facts=shard_facts
     )
@@ -384,7 +376,7 @@ def stage_work(
             tracer.span(telemetry.SpanName.ITEM) as span,
         ):
             telemetry.item_attributes(span, item, run_id=plan.run_id, shard=shard)
-            fetched = _fetch_one(item, settings, read_url, tracer, chrome_lines)
+            fetched = _fetch_one(item, settings, read_url, tracer)
         article, source_text = fetched.article, fetched.source_text
         fetch_ms, extract_ms = fetched.fetch_ms, fetched.extract_ms
         # One reading of the pair, split across the two cells the stage records
@@ -689,7 +681,20 @@ def stage_work(
             shard=shard,
             wall_clock_ms=int((time.monotonic() - shard_started) * 1000),
         )
-        landed = ledger.append_span_rollup(common.STATE_ROOT, plan.date, rows)
+        # Into this shard's own segment, not into the month head every other
+        # shard opens. Eight shards folding one month file is the collision the
+        # segment store exists to stop, and the attempt is in the name, so a
+        # re-run corrects its first try rather than adding a second fold of the
+        # same spans. `stage_compact` merges them into the month the rows name.
+        landed = ledger.write_segment(
+            common.STATE_ROOT,
+            ledger.SegmentLedger.SPAN_ROLLUP,
+            rows,
+            run_id=plan.run_id,
+            attempt=run_context.run_attempt(),
+            job=ServerJob.WORK,
+            shard=shard,
+        )
         LOG.info("rolled up spans shard=%s span_rows=%s", shard, landed)
 
 

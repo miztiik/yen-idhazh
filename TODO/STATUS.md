@@ -35,15 +35,18 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 16 | 12 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 11 |
-| [20260914-29-found-once-plan.md](20260914-29-found-once-plan.md) | 17 | 14 | 3 | 2 |
-| [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 28 | 0 | 27 | 5 |
+| [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 28 | 6 | 21 | 1 |
+| [20260917-34-similarity-autotune-plan.md](20260917-34-similarity-autotune-plan.md) | 17 | 2 | 15 | 1 |
 
-## In flight - 0
+## In flight - 3
 
-Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
-dispatches a row, so an empty table here and a busy worktree disagree.
+| Row | Plan | Group | Title | Worktree |
+| --- | --- | --- | --- | --- |
+| #3 | 33 | B | `item-health`, `scores`, `score-index` write segments | p33b3 |
+| #4 | 33 | B | `span-rollup` writes segments | p33b4 |
+| #10 | 33 | C | `model_load_ms` and `job_seconds` join `host-fingerprint` | p33c10 |
 
-## Ready now - 38
+## Ready now - 33
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -82,15 +85,10 @@ section 3 is where it is answered.
 | #9 | 27 | D | A cut reply keeps its summary | 1 |
 | #10 | 27 | D | A killed shard keeps the work it finished | - |
 | #11 | 27 | E | Two articles, three arms, one runner | 4 |
-| #12 | 29 | - | Label the sheet, then set the weights | - |
-| #16 | 29 | - | Refuse boilerplate, on a week of evidence | 13 |
-| #1 | 33 | A | Segment store and the `compact` stage, shipped inert | - |
-| #5 | 33 | A | Machine page stops lying about a day with no rows | - |
 | #6 | 33 | A | One concurrency group for `digest`, `validate`, `measure` | - |
-| #7 | 33 | A | OS memory and load, per item | - |
-| #18 | 33 | H | Chart-craft doctrine - the thirteen rules, written once | - |
+| #2 | 34 | - | The four contracts, shipped inert with header-only files | - |
 
-## Waiting on another row - 71
+## Waiting on another row - 79
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -142,33 +140,41 @@ section 3 is where it is answered.
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
-| #15 | 29 | - | The weights and the 0.88 floor | 12 is PENDING |
-| #2 | 33 | B | `host-fingerprint` writes segments | 1 is PENDING |
-| #3 | 33 | B | `item-health`, `scores`, `score-index` write segments | 2 is PENDING |
-| #4 | 33 | B | `span-rollup` writes segments | 3 is PENDING |
-| #17 | 33 | B | `runtime-counters` writes segments | 4 is PENDING |
-| #10 | 33 | C | `model_load_ms` and `job_seconds` join `host-fingerprint` | 2 is PENDING |
-| #12 | 33 | D | Delete the merge machinery | 2 is PENDING; 3 is PENDING; 4 is PENDING; 17 is PENDING |
-| #13 | 33 | D | Compaction lag and free swap on the console band | 1 is PENDING; 5 is PENDING; 7 is PENDING; 12 is PENDING |
-| #11 | 33 | E | Delete `runtime-counters` and everything that reads it | 7 is PENDING; 10 is PENDING; 17 is PENDING |
-| #15 | 33 | F | Generated TypeScript contracts replace the hand-written ones | 10 is PENDING; 11 is PENDING |
+| #17 | 33 | B | `runtime-counters` writes segments | 4 is IN-FLIGHT |
+| #12 | 33 | D | Delete the merge machinery | 3 is IN-FLIGHT; 4 is IN-FLIGHT; 17 is PENDING |
+| #13 | 33 | D | Compaction lag and free swap on the console band | 12 is PENDING |
+| #11 | 33 | E | Delete `runtime-counters` and everything that reads it | 10 is IN-FLIGHT; 17 is PENDING |
+| #15 | 33 | F | Generated TypeScript contracts replace the hand-written ones | 10 is IN-FLIGHT; 11 is PENDING |
 | #16 | 33 | G | Docs, and the orphan sweep | all names no row |
-| #28 | 33 | H | Pipeline panels: the share track goes, Extraction gains a trend | 18 is PENDING |
-| #19 | 33 | I | The shard board | 11 is PENDING; 18 is PENDING |
-| #21 | 33 | I | Memory and load, three grains - ABSORBS Row #14 | 5 is PENDING; 7 is PENDING; 15 is PENDING; 19 is PENDING |
+| #19 | 33 | I | The shard board | 11 is PENDING |
+| #21 | 33 | I | Memory and load, three grains - ABSORBS Row #14 | 15 is PENDING; 19 is PENDING |
 | #23 | 33 | I | What a run reads against what it writes, in tokens and in seconds | 21 is PENDING |
 | #25 | 33 | I | Outside the model call, as range marks | 23 is PENDING |
 | #22 | 33 | I | Platform mix as grouped bars | 25 is PENDING |
 | #24 | 33 | I | Counterfactual cost gets a shape | 22 is PENDING |
 | #20 | 33 | I | Timing panels merge and move to Pipeline | 24 is PENDING |
-| #26 | 33 | I | Machine cards: L3 and bandwidth as bars - AMENDS Row #5 | 5 is PENDING; 11 is PENDING; 18 is PENDING |
+| #26 | 33 | I | Machine cards: L3 and bandwidth as bars - AMENDS Row #5 | 11 is PENDING |
 | #27 | 33 | K | Route grouping and panel order | 20 is PENDING; 26 is PENDING |
 | #14 | 33 | - | The per-item machine load panel | - |
 | #8 | 33 | - | Memory split by prefill and decode | - |
+| #3 | 34 | - | The knob block, defaults only, nothing reads it | 2 is PENDING |
+| #5 | 34 | - | Score and select the borderline pairs, write the day shard | 2 is PENDING; 3 is PENDING |
+| #6 | 34 | - | The judge: prompt, grammar, token-id assertion, order swap | 2 is PENDING; 3 is PENDING |
+| #7 | 34 | - | Fold the day into the fixed-size record | 2 is PENDING; 5 is PENDING; 6 is PENDING |
+| #8 | 34 | - | Fit, damp, clamp, and write the day's row - the knob still unread | 3 is PENDING; 7 is PENDING |
+| #9 | 34 | - | Assemble reads the fitted line. **First row that changes a published day** | 8 is PENDING |
+| #10 | 34 | - | The `LLM-JUDGES` workflow, 4 matrix legs, two commit calls | 5 is PENDING; 6 is PENDING; 7 is PENDING; 8 is PENDING |
+| #11 | 34 | - | The sample sheet utility | 7 is PENDING; 8 is PENDING; 10 is PENDING |
+| #12 | 34 | - | Console: merge count and holdout - the two model-free panels | panel A1: nothing / panel A2: 2 names no row; 8 is PENDING |
+| #13 | 34 | - | Console: the threshold chart, applied solid and proposed dotted | 8 is PENDING; 12 is PENDING |
+| #14 | 34 | - | Console: judge self-agreement, and the record filling | 8 is PENDING; 12 is PENDING |
+| #15 | 34 | - | Console: the confusion matrix | 7 is PENDING; 8 is PENDING; 12 is PENDING |
+| #16 | 34 | - | The design document, prose plus a mermaid diagram | 9 is PENDING |
+| #17 | 34 | - | Measure a judge call on a stock runner and replace the estimate | 5 is PENDING; 6 is PENDING |
 
-## Finished - 18 plans with no live row
+## Finished - 19 plans with no live row
 
-20260815-digest-pipeline-plan.md, 20260905-01-visible-chart-plan.md, 20260905-02-retire-the-route-name-plan.md, 20260905-03-console-backfill-plan.md, 20260905-04-site-cap-defence-plan.md, 20260905-05-span-tree-plan.md, 20260905-06-fewer-better-articles-plan.md, 20260905-07-better-summaries-plan.md, 20260905-08-element-table-plan.md, 20260905-09-pin-the-runtime-plan.md, 20260905-10-visual-plan-contract-plan.md, 20260905-11-two-call-planner-plan.md, 20260906-constant-cost-reads-plan.md, 20260907-growing-reads-window-plan.md, 20260910-24-day-sharded-ledgers-plan.md, 20260911-26-retire-prerender-plan.md, 20260912-27-adaptive-guardrails-plan.md, 20260913-reference-dataset-2-plan.md
+20260815-digest-pipeline-plan.md, 20260905-01-visible-chart-plan.md, 20260905-02-retire-the-route-name-plan.md, 20260905-03-console-backfill-plan.md, 20260905-04-site-cap-defence-plan.md, 20260905-05-span-tree-plan.md, 20260905-06-fewer-better-articles-plan.md, 20260905-07-better-summaries-plan.md, 20260905-08-element-table-plan.md, 20260905-09-pin-the-runtime-plan.md, 20260905-10-visual-plan-contract-plan.md, 20260905-11-two-call-planner-plan.md, 20260906-constant-cost-reads-plan.md, 20260907-growing-reads-window-plan.md, 20260910-24-day-sharded-ledgers-plan.md, 20260911-26-retire-prerender-plan.md, 20260912-27-adaptive-guardrails-plan.md, 20260913-reference-dataset-2-plan.md, 20260914-29-found-once-plan.md
 
 ## See also
 

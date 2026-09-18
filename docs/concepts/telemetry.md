@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-18
 
 The structured-event vocabulary: the envelope every event carries, the event names that are emitted, the two shapes those names take, the span tree a developer can switch on, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, which is a project non-goal ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 0a).
 
@@ -49,14 +49,17 @@ flowchart TD
   sinks --> rollup
   record --> census
 
-  census --> ih["state/item-health/ (day)"]
-  rollup --> sr["state/span-rollup/ (month)"]
+  census --> ih["state/segments/item-health/ (one per writer)"]
+  rollup --> sr["state/segments/span-rollup/ (one per writer)"]
   traces --> tr["state/traces/ (day)"]
   health --> fh["state/feed-health/ (day)"]
 
+  ih --> head_ih["state/item-health/ (day)"]
+  sr --> head_sr["state/span-rollup/ (month)"]
+
   subgraph state["state/ - committed, append-only, day-sharded"]
-    ih
-    sr
+    head_ih
+    head_sr
     tr
     fh
     other["day-metrics/ and scores/ and published/ and seen/<br/>runtime-counters.csv and day-validations.csv"]
@@ -206,6 +209,8 @@ Two things the host sink does not do, measured against Langfuse 4.14.4 rather th
 
 The span tree is evidence and expires with the run. One summary of it is a record and is committed: `state/span-rollup/<YYYY-MM>.csv`, one row per `(date, run_id, shard, span_name)`, carrying how many spans of that name the shard opened and how long they took added together. The fold lives in `telemetry.roll_up_spans` and the row is `SpanRollupRow`.
 
+**A shard writes its fold to a segment, not to the month file.** Up to eight work shards fold one month head, so from 2026-09-18 each one writes `state/segments/span-rollup/<run>-<attempt>-work-<shard>.csv` - a name no second writer can take - and `idhazh compact` inside `assemble` merges the segments into the month each row's own `date` cell names. The month head has one writer per run. The routing is the row's date and not the compaction's clock, which is what carries the one night a month when a run starting at 23:59 UTC is read by a compaction running in the next month ([partitions.md](partitions.md)).
+
 **It commits five span names, not the eleven the tracer opens**, and the five are the steps no ledger column already times:
 
 | Committed span | Why it earns a row |
@@ -255,7 +260,7 @@ Assemble then writes the whole day's census, including a `not_attempted` row for
 every planned item no article payload arrived for. That keeps the denominator in
 the same file as the failure count.
 
-**The row comes off the shard that did the work.** A worker validates 113 cells
+**The row comes off the shard that did the work.** A worker validates 119 cells
 an item at a time and seals them beside the article and the summary, so both
 writers read that file and prefer it. What a rebuild can say is only what those
 two payloads carry: on the committed fixture day, 40 of the 113 columns against
@@ -338,6 +343,21 @@ So there is a third grain: **one row a job**, in
 about its own silicon plus a memory-bandwidth probe. A bench dispatch writes the
 same shape into `state/pipeline-tests/host-fingerprint/`, apart from the rows the
 console reads.
+
+**No job opens that day file.** Ten jobs of one run each draw a machine and each
+record it, so each writes its own
+`state/segments/host-fingerprint/<run>-<attempt>-<job>-<shard>.csv` and the
+compaction in `assemble` folds them into the day. Ten runners appending to one
+path is not a thing a merge driver can settle: on 2026-09-16 the pushes raced and
+the day came back header-only. What a reader opens is unchanged, because a
+segment is the head's own rows in transit and carries no shape of its own.
+
+`state/item-health/` goes the same way from 2026-09-18, with `state/scores/` and
+`state/score-index/` beside it. The writers there are the work shards and
+assemble rather than every job of the run, and the settlement has one extra
+thing to say: `ITEM_HEALTH_KEY` carries no `job` cell, so two writers describing
+one item are one record to the fold, and `ledger.ITEM_HEALTH_RULE` keeps the row
+that names a job over the row that does not.
 
 **Why a third grain rather than more columns on the two rows above.** These cells
 are fixed for the whole job. Repeating twenty of them on every item row would
