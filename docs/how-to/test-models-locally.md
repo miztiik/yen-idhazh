@@ -1,6 +1,6 @@
 # Test the models locally
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-18
 How to run the pipeline's models on your own machine, compare them, and read the
 result. Everything here also runs in CI - the point of doing it locally is a
 fast loop, not a different answer.
@@ -119,8 +119,8 @@ The flags are not yours to choose. `server_argv` in
 [`backend/idhazh/llm/server.py`](../../backend/idhazh/llm/server.py) builds them
 from `config/`, and it is the only function in the repository that spells a
 `llama-server` flag, so a flag typed by hand here is a different server from the
-one CI runs. The fingerprint contract intends to cover behaviour-affecting
-runtime inputs, but production identity wiring is incomplete. Ask for the
+one CI runs. The recorded input manifest carries those runtime knobs, so a flag
+typed by hand is also a flag no run records. Ask for the
 command instead of copying one:
 
 ```bash
