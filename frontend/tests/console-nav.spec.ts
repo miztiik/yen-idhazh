@@ -42,23 +42,31 @@ const ROUTES = [
 	{ id: 'voices', label: 'Voices', path: '/console/voices/' }
 ] as const;
 
-/** The routes still opened with no panel of their own. A strip that names a
- * page nobody can reach is a strip that lies, so the route answers, names
- * itself, and says in plain words what is still missing.
+/** The routes that still name something they do not draw.
  *
- * **It may not say that by citing a plan.** A reader of this page cannot open
- * `TODO/`, and once a plan is distilled and deleted the pointer names nothing
- * at all - so the absence says what is missing, and the check below refuses a
- * plan filename or a row number instead of demanding one (owner ruling,
- * 2026-09-17).
+ * A strip that names a page nobody can reach is a strip that lies, so the route
+ * answers, names itself, and says in plain words what is still missing.
  *
- * `Voices` was here until 2026-09-14, when the feed and source panels moved
- * onto it off Pipelines. It has a window control and four panels now, so it
- * fails every assertion below and belongs to the console suite instead. Its
- * own absent state is still checked - `console-voices-sources.spec.ts` owns the
- * census half and `console-voices.spec.ts` owns the one-route-per-panel half.
+ * **A route on this list may also draw panels, and `/console/judgement/` does
+ * since 2026-09-17.** The absence there is not the whole page: `Stories the day
+ * merged` counts what a day folded together, and the absence is about the desk
+ * and the lenses the model chose, which it still does not record. The two are
+ * different subjects, so the figure landing does not retire the absence - and
+ * an absence that quietly disappears the first time any panel lands on the
+ * route is the failure this list exists to catch.
+ *
+ * **It may not say what is missing by citing a plan.** A reader of this page
+ * cannot open `TODO/`, and once a plan is distilled and deleted the pointer
+ * names nothing at all - so the absence says what is missing, and the check
+ * below refuses a plan filename or a row number instead of demanding one (owner
+ * ruling, 2026-09-17).
+ *
+ * `Voices` was here until 2026-09-14, when the feed and source panels moved onto
+ * it off Pipelines and closed its absence outright. Its own absent states are
+ * still checked - `console-voices-sources.spec.ts` owns the census half and
+ * `console-voices.spec.ts` owns the one-route-per-panel half.
  */
-const EMPTY_ROUTES = [{ id: 'judgement', path: '/console/judgement/' }] as const;
+const NAMED_ABSENCES = [{ id: 'judgement', path: '/console/judgement/' }] as const;
 
 /** What an absence may not name: a plan file, or a row inside one. */
 const CITES_A_PLAN = /TODO\/\d|\brows?\s*#?\d|\bplan\s+\d/i;
@@ -286,8 +294,8 @@ for (const view of STRIP_WIDTHS) {
 	});
 }
 
-test.describe('the routes opened empty', () => {
-	for (const route of EMPTY_ROUTES) {
+test.describe('the routes that name something they do not draw', () => {
+	for (const route of NAMED_ABSENCES) {
 		test(`${route.path} answers, names itself and says what is missing`, async ({
 			page
 		}) => {
@@ -304,9 +312,15 @@ test.describe('the routes opened empty', () => {
 			const answered = await page.goto(route.path);
 			expect(answered?.status(), `${route.path} did not answer`).toBe(200);
 
+			// At least one, not exactly one: the route may have grown a panel, and a
+			// panel heading is an h2 too. How many each route owes is in
+			// `console-title.spec.ts`, which is the file that rules on headings.
 			const heading = page.locator('[data-surface="operator"] h2');
-			await expect(heading, `${route.path} carries no heading of its own`).toHaveCount(1);
-			expect((await heading.innerText()).trim().length).toBeGreaterThan(10);
+			expect(
+				await heading.count(),
+				`${route.path} carries no heading of its own`
+			).toBeGreaterThan(0);
+			expect((await heading.first().innerText()).trim().length).toBeGreaterThan(10);
 
 			const empty = page.locator(`[data-console-empty="${route.id}"]`);
 			await expect(empty, `${route.path} prints no named absence`).toHaveCount(1);
@@ -324,9 +338,6 @@ test.describe('the routes opened empty', () => {
 				await onward.count(),
 				`${route.path} names no page a reader can open instead`
 			).toBeGreaterThan(0);
-
-			// It fetches nothing, so it has no window control to govern nothing.
-			await expect(page.locator('[data-window-control]')).toHaveCount(0);
 			expect(errors, `${route.path} logged an error`).toEqual([]);
 		});
 	}

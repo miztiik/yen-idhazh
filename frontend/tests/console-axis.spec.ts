@@ -26,7 +26,13 @@ import { expect, test, type Page } from '@playwright/test';
  * that cannot be made to fail is not measuring anything.
  */
 
-const ROUTES = ['/console/', '/console/model/', '/console/machine/', '/console/voices/'];
+const ROUTES = [
+	'/console/',
+	'/console/model/',
+	'/console/machine/',
+	'/console/judgement/',
+	'/console/voices/'
+];
 const WIDTHS = [1440, 768, 390];
 
 /** Which routes draw a date axis of their own.
@@ -37,13 +43,15 @@ const WIDTHS = [1440, 768, 390];
  * headroom and for the latency plots. Both label a column that is a RUN rather
  * than a day, so a day carrying several runs is labelled once and the tick mark
  * stays. Voices draws the feed strip's axis, which arrived with the panels on
- * 2026-09-14. That is stated here rather than discovered, so a route that stops
+ * 2026-09-14. Judgement draws the merge chart's axis, which arrived on
+ * 2026-09-17. That is stated here rather than discovered, so a route that stops
  * declaring one fails this file instead of passing it with an empty scan.
  */
 const DECLARES: Record<string, boolean> = {
 	'/console/': true,
 	'/console/model/': true,
 	'/console/machine/': true,
+	'/console/judgement/': true,
 	'/console/voices/': true
 };
 
