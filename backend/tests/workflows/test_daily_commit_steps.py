@@ -8,12 +8,15 @@ import shlex
 import pytest
 from conftest import REPO_ROOT, read_text
 
+from idhazh import ledger
+
 from ._harness import (
     COMMIT_REFRESH_PATHS,
     COMMIT_SCRIPT,
     COMMIT_SCRIPT_ENV,
     COMMIT_STAGED_PATHS,
     COMMIT_STEPS,
+    COMPACT_STEP,
     DROP_ENTRY_POINT,
     SCRIPTS_DIR,
     SETTLE_COMMAND,
@@ -189,6 +192,35 @@ def test_both_settling_commit_steps_name_the_run_they_settle() -> None:
         assert settle[len(SETTLE_COMMAND) :] == [SETTLE_COVER_FLAG, SUBSTITUTED_DATE], (
             f"{label} must name the run it settles, or the pass reads the whole archive"
         )
+
+
+def test_the_catch_up_compaction_runs_before_the_plan_job_commits() -> None:
+    """A segment folded after the commit is a segment the runner throws away.
+
+    `assemble` drains the store on every run that reaches it. This job is the
+    only other caller, so a run whose assemble never happened has exactly one
+    chance to have its rows folded into a head - and that chance is over the
+    moment this job has pushed.
+
+    It is also why the job stages `state` whole: the compaction writes into
+    whichever head a waiting segment's own rows name, which no hand-written list
+    can know.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    names = [step.get("name") for step in _steps(workflow, "plan")]
+    assert names.index(COMPACT_STEP) < names.index(COMMIT_STEPS["plan"])
+    assert COMMIT_STAGED_PATHS["plan"] == ["state"]
+
+
+def test_the_segment_store_is_handed_back_to_the_tip_with_the_heads() -> None:
+    """A lost push refreshes the store as well as what the compaction wrote.
+
+    Without it the rebuild would fold this attempt's already-drained store onto
+    the tip's heads and miss every segment a sibling pushed while this run was
+    working - the rows would sit in the tree with nothing left to read them.
+    """
+    refreshed = COMMIT_REFRESH_PATHS["assemble"]
+    assert f"{ledger.STATE_DIRNAME}/{ledger.SEGMENTS_DIRNAME}" in refreshed
 
 
 def test_only_assemble_rebuilds_and_it_rebuilds_with_its_own_publish_command() -> None:

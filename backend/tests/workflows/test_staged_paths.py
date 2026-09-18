@@ -274,36 +274,40 @@ def test_every_path_the_day_stages_exists_in_a_fresh_checkout() -> None:
 
 
 def test_every_path_the_plan_stages_exists_in_a_fresh_checkout() -> None:
-    """The same rule, for the ledger the plan job gained on 2026-09-02.
+    """`git add` runs under `set -euo pipefail`, so a path that is not there ends the step.
 
-    Most runs retire nothing, so `state/feed-retirements.csv` is a file that is
-    named on every run and written on almost none. It ships with its header for
-    exactly that reason - a path that only appears the day a retirement happens
-    would abort the plan's commit step every other day, and take the sight and
-    health ledgers staged beside it.
+    The list became `state` whole on 2026-09-17, when the catch-up compaction
+    joined this job. It folds a segment into whichever head that segment's own
+    rows name, so what the job writes is not knowable when a list is written -
+    and a hand-listed set would commit the segment deletions while leaving the
+    heads behind. Naming the directory answers this test's own rule at the same
+    time: `state` is in every checkout, and a collection inside it need not be.
 
-    `state/counterfactual-scores/` joined the step on 2026-09-14 and ships with
-    one header-only day file for the same reason. Every run writes to it, so it
-    is never empty after a run - but a fresh clone has never run, and this is
-    the moment that would fail.
+    `state/segments/` is named separately because it is the one collection here
+    that is empty by design. It ships with a `.gitkeep`, or a fresh clone would
+    not carry the directory that `REFRESH_PATHS` hands back to the tip.
 
-    The directories are named rather than derived because `git add` on a
-    directory that does not exist fails the same way, and a fresh clone has all
-    of them.
+    `state/feed-retirements.csv` is named for a reason of its own that outlived
+    the staging list: almost no run writes a row and every run reads the file,
+    so it ships with its header rather than appearing the day a retirement
+    happens.
     """
     named = COMMIT_STAGED_PATHS["plan"]
-    assert ledger.feed_retirements_relpath() in named
-    assert f"{ledger.STATE_DIRNAME}/{ledger.COUNTERFACTUAL_SCORES_DIRNAME}" in named
+    assert named == [ledger.STATE_DIRNAME]
     for relative in named:
         assert (REPO_ROOT / relative).exists(), f"{relative} must be in a fresh checkout"
-    tracked = subprocess.run(
-        ["git", "ls-files", "--error-unmatch", ledger.feed_retirements_relpath()],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert tracked.returncode == 0, tracked.stderr.strip()
+    for relative in (
+        ledger.feed_retirements_relpath(),
+        f"{ledger.STATE_DIRNAME}/{ledger.SEGMENTS_DIRNAME}/.gitkeep",
+    ):
+        tracked = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", relative],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert tracked.returncode == 0, tracked.stderr.strip()
 
 
 def test_the_corpus_is_not_union_merged() -> None:
