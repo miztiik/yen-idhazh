@@ -7,6 +7,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import pytest
+from conftest import seed_item_health
 
 from idhazh import day_partition, ledger
 from idhazh.contracts.item_health import ItemStage
@@ -198,7 +199,7 @@ def test_the_stage_says_so_when_there_is_nothing_to_remove(
     """Silence and "nothing expired" read the same, and only one of them is true."""
     state = tmp_path / "state"
     day = f"{TODAY:%Y-%m}-04"
-    ledger.append_item_health(
+    seed_item_health(
         state, day, [health_row(day=day, run=1, number=1, stage=ItemStage.PUBLISH)]
     )
 
@@ -243,7 +244,7 @@ def test_the_stage_says_so_when_every_month_is_still_at_full_grain(
 ) -> None:
     state = tmp_path / "state"
     day = f"{TODAY:%Y-%m}-04"
-    ledger.append_item_health(
+    seed_item_health(
         state, day, [health_row(day=day, run=1, number=1, stage=ItemStage.PUBLISH)]
     )
     with caplog.at_level(logging.INFO):

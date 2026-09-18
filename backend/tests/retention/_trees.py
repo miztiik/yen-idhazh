@@ -10,6 +10,8 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
+from conftest import seed_item_health
+
 from idhazh import day_partition, ledger
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.item_health import (
@@ -156,7 +158,7 @@ def item_health_history(state_dir: Path, months: list[str]) -> None:
             rows.append(
                 health_row(day=day, run=2, number=index * 100 + 50, stage=ItemStage.PUBLISH)
             )
-            ledger.append_item_health(state_dir, day, rows)
+            seed_item_health(state_dir, day, rows)
 
 
 def totals_from_shard(texts: Iterable[str]) -> dict[tuple[str, str], tuple[int, int, int]]:

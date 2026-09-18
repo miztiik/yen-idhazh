@@ -23,8 +23,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from conftest import seed_item_health
 
-from idhazh import ledger
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.day_metrics import DayInstrument, DayMetrics, DayStageTiming
 from idhazh.contracts.digest_day import (
@@ -318,7 +318,7 @@ def _instrument(metrics: DayMetrics, column: str) -> DayInstrument:
 def test_the_producer_writes_the_whole_day_record(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
     eval_writer.append(state_root, _scores())
-    ledger.append_item_health(state_root, DATE, _timed_health())
+    seed_item_health(state_root, DATE, _timed_health())
 
     path = day_metrics.day_metrics_path(state_root, DATE)
     # RED: no producer has run, so the record does not exist.
@@ -382,7 +382,7 @@ def test_the_producer_writes_the_whole_day_record(tmp_path: Path) -> None:
 def test_throughput_sums_only_the_timed_items(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
     eval_writer.append(state_root, _scores())
-    ledger.append_item_health(state_root, DATE, _timed_health())
+    seed_item_health(state_root, DATE, _timed_health())
 
     metrics = DayMetrics.read(
         day_metrics.publish(
@@ -404,7 +404,7 @@ def test_throughput_sums_only_the_timed_items(tmp_path: Path) -> None:
 def test_stage_timing_counts_the_failed_fetch(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
     eval_writer.append(state_root, _scores())
-    ledger.append_item_health(state_root, DATE, _timed_health())
+    seed_item_health(state_root, DATE, _timed_health())
 
     metrics = DayMetrics.read(
         day_metrics.publish(
@@ -431,7 +431,7 @@ def test_stage_timing_counts_the_failed_fetch(tmp_path: Path) -> None:
 def test_instruments_are_nearest_rank_quartiles(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
     eval_writer.append(state_root, _scores())
-    ledger.append_item_health(state_root, DATE, _timed_health())
+    seed_item_health(state_root, DATE, _timed_health())
 
     metrics = DayMetrics.read(
         day_metrics.publish(
@@ -460,7 +460,7 @@ def test_instruments_are_nearest_rank_quartiles(tmp_path: Path) -> None:
 def test_a_correction_rewrites_the_record_whole(tmp_path: Path) -> None:
     state_root = tmp_path / "state"
     eval_writer.append(state_root, _scores())
-    ledger.append_item_health(state_root, DATE, _timed_health())
+    seed_item_health(state_root, DATE, _timed_health())
 
     day_metrics.publish(
         state_root=state_root, date=DATE, day=_day(), manifest=_manifest()

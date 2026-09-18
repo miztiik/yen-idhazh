@@ -14,6 +14,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
+from conftest import seed_item_health
 from pydantic import ValidationError
 
 from idhazh import config, day_partition, ledger
@@ -879,7 +880,7 @@ def _write_item_health(state: Path, rows: Sequence[ItemHealthRow]) -> None:
     for row in rows:
         by_date[row.date].append(row)
     for day, day_rows in by_date.items():
-        ledger.append_item_health(state, day, day_rows)
+        seed_item_health(state, day, day_rows)
 
 
 def test_publish_reads_the_selected_dates_and_writes_the_complete_read_s_bytes(

@@ -10,13 +10,15 @@ import math
 from datetime import date as date_type
 from datetime import timedelta
 from pathlib import Path
+from typing import Final
 
-from idhazh import assemble, config, ledger, rank, telemetry
+from idhazh import assemble, config, ledger, rank, run_context, telemetry
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.contracts.seen import PublishedRow
 from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.summary import Summary, SummaryStatus
@@ -41,6 +43,11 @@ from idhazh.stages.common import (
 from idhazh.telemetry import source_health
 from idhazh.telemetry.publish import day_metrics, dispatch
 from idhazh.telemetry.publish import source_health as source_health_publish
+
+#: The shard element of this job's segment names. `assemble` runs once for the
+#: whole day rather than fanning out, so it is shard 0 of one - the same answer
+#: the machine probe gives for every job that is not a work shard.
+ASSEMBLE_SHARD: Final = 0
 
 
 def _index_root() -> Path:
@@ -329,9 +336,29 @@ def stage_assemble(
     )
     _report_prose_change(recorded_inputs, previous_manifest)
     assemble.write_atomic(target / "run.json", manifest.to_json())
-    landed = writer.append(common.STATE_ROOT, rows)
     published = ledger.append_published(common.STATE_ROOT, day.date, _published_rows(day, plan))
-    item_health = ledger.append_item_health(common.STATE_ROOT, plan.date, item_health_rows)
+    # This job's own segments, never the day files. A work shard recorded the
+    # same items hours ago on another runner, so two writers would be appending
+    # to one path; each writes its own segment and the fold below settles the
+    # pair. `assemble` runs once for the whole day, so it is shard 0 of one.
+    attempt = run_context.run_attempt()
+    item_health = ledger.write_segment(
+        common.STATE_ROOT,
+        ledger.SegmentLedger.ITEM_HEALTH,
+        item_health_rows,
+        run_id=run_id,
+        attempt=attempt,
+        job=ServerJob.ASSEMBLE,
+        shard=ASSEMBLE_SHARD,
+    )
+    landed = writer.append_segment(
+        common.STATE_ROOT,
+        rows,
+        run_id=run_id,
+        attempt=attempt,
+        job=ServerJob.ASSEMBLE,
+        shard=ASSEMBLE_SHARD,
+    )
     # Before the publishers and never after them. Every projection below reads a
     # head off disk, so a compaction that ran afterwards would publish a page
     # built from a record this run had not finished writing.

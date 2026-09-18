@@ -18,7 +18,13 @@ from pathlib import Path
 from typing import Annotated, Any, Final, get_args, get_origin
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
+from conftest import (
+    CONFIG_DIR,
+    CONTRACT_FIXTURES_DIR,
+    REPO_ROOT,
+    read_text,
+    seed_item_health,
+)
 from pydantic import StringConstraints, TypeAdapter, ValidationError
 
 from idhazh import config, extract, ledger, summarize, telemetry
@@ -1171,7 +1177,7 @@ def test_a_day_file_from_before_the_cap_counter_still_takes_todays_row(tmp_path:
     )
     assert (date_, fresh.run_id, fresh.item_id) not in ledger.recorded_item_health(target)
 
-    assert ledger.append_item_health(state, date_, [fresh]) == 1
+    assert seed_item_health(state, date_, [fresh]) == 1
 
     after = records(target)
     assert ledger.read_header(target) == ItemHealthRow.csv_columns()

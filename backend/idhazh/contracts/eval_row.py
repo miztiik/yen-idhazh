@@ -366,3 +366,24 @@ class EvalRow(Contract):
     def csv_columns(cls) -> tuple[str, ...]:
         """The ledger's column order. One definition, so a writer cannot invent its own."""
         return tuple(cls.model_fields)
+
+    def csv_row(self) -> dict[str, str]:
+        """Every cell a string, keyed by column name.
+
+        The same serialization `evals.writer.append` reaches by dumping the model
+        and picking the columns, spelled once here instead. A segment of these
+        rows is written and read back by the generic machinery in `idhazh.ledger`,
+        which takes a row that can write itself and never a dict somebody built.
+        """
+        payload = self.model_dump(mode="json")
+        return {
+            name: "" if payload[name] is None else str(payload[name])
+            for name in self.csv_columns()
+        }
+
+    @classmethod
+    def from_csv_row(cls, row: dict[str, str]) -> Self:
+        """One row read back. An empty cell is an absent optional, which is what a CSV can say."""
+        return cls.model_validate(
+            {name: (row[name] or None) for name in cls.model_fields if name in row}
+        )

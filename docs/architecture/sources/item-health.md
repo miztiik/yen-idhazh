@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-18
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -178,9 +178,11 @@ is no second call to account for.
 because a rate needs its denominator beside its numerator.
 
 **A row is one planned item on one run.** `(date, run_id, item_id)` is the
-identity, and `ledger.append_item_health` filters on it before it writes. That is
-what lets two stages write the file: the second one to see an item has nothing
-new to say.
+identity, and the fold settles the day on it. That is what lets two stages
+record the same item: each writes its own segment, and `stage_compact` keeps one
+row for the key. Where the two rows disagree the one that names a job wins, for
+the reason the next section gives - `assemble` runs once for the whole day and
+cannot say which machine an item was for.
 
 **That filter reads a frozen file, so it is only half the guarantee.**
 `actions/checkout` pins a job to the commit its run was triggered at, so a second
@@ -355,9 +357,15 @@ of the run. The item row could spell three of the four and stopped there.
 **The rule is one-directional: a row that names a job names a shard too, and not
 the converse.** A job with no shard is half a key and resolves to every shard
 that job ran, so the contract refuses it. A shard with no job is what every row
-written before 2026-09-17 holds, and `ledger.append_item_health` reads those
-rows back through `from_csv_row` before it appends - so a two-directional rule
-would refuse the whole archive on the first run after the column landed.
+written before 2026-09-17 holds, and every reader of this ledger takes those
+rows back through `from_csv_row` - so a two-directional rule would refuse the
+whole archive on the first run after the column landed.
+
+**The pair is also what settles a contested row.** The key has no `job` cell, so
+a work shard and `assemble` recording one item are the same record to the fold.
+Segments are read in filename order and `assemble` sorts before `work`, so
+without a rule the row that knows neither cell would win. `ledger.ITEM_HEALTH_RULE`
+is that rule: a row naming a job beats a row that does not.
 
 ### What the machine had, against what a process held
 
@@ -572,8 +580,8 @@ the width alone would have called it clean.
 
 That is a failed scheduled run, not a failed lint. **This is the one ledger that
 migrates itself, and the reason is that it is the one that has retired a
-heading.** `ledger.append_item_health` reads line 1 before it writes; where the
-header is not the contract's it calls `ledger.migrate_header`, which re-files
+heading.** `stage_compact` reads the head's line 1 before it folds a row into
+it, and calls `ledger.settle_header`, which re-files
 every row through `ItemHealthRow.from_csv_row` and writes the file back under
 the current column list. The migration ships in the same commit as the contract
 (`CLAUDE.md` section 11) because that function IS the migration, not because a

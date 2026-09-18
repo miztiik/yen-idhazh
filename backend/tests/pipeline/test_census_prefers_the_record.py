@@ -7,10 +7,11 @@ carried a rebuild from the article and the summary payloads - which between them
 cannot say what the machine was, what the calls cost, or how long the item
 waited.
 
-Two writers reach that ledger and `ledger.append_item_health` keeps the FIRST
-row for a key, so the write order would decide which row a day keeps. The tests
-below take that question off the table rather than assuming an answer: both
-writers now derive the row from the same sealed file, so they agree cell for
+Two writers reach that ledger. Neither appends to it: each writes a segment and
+`stage_compact` folds them onto one head, and the fold settles two rows for one
+key rather than keeping whichever arrived first. The tests below take the
+question off the table at the source rather than relying on that settlement -
+both writers derive the row from the same sealed file, so they agree cell for
 cell and the order buys nothing.
 
 Every test is driven from the fixture plan's five items over captured pages and
@@ -35,6 +36,7 @@ from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.contracts.summary import Summary
 from idhazh.stages.assemble import stage_assemble
+from idhazh.stages.compact import stage_compact
 from idhazh.stages.record import stage_record
 from idhazh.telemetry.census import EXTRACTION_CELLS
 from idhazh.telemetry.record import HEALTH_SUFFIX
@@ -132,6 +134,7 @@ def test_every_cell_the_shard_sealed_reaches_the_days_ledger(
     state = tmp_path / "state"
 
     stage_record(run_plan, settings=config.load(CONFIG_DIR))
+    stage_compact(state)
 
     kept = committed(state, run_plan.date)
     on_disk = sealed(items_dir)
@@ -160,6 +163,7 @@ def test_the_ledger_row_says_more_than_the_payloads_could(
     state = tmp_path / "state"
 
     stage_record(run_plan, settings=config.load(CONFIG_DIR))
+    stage_compact(state)
 
     kept = committed(state, run_plan.date)
     for planned in run_plan.items:
@@ -174,11 +178,11 @@ def test_which_writer_reaches_the_ledger_first_does_not_change_the_row(
 ) -> None:
     """The sharp edge, blunted: both writers derive the row from the same file.
 
-    `ledger.append_item_health` keeps the first row for a key, so whichever
-    writer arrives first decides what the day carries forever - the file is
-    append-only and cannot correct a row. That used to be a real fork, because
-    the two stages ran two derivations. It is not one any more: both read the
-    row the shard sealed, and this test is what says so.
+    The fold settles two rows for one key, so whichever writer it reads first
+    decides what the day carries - and a head file is append-only, so it cannot
+    be corrected later. That used to be a real fork, because the two stages ran
+    two derivations. It is not one any more: both read the row the shard sealed,
+    and this test is what says so.
 
     One work stage feeds both arms. Two runs would differ in every timing cell
     and prove nothing about the derivation.
@@ -188,6 +192,7 @@ def test_which_writer_reaches_the_ledger_first_does_not_change_the_row(
     state = tmp_path / "state"
 
     stage_record(run_plan, settings=settings)
+    stage_compact(state)
     after_the_worker = committed(state, run_plan.date)
 
     ledger.item_health_path(state, run_plan.date).unlink()
@@ -216,6 +221,7 @@ def test_an_item_whose_shard_sealed_nothing_still_gets_a_census_line(
     (items_dir / f"{orphan.item_id}{HEALTH_SUFFIX}").unlink()
 
     stage_record(run_plan, settings=config.load(CONFIG_DIR))
+    stage_compact(state)
 
     kept = committed(state, run_plan.date)
     # `stage_record` runs as shard 0 of 1 in the `work` job here and stamps both
@@ -230,3 +236,53 @@ def test_an_item_whose_shard_sealed_nothing_still_gets_a_census_line(
     assert kept[orphan.item_id].job is ServerJob.WORK, (
         "the stage that rebuilt the row knows which job it is, even where the shard sealed nothing"
     )
+
+def test_work_then_assemble_leaves_one_settled_head_and_no_waiting_segments(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """The Oracle for moving the item census onto segments.
+
+    Both writers run in the order a real day runs them - a work shard as each
+    item settles, then assemble over the whole day - and the three things that
+    would say the move went wrong are checked together, because each one hides
+    a different failure and any of them alone passes while another is broken.
+
+    **Exactly one row per item.** Two writers recorded all five, so a fold that
+    did not settle them would leave ten rows, and every count taken off this
+    ledger - a feed's share of the day, the day's own metrics - would read
+    double.
+
+    **Nothing left waiting.** A fold that wrote the head and did not clear
+    `state/segments/` would re-fold the same rows on the next run, and the store
+    would grow with the archive rather than with what is waiting (Guardrail
+    #12).
+
+    **One header line.** The head is what every reader of this ledger opens, and
+    a second header block inside it is the shape `merge=union` makes and no
+    reader refuses - the day it appeared in the committed tree, 71 rows went
+    unread under it.
+
+    What this cannot settle is a production-scale row count: five fixture items
+    over captured pages is a shape check, not a load test.
+    """
+    settings = config.load(CONFIG_DIR)
+    run_plan, _ = worked(tmp_path, monkeypatch)
+    state = tmp_path / "state"
+
+    stage_record(run_plan, settings=settings)
+    assert ledger.segment_files(state, ledger.SegmentLedger.ITEM_HEALTH), (
+        "the work stage wrote no segment, so the rest of this proves nothing"
+    )
+    stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
+
+    head = ledger.item_health_path(state, run_plan.date)
+    lines = head.read_text(encoding="utf-8").splitlines()
+    header = list(ItemHealthRow.csv_columns())
+    assert [line for line in lines if line.split(",")[:3] == header[:3]] == [",".join(header)], (
+        "the head carries more than one header block"
+    )
+
+    kept = committed(state, run_plan.date)
+    assert sorted(kept) == sorted(item.item_id for item in run_plan.items)
+    assert len(lines) == PLANNED_ITEMS + 1, f"{len(lines) - 1} rows for {PLANNED_ITEMS} items"
+    assert ledger.segment_files(state) == [], "the fold left segments waiting"

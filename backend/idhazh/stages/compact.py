@@ -39,7 +39,9 @@ LOG: Final = logging.getLogger("idhazh")
 #: what makes the settlement below total rather than a list of cases.
 HEAD_ATTEMPT: Final = 0
 
-#: The cell that names the head a row belongs to.
+#: The cell that names the head a row belongs to, where the row has one. The
+#: score index does not: it is a stamp and a digest, filed beside the rows it
+#: describes, and `ledger.segment_dates_from_run` is what says so.
 DATE_CELL: Final = "date"
 
 #: The one non-key cell two rows may fill differently without disagreeing. It
@@ -76,6 +78,7 @@ class _Waiting:
     attempt: int
     lineno: int
     cells: dict[str, str]
+    date: str
 
 
 def _rows_of(path: Path) -> Iterator[tuple[int, dict[str, str]]]:
@@ -171,22 +174,31 @@ def _settle(
     return True
 
 
-def _waiting_rows(paths: list[Path], model: type[CsvContract]) -> list[_Waiting]:
+def _waiting_rows(
+    paths: list[Path], model: type[CsvContract], *, dates_from_run: bool
+) -> list[_Waiting]:
     """Every row of every segment of one ledger, in the order it is folded.
 
     Ascending attempt, so a correction always arrives after what it corrects and
     the settlement never has to look backwards. Ties break on the filename and
     then on the row, so two passes over the same files produce the same head.
+
+    The date each row is filed under comes off the row, except for the one
+    ledger whose rows carry no date at all - `ledger.segment_dates_from_run`
+    says which, and there the segment's own run id supplies it.
     """
     waiting = [
         _Waiting(
             path,
-            ledger.parse_segment_name(path).attempt,
+            name.attempt,
             lineno,
-            _parsed(path, lineno, raw, model),
+            cells,
+            name.run_id[:10] if dates_from_run else cells[DATE_CELL],
         )
-        for path in paths
-        for lineno, raw in _rows_of(path)
+        for path, name in ((path, ledger.parse_segment_name(path)) for path in paths)
+        for lineno, cells in (
+            (lineno, _parsed(path, lineno, raw, model)) for lineno, raw in _rows_of(path)
+        )
     ]
     waiting.sort(key=lambda row: (row.attempt, row.path.name, row.lineno))
     return waiting
@@ -197,8 +209,13 @@ def _compact_ledger(
 ) -> tuple[list[str], int, int]:
     """Fold one ledger's segments into every head their own rows name."""
     by_date: dict[str, list[_Waiting]] = {}
-    for row in _waiting_rows(paths, ledger.segment_contract(which)):
-        by_date.setdefault(row.cells[DATE_CELL], []).append(row)
+    rows_waiting = _waiting_rows(
+        paths,
+        ledger.segment_contract(which),
+        dates_from_run=ledger.segment_dates_from_run(which),
+    )
+    for row in rows_waiting:
+        by_date.setdefault(row.date, []).append(row)
     written: list[str] = []
     merged = 0
     superseded = 0
