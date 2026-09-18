@@ -142,6 +142,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_tag",
         "test_telemetry",
         "test_telemetry_fold",
+        "test_thin_corpus",
         "test_trace_tree",
         "test_two_runs",
         "test_validation",
