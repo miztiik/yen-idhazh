@@ -27,6 +27,7 @@ from idhazh.evals import metrics, sampling, score, writer
 from idhazh.fingerprint import (
     prose_changed_alone,
 )
+from idhazh.similarity import applied
 from idhazh.stages import common
 from idhazh.stages import compact as compact_stage
 from idhazh.stages.common import (
@@ -262,6 +263,15 @@ def stage_assemble(
     digest_items = [item.model_copy(update={"introduced_by_run": run_n}) for item in digest_items]
 
     generated_at = assemble.utc_now()
+    # The one place the merge line is chosen. `collapse_same_story` reads the floor
+    # off the block it is handed, so the fitted line arrives the same way the
+    # committed one always has - and with the flag off this returns the committed
+    # block itself, byte for byte.
+    same_story = applied.effective_same_story(
+        settings.app.assemble.same_story,
+        state_dir=common.STATE_ROOT,
+        date=plan.date,
+    )
     day = assemble.build_day(
         plan=plan,
         items=digest_items,
@@ -277,7 +287,7 @@ def stage_assemble(
         watchlist=settings.watchlist,
         ui=settings.app.ui,
         placement=settings.app.placement,
-        same_story=settings.app.assemble.same_story,
+        same_story=same_story,
         group_identical_titles=settings.app.assemble.group_identical_titles,
         same_story_window_hours=settings.app.assemble.same_story_window_hours,
         earlier_days=_earlier_days(
@@ -326,6 +336,7 @@ def stage_assemble(
         evaluation_sampled=sampling.run_is_sampled(run_id, observability.sample_rate),
         scorer_version=instruments[0] if len(instruments) == 1 else None,
         rank_version=rank.RANK_VERSION,
+        same_story_floor_applied=same_story.floor_min,
     )
     _report_prose_change(recorded_inputs, previous_manifest)
     assemble.write_atomic(target / "run.json", manifest.to_json())
