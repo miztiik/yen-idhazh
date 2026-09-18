@@ -13,7 +13,8 @@ const FILES: Record<Exclude<FrontendGroup, 'console'>, readonly string[]> = {
 		'extraction-trend', 'extraction-window', 'frame',
 		'glance-and-rank', 'item-health-day', 'merge-line', 'model-cards', 'one-pass-reductions',
 		'preview-port',
-		'telemetry-header', 'telemetry-hold', 'throughput-window', 'time-split', 'vocabulary',
+		'telemetry-header', 'telemetry-hold', 'throughput-window', 'time-split',
+		'verdict-split', 'vocabulary',
 		'weights'
 	],
 	reader: [

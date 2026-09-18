@@ -6,7 +6,7 @@ import {
 } from '$lib/server/config';
 import { mergeCountsOf, type JudgeDay, type LineDay, type MergeDay } from '$lib/console/merge-line';
 import { loadDay, publishedDates } from '$lib/server/payload';
-import { fittedLines } from '$lib/server/similarity-ledger';
+import { fittedLines, scoreRecord } from '$lib/server/similarity-ledger';
 
 export const prerender = true;
 
@@ -59,6 +59,9 @@ export function load() {
 	// and all three gate counts, so asking the ledger twice would be two reads of
 	// one file that could disagree about which run of a date they took.
 	const rows = fittedLines(widestDays);
+	// The record is cumulative and the counts are per day, so the newest row is
+	// what both the split and the figures strip are about.
+	const newest = rows.length === 0 ? null : rows[rows.length - 1];
 	return {
 		// Oldest first, the order every chart on this console draws a day axis in.
 		merges,
@@ -81,7 +84,7 @@ export function load() {
 				date: row.date,
 				disagreementRate: row.disagreementRate,
 				unclearRate: row.unclearRate,
-				pairsJudged: row.pairsJudged,
+				pairsJudged: row.pairsJudged ?? 0,
 				negativesOnRecord: row.negativesOnRecord,
 				aboveLineOnRecord: row.aboveLineOnRecord,
 				daysOnRecord: row.daysOnRecord,
@@ -95,6 +98,18 @@ export function load() {
 		// The band and the daily step the chart draws against, read off config so
 		// the axis is the range a line MAY take rather than the range it has taken.
 		similarity: similarityConfig(),
+		// 120 slots, a fixed size whatever the archive grows to, so this read costs
+		// the same on the thousandth day as on the third. The page draws no 120-slot
+		// chart, so only the four counts, the two ranges and the 24 rebinned rows
+		// reach the document.
+		record: scoreRecord(),
+		// The day's three counts, off the newest fitted row. A dash where the ledger
+		// holds no answer, never a zero.
+		figures: {
+			inBand: newest?.pairsInBand ?? null,
+			judged: newest?.pairsJudged ?? null,
+			usable: newest?.pairsUsable ?? null
+		},
 		// What the newest day was built with when no fit has ever run.
 		configuredLine: committedFloor(),
 		console,

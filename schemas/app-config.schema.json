@@ -526,6 +526,14 @@
           "title": "Pan Days",
           "type": "integer"
         },
+        "precision_axis_multiple": {
+          "default": 10.0,
+          "description": "How many times assemble.same_story.adaptive_dedup_threshold.discard_share the precision axis reaches. The fit places the line so that the discard share of judged two-story pairs stays above it, so 1 percent is where the line should hover; ten times that shows the target and a tenfold overshoot on one fixed scale. A value past the top is clamped at the top and printed in the readout, because the worst day is the one a hidden mark would cost.",
+          "exclusiveMinimum": 1.0,
+          "maximum": 100.0,
+          "title": "Precision Axis Multiple",
+          "type": "number"
+        },
         "shimmer_after_ms": {
           "default": 400,
           "description": "How long a reserved console block stays still before it starts to shimmer, in milliseconds. The block is drawn the moment the document is, so this knob decides nothing about the shape of the page - only whether a wait short enough to be over already gets animated on its way past. Four hundred is a DECLARED ESTIMATE and not a measurement (CLAUDE.md Guardrail #10), and it stays one: the number it needs is the median time a payload takes to reach a READER, and a reader-facing timing measurement is scoped out by the same owner ruling that authorised the fetch (2026-09-08). Everything measurable instead is localhost, where arrival is a few milliseconds and any threshold derived from it is one nobody ever crosses. What would settle it is in docs/reference/pipeline-cost.md under Still unmeasured. `config/appearance.json` owns the value, as `console.shimmer_after_ms`.",

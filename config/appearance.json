@@ -33,6 +33,7 @@
     "min_attempts_for_rate": 5,
     "min_window_days": 1,
     "pan_days": 7,
+    "precision_axis_multiple": 10.0,
     "shimmer_after_ms": 400,
     "source_rows": 10,
     "timeline_bars": 120,

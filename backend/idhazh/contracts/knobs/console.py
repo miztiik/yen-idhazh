@@ -81,6 +81,19 @@ class ConsoleConfig(Model):
         ge=1,
         description="Below this count a rate is outlined because the denominator is thin.",
     )
+    precision_axis_multiple: float = Field(
+        default=10.0,
+        gt=1.0,
+        le=100.0,
+        description=(
+            "How many times assemble.same_story.adaptive_dedup_threshold.discard_share "
+            "the precision axis reaches. The fit places the line so that the discard "
+            "share of judged two-story pairs stays above it, so 1 percent is where the "
+            "line should hover; ten times that shows the target and a tenfold overshoot "
+            "on one fixed scale. A value past the top is clamped at the top and printed "
+            "in the readout, because the worst day is the one a hidden mark would cost."
+        ),
+    )
     chart_height: int = Field(
         default=220,
         ge=120,
