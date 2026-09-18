@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-18
 Where the pipeline writes what a reader reads and what a reader's URL looks like. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
 What happens to any of it afterwards is the other half, and it is [retention.md](retention.md): unpublishing a day, what bounds the committed state tree, and the score shards that turn into summaries once they age out.
@@ -232,6 +232,8 @@ The one false merge at 0.93 is on 2026-08-30: Ontario's pushback against the lak
 **The two errors are not equal, which is why the number leans high.** A missed group costs a reader the same story twice, on a page they can see. A false merge costs them a story that never ran, and they cannot see what is not there ([../../../.github/agents/editor.agent.md](../../../.github/agents/editor.agent.md)).
 
 **`assemble.same_story.floor_min` is not comparable to `assist.similarity_floor`.** That one scores a reader's query against an item and this one scores two items against each other; the two distributions are different shapes, and reading one number against the other is how a threshold gets set from the wrong evidence.
+
+**The 0.0083 margin is why `assemble.same_story.adaptive_dedup_threshold` exists, and the block ships off.** The floor above was read once, by one person, over eleven days, and nothing re-reads it as the corpus changes. That block holds the knobs for a line that fits itself: the band worth judging, how the record slices it, the four steps that move the line and the three gates it has to clear first. **Nothing reads any of it today.** `enabled` is false, so the pass still compares against `floor_min` and publishes exactly the groups it published before the block existed, and `max_down_step` is refused at or above 0.0083 so no single step this design can take could cross the margin the table above measured. The shapes the fit will read and write - the scored pair, the score record, the fitted row and the hand-marked holdout - are in [../contracts/schemas.md](../contracts/schemas.md), and they are landed ahead of their producers under Guardrail #3.
 
 ### One headline, two outlets, and why 0.94 was not what changed
 

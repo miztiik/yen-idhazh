@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-18
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Guardrail #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -21,7 +21,8 @@ Knobs, by the surface they tune:
 - **Model** - which model reference and quantisation, the context size, thread count, and the sampling parameters that pin determinism.
 - **Summarize** - the length bands, each carrying its own key-point range, plus the title range and quote cap.
 - **Evaluation** - the confidence band thresholds, the brief compression ceiling, the copy reject ceiling, the word gate, the faithfulness window and its overlap, and the spot-check sample size ([evaluation.md](evaluation.md)).
-- **Run shape** - the safety ceiling, the batch size, per-job timeouts, and concurrency ([pipeline-loop.md](pipeline-loop.md)).
+- **Run shape** - the safety ceiling, the batch size, per-job timeouts, and concurrency ([pipeline-loop.md](pipeline-loop.md)). `run.judge_shard_timeout_minutes` is the second per-job timeout, and it bounds one leg of the same-story judging rather than a work shard.
+- **Same-story line** - `assemble.same_story.adaptive_dedup_threshold` holds how the merge line fits itself: the band worth judging, how the record slices it, the four steps that move the line, and the three gates it has to clear first. `enabled` is the switch and it ships **off**, so a fresh clone publishes exactly the groups `assemble.same_story.floor_min` produced before the block existed. Nothing reads the block yet ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)).
 - **Bench** - how many articles one runtime-sweep repeat reads, and whether a bench dispatch measures the model's raw speed first. `bench.corpus_items` is a fit against the job timeout rather than a taste ([../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md#why-the-bench-corpus-is-three-articles)). `bench.run_model_speed_case` is true by default; false skips the `llama-bench` job and leaves the rest of the dispatch running, which is what to set when the flow is being exercised rather than a model measured ([../reference/github-actions.md](../reference/github-actions.md#design-rationale)).
 - **Retention** - the image age window, the dry-run switch, the deletion fuse, the published-site alarm point and the published-site cap ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)). `retention.site_budget_mb` and `retention.pages_hard_cap_mb` are read by `idhazh site-weight`, which runs after the site is built and measures the built bundle - never the committed payload tree, which is a different tree eighteen times smaller. The alarm point warns; the cap fails the job.
 - **Drift** - the window and per-domain sample floors and the length/copying
