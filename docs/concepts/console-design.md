@@ -1,6 +1,6 @@
 # Console Design
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-17
 How a figure on the operator console is worded, coloured, ranked and drawn. It is
 the operator half of [design-system.md](design-system.md), which keeps the
 vocabulary the whole site resolves - the tokens, the colour ramps, the motion set
@@ -15,10 +15,6 @@ says at what grain a figure was measured. This page says how it is allowed to
 read on screen. The bounds are Jony's and Susan's
 ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md),
 [../../.github/agents/susan.agent.md](../../.github/agents/susan.agent.md)).
-
-The console is read by the developer and the operator, not by a digest reader.
-That sets who it is for; it does not relax how it is written. `CLAUDE.md` section
-0b binds every string in this repo.
 
 ## A console figure says what it counts, in words
 
@@ -694,6 +690,132 @@ neither, fails on a declared column with no strip, and fails on a swatch drawn
 inside a chart that has one. It also holds the reason to five words, because
 `none` passes an attribute check and tells a reader nothing.
 
+## Thirteen rules hold for every chart on this console
+
+> **Argued once so that no panel argues them again.** Thirteen rules settled in one place beat thirteen rules settled nine times, and a reader cannot learn nine answers to one question.
+
+Susan ruled these on 2026-09-17, after reading all 23 console panels, both timing
+components, the chart library and the committed ledgers. Twelve are chart craft -
+what the drawing may do. The thirteenth is the question the panel answers, and it
+catches more failures than any of the other twelve. **Each rule carries its
+reason, and the reason is the load-bearing part**: a rule quoted without it is a
+half-quote, and a rule whose reason has stopped holding is a rule to change.
+
+- **A fixed value domain is allowed only where the ceiling IS the comparison, and
+  then the panel prints the ceiling beside the figure.** Everywhere else the
+  domain comes from the data drawn, niced by the scale library - which is what
+  `linearAxis` already does. A fixed axis over adaptive data wastes the plot; an
+  adaptive axis over a limit deletes the comparison. **Four things are not "the
+  data drawn", and each one widens the domain rather than replacing it.** Each is
+  named with the shipped site that proves it, because an exception nobody can
+  point at is an exception nobody can check.
+  - **A limit the panel exists to measure distance from** - 16 GiB of runner
+    memory, the context window - **joins the values the domain is built from**,
+    so the limit is a line on the plot and a breach still draws past it. It is
+    never the axis maximum, which would clip the breach at the line and hide the
+    one reading the panel exists for. Shipped twice: `targetbar.ts` runs its
+    track to the larger of the value and the target, and the context headroom
+    panel on `/console/machine/` builds its axis from the drawn extent rather
+    than from the window it is measured against.
+  - **A share or a cumulative percentage runs 0 to 100**, because a curve that
+    stops short of its own top reads as a curve that has not finished. Shipped in
+    `TimeHistogram.svelte`, whose right-hand percent axis is always the full
+    nought to a hundred and whose comment is where that reason is already
+    written. `FailurePanels.svelte` fixes the same axis for a second reason worth
+    keeping: a rate over a known range is compared across stages and across days,
+    and scaling it to the window's own maximum drew a 12 percent rate and a 90
+    percent one at the same height.
+  - **A ratio against a baseline is symmetric about that baseline and carries a
+    minimum width**, or a two percent change fills the plot and reads as a rout.
+    Shipped as `swapScale` in `series.ts`: no change is 100 percent and that
+    point is the axis centre, and `minHalf` holds the half-width at 25 percentage
+    points however small the real spread turns out to be.
+  - **Every plot a panel means the reader to compare shares ONE domain.** A
+    per-plot domain inside one panel deletes every comparison the panel was built
+    for. Shipped in the five tail plots on `/console/machine/`, which take one
+    `linearAxis` over the extent of all five.
+
+  **The cost this rule accepts, stated rather than hidden:** an adaptive axis
+  re-nices when the reader moves the window, so the same panel on two days is not
+  comparable by eye. `.nice()` bounds that to whole tick steps and the readout
+  strip carries the figure - a reader who wants the number reads it, a reader who
+  wants the shape gets a full plot. Audited 2026-09-17 across
+  `frontend/src/lib/charts/` and its callers: 24 domains, 21 adapting and 3 fixed
+  with cause, so **the rule ratifies what is shipped rather than changing it.** An
+  earlier wording - set the maximum to the ceiling - would have broken two of the
+  three correct ones. The 1 GB Pages cap is not on this list: it is arithmetic in
+  `glance.ts` and never a scale.
+- **A stacked series has a fixed order, stated once.** Read at the bottom, write
+  at the top, everywhere. Unclaimed and residual always last. A stack whose order
+  moves between panels cannot be compared between panels, and a reader cannot
+  learn it.
+- **No piecewise or non-uniform value axis.** Where a spread genuinely defeats a
+  linear domain, use a log scale and label it as one. Equal pixel steps standing
+  for unequal value steps is a chart that misreports by construction; a log axis
+  misreports nothing, it just has to say so. The owner asked for a 0/10/50/100
+  axis on the shard board and it is refused. **What the reader loses by not
+  having it, named:** at a 6x spread across machines the low bars compress, and
+  the detail at the low end compresses with them. That compression is the true
+  picture of a 6x spread and is the thing worth seeing, where the piecewise axis
+  would have drawn the slowest machine and the fastest at comparable lengths.
+  Measured 2026-09-17: on a linear domain of 0 to 75 tokens a second, a 12 tok/s
+  bar still draws at 16 percent of the track, which is readable - so the refusal
+  costs nothing the panel needed.
+- **Two series share one axis when the larger is under 20x the smaller; past that
+  the smaller takes its own row on a shared x.** Measure before choosing. At 20:1
+  the smaller draws under 5 percent of the plot and reads as zero. The threshold
+  is a measurement rather than a taste, and the panel records the ratio it
+  measured beside itself.
+- **A panel may carry a shape switch or a grain switch where ONE builder call
+  returns every shape it offers.** Never two calls, never a second fetch. This is
+  what preserves the reason behind the no-re-shaping rule below - two derivations
+  that can disagree - while allowing a cumulative line and a shard-or-item grain.
+  `chartFlow` is the existing precedent.
+- **A switch control sits top right of its own panel, and it is radio inputs.**
+  Two named states a reader can see both of beats one state and a verb. Top right
+  because the control belongs to the panel rather than to the page.
+- **A tooltip is never the only carrier of a fact.** Every panel carrying one also
+  carries the readout strip or a printed list. The dominant reading device has no
+  hover. Restated here because tooltips are arriving at nine panels at once.
+- **A segment under 1 px at `console.chart_width` is not drawn as a segment.**
+  Where a split's smallest band falls below that, the split becomes a printed
+  figure and the bar draws whole. Measured 2026-09-17 over 23 shard-rows of
+  `state/span-rollup/2026-09.csv`: the four sub-steps of a shard's clock together
+  draw 0.026 px of a 760 px track and the residual draws 0.039 px, and a browser
+  paints neither. **A band at 0.026 px is a legend entry with no mark**, which
+  teaches a reader the category is zero when it is only unmeasurable at this
+  scale.
+- **A legend key for a series with no committed rows is deleted, not drawn
+  empty.** The `robots check` key has stood in one legend across 23 shard-rows
+  that never carried it. A key for an absent series is a claim the data does not
+  support.
+- **A figure with a span is drawn as a range, never written as two sentences.**
+  Value, low, high, one track. Four figures that each have a span, each written
+  as prose, is four sentences no two of which can be compared.
+- **A panel whose title asks a trend question draws a time axis.** A ranked list
+  answers "which is biggest", never "what is changing". The title and the shape
+  have to agree, or one of them is wrong.
+- **Bar thickness comes from one place and a bar is never thickened to fill
+  vertical room.** Room left over goes back to the panel. A thick bar reads as
+  importance; thickness is not a variable here, so it must not vary.
+- **A panel serves _is it working_ or _what is broken_, and names which. A verdict
+  panel sits above the panels it verdicts.** A verdict takes the central value or
+  the count and covers every subsystem. A break takes the extreme and the
+  individual that owns it, and covers every candidate in one subsystem. A panel
+  whose title asks one question and whose shape answers the other is the
+  commonest defect on this console: of the eight panels that failed review on
+  2026-09-17, five failed on this rule and only three on their drawing. The
+  rule's own proof is the peak-memory panel - a per-shard maximum is the verdict
+  reading, and the item that took the model process to 83.1 percent of the
+  runner's 16 GiB is invisible behind it. One measurement, two questions, one of
+  them built. **What a scattered verdict costs the operator:** he reads ten
+  Hardware panels and only then reaches the panel that tells him whether the
+  instruments agree.
+
+Authority: Susan, 2026-09-17. Which surface answers which of the two questions is
+[../architecture/publishing/console.md](../architecture/publishing/console.md);
+this page rules how the drawing may read.
+
 ## A stacked chart offers lines only where no data is re-shaped
 
 Stacked says what the mix is and how big the total got. Lines say what one
@@ -713,6 +835,23 @@ numbers.
 One control per panel, never one per series and never a preference that follows
 the reader across the site. A Sankey is not a line and a histogram is not a
 stacked bar; forcing the control everywhere would mean massaging data to fit it.
+
+**The rule is widened, and its reason is what the widening preserves.** Susan,
+2026-09-17. The identical-array test refuses a cumulative line, because a running
+total IS a re-shape - so the counterfactual-cost panel could not offer
+"cumulative by day" against "per day" at all, and the only shape a cost has that
+answers whether it is growing is the cumulative one. What the original test was
+protecting against was never the transform. It was **two derivations that can
+disagree**, where a reader who finds both has nothing on screen saying which to
+believe. So the test widens to the thing that actually holds that: **one builder
+call returns every shape the panel offers**, never two calls and never a second
+fetch. Where the same array draws both shapes with nothing between them the
+stronger form still holds, and it is still the one to prefer.
+
+**What the widening costs.** The byte-identical assertion no longer covers every
+switch. A panel whose shapes come out of one call but are not the same array owes
+its own oracle comparing the two shapes' numbers, the way `console-chrome.spec.ts`
+already compares the two that qualify under the stronger form.
 
 ## A chart says how much of its window it measured, once, above the plot
 
@@ -862,6 +1001,17 @@ behind them - `day-metrics.addresses_considered` and
 Authority: Susan, 2026-09-16.
 
 ## Design rationale
+
+**The thirteen chart rules landed in one commit, before any panel was redrawn.**
+The rejected alternative was to let each panel row make its own call as it came
+to it. Nine rows re-arguing the axis, the stacking order and the switch produce
+nine answers, and a reader who moves between two panels cannot learn nine - which
+is the defect the rules exist to remove, arriving by the door that was meant to
+avoid the argument. The cost of settling first is that every panel row now waits
+on one doc row. It was paid once. Landing a panel in the same commit was refused
+for a different reason: doctrine plus a panel cannot be reverted without
+reverting the panel, and the doctrine is the half more likely to need editing.
+Susan, 2026-09-17.
 
 **`console.shimmer_after_ms` ships at 400 and 400 is a declared estimate, not a
 measurement.** Guardrail #10 refuses an unmeasured number the right to justify a
