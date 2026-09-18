@@ -28,7 +28,7 @@ from ._harness import (
 
 pytestmark = pytest.mark.workflow
 
-FILENAME: Final = "llm-judges.yml"
+FILENAME: Final = "llm-council.yml"
 
 #: The knob the leg's bound is read from. Spelled once here and asserted in the
 #: file, so a workflow that read a different knob fails rather than bounding the

@@ -1,8 +1,16 @@
-name: LLM-JUDGES
+name: LLM-COUNCIL
 
 # The judge, once a night, on its own clock. It reads yesterday's published day,
 # asks a model which borderline pairs are one story, folds the answers into a
 # fixed-size record and fits the merge line off it.
+#
+# **Council, not judges, and the name is about where this goes** (owner,
+# 2026-09-18). Today the four legs shard a list and never confer, so on today's
+# shape `judges` would be the more literal word. What is coming is not one
+# question: autotune argues a case and needs something to adjudicate it - a
+# judge, a jury or a plain heuristic - and some of those paths will put a person
+# in the loop. One roof for all of them, named for the room rather than for the
+# one job being done in it this month.
 #
 # It is not part of `digest.yml`, and the reason is the budget the design
 # permits rather than the day the pipeline usually has. At the `pair_budget` cap
@@ -31,7 +39,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: llm-judges
+  group: llm-council
   cancel-in-progress: false
 
 env:
