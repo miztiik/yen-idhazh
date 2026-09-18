@@ -425,6 +425,25 @@ jobs:
           path: backend/var/qualification/samples-*.json
           retention-days: 30
 
+      # What each call was sent and what came back, one file per call per item
+      # per repeat. Without it a gate verdict names a count and nothing can say
+      # what the model was asked, which is the question every investigation of a
+      # bad score opens with. `backend/utilities/pipeline_artifact_analyzer.py`
+      # reads this directory.
+      #
+      # Owner decision, 2026-09-18. A prompt carries the article body, and this
+      # repository is public: GitHub asks only for read access to download an
+      # artifact, so this is readable by anyone rather than by maintainers
+      # alone. digest.yml had already made that trade for the daily run. It is
+      # bounded by `logging.capture_prompts` and `logging.capture_replies` -
+      # with both off the directory is empty and this line is a green no-op.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: captures-${{ matrix.shard }}
+          path: backend/var/run/${{ needs.plan.outputs.date }}/captures/
+          retention-days: 30
+          if-no-files-found: ignore
+
   decide:
     needs: [plan, qualify]
     # `always()`, because a shard that died still leaves the gates something to
