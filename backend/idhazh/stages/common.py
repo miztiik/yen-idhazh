@@ -76,6 +76,15 @@ VALIDATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "validation"
 QUALIFICATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "qualification"
 
 
+#: Where a day's draw of borderline pairs waits for the legs that judge it. A
+#: sibling of `VAR_ROOT` and never under `state/`: a drawn row carries no verdict
+#: yet and the legs rewrite it, while a row reaches `state/` once, already
+#: judged, and is never edited afterwards. The relative spelling is the one a log
+#: line prints, so the path written and the path reported cannot drift apart.
+JUDGE_ROOT_RELPATH: Final = "backend/var/judge"
+JUDGE_ROOT: Final = config.REPO_ROOT / JUDGE_ROOT_RELPATH
+
+
 #: A sibling of `VAR_ROOT` rather than a child, because the run never reads it
 #: back and no downstream job downloads it. A test redirects it the same way.
 EVIDENCE_ROOT: Final = config.REPO_ROOT / evidence.EVIDENCE_ROOT_RELPATH
