@@ -4,10 +4,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from idhazh import config, ledger
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.runtime_counters import ServerJob
+from idhazh.stages import compact as compact_stage
 from idhazh.telemetry import silicon
 
 
@@ -21,6 +24,18 @@ def a_plan() -> RunPlan:
             "items": [],
         }
     )
+
+
+def a_probe() -> config.Settings:
+    """The probe switched on with the bandwidth reading switched off.
+
+    The bandwidth probe allocates a gigabyte and times a copy of it, which is a
+    second of a test's life for a cell none of these tests reads.
+    """
+    settings = config.load()
+    settings.app.observability.host_fingerprint = True
+    settings.app.observability.host_fingerprint_bandwidth_mib = 0
+    return settings
 
 CPUINFO_XEON = """processor\t: 0
 vendor_id\t: GenuineIntel
@@ -184,31 +199,78 @@ def test_the_bench_can_ask_for_the_model_name_on_its_own() -> None:
     assert silicon.host_cpu_model("") is None
 
 
-def test_the_stage_writes_one_row_a_job_into_the_day_file(tmp_path: Path) -> None:
-    """The whole point: a reading somebody takes next month can find the machine."""
-    settings = config.load()
-    settings.app.observability.host_fingerprint = True
-    settings.app.observability.host_fingerprint_bandwidth_mib = 0
+def test_the_stage_writes_this_job_its_own_segment_and_never_the_day_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ten jobs of one run record a machine, so none of them may open one file.
 
+    `state/host-fingerprint/2026/09/16.csv` is header-only in this repository
+    because they did. A segment is named for the run, the attempt, the job and
+    the shard, so two writers cannot take one path and the compaction is what
+    turns them back into the day a reader opens.
+
+    The attempt is set here rather than left to the environment: this suite runs
+    on Actions too, and a re-run of the CI job would otherwise put a 2 in a name
+    this test spells out.
+    """
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
     row = silicon.stage_fingerprint(
-        a_plan(), settings=settings, state_root=tmp_path, shard=2, job=ServerJob.WORK
+        a_plan(), settings=a_probe(), state_root=tmp_path, shard=2, job=ServerJob.WORK
     )
 
     assert row is not None
-    written = ledger.host_fingerprint_path(tmp_path, "2026-09-16")
-    assert written.exists(), "a fingerprint nobody stored answers nothing next month"
-    assert written.parts[-3:] == ("2026", "09", "16.csv"), "the tree has to be day sharded"
+    assert not ledger.host_fingerprint_path(tmp_path, "2026-09-16").exists(), (
+        "the probe writes a segment; the head has one writer and it is the compaction"
+    )
+    written = ledger.segment_files(tmp_path, ledger.SegmentLedger.HOST_FINGERPRINT)
+    assert [path.name for path in written] == ["2026-09-16-1-1-work-02.csv"]
+
+    compact_stage.stage_compact(tmp_path)
+    head = ledger.host_fingerprint_path(tmp_path, "2026-09-16")
+    assert head.exists(), "a fingerprint nobody stored answers nothing next month"
+    assert head.parts[-3:] == ("2026", "09", "16.csv"), "the tree has to be day sharded"
+    assert not ledger.segment_files(tmp_path), "a folded segment is removed, not left behind"
 
 
-def test_a_second_call_for_one_job_does_not_write_a_second_row(tmp_path: Path) -> None:
+def test_a_second_attempt_at_one_shard_writes_beside_the_first_and_wins(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """GitHub keeps the run id and increments the attempt, so the attempt is in the name.
+
+    Without it the second try takes the path the first already took - in exactly
+    the case where the two disagree, because the first attempt is the one that
+    died. Both files survive to the fold, and the fold keeps the higher attempt.
+    """
+    plan, settings = a_plan(), a_probe()
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
+    silicon.stage_fingerprint(plan, settings=settings, state_root=tmp_path, shard=0)
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "2")
+    silicon.stage_fingerprint(plan, settings=settings, state_root=tmp_path, shard=0)
+
+    written = ledger.segment_files(tmp_path, ledger.SegmentLedger.HOST_FINGERPRINT)
+    assert [path.name for path in written] == [
+        "2026-09-16-1-1-work-00.csv",
+        "2026-09-16-1-2-work-00.csv",
+    ]
+
+    compact_stage.stage_compact(tmp_path)
+    lines = ledger.host_fingerprint_path(tmp_path, "2026-09-16").read_text(encoding="utf-8")
+    assert lines.count("\n") == 2, "one machine, one row, however many attempts drew it"
+
+
+def test_a_second_call_in_one_attempt_rewrites_the_one_segment(tmp_path: Path) -> None:
     """A machine counted twice is exactly what would make the distribution lie."""
-    settings = config.load()
-    settings.app.observability.host_fingerprint_bandwidth_mib = 0
-    plan = a_plan()
+    plan, settings = a_plan(), a_probe()
 
-    silicon.stage_fingerprint(plan, settings=settings, state_root=tmp_path, shard=0, job=ServerJob.WORK)
-    silicon.stage_fingerprint(plan, settings=settings, state_root=tmp_path, shard=0, job=ServerJob.WORK)
+    silicon.stage_fingerprint(
+        plan, settings=settings, state_root=tmp_path, shard=0, job=ServerJob.WORK
+    )
+    silicon.stage_fingerprint(
+        plan, settings=settings, state_root=tmp_path, shard=0, job=ServerJob.WORK
+    )
 
+    assert len(ledger.segment_files(tmp_path)) == 1, "one writer, one path, one file"
+    compact_stage.stage_compact(tmp_path)
     lines = ledger.host_fingerprint_path(tmp_path, "2026-09-16").read_text(encoding="utf-8")
     assert lines.count("\n") == 2, "one header and one row, however many times the stage ran"
 
@@ -221,18 +283,24 @@ def test_the_switch_being_off_writes_nothing_and_still_returns(tmp_path: Path) -
     row = silicon.stage_fingerprint(a_plan(), settings=settings, state_root=tmp_path, shard=0)
 
     assert row is None
+    assert not ledger.segment_files(tmp_path)
     assert not ledger.host_fingerprint_path(tmp_path, "2026-09-16").exists()
 
 
 def test_a_row_survives_the_round_trip_through_the_ledger_shape(tmp_path: Path) -> None:
-    """An empty cell has to read back as absent, never as a zero bandwidth."""
-    settings = config.load()
-    settings.app.observability.host_fingerprint_bandwidth_mib = 0
-    silicon.stage_fingerprint(a_plan(), settings=settings, state_root=tmp_path, shard=0)
+    """An empty cell has to read back as absent, never as a zero bandwidth.
 
-    path = ledger.host_fingerprint_path(tmp_path, "2026-09-16")
+    Read off the segment rather than off the head, because the segment is where
+    the writer's own rendering lands: a head has been through the fold, so a cell
+    the writer never filled and a cell the fold dropped would look the same.
+    """
+    silicon.stage_fingerprint(a_plan(), settings=a_probe(), state_root=tmp_path, shard=0)
+
+    path = ledger.segment_files(tmp_path, ledger.SegmentLedger.HOST_FINGERPRINT)[0]
     header, body = path.read_text(encoding="utf-8").splitlines()[:2]
-    read = HostFingerprintRow.from_csv_row(dict(zip(header.split(","), body.split(","), strict=True)))
+    read = HostFingerprintRow.from_csv_row(
+        dict(zip(header.split(","), body.split(","), strict=True))
+    )
 
     assert read.memcpy_gib_s is None, "a probe that did not run is absent, not zero"
     assert read.memcpy_probe_mib == 0
