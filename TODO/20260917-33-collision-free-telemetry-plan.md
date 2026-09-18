@@ -77,8 +77,8 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Segment store and the `compact` stage, shipped inert | - | A | PENDING | - | - | - |
-| 5 | Machine page stops lying about a day with no rows | - | A | IN-FLIGHT | p33r5 | 864 | - |
+| 1 | Segment store and the `compact` stage, shipped inert | - | A | IN-FLIGHT | p33a1 | - | - |
+| 5 | Machine page stops lying about a day with no rows | - | A | IN-FLIGHT | p33r5 | - | - |
 | 6 | One concurrency group for `digest`, `validate`, `measure` | - | A | PENDING | - | - | - |
 | 7 | OS memory and load, per item | - | A | PENDING | - | - | - |
 | 2 | `host-fingerprint` writes segments | 1 | B | PENDING | - | - | - |
@@ -91,7 +91,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 11 | Delete `runtime-counters` and everything that reads it | 7, 10, 17 | E | PENDING | - | - | - |
 | 15 | Generated TypeScript contracts replace the hand-written ones | 10, 11 | F | PENDING | - | - | - |
 | 16 | Docs, and the orphan sweep | all | G | PENDING | - | - | - |
-| 18 | Chart-craft doctrine - the thirteen rules, written once | - | H | PENDING | - | - | - |
+| 18 | Chart-craft doctrine - the thirteen rules, written once | - | H | IN-FLIGHT | p33r18 | - | - |
 | 28 | Pipeline panels: the share track goes, Extraction gains a trend | 18 | H | PENDING | - | - | - |
 | 19 | The shard board | 11, 18 | I | PENDING | - | - | - |
 | 21 | Memory and load, three grains - ABSORBS Row #14 | 5, 7, 15, 19 | I | PENDING | - | - | - |
@@ -1034,7 +1034,8 @@ Row #18 writes these into `docs/concepts/console-design.md` **before any panel r
 | 19D9 | **A legend key for a series with no committed rows is deleted, not drawn empty** | `robots check` has been in the legend across 23 shard-rows that never carried it. A key for an absent series is a claim the data does not support |
 | 19D10 | **A figure with a span is drawn as a range, never written as two sentences.** Value, low, high, one track | Four figures that each have a span, each written as prose, is 19A19 - and no two of them can be compared |
 | 19D11 | **A panel whose title asks a trend question draws a time axis.** A ranked list answers "which is biggest", never "what is changing" | 19A18. The title and the shape have to agree, or one of them is wrong |
-| 19D13 | **A panel serves *is it working* or *what is broken*, and names which. A verdict panel sits ABOVE the panels it verdicts.** A verdict takes the central value or the count and covers every subsystem; a break takes the extreme and the individual that owns it, and covers every candidate in one subsystem. A panel whose title asks one and whose shape answers the other is the single commonest defect on this console | **Five of the eight failures fail on this rule, not on their drawing.** 19A18 and 19A23 draw verdict shapes under trend titles; 19A8 and 19A7 draw levels and warn the reader not to read their direction; 19A9 promises both and built one. The rule's own proof is 19A12: a per-shard maximum is the verdict reading, and the item that hit 83.1 percent of the ceiling is invisible behind it - same measurement, two questions, one built. What a scattered verdict costs: an operator reads ten Hardware panels and only then reaches the panel saying the instruments disagree |ar reads as importance. Thickness is not a variable here, so it must not vary |
+| 19D12 | **Bar thickness comes from one place and a bar is never thickened to fill vertical room.** Room left over goes back to the panel | A thick bar reads as importance. Thickness is not a variable here, so it must not vary |
+| 19D13 | **A panel serves *is it working* or *what is broken*, and names which. A verdict panel sits ABOVE the panels it verdicts.** A verdict takes the central value or the count and covers every subsystem; a break takes the extreme and the individual that owns it, and covers every candidate in one subsystem. A panel whose title asks one and whose shape answers the other is the single commonest defect on this console | **Five of the eight failures fail on this rule, not on their drawing.** 19A18 and 19A23 draw verdict shapes under trend titles; 19A8 and 19A7 draw levels and warn the reader not to read their direction; 19A9 promises both and built one. The rule's own proof is 19A12: a per-shard maximum is the verdict reading, and the item that hit 83.1 percent of the ceiling is invisible behind it - same measurement, two questions, one built. What a scattered verdict costs: an operator reads ten Hardware panels and only then reaches the panel saying the instruments disagree |
 
 ### 19.5 Table 19C - consolidation
 
