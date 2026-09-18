@@ -327,6 +327,7 @@ and a re-run replaces its page rather than adding a second one.
 ## See also
 
 - [../models.md](../models.md) - the index, one row a model.
+- [../benchmarks/four-candidates-on-one-news-day.md](../benchmarks/four-candidates-on-one-news-day.md) - these weights with the reasoning channel ON, on 2026-09-17: no valid reply in 24 attempts. That arm is a separate config entry, not the one this dossier describes.
 - [../measurements.md](../measurements.md) - the instrument log: everything measured that is not a property of one model.
 - [../../../config/models/qwen3.5-9b-q4km.json](../../../config/models/qwen3.5-9b-q4km.json) - where the identity above is declared. `config/idhazh.json` names this file in one line, `models_file`, and that line is the whole of a swap.
 - [../../../backend/idhazh/measured.py](../../../backend/idhazh/measured.py) - the readings a gate or a test reads, including which are pinned to these weights.
