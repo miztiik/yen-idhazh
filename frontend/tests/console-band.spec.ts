@@ -381,12 +381,11 @@ test('THE ORACLE: the band is the same three facts on every route, and no window
 	// panels. Five routes deriving their own would eventually disagree about which
 	// one of them is worst, which is the whole reason it is derived once.
 	//
-	// The three routes with panels, because `hydrated` waits for a window control
-	// and `/console/judgement/` and `/console/voices/` have none - they fetch
-	// nothing, so a control there would govern nothing. That the band is word for
-	// word identical on all FIVE is asserted in `console-nav.spec.ts`, which does
-	// not wait on hydration; what this test adds is the half that needs one,
-	// below.
+	// Three routes rather than five, because `hydrated` waits for a window control
+	// and this half of the oracle only needs enough routes to prove the derivation
+	// is shared. That the band is word for word identical on all FIVE is asserted
+	// in `console-nav.spec.ts`, which does not wait on hydration; what this test
+	// adds is the half that needs one, below.
 	const pipelines = await bandText('/console/');
 	expect(pipelines.length, 'the band drew nothing on /console/').toBeGreaterThan(0);
 	for (const path of ['/console/model/', '/console/machine/']) {
