@@ -2,16 +2,23 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import pytest
+from conftest import FIXTURES_DIR
 
 from idhazh import config, ledger
+from idhazh.contracts import runtime_counters
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.run_plan import RunPlan
-from idhazh.contracts.runtime_counters import ServerJob
+from idhazh.contracts.runtime_counters import RuntimeCountersRow, ServerJob
 from idhazh.stages import compact as compact_stage
 from idhazh.telemetry import silicon
+
+#: One committed capture of llama-server's own log, so the four-field stamp the
+#: load time is decoded from is a real one rather than a shape somebody typed.
+SERVER_LOG = FIXTURES_DIR / "runtime" / "2026-08-29-3-shard-0.server-head.txt"
 
 
 def a_plan() -> RunPlan:
@@ -304,4 +311,158 @@ def test_a_row_survives_the_round_trip_through_the_ledger_shape(tmp_path: Path) 
 
     assert read.memcpy_gib_s is None, "a probe that did not run is absent, not zero"
     assert read.memcpy_probe_mib == 0
-    assert len(read.fingerprint) == 16
+    assert len(read.fingerprint or "") == 16
+
+
+def _head_row(state_dir: Path, date: str = "2026-09-16") -> dict[str, str]:
+    """The one row of the compacted day file, by column name."""
+    path = ledger.host_fingerprint_path(state_dir, date)
+    header, *body = path.read_text(encoding="utf-8").splitlines()
+    assert len(body) == 1, f"one machine, one row, and the head holds {len(body)}"
+    return dict(zip(header.split(","), body[0].split(","), strict=True))
+
+
+def test_the_probe_and_the_job_clock_fold_into_one_row(tmp_path: Path) -> None:
+    """The Oracle: two halves of one key, no cell filled twice, one row in the head.
+
+    The probe runs before the model server because the bandwidth reading wants an
+    idle machine, and the job's own clock is only knowable once the job is over.
+    Both write a row of the same shape under `HOST_FINGERPRINT_KEY`, filling
+    columns the other left empty, so the fold takes the union rather than
+    choosing between them.
+
+    It is the Join case of the settlement that makes this work, and Join only
+    fires because the key columns are excluded from what counts as contested -
+    `date`, `run_id`, `job` and `shard` are equal by construction, which is what
+    made the two rows one record in the first place.
+    """
+    plan, settings = a_plan(), a_probe()
+    probe = silicon.stage_fingerprint(
+        plan, settings=settings, state_root=tmp_path, shard=2, job=ServerJob.WORK
+    )
+    clock = silicon.stage_job_clock(
+        plan,
+        settings=settings,
+        state_root=tmp_path,
+        shard=2,
+        job=ServerJob.WORK,
+        job_started_at=int(time.time()) - 5550,
+        server_log_path=SERVER_LOG,
+    )
+
+    assert probe is not None and clock is not None
+    contested = [
+        name
+        for name, value in clock.csv_row().items()
+        if value and probe.csv_row()[name] and name not in ledger.HOST_FINGERPRINT_KEY
+    ]
+    assert contested == ["version"], (
+        "the two halves must fill different cells, or the fold has to choose between them"
+    )
+
+    compact_stage.stage_compact(tmp_path)
+    row = _head_row(tmp_path)
+
+    assert row["fingerprint"] == probe.fingerprint
+    assert row["measured_at"] == probe.measured_at
+    assert row["job_seconds"] == "5550"
+    assert float(row["model_load_ms"]) == clock.model_load_ms
+    assert HostFingerprintRow.from_csv_row(row).shard == 2
+
+
+def test_a_job_that_died_before_its_clock_leaves_a_usable_half_row(tmp_path: Path) -> None:
+    """The degrade path, named: two empty cells rather than a row nobody can read.
+
+    A shard killed at `run.shard_timeout_minutes` never reaches the clock step,
+    and everything the probe measured about the machine is still true.
+    """
+    silicon.stage_fingerprint(a_plan(), settings=a_probe(), state_root=tmp_path, shard=0)
+
+    compact_stage.stage_compact(tmp_path)
+    row = _head_row(tmp_path)
+
+    assert row["job_seconds"] == ""
+    assert row["model_load_ms"] == ""
+    assert HostFingerprintRow.from_csv_row(row).job_seconds is None
+
+
+def test_a_clock_with_no_stamp_and_no_log_reports_absence_rather_than_zero(
+    tmp_path: Path,
+) -> None:
+    """An empty cell says the reading was not taken. A zero claims a job that was free.
+
+    Both readings come from the workflow: the stamp from a step before the
+    checkout, the log from the server this job started. A run of this stage
+    anywhere else - a developer machine, a shard whose server never came up - has
+    neither.
+    """
+    clock = silicon.stage_job_clock(
+        a_plan(), settings=a_probe(), state_root=tmp_path, shard=0, server_log_path=None
+    )
+
+    assert clock is not None
+    assert clock.job_seconds is None
+    assert clock.model_load_ms is None
+    assert clock.csv_row()["job_seconds"] == ""
+    assert clock.fingerprint is None, "the clock half measured no machine and may not claim one"
+
+
+def test_the_clock_half_lands_in_the_probes_own_segment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """One job, one writer, one file - the grammar names the job and not the step.
+
+    `state/segments/<ledger>/<run>-<attempt>-<job>-<shard>.csv` has no element a
+    second step of one job could differ in, so a second file is not something
+    this store can express. The two halves are two rows of the file this job
+    owns, and neither is ever edited.
+    """
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "1")
+    plan, settings = a_plan(), a_probe()
+    silicon.stage_fingerprint(plan, settings=settings, state_root=tmp_path, shard=0)
+    silicon.stage_job_clock(
+        plan, settings=settings, state_root=tmp_path, shard=0, job_started_at=int(time.time()) - 60
+    )
+
+    written = ledger.segment_files(tmp_path, ledger.SegmentLedger.HOST_FINGERPRINT)
+    assert [path.name for path in written] == ["2026-09-16-1-1-work-00.csv"]
+    assert written[0].read_text(encoding="utf-8").count("\n") == 3, "one header and two halves"
+
+
+def test_the_switch_being_off_records_no_clock_either(tmp_path: Path) -> None:
+    """Guardrail #6: one knob answers for the whole record, not for half of it."""
+    settings = config.load()
+    settings.app.observability.host_fingerprint = False
+
+    clock = silicon.stage_job_clock(
+        a_plan(), settings=settings, state_root=tmp_path, shard=0, job_started_at=1
+    )
+
+    assert clock is None
+    assert not ledger.segment_files(tmp_path)
+
+
+def test_both_writers_of_the_two_job_cells_reach_the_same_arithmetic() -> None:
+    """Two ledgers carry these cells today, and two derivations would drift.
+
+    `RuntimeCountersRow` has held them since 2026-08-29 and the host row holds
+    them now, so the subtraction and the log decoding live once in
+    `contracts.runtime_counters` and both writers call it. Driven over a real
+    capture, because the four-field llama-server stamp is what a second copy
+    would get wrong.
+    """
+    text = SERVER_LOG.read_text(encoding="utf-8")
+    counters = RuntimeCountersRow.from_metrics_text(
+        "",
+        date="2026-09-16",
+        run_id="2026-09-16-1",
+        shard=0,
+        shards=1,
+        scraped_at="2026-09-16T04:11:02Z",
+        job_started_at=1789531312,
+        server_log=text,
+    )
+
+    assert runtime_counters.model_load_ms(text) == counters.model_load_ms
+    assert runtime_counters.job_seconds("2026-09-16T04:11:02Z", 1789531312) == counters.job_seconds
+    assert counters.model_load_ms is not None and counters.model_load_ms > 0
