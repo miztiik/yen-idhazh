@@ -490,6 +490,20 @@
 			{view.recording.scoresOnly}
 		</p>
 	{/if}
+	<!-- The machine record is the other instrument on this route, so it gets its
+	     own sentences rather than a share of the counters'. Its `off` state is not
+	     printed here: the three panels it governs each say it where it bites, and
+	     a banner across the page is what the per-instrument design refuses. -->
+	{#if view.machineRecord.startedMidWindow}
+		<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="machine-started">
+			{view.machineRecord.startedMidWindow}
+		</p>
+	{/if}
+	{#if view.machineRecord.recordDestroyed}
+		<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="machine-destroyed">
+			{view.machineRecord.recordDestroyed}
+		</p>
+	{/if}
 
 	{#if view.refused.length > 0}
 		<!-- Named, never dropped. A run count that quietly excludes one is a run
@@ -963,6 +977,7 @@
 	<div
 		data-readout-none="one card per machine, nothing shared"
 		data-machine-cards={data.machines.runId}
+		data-machine-record={data.machines.record}
 	>
 		<Panel
 			title="The machines this run drew"
@@ -972,6 +987,13 @@
 				<p class="empty" data-machine-panel-empty="machines-off">
 					What machine this job drew is not being recorded. The processor name below comes from the
 					model server's own counters.
+				</p>
+			{:else if data.machines.nothing === 'record-lost'}
+				<p class="empty" data-machine-panel-empty="machines-lost">
+					{data.machines.lostNote}
+					{#if data.machines.runId !== ''}
+						The run was {data.machines.runId}.
+					{/if}
 				</p>
 			{:else if data.machines.nothing === 'no-machine'}
 				<p class="empty" data-machine-panel-empty="machines-none">
@@ -986,10 +1008,14 @@
 						What machine this job drew is not being recorded. The processor name below comes from the
 						model server's own counters.
 					</p>
+				{:else if data.machines.lostNote}
+					<p class="empty" data-machine-panel-note="machines-lost">
+						{data.machines.lostNote}
+					</p>
 				{/if}
 				<div class="machines">
 					{#each data.machines.cards as card (card.identity.key)}
-						<MachineCard {card} />
+						<MachineCard {card} lost={data.machines.lost !== null} />
 					{/each}
 				</div>
 			{/if}
@@ -1008,6 +1034,11 @@
 			{#if view.fleet.nothing === 'recording-off'}
 				<p class="empty" data-machine-panel-empty="fleet-off">
 					Which machine a job draws is not being recorded, so there is nothing to count.
+				</p>
+			{:else if view.fleet.nothing === 'record-lost'}
+				<p class="empty" data-machine-panel-empty="fleet-lost">
+					{view.machineRecord.recordDestroyed}
+					There is nothing left in these {view.fleet.days} days to count.
 				</p>
 			{:else if view.fleet.nothing === 'none'}
 				<p class="empty" data-machine-panel-empty="fleet-none">

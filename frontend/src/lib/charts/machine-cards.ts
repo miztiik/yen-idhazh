@@ -22,6 +22,7 @@
 
 import type { HostFingerprint } from '$lib/server/host-fingerprint';
 import type { RunCounters } from '$lib/server/runtime-counters';
+import { recordDestroyed, type LostDay } from '$lib/console/recording';
 import {
 	machineKeys,
 	machineRamp,
@@ -68,12 +69,24 @@ export interface MachineCard {
 	where: MachineWhere | null;
 }
 
+/** What the machine record was doing on the day this run ran, as one name.
+ *
+ * Always set, and that is the point. A page that says its state only by which
+ * sentence it prints can be checked only by looking for a sentence, and an
+ * assertion that a sentence is absent passes just as happily when the sentence
+ * was renamed as when the state was fixed.
+ *
+ * `lost` is the state this type was added for: the day published articles and
+ * the record kept no row of it.
+ */
+export type MachineRecordState = 'recorded' | 'off' | 'lost' | 'none';
+
 export interface MachineCards {
 	runId: string;
 	date: string;
 	cards: MachineCard[];
 	/** Why there is nothing to draw. Null where there are cards. */
-	nothing: 'recording-off' | 'no-machine' | null;
+	nothing: 'recording-off' | 'record-lost' | 'no-machine' | null;
 	/** False where the machine record is switched off.
 	 *
 	 * Carried even when there are cards, because the counters ledger still names
@@ -84,6 +97,14 @@ export interface MachineCards {
 	/** True where no card could carry an instruction set, so the panel says the
 	 * flags, the cache and the bandwidth start on the day the record ran. */
 	nameOnly: boolean;
+	/** This run's day, where it published articles and the record kept no row of
+	 * it. Null on every other day, including a day that published nothing. */
+	lost: LostDay | null;
+	/** That loss in words, or null. One builder, so the route and this panel
+	 * cannot drift into two ways of saying the same thing. */
+	lostNote: string | null;
+	/** The state above as one name, for a page assertion that cannot fail open. */
+	record: MachineRecordState;
 }
 
 /** One job of a run, as a thing that drew a machine. */
@@ -123,10 +144,15 @@ export function machineCards(
 		ramp?: MachineRamp;
 		/** The page's own key resolver, built over the same population as the ramp. */
 		keys?: (seen: MachineSeen) => MachineKey;
+		/** This run's day where it published articles and the record kept no row of
+		 * it. The caller does the join, because only it reads both ledgers. */
+		lost?: LostDay | null;
 	}
 ): MachineCards {
 	const runId = run?.runId ?? '';
 	const date = run?.date ?? '';
+	const lost = options.lost ?? null;
+	const lostNote = recordDestroyed(lost === null ? [] : [lost]);
 	const forRun = run === null ? [] : fingerprints.filter((row) => row.runId === run.runId);
 	const covered = new Set(
 		forRun.filter((row) => row.job === 'work').map((row) => String(row.shard))
@@ -159,9 +185,14 @@ export function machineCards(
 			runId,
 			date,
 			cards: [],
-			nothing: options.recording ? 'no-machine' : 'recording-off',
+			// A day that published and kept no row is a loss, and it is named before
+			// the quiet-day sentence gets a chance to claim it.
+			nothing: !options.recording ? 'recording-off' : lost !== null ? 'record-lost' : 'no-machine',
 			recording: options.recording,
-			nameOnly: true
+			nameOnly: true,
+			lost,
+			lostNote,
+			record: recordState(options.recording, lost, false)
 		};
 	}
 
@@ -219,8 +250,25 @@ export function machineCards(
 		cards,
 		nothing: null,
 		recording: options.recording,
-		nameOnly: cards.every((card) => card.source === 'counters')
+		nameOnly: cards.every((card) => card.source === 'counters'),
+		lost,
+		lostNote,
+		record: recordState(
+			options.recording,
+			lost,
+			cards.some((card) => card.source === 'fingerprint')
+		)
 	};
+}
+
+function recordState(
+	recording: boolean,
+	lost: LostDay | null,
+	anyRecorded: boolean
+): MachineRecordState {
+	if (!recording) return 'off';
+	if (lost !== null) return 'lost';
+	return anyRecorded ? 'recorded' : 'none';
 }
 
 const MIB = 1024 * 1024;
