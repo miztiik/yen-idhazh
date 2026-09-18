@@ -589,23 +589,20 @@ the committed host row all still happen. What is given up is the prefill and
 decode rates, and with them the dossier - a dossier is both halves, so a
 dispatch missing one emits the server half and a line naming the half that is
 missing. It also moves who pays for the weights, because the speed case is what
-fills the cache entry the server case restores.
-Measured 2026-09-16 over the four dispatches of that day on stock
-`ubuntu-latest`, the speed case took 9.1, 26.7, 27.2 and 87.6 minutes - between
-a tenth and a third of a whole dispatch
-([what a bench dispatch costs](benchmarks/what-a-bench-dispatch-costs.md)).
+fills the cache entry the server case restores. What the job costs against a
+whole dispatch is in
+[what a bench dispatch costs](benchmarks/what-a-bench-dispatch-costs.md).
 
 `Model validation` reads `config/idhazh.json`, follows its pointer to the model
 file, and takes every candidate fact from there. It names no model of its own.
 [Swap the Summarizer Model](../how-to/evaluate-new-summarizer-model.md) owns the
 procedure and the acceptance requirements.
 
-**Several candidates can be dispatched at once, and until 2026-09-17 most of
-them were silently cancelled.** `Model validation` grouped every run under
-`concurrency: group: validate`, so a comparison fired four candidates wide
-queued three of them - and GitHub keeps only **one** pending run per group, each
-new one cancelling the last. The operator got the run that started, the case
-dispatched last, and two cancelled runs with no error on them. The group is now
+**Several candidates can be dispatched at once, and the concurrency group is what
+lets them.** GitHub keeps only one pending run per group, each new one cancelling
+the last, so a single `validate` group would queue a four-candidate comparison
+and leave the operator with the run that started, the case dispatched last, and
+two cancelled runs carrying no error. The group is
 `validate-${{ inputs.candidate_models_file || 'the-configured-model' }}`: the
 candidate file is the whole of what makes two dispatches different questions, so
 it is what names the group. Two dispatches of one candidate still queue, which
@@ -613,12 +610,10 @@ is right. An empty field means the configured model, and it is named rather than
 left as a bare trailing dash for every empty dispatch to collide on. `inputs` is
 a legal context on a `concurrency` key and this workflow is dispatch-only, so it
 is always populated. `measure.yml` has no `concurrency` block at all, so a bench
-was never affected. The same cancellation still applies to `digest.yml`, which
+is never affected. The same cancellation applies to `digest.yml`, which
 has one group on purpose - a day has one digest.
 
-**What a swap costs the 10 GB cache is a reading, and it lives in the instrument
-log.** This page carried a second copy of the 2026-08-27 table until 2026-09-17;
-the fuller one, with the headroom left over, is
+What a swap costs the cache is a reading, and it lives in the instrument log:
 [The cache transition](measurements.md#the-cache-transition-measured-2026-08-27).
 
 ## Vector backfill
@@ -635,15 +630,10 @@ union merge, and the scheduled pipeline appends to the live day several times an
 hour. Two producers writing that file do not interleave: one wins whole and the
 other one's run is gone.
 
-**It re-encodes a wrong day whole rather than topping it up.** Measured
-2026-08-26 over the 439 vectors the five closed days carried: a re-encode
-reproduces them at a median cosine of 0.9936 and moves the top-10 neighbour list
-of 413 of them. The same measurement against the day CI had written hours
-earlier returns a median cosine of 1.000000. Every closed day predates
-`fix(embed): make a vector a function of its own text, not of its batch`, so its
-vectors carry an arithmetic the browser's query encoder no longer uses. Topping
-such a day up would leave one block holding two arithmetics for a single query
-to rank against.
+**It re-encodes a wrong day whole rather than topping it up.** A day whose
+vectors predate a change to the embedding arithmetic holds vectors the browser's
+query encoder no longer produces. Topping such a day up would leave one block
+holding two arithmetics for a single query to rank against.
 
 **It validates every day and builds the site before it commits, and weighs the
 pages after.** The vectors ride inside the day payloads, and `/archive/` inlines
@@ -655,9 +645,8 @@ over its recorded weight still reads correctly, so `npm run bundle-gate` runs
 after the commit and fails the job without costing the repair
 ([../architecture/publishing/layout.md](../architecture/publishing/layout.md#a-bad-day-is-stopped-before-the-commit-the-weight-ratchet-is-not-2026-08-29)).
 `digest.yml` carries the same order for the same reason. **The validate step is
-there because the build stopped answering for it**: a reading document has
-carried a seed rather than its whole day since 2026-09-01, so a build never
-opens the stories past it.
+there because the build stopped answering for it**: a reading document carries a
+seed rather than its whole day, so a build never opens the stories past it.
 
 ## Pipeline tests
 
@@ -775,11 +764,9 @@ rather than asserting a version, and a second test reads the shell it runs.
 
 It builds the scratch config: a copy of `config/` whose `models_file` points at
 the candidate, and which differs from the committed tree in that one line and
-nothing else. `measure.yml` and `validate.yml` both call it. They carried
-byte-identical copies of the step until 2026-09-15, differing only in the job
-they read the models file from - and a step duplicated across two files is a
-step that drifts the day one of them is edited, which had already happened twice
-in these two workflows.
+nothing else. `measure.yml` and `validate.yml` both call it. A step duplicated
+across two files is a step that drifts the day one of them is edited, and these
+two workflows had already proved it.
 
 **What the extraction cost, stated rather than implied.** The two workflows are
 47 lines shorter and there is one new file a reader has to open, plus 36 lines
@@ -790,15 +777,14 @@ not remove a check; it removes the second place the step could be edited.
 
 ### The speed case is a job somebody can turn off, and turning it off must not turn off the rest
 
-Owner decision, 2026-09-17. The `llama-bench` job measures how each candidate
+The `llama-bench` job measures how each candidate
 performs, it is only dispatched while models are being tested, and it stays. The
 open question was what to do when somebody wants to exercise the `bench` flow
 itself and does not want to pay for it.
 
 **A bypass is worth having because the job is a real share of the dispatch, not
-a rounding error.** Over the four dispatches of 2026-09-16 on stock
-`ubuntu-latest` it took 9.1, 26.7, 27.2 and 87.6 minutes against whole dispatches
-of 170.6, 188.5, 113.6 and 287.8 - between a tenth and a third.
+a rounding error** - between a tenth and a third of one
+([what a bench dispatch costs](benchmarks/what-a-bench-dispatch-costs.md)).
 
 **Two controls rather than one, because they answer different questions.**
 `bench.run_model_speed_case` is the standing answer and lives in
@@ -834,7 +820,7 @@ restores. Skip it and `runtime` pays for the same bytes itself, once.
 
 ### What the model workflows share, and what they must not
 
-Answered 2026-09-17. `measure.yml` and `validate.yml` both stand a candidate
+`measure.yml` and `validate.yml` both stand a candidate
 model up on a runner, and the open question was how much of that they should
 hold in common. `.github/actions/candidate-config` was the first block; the
 rest was open.
@@ -851,57 +837,40 @@ duplication wearing a shared name. `candidate-config` has two inputs and three
 call sites, so it is a block. A shared corpus step would need an input per
 calling workflow, so it is not.
 
-#### The runtime pin was the next block, and it was taken one caller at a time
+#### The runtime pin is a block, and converting to it goes one caller at a time
 
-Fetching the inference runtime and the weights and proving the digests was **249
-substantive lines across 23 steps in five workflows** - `digest.yml`,
+Fetching the inference runtime and the weights and proving the digests was
+hundreds of lines across two dozen steps in five workflows - `digest.yml`,
 `idhazh-pipeline-tests.yaml`, `measure.yml`, `probe.yml` and `validate.yml`.
-Counted on 2026-09-17 over every step whose shell names `llama.tar.gz`,
-`huggingface.co/` or `sha256sum --check`; `ci.yml`'s browser cache is not a
-model runtime and is not in it.
 
 The pin itself - `LLAMA_CPP_BUILD`, its asset name and its SHA-256 - was spelled
-in **13 places that had to change together**: five `env:` blocks and eight fetch
-steps. It is now in **two**: `.github/scripts/llama-cpp-pin.sh` and
-`measure.yml`'s `env:` block, which is the one caller still to convert.
+in more than a dozen places that had to change together. It is now in
+`.github/scripts/llama-cpp-pin.sh`, plus `measure.yml`'s `env:` block, which is
+the one caller still to convert.
 
-```powershell
-git grep -c 'LLAMA_CPP_BUILD:' -- .github/workflows
-git grep -c 'releases/tags/${LLAMA_CPP_BUILD}' -- .github/workflows
-```
-
-Those two counts are a reading of this tree, not a constant. **The property is
-what mattered and it did not move: every copy of the pin had to change at once,
-and nothing in the tree compared them.** Change twelve of the thirteen and a
-qualification runs on a runtime production does not run, with every gate green,
-because no check could tell. That is what made it worth a block rather than a
-rule somebody remembers. What holds it together now is a contract test that
+**The property is what mattered: every copy of the pin had to change at once, and
+nothing in the tree compared them.** Change all but one and a qualification runs
+on a runtime production does not run, with every gate green, because no check
+could tell. That is what made it worth a block rather than a rule somebody
+remembers. What holds it together now is a contract test that
 pins the three variables in every workflow still spelling them and refuses any
 copy of them in a workflow that has been converted; where the pinned values live
 and how a caller reads them is [ci-model-runtime.md](ci-model-runtime.md).
 
-**The conversion was a strangler, one workflow per commit, and the workflow that
-publishes went last.** Four alternatives were live.
-
-| Option | Cost | What it gives up |
-| --- | --- | --- |
-| One commit converting all five | One review, one revert | A revert takes four working conversions out with the fifth. The daily run is in that set, so the blast radius of a mistake is a published day. |
-| One commit per workflow, publisher last | Five reviews, five reverts, a window where the tree holds two shapes | Nothing, except that the census reads oddly mid-way - which is why the counts above are dated |
-| Leave the pin copied, add a test that compares the copies | No workflow moves | The test would go green on five agreeing copies and say nothing about the sixth place somebody adds next |
-| One script with an optional `WEIGHTS_FILE` | One file instead of two | Every caller's weights refusals become optional to satisfy one caller that opens no weights |
-
-The second was taken. `probe.yml` first because it opens no weights and a
+**The conversion is a strangler, one workflow per commit, and the workflow that
+publishes goes last.** `probe.yml` first because it opens no weights and a
 mistake there costs a dispatch nobody depends on; `validate.yml` next because a
 mistake costs a qualification that can be re-run; `digest.yml` last because it
 publishes to readers and a bad fetch there is a bad day on the site.
 
-That order is also what made the fourth option refusable rather than merely
-disliked. `probe.yml` converted first, so the question "what does a job that
-opens no weights need" had to be answered before any weights-carrying caller
-moved - and the answer was a second script, `install-llama-runtime.sh`, which
-`fetch-model-runtime.sh` sources. Had `digest.yml` gone first, the cheap answer
-would have been an optional `WEIGHTS_FILE` and the refusals would have been
-weakened for every caller.
+That order is also what makes one alternative refusable rather than merely
+disliked.
+
+| Option | Why rejected |
+| --- | --- |
+| One commit converting all five | A revert takes four working conversions out with the fifth, and the daily run is in that set - so the blast radius of a mistake is a published day |
+| Leave the pin copied, add a test that compares the copies | The test goes green on five agreeing copies and says nothing about the sixth place somebody adds next |
+| One script with an optional `WEIGHTS_FILE` | Every caller's weights refusals become optional to satisfy one caller that opens no weights. Converting `probe.yml` first forced the question "what does a job that opens no weights need" to be answered before any weights-carrying caller moved, and the answer was a second script, `install-llama-runtime.sh`, which `fetch-model-runtime.sh` sources |
 
 #### What stays duplicated, and why
 
@@ -943,38 +912,23 @@ points at, the production ledgers under `state/`, the seen store inside them,
 the run id and the date a production day is keyed on, and article text, which
 never leaves the job that fetched it.
 
-**One of those six was open until 2026-09-17 and is now closed in both
-workflows.** `run.trial_state_dirname` moves a run's whole state root, and the
-bench passes `pipeline-tests` - but its `plan` step ran without `--config`, so
-it loaded the committed config, which redirects nothing. `plan` appends to the
-seen store, feed health, feed retirements and the counterfactual scores, so
-every bench dispatch wrote four production ledgers, and the seen store is the
-one that bites: a marked address makes the next production day skip that story
-with nothing in the log to say why. The step now reads the scratch config, and
+**`run.trial_state_dirname` moves a run's whole state root, and every stage of
+both dispatches has to read the copy that declares it.** A step that runs without
+`--config` loads the committed config, which redirects nothing. `plan` is the one
+that bites: it appends to the seen store, feed health, feed retirements and the
+counterfactual scores, and a marked address makes the next production day skip
+that story with nothing in the log to say why. Both workflows build the scratch
+copy in the `plan` job and both pass `pipeline-tests`.
 `test_no_bench_stage_can_reach_the_production_state_root` asserts it for every
 stage any job in that file runs, present or future.
 
-**`validate.yml` closed it the same day, and the closure changes which articles
-a qualification draws.** Its `Read the feeds` step ran `plan` against the
-committed config in a job that built no scratch copy at all. The fix is the
-bench's: the `plan` job now builds the same copy the `qualify` job does, both
-pass `pipeline-tests`, and the step reads it.
-
-**The cost is not the two lines, and it was declined once for that reason.**
-`plan` reads the seen store as well as writing it, so a redirected qualification
-plans from an empty one and draws articles a production day already covered. The
-owner took the trade on 2026-09-17, before a four-arm comparison. A
-qualification measures how well a model summarizes text; whether a reader has
-already seen the story is a publication question, and filtering on it made the
-corpus depend on what production happened to publish that week. The count does
-not move - 3 shards of 10 - only which addresses fill it.
-
-**No qualification has been shown to move a production row, and that is not what
-the fix rests on.** The `plan` job has no commit step; only `decide` runs
-`commit-and-push.sh`, from its own checkout on a different runner, so those rows
-died with the runner. The distance between a job that can reach the production
-state root and one that commits it is a single step, this workflow already holds
-`contents: write`, and a sibling job already commits `state` whole.
+**The cost is not the two lines.** `plan` reads the seen store as well as writing
+it, so a redirected qualification plans from an empty one and draws articles a
+production day already covered. That is the trade: a qualification measures how
+well a model summarizes text, whether a reader has already seen the story is a
+publication question, and filtering on it made the corpus depend on what
+production happened to publish that week. The count does not move - 3 shards of
+10 - only which addresses fill it.
 
 **`qualify-decide` is deliberately not redirected, and that is the one
 exception.** It writes the run's verdict to `state/validation-<YYYY-MM-DD>.csv`,
