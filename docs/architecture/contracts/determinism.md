@@ -1,6 +1,6 @@
 # Determinism and the Recorded Input Manifest
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-18
 
 What a run records about its own inputs, the one alarm built on that record, and how the pipeline notes the times "nothing changed" turns out to be false. This page owns the enumeration, where each input is read from, and the violation policy.
 
@@ -20,11 +20,11 @@ It was determinism *given identical logits*, which was always weaker than it sou
 | The batching | `n_ctx`, `n_batch`, `n_ubatch` and thread count all change how partial sums are accumulated. |
 | The input | A wider truncation cap, a changed extractor or sanitizer, or a publisher quietly rewriting an article at the same URL. |
 
-**Every committed entry pins `temperature: 0.2`, determinism is not a property a summarizer needs.
+**Every committed entry pins `temperature: 0.2`.** Determinism is not a property a summarizer needs.
 
 **`seed` is what repeatability rests on now.** It was dead code at temperature 0 and it was enumerated anyway, so a move off greedy could not change an output in silence. This is that move, and the field was ready for it: same inputs and same seed is the same reply, same inputs and a different seed is a different one. It is still never the *determinism* control, because there is no determinism to control - it is the reproducibility control, which is a different and honest claim.
 
-**What this costs, stated.** Two runs over one article can now differ in wording with nothing changed and nothing wrong. The gate that used to refuse that is a diagnostic above zero temperature and reports the spread instead ([../../concepts/evaluation.md](../../concepts/evaluation.md)). A run at temperature 0 still gets the hard gate, unchanged.
+**What this costs, stated.** Two runs over one article can now differ in wording with nothing changed and nothing wrong. **The gate that used to refuse that was retired on 2026-09-18** - owner ruling, and there is no temperature at which it comes back. A summarizer does not need to say a thing the same way twice, so the question was buying a guarantee nobody wanted at a price Andre had already named: a gate that fires across runner CPU classes for reasons unrelated to a regression gets switched off within a month. What a run records instead is `wording_spread`, a count of how many distinct wordings each item drew, with its denominator, blocking nothing ([../../concepts/evaluation.md](../../concepts/evaluation.md)). Qualification now has ten gates and every one of them is asked of every run.
 
 ## The record is the enumeration
 

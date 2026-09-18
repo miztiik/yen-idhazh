@@ -36,8 +36,7 @@ def stage_qualify_decide(
     adopting a model changes a persisted contract - so this writes the evidence
     and stops rather than switching anything itself.
 
-    Ten of the eleven are asked of every run; `determinism` is asked only at
-    temperature 0, and above it the run records `wording_spread` instead.
+    Every gate is asked of every run, and a report missing one is refused.
     """
     paths = sorted(common.QUALIFICATION_ROOT.glob("shard-*.json"))
     shards = [QualificationShard.read(path) for path in paths]

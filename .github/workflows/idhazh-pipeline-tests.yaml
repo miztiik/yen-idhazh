@@ -28,7 +28,7 @@
 # of a dispatch rather than the price of a bench. Name a models file and every
 # case runs on those weights, through the real prompts and the real two calls;
 # name nothing and it runs the configured model exactly as it always did. It is
-# not the qualification - that is validate.yml, eleven gates on a frozen corpus
+# not the qualification - that is validate.yml, ten gates on a frozen corpus
 # - and two articles settle nothing about how good a model is.
 #
 # Two things one dispatch cannot settle. Whether two articles are
