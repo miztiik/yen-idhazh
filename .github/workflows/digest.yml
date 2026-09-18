@@ -305,7 +305,7 @@ jobs:
       # four, so a scheduled run still never asks for more workers than the four
       # it has always had - the eight in the dispatch form above is the ceiling
       # an operator may ask for, and moving the automatic path onto it needs the
-      # three conditions in docs/reference/measurements.md, not this step. A
+      # three conditions in docs/reference/pipeline-cost.md, not this step. A
       # dispatch input still wins, which is why the guard stays a hard failure
       # there. What this step writes is also what caps the workers that run at
       # once, so the fan-out and its concurrency cap cannot disagree.
@@ -420,7 +420,7 @@ jobs:
       # 110 minutes, and until this stamp existed the only place a job's clock
       # lived was the GitHub jobs API - which drops a job record when the run
       # ages out, so the rollback rule was a person making an API call by hand
-      # (docs/reference/measurements.md). The counters step subtracts this and
+      # (docs/reference/pipeline-cost.md). The counters step subtracts this and
       # files the difference beside the tokens the same shard read.
       #
       # The processor rides along for the same reason. `ubuntu-latest` names the
