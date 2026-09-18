@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-18
 How a summary is judged, why one number is never enough, and the rule that keeps the measurement honest. This page fixes the vocabulary; the concrete metric implementations, thresholds and the golden-set contents are owned by the plan-doc and the eval subsystem doc, and the tunable bands live in [config.md](config.md).
 
 **Whether archive search finds the right story is a different instrument and lives in [search-quality.md](search-quality.md).** The two share no data, no metric and no config knob, and a person arrives holding one question or the other.
@@ -533,7 +533,7 @@ reply, never the count the model actually wrote. `evals/qualify.py` then graded
 that could fail the gate was refused before the gate looked.
 
 Run 33016222069 reported 0 of 90 replies outside the range, and passed
-([../reference/measurements.md](../reference/measurements.md#the-configured-summarizer-qwen35-9b-q4_k_m)).
+([../reference/models/qwen3.5-9b-q4km.md](../reference/models/qwen3.5-9b-q4km.md)).
 Zero was the only number that arithmetic could return, on any model and at any
 threshold, so that result is not evidence that this summarizer writes publishable
 lengths. Read every `publishable_length` verdict before 2026-09-10 as "not
@@ -1481,7 +1481,7 @@ summaries are better or worse than the retired model's.
 Qualification run `33016222069`, 2026-08-26, on `ubuntu-latest`. One model, three
 deterministic repeats, no side-by-side case. Every gate outcome, the band counts,
 the faithfulness spread and the identity of the bytes that ran are in
-[../reference/measurements.md](../reference/measurements.md#the-configured-summarizer-qwen35-9b-q4_k_m).
+[../reference/models/qwen3.5-9b-q4km.md](../reference/models/qwen3.5-9b-q4km.md).
 
 The frozen, **paired** corpus this page asks for above still does not exist.
 `qualify` freezes one model's inputs, which is what makes its own numbers
