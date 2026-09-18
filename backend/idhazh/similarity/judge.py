@@ -111,18 +111,23 @@ def read_once(
     second would double the weights the runner's cache carries, and the cache
     restore is the largest fixed cost in the pipeline (Guardrail #2).
 
-    Temperature, top_p and seed come off the entry rather than being pinned here.
-    The plan asked for temperature 0 and the committed entry pins 0.2; there is no
-    knob between the two, and a literal in this file would be a second place a
-    decode can move for a reason nobody recorded.
+    **The temperature is the judging knob's, not the entry's.** The entry pins
+    what suits writing a summary; this decode is the one whose answer is
+    compared against itself with the two summaries swapped, and that comparison
+    only reads position bias while the sampler is adding nothing of its own.
+    `top_p` and `seed` still come off the entry, because neither decides
+    anything at temperature 0.
     """
     entry = settings.models.summarize
+    tuning = settings.app.assemble.same_story.adaptive_dedup_threshold
     payload = grammar_completion_payload(
         model_id=entry.id,
         system=prompt.system_turn(),
         user=prompt.user_turn(left, right),
         grammar=prompt.grammar(),
-        inference=entry.inference,
+        inference=entry.inference.model_copy(
+            update={"temperature": tuning.judge_temperature}
+        ),
         turns=entry.turns,
         max_answer_tokens=prompt.REPLY_TOKENS,
         first_token_alternatives=len(SameStoryVerdict),

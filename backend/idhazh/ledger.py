@@ -125,6 +125,7 @@ from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.runtime_counters import RuntimeCountersRow, ServerJob
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.span_rollup import SpanRollupRow
+from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 
@@ -149,6 +150,12 @@ SCORED_PAIRS_DIRNAME: Final = "scored-pairs"
 FITTED_THRESHOLDS_DIRNAME: Final = "fitted-thresholds"
 SIMILARITY_HOLDOUT_FILENAME: Final = "holdout-pairs.csv"
 SCORE_DISTRIBUTION_FILENAME: Final = "score-distribution.json"
+
+#: Where a record goes when the inputs under it moved. It ships with a
+#: `.gitkeep`, because the commit step stages this directory on every run and an
+#: archive is written only on the rare day a stamp changed - `git add` on a path
+#: the checkout does not hold aborts the whole step.
+SCORE_ARCHIVE_DIRNAME: Final = "archive"
 RUNTIME_COUNTERS_FILENAME: Final = "runtime-counters.csv"
 FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
 CHROME_FILENAME: Final = "chrome.csv"
@@ -227,6 +234,14 @@ COUNTERFACTUAL_SCORE_KEY: Final = ("date", "run_id", "vertical", "url_key")
 #: record and walk the same counts, so the first row wins and there is nothing
 #: for a preference rule to choose between.
 STORY_SIMILARITY_THRESHOLD_KEY: Final = ("date", "run_id")
+
+#: What makes two judged-pair rows the same record. `run_id` is in the key
+#: because two runs of one day judge the same pair against different articles,
+#: and both readings are facts worth keeping. Drop it and the settlement would
+#: keep whichever landed first, which is the opposite of what a re-run means -
+#: the fold picks the newest run itself, over the whole day, rather than letting
+#: a line-by-line rewrite decide.
+STORY_SIMILARITY_PAIR_KEY: Final = ("date", "run_id", "pair_key")
 
 #: What makes two retirement rows the same record. The address and nothing else:
 #: a retirement is permanent for one endpoint key, so a second row for it says
@@ -619,6 +634,23 @@ def score_distribution_path(state_dir: Path) -> Path:
     changes instead of sorting every pair ever judged (Guardrail #12).
     """
     return state_dir / STORY_SIMILARITY_DIRNAME / SCORE_DISTRIBUTION_FILENAME
+
+
+def score_distribution_archive_relpath(stamp: str) -> str:
+    """`state/story-similarity/archive/<stamp>.json` - POSIX, for a log line."""
+    return f"{STATE_DIRNAME}/{STORY_SIMILARITY_DIRNAME}/{SCORE_ARCHIVE_DIRNAME}/{stamp}.json"
+
+
+def score_distribution_archive_path(state_dir: Path, stamp: str) -> Path:
+    """Where the record is put down when its own stamp no longer describes the run.
+
+    Named by the stamp rather than by a date, because the stamp is what the
+    counts inside it were taken under. Two archives from one day are two
+    different questions and get two files; one input moved back to what it was
+    and the archive it produces is the file already there.
+    """
+    root = state_dir / STORY_SIMILARITY_DIRNAME / SCORE_ARCHIVE_DIRNAME
+    return root / f"{stamp}.json"
 
 
 def shards_in_window(today: str, within_days: int) -> list[str]:
@@ -1450,6 +1482,55 @@ def append_counterfactual_scores(
         path.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
     landed = _append(path, columns, list(rows))
     return landed - drop_repeated_rows(path, COUNTERFACTUAL_SCORE_KEY)
+
+
+def append_story_similarity_pairs(
+    state_dir: Path, date: str, rows: Iterable[StorySimilarityPair]
+) -> int:
+    """Append a day's judged pairs into that day's own file.
+
+    Settled against `STORY_SIMILARITY_PAIR_KEY` straight after the write, the
+    way `append_counterfactual_scores` is. The key carries `run_id`, so a second
+    RUN of one date keeps its own rows and only a second attempt at one
+    execution is collapsed - both attempts judged the same pair under the same
+    prompt against the same day, so the first row wins and there is nothing to
+    choose between them. Which of two runs the record counts is decided over the
+    whole day when the day is folded, never line by line here.
+
+    **The day file is created even when the day judged nothing**, for the reason
+    `append_counterfactual_scores` gives: the commit step names this directory,
+    `git add` runs under `set -euo pipefail`, and a path missing from the working
+    tree aborts the step and costs the ledgers staged beside it.
+
+    Returns how many rows the file gained, so a caller can log the count.
+    """
+    path = scored_pairs_path(state_dir, date)
+    columns = StorySimilarityPair.csv_columns()
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
+    landed = _append(path, columns, list(rows))
+    return landed - drop_repeated_rows(path, STORY_SIMILARITY_PAIR_KEY)
+
+
+def load_story_similarity_pairs(state_dir: Path, date: str) -> list[StorySimilarityPair]:
+    """One named day's judged pairs, and never a second file.
+
+    **Guardrail #12 declaration, and it is the whole point of this store's
+    shape.** The fold counts one date into the record and the record is then the
+    only thing the fit reads, so this opens the file the date names and stops.
+    It costs the same on the thousandth day as on the third whatever the tree
+    holds beside it.
+
+    A row that no longer parses stops the read rather than being skipped. A
+    report may drop a day it cannot read; this is evidence being counted into a
+    record that is rewritten whole, and a silently short count is a record that
+    cannot be told from a quiet day.
+    """
+    return [
+        StorySimilarityPair.from_csv_row(raw)
+        for raw in _read_rows(scored_pairs_path(state_dir, date))
+    ]
 
 
 def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
