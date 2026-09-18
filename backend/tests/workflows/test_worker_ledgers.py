@@ -23,6 +23,8 @@ from ._harness import (
     FINGERPRINT_STEP,
     FOLD_STEP,
     HARVEST_STEP,
+    JOB_CLOCK_COMMAND,
+    JOB_CLOCK_STEP,
     RECORD_COMMAND,
     RECORD_STEP,
     REVIEW_STEP,
@@ -95,6 +97,32 @@ def test_a_worker_commits_its_rows_before_the_run_can_throw_them_away() -> None:
         names.index(RECORD_STEP) + offset for offset in range(len(WORK_LEDGER_STEPS))
     ]
     assert names.index(COMMIT_STEPS["work"]) < names.index("Prompt cache log summary")
+
+
+def test_the_job_clock_step_is_handed_both_readings_the_probe_cannot_take() -> None:
+    """The other half of the host row, and both of its inputs live on this runner.
+
+    The machine probe runs before the model server, because the bandwidth
+    reading wants an idle host. What the job cost is only knowable at its end,
+    and neither number can be read from the checkout: the stamp comes from a step
+    that ran before it existed, and the log belongs to the server this job
+    started. So the step has to hand both over, and a step that named neither
+    would write a row with two empty cells and no failure.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    step = _step(workflow, "work", "name", JOB_CLOCK_STEP)
+    script = _substitute(_script(step, f"work step {JOB_CLOCK_STEP}"))
+
+    assert JOB_CLOCK_COMMAND in script
+    assert f'--date "{SUBSTITUTED_DATE}"' in script
+    assert f"--shard {SUBSTITUTED_SHARD}" in script
+    # `:-` rather than a bare expansion, so a stamp that never arrived is an
+    # empty cell instead of the word `unbound` reaching a contract.
+    assert '--job-started-at "${JOB_STARTED_AT:-}"' in script
+    assert "--server-log llama-server.log" in script
+    # The job the row files under, which is the key column that joins it to the
+    # probe's half. A clock filed under another job is a second row, not a half.
+    assert f"{FINGERPRINT_JOB_FLAG} work" in script
 
 
 def test_a_killed_shard_still_hands_assemble_the_items_it_finished() -> None:

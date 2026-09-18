@@ -771,6 +771,35 @@ jobs:
             --server-log llama-server.log \
             --memory-peak-file memory-peak.txt
 
+      # The other end of `What machine this job drew`. That step probes the host
+      # before the model server starts, because the bandwidth reading wants a
+      # gigabyte and an idle machine; the two cells below are only knowable once
+      # the job is over. So the host row is written in two halves that fill
+      # different cells, into the one segment this job owns, and the fold in
+      # assemble unites them - one row a job in the day file either way.
+      #
+      # Both readings are already on this runner: `JOB_STARTED_AT` was stamped by
+      # the first step of this job, before the checkout, so the clock covers the
+      # cache restore and the weight load as well as the model time, and
+      # llama-server's own log brackets the model load with two stamps.
+      #
+      # `always()` and `continue-on-error`, for the reason written above the two
+      # steps before it: a job clock nobody recorded costs this run one cell,
+      # where a failed shard costs the day a worker. `:-` so a stamp that never
+      # arrived leaves an empty cell rather than sending the word "unbound" to a
+      # contract that would refuse it.
+      - name: What this job cost
+        if: always()
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          python -m idhazh job-clock \
+            --date "${{ needs.plan.outputs.date }}" \
+            --job work \
+            --shard ${{ matrix.shard }} \
+            --job-started-at "${JOB_STARTED_AT:-}" \
+            --server-log llama-server.log
+
       # The shape the plan job uses, for the reason written there, and the same
       # script - eight shards racing one branch is what its rebase loop and the
       # `merge=union` attribute on these two paths are for. It cannot rebuild

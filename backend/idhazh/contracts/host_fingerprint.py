@@ -1,8 +1,14 @@
-"""What silicon a job drew, as the host itself reported it.
+"""What silicon a job drew, and what that job cost, as the host itself reported it.
 
 One row a job. The columns are fixed for the length of that job - a processor
 does not change model number mid-run - which is why they are not repeated on
 every item row beside the readings that do move.
+
+**The row is written in two halves and neither half is ever edited.** The probe
+runs before the job's heaviest step, because the bandwidth reading wants an idle
+machine; the clock and the weight-load cost are only known when the job is over.
+So each half is a row of this shape carrying the cells it has, and the compaction
+is what unites them - one key, no cell filled twice, one row in the day file.
 
 **Only `job` is an enum, and that is deliberate.** It is the one column this
 project names; every other identifier here is a string the machine chose. A
@@ -55,6 +61,11 @@ class HostFingerprintRow(Contract):
     __schema_stem__: ClassVar[str] = "host-fingerprint-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-18",
+            change="Added `model_load_ms`, `job_seconds`; `fingerprint`, `measured_at` optional.",
+            why="A job's clock is only known at its end, so the row arrives in two halves.",
+        ),
+        ChangelogEntry(
             version="2026-09-17",
             change="Widened `job` to every workflow job that draws its own machine.",
             why="A run whose slowest job is unmeasured is a run whose cost nobody can attribute.",
@@ -79,12 +90,15 @@ class HostFingerprintRow(Contract):
         ge=0, description="The shard within that job. A single-shard job writes 0."
     )
 
-    fingerprint: FingerprintId = Field(
+    fingerprint: FingerprintId | None = Field(
+        default=None,
         description=(
             "A digest over the columns that cannot change inside a job - vendor, "
             "family, model, stepping, core counts, cache and flags. Two jobs on the "
             "same kind of machine carry the same value, which is what makes a "
-            "distribution countable without matching model-name strings by hand."
+            "distribution countable without matching model-name strings by hand. "
+            "Absent on the half a job writes at its end, which carries the clock and "
+            "repeats nothing the probe already recorded."
         ),
     )
 
@@ -188,7 +202,31 @@ class HostFingerprintRow(Contract):
     runner_name: str | None = Field(
         default=None, description="The runner label the platform gave this job."
     )
-    measured_at: Timestamp
+    measured_at: Timestamp | None = Field(
+        default=None,
+        description=(
+            "When the probe read this machine. Absent on the half a job writes at its "
+            "end, which measured no machine."
+        ),
+    )
+
+    model_load_ms: float | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Milliseconds the server spent opening the weights before the first item. "
+            "Once per job, which is this row's grain."
+        ),
+    )
+    job_seconds: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "The job's own wall clock. The truncation cap reverts on the slowest work "
+            "job's, and before this cell the only place that number lived was the "
+            "GitHub jobs API, which drops a job record when the run ages out."
+        ),
+    )
 
     @classmethod
     def csv_columns(cls) -> tuple[str, ...]:
