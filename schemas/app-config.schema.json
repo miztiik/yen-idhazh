@@ -719,6 +719,27 @@
           "title": "Lead Coverage Min",
           "type": "number"
         },
+        "qualification_min_brief": {
+          "default": 2,
+          "description": "Articles the corpus aims at that take the brief prompt, which is a different prompt - a corpus without one says nothing about that path.",
+          "minimum": 0,
+          "title": "Qualification Min Brief",
+          "type": "integer"
+        },
+        "qualification_min_over_cap": {
+          "default": 2,
+          "description": "Articles the corpus aims at that are long enough to be truncated. They are the only ones that exercise the cap at all.",
+          "minimum": 0,
+          "title": "Qualification Min Over Cap",
+          "type": "integer"
+        },
+        "qualification_min_per_band": {
+          "default": 3,
+          "description": "Articles a qualification corpus aims at in each summarize band. It describes the measuring stick rather than the candidate, so a corpus short of it is reported on the verdict and blocks nothing - the gate that refuses a thin run is scored_denominator, which counts what was actually scored.",
+          "minimum": 0,
+          "title": "Qualification Min Per Band",
+          "type": "integer"
+        },
         "qualification_pool_multiple": {
           "default": 6,
           "description": "Articles a qualification shard extracts for every one it replays. A floor on the choice the stratified selection gets, never a cap on the walk: a shard that has not yet been offered every length tier keeps going through its slice. Raising it buys fetch seconds, never model minutes, because the model still sees corpus_per_shard articles - one address measured 2.1 s on 2026-08-26 over 150 of them, against 330 minutes for the job.",
