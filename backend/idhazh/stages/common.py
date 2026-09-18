@@ -70,6 +70,16 @@ LOG: Final = logging.getLogger("idhazh")
 VAR_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "run"
 
 
+#: Where a day's judging leaves its draw and its verdict files. A sibling of
+#: `VAR_ROOT` rather than a child: a judging leg is not a work shard, it
+#: downloads none of the run artifacts, and the two trees are uploaded and
+#: retained separately. Nothing here is ever committed - a drawn row has no
+#: verdict yet, and `state/**/*.csv` merges by union, so committing a row that
+#: is later rewritten would stack both versions with nothing to say which is
+#: current.
+JUDGE_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "judge"
+
+
 VALIDATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "validation"
 
 

@@ -63,6 +63,7 @@ from idhazh.fingerprint import (
     file_digest,
     runtime_build,
 )
+from idhazh.llm.server import DEFAULT_ENDPOINT
 from idhazh.stages import (
     assemble as assemble_stage,
 )
@@ -73,6 +74,7 @@ from idhazh.stages import (
     decide,
     dedupe_ledgers,
     harvest,
+    judge_shard,
     prune_stamp,
     prune_state,
     qualify,
@@ -129,6 +131,7 @@ STAGES: Final[tuple[str, ...]] = (
     "backfill-vectors",
     "site-weight",
     "validate-days",
+    "judge-shard",
     # Listed so `--help` names every verb, and never parsed: `main` hands the
     # line to the telemetry package before this parser is built.
     telemetry_cli.VERB,
@@ -491,6 +494,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             "months named."
         ),
     )
+    parser.add_argument(
+        "--base-url",
+        default=DEFAULT_ENDPOINT,
+        help=(
+            "The llama-server one judging leg talks to. Every route it needs is derived "
+            "from this one address, so a leg cannot ask one server for a tokenisation "
+            "and another for a verdict."
+        ),
+    )
     args = parser.parse_args(argv)
 
     settings = config.load(args.config)
@@ -551,6 +563,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.stage == "prune-stamp":
         # Above the fetcher for the same reason: it rewrites one committed field.
         return prune_stamp.stage_prune_stamp(corpus_dir=args.corpus_dir, date=args.date or _today())
+
+    if args.stage == "judge-shard":
+        # Above the fetcher because a judging leg reads the committed days and
+        # posts to loopback. Starting a fetcher here would read every host's
+        # robots.txt to answer a question about two summaries already on disk.
+        judged_on = args.date or _today()
+        judge_shard.stage_judge_shard(
+            judged_on,
+            shard=args.shard,
+            shards=args.shards,
+            settings=settings,
+            digest_root=common.PUBLIC_ROOT,
+            run_dir=common.JUDGE_ROOT / judged_on,
+            base_url=args.base_url,
+        )
+        return 0
 
     if args.stage == "compact":
         # Above the fetcher because it reads and rewrites committed files only.
