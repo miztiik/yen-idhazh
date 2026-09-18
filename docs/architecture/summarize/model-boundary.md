@@ -1,6 +1,6 @@
 # The model boundary
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-18
 
 How the summarizer stays generic while the model behind it changes. This page
 owns the shape of the boundary - what crosses it, which side each fact lives
@@ -140,7 +140,7 @@ whenever the model digest moved. Per-model wording means a prompt edit made
 swap that carried it. The one alarm that survives a model change stops working
 on exactly the day it is needed.
 
-**Qualification would stop measuring one thing.** The eleven gates compare two
+**Qualification would stop measuring one thing.** The ten gates compare two
 models on one frozen corpus. Different words on each side measures two changes
 and reports one number.
 
@@ -159,7 +159,7 @@ moves it exactly as a reworded instruction would - measured 2026-09-14: the
 same two turns render 28 bytes shorter under the fold and the digest moves. The
 qualification run's stamp does not. `stages/qualify.py` hands `build_inputs`
 the content-only digest from `summarize.prompt_inputs`, which takes no envelope
-and carries no turn marker, so nothing on `turns` can move it - and the eleven
+and carries no turn marker, so nothing on `turns` can move it - and the ten
 gates are what adopt a model. A candidate compared through a digest that is
 blind to how its turns were written needs the envelope stated on the entry and
 checked against the running server, which is case 1 of the start-up proof.
@@ -359,7 +359,7 @@ flowchart LR
   C --> B
   B -->|"fits"| Q
   B -->|"does not fit"| X
-  Q -->|"eleven gates pass, a person decides"| AD
+  Q -->|"ten gates pass, a person decides"| AD
   Q -->|"any gate fails"| X
   AD -.->|"quality drops in the archive"| RV
 
@@ -521,7 +521,7 @@ What case 2 records that case 1 cannot:
 | Prompt-cache hit between calls | Only observable on the real call sequence |
 | Output digests | Determinism, by replaying the same rows |
 
-Case 2 never scores quality. The eleven gates judge quality and they live
+Case 2 never scores quality. The ten gates judge quality and they live
 elsewhere; a scorer inside a bench becomes the thing that selects, and the
 alarm stops being able to detect drift.
 

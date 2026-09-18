@@ -24,7 +24,7 @@ It is determinism *given identical logits*, which is weaker than it sounds. Ever
 
 **`seed` is what repeatability rests on.** Same inputs and the same seed is the same reply; same inputs and a different seed is a different one. It is never the *determinism* control, because there is no determinism to control - it is the reproducibility control, which is a different and honest claim.
 
-**What this costs, stated.** Two runs over one article can differ in wording with nothing changed and nothing wrong. Above zero temperature the gate that would refuse that is not asked at all, and the run reports the spread instead ([../../concepts/evaluation.md](../../concepts/evaluation.md)). A run at temperature 0 still gets the hard gate, unchanged.
+**What this costs, stated.** Two runs over one article can differ in wording with nothing changed and nothing wrong. The gate that would refuse that is retired, and there is no temperature at which it comes back: a summarizer does not need to say a thing the same way twice, and a gate that fires across runner CPU classes for reasons unrelated to a regression gets switched off within a month. What a run records instead is `wording_spread`, a count of how many distinct wordings each item drew, with its denominator, blocking nothing ([../../concepts/evaluation.md](../../concepts/evaluation.md)). Qualification has ten gates and every one of them is asked of every run.
 
 ## The record is the enumeration
 
@@ -159,10 +159,12 @@ out of the training corpus. The build does not fail.
 compare, and a run summarizes each item once. Repeats happen in qualification,
 which is where both the gate and the diagnostic live.
 
-**The gate is asked only at temperature 0**, the one setting where "identical
-inputs, identical words" has an answer. Above zero, repeats are meant to differ:
-the run records `wording_spread` instead - how many distinct wordings each item
-drew, against the denominator the gate would have used - and that blocks nothing.
+**The gate is gone and the column is not.** There is no determinism gate at any
+temperature: a summarizer is not asked to say a thing the same way twice, so
+`wording_spread` is what a qualification run records - how many distinct wordings
+each item drew, against its own denominator - and it blocks nothing.
+`determinism_violation` survives as a column because the days already committed
+carry it and the console still reads them.
 
 A gate that failed the build would fire across runner CPU classes for reasons
 unrelated to any regression, and a flaky gate gets switched off within a month -

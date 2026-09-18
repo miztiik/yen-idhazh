@@ -321,7 +321,7 @@
         },
         "temperature": {
           "default": 0.0,
-          "description": "How far the sampler may stray from the likeliest token. The default is 0.0 for the reason n_ctx's default is conservative: a temperature is a reading of one model's weights, and a number that suited one family applied to weights nobody has run is a setting somebody will trust. Every committed entry pins its own. Above 0.0 the seed stops being dead code and becomes the control that decides which token is drawn, and the determinism gate stops having a question to ask - docs/architecture/contracts/determinism.md.",
+          "description": "How far the sampler may stray from the likeliest token. The default is 0.0 for the reason n_ctx's default is conservative: a temperature is a reading of one model's weights, and a number that suited one family applied to weights nobody has run is a setting somebody will trust. Every committed entry pins its own. Above 0.0 the seed stops being dead code and becomes the control that decides which token is drawn - docs/architecture/contracts/determinism.md.",
           "minimum": 0.0,
           "title": "Temperature",
           "type": "number"

@@ -95,7 +95,7 @@ def test_the_committed_config_qualifies_on_the_path_the_digest_runs() -> None:
 def test_a_budget_met_in_the_first_call_counts_the_item_as_cut() -> None:
     """A pair whose first decode was truncated did not finish.
 
-    The determinism gate reads a `stop` as a clean completion. Taking the last
+    The schema gate reads a `stop` as a clean completion. Taking the last
     reply's word for it would report a cut item as clean on every pair where
     the label call ran out of budget and the summarize call did not - which is
     the common shape, because the label reply is the long one.

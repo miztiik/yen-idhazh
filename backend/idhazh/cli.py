@@ -315,7 +315,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--repeats",
         type=int,
         default=3,
-        help="Deterministic repeats per frozen article. The determinism gate reads them.",
+        help="How many times each frozen article is summarized. `wording_spread` reads them.",
     )
     parser.add_argument(
         "--corpus-per-shard",

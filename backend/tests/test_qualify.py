@@ -20,7 +20,6 @@ from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.qualification import (
-    OPTIONAL_GATES,
     CanaryObservation,
     CandidateIdentity,
     CorpusItem,
@@ -471,62 +470,39 @@ def test_a_shard_written_before_today_still_validates() -> None:
     assert all(c.failure_code is None for c in restored.canaries)
 
 
-def test_a_second_output_digest_on_one_item_fails_determinism() -> None:
-    broken = with_one_bad_call(a_passing_shard(), output_digest="9" * 64)
-    outcome = outcomes_of(broken)[GateName.DETERMINISM]
-    assert outcome.status is GateStatus.FAILED
-    assert "energy-01" in outcome.detail
+# --- every gate is asked, and a drifted wording is not one of them ----------
 
 
-def test_a_failed_call_is_not_counted_as_a_determinism_violation() -> None:
-    """A call that never replied has no digest. Counting it would blame decoding
-    for a network fault - the schema gate already fails on it."""
-    broken = with_one_bad_call(
-        a_passing_shard(), ok=False, schema_valid=False, output_digest="0" * 64
-    )
-    assert outcomes_of(broken)[GateName.DETERMINISM].status is GateStatus.PASSED
+def test_a_second_output_digest_on_one_item_fails_no_gate() -> None:
+    """Two wordings of one article used to fail `determinism`. That gate is retired.
 
-
-# --- the one gate a run can legitimately not ask ----------------------------
-
-
-def test_above_zero_temperature_the_determinism_gate_is_not_asked() -> None:
-    """The owner set the temperature in config, so the question stops having an answer.
-
-    It is not the gate moving to let a candidate through. A shard that WOULD
-    fail the gate is used here on purpose: at temperature 0 it fails, and above
-    zero there is no outcome at all rather than a pass. The other ten are asked
-    either way.
+    A shard that would have failed it is used here on purpose: every gate it
+    still has must pass, so nothing survived the retirement under another name.
     """
+    drifted = with_one_bad_call(a_passing_shard(), output_digest="9" * 64)
+
+    outcomes = outcomes_of(drifted, inference=InferenceConfig(temperature=0.2))
+
+    assert set(outcomes) == set(GateName)
+    assert all(outcome.status is GateStatus.PASSED for outcome in outcomes.values())
+
+
+def test_the_temperature_does_not_change_which_gates_are_asked() -> None:
+    """There is no conditional gate left, so a report cannot be missing one."""
     drifted = with_one_bad_call(a_passing_shard(), output_digest="9" * 64)
 
     greedy = outcomes_of(drifted, inference=InferenceConfig())
     sampled = outcomes_of(drifted, inference=InferenceConfig(temperature=0.2))
 
-    assert greedy[GateName.DETERMINISM].status is GateStatus.FAILED
-    assert GateName.DETERMINISM not in sampled
-    assert set(sampled) == set(GateName) - {GateName.DETERMINISM}
-
-
-def test_a_report_may_omit_that_gate_and_no_other() -> None:
-    """The contract carries the same rule, so a payload cannot disagree with the run.
-
-    Asserted where the report builder lives, in
-    `backend/tests/test_qualification_summary.py`. This line is here because the
-    condition is decided in `gates` and a reader of this file needs to know the
-    payload will accept what it just produced.
-    """
-    sampled = outcomes_of(a_passing_shard(), inference=InferenceConfig(temperature=0.2))
-
-    assert OPTIONAL_GATES == {GateName.DETERMINISM}
-    assert set(GateName) - set(sampled) <= OPTIONAL_GATES
+    assert set(greedy) == set(GateName)
+    assert set(sampled) == set(GateName)
 
 
 def test_the_spread_diagnostic_counts_wordings_rather_than_violations() -> None:
     """Above zero temperature a second wording is the sampler working.
 
     So the number is a spread with its denominator, it is printed, and it blocks
-    nothing. Both rows carry the population the gate would have judged - only
+    nothing. Both rows carry the population a reader compares against - only
     items that succeeded on every repeat can be compared at all.
     """
     drifted = with_one_bad_call(a_passing_shard(), output_digest="9" * 64)

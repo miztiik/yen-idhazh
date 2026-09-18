@@ -108,8 +108,7 @@ class InferenceConfig(Model):
             "reading of one model's weights, and a number that suited one family "
             "applied to weights nobody has run is a setting somebody will trust. "
             "Every committed entry pins its own. Above 0.0 the seed stops being dead "
-            "code and becomes the control that decides which token is drawn, and the "
-            "determinism gate stops having a question to ask - "
+            "code and becomes the control that decides which token is drawn - "
             "docs/architecture/contracts/determinism.md."
         ),
     )
