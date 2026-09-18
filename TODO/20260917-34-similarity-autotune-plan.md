@@ -28,7 +28,7 @@ Only one of those is invisible.**
 | O1 | The model judges, and it judges alone. No human in the loop, ever. |
 | O2 | **There is no hard floor.** The line may move down as well as up. Most of the world's coverage is regurgitated, so more merging is the goal, not less. Content decides its own future. |
 | O3 | The knob is `adaptive_dedup_threshold` and it lives in `config/idhazh.json`. |
-| O4 | A daily CI workflow named `LLM-JUDGES` hosts this and later judge tasks. |
+| O4 | A daily CI workflow named `LLM-COUNCIL` hosts this and later judge tasks. **Council, not judges** (owner, 2026-09-18): the legs shard a list today and never confer, and the name is chosen for where this goes rather than where it is. Autotune argues a case - it is prosecution counsel - and a case needs something to adjudicate it: a judge, a jury, or a heuristic. All three belong under one roof, and some of those paths will put a person in the loop. |
 | O5 | The cap is 200 pairs a day, across 4 shards. |
 | O6 | Damping and the daily clamp are kept. |
 | O7 | The model stamp is a typed field with an enum, not a free string - a model change becomes a contract change. |
@@ -1887,7 +1887,7 @@ Call 1 is a recording call because a verdict row is a fact about a pair, appende
 
 `docs/architecture/publishing/retention.md` gains one row for `scored-pairs` in this commit, naming the age it is pruned at and the `story-similarity-scored-pairs` word an operator types. `docs/concepts/growing-reads.md` gains nothing here: `load_story_similarity_pairs` opens one named day file whatever the tree holds, which is a bounded read and not an entry that page carries.
 
-**Test files: `backend/tests/test_similarity_fold.py` (unit), plus two workflow tests that land with row #10 in `backend/tests/workflows/test_llm_judges_workflow.py`.** The two commit-call tests read a workflow file row #10 creates, so they cannot run before it exists; they are named here because this row decides what they assert.
+**Test files: `backend/tests/test_similarity_fold.py` (unit), plus two workflow tests that land with row #10 in `backend/tests/workflows/test_llm_council_workflow.py`.** The two commit-call tests read a workflow file row #10 creates, so they cannot run before it exists; they are named here because this row decides what they assert.
 
 | Test | Tier | What drives it |
 | --- | --- | --- |
@@ -1902,7 +1902,7 @@ Call 1 is a recording call because a verdict row is a fact about a pair, appende
 | `test_one_pair_judged_twice_is_counted_once` | unit | Two built rows sharing a `pair_key` under two `run_id`s and two verdicts, asserting the slot moved by one and the newer `run_id` is the verdict that landed |
 | `test_a_day_with_a_missing_leg_is_not_folded` | unit | Three verdict files where four shards were expected: the rows are still appended, the record is unchanged, and the date is absent from `folded_dates` |
 | `test_a_re_dispatch_folds_the_day_a_missing_leg_blocked` | unit | The same day with all four files present, asserting one fold and the counts the whole day should give |
-| `test_the_two_commit_calls_are_separate` | workflow | `_harness` reading `.github/workflows/llm-judges.yml` |
+| `test_the_two_commit_calls_are_separate` | workflow | `_harness` reading `.github/workflows/llm-council.yml` |
 | `test_only_the_record_is_refreshed` | workflow | The same file, asserting both `scored-pairs` and `fitted-thresholds` are absent from `REFRESH_PATHS` |
 
 Every unit test builds its own record and its own rows. None reads `state/`, and none counts how many committed rows carry a field - that shape is a test with a date on the calendar, and CLAUDE.md section 13 names the day one fired and took every open pull request red.
@@ -2076,10 +2076,10 @@ same_story=applied.effective_same_story(
 
 ---
 
-## Row #10 - the `LLM-JUDGES` workflow, 4 matrix legs
+## Row #10 - the `LLM-COUNCIL` workflow, 4 matrix legs
 
 
-**File: `.github/workflows/llm-judges.yml`, `name: LLM-JUDGES`.** Triggers: `schedule` at `0 22 * * *` and `workflow_dispatch` with one `date` input. The scheduled run judges `date -u -d 'yesterday' +%F`, shaped against the same anchored `^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$` pattern `digest.yml` uses, for the same reason: a typo publishes rows at an address no reader ever looks at.
+**File: `.github/workflows/llm-council.yml`, `name: LLM-COUNCIL`.** Triggers: `schedule` at `0 22 * * *` and `workflow_dispatch` with one `date` input. The scheduled run judges `date -u -d 'yesterday' +%F`, shaped against the same anchored `^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$` pattern `digest.yml` uses, for the same reason: a typo publishes rows at an address no reader ever looks at.
 
 **22:00 UTC, and it can overlap the tail of a publish.** The last digest cron is `20 18 * * *`, and `digest.yml`'s own header records that a scheduled run there starts 40 to 70 minutes after its cron minute and then takes 164 to 184 minutes (ubuntu-latest, 2026-08-23 and 2026-08-24, n=3). So the 18:20 slot normally finishes between 21:44 and 22:34, and the first 34 minutes of a judge run can land inside it. Both push to `main`, which the two-call commit shape of row #7 already handles. What the overlap costs is a queued cache restore, not a failed run.
 
@@ -2099,7 +2099,7 @@ same_story=applied.effective_same_story(
 
 Why the assertion matters: `timeout-minutes` takes whatever it is handed. A value Actions cannot read as a number leaves the job with no bound at all, and the run finds out at the 6 h ceiling, where GitHub kills it with nothing written.
 
-**The model is `models.summarize`, and that is a cache decision.** The `judge` job writes the same cache key `digest.yml`'s work job writes, character for character: `llm-${{ needs.draw.outputs.summarize_file }}-${{ needs.draw.outputs.summarize_revision }}-${{ needs.draw.outputs.llama_cpp_build }}-v4`. Two things follow. The daily run has already created that entry, so LLM-JUDGES restores rather than downloads and adds **zero bytes** to the 10 GB cache allowance. And the repository's own throughput reading - 9.85 tokens a second, median over 4,117 timed rows, slowest 8.25 and fastest 44.71, taken 2026-09-09 on a stock ubuntu-latest - transfers to this workload at all, because it was taken on these weights. A second model would be a second multi-gigabyte entry competing for eviction inside an allowance already near its ceiling; the cache cannot fail a run, but an eviction costs a re-download, and a download is wall-clock inside a job with a hard ceiling.
+**The model is `models.summarize`, and that is a cache decision.** The `judge` job writes the same cache key `digest.yml`'s work job writes, character for character: `llm-${{ needs.draw.outputs.summarize_file }}-${{ needs.draw.outputs.summarize_revision }}-${{ needs.draw.outputs.llama_cpp_build }}-v4`. Two things follow. The daily run has already created that entry, so LLM-COUNCIL restores rather than downloads and adds **zero bytes** to the 10 GB cache allowance. And the repository's own throughput reading - 9.85 tokens a second, median over 4,117 timed rows, slowest 8.25 and fastest 44.71, taken 2026-09-09 on a stock ubuntu-latest - transfers to this workload at all, because it was taken on these weights. A second model would be a second multi-gigabyte entry competing for eviction inside an allowance already near its ceiling; the cache cannot fail a run, but an eviction costs a re-download, and a download is wall-clock inside a job with a hard ceiling.
 
 The `judge` job reuses the shipped parts and spells nothing itself: `backend/utilities/model_refs.py configured` for the refs, `.github/scripts/llama-cpp-pin.sh` for the build, `.github/scripts/fetch-model-runtime.sh` on a cache miss, the `sha256sum --check` step on every run including a hit, and `.github/scripts/start-llama-server.sh summarize llama-server` for the server. That script reaches `idhazh.llm.server.server_argv` through `backend/utilities/llama_argv.py`, which is the one place a llama-server flag may be spelled.
 
@@ -2141,7 +2141,7 @@ Rejected alternative, and what it costs: four legs each committing into the one 
 - artifacts: one draw of at most 200 rows and four verdict files of at most 50 rows each. Under 100 KB, and this is a public repository, so the 500 MB private-repository quota meters nothing.
 - dependency: none added. Every script and every binary this workflow uses already ships.
 
-**Tests: `backend/tests/workflows/test_llm_judges_workflow.py`, workflow tier**, driven by the harness reading the committed YAML and never by a live run.
+**Tests: `backend/tests/workflows/test_llm_council_workflow.py`, workflow tier**, driven by the harness reading the committed YAML and never by a live run.
 
 | Test | What it asserts |
 | --- | --- |
@@ -2160,9 +2160,9 @@ Rejected alternative, and what it costs: four legs each committing into the one 
 
 **Three closed-world tables in `backend/tests/workflows/_harness.py` must gain an entry, or the suite fails before your test runs:**
 
-- `EXPECTED_WORKFLOWS` gains `"llm-judges.yml": ("LLM-JUDGES", frozenset({"schedule", "workflow_dispatch"}))`.
-- `SERVER_STARTERS` gains `("llm-judges.yml", "judge"): (("Start the model", "config"),)`. It is compared by equality, so a server started anywhere else still fails.
-- `DISPATCH_INPUT_SHAPES` gains `("llm-judges.yml", "date")` with its shape, the way `digest.yml`'s own `date` is declared.
+- `EXPECTED_WORKFLOWS` gains `"llm-council.yml": ("LLM-COUNCIL", frozenset({"schedule", "workflow_dispatch"}))`.
+- `SERVER_STARTERS` gains `("llm-council.yml", "judge"): (("Start the model", "config"),)`. It is compared by equality, so a server started anywhere else still fails.
+- `DISPATCH_INPUT_SHAPES` gains `("llm-council.yml", "date")` with its shape, the way `digest.yml`'s own `date` is declared.
 
 `RUNTIME_IDENTITY_JOBS`, `RUNTIME_LOG_SUMMARY_STEPS` and `COUNTERS_JOBS` are read against `digest.yml` only. This row adds nothing to any of them.
 
@@ -2456,7 +2456,7 @@ pair here does merge, it is a story the reader never got to see.
 
 ### Where it runs and how it is committed
 
-**One step in the `fold` job of `.github/workflows/llm-judges.yml`**, after
+**One step in the `fold` job of `.github/workflows/llm-council.yml`**, after
 `idhazh judge-fit` and before the second commit call. It reads what the fold and
 the fit wrote, so it cannot run before either.
 
@@ -2549,7 +2549,7 @@ at module scope (CLAUDE.md section 13).
 | `test_the_sheet_renders_from_the_canary_day` | integration | `backend/var/canary/`, asserting the body parses as markdown and names every cell |
 
 **One workflow test**, added to
-`backend/tests/workflows/test_llm_judges_workflow.py`:
+`backend/tests/workflows/test_llm_council_workflow.py`:
 `test_the_sample_sheet_is_rewritten_by_the_call_that_refreshes_it` - the path is
 staged by call 2, is in `REFRESH_PATHS`, and the command that rewrites it is a
 single executable in `REGENERATE_COMMAND` carrying no `&&`, because the script
@@ -3382,7 +3382,7 @@ flowchart TD
     fitted["Group at the fitted line"]
     configured["Group at the config floor"]
   end
-  subgraph jud["LLM-JUDGES, 22:00"]
+  subgraph jud["LLM-COUNCIL, 22:00"]
     draw["Score every cross-source pair.<br/>Keep 0.88 and above.<br/>Take what the budget allows"]
     legs["Four legs, one server each.<br/>Every pair read twice,<br/>once in each order"]
     agree{"Do the two<br/>readings agree?"}
@@ -3446,7 +3446,7 @@ restating it. One concept, defined once (CLAUDE.md section 5).
 | The judge prompt's own words | `backend/idhazh/prompts/judge_same_story.txt`. The page says what the prompt must not contain and why, and pastes none of it |
 | How fetched text is fenced, and what `untrusted_block` guarantees | `docs/architecture/sources/trust-boundary.md` and Guardrail #11 |
 | Seconds a call, tokens a second, a leg's wall clock | Row #17's benchmark record. This page carries no timing of its own |
-| The workflow's jobs, matrix and cache key | `.github/workflows/llm-judges.yml` and `docs/how-to/run-the-gates.md` |
+| The workflow's jobs, matrix and cache key | `.github/workflows/llm-council.yml` and `docs/how-to/run-the-gates.md` |
 
 **The measured readings that are already on this page stay on this page**, and
 that is not a contradiction. `What chose 0.94` is a hand-label measurement of
@@ -3735,7 +3735,7 @@ the module that already owns `measure.yml`.
   belong to the box that took them, and this repository already holds two cases
   where a laptop and the runner disagreed by more than a factor of two.
 - Drop the cold call, or average it into the median.
-- Run inside `LLM-JUDGES` or `digest.yml`. A measurement that runs every day is a
+- Run inside `LLM-COUNCIL` or `digest.yml`. A measurement that runs every day is a
   cost every day, and this question is asked once.
 - Time one call, or twenty, and report a mean.
 - Change a flag, a knob, the prompt or the grammar to make a number look better.
