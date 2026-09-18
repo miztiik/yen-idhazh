@@ -1,6 +1,6 @@
 # Model throughput and why it drifts inside a run
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-18
 What the two model rates mean, why the slow half of a run is slow, and what a
 change in either number is allowed to prove.
 
@@ -108,7 +108,7 @@ rate is no longer the one to quote.** They come from run `32742672105` on
 **9.85 tokens a second**, slowest timed item 8.25 and fastest 44.71, measured
 2026-09-09 over the timed items of 2026-09-01 to 2026-09-09 on GitHub-hosted
 `ubuntu-latest`, 4 vCPU, no GPU
-([What the wall clock pays](../../reference/measurements.md#what-the-wall-clock-pays)).
+([What the wall clock pays](../../reference/benchmarks/how-often-the-truncation-cap-bites.md#what-the-wall-clock-pays)).
 **Do not subtract those two numbers.** They differ by model, by cap and by which
 processor their shards drew, and the last of those three is worth 4.2 times on
 its own - see
@@ -534,7 +534,7 @@ Three things follow for anyone reading a rate off this page or the console:
 rather than among them. It is on this page because it is the largest single term
 in a shard's read time, and a page about what moves throughput that leaves out
 the biggest mover teaches the wrong model of the machine
-([The cap cut nothing, and the rate it was priced at did not move](../../reference/measurements.md#the-cap-cut-nothing-and-the-rate-it-was-priced-at-did-not-move)).
+([The cap cut nothing, and the rate it was priced at did not move](../../reference/benchmarks/a-run-at-the-doubled-window-and-cap.md#the-cap-cut-nothing-and-the-rate-it-was-priced-at-did-not-move)).
 
 ## What this means when reading the chart
 
