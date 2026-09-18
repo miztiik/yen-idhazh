@@ -52,7 +52,6 @@ from idhazh import day_partition, ledger
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.runtime_counters import ServerJob
-from idhazh.contracts.validation_row import ValidationRow
 from idhazh.evals import archive
 from idhazh.ledger import read_header as _read_header
 from idhazh.ledger import require_matching_header
@@ -562,26 +561,3 @@ def append_segment(
         shard=shard,
     )
     return written
-
-
-def append_validation(path: Path, rows: Iterable[ValidationRow]) -> int:
-    """The model-validation ledger, one file per validation date.
-
-    Dated rather than appended to one file: a validation is a whole comparison,
-    not an item, and mixing two of them in one table makes the denominator a
-    question.
-    """
-    pending = list(rows)
-    if not pending:
-        return 0
-    names = ValidationRow.csv_columns()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    exists = path.exists()
-    with path.open("a", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=names, lineterminator="\n")
-        if not exists:
-            writer.writeheader()
-        for row in pending:
-            payload = row.model_dump(mode="json")
-            writer.writerow({name: payload[name] for name in names})
-    return len(pending)

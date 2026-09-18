@@ -8,16 +8,24 @@ from __future__ import annotations
 
 from idhazh import (
     config,
+    ledger,
+    run_context,
 )
+from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.contracts.validation_row import (
     ValidationVerdict,
 )
-from idhazh.evals import golden, validation, writer
+from idhazh.evals import golden, validation
 from idhazh.stages import common
 from idhazh.stages.common import LOG
 
+#: The decider runs once for a whole comparison, so it is shard 0 of one.
+DECIDE_SHARD = 0
 
-def stage_decide(*, settings: config.Settings, date: str, commit_sha: str, runner: str) -> int:
+
+def stage_decide(
+    *, settings: config.Settings, date: str, run_id: str, commit_sha: str, runner: str
+) -> int:
     """Apply the Row #7 rule to whatever was measured, and record it.
 
     Returns non-zero on a switch. That verdict is an ESCALATE, and a green build
@@ -47,11 +55,23 @@ def stage_decide(*, settings: config.Settings, date: str, commit_sha: str, runne
         incumbent,
         challengers,
         decision,
-        measured_on=date,
+        date=date,
+        run_id=run_id,
         commit_sha=commit_sha,
         runner=runner,
     )
-    writer.append_validation(config.REPO_ROOT / golden.ledger_relpath(date), rows)
+    # This execution's own segment, never the day file. Two comparisons can be
+    # judged on one date, and the state root is the one the config names - so a
+    # trial run leaves nothing in the tree a published day is built from.
+    ledger.write_segment(
+        common.STATE_ROOT,
+        ledger.SegmentLedger.VALIDATION,
+        rows,
+        run_id=run_id,
+        attempt=run_context.run_attempt(),
+        job=ServerJob.DECIDE,
+        shard=DECIDE_SHARD,
+    )
 
     LOG.info("verdict=%s winner=%s", decision.verdict.value, decision.winner)
     LOG.info("%s", decision.detail)

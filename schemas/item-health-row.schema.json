@@ -78,13 +78,14 @@
       "type": "string"
     },
     "ServerJob": {
-      "description": "Which workflow job produced a row.\n\nOurs to name, so it is a closed set. Every other identifier on a host row is\na string the machine chose and cannot be one - see\n`docs/reference/host-metrics.md`. Refusing anything else is what stops a typo\nbecoming a job nobody can group by.\n\nEvery value is a job's own id in its workflow file, lowercase, so a reader\ngoes from a row to the steps that wrote it with no lookup table in between.\nA display name would drift from the thing it identifies.\n\n**`visuals` is here for the rows and not for a job.** `digest.yml` ran one\nuntil 2026-09-13, when the small model, its job and its flag were retired\ntogether. Six committed counters rows still carry the value, and a member\nwith no producer left is the only thing that can read them back.",
+      "description": "Which workflow job produced a row.\n\nOurs to name, so it is a closed set. Every other identifier on a host row is\na string the machine chose and cannot be one - see\n`docs/reference/host-metrics.md`. Refusing anything else is what stops a typo\nbecoming a job nobody can group by.\n\nEvery value is a job's own id in its workflow file, lowercase, so a reader\ngoes from a row to the steps that wrote it with no lookup table in between.\nA display name would drift from the thing it identifies.\n\n**`visuals` is here for the rows and not for a job.** `digest.yml` ran one\nuntil 2026-09-13, when the small model, its job and its flag were retired\ntogether. Six committed counters rows still carry the value, and a member\nwith no producer left is the only thing that can read them back.\n\n**`decide` is here for a filename and not for a column.** `validate.yml`'s\ngate job writes the validation ledger's segment, and the segment grammar\nnames its writer from this set - so the job belongs here. No row of the three\nledgers that carry a `job` column can hold it: that job stands no server up,\nrecords no machine and reads no item. Their generated schemas list it because\none enum answers \"which workflow job\" for the whole repository, which is why\nnone of the three is version-stamped for it - a stamp says a shape moved, and\ntheirs did not.",
       "enum": [
         "plan",
         "work",
         "assemble",
         "visuals",
-        "runtime"
+        "runtime",
+        "decide"
       ],
       "title": "ServerJob",
       "type": "string"

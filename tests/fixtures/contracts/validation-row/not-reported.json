@@ -1,15 +1,16 @@
 {
   "articles": 27,
   "commit_sha": "0000000000000000000000000000000000000000",
+  "date": "2026-08-26",
   "detail": "every gate passed; the model card publishes no faithfulness result",
   "is_incumbent": false,
   "leaderboard_hhem": null,
   "leaderboard_provenance": "not_reported",
   "measured_hhem": 0.79,
-  "measured_on": "2026-08-26",
   "model_id": "qwen3-5-9b-q4-k-m",
+  "run_id": "2026-08-26-35196099426",
   "runner": "ubuntu-latest",
   "selected": true,
   "verdict": "qualified",
-  "version": "2026-08-26"
+  "version": "2026-09-18"
 }

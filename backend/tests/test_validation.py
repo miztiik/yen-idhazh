@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
-from idhazh.contracts.validation_row import ValidationRow, ValidationVerdict
+from idhazh.contracts.validation_row import LeaderboardProvenance, ValidationRow, ValidationVerdict
 from idhazh.evals.validation import Measurement, decide, to_rows
 
 CONFIG = EvaluationConfig()
@@ -121,7 +121,8 @@ class TestTheLedger:
             base,
             decision_input,
             decision,
-            measured_on="2026-08-22",
+            date="2026-08-22",
+            run_id="2026-08-22-900000001",
             commit_sha="a" * 40,
             runner="ubuntu-latest",
         )
@@ -158,7 +159,8 @@ class TestTheLedger:
                 leaderboard_hhem=0.75,
                 measured_hhem=0.70,
                 articles=20,
-                measured_on="2026-08-22",
+                date="2026-08-22",
+                run_id="2026-08-22-900000001",
                 commit_sha="a" * 40,
                 runner="ubuntu-latest",
                 verdict=ValidationVerdict.SWITCH_AND_PAUSE,
@@ -168,3 +170,24 @@ class TestTheLedger:
     def test_a_row_round_trips(self) -> None:
         rows = self._rows([challenger("a", 0.71)])
         assert ValidationRow.from_json(rows[0].to_json()) == rows[0]
+
+    def test_a_row_round_trips_through_its_csv_cells(self) -> None:
+        """The segment store writes cells and the compaction reads them back.
+
+        A model nobody published a score for carries an empty leaderboard cell,
+        and that has to come back as an unknown prior rather than as a zero -
+        the whole reason `leaderboard_provenance` exists.
+        """
+        rows = self._rows([challenger("a", 0.71)])
+        for row in rows:
+            assert ValidationRow.from_csv_row(row.csv_row()) == row
+
+        unscored = rows[0].model_copy(
+            update={
+                "leaderboard_hhem": None,
+                "leaderboard_provenance": LeaderboardProvenance.NOT_REPORTED,
+            }
+        )
+        cells = unscored.csv_row()
+        assert cells["leaderboard_hhem"] == ""
+        assert ValidationRow.from_csv_row(cells).leaderboard_hhem is None

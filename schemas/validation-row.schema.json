@@ -27,6 +27,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Renamed `measured_on` to `date` and appended `run_id`.",
+      "version": "2026-09-18",
+      "why": "The head is named by the row's date cell, and two runs of a day are two verdicts."
+    },
+    {
       "change": "leaderboard_hhem may be null beside a leaderboard_provenance of not_reported.",
       "version": "2026-08-26",
       "why": "A single-model qualification has no incumbent to compare against."
@@ -58,6 +63,12 @@
       "description": "The tree the measurement ran against.",
       "minLength": 7,
       "title": "Commit Sha"
+    },
+    "date": {
+      "description": "The day this was measured, and the day file it lands in.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
     },
     "detail": {
       "description": "The rule's own words for why, so a reader needs no code.",
@@ -97,14 +108,15 @@
       "title": "Measured Hhem",
       "type": "number"
     },
-    "measured_on": {
-      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-      "title": "Measured On",
-      "type": "string"
-    },
     "model_id": {
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
       "title": "Model Id",
+      "type": "string"
+    },
+    "run_id": {
+      "description": "Which execution measured it. Two dispatches of one candidate are two verdicts.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+      "title": "Run Id",
       "type": "string"
     },
     "runner": {
@@ -123,7 +135,7 @@
       "description": "What the run concluded. A run-level fact, identical on every row."
     },
     "version": {
-      "default": "2026-08-26",
+      "default": "2026-09-18",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -135,7 +147,8 @@
     "selected",
     "measured_hhem",
     "articles",
-    "measured_on",
+    "date",
+    "run_id",
     "commit_sha",
     "runner",
     "verdict",
@@ -143,5 +156,5 @@
   ],
   "title": "ValidationRow",
   "type": "object",
-  "version": "2026-08-26"
+  "version": "2026-09-18"
 }
