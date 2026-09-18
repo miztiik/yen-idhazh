@@ -92,7 +92,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 15 | Generated TypeScript contracts replace the hand-written ones | 10, 11 | F | PENDING | - | - | - |
 | 16 | Docs, and the orphan sweep | all | G | PENDING | - | - | - |
 | 18 | Chart-craft doctrine - the thirteen rules, written once | - | H | IN-FLIGHT | p33r18 | - | - |
-| 28 | Pipeline panels: the share track goes, Extraction gains a trend | 18 | H | PENDING | - | - | - |
+| 28 | Pipeline panels: the share track goes, Extraction gains a trend | 18 | H | IN-FLIGHT | p33h28 | - | - |
 | 19 | The shard board | 11, 18 | I | PENDING | - | - | - |
 | 21 | Memory and load, three grains - ABSORBS Row #14 | 5, 7, 15, 19 | I | PENDING | - | - | - |
 | 23 | What a run reads against what it writes, in tokens and in seconds | 21 | I | PENDING | - | - | - |
