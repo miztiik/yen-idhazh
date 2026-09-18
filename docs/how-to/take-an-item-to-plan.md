@@ -14,7 +14,7 @@ A user names one item from a list of work - "take the next one", "work this item
 
 The list is a Markdown file the user names when they invoke. Nothing here reads a fixed path.
 
-**One invocation handles one item, then stops.** Where several items are wanted, the caller invokes again - the loop belongs to the person or the automation driving it, never to a step on this page.
+**One item, one session.** An invocation handles one item and stops; a loop is N invocations, not one conversation. A cold start re-reads the contract verbatim instead of a compacted paraphrase of it, keeps a failed item from costing its siblings, and stops the previous item's ruling from framing the next one. Where several items are wanted, the caller invokes again - the loop belongs to the person or the automation driving it, never to a step on this page.
 
 ## The chain
 
