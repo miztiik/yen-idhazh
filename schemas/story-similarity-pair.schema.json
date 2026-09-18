@@ -1,0 +1,239 @@
+{
+  "$defs": {
+    "SameStoryVerdict": {
+      "description": "The three words a judge may answer with, and nothing else.\n\nUpper case on the wire deliberately. The grammar handed to the decoder emits\nthese spellings, and the three differ at the first generated token - which is\nwhat makes `first_token_margin` a reading about this pair rather than about\nwhere the three words happen to agree.",
+      "enum": [
+        "YES",
+        "NO",
+        "UNCLEAR"
+      ],
+      "title": "SameStoryVerdict",
+      "type": "string"
+    }
+  },
+  "$id": "story-similarity-pair.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: one pair, two readings, and the scorer and judge behind them.",
+      "version": "2026-09-18",
+      "why": "The merge line was one person's reading, and nothing recorded what it cost."
+    }
+  ],
+  "description": "One pair, what it scored, and what a judge said about it in both orders.",
+  "properties": {
+    "composite_score": {
+      "description": "The weighted score the same-story pass would have given this pair. This is the number the fitted line is compared against, and the judge never sees it.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Composite Score",
+      "type": "number"
+    },
+    "cosine": {
+      "description": "The cosine between the two vectors the day already carries. Recorded raw so a later reweighting can be computed from the row rather than re-run.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Cosine",
+      "type": "number"
+    },
+    "cosine_weight": {
+      "description": "What the cosine was worth when this row was scored, read from the committed config at scoring time. On the row rather than in a file a reader has to go and find, so a window spanning a config edit is still readable.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Cosine Weight",
+      "type": "number"
+    },
+    "date": {
+      "description": "The digest date whose items this pair came from.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "decode_seconds": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Wall clock for both calls on this pair. A per-pair reading, so a day's spread is readable off the day file; the leg bound is sized off its own run instead.",
+      "title": "Decode Seconds"
+    },
+    "first_token_margin": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The gap between the highest and the second-highest probability at the first generated position, on the file-order call. A margin near zero means the grammar chose and the model did not.",
+      "title": "First Token Margin"
+    },
+    "grammar_digest": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "sha256 of the grammar handed to the decoder. A grammar edit changes what the three words can be, so it is part of what the verdict means.",
+      "title": "Grammar Digest"
+    },
+    "headline": {
+      "description": "Whether the two items shared a headline, which makes the score 1.0 outright instead of the weighted sum. On the row because the two paths give one number by two rules, and a reader cannot tell them apart afterwards.",
+      "title": "Headline",
+      "type": "boolean"
+    },
+    "judge_model": {
+      "anyOf": [
+        {
+          "enum": [
+            "qwen3-5-9b-q4-k-m",
+            "qwen3-5-9b-q4-k-m-thinking",
+            "ornith-1-5-9b-q5-k-m",
+            "gemma-4-e4b-it-qat-ud-q4-k-xl"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Which model judged. A Literal for the same reason the scorer is one.",
+      "title": "Judge Model"
+    },
+    "key_point": {
+      "description": "The share of key-point words the two items have in common, on the same 0 to 1 scale. Recorded raw for the same reason as the cosine.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Key Point",
+      "type": "number"
+    },
+    "key_point_weight": {
+      "description": "What the key-point term was worth. Same reason as the cosine weight.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Key Point Weight",
+      "type": "number"
+    },
+    "left_url_key": {
+      "description": "The lower of the two address keys. Not an item id: an id is minted per day and this pair has to be recognisable across days.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Left Url Key",
+      "type": "string"
+    },
+    "pair_key": {
+      "description": "The pair's identity: sha256 of the two url keys joined in sorted order. Recomputed on read, never trusted from the row.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Pair Key",
+      "type": "string"
+    },
+    "prompt_digest": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "sha256 of the rendered system turn. The prompt is content, so a digest is the only honest shape for it.",
+      "title": "Prompt Digest"
+    },
+    "right_url_key": {
+      "description": "The higher of the two address keys. Sorted so one pair has one row rather than two.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Right Url Key",
+      "type": "string"
+    },
+    "run_id": {
+      "description": "The run that scored the pair. Two runs of one day judge the same pair twice, and both rows stay: each read its own day.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "scorer_model": {
+      "const": "all-minilm-l6-v2-quantized",
+      "description": "Which encoder produced the two vectors. A Literal rather than a string, so swapping the encoder is a schema diff and a changelog entry rather than a silent change of scale.",
+      "title": "Scorer Model",
+      "type": "string"
+    },
+    "shard": {
+      "description": "Which judging leg owns this row. index mod shards, never a contiguous block, so a truncated draw still spreads evenly across the legs.",
+      "minimum": 0,
+      "title": "Shard",
+      "type": "integer"
+    },
+    "usable": {
+      "default": false,
+      "description": "Whether the two readings agree. Only an agreed pair is folded into the record; a disagreement is a reading about the judge rather than about the pair.",
+      "title": "Usable",
+      "type": "boolean"
+    },
+    "verdict": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SameStoryVerdict"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What the judge said with the items in file order. Empty until a judging leg has read the pair."
+    },
+    "verdict_swapped": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SameStoryVerdict"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What the judge said with the same two items in the other order. Two readings of one pair, which is what makes disagreement measurable."
+    },
+    "version": {
+      "default": "2026-09-18",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "date",
+    "run_id",
+    "shard",
+    "pair_key",
+    "left_url_key",
+    "right_url_key",
+    "composite_score",
+    "cosine",
+    "key_point",
+    "headline",
+    "scorer_model",
+    "cosine_weight",
+    "key_point_weight"
+  ],
+  "title": "StorySimilarityPair",
+  "type": "object",
+  "version": "2026-09-18"
+}
