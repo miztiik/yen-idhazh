@@ -462,7 +462,7 @@ jobs:
             --job-budget-minutes "${{ fromJSON(inputs.job_budget_minutes) }}" \
             --runner ubuntu-latest
 
-      # The eleven gates, failures first. `if: always()` because the step above
+      # The ten gates, failures first. `if: always()` because the step above
       # exits non-zero on an ESCALATE, and that is precisely the verdict a
       # reader opened this page for.
       - name: The verdict

@@ -578,11 +578,11 @@ nothing there is a second measurement that could disagree with the artifact -
 and neither page spells a model name, so it cannot describe a model the run did
 not serve.
 
-What the shard page carries that the gates do not: **which items drifted**. The
-determinism gate reports a count, and a count sends the next reader to the
-artifact to diff digests by hand. The shard page names them - and above zero
-temperature that page is the whole of the drift story, since the gate is not
-there to report one.
+What the shard page carries that the gates do not: **which articles the sampler
+worded more than one way**. `wording_spread` reports a count, and a count sends
+the next reader to the artifact to diff digests by hand. The shard page names
+them. Nothing there is a defect - above zero temperature a second wording is the
+sampler working, and no gate reads it.
 
 Both steps run under `if: always()`, on purpose. A run that died half way is
 exactly the one whose counts somebody wants, and `decide` exits non-zero on an
