@@ -1,9 +1,10 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-18
 
 Every column of the host fingerprint, what it means, and what it is for. One row
-a job, written once at job start, by every job that draws its own runner.
+a job, by every job that draws its own runner - written in two halves, one at job
+start and one at job end.
 
 Read this when a number surprises you and you want to know which machine
 produced it. Why the record exists at all, and what the fleet does to a reading,
@@ -24,8 +25,8 @@ set is still operator-only: the console reads it at build time under
 | Contract | [`backend/idhazh/contracts/host_fingerprint.py`](../../backend/idhazh/contracts/host_fingerprint.py) |
 | Generated schema | [`schemas/host-fingerprint-row.schema.json`](../../schemas/host-fingerprint-row.schema.json) |
 | Store | `state/host-fingerprint/<YYYY>/<MM>/<DD>.csv` for the daily run; `state/pipeline-tests/host-fingerprint/<YYYY>/<MM>/<DD>.csv` for a bench dispatch |
-| In transit | `state/segments/host-fingerprint/<run>-<attempt>-<job>-<shard>.csv` - one file a writer, folded into the store above and deleted |
-| Producer | `idhazh fingerprint`, through `backend/idhazh/telemetry/silicon.py`. The store above is written by `idhazh compact` and by nothing else |
+| In transit | `state/segments/host-fingerprint/<run>-<attempt>-<job>-<shard>.csv` - one file a job, folded into the store above and deleted |
+| Producer | `idhazh fingerprint` and `idhazh job-clock`, through [`backend/idhazh/telemetry/silicon.py`](../../backend/idhazh/telemetry/silicon.py). The store above is written by `idhazh compact` and by nothing else |
 | Read by | `/console/machine/`, at build time through `frontend/src/lib/server/host-fingerprint.ts` |
 | Key | `date`, `run_id`, `job`, `shard` - one row a job |
 | Switch | `observability.host_fingerprint` |
@@ -42,6 +43,21 @@ nobody could attribute to a processor.
 the fold in `assemble` is the one writer of the day. Ten writers on one path is
 what emptied 2026-09-16; the design rationale below says what it cost and why a
 merge driver was never going to settle it.
+
+**The row arrives in two halves, from 2026-09-18, and neither is ever edited.**
+The probe runs before the job's heaviest step, because the bandwidth reading
+wants a gigabyte and an idle machine. What the job cost - its wall clock, and
+what opening the weights cost before the first item - is only knowable once the
+job is over. So `idhazh job-clock` writes a second row of the same shape into the
+same segment, carrying those two cells and repeating nothing, and the fold takes
+the union. **A job that dies between the two leaves a usable half-row with two
+empty cells**, which is the degrade path rather than a failure - and an empty
+cell is what says the reading was not taken, where a zero would claim a job that
+cost nothing.
+
+The two halves share one segment because the path grammar names the job and not
+the step: `<run>-<attempt>-<job>-<shard>.csv` has no element two steps of one job
+could differ in. They are two rows of the file that job owns.
 
 **A bench dispatch writes into a tree of its own.** `measure.yml` redirects its
 whole state root with `run.trial_state_dirname`, so its rows land under
@@ -93,7 +109,7 @@ Neither table repeats the other's cells.
 | `run_id` | run id | The run |
 | `job` | **enum**: `plan`, `work`, `assemble`, `visuals`, `runtime` | Which workflow job drew this machine |
 | `shard` | int, 0+ | The shard inside that job. A single-shard job writes 0 |
-| `fingerprint` | 16 hex characters | A digest over the cells that cannot change inside a job |
+| `fingerprint` | 16 hex characters? | A digest over the cells that cannot change inside a job |
 
 **`fingerprint` is the column that makes the collection countable.** It digests
 vendor, family, model, stepping, model name, cores, threads, L3 and flags - and
@@ -177,12 +193,39 @@ when a drawn machine reports an L3 at or above the default.
 | `vm_zone` | string? | The availability zone, where one is published |
 | `vm_fault_domain` | string? | The fault domain, which separates one rack from another |
 | `runner_name` | string? | The runner label the platform gave the job |
-| `measured_at` | timestamp | When the probe ran |
+| `measured_at` | timestamp? | When the probe ran |
 
 These four come from the host metadata service on a link-local address. **They
 are the placement decision in the platform's vocabulary rather than ours**, which
 is the only way to ask whether "a lottery" is really "which pools we draw from".
 A machine that does not answer records nothing, which is every developer machine.
+
+`fingerprint` and `measured_at` are the two cells that carry a question mark
+because of the second half: the half a job writes at its end measured no machine,
+so it names none and stamps no probe time. A compacted row carries both, because
+the probe's half is where they come from.
+
+## What the job cost
+
+The half written at job end. Both readings come from the workflow - one from a
+step that ran before the checkout existed, one from the log of the server this
+job started - so a run of the stage anywhere else records neither.
+
+| Column | Type | What it is | What it is for |
+| --- | --- | --- | --- |
+| `model_load_ms` | float? | Milliseconds the server spent opening the weights before the first item | The fixed cost `run.shard_size` exists to amortise. Measured 1.1 to 1.5 percent of a work shard's fixed cost |
+| `job_seconds` | int? | The job's own wall clock, first step to the clock write | **The cell the truncation-cap rollback reads.** Before it, that number lived only in the GitHub jobs API, which drops a job record when the run ages out |
+
+**`job_seconds` is a floor on the job's wall clock and never a ceiling.** The
+steps after it - the ledger push, two log summaries and the artifact uploads -
+are outside the window. Only the `work` job stamps the clock its first step
+reads, so only `work` rows carry these two cells today.
+
+**The same two cells sit on `state/runtime-counters.csv`, and that is on
+purpose.** The arithmetic behind both lives once, in
+[`backend/idhazh/contracts/runtime_counters.py`](../../backend/idhazh/contracts/runtime_counters.py),
+and both writers call it - two subtractions of one pair of instants are two
+things that can disagree.
 
 ## Why almost nothing here is an enum
 
@@ -262,7 +305,7 @@ drift guard to a file rather than to a question is what let a second writer
 through**, and what replaced both names no file - it charges each store to the
 job whose `python -m idhazh <verb>` step reaches its writer, so a fourth job that
 records a machine and stages nothing fails without an edit
-([github-actions.md](github-actions.md#the-commit-steps-push-through-a-rebase-and-the-one-that-can-rebuild-rebuilds)).
+([../architecture/publishing/committing.md](../architecture/publishing/committing.md#the-commit-steps-push-through-a-rebase-and-the-one-that-can-rebuild-rebuilds)).
 
 **A repeated row now settles, and it could not have before.** `ledger.keyed_paths`
 is the registry the post-merge pass walks, and this ledger was not in it - which

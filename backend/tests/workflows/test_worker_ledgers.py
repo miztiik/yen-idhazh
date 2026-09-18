@@ -23,6 +23,8 @@ from ._harness import (
     FINGERPRINT_STEP,
     FOLD_STEP,
     HARVEST_STEP,
+    JOB_CLOCK_COMMAND,
+    JOB_CLOCK_STEP,
     RECORD_COMMAND,
     RECORD_STEP,
     REVIEW_STEP,
@@ -95,6 +97,32 @@ def test_a_worker_commits_its_rows_before_the_run_can_throw_them_away() -> None:
         names.index(RECORD_STEP) + offset for offset in range(len(WORK_LEDGER_STEPS))
     ]
     assert names.index(COMMIT_STEPS["work"]) < names.index("Prompt cache log summary")
+
+
+def test_the_job_clock_step_is_handed_both_readings_the_probe_cannot_take() -> None:
+    """The other half of the host row, and both of its inputs live on this runner.
+
+    The machine probe runs before the model server, because the bandwidth
+    reading wants an idle host. What the job cost is only knowable at its end,
+    and neither number can be read from the checkout: the stamp comes from a step
+    that ran before it existed, and the log belongs to the server this job
+    started. So the step has to hand both over, and a step that named neither
+    would write a row with two empty cells and no failure.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    step = _step(workflow, "work", "name", JOB_CLOCK_STEP)
+    script = _substitute(_script(step, f"work step {JOB_CLOCK_STEP}"))
+
+    assert JOB_CLOCK_COMMAND in script
+    assert f'--date "{SUBSTITUTED_DATE}"' in script
+    assert f"--shard {SUBSTITUTED_SHARD}" in script
+    # `:-` rather than a bare expansion, so a stamp that never arrived is an
+    # empty cell instead of the word `unbound` reaching a contract.
+    assert '--job-started-at "${JOB_STARTED_AT:-}"' in script
+    assert "--server-log llama-server.log" in script
+    # The job the row files under, which is the key column that joins it to the
+    # probe's half. A clock filed under another job is a second row, not a half.
+    assert f"{FINGERPRINT_JOB_FLAG} work" in script
 
 
 def test_a_killed_shard_still_hands_assemble_the_items_it_finished() -> None:
@@ -253,14 +281,12 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
     matters, because `state/**/*.csv` would otherwise reach it and a union of two
     segments stacks two copies of a file meant to have exactly one writer.
     """
-    # The file each staged path resolves to. All three ledger directories file by
-    # day now, so the union driver has to reach a nested path - `state/**/*.csv`
-    # is the attribute line that does it. The span rollup files by month, and the
-    # same attribute line covers it.
+    # The file each staged path resolves to. The span rollup files by month and
+    # `state/**/*.csv` is the attribute line that reaches it; the counters file
+    # is a single file at the top of the store. The three item-grain heads left
+    # this set on 2026-09-18 - the shard writes segments now, so it no longer
+    # stages a path it does not write.
     written = {
-        "state/item-health": ledger.item_health_relpath(SUBSTITUTED_DATE),
-        "state/scores": score_writer.ledger_relpath(SUBSTITUTED_DATE),
-        "state/score-index": score_writer.index_relpath(SUBSTITUTED_DATE),
         "state/runtime-counters.csv": "state/runtime-counters.csv",
         "state/span-rollup": ledger.span_rollup_relpath(SUBSTITUTED_DATE[:7]),
     }
@@ -370,20 +396,31 @@ def test_every_path_the_work_job_stages_is_in_a_fresh_checkout() -> None:
 def test_the_observation_index_travels_with_the_rows_it_describes() -> None:
     """The index is what the writer reads instead of the rows, so it has to be committed.
 
-    A shard pushed without its index is a month the next run cannot recognise.
-    The dedupe would read an index that stops short of the rows beside it, call
-    every measurement past that point new, and append each one a second time -
-    the one promise the eval ledger makes about itself.
+    A shard pushed without its index is a day the next run cannot recognise. The
+    dedupe would read an index that stops short of the rows beside it, call every
+    measurement past that point new, and record each one a second time - the one
+    promise the eval ledger makes about itself.
 
-    The assemble job refreshes it for the mirror-image reason. A retry hands the
-    rows back to origin's tip and runs the producer again; an index left holding
-    the first attempt's digests would make the producer refuse the day it just
-    rebuilt, and the day's measurements would be lost rather than doubled.
+    **The two now travel as one segment pair rather than as two staged heads.**
+    A work shard writes `state/segments/scores/<name>.csv` and
+    `state/segments/score-index/<name>.csv`, and both are inside the one path the
+    shard stages, so there is no order in which one is committed and the other is
+    not. The fold writes the two heads together.
+
+    The assemble job refreshes the index for the mirror-image reason. A retry
+    hands the rows back to origin's tip and runs the producer again; an index
+    left holding the first attempt's digests would make the producer refuse the
+    day it just rebuilt, and the day's measurements would be lost rather than
+    doubled.
 
     The directory is named rather than derived, and `git add` on a path that is
     not there aborts the whole step, so a fresh checkout has to carry it.
     """
-    assert score_writer.INDEX_RELDIR in COMMIT_STAGED_PATHS["work"]
+    staged = COMMIT_STAGED_PATHS["work"]
+    segments = f"{ledger.STATE_DIRNAME}/{ledger.SEGMENTS_DIRNAME}"
+    assert segments in staged, "the shard stages the store both segments go to"
+    assert score_writer.INDEX_RELDIR not in staged, "the shard no longer writes the head"
+    assert score_writer.LEDGER_RELDIR not in staged
     assert score_writer.INDEX_RELDIR in COMMIT_REFRESH_PATHS["assemble"]
     assert (REPO_ROOT / score_writer.INDEX_RELDIR).is_dir()
     tracked = subprocess.run(

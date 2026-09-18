@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-18
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**
@@ -632,9 +632,7 @@ to is a sort of names already in hand. Guardrail #10 says the design changes whe
 measurement contradicts it, so the optimisation was not written. The row shipped
 the defect the measurement uncovered instead: three month-name recognisers
 disagreed, and one was deleting files the other two protected. The rule they now
-share is [what counts as a month name](partitions.md#what-counts-as-a-month-name),
-and the full working is
-[in the layout doc](../architecture/publishing/layout.md#the-state-prunes-were-already-constant-cost-and-the-premise-that-said-otherwise-was-wrong-2026-09-08).
+share is [what counts as a month name](partitions.md#what-counts-as-a-month-name).
 
 Both are worth more on this page than a clean sweep would have been. A rule whose
 inventory only records the reads that bent to it teaches nothing about the ones

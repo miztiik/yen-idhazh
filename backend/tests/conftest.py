@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+import csv
 import json
 import threading
 import time
+from collections.abc import Iterable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Final
 
 import pytest
 
-from idhazh import config
+from idhazh import config, ledger
 from idhazh.classify.calls import build_label_request
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
@@ -20,6 +22,7 @@ from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.element import ElementTable
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.models import ModelRef
@@ -39,6 +42,51 @@ CONFIG_DIR: Final = REPO_ROOT / "config"
 STATE_DIR: Final = REPO_ROOT / "state"
 FIXTURES_DIR: Final = REPO_ROOT / "tests" / "fixtures"
 CONTRACT_FIXTURES_DIR: Final = FIXTURES_DIR / "contracts"
+
+
+def seed_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]) -> int:
+    """Put an item census on disk the way a finished run leaves it.
+
+    A fixture builder and not a copy of a writer. The pipeline no longer appends
+    to this head: a work shard and `assemble` each write a segment and
+    `stage_compact` folds them in, so there is no longer one call a test can make
+    to reach a settled day file. Every caller of this helper wants the day
+    ALREADY settled - it is checking what the planner, the fold or a projection
+    does with a census, not how the census got written - so this leaves the fold
+    itself to `tests/pipeline/test_compact.py` and puts the finished file there.
+
+    Settled means what the compaction means by it. A day file carrying a heading
+    from an earlier build is re-filed onto the current one first, through the
+    contract's own reader, and then the first row for an `ITEM_HEALTH_KEY` wins:
+    a row repeating a key already in the file is dropped rather than appended.
+
+    Returns the rows the file gained, so a caller that asserted on the old
+    writer's count asserts on the same number.
+    """
+    path = ledger.item_health_path(state_dir, date)
+    columns = ItemHealthRow.csv_columns()
+    ledger.settle_header(
+        path, columns, ledger.refiler(ItemHealthRow), carried=ledger.ITEM_HEALTH_CARRIED
+    )
+    held = ledger.recorded_item_health(path)
+    kept: list[dict[str, str]] = []
+    for row in rows:
+        cells = row.csv_row()
+        key = tuple(cells[name] for name in ledger.ITEM_HEALTH_KEY)
+        if key in held:
+            continue
+        held.add(key)
+        kept.append(cells)
+    if not kept:
+        return 0
+    path.parent.mkdir(parents=True, exist_ok=True)
+    exists = path.exists()
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        out = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
+        if not exists:
+            out.writeheader()
+        out.writerows({name: cells[name] for name in columns} for cells in kept)
+    return len(kept)
 
 
 def read_text(path: Path) -> str:

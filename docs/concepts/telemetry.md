@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-18
 
 The structured-event vocabulary: the envelope every event carries, the event names that are emitted, the two shapes those names take, the span tree a developer can switch on, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, which is a project non-goal ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 0a).
 
@@ -346,6 +346,13 @@ compaction in `assemble` folds them into the day. Ten runners appending to one
 path is not a thing a merge driver can settle: on 2026-09-16 the pushes raced and
 the day came back header-only. What a reader opens is unchanged, because a
 segment is the head's own rows in transit and carries no shape of its own.
+
+`state/item-health/` goes the same way from 2026-09-18, with `state/scores/` and
+`state/score-index/` beside it. The writers there are the work shards and
+assemble rather than every job of the run, and the settlement has one extra
+thing to say: `ITEM_HEALTH_KEY` carries no `job` cell, so two writers describing
+one item are one record to the fold, and `ledger.ITEM_HEALTH_RULE` keeps the row
+that names a job over the row that does not.
 
 **Why a third grain rather than more columns on the two rows above.** These cells
 are fixed for the whole job. Repeating twenty of them on every item row would
