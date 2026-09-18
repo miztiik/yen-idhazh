@@ -131,7 +131,7 @@ export interface ShardCounters {
 /** Tokens and the seconds they took, summed. Never a mean of per-part rates.
  *
  * A rate is a ratio, and averaging ratios weighs a shard that did 20 items the
- * same as one that did 40 (`docs/reference/measurements.md`). The same shape
+ * same as one that did 40 (`docs/reference/pipeline-cost.md`). The same shape
  * `reconcile_prefill.Pooled` carries, so one definition serves the audit and
  * the page.
  */

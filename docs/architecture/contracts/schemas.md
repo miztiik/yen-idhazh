@@ -56,7 +56,6 @@ The shapes, and where each one lives once written:
 | `PublishedRow` | `published-row` | one appended row of `state/published/YYYY/MM/DD.csv` |
 | `FeedHealthRow` | `feed-health-row` | one appended row of `state/feed-health/<YYYY>/<MM>/<DD>.csv` |
 | `FeedRetirementRow` | `feed-retirement-row` | one appended row of `state/feed-retirements.csv` |
-| `ChromeLineRow` | `chrome-line-row` | one row of `state/chrome.csv` - a host, a line's hash, and how many of that host's pages carried it |
 | `ItemHealthRow` | `item-health-row` | one appended row of `state/item-health/<YYYY>/<MM>/<DD>.csv` |
 | `PublicTelemetryRow` | `public-telemetry` | one row of `frontend/public/telemetry/<YYYY-MM>.csv`, the browser-safe projection of the row above |
 | `TelemetryAggregateRow` | `telemetry-aggregate-row` | one row of `state/telemetry-aggregate/<YYYY-MM>.csv`, rewritten whole |
@@ -84,7 +83,7 @@ Everything under `state/` is a row contract rather than a file contract, because
 
 ### A new row ledger ships with its header, not with its first run
 
-`.github/scripts/commit-and-push.sh` runs under `set -euo pipefail` and stages every path a job owns in one `git add "$@"`. A path that is not in the checkout makes that call fail, and `set -e` then abandons the whole commit step - so a ledger that only appears once its producer has succeeded lets a broken producer cost the job the *other* ledgers it was staging beside it. `state/runtime-counters.csv` therefore ships as a header-only file, and a test asserts the committed header equals `RuntimeCountersRow.csv_columns`.
+`.github/scripts/commit-and-push.sh` runs under `set -euo pipefail` and stages every path a job owns in one `git add "$@"`. A path that is not in the checkout makes that call fail, and `set -e` then abandons the whole commit step - so a ledger that only appears once its producer has succeeded lets a broken producer cost the job the *other* ledgers it was staging beside it. `state/runtime-counters.csv` therefore ships as a header-only file, and a test asserts the committed header equals `RuntimeCountersRow.csv_columns`. The work shard stopped staging that path on 2026-09-18 - it writes a segment and `assemble` folds it in - so what keeps the file shipped is now the audit that opens it by name rather than the commit step, and the rule above still binds every other ledger a job stages one path at a time.
 
 That is not "pre-creating an empty module for later" (`CLAUDE.md` section 10). The file is the ledger, and its header is the contract's own column list; what is being avoided is a failure mode in the step that commits it.
 
@@ -131,7 +130,7 @@ edit does not start (Guardrail #11).
 
 `RuntimeCountersRow` could have been a list on `RunRecord`, and four things say it should not be. **Grain**: a manifest run record is one run and a counter snapshot is one shard, so the manifest would grow a variable-length list keyed by something it does not otherwise carry. **Producer**: the manifest is written by `assemble`, in another job hours later, so the numbers would have to travel inside the `items-*` artifact - which expires and is never committed, and a cancelled shard's counters are the ones most worth having. **Audience**: `run.json` is a published payload a reader's browser fetches, and this is measurement evidence, which belongs under `state/` where nothing is served. **Timing**: a concurrent branch was also opening `RunManifest`, and two branches stamping one contract's changelog on the same date raise `TypeError` at import.
 
-**The grain argument earned two more cells on 2026-08-29.** `job_seconds` and `cpu_model` are facts about the `work` job rather than about its model server, and they landed here rather than on the manifest for the first reason above: one run draws up to eight hosts and takes eight different clocks, so a manifest field would have to become a per-shard list - which is what this ledger already is. `docs/reference/measurements.md` owns what they measure and how to read them; the rollback rule for the truncation cap is the caller.
+**The grain argument earned two more cells on 2026-08-29.** `job_seconds` and `cpu_model` are facts about the `work` job rather than about its model server, and they landed here rather than on the manifest for the first reason above: one run draws up to eight hosts and takes eight different clocks, so a manifest field would have to become a per-shard list - which is what this ledger already is. `docs/reference/pipeline-cost.md` owns what they measure and how to read them; the rollback rule for the truncation cap is the caller.
 
 **And three more on 2026-08-30, for the same reason.** `cpu_busy_pct`, `peak_rss_bytes` and `model_load_ms` are facts about the machine one shard drew, not about the model it served. They arrive as raw text the job printed - the `cpu` line of `/proc/stat` at each end of the job, the memory sampler's file, llama-server's own log - and every derivation happens inside the contract. A shell that computes a percentage is a second place the arithmetic lives and no place it can be tested; a contract that parses the raw text is one place, and its oracle is the real captures under `tests/fixtures/runtime/`.
 
@@ -157,7 +156,6 @@ mirrors the digest tree its rows are derived from.
 | `state/score-archive/` | monthly documents | what did a month past `scores_full_grain_months` do, in totals and distributions - and which measurements did it hold? | it inherits the shard boundary of the file it replaces |
 | `state/runtime-counters.csv` | one file | what did the model server itself count? | no - the audit reads one run |
 | `state/feed-retirements.csv` | one file | is this address gone for good? | no - a retirement is permanent for one endpoint |
-| `state/chrome.csv` | one file | what does this host print on every page? | no - chrome learned in August is chrome in September, so every partition would be opened anyway. It is bounded by `extract.chrome_lines_per_host_max` times the hosts we read, and pruned past `extract.chrome_forget_days` ([../extraction/chrome.md](../extraction/chrome.md)). **The one ledger whose writer rewrites rather than appends**, because a row is a running count and appending two would make a reader add a count to itself |
 | `state/day-validations.csv` | one file | which frozen days have passed, and against what? | no - a receipt file, read once a run |
 | `state/day-metrics/` | day files | what did one published day do, in totals? | it is addressed by day: the site opens the dates a page names and walks nothing |
 | `state/visual-prunes/` | day files | is the picture backlog shrinking? | no, and the layout saves this read nothing - see below |
@@ -436,7 +434,7 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 - [../sources/item-health.md](../sources/item-health.md) - the fastest-growing shard, and what would move it to a shorter period.
 - [../../concepts/partitions.md](../../concepts/partitions.md) - the month partition as a pattern: the freeze rule, and the four cases an append-only writer gets wrong.
 - [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - what a read over a growing collection declares, and the three shapes a cover can take.
-- [../../reference/measurements.md](../../reference/measurements.md) - the ledger sizes the shard rule is argued from.
+- [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md) - the ledger sizes the shard rule is argued from.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the stages whose payloads these are.
 - [../../concepts/config.md](../../concepts/config.md) - config as a versioned contract like any other.
 - [../../concepts/telemetry.md](../../concepts/telemetry.md) - the event envelope, which is deliberately not one of these shapes.

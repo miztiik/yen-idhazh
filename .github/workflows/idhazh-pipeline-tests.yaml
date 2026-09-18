@@ -9,7 +9,7 @@
 #
 # Three cases, in sequence, on ONE runner, over the SAME two articles, and never
 # a matrix. Between two GitHub-hosted runners prefill spans 4.2x
-# (docs/reference/measurements.md), which is larger than anything a case here is
+# (docs/reference/pipeline-cost.md), which is larger than anything a case here is
 # looking for, so a matrix would report the hosts it drew rather than the change
 # it ran. Sequential on one box cancels the host.
 #

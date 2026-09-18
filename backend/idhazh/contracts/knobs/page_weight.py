@@ -38,7 +38,7 @@ class PageWeightConfig(Model):
 
     **Every number here is gzip -5, because that is what the reader pays.** The
     reading behind that choice is in
-    `docs/reference/measurements-site.md`.
+    `docs/reference/site-weight.md`.
 
     **A document is capped and a payload is capped, and they are different
     jobs.** A document number catches a page that took on bytes it does not

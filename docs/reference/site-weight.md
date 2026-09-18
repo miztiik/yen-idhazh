@@ -1,18 +1,18 @@
-# Site Measurements
+# What a reader downloads
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-18
 Every number about **what the reader downloads**: the compression level the
 origin serves, each page's ceiling, what a cold load costs, how fast the site
 fills, and the weight of the archive, the search index and the published ledger.
 
-[measurements.md](measurements.md) is the other half and holds the **producer**:
+[pipeline-cost.md](pipeline-cost.md) is the other half and holds the **producer**:
 the model, the runner, prefill and decode, memory, shard cost and the corpus.
 The two never cite each other's figures, and they read different config objects
 - this page backs `page_weight`, `retention`, `ui`, `console` and `assist`,
 where the other backs `models`, `run` and `extract`.
 
 Both pages obey the two rules stated in full on
-[measurements.md](measurements.md): a figure is either measured, with its date
+[pipeline-cost.md](pipeline-cost.md): a figure is either measured, with its date
 and spread, or it is listed as unmeasured; and **a second and a resident set
 belong to the box that took them, where a byte, a token and a pixel do not.**
 Almost every figure here is a byte or a pixel, which is why almost none of them
@@ -872,7 +872,7 @@ is what a date-only feed date parses to and also what a story genuinely
 published at midnight parses to. That figure is why a midnight stamp still
 prints a clock: blanking it would hide the real midnight stories
 inside the same 1.0 percent, and the payload cannot say which they are
-([../architecture/publishing/layout.md](../architecture/publishing/layout.md#the-items-own-stamp-is-what-reads-it-and-what-it-can-and-cannot-say-2026-09-12)).
+([../architecture/publishing/layout.md](../architecture/publishing/layout.md#the-items-own-stamp-is-what-reads-it-and-what-it-can-and-cannot-say)).
 
 ### A phone gets no rail column, and this is the number that decided it
 
@@ -1702,7 +1702,7 @@ What a browser fetches before a reader does anything: the prerendered document, 
 
 ## See also
 
-- [measurements.md](measurements.md) - the producer half: the model, the runner, memory and throughput.
+- [pipeline-cost.md](pipeline-cost.md) - the producer half: the model, the runner, memory and throughput.
 - [../archive/measurements-2026-08.md](../archive/measurements-2026-08.md) - finished experiments and superseded levels.
 - [../architecture/publishing/layout.md](../architecture/publishing/layout.md) - the published-size arithmetic these numbers feed.
 - [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md) - the reader's surface these figures were taken on.

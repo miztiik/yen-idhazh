@@ -305,7 +305,7 @@ jobs:
       # four, so a scheduled run still never asks for more workers than the four
       # it has always had - the eight in the dispatch form above is the ceiling
       # an operator may ask for, and moving the automatic path onto it needs the
-      # three conditions in docs/reference/measurements.md, not this step. A
+      # three conditions in docs/reference/pipeline-cost.md, not this step. A
       # dispatch input still wins, which is why the guard stays a hard failure
       # there. What this step writes is also what caps the workers that run at
       # once, so the fan-out and its concurrency cap cannot disagree.
@@ -420,7 +420,7 @@ jobs:
       # 110 minutes, and until this stamp existed the only place a job's clock
       # lived was the GitHub jobs API - which drops a job record when the run
       # ages out, so the rollback rule was a person making an API call by hand
-      # (docs/reference/measurements.md). The counters step subtracts this and
+      # (docs/reference/pipeline-cost.md). The counters step subtracts this and
       # files the difference beside the tokens the same shard read.
       #
       # The processor rides along for the same reason. `ubuntu-latest` names the
@@ -771,56 +771,88 @@ jobs:
             --server-log llama-server.log \
             --memory-peak-file memory-peak.txt
 
+      # The other end of `What machine this job drew`. That step probes the host
+      # before the model server starts, because the bandwidth reading wants a
+      # gigabyte and an idle machine; the two cells below are only knowable once
+      # the job is over. So the host row is written in two halves that fill
+      # different cells, into the one segment this job owns, and the fold in
+      # assemble unites them - one row a job in the day file either way.
+      #
+      # Both readings are already on this runner: `JOB_STARTED_AT` was stamped by
+      # the first step of this job, before the checkout, so the clock covers the
+      # cache restore and the weight load as well as the model time, and
+      # llama-server's own log brackets the model load with two stamps.
+      #
+      # `always()` and `continue-on-error`, for the reason written above the two
+      # steps before it: a job clock nobody recorded costs this run one cell,
+      # where a failed shard costs the day a worker. `:-` so a stamp that never
+      # arrived leaves an empty cell rather than sending the word "unbound" to a
+      # contract that would refuse it.
+      - name: What this job cost
+        if: always()
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          python -m idhazh job-clock \
+            --date "${{ needs.plan.outputs.date }}" \
+            --job work \
+            --shard ${{ matrix.shard }} \
+            --job-started-at "${JOB_STARTED_AT:-}" \
+            --server-log llama-server.log
+
       # The shape the plan job uses, for the reason written there, and the same
-      # script - eight shards racing one branch is what its rebase loop and the
-      # `merge=union` attribute on these two paths are for. It cannot rebuild
-      # what it commits, so it carries none of the refresh settings.
+      # script - eight shards racing one branch is what its rebase loop is for.
+      # It cannot rebuild what it commits, so it carries none of the refresh
+      # settings.
       #
       # Appending the same row twice is the one thing that would make this worse
       # than the loss it fixes, because `public_telemetry` copies every row into
-      # the file the console reads. Each of the three ledgers keys a row -
-      # `ledger.append_item_health` by run and item, `evals.writer.append` by
-      # observation, `ledger.append_runtime_counters` by run and shard - so
-      # assemble's copy of these rows lands once.
+      # the file the console reads. No ledger head is staged here any more: the
+      # item census, the eval rows, the span fold and the model server's own
+      # counters each go to their writer's own segment, and the compaction
+      # settles them by key - which is what `state/segments` below is.
       #
-      # Those filters read the checkout, which is frozen at the commit this run
-      # was triggered at, so a SECOND ATTEMPT at this same shard cannot see the
-      # rows the first attempt pushed and appends them again. The union merge
-      # then keeps both. `DROP_REPEATED_ROWS_COMMAND` is the half that runs after
-      # the merge, on the merged file - the only place the two attempts have ever
-      # been together.
+      # `DROP_REPEATED_ROWS_COMMAND` stays wired while `.gitattributes` still
+      # gives `state/**/*.csv` the union driver. A second attempt at this shard
+      # sees a checkout frozen at the commit this run was triggered at, so it
+      # cannot see what the first attempt pushed; the pass runs after the merge,
+      # on the merged file, which is the only place two attempts have ever been
+      # together.
       #
-      # `--date` is what it settles. This run appended to one item-health day
-      # file and one score day file, so those are the only files a repeat can be
-      # in, and naming them is what keeps the pass costing the same however many
-      # days the archive holds (Guardrail #12).
+      # `--date` is what it settles. This run appended to the files its own date
+      # routes to, so those are the only files a repeat can be in, and naming
+      # them is what keeps the pass costing the same however many days the
+      # archive holds (Guardrail #12).
       #
-      # `state/span-rollup` is staged here because a shard is the only thing that
-      # writes it. `roll_up_spans` folds the shard's spans and appends the month
-      # file into this runner's checkout; until 2026-09-15 no list named the path,
-      # so the fold died with the runner and assemble published a header row over
-      # an absent directory. Every span this project has ever opened was measured,
-      # folded and thrown away by one missing path.
+      # `state/span-rollup` was staged here from 2026-09-15 because a shard was
+      # the only thing that wrote it. `roll_up_spans` folds the shard's spans and
+      # the fold used to be appended to the month file in this runner's checkout;
+      # until that day no list named the path, so each fold died with the runner
+      # and assemble published a header row over an absent directory. Every span
+      # this project had ever opened was measured, folded and thrown away by one
+      # missing path. The fold goes to a segment now and the head is written by
+      # the compaction, so the path left this list on 2026-09-18.
       #
       # `state/traces` is the same shape and was missed the same way. `stage_work`
       # opens a file sink at `state/traces/<YYYY>/<MM>/<DD>-<run>-<shard>.jsonl` on
       # this runner whenever tracing is on, which it has been since 2026-09-06. A
       # trace file is named for one shard of one run, so two shards never write one
-      # path and no merge driver is needed - unlike the four ledgers above, which
-      # is why `merge=union` covers `state/**/*.csv` and not this.
+      # path and no merge driver is needed - unlike a ledger head, which is why
+      # `merge=union` covers `state/**/*.csv` and not this.
       #
-      # `state/segments` is the newest of that kind, and it is where this shard's
-      # machine row now goes. The step `What machine this job drew` above used to
-      # append to `state/host-fingerprint/<YYYY>/<MM>/<DD>.csv`, which ten jobs of
-      # one run opened at once; on 2026-09-16 that race left the day header-only.
-      # Each job writes its own
-      # `state/segments/host-fingerprint/<run>-<attempt>-<job>-<shard>.csv`
-      # instead, so two writers never share a path, and `assemble` folds them
-      # into the head. The head is no longer staged here because this job no
-      # longer writes it.
+      # `state/segments` is where everything this shard measured now goes, and
+      # it is the only ledger path left in the list below. The machine row moved
+      # there on 2026-09-17; the item census, the eval rows, the record of what
+      # those rows are, the span fold and the model server's own counters
+      # followed on 2026-09-18. Each of those used to be appended to a file that
+      # up to eight work shards and assemble all opened, and each writer now
+      # takes `state/segments/<ledger>/<run>-<attempt>-<job>-<shard>.csv`
+      # instead, so two writers never share a path. `assemble` folds them into
+      # the heads, and the heads are no longer staged here because this job no
+      # longer writes them.
       #
       # `.gitattributes` gives that path `-merge` rather than the union driver
-      # the four ledgers above carry, for the reason `state/traces` is outside
+      # the remaining ledgers carry, for the reason `state/traces` is outside
       # it: a segment is named for one shard of one run, so there is nothing for
       # a merge driver to settle and a union of two would silently stack copies
       # of a file that is meant to have one writer.
@@ -835,8 +867,7 @@ jobs:
             python -m idhazh dedupe-ledgers --date ${{ needs.plan.outputs.date }}
         run: >-
           bash .github/scripts/commit-and-push.sh
-          state/item-health state/scores state/score-index state/runtime-counters.csv
-          state/span-rollup state/traces state/segments
+          state/traces state/segments
 
       - name: Prompt cache log summary
         if: always()

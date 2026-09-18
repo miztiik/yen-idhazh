@@ -31,7 +31,7 @@ shard against 13.16 GiB for the server alone.
 pages the kernel can evict and counts any page the two share twice, so the sum
 bounds what was held rather than measuring what the machine committed - and
 subtracting it from 16 GB reserves nothing for the kernel or the runner agent.
-What the machine had free was never captured. `docs/reference/measurements.md`
+What the machine had free was never captured. `docs/reference/pipeline-cost.md`
 carries the retraction of the 0.59 GiB figure this docstring used to quote, and
 the `/proc/meminfo` columns the sampler took up on 2026-09-09 to close it.
 
@@ -51,7 +51,7 @@ become a committed row.
 the sum of the tokens over the sum of the seconds - never the mean of the
 per-shard rates. A rate is a ratio, and averaging ratios weighs a shard that did
 20 items the same as one that did 40
-(`docs/reference/measurements.md`). Deliberately there is no per-row rate
+(`docs/reference/pipeline-cost.md`). Deliberately there is no per-row rate
 property here: the pooling lives in `backend/utilities/reconcile_prefill.py`,
 where it can only be done the one correct way.
 
@@ -541,11 +541,11 @@ class RuntimeCountersRow(Contract):
                 "shards": shards,
                 "scraped_at": scraped_at,
                 "job": job,
-                "job_seconds": _elapsed(scraped_at, job_started_at),
+                "job_seconds": job_seconds(scraped_at, job_started_at),
                 "cpu_model": _cpu_model_cell(cpu_model),
                 "cpu_busy_pct": cpu_busy_pct_between(cpu_stat_at_start, cpu_stat_at_end),
                 "peak_rss_bytes": _peak_bytes(rss_samples, _RSS_PEAK_COLUMN),
-                "model_load_ms": _model_load_ms(server_log),
+                "model_load_ms": model_load_ms(server_log),
                 "n_ctx_configured": _n_ctx_configured(server_log),
                 "python_peak_rss_bytes": _peak_bytes(rss_samples, _PYTHON_RSS_PEAK_COLUMN),
                 "cgroup_peak_bytes": cgroup_peak_bytes,
@@ -645,12 +645,18 @@ def _log_microseconds(line: str) -> int | None:
     return (((minutes * 60) + seconds) * 1000 + milliseconds) * 1000 + microseconds
 
 
-def _model_load_ms(text: str | None) -> float | None:
+def model_load_ms(text: str | None) -> float | None:
     """Milliseconds between the two lines llama-server brackets its load with.
 
     Both ends have to be present and stamped. A build that renames either line,
     or one that logs without timestamps, leaves the cell empty - which reads as
     unknown, and is the failure `SERIES` is written for as well.
+
+    **Public because the host row takes the same reading.** `job` grain is what
+    this figure has, and `telemetry.silicon` writes the ledger whose grain is the
+    job - so it reads the same log through this function rather than through a
+    second copy of the arithmetic (Guardrail #5). Nothing below `contracts/` is
+    imported to do it: this stays a pure function over text the caller opened.
     """
     if not text:
         return None
@@ -685,8 +691,13 @@ def _n_ctx_configured(text: str | None) -> int | None:
     return None
 
 
-def _elapsed(scraped_at: str, job_started_at: int | None) -> int | None:
-    """Job start to scrape, in seconds. A stamp in the future fails `ge=0` loudly."""
+def job_seconds(scraped_at: str, job_started_at: int | None) -> int | None:
+    """Job start to scrape, in seconds. A stamp in the future fails `ge=0` loudly.
+
+    Public for `model_load_ms`'s reason: the host row carries the same cell at
+    the same grain, and two subtractions of one pair of instants are two things
+    that can disagree.
+    """
     if job_started_at is None:
         return None
     scraped = datetime.strptime(scraped_at, _SCRAPED_AT_FORMAT).replace(tzinfo=UTC)

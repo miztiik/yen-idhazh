@@ -1,6 +1,6 @@
 # Model throughput and why it drifts inside a run
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-18
 What the two model rates mean, why the slow half of a run is slow, and what a
 change in either number is allowed to prove.
 
@@ -20,7 +20,7 @@ are in
 and what that run has to record is in
 [What the first run at cap 5000 must record](../../archive/measurements-2026-08.md#what-the-first-run-at-cap-5000-must-record).
 What the move to 10,000 cost is measured in
-[How often the truncation cap actually bites](../../reference/measurements.md#how-often-the-truncation-cap-actually-bites-2026-09-09).
+[How often the truncation cap actually bites](../../reference/pipeline-cost.md#how-often-the-truncation-cap-actually-bites-2026-09-09).
 **Read is the end that moves.** A longer article is more prompt to take in;
 write does not move at all, because the summary length asked for comes from
 `article.band_source_words`, which is the count from before the cap cut it.
@@ -108,7 +108,7 @@ rate is no longer the one to quote.** They come from run `32742672105` on
 **9.85 tokens a second**, slowest timed item 8.25 and fastest 44.71, measured
 2026-09-09 over the timed items of 2026-09-01 to 2026-09-09 on GitHub-hosted
 `ubuntu-latest`, 4 vCPU, no GPU
-([What the wall clock pays](../../reference/measurements.md#what-the-wall-clock-pays)).
+([What the wall clock pays](../../reference/benchmarks/how-often-the-truncation-cap-bites.md#what-the-wall-clock-pays)).
 **Do not subtract those two numbers.** They differ by model, by cap and by which
 processor their shards drew, and the last of those three is worth 4.2 times on
 its own - see
@@ -226,7 +226,7 @@ subtracting the two stopwatches instead would leave it holding this process's
 own render, parse and draw under a name that says model.
 
 Measurements, with hardware and date, are in
-[`../../reference/measurements.md`](../../reference/measurements.md).
+[`../../reference/pipeline-cost.md`](../../reference/pipeline-cost.md).
 
 ## The read rate is checked against the server, and it holds
 
@@ -244,7 +244,7 @@ the gap. **Measured on run `2026-08-26-5`: the ledger says 11.1755 tok/s and the
 server says 11.1796, which is 0.037 percent apart against a 5 percent bound
 written down before either side was read.** Tokens read, tokens reused and
 tokens written match to the token on both sides. The full figures are under
-[The ledger and the server agree about the read rate](../../reference/measurements.md#the-ledger-and-the-server-agree-about-the-read-rate).
+[The ledger and the server agree about the read rate](../../reference/pipeline-cost.md#the-ledger-and-the-server-agree-about-the-read-rate).
 
 Two things follow for anyone reading a number off this page:
 
@@ -523,7 +523,7 @@ Three things follow for anyone reading a rate off this page or the console:
  committed per-shard cell on `state/runtime-counters.csv`, so that check costs
  a column read.
 - **Compare within a processor, never across one.** Every paired figure in
- [../../reference/measurements.md](../../reference/measurements.md) that prices a
+ [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md) that prices a
  runtime setting is matched on EPYC 9V74 for this reason. Doubling `n_ctx` moved
  read by about 1 percent; the processor moves it by 4.2 times.
 - **A whole-run median hides it.** The month figure of 9.85 tokens a second runs
@@ -534,7 +534,7 @@ Three things follow for anyone reading a rate off this page or the console:
 rather than among them. It is on this page because it is the largest single term
 in a shard's read time, and a page about what moves throughput that leaves out
 the biggest mover teaches the wrong model of the machine
-([The cap cut nothing, and the rate it was priced at did not move](../../reference/measurements.md#the-cap-cut-nothing-and-the-rate-it-was-priced-at-did-not-move)).
+([The cap cut nothing, and the rate it was priced at did not move](../../reference/benchmarks/a-run-at-the-doubled-window-and-cap.md#the-cap-cut-nothing-and-the-rate-it-was-priced-at-did-not-move)).
 
 ## What this means when reading the chart
 
@@ -566,7 +566,7 @@ slowest-writing ones: they read at 36.4 and 37.2 tok/s and wrote at 3.36 and
 simply faster would move both ends together, so a day where the two ends move
 apart is a host difference and not a model one. The figures, and what they do
 and do not settle, are in
-[`../../reference/measurements.md`](../../reference/measurements.md).
+[`../../reference/pipeline-cost.md`](../../reference/pipeline-cost.md).
 
 **The chart has one day on it.** Counted 2026-08-25: the token columns landed on
 2026-08-24, so `2026-08-25` is the only date with any `prefill_ms`, 145 rows of
@@ -665,5 +665,5 @@ at the width it occupies, so one unit is one pixel. The server draws at
 - [`../sources/item-health.md`](../sources/item-health.md) - the columns, and how a rate is derived.
 - [`../contracts/schemas.md`](../contracts/schemas.md) - `RuntimeCountersRow`, and why the snapshot is its own contract.
 - [`prompt.md`](prompt.md) - the bands, and why the ask changes with article length.
-- [`../../reference/measurements.md`](../../reference/measurements.md) - every number here, with hardware and date.
+- [`../../reference/pipeline-cost.md`](../../reference/pipeline-cost.md) - every number here, with hardware and date.
 - [`../../concepts/pipeline-loop.md`](../../concepts/pipeline-loop.md) - why a worker may reorder inside its shard.

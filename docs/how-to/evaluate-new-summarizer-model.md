@@ -725,7 +725,7 @@ gh cache delete <old-summary-cache-id>
 **Measure the cache, do not derive it.** The key names the model file and the
 pinned llama.cpp build, so the outgoing model may already have aged out and
 there may be nothing to delete
-([../reference/measurements.md](../reference/measurements.md#the-cache-transition-measured-2026-08-27)).
+([../reference/pipeline-cost.md](../reference/pipeline-cost.md#the-cache-transition-measured-2026-08-27)).
 
 Production derives the worker count as
 `min(ceil(items / run.shard_size), run.max_parallel)`, so a full day at
@@ -793,6 +793,6 @@ and health before normal workers resume.
 - [../concepts/config.md](../concepts/config.md) - model and runtime knobs.
 - [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - rendered bands, decoder rails and prompt controls.
 - [../architecture/summarize/throughput.md](../architecture/summarize/throughput.md) - read/write rates and prompt reuse.
-- [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md) - the fingerprint contract.
-- [../reference/measurements.md](../reference/measurements.md) - runner numbers and open measurements.
+- [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md) - what a run records about its own inputs.
+- [../reference/pipeline-cost.md](../reference/pipeline-cost.md) - runner numbers and open measurements.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrails #2, #3, #6, #9, #10 and #11.

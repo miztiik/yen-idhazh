@@ -15,8 +15,11 @@ from typing import Final
 import pytest
 
 from idhazh import ledger
+from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
-from idhazh.contracts.runtime_counters import ServerJob
+from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.observation_index import ObservationIndexRow
+from idhazh.contracts.runtime_counters import RuntimeCountersRow, ServerJob
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.stages import compact
 
@@ -34,6 +37,14 @@ WRITERS: Final[tuple[tuple[ServerJob, int], ...]] = (
     (ServerJob.PLAN, 0),
     *tuple((ServerJob.WORK, shard) for shard in range(8)),
     (ServerJob.ASSEMBLE, 0),
+)
+
+#: Every job of one run that stands a model server up and scrapes its counters:
+#: the eight work shards. Each runs its own server on its own runner, so each
+#: one of them used to append to `state/runtime-counters.csv` from a checkout
+#: that could not see what the other seven had pushed.
+COUNTER_WRITERS: Final[tuple[tuple[ServerJob, int], ...]] = tuple(
+    (ServerJob.WORK, shard) for shard in range(8)
 )
 
 
@@ -68,8 +79,10 @@ def _fingerprints(*rows: dict[str, str]) -> str:
     return ledger.render_file(HostFingerprintRow.csv_columns(), rows)
 
 
-def _rollup(date: str, run_id: str, *, shard: int, span: RollupSpan, total_ms: int) -> str:
-    row = SpanRollupRow.model_validate(
+def _rollup_row(
+    date: str, run_id: str, *, shard: int, span: RollupSpan, total_ms: int
+) -> dict[str, str]:
+    return SpanRollupRow.model_validate(
         {
             "date": date,
             "run_id": run_id,
@@ -78,8 +91,40 @@ def _rollup(date: str, run_id: str, *, shard: int, span: RollupSpan, total_ms: i
             "count": 1,
             "total_ms": total_ms,
         }
+    ).csv_row()
+
+
+def _rollups(*rows: dict[str, str]) -> str:
+    return ledger.render_file(SpanRollupRow.csv_columns(), rows)
+
+
+def _rollup(date: str, run_id: str, *, shard: int, span: RollupSpan, total_ms: int) -> str:
+    """One fold rendered as a segment file's whole body."""
+    return _rollups(_rollup_row(date, run_id, shard=shard, span=span, total_ms=total_ms))
+
+
+def _counters_model(
+    date: str, run_id: str, *, job: ServerJob, shard: int, **cells: object
+) -> RuntimeCountersRow:
+    return RuntimeCountersRow.model_validate(
+        {
+            "date": date,
+            "run_id": run_id,
+            "job": job,
+            "shard": shard,
+            "shards": len(COUNTER_WRITERS),
+            "scraped_at": f"{date}T00:00:00Z",
+            **cells,
+        }
     )
-    return ledger.render_file(SpanRollupRow.csv_columns(), [row.csv_row()])
+
+
+def _counters(date: str, run_id: str, *, job: ServerJob, shard: int, **cells: object) -> str:
+    """One model server's counters rendered as a segment file's whole body."""
+    return ledger.render_file(
+        RuntimeCountersRow.csv_columns(),
+        [_counters_model(date, run_id, job=job, shard=shard, **cells).csv_row()],
+    )
 
 
 def _write(state: Path, which: ledger.SegmentLedger, name: str, body: str) -> Path:
@@ -204,6 +249,124 @@ def test_ten_writers_of_one_run_land_ten_rows_in_one_machine_day(tmp_path: Path)
     assert not ledger.segment_files(state), "a folded segment is removed, not left behind"
 
 
+def test_eight_shard_writers_land_eight_counter_rows_under_one_header(tmp_path: Path) -> None:
+    """The row's oracle. Eight model servers, eight segments, one head, one header.
+
+    Driven through `ledger.write_segment`, the call `telemetry.host.stage_counters`
+    makes, because what this asks is whether eight shards of one run can record
+    their servers without taking each other's path.
+
+    The header line is asserted as well as the rows, and that is not tidiness.
+    `state/runtime-counters.csv` carries `merge=union` until the merge driver
+    goes, and a union of two whole-file rewrites is a file with the header in
+    the middle of it - the shape `settle_header` exists to fold back. One header
+    is what says the compaction wrote the head rather than stacked onto it.
+
+    What it cannot settle is whether eight real runners racing produce this; the
+    first live run is that check.
+    """
+    state = tmp_path / ledger.STATE_DIRNAME
+    for job, shard in COUNTER_WRITERS:
+        ledger.write_segment(
+            state,
+            ledger.SegmentLedger.RUNTIME_COUNTERS,
+            [_counters_model(TODAY, RUN, job=job, shard=shard, prompt_tokens_total=100 + shard)],
+            run_id=RUN,
+            attempt=1,
+            job=job,
+            shard=shard,
+        )
+
+    waiting = ledger.segment_files(state, ledger.SegmentLedger.RUNTIME_COUNTERS)
+    assert len(waiting) == len(COUNTER_WRITERS), "one writer, one file, and no two share one"
+
+    report = compact.stage_compact(state)
+
+    head = ledger.runtime_counters_path(state)
+    header = ",".join(RuntimeCountersRow.csv_columns())
+    lines = head.read_text(encoding="utf-8").splitlines()
+    assert lines.count(header) == 1, f"the head carries its header {lines.count(header)} times"
+    assert lines[0] == header, "and it is the first line"
+
+    pairs = [(row["job"], int(row["shard"])) for row in _rows(head)]
+    assert len(pairs) == len(COUNTER_WRITERS), "eight servers, eight rows"
+    assert sorted(pairs) == sorted((job.value, shard) for job, shard in COUNTER_WRITERS)
+    assert len(set(pairs)) == len(COUNTER_WRITERS), "a repeated pair is one shard counted twice"
+    assert report.rows_superseded == 0, "eight distinct keys settle nothing against each other"
+    assert report.heads_written == (ledger.runtime_counters_relpath(),)
+    assert not ledger.segment_files(state), "a folded segment is removed, not left behind"
+
+
+def test_two_runs_of_two_dates_reach_the_one_head_that_holds_every_date(
+    tmp_path: Path,
+) -> None:
+    """The one flat head, and what makes it different from every other.
+
+    `state/runtime-counters.csv` is a single file for the life of the project:
+    the audit that reads it asks about one run and a run id already names its
+    date, so there is nothing a day tree would buy before Row #11 deletes it.
+    Every other ledger picks a head from the row's own date cell; here the date
+    is read and then names the same file whatever it says.
+
+    So two dates must reach one head, and `heads_written` must name it once - a
+    head reported twice is a head read and rewritten twice in one pass.
+    """
+    state = tmp_path / ledger.STATE_DIRNAME
+    _write(
+        state,
+        ledger.SegmentLedger.RUNTIME_COUNTERS,
+        f"{RUN}-1-{ServerJob.WORK.value}-00.csv",
+        _counters(TODAY, RUN, job=ServerJob.WORK, shard=0, prompt_tokens_total=100),
+    )
+    _write(
+        state,
+        ledger.SegmentLedger.RUNTIME_COUNTERS,
+        f"{OLD_RUN}-1-{ServerJob.WORK.value}-00.csv",
+        _counters(THREE_DAYS_OLD, OLD_RUN, job=ServerJob.WORK, shard=0, prompt_tokens_total=200),
+    )
+
+    report = compact.stage_compact(state)
+
+    rows = _rows(ledger.runtime_counters_path(state))
+    assert sorted((row["date"], row["prompt_tokens_total"]) for row in rows) == [
+        (THREE_DAYS_OLD, "200"),
+        (TODAY, "100"),
+    ]
+    assert report.heads_written == (ledger.runtime_counters_relpath(),)
+
+
+def test_the_second_attempt_at_a_shard_replaces_the_totals_the_first_one_read(
+    tmp_path: Path,
+) -> None:
+    """A cumulative total is not an event, so two rows for one shard is a doubled run.
+
+    A re-run of a failed shard starts a fresh server and scrapes it again.
+    Nothing pools two rows for one shard correctly - the tokens would be added
+    to themselves - and until 2026-09-18 a scan-before-append kept whichever row
+    landed first, which is the attempt that did not finish. The attempt is in
+    the segment name now, so the later one wins the cells the two disagree on.
+    """
+    state = tmp_path / ledger.STATE_DIRNAME
+    _write(
+        state,
+        ledger.SegmentLedger.RUNTIME_COUNTERS,
+        f"{RUN}-1-{ServerJob.WORK.value}-00.csv",
+        _counters(TODAY, RUN, job=ServerJob.WORK, shard=0, prompt_tokens_total=100),
+    )
+    _write(
+        state,
+        ledger.SegmentLedger.RUNTIME_COUNTERS,
+        f"{RUN}-2-{ServerJob.WORK.value}-00.csv",
+        _counters(TODAY, RUN, job=ServerJob.WORK, shard=0, prompt_tokens_total=999),
+    )
+
+    report = compact.stage_compact(state)
+
+    rows = _rows(ledger.runtime_counters_path(state))
+    assert [row["prompt_tokens_total"] for row in rows] == ["999"], "one shard, one total"
+    assert report.rows_superseded == 1
+
+
 def test_every_waiting_row_reaches_the_head_its_own_date_names(tmp_path: Path) -> None:
     """Cases (a) to (d), and the store is empty of them afterwards."""
     state = tmp_path / ledger.STATE_DIRNAME
@@ -234,6 +397,105 @@ def test_every_waiting_row_reaches_the_head_its_own_date_names(tmp_path: Path) -
         )
     )
     assert report.oldest_segment_date == THREE_DAYS_OLD
+
+
+def test_two_dates_of_one_month_fold_into_one_head_carrying_both(tmp_path: Path) -> None:
+    """The span fold files by month, so two dates share a head and must stay apart on it.
+
+    A shard that runs across midnight leaves a segment dated yesterday for a
+    compaction that runs today, and both dates are in the same month for all but
+    one night a month. Every shard of both runs folds into `2026-09.csv`, so the
+    head is the one file a whole month of runs reaches.
+
+    Unique across `SPAN_ROLLUP_KEY` is the half that matters. A repeated key is
+    one shard's spans counted twice, and the console divides that number, so a
+    doubled row does not look like an error - it looks like a slower run.
+    """
+    state = tmp_path / ledger.STATE_DIRNAME
+    yesterday = "2026-09-16"
+    overnight = f"{yesterday}-900000003"
+    for shard in (0, 1):
+        _write(
+            state,
+            ledger.SegmentLedger.SPAN_ROLLUP,
+            f"{overnight}-1-{ServerJob.WORK.value}-{shard:02d}.csv",
+            _rollup(
+                yesterday, overnight, shard=shard, span=RollupSpan.ITEM, total_ms=90 + shard
+            ),
+        )
+    _write(
+        state,
+        ledger.SegmentLedger.SPAN_ROLLUP,
+        f"{RUN}-1-{ServerJob.WORK.value}-00.csv",
+        _rollups(
+            _rollup_row(TODAY, RUN, shard=0, span=RollupSpan.ITEM, total_ms=120),
+            _rollup_row(TODAY, RUN, shard=0, span=RollupSpan.ROBOTS, total_ms=8),
+        ),
+    )
+
+    report = compact.stage_compact(state)
+
+    assert report.heads_written == (ledger.span_rollup_relpath(TODAY[:7]),)
+    rows = _rows(ledger.span_rollup_path(state, TODAY[:7]))
+    assert {row["date"] for row in rows} == {yesterday, TODAY}
+    keys = [tuple(row[name] for name in ledger.SPAN_ROLLUP_KEY) for row in rows]
+    assert len(keys) == 4, f"one fold went missing or arrived twice: {keys}"
+    assert len(set(keys)) == len(keys), f"two rows share a key: {keys}"
+    assert ledger.segment_files(state) == []
+
+
+def test_a_fold_left_over_a_month_boundary_reaches_the_month_its_own_rows_name(
+    tmp_path: Path,
+) -> None:
+    """The case no real run can be asked to produce: the night the month changes.
+
+    A shard that starts at 23:59 UTC on the last of the month writes its segment
+    on one date and the compaction that reads it runs on another - and once a
+    month those two dates are in different months. Routing is off each row's own
+    `date` cell rather than off the clock the compaction runs on, so August's
+    fold reaches August's head and September's reaches September's.
+
+    Built here for the reason the file's own heading gives: the archive has never
+    produced this night and cannot be made to, and a compaction that read its
+    own clock would pass every other test in this file.
+    """
+    state = tmp_path / ledger.STATE_DIRNAME
+    last_of_august = "2026-08-31"
+    first_of_september = "2026-09-01"
+    before_midnight = f"{last_of_august}-900000004"
+    after_midnight = f"{first_of_september}-900000005"
+    _write(
+        state,
+        ledger.SegmentLedger.SPAN_ROLLUP,
+        f"{before_midnight}-1-{ServerJob.WORK.value}-00.csv",
+        _rollup(
+            last_of_august, before_midnight, shard=0, span=RollupSpan.ITEM, total_ms=61
+        ),
+    )
+    _write(
+        state,
+        ledger.SegmentLedger.SPAN_ROLLUP,
+        f"{after_midnight}-1-{ServerJob.WORK.value}-00.csv",
+        _rollup(
+            first_of_september, after_midnight, shard=0, span=RollupSpan.ITEM, total_ms=59
+        ),
+    )
+
+    report = compact.stage_compact(state)
+
+    assert report.heads_written == tuple(
+        sorted(
+            (
+                ledger.span_rollup_relpath(last_of_august[:7]),
+                ledger.span_rollup_relpath(first_of_september[:7]),
+            )
+        )
+    )
+    august = _rows(ledger.span_rollup_path(state, last_of_august[:7]))
+    september = _rows(ledger.span_rollup_path(state, first_of_september[:7]))
+    assert [(row["date"], row["total_ms"]) for row in august] == [(last_of_august, "61")]
+    assert [(row["date"], row["total_ms"]) for row in september] == [(first_of_september, "59")]
+    assert report.oldest_segment_date == last_of_august
 
 
 def test_the_higher_attempt_wins_the_cell_the_two_disagree_on(tmp_path: Path) -> None:
@@ -447,3 +709,159 @@ def test_the_segment_name_carries_the_four_cells_that_make_it_unique(tmp_path: P
     assert ledger.parse_segment_name(path) == ledger.SegmentName(
         run_id=RUN, attempt=2, job=ServerJob.WORK, shard=3
     )
+
+def _census(
+    date: str, run_id: str, *, item: str, job: ServerJob | None = None, **cells: object
+) -> str:
+    """One item-census row rendered as a segment file's whole body."""
+    url = f"https://example.com/{item}"
+    row = ItemHealthRow.model_validate(
+        {
+            "version": ItemHealthRow.schema_version(),
+            "date": date,
+            "run_id": run_id,
+            "item_id": item,
+            "source_id": "wire",
+            "url_key": derive_url_key(url),
+            "canonical_url": url,
+            "vertical": "ai",
+            "stage": ItemStage.PUBLISH,
+            "outcome": ItemOutcome.OK,
+            **({"job": job, "shard": 0} if job is not None else {}),
+            **cells,
+        }
+    )
+    return ledger.render_file(ItemHealthRow.csv_columns(), [row.csv_row()])
+
+
+def _digests(*digests: str) -> str:
+    """Score-index rows rendered as a segment file's whole body."""
+    rows = [
+        ObservationIndexRow.model_validate(
+            {"version": ObservationIndexRow.schema_version(), "observation_digest": digest}
+        ).csv_row()
+        for digest in digests
+    ]
+    return ledger.render_file(ObservationIndexRow.csv_columns(), rows)
+
+
+def test_two_jobs_that_recorded_one_item_leave_one_census_row(tmp_path: Path) -> None:
+    """The reason the item census moved onto segments at all.
+
+    A work shard records an item as it settles and `assemble` records the whole
+    day afterwards, so two writers describe one item on one run. They used to
+    append to one day file, and the count of rows in that file feeds a feed's
+    share of the day and the day's own metrics - so a repeat there is a number a
+    reader sees, not an untidy file.
+    """
+    state = tmp_path / "state"
+    _write(
+        state,
+        ledger.SegmentLedger.ITEM_HEALTH,
+        f"{RUN}-1-{ServerJob.WORK.value}-03.csv",
+        _census(TODAY, RUN, item="ai-01", job=ServerJob.WORK),
+    )
+    _write(
+        state,
+        ledger.SegmentLedger.ITEM_HEALTH,
+        f"{RUN}-1-{ServerJob.ASSEMBLE.value}-00.csv",
+        _census(TODAY, RUN, item="ai-01"),
+    )
+
+    report = compact.stage_compact(state)
+
+    rows = _rows(ledger.item_health_path(state, TODAY))
+    assert len(rows) == 1, "one item, one run, one row"
+    assert report.rows_superseded == 1
+    assert ledger.segment_files(state) == []
+
+
+def test_the_row_that_names_a_job_beats_the_row_that_does_not(tmp_path: Path) -> None:
+    """Which of two writers wins has to be the one that knows more, not the one sorted first.
+
+    `ITEM_HEALTH_KEY` has no `job` cell, so both rows are the same record and
+    the fold has to choose. A work shard stamps the job and the shard it ran as
+    - the one moment either is known - and `assemble` runs once for the whole
+    day and leaves both empty. Segment files are read in filename order, and
+    `assemble` sorts before `work`, so without a rule the emptier row would win
+    every time and the pair that takes an item to the machine that read it would
+    be gone.
+    """
+    state = tmp_path / "state"
+    _write(
+        state,
+        ledger.SegmentLedger.ITEM_HEALTH,
+        f"{RUN}-1-{ServerJob.ASSEMBLE.value}-00.csv",
+        _census(TODAY, RUN, item="ai-01"),
+    )
+    _write(
+        state,
+        ledger.SegmentLedger.ITEM_HEALTH,
+        f"{RUN}-1-{ServerJob.WORK.value}-03.csv",
+        _census(TODAY, RUN, item="ai-01", job=ServerJob.WORK),
+    )
+
+    compact.stage_compact(state)
+
+    kept = _rows(ledger.item_health_path(state, TODAY))[0]
+    assert kept["job"] == ServerJob.WORK.value
+    assert kept["shard"] == "0"
+
+
+def test_a_score_index_row_is_filed_by_the_run_that_carried_it(tmp_path: Path) -> None:
+    """The index has no date of its own, so the segment's run id is where the date comes from.
+
+    Every other ledger here reads the date off the row. `ObservationIndexRow` is
+    a stamp and a digest - it is filed beside the scores it describes and never
+    says which day that is - so the fold takes the date from the run that wrote
+    the segment. A run id opens on its own date, and the only writer of an eval
+    row files it under the run's date too, so the two always agree.
+    """
+    state = tmp_path / "state"
+    _write(
+        state,
+        ledger.SegmentLedger.SCORE_INDEX,
+        f"{RUN}-1-{ServerJob.WORK.value}-00.csv",
+        _digests("a" * 64),
+    )
+    _write(
+        state,
+        ledger.SegmentLedger.SCORE_INDEX,
+        f"{OLD_RUN}-1-{ServerJob.WORK.value}-00.csv",
+        _digests("b" * 64),
+    )
+
+    compact.stage_compact(state)
+
+    today = _rows(ledger.score_index_path(state, TODAY))
+    older = _rows(ledger.score_index_path(state, THREE_DAYS_OLD))
+    assert [row["observation_digest"] for row in today] == ["a" * 64]
+    assert [row["observation_digest"] for row in older] == ["b" * 64]
+
+
+def test_one_digest_written_by_two_jobs_is_indexed_once(tmp_path: Path) -> None:
+    """The index is what the eval writer reads to know a measurement is already held.
+
+    A digest listed twice would cost nothing but bytes today. It is settled
+    anyway because `OBSERVATION_INDEX_KEY` is the whole row: two index rows for
+    one digest carry no cell that can disagree, so the fold has nothing to weigh
+    and keeping both would only make the file grow with the runs.
+    """
+    state = tmp_path / "state"
+    _write(
+        state,
+        ledger.SegmentLedger.SCORE_INDEX,
+        f"{RUN}-1-{ServerJob.WORK.value}-00.csv",
+        _digests("a" * 64),
+    )
+    _write(
+        state,
+        ledger.SegmentLedger.SCORE_INDEX,
+        f"{RUN}-1-{ServerJob.ASSEMBLE.value}-00.csv",
+        _digests("a" * 64),
+    )
+
+    compact.stage_compact(state)
+
+    rows = _rows(ledger.score_index_path(state, TODAY))
+    assert [row["observation_digest"] for row in rows] == ["a" * 64]

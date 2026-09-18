@@ -173,6 +173,37 @@ export interface VisualsConfig {
 	min_chart_points: number;
 }
 
+/** The band the merge line may move in, and the clamps that shape how it moves.
+ *
+ * Only the keys a console panel draws. The block carries fifteen more - the
+ * gates, the judge's own limits, the pair budget - and none of them is a number
+ * a chart puts on screen, so none of them is declared here. `band_low` and
+ * `band_high` are the score axis; `max_down_step` is the envelope behind the
+ * applied line; `step_change_multiple` is what the guard fires against.
+ */
+export interface SimilarityConfig {
+	/** The lowest score the record holds a slot for. The bottom of the axis. */
+	band_low: number;
+	/** The top of the band. 1.00, because a cosine goes no higher. */
+	band_high: number;
+	/** The furthest the line may fall in one day. The height of the clamp band. */
+	max_down_step: number;
+	/** How many times the typical daily shift a day has to beat before the guard
+	 * holds the line. On the row rather than on the chart, so a reader comparing
+	 * two days is comparing one question. */
+	step_change_multiple: number;
+	/** How often the two orders may disagree before the run holds. The lower of
+	 * the two markers on the agreement plot. */
+	disagreement_max: number;
+	/** What share of readings may be UNCLEAR before the run holds. The top of the
+	 * agreement axis, so a rate cannot leave the chart. */
+	unclear_max: number;
+	/** The three gates, as the counts the record has to reach. */
+	minimum_negatives: number;
+	minimum_above_line: number;
+	minimum_days: number;
+}
+
 export interface ConsoleConfig {
 	default_window_days: number;
 	/** The spans the window control offers, ascending. `default_window_days` is
@@ -353,6 +384,22 @@ const RUN_DEFAULTS: RunConfig = {
 	shard_timeout_minutes: 200
 };
 const VISUALS_DEFAULTS: VisualsConfig = { min_chart_points: 3 };
+// The same four values `SimilarityThresholdConfig` declares in the contract, so
+// a checkout with no config file draws the axis the pipeline would have fitted
+// against rather than an axis this file invented.
+const SIMILARITY_DEFAULTS: SimilarityConfig = {
+	band_low: 0.88,
+	band_high: 1.0,
+	max_down_step: 0.005,
+	step_change_multiple: 5,
+	disagreement_max: 0.15,
+	unclear_max: 0.35,
+	minimum_negatives: 200,
+	minimum_above_line: 30,
+	minimum_days: 10
+};
+// `SameStoryConfig.floor_min`'s own default, for a checkout with no config file.
+const SAME_STORY_FLOOR = 0.94;
 // The CONTRACT default, not the committed window. `config/idhazh.json` pins
 // `models.summarize.inference.n_ctx` at 49152 since 2026-09-13 and every real
 // page reads that; this only fires for a checkout with no config file, and such
@@ -471,6 +518,15 @@ interface RawConfig {
 	assist?: Partial<AssistConfig>;
 	observability?: Partial<ObservabilityConfig>;
 	visuals?: Partial<VisualsConfig>;
+	/** Where the merge line's own block sits. Nested under `same_story` rather
+	 * than flat, because a knob whose legal value depends on another knob's value
+	 * belongs where a validator can see both. */
+	assemble?: {
+		same_story?: {
+			floor_min?: number;
+			adaptive_dedup_threshold?: Partial<SimilarityConfig>;
+		};
+	};
 	/** Which file under `config/models/` holds the active model. The whole
 	 * model left `idhazh.json` on 2026-09-14; this names where it went. */
 	models_file?: string;
@@ -702,6 +758,30 @@ export function runConfig(): RunConfig {
 	return { ...RUN_DEFAULTS, ...(raw().run ?? {}) };
 }
 
+/** The band and the clamps the merge-line chart draws against.
+ *
+ * Read off the committed config rather than off the data, because the axis is
+ * the point: after the first fortnight the line moves under 0.002 a day, and an
+ * axis fitted to the data would fill the panel with a two-thousandth move and
+ * teach an operator that a normal day is an incident.
+ */
+export function similarityConfig(): SimilarityConfig {
+	return {
+		...SIMILARITY_DEFAULTS,
+		...(raw().assemble?.same_story?.adaptive_dedup_threshold ?? {})
+	};
+}
+
+/** The committed merge line, before any fit has moved it.
+ *
+ * What the chart draws a rule at on a day nothing has been fitted: a panel that
+ * opened with a blank box would say the line does not exist, when in fact every
+ * published day so far was grouped at this number.
+ */
+export function committedFloor(): number {
+	return raw().assemble?.same_story?.floor_min ?? SAME_STORY_FLOOR;
+}
+
 /** The visual planner's floor, and only that.
  *
  * One knob rather than the whole `visuals` block, because whatever this returns
@@ -713,8 +793,7 @@ export function visualsConfig(): VisualsConfig {
 	return { min_chart_points: raw().visuals?.min_chart_points ?? VISUALS_DEFAULTS.min_chart_points };
 }
 
-export function inferenceConfig(): InferenceConfig {
-	return { ...INFERENCE_DEFAULTS, ...(models().summarize?.inference ?? {}) };
+export function inferenceConfig(): InferenceConfig {	return { ...INFERENCE_DEFAULTS, ...(models().summarize?.inference ?? {}) };
 }
 
 export function retentionConfig(): RetentionConfig {

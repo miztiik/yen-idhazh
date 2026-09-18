@@ -65,7 +65,6 @@ set is what an unpublish has to answer for:
 | `state/score-index/<Y>/<M>/<D>.csv` | day | remove |
 | `state/item-health/<Y>/<M>/<D>.csv` | day | remove |
 | `state/runtime-counters.csv` | append-only | rewrite without the day |
-| `state/chrome.csv` | one file, rewritten | re-fold without the day. `stages.prune_state._prune_chrome_lines` is what enforces the bound: it drops a line no page has carried for `extract.chrome_forget_days` and re-applies the per-host cap a `merge=union` may have undone ([../extraction/chrome.md](../extraction/chrome.md)) |
 | `corpus/corpus.jsonl` | rolling window | rewrite without the day |
 
 The month-grain rows are the trap. Three of them are shards a later run appends
@@ -280,13 +279,25 @@ primitive pointed at the repository is the one accident nobody can undo.
 | `item-health` | `observability.item_health_full_grain_months` |
 | `score-index` | `observability.scores_full_grain_months` |
 | `scores` | `observability.scores_full_grain_months` |
+| `story-similarity-fitted-thresholds` | nothing today - one row a day at about 400 bytes across 33 columns is 146 KB a year at any `pair_budget` |
+| `story-similarity-scored-pairs` | nothing today - at most `pair_budget` rows a day, 200 on the committed knobs |
 | `visual-prunes` | nothing today - it is bounded by arithmetic, above |
 
 The rule that decides membership is one line: a store files
-`<YYYY>/<MM>/<DD>.csv` day files, and is not one of the two below. The word an
-operator types **is** the directory name under `state/`, taken from the module
-that owns the store rather than spelled again, so a store that is renamed
-renames its target with it (Guardrail #6).
+`<YYYY>/<MM>/<DD>.csv` day files, and is not one of the two below. A flat
+store's word **is** its directory name under `state/`, and a nested store's word
+joins its two directory names with a hyphen. Both halves come from the module
+that owns the store rather than being spelled again, so a store that is renamed
+renames its target with it (Guardrail #6). The hyphen is what keeps the
+vocabulary closed: a slash in the word would make the argument look like a path,
+and a deletion primitive that resolved its argument against the file system is
+the one accident nobody can undo.
+
+**The two story-similarity stores are not a pair and either can go on its own.**
+The judged pairs are folded into `score-distribution.json` once and never read
+again, so deleting a day of them takes nothing away from the fit. Deleting a
+fitted row does take something away: it leaves a day out of the step-change
+guard's median and out of what step 4 compares this week against.
 
 **`state/day-metrics/` and `state/traces/` are day-shaped and deliberately
 outside it.** They file `<DD>.json` and `<DD>-<run>-<shard>.jsonl`, which
@@ -506,6 +517,6 @@ somebody wants them.
 - [layout.md](layout.md) - what a run writes, and the addresses a reader reaches.
 - [../../concepts/config.md](../../concepts/config.md) - the retention knobs and their defaults.
 - [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - Guardrail #12's escape hatch, and what a growing read has to declare.
-- [../../reference/measurements-site.md](../../reference/measurements-site.md) - the site's weight, its growth rate and the alarm point.
+- [../../reference/site-weight.md](../../reference/site-weight.md) - the site's weight, its growth rate and the alarm point.
 - [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md) - the page ceilings and what to do when one fires.
 - [../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #2 (the runner is the architecture) and Guardrail #12 (nothing costs more as the repository grows).

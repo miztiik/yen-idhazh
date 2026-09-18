@@ -533,7 +533,7 @@ reply, never the count the model actually wrote. `evals/qualify.py` then graded
 that could fail the gate was refused before the gate looked.
 
 Run 33016222069 reported 0 of 90 replies outside the range, and passed
-([../reference/measurements.md](../reference/measurements.md#the-configured-summarizer-qwen35-9b-q4_k_m)).
+([../reference/models/qwen3.5-9b-q4km.md](../reference/models/qwen3.5-9b-q4km.md)).
 Zero was the only number that arithmetic could return, on any model and at any
 threshold, so that result is not evidence that this summarizer writes publishable
 lengths. Read every `publishable_length` verdict before 2026-09-10 as "not
@@ -1481,7 +1481,7 @@ summaries are better or worse than the retired model's.
 Qualification run `33016222069`, 2026-08-26, on `ubuntu-latest`. One model, three
 deterministic repeats, no side-by-side case. Every gate outcome, the band counts,
 the faithfulness spread and the identity of the bytes that ran are in
-[../reference/measurements.md](../reference/measurements.md#the-configured-summarizer-qwen35-9b-q4_k_m).
+[../reference/models/qwen3.5-9b-q4km.md](../reference/models/qwen3.5-9b-q4km.md).
 
 The frozen, **paired** corpus this page asks for above still does not exist.
 `qualify` freezes one model's inputs, which is what makes its own numbers
@@ -1499,7 +1499,7 @@ not lose. The gate failed on `replied: false` - the model returned no usable
 summary for that item. Four canaries were neutralised, and the fifth was never
 exercised, because there was nothing to check. The artifact quote, the local
 sweep, its hardware and the command that reproduces it are in
-[../reference/measurements.md](../reference/measurements.md#the-fifth-canary-was-never-exercised).
+[../reference/pipeline-cost.md](../reference/pipeline-cost.md#the-fifth-canary-was-never-exercised).
 
 **Guardrail #11 held. Guardrail #10 broke.** Fetched text is data and never instruction,
 and the sanitizer plus the schema are the controls that rule names - both did

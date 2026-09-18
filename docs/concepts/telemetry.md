@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-18
 
 The structured-event vocabulary: the envelope every event carries, the event names that are emitted, the two shapes those names take, the span tree a developer can switch on, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, which is a project non-goal ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 0a).
 
@@ -49,14 +49,17 @@ flowchart TD
   sinks --> rollup
   record --> census
 
-  census --> ih["state/item-health/ (day)"]
-  rollup --> sr["state/span-rollup/ (month)"]
+  census --> ih["state/segments/item-health/ (one per writer)"]
+  rollup --> sr["state/segments/span-rollup/ (one per writer)"]
   traces --> tr["state/traces/ (day)"]
   health --> fh["state/feed-health/ (day)"]
 
+  ih --> head_ih["state/item-health/ (day)"]
+  sr --> head_sr["state/span-rollup/ (month)"]
+
   subgraph state["state/ - committed, append-only, day-sharded"]
-    ih
-    sr
+    head_ih
+    head_sr
     tr
     fh
     other["day-metrics/ and scores/ and published/ and seen/<br/>runtime-counters.csv and day-validations.csv"]
@@ -206,6 +209,8 @@ Two things the host sink does not do, measured against Langfuse 4.14.4 rather th
 
 The span tree is evidence and expires with the run. One summary of it is a record and is committed: `state/span-rollup/<YYYY-MM>.csv`, one row per `(date, run_id, shard, span_name)`, carrying how many spans of that name the shard opened and how long they took added together. The fold lives in `telemetry.roll_up_spans` and the row is `SpanRollupRow`.
 
+**A shard writes its fold to a segment, not to the month file.** Up to eight work shards fold one month head, so from 2026-09-18 each one writes `state/segments/span-rollup/<run>-<attempt>-work-<shard>.csv` - a name no second writer can take - and `idhazh compact` inside `assemble` merges the segments into the month each row's own `date` cell names. The month head has one writer per run. The routing is the row's date and not the compaction's clock, which is what carries the one night a month when a run starting at 23:59 UTC is read by a compaction running in the next month ([partitions.md](partitions.md)).
+
 **It commits five span names, not the eleven the tracer opens**, and the five are the steps no ledger column already times:
 
 | Committed span | Why it earns a row |
@@ -322,7 +327,7 @@ empty rather than failing the item. `/sys/fs/cgroup/memory.peak` has measured
 absent on every GitHub-hosted runner this project has probed, so that cell is
 usually empty in CI and always empty on a developer machine - a fact about the
 instrument, not about the job. What one sample costs is in
-[measurements.md](../reference/measurements.md).
+[pipeline-cost.md](../reference/pipeline-cost.md).
 
 ## What the machine WAS, which is a different question
 
@@ -346,6 +351,21 @@ compaction in `assemble` folds them into the day. Ten runners appending to one
 path is not a thing a merge driver can settle: on 2026-09-16 the pushes raced and
 the day came back header-only. What a reader opens is unchanged, because a
 segment is the head's own rows in transit and carries no shape of its own.
+
+`state/item-health/` goes the same way from 2026-09-18, with `state/scores/` and
+`state/score-index/` beside it. The writers there are the work shards and
+assemble rather than every job of the run, and the settlement has one extra
+thing to say: `ITEM_HEALTH_KEY` carries no `job` cell, so two writers describing
+one item are one record to the fold, and `ledger.ITEM_HEALTH_RULE` keeps the row
+that names a job over the row that does not.
+
+`state/runtime-counters.csv` joined them the same day, and it is the odd one:
+its head stays a single flat file rather than moving to a day tree. Every
+model-server job scrapes its own server and files the numbers, so the path had
+as many writers as the day file above it, and a segment closes that. A flat head
+is not a collider once the compaction is the only thing that writes it, and this
+ledger is on its way out anyway - the columns it carries are moving onto the two
+rows above - so a day tree here would be work thrown away.
 
 **Why a third grain rather than more columns on the two rows above.** These cells
 are fixed for the whole job. Repeating twenty of them on every item row would
@@ -490,7 +510,7 @@ There is a second reason, and it bites in production rather than in year two. A 
 | Fill the census columns the run already computes | 58 of the 70 empty columns, from values the process holds and discards | Nothing blocking. The cost is one commit, not a measurement |
 | Fold `visual-prunes` and `runtime-counters` into one run-grain ledger | one store and one writer instead of three | whether the month fold can carry two row shapes without a second fold path |
 | Move the three flat files to day trees | a store `idhazh telemetry prune` can reach, since that command takes a day file out and has no way to rewrite a row out of a flat one ([../architecture/publishing/retention.md](../architecture/publishing/retention.md#a-named-prune-one-store-one-range-of-days-2026-09-16)) | the one-time migration's cost, and whether any reader assumes a single file |
-| Compress the published projections | **measured 2026-09-15: 6,720,442 bytes of 8,726,606, 77.0 percent**, with no new dependency ([../reference/measurements.md](../reference/measurements.md#what-compressing-the-telemetry-takes-against-re-encoding-it-2026-09-15)) | whether every console fetch path handles the encoding. One build settles it. `span-rollup/` is 67 bytes and gzips to 77, so a switch has to leave a file alone where compressing it does not pay |
+| Compress the published projections | **measured 2026-09-15: 6,720,442 bytes of 8,726,606, 77.0 percent**, with no new dependency ([../reference/pipeline-cost.md](../reference/pipeline-cost.md#what-compressing-the-telemetry-takes-against-re-encoding-it-2026-09-15)) | whether every console fetch path handles the encoding. One build settles it. `span-rollup/` is 67 bytes and gzips to 77, so a switch has to leave a file alone where compressing it does not pay |
 | Re-encode every closed-vocabulary column as an ordinal integer | **measured 2026-09-15: 369,855 bytes of `state/item-health/`, 7.1 percent** - a ninth of what compressing the same files takes, and it costs a legend shipped beside the data and `grep failed` over a committed day | nothing. It is priced and deferred: compression is taken first, and an ordinal taken first would be re-encoded when compression lands |
 | A query engine over a rolling month index, in the browser | one fetch instead of a month of rows | the engine's wire size. The month it would replace is no longer an estimate: `telemetry/2026-09.csv` is 1,186,543 bytes and gzips to 254,252 |
 | A year rung on the fold ladder | a shape for year-over-year | nothing, until a month fold is too big to read. At kilobytes a month it is not |
@@ -515,7 +535,7 @@ Treating the Actions run log as the log store, rather than shipping logs anywher
 
 **Tracing switched on by default on 2026-09-06, and the CI hazard that kept it off never applied to the file sink.** It was off because a publish job that can fail on a third party's availability is a worse job (below) - but that hazard is the *host*, and CI never had the host: no workflow sets the three Langfuse variables and CI holds no such secret, so a traced run in CI writes the committed file and reaches nothing. On by default is what makes the committed trace and the span rollup exist for the runs a reader actually looks at, rather than only for a developer who remembered to export a variable. The runner cost is negligible - Carmack measured the span collection at about one part in 128,000 of a shard's time. Guardrail #11 still holds it safe: the attribute vocabulary is closed, and `backend/tests/test_spans.py` and `backend/tests/test_canaries.py` now run that guard in CI over real spans. Authority: owner, 2026-09-06.
 
-**The flip is a discontinuity, and every panel that plots a span number must name it.** A committed rollup row exists only from 2026-09-06 forward, because no run before that day wrote one. A sub-step series that begins on the flip date is the instrument switching on, not the pipeline slowing down, and a chart that reads the gap as a regression is reading an artefact of the switch. The date is recorded as a discontinuity in [`../reference/measurements.md`](../reference/measurements.md), for the same reason a hardware change is.
+**The flip is a discontinuity, and every panel that plots a span number must name it.** A committed rollup row exists only from 2026-09-06 forward, because no run before that day wrote one. A sub-step series that begins on the flip date is the instrument switching on, not the pipeline slowing down, and a chart that reads the gap as a regression is reading an artefact of the switch. The date is recorded as a discontinuity in [`../reference/pipeline-cost.md`](../reference/pipeline-cost.md), for the same reason a hardware change is.
 
 **The rollup measured nothing for nine days, and the cause was a path nobody named.** From 2026-09-06 every shard folded its spans and appended `state/span-rollup/<YYYY-MM>.csv` into its own checkout. No commit step staged that path, so each fold died with its runner; assemble, on another machine, projected a directory that had never existed and published a header row. Nothing failed and no test was red - the instrument ran, cost what it cost, and reported nothing. `state/traces/` was missed the same way and by the same list: `stage_work` opens a file sink onto it whenever tracing is on, and nothing staged it either, so the raw evidence the fold is taken from never survived its runner. The fix is both paths in the work job's commit step, a seed in each so `git add` under `set -euo pipefail` cannot abort the step on a fresh clone, and both in assemble's refresh set so a lost race does not let the union merge double the rows. The lasting part is the test: the stores a stage writes are now read out of the stage and compared against the paths the job stages, so the two lists cannot drift again. Authority: Carmack found the rollup, 2026-09-15.
 

@@ -75,6 +75,7 @@ from idhazh.stages import (
     dedupe_ledgers,
     harvest,
     judge_draw,
+    judge_fit,
     judge_fold,
     judge_shard,
     prune_stamp,
@@ -117,6 +118,7 @@ STAGES: Final[tuple[str, ...]] = (
     "record",
     "counters",
     "fingerprint",
+    "job-clock",
     "assemble",
     "harvest",
     "compact",
@@ -134,6 +136,7 @@ STAGES: Final[tuple[str, ...]] = (
     "site-weight",
     "validate-days",
     "judge-draw",
+    "judge-fit",
     "judge-fold",
     "judge-shard",
     # Listed so `--help` names every verb, and never parsed: `main` hands the
@@ -596,6 +599,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 0
 
+    if args.stage == "judge-fit":
+        # After the fold in the same job, and beside it here: the fold writes the
+        # record this reads. Nothing reads the line it writes until row 9.
+        judge_fit.stage_judge_fit(
+            args.date or _today(),
+            settings=settings,
+            state_dir=args.state_root,
+            digest_root=args.digest_root,
+        )
+        return 0
+
     if args.stage == "prune-stamp":
         # Above the fetcher for the same reason: it rewrites one committed field.
         return prune_stamp.stage_prune_stamp(corpus_dir=args.corpus_dir, date=args.date or _today())
@@ -796,6 +810,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             state_root=common.STATE_ROOT,
             shard=args.shard,
             job=args.job,
+        )
+        return 0
+
+    if args.stage == "job-clock":
+        silicon.stage_job_clock(
+            common._load_plan(date),
+            settings=settings,
+            state_root=common.STATE_ROOT,
+            shard=args.shard,
+            job=args.job,
+            job_started_at=int(args.job_started_at) if args.job_started_at else None,
+            server_log_path=args.server_log,
         )
         return 0
 

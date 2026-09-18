@@ -1803,7 +1803,7 @@ def build_search_index(month: str, days: Sequence[DigestDay]) -> tuple[SearchInd
     path, so there is no read-modify-write to race with itself across two runs
     of a day and no repair command for when it does. The cost is one pass over a
     month of payloads per assemble run, which is measured in
-    `docs/reference/measurements.md`.
+    `docs/reference/pipeline-cost.md`.
 
     **One index names one encoder, and it names the one that WROTE the vectors.**
     The header is taken from the newest day that carries vectors. A day whose
@@ -2169,6 +2169,7 @@ def build_manifest(
     evaluation_sampled: bool | None = None,
     scorer_version: str | None = None,
     rank_version: str | None = None,
+    same_story_floor_applied: float | None = None,
 ) -> RunManifest:
     """What ran, against which model, at which commit - appended, never rewritten.
 
@@ -2242,6 +2243,7 @@ def build_manifest(
         evaluation_sampled=evaluation_sampled,
         scorer_version=scorer_version,
         rank_version=rank_version,
+        same_story_floor_applied=same_story_floor_applied,
         config_digests=list(config_digests),
         note=note,
     )

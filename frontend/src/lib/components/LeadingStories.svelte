@@ -36,10 +36,17 @@
 		<ul class="leading-list">
 			{#each stories as story (story.item_id)}
 				<li class="lead" data-lead={story.item_id}>
-					<a class="lead-title measure text-xl font-semibold text-text" href="#{story.item_id}">
-						{story.title}
-					</a>
-					<p class="measure mt-1 text-base text-text-secondary">{story.reason}</p>
+					<!-- The measure sits on this block, not on the two lines inside it. A
+					     `ch` resolves against the element that uses it, so the title and
+					     the reason carrying it separately were two different widths. It is
+					     not on the `li`, because the rule between leads is drawn there and
+					     should span the card. -->
+					<div class="lead-prose">
+						<a class="lead-title text-xl font-semibold text-text" href="#{story.item_id}">
+							{story.title}
+						</a>
+						<p class="mt-1 text-base text-text-secondary">{story.reason}</p>
+					</div>
 				</li>
 			{/each}
 		</ul>
@@ -75,13 +82,27 @@
 		border-block-start: 1px solid var(--color-rule);
 	}
 
+	/* One measure for the lead, set once at the size the reason is written in.
+
+	   Below the wide breakpoint this block is a full-width part of the stream
+	   (app.css), so the cap binds and a lead that wore `.measure` on its title and
+	   again on its reason had two right edges. Inside the aside the column is
+	   narrower than the measure and neither binds, which is why the step only
+	   showed on the layout most readers get. */
+	.lead-prose {
+		max-width: var(--measure);
+		font-size: var(--text-base);
+		text-wrap: pretty;
+	}
+
 	.lead-title {
 		display: block;
 		text-decoration: none;
+		text-wrap: balance;
 		/* An unbroken headline token is the one thing in this block that can force
 		   a horizontal scrollbar, and no reader-facing surface carries one. Stated
-		   here rather than left to the `measure` utility, so the promise holds
-		   wherever this component is drawn. */
+		   here rather than left to a utility, so the promise holds wherever this
+		   component is drawn. */
 		overflow-wrap: anywhere;
 	}
 

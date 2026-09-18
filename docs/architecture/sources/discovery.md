@@ -1,6 +1,6 @@
 # Source Discovery
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-18
 What the Collect stage consults, how those sources are organised, and how that organisation is changed without breaking a payload an earlier run wrote. Collect is one of the two stages that see the whole day ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape of what it sees.
 
 ## Three primitives, not one
@@ -51,7 +51,7 @@ The second sentence is the load-bearing half. Derive the terms from the id and `
 
 A failed article keeps its empty lists. It has no text, it never reaches a reader, and a tag on it would be a tag on a feed title.
 
-**The tagger is deliberately not a fingerprint input.** A tag does not change a summary, so adding the vocabulary to the stamp would re-summarize every past item to produce identical words ([../contracts/determinism.md](../contracts/determinism.md) already warns that a new `PipelineInputs` field resets every fingerprint). A vocabulary edit therefore re-tags what runs next and leaves the past alone.
+**The tagger is deliberately not a recorded input.** A tag does not change a summary, so declaring the vocabulary on `PipelineInputs` would say the pipeline moved when only the labels did ([../contracts/determinism.md](../contracts/determinism.md) owns what the record carries and why). A vocabulary edit therefore re-tags what runs next and leaves the past alone.
 
 ### A lens can also score, and then two more rules apply
 
