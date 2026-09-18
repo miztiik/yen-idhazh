@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-18
 Every number this project's design rests on, with the date it was taken and the
 spread. Guardrail #10 in one page: **an unmeasured number is labelled an estimate and
 may not be used to justify a design.**
@@ -1302,6 +1302,14 @@ the retired incumbent.
 
 What stays here is what one of those gates taught about the instrument rather
 than about the model.
+
+**Four candidates were qualified side by side on 2026-09-17** - Ornith-1.5-9B,
+both Gemma-4-E4B configurations and Qwen3.5-9B with its reasoning channel on.
+Every gate verdict, what each arm wrote for the same article, and what a token
+bought, are in
+[benchmarks/four-candidates-on-one-news-day.md](benchmarks/four-candidates-on-one-news-day.md).
+No row moved here or onto a dossier: the corpus was a third of the registered
+floor, so nothing that run measured can rank one candidate against another.
 
 #### The fifth canary was never exercised
 
