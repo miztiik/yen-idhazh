@@ -36,7 +36,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 11 |
 | [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 29 | 6 | 22 | 2 |
-| [20260917-34-similarity-autotune-plan.md](20260917-34-similarity-autotune-plan.md) | 17 | 2 | 15 | 1 |
+| [20260917-34-similarity-autotune-plan.md](20260917-34-similarity-autotune-plan.md) | 4 | 0 | 4 | 0 |
 
 ## In flight - 4
 
@@ -47,7 +47,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | #17 | 33 | B | `runtime-counters` writes segments | p33b17 |
 | #10 | 33 | C | `model_load_ms` and `job_seconds` join `host-fingerprint` | p33c10 |
 
-## Ready now - 34
+## Ready now - 33
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -88,9 +88,8 @@ section 3 is where it is answered.
 | #11 | 27 | E | Two articles, three arms, one runner | 4 |
 | #6 | 33 | A | The validation ledger leaves the root of `state/` | - |
 | #29 | 33 | J | `prune.yml` wakes outside the digest window | - |
-| #2 | 34 | - | The four contracts, shipped inert with header-only files | - |
 
-## Waiting on another row - 78
+## Waiting on another row - 68
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -158,20 +157,10 @@ section 3 is where it is answered.
 | #27 | 33 | K | Route grouping and panel order | 20 is PENDING; 26 is PENDING |
 | #14 | 33 | - | The per-item machine load panel | - |
 | #8 | 33 | - | Memory split by prefill and decode | - |
-| #3 | 34 | - | The knob block, defaults only, nothing reads it | 2 is PENDING |
-| #5 | 34 | - | Score and select the borderline pairs, write the day shard | 2 is PENDING; 3 is PENDING |
-| #6 | 34 | - | The judge: prompt, grammar, token-id assertion, order swap | 2 is PENDING; 3 is PENDING |
-| #7 | 34 | - | Fold the day into the fixed-size record | 2 is PENDING; 5 is PENDING; 6 is PENDING |
-| #8 | 34 | - | Fit, damp, clamp, and write the day's row - the knob still unread | 3 is PENDING; 7 is PENDING |
-| #9 | 34 | - | Assemble reads the fitted line. **First row that changes a published day** | 8 is PENDING |
-| #10 | 34 | - | The `LLM-JUDGES` workflow, 4 matrix legs, two commit calls | 5 is PENDING; 6 is PENDING; 7 is PENDING; 8 is PENDING |
-| #11 | 34 | - | The sample sheet utility | 7 is PENDING; 8 is PENDING; 10 is PENDING |
-| #12 | 34 | - | Console: merge count and holdout - the two model-free panels | panel A1: nothing / panel A2: 2 names no row; 8 is PENDING |
-| #13 | 34 | - | Console: the threshold chart, applied solid and proposed dotted | 8 is PENDING; 12 is PENDING |
-| #14 | 34 | - | Console: judge self-agreement, and the record filling | 8 is PENDING; 12 is PENDING |
-| #15 | 34 | - | Console: the confusion matrix | 7 is PENDING; 8 is PENDING; 12 is PENDING |
-| #16 | 34 | - | The design document, prose plus a mermaid diagram | 9 is PENDING |
-| #17 | 34 | - | Measure a judge call on a stock runner and replace the estimate | 5 is PENDING; 6 is PENDING |
+| #11 | 34 | - | The sample sheet utility | 7 names no row; 8 names no row; 10 names no row |
+| #12 | 34 | - | Console: the holdout panel. **The merge count landed in #874; this is the other half** | 2 names no row; 8 names no row |
+| #15 | 34 | - | Console: the confusion matrix | 7 names no row; 8 names no row; 12 is PENDING |
+| #16 | 34 | - | The design document. **Mostly overtaken - see below** | 9 names no row |
 
 ## Finished - 19 plans with no live row
 
