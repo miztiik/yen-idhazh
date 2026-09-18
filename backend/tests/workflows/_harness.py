@@ -896,10 +896,18 @@ CLOCK_STEP: Final = "Stamp the shard clock and the host"
 
 CLOCK_VARIABLES: Final = ("JOB_STARTED_AT", "CPU_MODEL", "CPU_STAT_AT_START")
 
+# The other end of `FINGERPRINT_STEP`. The probe runs before the model server so
+# the bandwidth reading gets an idle machine; the job's own clock and what the
+# weights cost to open are only knowable once the job is over. Both halves go to
+# the one segment this job owns and the fold unites them.
+JOB_CLOCK_STEP: Final = "What this job cost"
+
+JOB_CLOCK_COMMAND: Final = "python -m idhazh job-clock"
+
 # Neither of the work job's two steps may fail the shard. See the comment above
 # them in the workflow for which loss is the cheaper one. `BaseLoader` keeps
 # every scalar a string, so the value to compare is the word, not the boolean.
-WORK_LEDGER_STEPS: Final = (RECORD_STEP, COUNTERS_STEP, COMMIT_STEPS["work"])
+WORK_LEDGER_STEPS: Final = (RECORD_STEP, COUNTERS_STEP, JOB_CLOCK_STEP, COMMIT_STEPS["work"])
 
 TOLERATED: Final = "true"
 

@@ -85,7 +85,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 3 | `item-health`, `scores`, `score-index` write segments | 2 | B | PENDING | - | - | - |
 | 4 | `span-rollup` writes segments | 3 | B | PENDING | - | - | - |
 | 17 | `runtime-counters` writes segments | 4 | B | PENDING | - | - | - |
-| 10 | `model_load_ms` and `job_seconds` join `host-fingerprint` | 2 | C | PENDING | - | - | - |
+| 10 | `model_load_ms` and `job_seconds` join `host-fingerprint` | 2 | C | IN-FLIGHT | p33c10 | #887 | - |
 | 12 | Delete the merge machinery | 2, 3, 4, 17 | D | PENDING | - | - | - |
 | 13 | Compaction lag and free swap on the console band | 1, 5, 7, 12 | D | PENDING | - | - | - |
 | 11 | Delete `runtime-counters` and everything that reads it | 7, 10, 17 | E | PENDING | - | - | - |

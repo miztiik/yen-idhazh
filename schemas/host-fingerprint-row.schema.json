@@ -18,6 +18,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added `model_load_ms`, `job_seconds`; `fingerprint`, `measured_at` optional.",
+      "version": "2026-09-18",
+      "why": "A job's clock is only known at its end, so the row arrives in two halves."
+    },
+    {
       "change": "Widened `job` to every workflow job that draws its own machine.",
       "version": "2026-09-17",
       "why": "A run whose slowest job is unmeasured is a run whose cost nobody can attribute."
@@ -129,10 +134,18 @@
       "type": "string"
     },
     "fingerprint": {
-      "description": "A digest over the columns that cannot change inside a job - vendor, family, model, stepping, core counts, cache and flags. Two jobs on the same kind of machine carry the same value, which is what makes a distribution countable without matching model-name strings by hand.",
-      "pattern": "^[0-9a-f]{16}$",
-      "title": "Fingerprint",
-      "type": "string"
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{16}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "A digest over the columns that cannot change inside a job - vendor, family, model, stepping, core counts, cache and flags. Two jobs on the same kind of machine carry the same value, which is what makes a distribution countable without matching model-name strings by hand. Absent on the half a job writes at its end, which carries the clock and repeats nothing the probe already recorded.",
+      "title": "Fingerprint"
     },
     "flags": {
       "default": "",
@@ -144,6 +157,20 @@
       "$ref": "#/$defs/ServerJob",
       "default": "work",
       "description": "The workflow job that drew this machine. Every job that draws its own runner writes one row, because a run is only as fast as its slowest job."
+    },
+    "job_seconds": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The job's own wall clock. The truncation cap reverts on the slowest work job's, and before this cell the only place that number lived was the GitHub jobs API, which drops a job record when the run ages out.",
+      "title": "Job Seconds"
     },
     "l3_cache_bytes": {
       "anyOf": [
@@ -160,9 +187,18 @@
       "title": "L3 Cache Bytes"
     },
     "measured_at": {
-      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
-      "title": "Measured At",
-      "type": "string"
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "When the probe read this machine. Absent on the half a job writes at its end, which measured no machine.",
+      "title": "Measured At"
     },
     "memcpy_gib_s": {
       "anyOf": [
@@ -233,6 +269,20 @@
       "description": "`microcode` revision, which moves under a fixed stepping.",
       "title": "Microcode"
     },
+    "model_load_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Milliseconds the server spent opening the weights before the first item. Once per job, which is this row's grain.",
+      "title": "Model Load Ms"
+    },
     "run_id": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
       "title": "Run Id",
@@ -272,7 +322,7 @@
       "title": "Threads"
     },
     "version": {
-      "default": "2026-09-17",
+      "default": "2026-09-18",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -333,11 +383,9 @@
   "required": [
     "date",
     "run_id",
-    "shard",
-    "fingerprint",
-    "measured_at"
+    "shard"
   ],
   "title": "HostFingerprintRow",
   "type": "object",
-  "version": "2026-09-17"
+  "version": "2026-09-18"
 }
