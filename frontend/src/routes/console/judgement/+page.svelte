@@ -1,26 +1,86 @@
 <script lang="ts">
-	/** What the model made of each article - the route, opened before its panels.
+	/** What the model made of each article - the route, and the first fact on it.
 	 *
-	 * **It is deliberately empty and it is deliberately here.** The strip took a
-	 * fourth and a fifth tab on 2026-09-12, and a tab naming a page nobody can
-	 * reach is worse than three tabs. So the route answers 200, carries its own
-	 * heading and prints a named absence saying what is still missing.
+	 * **The panel and the named absence sit side by side on purpose.** The strip
+	 * took a fourth and a fifth tab on 2026-09-12 and this route opened empty
+	 * behind one of them, so it answered 200 and printed an absence saying what
+	 * was still missing. `Stories the day merged` is the first figure to land
+	 * here, and it does not close that absence: it counts what a day folded
+	 * together, and the absence is about the desk and the lenses the model chose.
+	 * So the figure is drawn and the absence is still named.
 	 *
-	 * It draws no panel and fetches nothing, which is why it has no window
-	 * control: the control governs the panels below it and there are none.
+	 * The control governs the panels below it, which is why the route has one now
+	 * and had none before. Nothing here is fetched: every span the control can
+	 * draw is already in this document, so a preset costs no request.
 	 */
 	import { base } from '$app/paths';
+	import { onMount } from 'svelte';
+	import { windowOfDays } from '$lib/charts/viewport';
+	import WindowControl from '$lib/components/WindowControl.svelte';
+	import MergedStoriesPanel from './MergedStoriesPanel.svelte';
 
 	let { data } = $props();
+
+	/** The same key the other four console routes read, so the operator's choice
+	 * of span follows him between them rather than resetting on every click. */
+	const WINDOW_KEY = 'idhazh:console-window';
+
+	const presets = $derived(data.console.window_presets);
+
+	// svelte-ignore state_referenced_locally
+	let windowDays = $state(data.console.default_window_days);
+	/** False until a browser has run this page. The control cannot do anything
+	 * before that, so it says so rather than pretending. */
+	let ready = $state(false);
+
+	onMount(() => {
+		ready = true;
+		if (typeof localStorage === 'undefined') return;
+		const stored = Number(localStorage.getItem(WINDOW_KEY));
+		if (presets.includes(stored) && stored !== windowDays) show(stored);
+	});
+
+	function show(days: number, remember = true) {
+		windowDays = days;
+		if (remember && typeof localStorage !== 'undefined') {
+			localStorage.setItem(WINDOW_KEY, String(days));
+		}
+	}
+
+	/** Nothing on this route is fetched. Every span it can draw is already
+	 * inlined, so no preset costs a month file and none of them is priced. */
+	function monthsFor(): number {
+		return 0;
+	}
+
+	const viewport = $derived(
+		windowOfDays(
+			data.merges.map((day) => day.date),
+			data.today,
+			windowDays,
+			data.console.today_anchor
+		)
+	);
 </script>
 
 <div data-console-panels="judgement">
-	<!-- One sentence, no chart. Until this route has figures of its own it is
-	     the only number on the page, and it is derived rather than stated. -->
+	<!-- The title, the strip and the band are the shell and live in
+	     `../+layout.svelte`. The control stays here because it governs this
+	     route's panels and nothing above them. -->
+	<WindowControl days={windowDays} {presets} {monthsFor} {ready} onChange={show} />
+
 	<p class="console-carry" data-console-carry="model">
 		{data.carries.judgement}
 		<a class="carry-link" href="{base}/console/model/">Summaries &rarr;</a>
 	</p>
+
+	<MergedStoriesPanel
+		days={data.merges}
+		{viewport}
+		height={data.console.chart_height}
+		width={data.console.chart_width}
+		tickDensity={data.chart.tick_density}
+	/>
 
 	<h2 class="console-h2">What the model made of each article</h2>
 
@@ -31,17 +91,18 @@
 			and ours differ.
 		</p>
 		<p class="empty-note">
-			Nothing is drawn here yet. The model does not record the desk and lenses it
-			chose or how sure it was, and the panels that would draw them are not built.
-			Until both arrive, what the checker doubted is on Summaries.
+			The panel above counts what a day folded together, which is a fact about what
+			shipped. What the model chose is not drawn here yet: it does not record the
+			desk and lenses it picked or how sure it was, and the panels that would draw
+			them are not built. Until both arrive, what the checker doubted is on
+			Summaries.
 		</p>
 	</div>
 </div>
 
 <style>
-	/* The lead carries the weight, because with no figure on the page it is the
-	   one thing the eye lands on (design-system.md). The note under it is the
-	   secondary voice every console panel uses for a caveat. */
+	/* The lead carries the weight of the absence, and the note under it is the
+	   secondary voice every console panel uses for a caveat (design-system.md). */
 	.empty-lead {
 		margin: 0;
 		font-size: var(--text-base);

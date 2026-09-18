@@ -29,17 +29,28 @@ import { expect, test, type Page } from '@playwright/test';
  * tabs on 2026-09-12, is in `console-nav.spec.ts`.
  */
 
-const ROUTES = ['/console/', '/console/model/', '/console/machine/', '/console/voices/'] as const;
-
-/** The route still opened with no panel of its own on 2026-09-12.
+/** Every console route, and the fewest h2 headings it may draw.
  *
- * It is not in `ROUTES` because the rule above counts panel titles and demands
- * more than two - a route with no panels would fail it for being empty rather
- * than for being ungrammatical. The grammar still binds its one heading, which
- * is what this list is for. `/console/voices/` was here until 2026-09-14, when
- * four panels moved onto it and it started drawing three headings.
+ * The floor is per route rather than shared, because the two things it is doing
+ * pull apart. The grammar below binds every title on every route. The floor is
+ * a separate guarantee - that the scan found the route's own panels rather than
+ * an empty frame - and that number is a fact about the route, not about the
+ * rule. A shared floor of three made `/console/judgement/` unassertable when it
+ * drew one heading, and a shared floor of two would quietly stop noticing if
+ * `/console/` lost a panel.
+ *
+ * `/console/judgement/` draws two on 2026-09-17: the `Stories the day merged`
+ * panel, and the heading over the absence that names what the model still does
+ * not record. `/console/voices/` drew one until 2026-09-14, when four panels
+ * moved onto it.
  */
-const EMPTY_ROUTES = ['/console/judgement/'] as const;
+const ROUTES: Record<string, number> = {
+	'/console/': 3,
+	'/console/model/': 3,
+	'/console/machine/': 3,
+	'/console/voices/': 3,
+	'/console/judgement/': 2
+};
 
 /** An opening that turns the rest of the line into a question. */
 const AUXILIARY =
@@ -56,11 +67,14 @@ async function titlesOn(page: Page): Promise<string[]> {
 		);
 }
 
-for (const route of ROUTES) {
+for (const [route, floor] of Object.entries(ROUTES)) {
 	test(`THE ORACLE: every title on ${route} is a noun phrase`, async ({ page }) => {
 		await page.goto(route);
 		const titles = await titlesOn(page);
-		expect(titles.length, `${route} draws no h2 at all, so this asserts nothing`).toBeGreaterThan(2);
+		expect(
+			titles.length,
+			`${route} draws fewer than ${floor} h2, so this asserts less than it should`
+		).toBeGreaterThanOrEqual(floor);
 
 		for (const title of titles) {
 			expect(title.length, `${route} carries an empty title`).toBeGreaterThan(2);
@@ -68,20 +82,6 @@ for (const route of ROUTES) {
 			expect(title, `"${title}" on ${route} opens with an auxiliary verb`).not.toMatch(AUXILIARY);
 			expect(title, `"${title}" on ${route} is a sentence, not a title`).not.toMatch(/\.\s+\S/);
 		}
-	});
-}
-
-for (const route of EMPTY_ROUTES) {
-	test(`the one heading on ${route} is a noun phrase too`, async ({ page }) => {
-		await page.goto(route);
-		const titles = await titlesOn(page);
-		expect(titles, `${route} draws no heading of its own`).toHaveLength(1);
-
-		const [title] = titles;
-		expect(title.length, `${route} carries an empty title`).toBeGreaterThan(2);
-		expect(title, `"${title}" on ${route} is a question`).not.toMatch(/\?\s*$/);
-		expect(title, `"${title}" on ${route} opens with an auxiliary verb`).not.toMatch(AUXILIARY);
-		expect(title, `"${title}" on ${route} is a sentence, not a title`).not.toMatch(/\.\s+\S/);
 	});
 }
 
@@ -95,7 +95,7 @@ test('the three titles the row was opened for are the ones that changed', async 
 		'Is the tail growing',
 		'Did the model change move anything'
 	];
-	for (const route of ROUTES) {
+	for (const route of Object.keys(ROUTES)) {
 		await page.goto(route);
 		const text = await page.locator('[data-surface="operator"]').innerText();
 		for (const title of gone) {
@@ -148,9 +148,8 @@ test('THE ORACLE: the labels moved and the addresses did not', async ({ page }) 
 	).toEqual(['Pipelines', 'Summaries', 'Hardware', 'Judgement', 'Voices']);
 
 	// The ids did not, and neither did what they point at. Typed out in strip
-	// order rather than spliced from `ROUTES` and `EMPTY_ROUTES`: those two lists
-	// are split by how many headings a route draws, which stopped matching strip
-	// order on 2026-09-14 when Voices filled.
+	// order rather than read off `ROUTES`: that map is keyed for the grammar
+	// rule and nothing holds its keys in the order the strip draws them.
 	expect(
 		drawn.map((tab) => tab.id),
 		'a tab id moved with a label, which is an address and not a label'
