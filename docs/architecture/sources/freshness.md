@@ -1,6 +1,6 @@
 # Freshness and Identity
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-18
 
 How often the pipeline runs, what makes an article worth today's slot, what stops the same article being published twice, and how an item keeps its name across the runs of one day. This page owns the decisions the planning step makes before any model loads.
 
@@ -499,7 +499,7 @@ and guessing it is what this refusal is about.
 - [../contracts/schemas.md](../contracts/schemas.md) - the row contracts under `state/`, and the rule that decides when a ledger shards.
 - [../../reference/measurements.md](../../reference/measurements.md) - the ledger sizes, the read cost, and the ceiling measurement quoted above.
 - [health.md](health.md) - the record of what every feed did, and the quarantine that reads it.
-- [../contracts/determinism.md](../contracts/determinism.md) - the fingerprint that makes "this re-run changed nothing" checkable.
+- [../contracts/determinism.md](../contracts/determinism.md) - the recorded input manifest that makes "this re-run changed nothing" checkable.
 - [../publishing/visuals.md](../publishing/visuals.md) - what a picture costs, and the picture-side version of the budget refused above.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the stages, and which of them see the whole day.
 - [../../concepts/config.md](../../concepts/config.md) - where these knobs live and the knob-versus-fact rule.

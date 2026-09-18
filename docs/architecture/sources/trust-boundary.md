@@ -1,6 +1,6 @@
 # The Trust Boundary
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-18
 
 Where a stranger's bytes stop being instructions and become data, what actually enforces that, and the planted attacks that assert it on every change. This is the operational home of Guardrail #11.
 
@@ -65,7 +65,7 @@ It asks two questions, because either alone lets a marker through. **Is the mark
 
 `untrusted_block` is the only way source text is ever handed to a model. It applies sanitization itself rather than trusting a caller to have done it earlier, and sanitization removes the fence markers - so the text inside can never close the fence around it.
 
-The version string, `SANITIZER_VERSION`, is a pipeline-fingerprint input ([../contracts/determinism.md](../contracts/determinism.md)). Changing the transformation without bumping it would leave every prior summary looking current.
+The version string, `SANITIZER_VERSION`, is a recorded pipeline input ([../contracts/determinism.md](../contracts/determinism.md)). Changing the transformation without bumping it would leave every prior summary looking current.
 
 ## The address is untrusted before the text is
 

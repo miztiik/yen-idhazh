@@ -74,9 +74,9 @@ def tagged(article: Article, *, taxonomy: Taxonomy, watchlist: Watchlist) -> Art
     A failed article keeps its empty lists. It has no text, it never reaches a
     reader, and a tag on it would only be a tag on a feed title.
 
-    Deliberately not a fingerprint input. A tag does not change a summary, so
-    adding the vocabulary to the stamp would re-summarize every past item to
-    produce identical words ([docs/architecture/contracts/determinism.md]).
+    Deliberately not a recorded input. A tag does not change a summary, so
+    declaring the vocabulary on `PipelineInputs` would say the pipeline moved
+    when only the labels did ([docs/architecture/contracts/determinism.md]).
     A vocabulary edit therefore re-tags what runs next and leaves the past
     alone, which is the same rule the rest of the config follows.
     """
