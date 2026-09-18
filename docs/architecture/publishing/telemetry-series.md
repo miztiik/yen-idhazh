@@ -43,7 +43,7 @@ The published columns are exactly:
 
 `date, run_id, item_id, vertical, source_id, stage, outcome, code, source_words, summary_words, source_words_before_cap, fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens, cached_tokens, model_calls, label_kind, label_prefill_ms, label_decode_ms, label_input_tokens, label_output_tokens, label_cached_tokens, summary_kind, summary_prefill_ms, summary_decode_ms, summary_input_tokens, summary_output_tokens, summary_cached_tokens, queue_wait_ms, label_ms, summary_ms, visual_plan_ms, visual_plan_ms_is_estimate, faithfulness_ms, model_wait_ms, item_total_ms, stage_gap_ms, visual_plan_tokens_written, label_prefill_tokens_per_s, label_decode_tokens_per_s, summary_prefill_tokens_per_s, summary_decode_tokens_per_s, cpu_model, cpu_busy_pct, load_1m`
 
-Forty-nine of the census's 113. The last seventeen landed 2026-09-15 and are
+Forty-nine of the census's 119. The last seventeen landed 2026-09-15 and are
 [the three questions](#the-seventeen-columns-an-operator-asks-for-since-2026-09-15)
 below. Positions 20 to 31 are the two model calls' own shares of the five cost
 cells before them, and the kind of call each one was. The flat cells are their
@@ -185,7 +185,7 @@ Nothing on the page needs one today.
 
 ### The seventeen columns an operator asks for, since 2026-09-15
 
-The census measures 113 columns an item at a time. This projection published 32
+The census measures 119 columns an item at a time. This projection published 32
 of them, so three questions an operator asks had no answer anywhere a person
 could read.
 
@@ -241,8 +241,8 @@ it is 42 percent of what the widening costs the cap and 7 percent of what it
 costs a fetch. It is the first cell to drop if the cap ever binds, and dropping
 it takes the busiest-day projection from 8.59 to 7.33 percent.
 
-**What was left behind, and why.** Sixty-four census columns still do not cross,
-in six groups.
+**What was left behind, and why.** Seventy census columns still do not cross,
+in seven groups.
 
 | Group | Columns | Why not |
 | --- | --- | --- |
@@ -251,6 +251,7 @@ in six groups.
 | Fetch sub-splits | `fetch_connect_ms`, `fetch_ttfb_ms`, `robots_ms`, `retry_count`, `retry_total_ms`, `http_status` | One level below the question asked. `fetch_ms` names the band; these say which half of it, which is the next question and not this one. |
 | Cache and slot internals | `label_cache_pct`, `summary_cache_pct`, `slot_id`, `kv_tokens_at_start`, `prefix_shared_with_previous` | The two percentages are `cached / input` off cells already published, and the other three are llama-server bookkeeping a page never draws. |
 | Shard and run bookkeeping | `shard`, `job`, `item_index`, `shard_item_count`, `item_started_at`, `item_ended_at`, `cpu_busy_max`, `cpu_busy_min`, `llama_rss_bytes`, `llama_rss_peak_bytes`, `python_rss_bytes`, `cgroup_peak_bytes` | Answered at shard grain on `/console/machine/`, which already publishes them once a shard instead of once an item. |
+| What the machine had | `os_mem_available_bytes`, `os_mem_total_bytes`, `os_mem_cached_bytes`, `os_swap_free_bytes`, `os_swap_total_bytes`, `os_mem_available_min_bytes` | Six memory cells a reader never asks about. The operator console reads them out of `state/` at build time, so publishing them would cost every browser fetch and answer nobody's question. |
 | Configuration provenance | `model_id`, `model_quantisation`, `n_ctx_configured`, `n_parallel`, `n_threads`, `n_batch`, `max_output_tokens`, `label_budget_tokens`, `summary_budget_tokens`, `run_visual_decision`, `temperature`, `truncation_cap_tokens` | Constant within a run. Carrying twelve constants on every row is the largest byte waste on the list, and the run surface already holds them. |
 | Extraction, finish reasons, recovery | `source_chars`, `span_integrity`, `elements_found`, `element_class`, `failed_field`, `failed_rule`, `label_finish_reason`, `summary_finish_reason`, `recovered` | The extraction pass has its own panel, and a finish reason is neither a timing nor a rate. |
 

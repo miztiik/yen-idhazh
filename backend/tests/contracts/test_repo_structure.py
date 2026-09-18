@@ -239,6 +239,12 @@ def test_the_item_health_ledger_columns_are_defined_once() -> None:
         "temperature",
         "failed_field",
         "failed_rule",
+        "os_mem_available_bytes",
+        "os_mem_total_bytes",
+        "os_mem_cached_bytes",
+        "os_swap_free_bytes",
+        "os_swap_total_bytes",
+        "os_mem_available_min_bytes",
     )
 
 

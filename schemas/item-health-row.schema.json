@@ -123,6 +123,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Six os_ columns: what the machine had, not only what a process held.",
+      "version": "2026-09-17T18:00",
+      "why": "An RSS mark counts evictable weight pages, so it cannot answer headroom."
+    },
+    {
       "change": "Retired runner_name; the host record carries it at job grain.",
       "version": "2026-09-17T12:00",
       "why": "Nothing read the item-row copy, and a second copy is a thing that can disagree."
@@ -136,11 +141,6 @@
       "change": "The three slot columns carry the item's first call.",
       "version": "2026-09-16T12:30",
       "why": "All three were declared with no producer; the pinned build reports them."
-    },
-    {
-      "change": "label_ms and summary_ms are a stopwatch; both finish reasons may be null.",
-      "version": "2026-09-16",
-      "why": "A clock that was its two neighbours summed could not see a wait."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -960,6 +960,90 @@
       "description": "Did this item reach the published front page?",
       "title": "On Front Page"
     },
+    "os_mem_available_bytes": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Memory the kernel says a new allocation could have when the item ended, from /proc/meminfo MemAvailable. This is headroom; an RSS mark is not.",
+      "title": "Os Mem Available Bytes"
+    },
+    "os_mem_available_min_bytes": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Lowest MemAvailable seen while the model was working on this item, from /proc/meminfo sampled by that item's own watch. The closest this item took the machine to its limit.",
+      "title": "Os Mem Available Min Bytes"
+    },
+    "os_mem_cached_bytes": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Page cache when the item ended, from /proc/meminfo Cached. Most of the model weights sit here, so a drop is the kernel evicting what the next item has to read again.",
+      "title": "Os Mem Cached Bytes"
+    },
+    "os_mem_total_bytes": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What the machine has, from /proc/meminfo MemTotal. Constant within a job; recorded per item so a row means something on its own.",
+      "title": "Os Mem Total Bytes"
+    },
+    "os_swap_free_bytes": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Swap left when the item ended, from /proc/meminfo SwapFree. A fall here is the machine in trouble before the cgroup kill.",
+      "title": "Os Swap Free Bytes"
+    },
+    "os_swap_total_bytes": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Swap this machine has, from /proc/meminfo SwapTotal. Recorded because a free figure of zero says 'no swap on this box' and 'swap fully consumed' equally, and only the second is an emergency.",
+      "title": "Os Swap Total Bytes"
+    },
     "outcome": {
       "$ref": "#/$defs/ItemOutcome"
     },
@@ -1532,7 +1616,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-17T12:00",
+      "default": "2026-09-17T18:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1623,5 +1707,5 @@
   ],
   "title": "ItemHealthRow",
   "type": "object",
-  "version": "2026-09-17T12:00"
+  "version": "2026-09-17T18:00"
 }

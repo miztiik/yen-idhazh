@@ -1,6 +1,6 @@
 """Does the row a shard recorded outlive the process that recorded it?
 
-The recorder validates 113 cells an item at a time and used to hand them to a
+The recorder validates 119 cells an item at a time and used to hand them to a
 log line and to nothing else. A log line is a CI artifact that expires, so the
 census was rebuilt later out of the article and the summary payloads, which
 between them cannot carry most of those cells. These tests read the file the
@@ -117,7 +117,7 @@ def test_the_file_is_the_row_the_shard_reported_cell_for_cell(
 
     The log line is the only account of a shard that anybody trusted before this
     payload existed. If the two ever disagree, a reader has no way to tell which
-    one measured the item - so the test compares all 113 cells rather than the
+    one measured the item - so the test compares all 119 cells rather than the
     handful a caller happens to use.
     """
     caplog.set_level(logging.INFO, logger="idhazh")
@@ -146,6 +146,12 @@ HOST_COLUMNS: Final = (
     "llama_rss_peak_bytes",
     "python_rss_bytes",
     "cgroup_peak_bytes",
+    "os_mem_available_bytes",
+    "os_mem_total_bytes",
+    "os_mem_cached_bytes",
+    "os_swap_free_bytes",
+    "os_swap_total_bytes",
+    "os_mem_available_min_bytes",
 )
 
 
@@ -153,9 +159,9 @@ def a_machine_that_answers(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
     """A `/proc` and a kernel peak this test writes, so every host cell fills.
 
     Nothing here reads the box the suite runs on. None of these paths exists on a
-    developer machine, so a test that asked the real host would record ten empty
-    cells locally and ten full ones in CI - which is a test that passes or fails
-    on the weather (CLAUDE.md section 13).
+    developer machine, so a test that asked the real host would record every host
+    cell empty locally and every one full in CI - which is a test that passes or
+    fails on the weather (CLAUDE.md section 13).
 
     The processor counters climb between reads, because a busy share is the
     difference of two of them and two identical reads are no window at all.
@@ -165,6 +171,7 @@ def a_machine_that_answers(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
         (table / pid).mkdir(parents=True)
         (table / pid / "comm").write_text(f"{comm}\n", encoding="utf-8")
     ticks = count(start=100, step=200)
+    spent = count(start=0, step=1000)
 
     def built(path: Path) -> str | None:
         if path == host.PROC_STAT:
@@ -172,6 +179,16 @@ def a_machine_that_answers(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
             return f"cpu  {moment} 0 {moment} {moment * 4} 0 0 0 0 0 0\n"
         if path == host.LOADAVG:
             return "1.53 1.20 0.91 2/312 9931\n"
+        if path == host.MEMINFO:
+            # Falling headroom, so the floor cell has something below its last
+            # reading to find. A runner reports these in kilobytes.
+            return (
+                "MemTotal:       16373964 kB\n"
+                f"MemAvailable:    {9_000_000 - next(spent)} kB\n"
+                "Cached:          6100000 kB\n"
+                "SwapTotal:       4194300 kB\n"
+                "SwapFree:        4194300 kB\n"
+            )
         if path == host.CGROUP_PEAK:
             return "15032385536\n"
         if path.name == "status":
@@ -188,7 +205,7 @@ def a_machine_that_answers(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
 def test_every_host_column_reaches_the_row_the_shard_left_behind(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    """Ten columns that were computed and discarded now outlive the process.
+    """Fifteen columns that were computed and discarded now outlive the process.
 
     A throughput number with no machine beside it is not a measurement
     (Guardrail #10), and until the work stage recorded these, whether a slow item

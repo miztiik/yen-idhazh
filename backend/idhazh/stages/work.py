@@ -269,7 +269,7 @@ def _failure_detail(recorder: ItemRecorder, summary: Summary) -> str | None:
 def _slowest(finished: list[ItemHealthRow]) -> dict[str, Any] | None:
     """The item that cost the shard most, and enough to find it again.
 
-    Four cells and not the row: a shard record carrying 113 columns of one item
+    Four cells and not the row: a shard record carrying 119 columns of one item
     buries the totals beside it, and the item's own completion record is already
     in the log for anyone who wants the rest.
 
