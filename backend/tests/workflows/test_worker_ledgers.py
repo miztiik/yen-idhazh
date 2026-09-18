@@ -266,29 +266,23 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
     }
 
 
-def test_every_path_the_work_shard_stages_is_union_merged() -> None:
-    """Eight shards append to one branch, so every shared file needs the union driver.
+def test_every_path_the_work_shard_stages_carries_the_driver_it_asked_for() -> None:
+    """Eight shards push to one branch, so what settles a shared file has to be right.
 
     Asked of git rather than of a pattern matcher written here: `.gitattributes`
     is the file that decides, and a second implementation of its globbing could
     agree with this test and disagree with the merge.
 
-    Two staged paths are deliberately outside the driver, and each is asserted to
-    be outside in its own words rather than left unmentioned. A trace file is
-    named for one shard of one run and inherits nothing, so git answers
-    `unspecified`. A segment is named for one attempt at one shard of one run and
-    is refused the driver by name, so git answers `unset` - the difference
-    matters, because `state/**/*.csv` would otherwise reach it and a union of two
-    segments stacks two copies of a file meant to have exactly one writer.
+    No staged path is union-merged any more, and that is the property rather
+    than an omission. A shard writes no ledger head: the last one moved to a
+    segment on 2026-09-18. Each remaining path is asserted to be outside the
+    driver in its own words. A trace file is named for one shard of one run and
+    inherits nothing, so git answers `unspecified`. A segment is named for one
+    attempt at one shard of one run and is refused the driver by name, so git
+    answers `unset` - the difference matters, because `state/**/*.csv` would
+    otherwise reach it and a union of two segments stacks two copies of a file
+    meant to have exactly one writer.
     """
-    # The file each staged path resolves to. The counters file is a single file
-    # at the top of the store, and it is the only head this shard still writes.
-    # The three item-grain heads left this set on 2026-09-18 and the span fold
-    # left with them - the shard writes segments now, so it no longer stages a
-    # path it does not write.
-    written = {
-        "state/runtime-counters.csv": "state/runtime-counters.csv",
-    }
     inherits_nothing = {
         "state/traces": telemetry.committed_trace_relpath(f"{SUBSTITUTED_DATE}-1", 1),
     }
@@ -301,9 +295,7 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
             shard=1,
         ),
     }
-    assert set(written) | set(inherits_nothing) | set(refuses_the_driver) == set(
-        COMMIT_STAGED_PATHS["work"]
-    )
+    assert set(inherits_nothing) | set(refuses_the_driver) == set(COMMIT_STAGED_PATHS["work"])
 
     answered = subprocess.run(
         [
@@ -311,7 +303,6 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
             "check-attr",
             "merge",
             "--",
-            *written.values(),
             *inherits_nothing.values(),
             *refuses_the_driver.values(),
         ],
@@ -322,7 +313,6 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
     ).stdout.splitlines()
 
     assert answered == [
-        *(f"{path}: merge: union" for path in written.values()),
         *(f"{path}: merge: unspecified" for path in inherits_nothing.values()),
         *(f"{path}: merge: unset" for path in refuses_the_driver.values()),
     ]

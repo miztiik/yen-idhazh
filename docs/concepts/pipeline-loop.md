@@ -166,6 +166,11 @@ all record the same day there, which is the same race with more writers in it,
 and the item census is the one where a repeat is visible to a reader: the count
 of rows in a day feeds a feed's share of the day and the day's own metrics.
 
+`state/span-rollup/` and `state/runtime-counters.csv` joined them that day. Both
+are written once a job rather than once an item, and both had every work shard
+opening one head. The counters file is the one flat head in the store: its rows
+carry a date and the compaction reads it, but every date names the same file.
+
 The compaction is the one writer here that rewrites a head rather than appending
 to it, and the segment store is what makes that safe: a rewrite is a race only
 when two jobs can do it, and only the compaction can.

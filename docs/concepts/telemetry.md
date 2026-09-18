@@ -359,6 +359,14 @@ thing to say: `ITEM_HEALTH_KEY` carries no `job` cell, so two writers describing
 one item are one record to the fold, and `ledger.ITEM_HEALTH_RULE` keeps the row
 that names a job over the row that does not.
 
+`state/runtime-counters.csv` joined them the same day, and it is the odd one:
+its head stays a single flat file rather than moving to a day tree. Every
+model-server job scrapes its own server and files the numbers, so the path had
+as many writers as the day file above it, and a segment closes that. A flat head
+is not a collider once the compaction is the only thing that writes it, and this
+ledger is on its way out anyway - the columns it carries are moving onto the two
+rows above - so a day tree here would be work thrown away.
+
 **Why a third grain rather than more columns on the two rows above.** These cells
 are fixed for the whole job. Repeating twenty of them on every item row would
 store the same answer a hundred times a day and say nothing new; the job grain

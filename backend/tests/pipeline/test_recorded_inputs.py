@@ -9,7 +9,7 @@ import pytest
 from conftest import CONFIG_DIR, read_text
 from pytest import MonkeyPatch
 
-from idhazh import config, ledger, telemetry
+from idhazh import config, ledger, run_context, telemetry
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
@@ -159,7 +159,10 @@ def test_a_traced_work_shard_writes_a_reconciling_span_rollup(
         common.STATE_ROOT,
         ledger.SegmentLedger.SPAN_ROLLUP,
         run_id=run_plan.run_id,
-        attempt=1,
+        # Asked for rather than assumed: the stage names its file from
+        # GITHUB_RUN_ATTEMPT, which is 2 on a re-run of a CI job, so a hardcoded
+        # 1 here goes red on a button nobody pressed in this repository.
+        attempt=run_context.run_attempt(),
         job=ServerJob.WORK,
         shard=0,
     )

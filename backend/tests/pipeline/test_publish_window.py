@@ -662,6 +662,10 @@ def test_a_shard_commits_what_its_model_server_counted(
     existed those counters reached only a job log with two days of retention -
     so the read rate two published surfaces quote could be reported and never
     reconciled (Guardrail #10).
+
+    The stage writes this shard's own segment and the fold is what puts it in
+    the head, so both run here: what a reader opens is the head, and a stage
+    that filled a segment nothing drained would still have lost the row.
     """
     run_plan = plan()
     isolate_ledgers(tmp_path, monkeypatch)
@@ -670,6 +674,7 @@ def test_a_shard_commits_what_its_model_server_counted(
     row = stage_counters(
         run_plan, state_root=common.STATE_ROOT, metrics_path=capture, shard=0, shards=1
     )
+    stage_compact(tmp_path / "state")
 
     assert row.prompt_tokens_total == 23411
     assert row.prompt_seconds_total == 2128.08
@@ -695,6 +700,7 @@ def test_a_shard_whose_server_died_still_files_a_row(
     row = stage_counters(
         run_plan, state_root=common.STATE_ROOT, metrics_path=tmp_path / "never-written.prom"
     )
+    stage_compact(tmp_path / "state")
 
     assert row.prompt_tokens_total is None
     assert row.run_id == run_plan.run_id

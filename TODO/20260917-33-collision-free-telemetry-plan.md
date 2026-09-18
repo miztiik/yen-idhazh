@@ -84,7 +84,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 2 | `host-fingerprint` writes segments | 1 | B | DONE | p33b2 | #866 | - |
 | 3 | `item-health`, `scores`, `score-index` write segments | 2 | B | IN-FLIGHT | p33b3 | - | - |
 | 4 | `span-rollup` writes segments | 3 | B | IN-FLIGHT | p33b4 | - | - |
-| 17 | `runtime-counters` writes segments | 4 | B | PENDING | - | - | - |
+| 17 | `runtime-counters` writes segments | 4 | B | IN-FLIGHT | p33b17 | - | - |
 | 10 | `model_load_ms` and `job_seconds` join `host-fingerprint` | 2 | C | IN-FLIGHT | p33c10 | #887 | - |
 | 12 | Delete the merge machinery | 2, 3, 4, 17 | D | PENDING | - | - | - |
 | 13 | Compaction lag and free swap on the console band | 1, 5, 7, 12 | D | PENDING | - | - | - |
@@ -512,7 +512,7 @@ No technical debt. Every artifact below is deleted by the row named, in the same
 | D3 | `schemas/runtime-counters-row.schema.json` | #11 | - |
 | D4 | The `counters` CLI stage and its parser block in `backend/idhazh/cli.py` | #11 | the per-item sample reader |
 | D5 | `host.stage_counters` and every helper only it calls | #11 | - |
-| D6 | `ledger.append_runtime_counters`, `ledger.load_runtime_counters`, `RUNTIME_COUNTERS_KEY` | #11 | - |
+| D6 | `ledger.load_runtime_counters`, `ledger.recorded_runtime_counters`, `RUNTIME_COUNTERS_KEY`, and the `RUNTIME_COUNTERS` member of `SegmentLedger` with its head-shape entry | #11 | - |
 | D7 | `backend/idhazh/telemetry/publish/machine.py` whole-file read, `months_on_file`, and the module docstring accepting it | #11 | **a read scoped by `series.months_to_write` over a 426-day cover** of `item-health` and `host-fingerprint`. The module's stated exception - its source is one unsharded file, so there is no month boundary to inherit - dies with the file, and the publisher becomes an ordinary month-scoped producer |
 | D8 | `frontend/src/lib/server/runtime-counters.ts` | #11 | a reader over the two surviving ledgers, keeping `server_prompt_tokens` and `server_prompt_seconds` as the second clock |
 | D9 | Every test naming `runtime_counters`, `RuntimeCountersRow`, the `counters` stage, **or the frontend spelling `RunCounters`** | #11 | tests for the new columns. **The underscore spelling alone misses six browser specs and `frontend/tests/support/reduction-input.ts`** |
