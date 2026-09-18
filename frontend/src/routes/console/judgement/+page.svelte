@@ -19,6 +19,8 @@
 	import WindowControl from '$lib/components/WindowControl.svelte';
 	import MergeLinePlot from './MergeLinePlot.svelte';
 	import MergedStoriesPanel from './MergedStoriesPanel.svelte';
+	import JudgeAgreement from './JudgeAgreement.svelte';
+	import RecordGates from './RecordGates.svelte';
 
 	let { data } = $props();
 
@@ -92,6 +94,31 @@
 		tickDensity={data.chart.tick_density}
 		readoutMaxShare={data.chart.readout_max_share}
 		configuredLine={data.configuredLine}
+	/>
+
+	<JudgeAgreement
+		days={data.judge}
+		limits={{
+			disagreementMax: data.similarity.disagreement_max,
+			unclearMax: data.similarity.unclear_max
+		}}
+		{viewport}
+		height={data.console.chart_height}
+		width={data.console.chart_width}
+		tickDensity={data.chart.tick_density}
+		readoutMaxShare={data.chart.readout_max_share}
+		attemptsFloor={data.console.min_attempts_for_rate}
+	/>
+
+	<RecordGates
+		days={data.judge}
+		dates={data.span}
+		gates={{
+			minimumNegatives: data.similarity.minimum_negatives,
+			minimumDays: data.similarity.minimum_days,
+			minimumAboveLine: data.similarity.minimum_above_line
+		}}
+		{viewport}
 	/>
 
 	<h2 class="console-h2">What the model made of each article</h2>
