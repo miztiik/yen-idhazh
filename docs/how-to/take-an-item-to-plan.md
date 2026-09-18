@@ -72,7 +72,7 @@ For the chosen way, name:
 
 1. Order the work so a reader lands before its writer, and a contract lands before the code depending on it.
 2. Hand steps 1 to 3 to [author-a-plan.md](author-a-plan.md) as the brief its rows are sized against. The [prepare-plan](../../.claude/skills/prepare-plan/SKILL.md) skill invokes it.
-3. Append the plan-doc path to the item's line on the list, so the list points at the work. **A path never means done - only a tick does, and only a person ticks.** An item can carry a plan-doc and still be open.
+3. Append the plan-doc path to the item's line on the list, so the list points at the work. **An item is open until a person ticks it.** A path never implies a tick, so an item can carry a plan-doc and still be open.
 
 ## The test this page has to pass
 
