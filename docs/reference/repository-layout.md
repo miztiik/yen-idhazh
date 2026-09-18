@@ -1,6 +1,6 @@
 # Repository Layout
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-18
 
 Every top-level directory, what it holds, who writes it, and whether a reader
 ever sees it. Read this before adding a directory, or when deciding where a new
@@ -37,7 +37,7 @@ question, and the four answers do not mix.
 | `.github/scripts/` | A shell step two or more workflow jobs run | a person | no |
 | `.github/agents/` | The seven persona advisors (`CLAUDE.md` section 14) | a person | no |
 | `.claude/skills/` | Claude Code skill wrappers that point at `docs/`, so one procedure is not written twice | a person | no |
-| `state/` | The append-only ledgers one run leaves for the next. Six of them partition - `state/seen/`, `state/feed-health/`, `state/item-health/`, `state/published/` and `state/counterfactual-scores/` by day, `state/scores/` by month. `state/segments/` is the one child that is not a ledger: rows in transit, one file per writer, deleted by the compaction that folds them into a head | a run, in CI | **never** |
+| `state/` | The append-only ledgers one run leaves for the next. Eight of them partition - `state/seen/`, `state/feed-health/`, `state/item-health/`, `state/published/`, `state/counterfactual-scores/`, `state/story-similarity/scored-pairs/` and `state/story-similarity/fitted-thresholds/` by day, `state/scores/` by month. `state/story-similarity/` is the one child that is a folder of ledgers rather than a ledger, so the whole adaptive merge line is one prefix for a commit step to stage. `state/segments/` is the one child that is not a ledger: rows in transit, one file per writer, deleted by the compaction that folds them into a head | a run, in CI | **never** |
 | `frontend/` | The published site, plus the digest payloads under `public/` | a person, and the pipeline under `public/` | yes |
 | `tests/` | Cross-cutting fixtures: captured pages, golden summaries, injection canaries | a person | no |
 | `notebooks/` | Committed notebooks a person runs off this machine, on hardware the runner does not have. Instructions only - never weights, never a token, and nothing in CI runs them (Guardrail #2) | a person | no |
@@ -54,6 +54,7 @@ These exist on a developer machine and in CI. None is ever committed.
 | `backend/bin/` | llama.cpp binaries, ~45 MB. Downloaded, not authored |
 | `backend/var/` | Run intermediates and caches. The committed record of a run is the digest plus the `state/` rows, never the workings |
 | `backend/var/evidence/` | Inside `backend/var/`, and named here because a person has to find it. One file per scored item, holding the article text and the summary a human labeller must read. Article bodies are not ours to republish (`CLAUDE.md` section 0a), so this one is uncommittable on principle rather than on size |
+| `backend/var/judge/` | Inside `backend/var/`, and named here for the same reason. One `draw.csv` a day: the borderline pairs `idhazh judge-draw` selected, with every verdict column empty. A judging leg rewrites the rows it owns, and `state/**/*.csv` merges by union - so committing a drawn row would stack it beside its judged self with nothing to say which is current. A row reaches `state/story-similarity/scored-pairs/` once, already judged, and is never edited afterwards |
 | `frontend/build/` | The built bundle. Pages rebuilds it from source on every deploy |
 | `frontend/static/digest/` | Staged from `frontend/public/digest/` at build time. A copy is not a source |
 
@@ -73,7 +74,7 @@ of the other candidates fails on one of those three:
 | `config/` | Human-edited. A machine appending to a file a person owns invites a merge conflict every run |
 | `backend/` | Source. A ledger is not code, and a Python package is not a database |
 
-**One file under `state/` is written by a person, not a machine.**
+**Two files under `state/` are written by a person, not a machine.**
 `state/labels.csv` holds human faithfulness labels, appended one keystroke at a
 time by `backend/utilities/label_queue.py`. It sits with the other ledgers
 because it is read the same way - joined to `state/scores.csv` on
@@ -81,6 +82,13 @@ because it is read the same way - joined to `state/scores.csv` on
 one exception to "written by a machine", and it is deliberate: the point of the
 file is that no machine wrote it (`CLAUDE.md` section 0a). See
 [../concepts/evaluation.md](../concepts/evaluation.md).
+
+`state/story-similarity/holdout-pairs.csv` is the second, and it is the same
+exception for the same reason: a person reads two articles and marks them one
+story or two, and that mark is the fixed floor the fitted merge line has to stay
+above. It is the one `state/` CSV that is `merge=text` rather than `merge=union`,
+because two people editing it are disagreeing about the same rows rather than
+appending independent ones.
 
 **The text those labels judge lives under `backend/var/evidence/`, not under
 `state/`.** A label is our own words about an item and is ours to commit. The

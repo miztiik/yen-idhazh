@@ -20,7 +20,7 @@ It was determinism *given identical logits*, which was always weaker than it sou
 | The batching | `n_ctx`, `n_batch`, `n_ubatch` and thread count all change how partial sums are accumulated. |
 | The input | A wider truncation cap, a changed extractor or sanitizer, or a publisher quietly rewriting an article at the same URL. |
 
-**Every committed entry pins `temperature: 0.2` since 2026-09-17.** Owner ruling: determinism is not a property a summarizer needs, and Qwen's own model card says of thinking mode "DO NOT use greedy decoding, as it can lead to performance degradation and endless repetitions" - so the setting this page was named after was buying a guarantee nobody needed at a cost the model's authors warn about.
+**Every committed entry pins `temperature: 0.2`, determinism is not a property a summarizer needs.
 
 **`seed` is what repeatability rests on now.** It was dead code at temperature 0 and it was enumerated anyway, so a move off greedy could not change an output in silence. This is that move, and the field was ready for it: same inputs and same seed is the same reply, same inputs and a different seed is a different one. It is still never the *determinism* control, because there is no determinism to control - it is the reproducibility control, which is a different and honest claim.
 

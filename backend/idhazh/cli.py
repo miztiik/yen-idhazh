@@ -63,6 +63,7 @@ from idhazh.fingerprint import (
     file_digest,
     runtime_build,
 )
+from idhazh.llm.server import DEFAULT_ENDPOINT
 from idhazh.stages import (
     assemble as assemble_stage,
 )
@@ -73,6 +74,9 @@ from idhazh.stages import (
     decide,
     dedupe_ledgers,
     harvest,
+    judge_draw,
+    judge_fold,
+    judge_shard,
     prune_stamp,
     prune_state,
     qualify,
@@ -129,6 +133,9 @@ STAGES: Final[tuple[str, ...]] = (
     "backfill-vectors",
     "site-weight",
     "validate-days",
+    "judge-draw",
+    "judge-fold",
+    "judge-shard",
     # Listed so `--help` names every verb, and never parsed: `main` hands the
     # line to the telemetry package before this parser is built.
     telemetry_cli.VERB,
@@ -461,6 +468,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="The training window `harvest` rolls. Never the reference set.",
     )
     parser.add_argument(
+        "--out-dir",
+        type=Path,
+        default=common.JUDGE_ROOT,
+        help=(
+            "Where `judge-draw` leaves the day's draw, one directory per date. It is "
+            "uploaded as an artifact and never committed: the legs rewrite the rows "
+            "they judge, and a committed rewrite would stack two versions of one row."
+        ),
+    )
+    parser.add_argument(
         "--force",
         action="store_true",
         help="Harvest even when finetune.harvest_every_days says it is not due yet.",
@@ -489,6 +506,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             "costs more every month. `dedupe-ledgers` settles them all rather than the "
             "run's; `rebuild-score-index` rewrites every month's index rather than the "
             "months named."
+        ),
+    )
+    parser.add_argument(
+        "--base-url",
+        default=DEFAULT_ENDPOINT,
+        help=(
+            "The llama-server one judging leg talks to. Every route it needs is derived "
+            "from this one address, so a leg cannot ask one server for a tokenisation "
+            "and another for a verdict."
         ),
     )
     args = parser.parse_args(argv)
@@ -548,9 +574,47 @@ def main(argv: Sequence[str] | None = None) -> int:
         state_dir = common.STATE_ROOT if args.state_root is None else args.state_root
         return validate_days.stage_validate_days(args.digest_root, args.day, state_dir=state_dir)
 
+    if args.stage == "judge-draw":
+        # Above the fetcher because it reads two committed files and scores what
+        # they already carry. It calls no model either: the draw says which pairs
+        # are worth a model's time, and a later step is what spends it.
+        judge_draw.stage_judge_draw(
+            args.date or _today(),
+            settings=settings,
+            digest_root=args.digest_root,
+            out_dir=args.out_dir,
+        )
+        return 0
+
+    if args.stage == "judge-fold":
+        # Beside its siblings: it reads the legs' files and one committed record,
+        # calls no model, and opens no socket.
+        judge_fold.stage_judge_fold(
+            args.date or _today(),
+            settings=settings,
+            state_dir=args.state_root,
+        )
+        return 0
+
     if args.stage == "prune-stamp":
         # Above the fetcher for the same reason: it rewrites one committed field.
         return prune_stamp.stage_prune_stamp(corpus_dir=args.corpus_dir, date=args.date or _today())
+
+    if args.stage == "judge-shard":
+        # Above the fetcher because a judging leg reads the committed days and
+        # posts to loopback. Starting a fetcher here would read every host's
+        # robots.txt to answer a question about two summaries already on disk.
+        judged_on = args.date or _today()
+        judge_shard.stage_judge_shard(
+            judged_on,
+            shard=args.shard,
+            shards=args.shards,
+            settings=settings,
+            digest_root=common.PUBLIC_ROOT,
+            run_dir=common.JUDGE_ROOT / judged_on,
+            base_url=args.base_url,
+        )
+        return 0
 
     if args.stage == "compact":
         # Above the fetcher because it reads and rewrites committed files only.

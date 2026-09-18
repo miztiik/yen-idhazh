@@ -11,7 +11,8 @@ const FILES: Record<Exclude<FrontendGroup, 'console'>, readonly string[]> = {
 	logic: [
 		'appearance-config', 'archive-scope', 'asset-base', 'day-list', 'day-metrics',
 		'extraction-trend', 'extraction-window', 'frame',
-		'glance-and-rank', 'item-health-day', 'model-cards', 'one-pass-reductions', 'preview-port',
+		'glance-and-rank', 'item-health-day', 'merge-line', 'model-cards', 'one-pass-reductions',
+		'preview-port',
 		'telemetry-header', 'telemetry-hold', 'throughput-window', 'time-split', 'vocabulary',
 		'weights'
 	],
