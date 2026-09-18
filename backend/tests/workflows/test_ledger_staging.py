@@ -40,6 +40,8 @@ from typing import Any, Final
 import pytest
 
 from idhazh import cli, ledger
+from idhazh.contracts.runtime_counters import ServerJob
+from idhazh.stages import compact as compact_stage
 from idhazh.telemetry import sinks, traces
 
 from ._harness import (
@@ -140,11 +142,24 @@ def _helper_arguments(date: str) -> dict[str, object]:
     """What to pass a path helper, named by the parameter that asks for it.
 
     A store filed by something other than a date says so in its own signature - the
-    trace tree files by run and by shard, and an archived record files by the stamp
-    its counts were taken under - so the value follows the parameter's name rather
-    than the helper's.
+    trace tree files by run and by shard, a segment by run, attempt, job and shard,
+    and an archived record files by the stamp its counts were taken under - so the
+    value follows the parameter's name rather than the helper's.
+
+    `ledger` picks one member of the declared set and any member would do: what the
+    staging check asks is whether the job that writes a segment stages the store, and
+    `state/segments` covers every ledger inside it.
     """
-    return {"date": date, "month": date, "run_id": f"{date}-1", "shard": 0, "stamp": date}
+    return {
+        "date": date,
+        "month": date,
+        "run_id": f"{date}-1",
+        "shard": 0,
+        "stamp": date,
+        "ledger": ledger.SegmentLedger.HOST_FINGERPRINT,
+        "attempt": 1,
+        "job": ServerJob.WORK,
+    }
 
 
 def _relpath_for(name: str, helper: Callable[..., Any], date: str) -> str:
@@ -377,9 +392,16 @@ def _verb_stores() -> dict[str, dict[str, str]]:
     """
     stores = _writer_stores()
     sunk = _sink_stores()
+    compacted = _compacted_stores()
     charged: dict[str, dict[str, str]] = {}
     for verb, reachable in _reachable_modules().items():
         for module in sorted(reachable, key=lambda entered: entered.__name__):
+            if module is compact_stage:
+                for store, which in sorted(compacted.items()):
+                    charged.setdefault(verb, {})[store] = (
+                        f"`python -m idhazh {verb}` reaches {module.__name__}, "
+                        f"which folds every waiting {which} segment into this head"
+                    )
             for writer in sorted(_writers_called_by(module)):
                 assert writer in stores, (
                     f"{module.__name__} calls ledger.{writer}, which idhazh.ledger does "
@@ -422,6 +444,29 @@ def _covers(staged: str, store: str) -> bool:
     return store == staged or store.startswith(f"{staged}/")
 
 
+def _compacted_stores() -> dict[str, str]:
+    """Every head the compaction fills, and the ledger whose segments drain into it.
+
+    The compaction writes a head generically - one function, one declared head table,
+    and no `append_*` name for `_writer_stores` to find - so it is read out of
+    `SegmentLedger` rather than named here. That is what keeps a ledger joining the
+    set from leaving its head charged to no job, which is the loss this whole file
+    exists to catch.
+    """
+    stores = set(_stores().values())
+    found: dict[str, str] = {}
+    for which in ledger.SegmentLedger:
+        head = ledger.segment_head(Path(ledger.STATE_DIRNAME), which, SUBSTITUTED_DATE).relpath
+        store = next((name for name in stores if _covers(name, head)), None)
+        assert store is not None, (
+            f"{which.value} segments compact into {head}, and no store module exports a "
+            "path helper that covers it. Add one beside the head's own path helper, so "
+            "this test can say which job has to stage what the compaction writes."
+        )
+        found[store] = which.value
+    return found
+
+
 def test_every_store_is_filled_by_a_writer_this_test_can_follow() -> None:
     """The derivation must not answer an empty question.
 
@@ -432,6 +477,7 @@ def test_every_store_is_filled_by_a_writer_this_test_can_follow() -> None:
     """
     stores = _stores()
     written = set(_writer_stores().values()) | set(_sink_stores().values())
+    written |= set(_compacted_stores())
 
     assert stores, "the store modules export no *_relpath helper, so nothing here is checked"
     assert SINK_CLASSES, (
@@ -552,9 +598,15 @@ def _rewritten_stores() -> set[str]:
     post-merge key is still right for it: the file is `merge=union`, so two runs'
     folds stack in the merged copy and the settler is the only thing that can take
     one of them back out again. `state/chrome.csv` is the case (`ledger.write_chrome`).
+
+    A head the compaction fills is the same case one step further out. It settles its
+    rows by key as it folds them (`stages.compact._settle`) rather than as it writes,
+    and it has no `append_*`/`write_*` name at all - so it is added here from the
+    declared head table. `state/host-fingerprint` is the case.
     """
     stores = _writer_stores()
     replaced = {store for name, store in stores.items() if name.startswith("write_")}
+    replaced |= set(_compacted_stores())
     appended = {store for name, store in stores.items() if name.startswith("append_")}
     return replaced - appended
 

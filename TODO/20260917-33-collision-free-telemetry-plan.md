@@ -81,7 +81,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 5 | Machine page stops lying about a day with no rows | - | A | IN-FLIGHT | p33r5 | - | - |
 | 6 | One concurrency group for `digest`, `validate`, `measure` | - | A | PENDING | - | - | - |
 | 7 | OS memory and load, per item | - | A | IN-FLIGHT | p33r7b | - | - |
-| 2 | `host-fingerprint` writes segments | 1 | B | PENDING | - | - | - |
+| 2 | `host-fingerprint` writes segments | 1 | B | IN-FLIGHT | p33b2 | - | - |
 | 3 | `item-health`, `scores`, `score-index` write segments | 2 | B | PENDING | - | - | - |
 | 4 | `span-rollup` writes segments | 3 | B | PENDING | - | - | - |
 | 17 | `runtime-counters` writes segments | 4 | B | PENDING | - | - | - |

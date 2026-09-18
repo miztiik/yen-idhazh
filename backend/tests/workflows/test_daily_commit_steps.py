@@ -18,6 +18,7 @@ from ._harness import (
     COMMIT_STEPS,
     COMPACT_STEP,
     DROP_ENTRY_POINT,
+    FINGERPRINT_STEP,
     SCRIPTS_DIR,
     SETTLE_COMMAND,
     SETTLE_COVER_FLAG,
@@ -205,10 +206,18 @@ def test_the_catch_up_compaction_runs_before_the_plan_job_commits() -> None:
     It is also why the job stages `state` whole: the compaction writes into
     whichever head a waiting segment's own rows name, which no hand-written list
     can know.
+
+    And it runs before this job's OWN probe, which is what keeps a head down to
+    one writer a run. The probe writes a segment; a fold placed after it would
+    find that segment, write the day file here, and leave `assemble` writing the
+    same file again. Nothing would be lost - the fold is idempotent - but two
+    head writers in one run is the shape this design removes, and the third
+    arrives by looking like the second.
     """
     workflow = _load_workflows()["digest.yml"]
     names = [step.get("name") for step in _steps(workflow, "plan")]
     assert names.index(COMPACT_STEP) < names.index(COMMIT_STEPS["plan"])
+    assert names.index(COMPACT_STEP) < names.index(FINGERPRINT_STEP)
     assert COMMIT_STAGED_PATHS["plan"] == ["state"]
 
 

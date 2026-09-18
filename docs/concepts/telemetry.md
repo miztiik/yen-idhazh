@@ -339,6 +339,14 @@ about its own silicon plus a memory-bandwidth probe. A bench dispatch writes the
 same shape into `state/pipeline-tests/host-fingerprint/`, apart from the rows the
 console reads.
 
+**No job opens that day file.** Ten jobs of one run each draw a machine and each
+record it, so each writes its own
+`state/segments/host-fingerprint/<run>-<attempt>-<job>-<shard>.csv` and the
+compaction in `assemble` folds them into the day. Ten runners appending to one
+path is not a thing a merge driver can settle: on 2026-09-16 the pushes raced and
+the day came back header-only. What a reader opens is unchanged, because a
+segment is the head's own rows in transit and carries no shape of its own.
+
 **Why a third grain rather than more columns on the two rows above.** These cells
 are fixed for the whole job. Repeating twenty of them on every item row would
 store the same answer a hundred times a day and say nothing new; the job grain

@@ -686,6 +686,25 @@ jobs:
             --shard 0 \
             --job runtime
 
+      # The probe writes a segment rather than the day file, so this is what
+      # turns it into the row the step below commits. It runs here, straight
+      # after the probe and not beside the commit: the sweep can fail, the commit
+      # step is `if: always()` and this one is not, so a compaction further down
+      # would be skipped on exactly the dispatch whose machine record is worth
+      # having.
+      #
+      # `--config` is what points it at `state/pipeline-tests/`. The same flag
+      # moved the probe's whole state root there, so the segment it drains is the
+      # one the probe wrote and no production head is opened.
+      #
+      # Two dispatches of this workflow can run at once - it is the one state
+      # writer with no concurrency group at all - so the segment is what keeps
+      # them off one path. The heads they fold into are still two rewrites of one
+      # file, and `merge=union` plus the run-id key is what settles that until
+      # the segment store covers every ledger.
+      - name: Fold the machine record into its day
+        run: python -m idhazh compact --config backend/var/candidate-config
+
       - name: Measure runtime candidate
         env:
           RUNTIME_CANDIDATE: ${{ inputs.runtime_candidate }}

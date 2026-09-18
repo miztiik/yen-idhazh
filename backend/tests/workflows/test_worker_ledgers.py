@@ -10,6 +10,7 @@ import pytest
 from conftest import REPO_ROOT, read_text
 
 from idhazh import ledger, telemetry
+from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.evals import writer as score_writer
 
 from ._harness import (
@@ -244,16 +245,17 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
     is the file that decides, and a second implementation of its globbing could
     agree with this test and disagree with the merge.
 
-    `state/traces` is the one staged path deliberately outside the driver, so it
-    is asserted to be outside rather than left unmentioned. A trace file is named
-    for one shard of one run, so two shards never write one path and there is
-    nothing for a merge driver to settle. Unioning them would also be wrong: the
-    file is JSON lines, and a union of two different runs' spans is a tree that
-    reconciles against neither shard's clock.
+    Two staged paths are deliberately outside the driver, and each is asserted to
+    be outside in its own words rather than left unmentioned. A trace file is
+    named for one shard of one run and inherits nothing, so git answers
+    `unspecified`. A segment is named for one attempt at one shard of one run and
+    is refused the driver by name, so git answers `unset` - the difference
+    matters, because `state/**/*.csv` would otherwise reach it and a union of two
+    segments stacks two copies of a file meant to have exactly one writer.
     """
-    # The file each staged path resolves to. All four directories file by day
-    # now, so the union driver has to reach a nested path - `state/**/*.csv` is
-    # the attribute line that does it. The span rollup files by month, and the
+    # The file each staged path resolves to. All three ledger directories file by
+    # day now, so the union driver has to reach a nested path - `state/**/*.csv`
+    # is the attribute line that does it. The span rollup files by month, and the
     # same attribute line covers it.
     written = {
         "state/item-health": ledger.item_health_relpath(SUBSTITUTED_DATE),
@@ -261,15 +263,33 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
         "state/score-index": score_writer.index_relpath(SUBSTITUTED_DATE),
         "state/runtime-counters.csv": "state/runtime-counters.csv",
         "state/span-rollup": ledger.span_rollup_relpath(SUBSTITUTED_DATE[:7]),
-        "state/host-fingerprint": ledger.host_fingerprint_relpath(SUBSTITUTED_DATE),
     }
-    per_shard = {
+    inherits_nothing = {
         "state/traces": telemetry.committed_trace_relpath(f"{SUBSTITUTED_DATE}-1", 1),
     }
-    assert set(written) | set(per_shard) == set(COMMIT_STAGED_PATHS["work"])
+    refuses_the_driver = {
+        "state/segments": ledger.segment_relpath(
+            ledger.SegmentLedger.HOST_FINGERPRINT,
+            run_id=f"{SUBSTITUTED_DATE}-1",
+            attempt=1,
+            job=ServerJob.WORK,
+            shard=1,
+        ),
+    }
+    assert set(written) | set(inherits_nothing) | set(refuses_the_driver) == set(
+        COMMIT_STAGED_PATHS["work"]
+    )
 
     answered = subprocess.run(
-        ["git", "check-attr", "merge", "--", *written.values(), *per_shard.values()],
+        [
+            "git",
+            "check-attr",
+            "merge",
+            "--",
+            *written.values(),
+            *inherits_nothing.values(),
+            *refuses_the_driver.values(),
+        ],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -278,7 +298,8 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
 
     assert answered == [
         *(f"{path}: merge: union" for path in written.values()),
-        *(f"{path}: merge: unspecified" for path in per_shard.values()),
+        *(f"{path}: merge: unspecified" for path in inherits_nothing.values()),
+        *(f"{path}: merge: unset" for path in refuses_the_driver.values()),
     ]
 
 

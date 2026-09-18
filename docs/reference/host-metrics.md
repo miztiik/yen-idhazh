@@ -24,7 +24,8 @@ set is still operator-only: the console reads it at build time under
 | Contract | [`backend/idhazh/contracts/host_fingerprint.py`](../../backend/idhazh/contracts/host_fingerprint.py) |
 | Generated schema | [`schemas/host-fingerprint-row.schema.json`](../../schemas/host-fingerprint-row.schema.json) |
 | Store | `state/host-fingerprint/<YYYY>/<MM>/<DD>.csv` for the daily run; `state/pipeline-tests/host-fingerprint/<YYYY>/<MM>/<DD>.csv` for a bench dispatch |
-| Producer | `idhazh fingerprint`, through `backend/idhazh/telemetry/silicon.py` |
+| In transit | `state/segments/host-fingerprint/<run>-<attempt>-<job>-<shard>.csv` - one file a writer, folded into the store above and deleted |
+| Producer | `idhazh fingerprint`, through `backend/idhazh/telemetry/silicon.py`. The store above is written by `idhazh compact` and by nothing else |
 | Read by | `/console/machine/`, at build time through `frontend/src/lib/server/host-fingerprint.ts` |
 | Key | `date`, `run_id`, `job`, `shard` - one row a job |
 | Switch | `observability.host_fingerprint` |
@@ -36,6 +37,11 @@ set is still operator-only: the console reads it at build time under
 not say what the other two cost. The `work` shards had the record from the start
 because they hold the model server; the two jobs either side of them spent time
 nobody could attribute to a processor.
+
+**No job writes the day file, from 2026-09-17.** Each writes its own segment and
+the fold in `assemble` is the one writer of the day. Ten writers on one path is
+what emptied 2026-09-16; the design rationale below says what it cost and why a
+merge driver was never going to settle it.
 
 **A bench dispatch writes into a tree of its own.** `measure.yml` redirects its
 whole state root with `run.trial_state_dirname`, so its rows land under
@@ -266,6 +272,39 @@ one `(date, run_id, job, shard)` are one machine written down twice, and the
 fleet distribution is the one question this record exists to answer. The first
 row wins; there is nothing to choose between two attempts that read the same
 host. Authority: Fowler, 2026-09-16.
+
+**Staging the shared path was not enough, and 2026-09-16 is the file that proves
+it.** The day was staged, committed and pushed by ten jobs of one run, and
+`state/host-fingerprint/2026/09/16.csv` is header-only. Each job appended to one
+path in its own checkout, the pushes raced, and a merge driver settling two
+appends could not help: a rebase hands a job the tip, the job replays its own
+append, and the last writer to win a race carries whatever its checkout held.
+**A shared path is the defect; a settlement rule on top of it is a repair.**
+
+So from 2026-09-17 no job opens the day file. Each writes
+`state/segments/host-fingerprint/<run>-<attempt>-<job>-<shard>.csv`, which names
+the run, the try at it, the job and the shard - four cells that make a filename
+one writer's alone - and `idhazh compact` inside `assemble` folds them into the
+day and deletes them. The `plan` job of the next run folds anything an `assemble`
+that died left behind, so a segment waits at most one run.
+
+**The attempt is in the name and in no column.** GitHub keeps the run id stable
+across a re-run and increments the attempt, so without it a second try takes the
+path its first try already wrote - in exactly the case where the two disagree,
+because the first is the one that died. With it, both files reach the fold and
+the higher attempt wins each cell the two fill differently.
+
+**The row's shape did not change and neither did the day file's.** A segment
+carries the head's own columns and the head's own contract, so there is no
+version stamp, no migration and no second schema. A reader opens the same file it
+opened before. Authority: Fowler, 2026-09-17.
+
+**A bench dispatch folds its own segment.** `measure.yml` has no `assemble` job,
+so the step after its probe runs `idhazh compact --config
+backend/var/candidate-config` and the commit stages the day file as it always
+did. It is the one state writer with no concurrency group at all, which is why it
+gets the segment rather than being left on the shared path. Authority: Carmack,
+2026-09-17.
 
 ## See also
 

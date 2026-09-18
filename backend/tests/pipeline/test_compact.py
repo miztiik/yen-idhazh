@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -26,16 +27,25 @@ THREE_DAYS_OLD = "2026-09-14"
 RUN = f"{TODAY}-900000001"
 OLD_RUN = f"{THREE_DAYS_OLD}-900000002"
 
+#: Every job of one full digest run that draws its own machine and records it:
+#: one plan, eight work shards, one assemble. Ten writers, ten machines, and on
+#: 2026-09-16 the day file they all appended to came back header-only.
+WRITERS: Final[tuple[tuple[ServerJob, int], ...]] = (
+    (ServerJob.PLAN, 0),
+    *tuple((ServerJob.WORK, shard) for shard in range(8)),
+    (ServerJob.ASSEMBLE, 0),
+)
+
 
 def _fingerprint(date: str, run_id: str, *, job: ServerJob, shard: int, **cells: object) -> str:
     """One host row rendered as a segment file's whole body."""
     return _fingerprints(_host_row(date, run_id, job=job, shard=shard, **cells))
 
 
-def _host_row(
+def _host_model(
     date: str, run_id: str, *, job: ServerJob, shard: int, **cells: object
-) -> dict[str, str]:
-    row = HostFingerprintRow.model_validate(
+) -> HostFingerprintRow:
+    return HostFingerprintRow.model_validate(
         {
             "date": date,
             "run_id": run_id,
@@ -46,7 +56,12 @@ def _host_row(
             **cells,
         }
     )
-    return row.csv_row()
+
+
+def _host_row(
+    date: str, run_id: str, *, job: ServerJob, shard: int, **cells: object
+) -> dict[str, str]:
+    return _host_model(date, run_id, job=job, shard=shard, **cells).csv_row()
 
 
 def _fingerprints(*rows: dict[str, str]) -> str:
@@ -144,6 +159,49 @@ def test_an_empty_store_folds_nothing_and_says_so(tmp_path: Path) -> None:
     report = compact.stage_compact(tmp_path / ledger.STATE_DIRNAME)
 
     assert report == compact.CompactionReport(0, 0, 0, (), None)
+
+
+def test_ten_writers_of_one_run_land_ten_rows_in_one_machine_day(tmp_path: Path) -> None:
+    """A full run's ten machines, through the writer production calls, into one head.
+
+    Driven through `ledger.write_segment` rather than through a built file,
+    because what this asks is whether the ten jobs of one run can write at all
+    without taking each other's path - and a hand-built name would answer a
+    question about this test instead.
+
+    `state/host-fingerprint/2026/09/16.csv` is header-only in this repository:
+    ten runners appended to it, the pushes raced, and the day came back empty.
+    Ten distinct `(job, shard)` pairs and no repeat is that failure made
+    checkable.
+
+    What it cannot settle is whether ten real runners racing produce this - the
+    first live run is that check.
+    """
+    state = tmp_path / ledger.STATE_DIRNAME
+    for job, shard in WRITERS:
+        ledger.write_segment(
+            state,
+            ledger.SegmentLedger.HOST_FINGERPRINT,
+            [_host_model(TODAY, RUN, job=job, shard=shard, cpu_model=f"{job.value}-{shard}")],
+            run_id=RUN,
+            attempt=1,
+            job=job,
+            shard=shard,
+        )
+
+    waiting = ledger.segment_files(state, ledger.SegmentLedger.HOST_FINGERPRINT)
+    assert len(waiting) == len(WRITERS), "one writer, one file, and no two writers share one"
+
+    report = compact.stage_compact(state)
+
+    head = ledger.host_fingerprint_path(state, TODAY)
+    pairs = [(row["job"], int(row["shard"])) for row in _rows(head)]
+    assert sorted(pairs) == sorted((job.value, shard) for job, shard in WRITERS)
+    assert len(set(pairs)) == len(WRITERS), "a repeated pair is one machine counted twice"
+    assert report.rows_superseded == 0, "ten distinct keys settle nothing against each other"
+    assert report.segments_read == len(WRITERS)
+    assert report.heads_written == (ledger.host_fingerprint_relpath(TODAY),)
+    assert not ledger.segment_files(state), "a folded segment is removed, not left behind"
 
 
 def test_every_waiting_row_reaches_the_head_its_own_date_names(tmp_path: Path) -> None:

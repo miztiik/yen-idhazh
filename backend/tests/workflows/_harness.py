@@ -434,6 +434,14 @@ BENCH_CORPUS_STEP: Final = "Build the fixed bench corpus"
 
 BENCH_FINGERPRINT_STEP: Final = "What machine this bench drew"
 
+#: The step that turns the probe's segment into the row the bench commits. The
+#: probe writes `state/pipeline-tests/segments/host-fingerprint/...`, and this
+#: workflow has no `assemble` to drain it - so without this step the bench stages
+#: a day file nothing wrote and records no machine at all.
+BENCH_COMPACT_STEP: Final = "Fold the machine record into its day"
+
+BENCH_COMPACT_COMMAND: Final = "python -m idhazh compact"
+
 #: The one composite action in this repository. The step above was byte-identical
 #: in two workflows apart from the job it read the models file from, and a step
 #: duplicated across two files is a step that drifts the day one of them is
@@ -729,10 +737,10 @@ COMMIT_STAGED_PATHS: Final = {
     # spans were measured and then thrown away with the runner. `state/traces`
     # is the raw evidence the fold is taken from and was missed the same way.
     #
-    # `state/host-fingerprint` joined on 2026-09-16 and had been missed since the
-    # probe shipped: it is written by its own subcommand rather than from inside
-    # `stage_work`, so the guard that reads the stage's own ledger calls never
-    # saw it, and `git ls-files` found not one committed fingerprint.
+    # `state/segments` replaced `state/host-fingerprint` on 2026-09-17. The
+    # machine probe used to append to the day file that ten jobs of one run all
+    # opened; it now writes its own segment and `assemble` folds them in, so this
+    # job stages the segment store and no longer stages a head it does not write.
     "work": [
         "state/item-health",
         "state/scores",
@@ -740,7 +748,7 @@ COMMIT_STAGED_PATHS: Final = {
         "state/runtime-counters.csv",
         "state/span-rollup",
         "state/traces",
-        "state/host-fingerprint",
+        "state/segments",
     ],
     "assemble": [
         "frontend/public/digest",
