@@ -1,6 +1,7 @@
 # Plan 34 - the merge line fits itself
 
 **Created**: 2026-09-17
+**Last Updated**: 2026-09-18
 **Supersedes**: [`20260914-29-found-once-plan.md`](20260914-29-found-once-plan.md) rows #12 and #15
 **Correction level**: 5 - a model verdict moves a number that decides what publishes
 
@@ -248,21 +249,33 @@ build.
 | # | Row | Depends on | Wave | Status |
 | --- | --- | --- | --- | --- |
 | 1 | Three pages disagree on whether a model may select what publishes | - | A | DONE `09c680c4` |
-| 2 | The four contracts, shipped inert with header-only files | - | A | PENDING |
-| 3 | The knob block, defaults only, nothing reads it | 2 | A | PENDING |
-| 4 | Nested `state/` support: the inventory glob and the prune vocabulary | - | A | DONE `c0cb75f7` |
-| 5 | Score and select the borderline pairs, write the day shard | 2,3 | B | PENDING |
-| 6 | The judge: prompt, grammar, token-id assertion, order swap | 2,3 | B | PENDING |
-| 7 | Fold the day into the fixed-size record | 2,5,6 | B | PENDING |
-| 8 | Fit, damp, clamp, and write the day's row - the knob still unread | 3,7 | C | PENDING |
-| 9 | Assemble reads the fitted line. **First row that changes a published day** | 8 | C | PENDING |
-| 10 | The `LLM-JUDGES` workflow, 4 matrix legs, two commit calls | 5,6,7,8 | C | PENDING |
+| 2 | The four contracts, shipped inert with header-only files | - | A | DONE #870 |
+| 3 | The knob block, defaults only, nothing reads it | 2 | A | DONE #870 |
+| 4 | Nested `state/` support: the inventory glob and the prune vocabulary | - | A | DONE `c0cb75f7`, and the prune vocabulary in #885 |
+| 5 | Score and select the borderline pairs, write the day shard | 2,3 | B | DONE #871 |
+| 6 | The judge: prompt, grammar, token-id assertion, order swap | 2,3 | B | DONE #872 |
+| 7 | Fold the day into the fixed-size record | 2,5,6 | B | DONE #875 |
+| 8 | Fit, damp, clamp, and write the day's row - the knob still unread | 3,7 | C | DONE #885 |
+| 9 | Assemble reads the fitted line. **First row that changes a published day** | 8 | C | DONE #889, **and the flag ships off** |
+| 10 | The `LLM-JUDGES` workflow, 4 matrix legs, two commit calls | 5,6,7,8 | C | DONE #890 |
 | 11 | The sample sheet utility | 7,8,10 | C | PENDING |
-| 12 | Console: merge count and holdout - the two model-free panels | **panel A1: nothing** / panel A2: 2,8 | D | PENDING |
-| 13 | Console: the threshold chart, applied solid and proposed dotted | 8,12 | D | PENDING |
-| 14 | Console: judge self-agreement, and the record filling | 8,12 | D | PENDING |
+| 12 | Console: merge count and holdout - the two model-free panels | **panel A1: nothing** / panel A2: 2,8 | D | DONE #874 (merge count). The holdout panel is still owed |
+| 13 | Console: the threshold chart, applied solid and proposed dotted | 8,12 | D | DONE #899 |
+| 14 | Console: judge self-agreement, and the record filling | 8,12 | D | DONE #904 |
 | 15 | Console: the confusion matrix | 7,8,12 | D | PENDING |
-| 16 | The design document, prose plus a mermaid diagram | 9 | D | PENDING |
+| 16 | The design document, prose plus a mermaid diagram | 9 | D | MOSTLY OVERTAKEN - see below |
+
+**Row 16 shrank while this plan was being built, and the reason is somebody
+else's work.** [#896](https://github.com/miztiik/yen-idhazh/pull/896) split the
+same-story rules out of `docs/architecture/publishing/layout.md` into
+`docs/architecture/publishing/same-story.md`, which was the split this row was
+going to pay for. Row 9 then put the fitted line's own prose on that page. What
+is left of this row is the loop diagram and the two lists - the rationale and the
+rejected alternatives - distilled out of this plan as it is deleted.
+
+**Row 12's second panel is still owed.** The merge count landed; the holdout
+check did not, and the row is marked DONE on the half that shipped rather than on
+both. Whoever picks it up should re-read the row body rather than this line.
 | 17 | Measure a judge call on a stock runner and replace the estimate | 5,6 | B | PENDING |
 
 Row 1 dropped out of row 2's dependency list because it has landed. **Row 12's
