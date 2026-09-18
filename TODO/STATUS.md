@@ -39,7 +39,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 28 | 0 | 27 | 1 |
 | [20260917-34-similarity-autotune-plan.md](20260917-34-similarity-autotune-plan.md) | 17 | 2 | 15 | 1 |
 
-## In flight - 5
+## In flight - 6
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
@@ -48,6 +48,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | #7 | 33 | A | OS memory and load, per item | p33r7b |
 | #2 | 33 | B | `host-fingerprint` writes segments | p33b2 |
 | #18 | 33 | H | Chart-craft doctrine - the thirteen rules, written once | p33r18 |
+| #28 | 33 | H | Pipeline panels: the share track goes, Extraction gains a trend | p33h28 |
 
 ## Ready now - 34
 
@@ -92,7 +93,7 @@ section 3 is where it is answered.
 | #6 | 33 | A | One concurrency group for `digest`, `validate`, `measure` | - |
 | #2 | 34 | - | The four contracts, shipped inert with header-only files | - |
 
-## Waiting on another row - 83
+## Waiting on another row - 82
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -153,7 +154,6 @@ section 3 is where it is answered.
 | #11 | 33 | E | Delete `runtime-counters` and everything that reads it | 7 is IN-FLIGHT; 10 is PENDING; 17 is PENDING |
 | #15 | 33 | F | Generated TypeScript contracts replace the hand-written ones | 10 is PENDING; 11 is PENDING |
 | #16 | 33 | G | Docs, and the orphan sweep | all names no row |
-| #28 | 33 | H | Pipeline panels: the share track goes, Extraction gains a trend | 18 is IN-FLIGHT |
 | #19 | 33 | I | The shard board | 11 is PENDING; 18 is IN-FLIGHT |
 | #21 | 33 | I | Memory and load, three grains - ABSORBS Row #14 | 5 is IN-FLIGHT; 7 is IN-FLIGHT; 15 is PENDING; 19 is PENDING |
 | #23 | 33 | I | What a run reads against what it writes, in tokens and in seconds | 21 is PENDING |
