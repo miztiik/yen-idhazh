@@ -1656,6 +1656,52 @@ def write_segment(
     return len(rows)
 
 
+def extend_segment(
+    state_dir: Path,
+    ledger: SegmentLedger,
+    rows: Sequence[CsvRecord],
+    *,
+    run_id: str,
+    attempt: int,
+    job: ServerJob,
+    shard: int,
+) -> int:
+    """Add rows to this writer's own segment, keeping the ones it wrote earlier.
+
+    `write_segment` is for a step that has everything its job will ever say. This
+    is for a job that learns something later: the machine probe runs before the
+    heaviest step because the bandwidth reading wants an idle host, and the job's
+    own clock is only known once the job is over. Two steps, one writer, one
+    file - the grammar in `segment_path` names the job and not the step, so a
+    second file is not something this store can express.
+
+    The earlier rows are read and written back unchanged. Nothing is edited and
+    nothing is settled here: the arriving row carries the cells it has, the
+    earlier row keeps the cells it had, and `stages.compact` is the one place
+    that decides what two rows of one key mean.
+
+    Whole through a temp file and a rename for `write_segment`'s reason - a
+    writer killed mid-write leaves the file it already had rather than half a
+    row.
+
+    Returns how many rows it added, so a caller can log the count.
+    """
+    if not rows:
+        return 0
+    path = segment_path(state_dir, ledger, run_id=run_id, attempt=attempt, job=job, shard=shard)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    columns = _SEGMENT_HEADS[ledger].model.csv_columns()
+    held = [{name: row.get(name, "") for name in columns} for row in _read_rows(path)]
+    scratch = state_dir / SEGMENTS_DIRNAME / f"{path.stem}.{os.getpid()}.tmp"
+    scratch.write_text(
+        render_file(columns, held + [row.csv_row() for row in rows]),
+        encoding="utf-8",
+        newline="",
+    )
+    scratch.replace(path)
+    return len(rows)
+
+
 def parse_segment_name(path: Path) -> SegmentName:
     """A segment filename read back, or a refusal naming the file.
 

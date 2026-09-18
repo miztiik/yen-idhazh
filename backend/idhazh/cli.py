@@ -117,6 +117,7 @@ STAGES: Final[tuple[str, ...]] = (
     "record",
     "counters",
     "fingerprint",
+    "job-clock",
     "assemble",
     "harvest",
     "compact",
@@ -796,6 +797,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             state_root=common.STATE_ROOT,
             shard=args.shard,
             job=args.job,
+        )
+        return 0
+
+    if args.stage == "job-clock":
+        silicon.stage_job_clock(
+            common._load_plan(date),
+            settings=settings,
+            state_root=common.STATE_ROOT,
+            shard=args.shard,
+            job=args.job,
+            job_started_at=int(args.job_started_at) if args.job_started_at else None,
+            server_log_path=args.server_log,
         )
         return 0
 
