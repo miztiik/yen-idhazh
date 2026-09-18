@@ -790,27 +790,6 @@
           "title": "Boilerplate Ratio Max",
           "type": "number"
         },
-        "chrome_forget_days": {
-          "default": 90,
-          "description": "How long a line is kept after the last page carried it. A host that rebuilt its template stops printing the old lines, and they age out rather than being carried for ever against pages that cannot match them. 90 days is long enough that a quarterly publisher's own chrome survives between its issues. The prune is what enforces it; without one the bound above is prose.",
-          "minimum": 1,
-          "title": "Chrome Forget Days",
-          "type": "integer"
-        },
-        "chrome_lines_per_host_max": {
-          "default": 200,
-          "description": "The most chrome lines one host may keep. The bound on `state/chrome.csv` is this times the hosts we read, so the file grows with the source registry and then stops - never with the archive (Guardrail #12). When a host is over it, the line seen on the FEWEST pages goes first and the oldest `last_seen` breaks the tie. Evicting the newest would throw away the template and keep the coincidences; evicting by recency alone would throw away the chrome using the very articles it is compared against. 200 is an ESTIMATE: a page template is tens of lines, not hundreds, so this is several times the largest one we expect. What would overturn it is a host whose kept lines sit at the cap while its page count still climbs.",
-          "minimum": 1,
-          "title": "Chrome Lines Per Host Max",
-          "type": "integer"
-        },
-        "chrome_pages_min": {
-          "default": 3,
-          "description": "How many of a host's DISTINCT pages must carry one line before it counts as that host's chrome. Two pages sharing a sentence is a coincidence a wire story produces every day; three is a template. Under this the line is still stored - the count has to reach three somehow - and it is not handed to the extractor as chrome.",
-          "minimum": 2,
-          "title": "Chrome Pages Min",
-          "type": "integer"
-        },
         "max_body_bytes": {
           "default": 2000000,
           "minimum": 1024,
@@ -2385,6 +2364,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "The three extract.chrome_* knobs, removed with the store they governed.",
+      "version": "2026-09-18T11:00",
+      "why": "Over a full run the store moved the boilerplate signal zero times."
+    },
+    {
       "change": "adaptive_dedup_threshold.judge_temperature, additive, default 0.0.",
       "version": "2026-09-18T10:00",
       "why": "The swap reads position bias only while the sampler adds no noise of its own."
@@ -2398,11 +2382,6 @@
       "change": "extract.reject_too_short, additive, default false. Never rejects an abstract.",
       "version": "2026-09-17T17:00",
       "why": "Two of the three shape signals had a switch and the third did not."
-    },
-    {
-      "change": "bench.run_model_speed_case, additive, default true.",
-      "version": "2026-09-17T16:00",
-      "why": "Testing the bench flow should not cost half an hour of llama-bench."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2483,7 +2462,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-18T10:00",
+      "default": "2026-09-18T11:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2494,5 +2473,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-18T10:00"
+  "version": "2026-09-18T11:00"
 }

@@ -125,14 +125,13 @@ curator can turn on `extract.reject_not_prose`, `extract.reject_boilerplate` or
 `extract.reject_too_short`,
 but length and shape do not decide newsworthiness by themselves.
 
-**The `boilerplate` signal only started answering anything on 2026-09-17.** It
-compares the page's lines against lines the same host printed on its other
-pages, and nothing ever supplied that second set - so it divided by an empty set
-and said no to every page. `state/chrome.csv` supplies it now
-([../extraction/chrome.md](../extraction/chrome.md)), and the comparison stays
-inside the trust boundary because only hashes are stored: a line is reduced and
-hashed before it is counted, so nothing in that file can carry an instruction a
-page tried to give us.
+**The `boilerplate` signal has never answered anything.** It compares the page's
+lines against lines the same host printed on its other pages, and nothing
+supplies that second set - so it divides by an empty set and says no to every
+page. A store that supplied it shipped on 2026-09-17 and was reverted the same
+day, on the measurement rather than on the risk: over a full run it moved the
+signal zero times. Anything that revives it stores hashes rather than lines, so
+nothing in that file can carry an instruction a page tried to give us.
 
 `extract_text` removes embedded-player interface containers through
 Trafilatura's `prune_xpath` hook before its existing sanitization pass. The
