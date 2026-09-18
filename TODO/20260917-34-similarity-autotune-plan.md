@@ -1,6 +1,7 @@
 # Plan 34 - the merge line fits itself
 
 **Created**: 2026-09-17
+**Last Updated**: 2026-09-18
 **Supersedes**: [`20260914-29-found-once-plan.md`](20260914-29-found-once-plan.md) rows #12 and #15
 **Correction level**: 5 - a model verdict moves a number that decides what publishes
 
@@ -27,7 +28,7 @@ Only one of those is invisible.**
 | O1 | The model judges, and it judges alone. No human in the loop, ever. |
 | O2 | **There is no hard floor.** The line may move down as well as up. Most of the world's coverage is regurgitated, so more merging is the goal, not less. Content decides its own future. |
 | O3 | The knob is `adaptive_dedup_threshold` and it lives in `config/idhazh.json`. |
-| O4 | A daily CI workflow named `LLM-JUDGES` hosts this and later judge tasks. |
+| O4 | A daily CI workflow named `LLM-COUNCIL` hosts this and later judge tasks. **Council, not judges** (owner, 2026-09-18): the legs shard a list today and never confer, and the name is chosen for where this goes rather than where it is. Autotune argues a case - it is prosecution counsel - and a case needs something to adjudicate it: a judge, a jury, or a heuristic. All three belong under one roof, and some of those paths will put a person in the loop. |
 | O5 | The cap is 200 pairs a day, across 4 shards. |
 | O6 | Damping and the daily clamp are kept. |
 | O7 | The model stamp is a typed field with an enum, not a free string - a model change becomes a contract change. |
@@ -239,30 +240,49 @@ O2 removed it. Three things carry its job instead.
 
 ## Status Reckoner
 
-Every row below carries a body further down this page. A row's body is written
-for somebody who has never opened this repository, so it names the file, the
-class, the function, the test and the thing the row must not do. **Read the row
-body, not this table.** The table says what is blocked; the body says what to
-build.
+**This table is what is left.** A row that landed is gone from it, because a
+worker picking this plan up needs the four things still to build, not the twelve
+already in the repository. Git is where a finished row's history lives, and the
+pull request numbers below are how a reader finds it.
+
+Every row here carries a body further down this page. A row's body is written for
+somebody who has never opened this repository, so it names the file, the class,
+the function, the test and the thing the row must not do. **Read the row body,
+not this table.** The table says what is blocked; the body says what to build.
 
 | # | Row | Depends on | Wave | Status |
 | --- | --- | --- | --- | --- |
-| 1 | Three pages disagree on whether a model may select what publishes | - | A | DONE `09c680c4` |
-| 2 | The four contracts, shipped inert with header-only files | - | A | PENDING |
-| 3 | The knob block, defaults only, nothing reads it | 2 | A | PENDING |
-| 4 | Nested `state/` support: the inventory glob and the prune vocabulary | - | A | DONE `c0cb75f7` |
-| 5 | Score and select the borderline pairs, write the day shard | 2,3 | B | PENDING |
-| 6 | The judge: prompt, grammar, token-id assertion, order swap | 2,3 | B | PENDING |
-| 7 | Fold the day into the fixed-size record | 2,5,6 | B | PENDING |
-| 8 | Fit, damp, clamp, and write the day's row - the knob still unread | 3,7 | C | PENDING |
-| 9 | Assemble reads the fitted line. **First row that changes a published day** | 8 | C | PENDING |
-| 10 | The `LLM-JUDGES` workflow, 4 matrix legs, two commit calls | 5,6,7,8 | C | PENDING |
 | 11 | The sample sheet utility | 7,8,10 | C | PENDING |
-| 12 | Console: merge count and holdout - the two model-free panels | **panel A1: nothing** / panel A2: 2,8 | D | PENDING |
-| 13 | Console: the threshold chart, applied solid and proposed dotted | 8,12 | D | PENDING |
-| 14 | Console: judge self-agreement, and the record filling | 8,12 | D | PENDING |
+| 12 | Console: the holdout panel. **The merge count landed in #874; this is the other half** | 2,8 | D | PENDING |
 | 15 | Console: the confusion matrix | 7,8,12 | D | PENDING |
-| 16 | The design document, prose plus a mermaid diagram | 9 | D | PENDING |
+| 16 | The design document. **Mostly overtaken - see below** | 9 | D | PENDING |
+
+**Landed, in the order they merged:** row 1 `09c680c4`, row 4 `c0cb75f7` and the
+prune vocabulary in [#885](https://github.com/miztiik/yen-idhazh/pull/885), rows
+2 and 3 in [#870](https://github.com/miztiik/yen-idhazh/pull/870), row 5 in
+[#871](https://github.com/miztiik/yen-idhazh/pull/871), row 6 in
+[#872](https://github.com/miztiik/yen-idhazh/pull/872), row 7 in
+[#875](https://github.com/miztiik/yen-idhazh/pull/875), row 17 in
+[#876](https://github.com/miztiik/yen-idhazh/pull/876), row 8 in
+[#885](https://github.com/miztiik/yen-idhazh/pull/885), row 10 in
+[#890](https://github.com/miztiik/yen-idhazh/pull/890), row 9 in
+[#889](https://github.com/miztiik/yen-idhazh/pull/889), row 12's merge-count
+panel in [#874](https://github.com/miztiik/yen-idhazh/pull/874), row 13 in
+[#899](https://github.com/miztiik/yen-idhazh/pull/899) and row 14 in
+[#904](https://github.com/miztiik/yen-idhazh/pull/904).
+
+**Row 9 landed with the flag off.** `assemble.same_story.adaptive_dedup_threshold.enabled`
+is `false` in the committed config, so every published day is still grouped at
+`floor_min`. Turning the feature on is a one-character edit to `config/idhazh.json`,
+and turning it off again is the same edit.
+
+**Row 16 shrank while this plan was being built, and the reason is somebody
+else's work.** [#896](https://github.com/miztiik/yen-idhazh/pull/896) split the
+same-story rules out of `docs/architecture/publishing/layout.md` into
+`docs/architecture/publishing/same-story.md`, which was the split this row was
+going to pay for. Row 9 then put the fitted line's own prose on that page. What
+is left of this row is the loop diagram and the two lists - the rationale and the
+rejected alternatives - distilled out of this plan as it is deleted.
 | 17 | Measure a judge call on a stock runner and replace the estimate | 5,6 | B | PENDING |
 
 Row 1 dropped out of row 2's dependency list because it has landed. **Row 12's
@@ -1867,7 +1887,7 @@ Call 1 is a recording call because a verdict row is a fact about a pair, appende
 
 `docs/architecture/publishing/retention.md` gains one row for `scored-pairs` in this commit, naming the age it is pruned at and the `story-similarity-scored-pairs` word an operator types. `docs/concepts/growing-reads.md` gains nothing here: `load_story_similarity_pairs` opens one named day file whatever the tree holds, which is a bounded read and not an entry that page carries.
 
-**Test files: `backend/tests/test_similarity_fold.py` (unit), plus two workflow tests that land with row #10 in `backend/tests/workflows/test_llm_judges_workflow.py`.** The two commit-call tests read a workflow file row #10 creates, so they cannot run before it exists; they are named here because this row decides what they assert.
+**Test files: `backend/tests/test_similarity_fold.py` (unit), plus two workflow tests that land with row #10 in `backend/tests/workflows/test_llm_council_workflow.py`.** The two commit-call tests read a workflow file row #10 creates, so they cannot run before it exists; they are named here because this row decides what they assert.
 
 | Test | Tier | What drives it |
 | --- | --- | --- |
@@ -1882,7 +1902,7 @@ Call 1 is a recording call because a verdict row is a fact about a pair, appende
 | `test_one_pair_judged_twice_is_counted_once` | unit | Two built rows sharing a `pair_key` under two `run_id`s and two verdicts, asserting the slot moved by one and the newer `run_id` is the verdict that landed |
 | `test_a_day_with_a_missing_leg_is_not_folded` | unit | Three verdict files where four shards were expected: the rows are still appended, the record is unchanged, and the date is absent from `folded_dates` |
 | `test_a_re_dispatch_folds_the_day_a_missing_leg_blocked` | unit | The same day with all four files present, asserting one fold and the counts the whole day should give |
-| `test_the_two_commit_calls_are_separate` | workflow | `_harness` reading `.github/workflows/llm-judges.yml` |
+| `test_the_two_commit_calls_are_separate` | workflow | `_harness` reading `.github/workflows/llm-council.yml` |
 | `test_only_the_record_is_refreshed` | workflow | The same file, asserting both `scored-pairs` and `fitted-thresholds` are absent from `REFRESH_PATHS` |
 
 Every unit test builds its own record and its own rows. None reads `state/`, and none counts how many committed rows carry a field - that shape is a test with a date on the calendar, and CLAUDE.md section 13 names the day one fired and took every open pull request red.
@@ -2056,10 +2076,10 @@ same_story=applied.effective_same_story(
 
 ---
 
-## Row #10 - the `LLM-JUDGES` workflow, 4 matrix legs
+## Row #10 - the `LLM-COUNCIL` workflow, 4 matrix legs
 
 
-**File: `.github/workflows/llm-judges.yml`, `name: LLM-JUDGES`.** Triggers: `schedule` at `0 22 * * *` and `workflow_dispatch` with one `date` input. The scheduled run judges `date -u -d 'yesterday' +%F`, shaped against the same anchored `^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$` pattern `digest.yml` uses, for the same reason: a typo publishes rows at an address no reader ever looks at.
+**File: `.github/workflows/llm-council.yml`, `name: LLM-COUNCIL`.** Triggers: `schedule` at `0 22 * * *` and `workflow_dispatch` with one `date` input. The scheduled run judges `date -u -d 'yesterday' +%F`, shaped against the same anchored `^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$` pattern `digest.yml` uses, for the same reason: a typo publishes rows at an address no reader ever looks at.
 
 **22:00 UTC, and it can overlap the tail of a publish.** The last digest cron is `20 18 * * *`, and `digest.yml`'s own header records that a scheduled run there starts 40 to 70 minutes after its cron minute and then takes 164 to 184 minutes (ubuntu-latest, 2026-08-23 and 2026-08-24, n=3). So the 18:20 slot normally finishes between 21:44 and 22:34, and the first 34 minutes of a judge run can land inside it. Both push to `main`, which the two-call commit shape of row #7 already handles. What the overlap costs is a queued cache restore, not a failed run.
 
@@ -2079,7 +2099,7 @@ same_story=applied.effective_same_story(
 
 Why the assertion matters: `timeout-minutes` takes whatever it is handed. A value Actions cannot read as a number leaves the job with no bound at all, and the run finds out at the 6 h ceiling, where GitHub kills it with nothing written.
 
-**The model is `models.summarize`, and that is a cache decision.** The `judge` job writes the same cache key `digest.yml`'s work job writes, character for character: `llm-${{ needs.draw.outputs.summarize_file }}-${{ needs.draw.outputs.summarize_revision }}-${{ needs.draw.outputs.llama_cpp_build }}-v4`. Two things follow. The daily run has already created that entry, so LLM-JUDGES restores rather than downloads and adds **zero bytes** to the 10 GB cache allowance. And the repository's own throughput reading - 9.85 tokens a second, median over 4,117 timed rows, slowest 8.25 and fastest 44.71, taken 2026-09-09 on a stock ubuntu-latest - transfers to this workload at all, because it was taken on these weights. A second model would be a second multi-gigabyte entry competing for eviction inside an allowance already near its ceiling; the cache cannot fail a run, but an eviction costs a re-download, and a download is wall-clock inside a job with a hard ceiling.
+**The model is `models.summarize`, and that is a cache decision.** The `judge` job writes the same cache key `digest.yml`'s work job writes, character for character: `llm-${{ needs.draw.outputs.summarize_file }}-${{ needs.draw.outputs.summarize_revision }}-${{ needs.draw.outputs.llama_cpp_build }}-v4`. Two things follow. The daily run has already created that entry, so LLM-COUNCIL restores rather than downloads and adds **zero bytes** to the 10 GB cache allowance. And the repository's own throughput reading - 9.85 tokens a second, median over 4,117 timed rows, slowest 8.25 and fastest 44.71, taken 2026-09-09 on a stock ubuntu-latest - transfers to this workload at all, because it was taken on these weights. A second model would be a second multi-gigabyte entry competing for eviction inside an allowance already near its ceiling; the cache cannot fail a run, but an eviction costs a re-download, and a download is wall-clock inside a job with a hard ceiling.
 
 The `judge` job reuses the shipped parts and spells nothing itself: `backend/utilities/model_refs.py configured` for the refs, `.github/scripts/llama-cpp-pin.sh` for the build, `.github/scripts/fetch-model-runtime.sh` on a cache miss, the `sha256sum --check` step on every run including a hit, and `.github/scripts/start-llama-server.sh summarize llama-server` for the server. That script reaches `idhazh.llm.server.server_argv` through `backend/utilities/llama_argv.py`, which is the one place a llama-server flag may be spelled.
 
@@ -2121,7 +2141,7 @@ Rejected alternative, and what it costs: four legs each committing into the one 
 - artifacts: one draw of at most 200 rows and four verdict files of at most 50 rows each. Under 100 KB, and this is a public repository, so the 500 MB private-repository quota meters nothing.
 - dependency: none added. Every script and every binary this workflow uses already ships.
 
-**Tests: `backend/tests/workflows/test_llm_judges_workflow.py`, workflow tier**, driven by the harness reading the committed YAML and never by a live run.
+**Tests: `backend/tests/workflows/test_llm_council_workflow.py`, workflow tier**, driven by the harness reading the committed YAML and never by a live run.
 
 | Test | What it asserts |
 | --- | --- |
@@ -2140,9 +2160,9 @@ Rejected alternative, and what it costs: four legs each committing into the one 
 
 **Three closed-world tables in `backend/tests/workflows/_harness.py` must gain an entry, or the suite fails before your test runs:**
 
-- `EXPECTED_WORKFLOWS` gains `"llm-judges.yml": ("LLM-JUDGES", frozenset({"schedule", "workflow_dispatch"}))`.
-- `SERVER_STARTERS` gains `("llm-judges.yml", "judge"): (("Start the model", "config"),)`. It is compared by equality, so a server started anywhere else still fails.
-- `DISPATCH_INPUT_SHAPES` gains `("llm-judges.yml", "date")` with its shape, the way `digest.yml`'s own `date` is declared.
+- `EXPECTED_WORKFLOWS` gains `"llm-council.yml": ("LLM-COUNCIL", frozenset({"schedule", "workflow_dispatch"}))`.
+- `SERVER_STARTERS` gains `("llm-council.yml", "judge"): (("Start the model", "config"),)`. It is compared by equality, so a server started anywhere else still fails.
+- `DISPATCH_INPUT_SHAPES` gains `("llm-council.yml", "date")` with its shape, the way `digest.yml`'s own `date` is declared.
 
 `RUNTIME_IDENTITY_JOBS`, `RUNTIME_LOG_SUMMARY_STEPS` and `COUNTERS_JOBS` are read against `digest.yml` only. This row adds nothing to any of them.
 
@@ -2436,7 +2456,7 @@ pair here does merge, it is a story the reader never got to see.
 
 ### Where it runs and how it is committed
 
-**One step in the `fold` job of `.github/workflows/llm-judges.yml`**, after
+**One step in the `fold` job of `.github/workflows/llm-council.yml`**, after
 `idhazh judge-fit` and before the second commit call. It reads what the fold and
 the fit wrote, so it cannot run before either.
 
@@ -2529,7 +2549,7 @@ at module scope (CLAUDE.md section 13).
 | `test_the_sheet_renders_from_the_canary_day` | integration | `backend/var/canary/`, asserting the body parses as markdown and names every cell |
 
 **One workflow test**, added to
-`backend/tests/workflows/test_llm_judges_workflow.py`:
+`backend/tests/workflows/test_llm_council_workflow.py`:
 `test_the_sample_sheet_is_rewritten_by_the_call_that_refreshes_it` - the path is
 staged by call 2, is in `REFRESH_PATHS`, and the command that rewrites it is a
 single executable in `REGENERATE_COMMAND` carrying no `&&`, because the script
@@ -3362,7 +3382,7 @@ flowchart TD
     fitted["Group at the fitted line"]
     configured["Group at the config floor"]
   end
-  subgraph jud["LLM-JUDGES, 22:00"]
+  subgraph jud["LLM-COUNCIL, 22:00"]
     draw["Score every cross-source pair.<br/>Keep 0.88 and above.<br/>Take what the budget allows"]
     legs["Four legs, one server each.<br/>Every pair read twice,<br/>once in each order"]
     agree{"Do the two<br/>readings agree?"}
@@ -3426,7 +3446,7 @@ restating it. One concept, defined once (CLAUDE.md section 5).
 | The judge prompt's own words | `backend/idhazh/prompts/judge_same_story.txt`. The page says what the prompt must not contain and why, and pastes none of it |
 | How fetched text is fenced, and what `untrusted_block` guarantees | `docs/architecture/sources/trust-boundary.md` and Guardrail #11 |
 | Seconds a call, tokens a second, a leg's wall clock | Row #17's benchmark record. This page carries no timing of its own |
-| The workflow's jobs, matrix and cache key | `.github/workflows/llm-judges.yml` and `docs/how-to/run-the-gates.md` |
+| The workflow's jobs, matrix and cache key | `.github/workflows/llm-council.yml` and `docs/how-to/run-the-gates.md` |
 
 **The measured readings that are already on this page stay on this page**, and
 that is not a contradiction. `What chose 0.94` is a hand-label measurement of
@@ -3715,7 +3735,7 @@ the module that already owns `measure.yml`.
   belong to the box that took them, and this repository already holds two cases
   where a laptop and the runner disagreed by more than a factor of two.
 - Drop the cold call, or average it into the median.
-- Run inside `LLM-JUDGES` or `digest.yml`. A measurement that runs every day is a
+- Run inside `LLM-COUNCIL` or `digest.yml`. A measurement that runs every day is a
   cost every day, and this question is asked once.
 - Time one call, or twenty, and report a mean.
 - Change a flag, a knob, the prompt or the grammar to make a number look better.

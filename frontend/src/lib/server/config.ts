@@ -188,10 +188,23 @@ export interface SimilarityConfig {
 	band_high: number;
 	/** The furthest the line may fall in one day. The height of the clamp band. */
 	max_down_step: number;
+	/** What share of judged two-story pairs the fit leaves above the line. The
+	 * target the precision line is drawn against. */
+	discard_share: number;
 	/** How many times the typical daily shift a day has to beat before the guard
 	 * holds the line. On the row rather than on the chart, so a reader comparing
 	 * two days is comparing one question. */
 	step_change_multiple: number;
+	/** How often the two orders may disagree before the run holds. The lower of
+	 * the two markers on the agreement plot. */
+	disagreement_max: number;
+	/** What share of readings may be UNCLEAR before the run holds. The top of the
+	 * agreement axis, so a rate cannot leave the chart. */
+	unclear_max: number;
+	/** The three gates, as the counts the record has to reach. */
+	minimum_negatives: number;
+	minimum_above_line: number;
+	minimum_days: number;
 }
 
 export interface ConsoleConfig {
@@ -205,6 +218,11 @@ export interface ConsoleConfig {
 	min_window_days: number;
 	max_window_days: number;
 	min_attempts_for_rate: number;
+	/** How many times the discard share the precision axis reaches. A bare 10 in
+	 * a component is a hard-coded axis, and this one has a reason worth writing
+	 * down: the fit aims for the discard share, and ten times it shows the target
+	 * and a tenfold overshoot on one fixed scale. */
+	precision_axis_multiple: number;
 	/** The size a console chart is drawn at on the server, before a script
 	 * re-measures the container. Declared once, in `config/appearance.json`. */
 	chart_height: number;
@@ -381,7 +399,13 @@ const SIMILARITY_DEFAULTS: SimilarityConfig = {
 	band_low: 0.88,
 	band_high: 1.0,
 	max_down_step: 0.005,
-	step_change_multiple: 5
+	discard_share: 0.01,
+	step_change_multiple: 5,
+	disagreement_max: 0.15,
+	unclear_max: 0.35,
+	minimum_negatives: 200,
+	minimum_above_line: 30,
+	minimum_days: 10
 };
 // `SameStoryConfig.floor_min`'s own default, for a checkout with no config file.
 const SAME_STORY_FLOOR = 0.94;
@@ -428,6 +452,7 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	min_window_days: 1,
 	max_window_days: 366,
 	min_attempts_for_rate: 5,
+	precision_axis_multiple: 10,
 	chart_height: 220,
 	chart_width: 760,
 	shimmer_after_ms: 400,

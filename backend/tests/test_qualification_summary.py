@@ -7,7 +7,6 @@ import test_qualify as built
 from pydantic import ValidationError
 
 from idhazh.contracts.qualification import (
-    OPTIONAL_GATES,
     Diagnostic,
     GateName,
     GateOutcome,
@@ -20,7 +19,10 @@ pytestmark = pytest.mark.contract
 
 
 def a_report(
-    *, failing: GateName | None = None, omit: GateName | None = None
+    *,
+    failing: GateName | None = None,
+    omit: GateName | None = None,
+    shortfalls: list[str] | None = None,
 ) -> QualificationReport:
     """Eleven gates, one of them optionally red or absent. Built, never read off a run.
 
@@ -54,7 +56,15 @@ def a_report(
         repeats=3,
         scored=12,
         gates=gates,
-        diagnostics=[Diagnostic(name="mean compression", value="0.31", denominator=12)],
+        corpus_shortfalls=shortfalls or [],
+        diagnostics=[
+            Diagnostic(
+                name="mean compression",
+                value="0.31",
+                unit="summary words per source word",
+                denominator=12,
+            )
+        ],
         qualified=failing is None,
         detail="every gate passed" if failing is None else "faithfulness_floor measured 0.612",
     )
@@ -75,33 +85,29 @@ def test_a_shard_page_names_its_denominator_everywhere_it_names_a_count() -> Non
     assert "%)" in page, "a count against its denominator, not a bare number"
 
 
-def test_a_shard_page_names_the_items_whose_repeats_disagreed() -> None:
-    """The gate reports a count. A reader fixing it needs the item.
-
-    `determinism` says "3 of 12 items drifted" and stops there, so the shard
-    page is the only place the three are named. Without it the next step is
-    downloading an artifact and diffing digests by hand.
-    """
+def test_a_shard_page_names_the_items_the_sampler_reworded() -> None:
+    """`wording_spread` reports a count. A reader asking how far the sampler went
+    needs the article, and this page is the only place it is named."""
     shard = built.a_passing_shard()
-    drifted = shard.observations[0].item_id
+    reworded = shard.observations[0].item_id
     shifted = [
         call.model_copy(update={"output_digest": "b" * 64})
-        if call.item_id == drifted and call.repeat == 2
+        if call.item_id == reworded and call.repeat == 2
         else call
         for call in shard.observations
     ]
 
     page = qualification_summary.render_shard(shard.model_copy(update={"observations": shifted}))
 
-    assert "Repeats that disagreed" in page
-    assert drifted in page
+    assert "worded more than one way" in page
+    assert reworded in page
 
 
-def test_a_shard_page_that_saw_no_drift_does_not_invent_a_section() -> None:
+def test_a_shard_page_with_one_wording_each_does_not_invent_a_section() -> None:
     page = qualification_summary.render_shard(built.a_passing_shard())
 
-    assert "Repeats that disagreed" not in page
-    assert "Items whose repeats disagreed | 0 of" in page
+    assert "worded more than one way." not in page
+    assert "Items worded more than one way | 0 of" in page
 
 
 def test_a_failed_call_is_named_by_its_code_rather_than_counted_away() -> None:
@@ -123,9 +129,9 @@ def test_a_failed_call_is_named_by_its_code_rather_than_counted_away() -> None:
 def test_the_verdict_puts_the_failing_gate_above_the_passing_ones() -> None:
     """A reader opens this page because a run went red. Do not make them scan.
 
-    Eleven rows, one of which sent them here: the failing gate is the first row
-    of the table and its own words are repeated under it, because `measured` and
-    `threshold` say what happened and `detail` says what it means.
+    One row of the table sent them here: the failing gate is the first row and
+    its own words are repeated under it, because `measured` and `threshold` say
+    what happened and `detail` says what it means.
     """
     page = qualification_summary.render_report(a_report(failing=GateName.FAITHFULNESS_FLOOR))
 
@@ -149,29 +155,26 @@ def test_a_clean_verdict_says_so_and_prints_no_failure_section() -> None:
     assert f"{len(GateName)} of {len(GateName)} gates passed" in page
 
 
-def test_a_report_may_omit_the_determinism_gate_and_no_other() -> None:
-    """Above zero temperature that gate has no question to ask (owner ruling, 2026-09-17).
+def test_a_report_may_not_omit_any_gate() -> None:
+    """Every gate is asked of every run, so a report missing one is refused by name.
 
-    Optional is not weaker. Every other gate is still required of every report,
-    and one omitted is refused by name - which is what stops a run dropping a
-    gate it did not like and publishing the verdict anyway.
+    That is what stops a run dropping a gate it did not like and publishing the
+    verdict anyway. `determinism` was the one exception until 2026-09-18, when
+    the owner retired the gate rather than the rule.
     """
-    report = a_report(omit=GateName.DETERMINISM)
-
-    assert OPTIONAL_GATES == {GateName.DETERMINISM}
-    assert len(report.gates) == len(GateName) - 1
-    with pytest.raises(ValidationError, match="budget"):
-        a_report(omit=GateName.BUDGET)
+    assert "determinism" not in {gate.value for gate in GateName}
+    for gate in GateName:
+        with pytest.raises(ValidationError, match=gate.value):
+            a_report(omit=gate)
 
 
-def test_the_verdict_counts_the_gates_it_was_given_rather_than_the_whole_enum() -> None:
-    """A run that asked ten says ten. A page that said eleven would claim a
-    number nobody measured (Guardrail #10)."""
-    page = qualification_summary.render_report(a_report(omit=GateName.DETERMINISM))
+def test_the_verdict_counts_the_gates_it_was_given() -> None:
+    """A page that named a gate the run did not ask would claim a number nobody
+    measured (Guardrail #10)."""
+    page = qualification_summary.render_report(a_report())
     rows = [line for line in page.splitlines() if line.startswith(("| FAIL", "| PASS"))]
 
-    assert f"{len(GateName) - 1} of {len(GateName) - 1} gates passed" in page
-    assert len(rows) == len(GateName) - 1
+    assert len(rows) == len(GateName)
     assert "`determinism`" not in page
 
 

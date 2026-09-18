@@ -95,7 +95,7 @@ Four invariants hold regardless of how the batches are sized:
 
 ## The judge runs on its own clock
 
-**`LLM-JUDGES` is a second loop, once a night at 22:00 UTC, and it reads
+**`LLM-COUNCIL` is a second loop, once a night at 22:00 UTC, and it reads
 yesterday.** It draws the day's borderline same-story pairs, asks a model which
 of them are one story, folds the answers into a fixed-size record and fits the
 merge line off it. Four legs judge in parallel, one `llama-server` each, and

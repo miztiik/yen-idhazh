@@ -75,7 +75,7 @@
     },
     "Diagnostic": {
       "additionalProperties": false,
-      "description": "A number recorded and never blocked on.\n\nEvery one carries its denominator. A rate over four items is not a rate, and\na diagnostic that hides its denominator is how an unmeasured number gets\ncited later as if it were evidence (Guardrail #10).",
+      "description": "A number recorded and never blocked on.\n\nEvery one carries its denominator. A rate over four items is not a rate, and\na diagnostic that hides its denominator is how an unmeasured number gets\ncited later as if it were evidence (Guardrail #10).\n\n**And every one carries its unit**, because `0.0412` answers nothing on its\nown: the reader cannot tell a share from a count from a rate per second, and\na number nobody can act on is the failure this project keeps finding.\n`name` is deliberately a string rather than a closed set - `stratification`\nmints a row per configured band, so the vocabulary is only knowable once the\nconfig is read.",
       "properties": {
         "denominator": {
           "description": "How many observations produced the value.",
@@ -88,6 +88,12 @@
           "title": "Name",
           "type": "string"
         },
+        "unit": {
+          "description": "What the value is counted in - articles, a share, tokens a second.",
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
         "value": {
           "minLength": 1,
           "title": "Value",
@@ -97,18 +103,18 @@
       "required": [
         "name",
         "value",
+        "unit",
         "denominator"
       ],
       "title": "Diagnostic",
       "type": "object"
     },
     "GateName": {
-      "description": "The eleven gates that block adoption. Closed set, never free text.\n\nEvery run asks ten of them. `OPTIONAL_GATES` below names the one a run may\nleave unevaluated, and says when and why.",
+      "description": "The ten gates that block adoption. Closed set, never free text.\n\nEvery run asks every one of them. A report that omits one is refused by\nname, because a gate nobody asked is a gate nobody can be shown to have\npassed.",
       "enum": [
         "reasoning_leakage",
         "schema_validity",
         "injection_canaries",
-        "determinism",
         "publishable_length",
         "context_fit",
         "identity",
@@ -344,9 +350,14 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "gates may omit determinism, and no other gate.",
-      "version": "2026-09-17",
-      "why": "Above temperature 0 that gate has no question to ask."
+      "change": "Added corpus_shortfalls; every diagnostic carries a unit.",
+      "version": "2026-09-18T12:00",
+      "why": "A thin corpus is recorded rather than fatal, and a bare number answers nothing."
+    },
+    {
+      "change": "determinism is no longer a gate; every gate is required.",
+      "version": "2026-09-18",
+      "why": "A summarizer does not need identical words; wording_spread records the drift."
     },
     {
       "change": "inputs gains turn_markers_sha256, optional.",
@@ -359,9 +370,9 @@
       "why": "Both halves land in one entry because the first was never stamped."
     },
     {
-      "change": "Initial shape: eleven hard gates, the diagnostics, and the corpus digest.",
+      "change": "Earlier shapes are in this file's git history.",
       "version": "2026-08-26",
-      "why": "An adoption gate reporting a pass without its numbers cannot be re-checked."
+      "why": "Git is the archive; every entry here ships inside the generated schema."
     }
   ],
   "description": "The merged verdict: every gate, every diagnostic, one answer.",
@@ -384,6 +395,14 @@
       "minimum": 0,
       "title": "Corpus Items",
       "type": "integer"
+    },
+    "corpus_shortfalls": {
+      "description": "Where the frozen corpus fell short of the shape `evaluation` asks for. Empty on a corpus that met it. A line here describes the measuring stick rather than the candidate and blocks nothing - the gate that refuses a run with too little evidence is `scored_denominator`.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Corpus Shortfalls",
+      "type": "array"
     },
     "date": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
@@ -450,7 +469,7 @@
       "$ref": "#/$defs/ScorerIdentity"
     },
     "version": {
-      "default": "2026-09-17",
+      "default": "2026-09-18T12:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -473,5 +492,5 @@
   ],
   "title": "QualificationReport",
   "type": "object",
-  "version": "2026-09-17"
+  "version": "2026-09-18T12:00"
 }

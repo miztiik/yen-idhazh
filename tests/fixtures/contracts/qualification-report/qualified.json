@@ -14,12 +14,14 @@
   "commit_sha": "0000000000000000000000000000000000000000",
   "corpus_digest": "8b39747f9a599262b1caa3bdca3ccf10f1a421ee4fb58c7fa1878ca61bb27ed3",
   "corpus_items": 30,
+  "corpus_shortfalls": [],
   "date": "2026-08-26",
   "detail": "every gate passed on 30 frozen articles",
   "diagnostics": [
     {
       "denominator": 27,
       "name": "hhem_mean",
+      "unit": "summary words per source word",
       "value": "0.7912"
     }
   ],
@@ -43,14 +45,6 @@
     {
       "detail": "recorded from the merged shards",
       "gate": "injection_canaries",
-      "measured": "see the run log",
-      "source": "config/idhazh.json",
-      "status": "passed",
-      "threshold": "see the row"
-    },
-    {
-      "detail": "recorded from the merged shards",
-      "gate": "determinism",
       "measured": "see the run log",
       "source": "config/idhazh.json",
       "status": "passed",
