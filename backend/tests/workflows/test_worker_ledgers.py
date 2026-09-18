@@ -281,14 +281,13 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
     matters, because `state/**/*.csv` would otherwise reach it and a union of two
     segments stacks two copies of a file meant to have exactly one writer.
     """
-    # The file each staged path resolves to. The span rollup files by month and
-    # `state/**/*.csv` is the attribute line that reaches it; the counters file
-    # is a single file at the top of the store. The three item-grain heads left
-    # this set on 2026-09-18 - the shard writes segments now, so it no longer
-    # stages a path it does not write.
+    # The file each staged path resolves to. The counters file is a single file
+    # at the top of the store, and it is the only head this shard still writes.
+    # The three item-grain heads left this set on 2026-09-18 and the span fold
+    # left with them - the shard writes segments now, so it no longer stages a
+    # path it does not write.
     written = {
         "state/runtime-counters.csv": "state/runtime-counters.csv",
-        "state/span-rollup": ledger.span_rollup_relpath(SUBSTITUTED_DATE[:7]),
     }
     inherits_nothing = {
         "state/traces": telemetry.committed_trace_relpath(f"{SUBSTITUTED_DATE}-1", 1),
