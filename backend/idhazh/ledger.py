@@ -1863,9 +1863,9 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     writes it, for the reason `state/feed-retirements.csv` was: the settlement
     runs over whatever it finds, a missing file settles to nothing, and
     registering the shape rather than its first writer is what stops two stale
-    checkouts leaving one date fitted twice. Its sibling `scored-pairs/` is
-    deliberately absent until the step that appends to it lands - a key with no
-    writer is a claim about rows nobody can produce.
+    checkouts leaving one date fitted twice. Its sibling `scored-pairs/` joins on
+    the same terms: `run_id` is in its key, so what settles there is a second
+    attempt at one execution and never a second run of the day.
     """
     flat: list[KeyedLedger] = [
         KeyedLedger(runtime_counters_path(state_dir), RUNTIME_COUNTERS_KEY, RuntimeCountersRow),
@@ -1899,6 +1899,11 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
                 FittedSimilarityThreshold,
             ),
             KeyedLedger(
+                scored_pairs_path(state_dir, date),
+                STORY_SIMILARITY_PAIR_KEY,
+                StorySimilarityPair,
+            ),
+            KeyedLedger(
                 span_rollup_path(state_dir, date[:7]), SPAN_ROLLUP_KEY, SpanRollupRow
             ),
         ]
@@ -1928,6 +1933,12 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
             KeyedLedger(path, STORY_SIMILARITY_THRESHOLD_KEY, FittedSimilarityThreshold)
             for path in day_partition.day_files(
                 state_dir / STORY_SIMILARITY_DIRNAME / FITTED_THRESHOLDS_DIRNAME
+            )
+        ),
+        *(
+            KeyedLedger(path, STORY_SIMILARITY_PAIR_KEY, StorySimilarityPair)
+            for path in day_partition.day_files(
+                state_dir / STORY_SIMILARITY_DIRNAME / SCORED_PAIRS_DIRNAME
             )
         ),
         *(
