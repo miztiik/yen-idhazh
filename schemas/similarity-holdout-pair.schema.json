@@ -1,0 +1,96 @@
+{
+  "$id": "similarity-holdout-pair.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: two addresses, two headlines, a mark and its reason.",
+      "version": "2026-09-18",
+      "why": "The hand labels that set today's floor lived in one person's reading."
+    }
+  ],
+  "description": "One pair, two headlines, a person's mark and the reason for it.",
+  "properties": {
+    "left_date": {
+      "description": "The digest date the left article was published on. On the row so a reader of the holdout report opens two named day files rather than searching the published tree for an address.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Left Date",
+      "type": "string"
+    },
+    "left_title": {
+      "description": "The headline, so a person reading the holdout panel can tell which pair a mark belongs to.",
+      "maxLength": 200,
+      "minLength": 1,
+      "pattern": "^[ -~]+$",
+      "title": "Left Title",
+      "type": "string"
+    },
+    "left_url": {
+      "description": "One of the two articles, as a canonical URL. A person types this file, so it carries addresses rather than digests; the keys are recomputed on read.",
+      "maxLength": 2048,
+      "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+      "title": "Left Url",
+      "type": "string"
+    },
+    "marked_on": {
+      "description": "When a person marked it. A mark taken under an older reading of what counts as one story is still on record and still says when it was taken.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Marked On",
+      "type": "string"
+    },
+    "note": {
+      "description": "Why, in one line. A mark with no reason cannot be argued with when the line later disagrees with it.",
+      "maxLength": 200,
+      "minLength": 1,
+      "pattern": "^[ -~]+$",
+      "title": "Note",
+      "type": "string"
+    },
+    "right_date": {
+      "description": "The digest date the right article was published on. The same day as the left one where the pair could ever have merged, and a different one where the pair straddled midnight.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Right Date",
+      "type": "string"
+    },
+    "right_title": {
+      "description": "The other headline.",
+      "maxLength": 200,
+      "minLength": 1,
+      "pattern": "^[ -~]+$",
+      "title": "Right Title",
+      "type": "string"
+    },
+    "right_url": {
+      "description": "The other article.",
+      "maxLength": 2048,
+      "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+      "title": "Right Url",
+      "type": "string"
+    },
+    "same_story": {
+      "description": "True where a person judged the two to be one event. The false rows are the load-bearing ones: the line has to stay above every one of them.",
+      "title": "Same Story",
+      "type": "boolean"
+    },
+    "version": {
+      "default": "2026-09-18",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "left_url",
+    "right_url",
+    "left_date",
+    "right_date",
+    "left_title",
+    "right_title",
+    "same_story",
+    "marked_on",
+    "note"
+  ],
+  "title": "SimilarityHoldoutPair",
+  "type": "object",
+  "version": "2026-09-18"
+}
