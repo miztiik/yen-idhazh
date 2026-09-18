@@ -1,0 +1,37 @@
+{
+  "band_high": 0.9,
+  "band_low": 0.88,
+  "bin_width": 0.001,
+  "cosine_weight": 1.0,
+  "folded_dates": [
+    "2026-09-18"
+  ],
+  "grammar_digest": "c0426bfa5af2e178d25538a7710f36187a35ae540a9e4293072d866b17df756b",
+  "judge_model": "qwen3-5-9b-q4-k-m",
+  "key_point_weight": 0.0,
+  "prompt_digest": "ae894804f944af7d20770aaeac592245089f908f2f983a16219eb77b761f6246",
+  "scorer_model": "all-minilm-l6-v2-quantized",
+  "slots": [
+    {"bin_low": 0.88,"different_count": 20,"same_count": 0,"unclear_count": 0},
+    {"bin_low": 0.881,"different_count": 19,"same_count": 1,"unclear_count": 1},
+    {"bin_low": 0.882,"different_count": 18,"same_count": 2,"unclear_count": 2},
+    {"bin_low": 0.883,"different_count": 17,"same_count": 3,"unclear_count": 0},
+    {"bin_low": 0.884,"different_count": 16,"same_count": 4,"unclear_count": 1},
+    {"bin_low": 0.885,"different_count": 15,"same_count": 5,"unclear_count": 2},
+    {"bin_low": 0.886,"different_count": 14,"same_count": 6,"unclear_count": 0},
+    {"bin_low": 0.887,"different_count": 13,"same_count": 7,"unclear_count": 1},
+    {"bin_low": 0.888,"different_count": 12,"same_count": 8,"unclear_count": 2},
+    {"bin_low": 0.889,"different_count": 11,"same_count": 9,"unclear_count": 0},
+    {"bin_low": 0.89,"different_count": 10,"same_count": 10,"unclear_count": 1},
+    {"bin_low": 0.891,"different_count": 9,"same_count": 11,"unclear_count": 2},
+    {"bin_low": 0.892,"different_count": 8,"same_count": 12,"unclear_count": 0},
+    {"bin_low": 0.893,"different_count": 7,"same_count": 13,"unclear_count": 1},
+    {"bin_low": 0.894,"different_count": 6,"same_count": 14,"unclear_count": 2},
+    {"bin_low": 0.895,"different_count": 5,"same_count": 15,"unclear_count": 0},
+    {"bin_low": 0.896,"different_count": 4,"same_count": 16,"unclear_count": 1},
+    {"bin_low": 0.897,"different_count": 3,"same_count": 17,"unclear_count": 2},
+    {"bin_low": 0.898,"different_count": 2,"same_count": 18,"unclear_count": 0},
+    {"bin_low": 0.899,"different_count": 1,"same_count": 19,"unclear_count": 1}
+  ],
+  "version": "2026-09-18"
+}
