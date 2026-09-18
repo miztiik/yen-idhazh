@@ -156,3 +156,68 @@ export function mergeRate(totals: MergeTotals, windowDays: number): string | nul
 	const printed = share < 0.5 ? '<1' : String(Math.round(share));
 	return `That is ${printed}% of the ${grouped(totals.published)} stories ${span(windowDays)} published.`;
 }
+
+// --- Where the merge line sits -------------------------------------------------
+
+/** One day's fitted row, reduced to what the chart draws. */
+export interface LineDay {
+	date: string;
+	previous: number;
+	proposed: number | null;
+	applied: number;
+	clampKind: string;
+	heldReason: string;
+	maxDownStep: number;
+}
+
+/** The score axis: the whole range a fitted line may take, and never the data.
+ *
+ * Fixed by two config knobs on purpose. After the first fortnight the line moves
+ * under 0.002 a day - auto-scaled, that fills the panel top to bottom and a
+ * normal day reads as an incident. On a 0-to-1 axis the same move is a fifth of
+ * a pixel and the chart is a flat line whether or not anything is happening. The
+ * corridor is the answer to both: a normal day looks flat, and the reader can
+ * see it is flat against a scale that would have shown a real move.
+ */
+export function corridorOf(knobs: { band_low: number; band_high: number }): [number, number] {
+	return [knobs.band_low, knobs.band_high];
+}
+
+/** The envelope a day's line was allowed to fall into, per day.
+ *
+ * Drawn behind the applied line, because without it the dotted proposal leaving
+ * the band is a dotted line going somewhere and a reader cannot see which side
+ * of the limit it is on. `low` is `previous - max_down_step` and `high` is
+ * `previous`: there is no upward clamp, so the band has no top above where the
+ * line already was.
+ */
+export function clampEnvelope(days: readonly LineDay[]): { low: number; high: number }[] {
+	return days.map((day) => ({ low: day.previous - day.maxDownStep, high: day.previous }));
+}
+
+/** How the clamp behaved over the window, in one sentence.
+ *
+ * The clamp gets no panel of its own: a panel titled "the clamp" would draw a
+ * bar chart of a word. The dotted line outside the band IS the clamp firing, in
+ * the one place a reader is already looking. What the reader would lose is the
+ * count, so the count is here.
+ */
+export function clampNote(days: readonly LineDay[], windowDays: number): string {
+	const held = days.filter((day) => day.clampKind !== 'none').length;
+	if (held === 0) {
+		return `The clamp has not held the line back on any of the last ${windowDays} days.`;
+	}
+	return `The clamp held the line back on ${held} of the last ${windowDays} days.`;
+}
+
+/** How many days in the window fitted nothing, in one sentence, or null.
+ *
+ * A held day breaks the proposed series rather than joining across it: a line
+ * drawn through a day nothing was fitted on claims a measurement nobody took.
+ * The applied line does continue, because the line really was applied.
+ */
+export function heldNote(days: readonly LineDay[], windowDays: number): string | null {
+	const held = days.filter((day) => day.heldReason !== 'none').length;
+	if (held === 0) return null;
+	return `Nothing was fitted on ${held} of these ${windowDays} days.`;
+}
