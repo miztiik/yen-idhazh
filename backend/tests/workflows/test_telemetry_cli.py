@@ -225,3 +225,29 @@ def test_show_names_the_day_shard_and_the_month_shard(tmp_path: Path) -> None:
     )
     assert day_shard in report, f"the day shard is missing from the listing: {report}"
     assert month_shard in report, f"the month shard is missing from the listing: {report}"
+
+
+def test_a_store_that_nests_is_listed_rather_than_silently_missed(tmp_path: Path) -> None:
+    """A one-segment glob omits a nested store and reports success either way.
+
+    `state/` root already holds 13 directories, so a store that groups its files
+    under a parent is the ordinary next shape rather than an exotic one. The
+    listing globbed `*/<Y>/<M>/<D>*`, which is one segment, so
+    `<group>/<store>/<Y>/<M>/<D>` was absent from a report that said nothing
+    about the absence - the failure mode this test exists to hold shut.
+
+    Built here rather than read from the archive, so it holds on a tree the
+    pipeline has never produced (CLAUDE.md section 13).
+    """
+    state_root, _digest_root, date = _a_published_day(tmp_path)
+    year, month, day = date.split("-")
+    nested = state_root / "a-group" / "a-store" / year / month
+    nested.mkdir(parents=True)
+    (nested / f"{day}.csv").write_text("version\n", encoding="utf-8", newline="\n")
+    month_fold = state_root / "a-group" / "a-store" / f"{year}-{month}.csv"
+    month_fold.write_text("version\n", encoding="utf-8", newline="\n")
+
+    report = "\n".join(inventory.files(state_root, date=date))
+
+    assert "a-group/a-store" in report, f"the nested day shard is missing: {report}"
+    assert month_fold.relative_to(state_root).as_posix() in report
