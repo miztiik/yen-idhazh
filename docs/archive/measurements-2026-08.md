@@ -1,7 +1,7 @@
 # Retired measurements, August 2026
 
 **Last Updated**: 2026-09-18
-Moved out of [../reference/measurements.md](../reference/measurements.md). Every
+Moved out of [../reference/pipeline-cost.md](../reference/pipeline-cost.md). Every
 number here was true when it was taken, on the hardware and date its own section
 names. Several sections measure a gate or a cap that no longer exists.
 
@@ -433,7 +433,7 @@ HTTP/1.1. Deterministic bytes, so no spread; n=1 per row.
 each other**, and they are the reason the encoder stayed here. They were measured
 on 2026-09-09 by the same method against
 `https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/`, n=3 per file,
-spread zero ([../reference/measurements.md](../reference/measurements.md), "What
+spread zero ([../reference/pipeline-cost.md](../reference/pipeline-cost.md), "What
 the encoder costs on the wire from Hugging Face"). **The hub compresses the
 tokenizer to within 3,059 bytes of what this origin does and does not compress
 the weights at all**, so a first search from the hub costs 28.4 MB against 21.6
@@ -661,7 +661,7 @@ scrape has printed `llamacpp:` lines into the job log since 2026-08-25, and the
 raw body has ridden in `runtime-log-<shard>` for two days. From 2026-08-27 each
 shard also files the counters as one row of `state/runtime-counters.csv`, which
 is what turned the read rate from a reported number into a checked one - see
-[The ledger and the server agree about the read rate](../reference/measurements.md#the-ledger-and-the-server-agree-about-the-read-rate)
+[The ledger and the server agree about the read rate](../reference/pipeline-cost.md#the-ledger-and-the-server-agree-about-the-read-rate)
 for the arithmetic, the reconciliation and the storage cost.
 
 
@@ -682,7 +682,7 @@ reading of that run.
 job records the processor it drew in its own `state/runtime-counters.csv` row,
 so the covariate this comparison used to be unable to hold is now readable per
 shard. The `route` job still has no such row
-([Still unmeasured](../reference/measurements.md#still-unmeasured)).
+([Still unmeasured](../reference/pipeline-cost.md#still-unmeasured)).
 
 **Date.** **2026-08-29.** The first scheduled run at cap 5000 is run
 `33244705103`, ledger run id `2026-08-29-2`, head commit `fa53634`, started
@@ -693,7 +693,7 @@ control every comparison below uses.
 **n.** One run, four `work` jobs, 160 items planned, 40 items a worker.
 `run.max_parallel` is 4 and `run.safety_ceiling_per_run` is 160, so a scheduled
 run cannot hand a worker more. That is the same load
-[The first scheduled day on the configured model](../reference/measurements.md#the-first-scheduled-day-on-the-configured-model-2026-08-27)
+[The first scheduled day on the configured model](../reference/pipeline-cost.md#the-first-scheduled-day-on-the-configured-model-2026-08-27)
 carried, which is what makes its 85.6 minutes a like-for-like baseline rather
 than a number off a differently shaped day.
 
@@ -836,7 +836,7 @@ or worse, which is 10 to 21 percent above the worst prose measured here. An
 absence test on an event that will not fire passes on a run that did nothing,
 and this project has published that mistake once already, when a canary that
 returned no summary at all was written up as a sanitizer failure
-([The fifth canary was never exercised](../reference/measurements.md#the-fifth-canary-was-never-exercised)).
+([The fifth canary was never exercised](../reference/pipeline-cost.md#the-fifth-canary-was-never-exercised)).
 
 **What makes it fail on a run that exercised nothing.** The ledger's
 `source_words` is the post-cap count, and it cannot exceed
@@ -941,7 +941,7 @@ a published payload a reader's browser fetches rather than measurement evidence
 under `state/` ([../architecture/contracts/schemas.md](../architecture/contracts/schemas.md)).
 That reasoning does not reach the `route` job, which runs no shards and files no
 counters row, so which processor a `route` job drew is still unrecorded
-([Still unmeasured](../reference/measurements.md#still-unmeasured)).
+([Still unmeasured](../reference/pipeline-cost.md#still-unmeasured)).
 
 
 ## What the first run at cap 5000 must record
@@ -1040,7 +1040,7 @@ read a committed file instead of an API.
 | 9 | Widest complete request, prompt plus output tokens, from `n_tokens_max` | 3,775 + 900 measured, against `n_ctx` of 8,192. **Above 7,800 the cap comes down to 4000 and `n_ctx` does not move** | **4,925 tokens**, shard 2. The four shards read 3,122, 4,178, 4,570 and 4,925. **2,875 below the 7,800 line and 3,267 below the window** - step 7 did not fire and the cap stays at 5000 |
 | 10 | Implied tokens per word on the widest item | 1.35 to 1.44 measured on this project's prose; 1.59 or worse is what it takes to overflow | **1.387 tokens an article word over the run, and 1.352 on the widest item.** Regressing `input_tokens` on `source_words` over the 104 sized items gives a slope of 1.387 and a fixed prompt of 951 tokens, with a residual spread of 119 tokens. On the widest item - 2,772 words, 4,698 prompt tokens - the article's own share is 3,747 tokens. Both sit inside the measured band and well under the 1.59 that would overflow. **Superseded 2026-08-30 by a wider population**: over all 413 rows written at cap 5000 the slope is **1.2999** and the fixed prompt 998 tokens ([Three figures the ledgers already held](#three-figures-the-ledgers-already-held-2026-08-30)). The 1.387 here is this one run and it reproduces exactly; the two runs after it read an article to the full 3,846-word ceiling and the widest point is what sets a slope. 1.2999 sits *below* the 1.35 to 1.44 band this row checks against, so the band is superseded rather than confirmed, and 1.2999 is 18.2 percent under the 1.59 that overflows |
 | 11 | `context_exceeded` rows | 0 over 3,672 rows of `state/item-health/2026-08.csv`, counted 2026-08-29. Read it beside row 3 - a zero here means nothing if nothing was read past 1,923 words | **0 of 160 planned rows.** It is a measurement rather than an absence, because row 3 says 6 items were read past the old ceiling on this run |
-| 12 | Peak resident set per worker | 14.39 GiB high point on record, against 16 GB on the runner | **12.56, 12.64, 12.70 and 13.55 GiB** for `llama-server`, plus 1.43 to 1.98 GiB for the Python worker, over 167 to 260 samples a shard. Under the 14.39 on record and 2.45 GiB under the runner's 16 GB at the worst shard. `cgroup_memory_peak_bytes` printed `unavailable` on all four, so that instrument is still broken ([Still unmeasured](../reference/measurements.md#still-unmeasured)) |
+| 12 | Peak resident set per worker | 14.39 GiB high point on record, against 16 GB on the runner | **12.56, 12.64, 12.70 and 13.55 GiB** for `llama-server`, plus 1.43 to 1.98 GiB for the Python worker, over 167 to 260 samples a shard. Under the 14.39 on record and 2.45 GiB under the runner's 16 GB at the worst shard. `cgroup_memory_peak_bytes` printed `unavailable` on all four, so that instrument is still broken ([Still unmeasured](../reference/pipeline-cost.md#still-unmeasured)) |
 | 13 | `route`: `items_prefiltered`, `items_asked`, `unrouted` | 18 unrouted is the median of the runs on record. A longer body yields more quantities, so **prefiltered should fall and unrouted should rise**. It costs charts, not clock - the stage self-stops at `run.route_budget_minutes` of 40 | **58 prefiltered, 46 asked, 0 unrouted** over the 104 items the stage decided, with 10 charts drafted and 8 kept. It spent 37.0 of its 40 minutes, so it just fit. **The prediction did not hold, and this run cannot test it**: prefiltered rose from 44.1 percent on run 1 (41 of 93) to 55.8 percent, and unrouted fell from a median of 18 to zero. Only 6 items got any extra text at all, so nothing here is attributable to the cap |
 | 14 | `hhem` against `hhem_full` on items that would have been cut at the old cap | `hhem_delta` runs -0.1235 to +0.0381 over the 24 cut items on record. **This row is an observation, not a gate.** Nothing measured says a longer read produces a better summary | **`hhem_delta` is 0.0000 on all 6.** That is the ledger being unable to answer rather than an answer: `cli.stage_work` passes `article.text` as both `seen_text` and `full_text`, so the two scores are one score and the column is structurally zero in production. The instrument that can answer is the offline re-score over committed evidence pairs ([Which way the grader's length bias runs](#which-way-the-graders-length-bias-runs)) |
 
@@ -1095,7 +1095,7 @@ changing anything.
 article read, and that is all it is measured to buy. Whether the summary is
 better is a different measurement with a different instrument, and the instrument
 that would say has never returned a real number
-([Still unmeasured](../reference/measurements.md#still-unmeasured)).
+([Still unmeasured](../reference/pipeline-cost.md#still-unmeasured)).
 
 **The run also showed the ledger cannot answer row 14 at all.** `hhem_delta` is
 0.0000 on all six items the old cap would have cut, because production hands the
@@ -1228,7 +1228,7 @@ lottery that moved a shard 1.37x within one run, so it needs two of three.
 **When every step passes, say so on this page.** Replace the sheet's opening
 sentence - the one that says no value is measured yet - with the run id and the
 date, and strike the `truncation_cap_tokens` half of the
-[Still unmeasured](../reference/measurements.md#still-unmeasured) row in the same commit. A sheet that stays
+[Still unmeasured](../reference/pipeline-cost.md#still-unmeasured) row in the same commit. A sheet that stays
 blank after its run has happened reads as a run that never happened.
 
 
@@ -1271,7 +1271,7 @@ Run `32742672105`, 2026-08-24, GitHub-hosted `ubuntu-latest` (4 vCPU, 16 GB),
 four `work` jobs, `Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record), llama.cpp `b10598`.
 Every row is
 already on this page under
-[Model throughput across the four workers](../reference/measurements.md#model-throughput-across-the-four-workers).
+[Model throughput across the four workers](../reference/pipeline-cost.md#model-throughput-across-the-four-workers).
 
 | Quantity | Four shards |
 | --- | --- |
@@ -2068,7 +2068,7 @@ runs:
  [What a job log names](../archive/measurements-2026-08.md#what-a-job-log-names) do print. **This was never a
  grep fault**: the line is not printed at all below verbosity 4, so the pattern
  was right and the line was not there
- ([What llama-server reports about its own runtime settings](../reference/measurements.md#what-llama-server-reports-about-its-own-runtime-settings-2026-09-09)).
+ ([What llama-server reports about its own runtime settings](../reference/pipeline-cost.md#what-llama-server-reports-about-its-own-runtime-settings-2026-09-09)).
 - The log summary's `grep -E '^(srv|slot) '` **could not match this build's
  output, and that one was a fault.** Every line starts with a timestamp and a
  level, as in
@@ -2146,7 +2146,7 @@ work against different bounds: 30 replay calls at 3 repeats on frozen payloads,
 against up to 40 live items with fetch, extraction, routing and scoring around
 them, under the `work` job's 150-minute bound. The configured model has never
 run a production day, so its worst worker is still unmeasured
-([Where the work job's bound comes from](../reference/measurements.md#where-the-work-jobs-bound-comes-from)).
+([Where the work job's bound comes from](../reference/pipeline-cost.md#where-the-work-jobs-bound-comes-from)).
 
 ## Drift review and source extraction, 2026-09-08
 

@@ -346,7 +346,7 @@ def test_the_two_calls_fit_the_window_at_the_cap() -> None:
         f"{sequence - inference.n_ctx}. Raise models.summarize.inference.n_ctx, or "
         "lower extract.truncation_cap_tokens or elements.max_per_article beside it. "
         "KV is 32 KiB a token on the configured weights, so a doubling is about a "
-        "gigabyte and docs/reference/measurements.md says what the runner had free."
+        "gigabyte and docs/reference/pipeline-cost.md says what the runner had free."
     )
 
 

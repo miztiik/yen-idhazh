@@ -41,7 +41,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 ## 2. Row #1 - How often does an article actually state a whole
 
 - **Scope:** Count, over the committed corpus, how often an article states a total that its parts are meant to sum to.
-- **Files touched:** `docs/reference/measurements.md`
+- **Files touched:** `docs/reference/pipeline-cost.md`
 - **Acceptance gates:** the docs check; no code moves.
 - **Oracle:** The figure carries the corpus, the date and the definition of "states a whole" that was counted, so a later count can be compared to this one rather than merely disagreeing with it.
 

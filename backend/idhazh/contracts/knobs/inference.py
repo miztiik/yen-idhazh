@@ -28,7 +28,7 @@ class InferenceConfig(Model):
             "layers of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB "
             "whatever the window is. Whether that fits is decided by what the machine "
             "had free and never by what the processes held - "
-            "docs/reference/measurements.md."
+            "docs/reference/pipeline-cost.md."
         ),
     )
     n_threads: int = Field(default=4, ge=1)

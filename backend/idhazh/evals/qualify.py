@@ -3,7 +3,7 @@
 One model runs. There is no incumbent case, so no gate here reads a second
 model's number: the owner ruled on 2026-08-26 that the candidate is qualified
 alone, and every threshold below is read from something already committed -
-`config/idhazh.json`, the adoption target in `docs/reference/measurements.md`,
+`config/idhazh.json`, the adoption target in `docs/reference/pipeline-cost.md`,
 or the dispatch's own job bound.
 
 A gate never moves to let a candidate through. The only two ways past one are a
@@ -56,7 +56,7 @@ from idhazh.contracts.qualification import (
 COMPLETE: Final = "stop"
 
 _CONFIG: Final = "config/idhazh.json"
-_TARGET: Final = "docs/reference/measurements.md - adoption target"
+_TARGET: Final = "docs/reference/pipeline-cost.md - adoption target"
 _DISPATCH: Final = "workflow dispatch input"
 _RULE_11: Final = "CLAUDE.md Guardrail #11"
 _ANDRE: Final = "Andre, 2026-08-26"

@@ -430,7 +430,7 @@ That table is the argument for decision 3 rather than an illustration of it. At 
 
 ## The archive lists stories, and fetches them a month at a time
 
-`/archive/` used to list five dates and no articles, and it inlined every committed day whole so on-device search could read the vectors without a request. Measured 2026-08-27 on one checkout, six committed days and 2,237 items: **1,766,682 gzipped bytes**, growing **489,843 bytes** for the one extra day that carried 621 stories. The page a reader opened to find one story carried all of them. It is **2,912 bytes** now, and one more day of 621 stories costs it **24 bytes** ([../../reference/measurements-site.md](../../reference/measurements-site.md#the-archive-stops-carrying-the-corpus)).
+`/archive/` used to list five dates and no articles, and it inlined every committed day whole so on-device search could read the vectors without a request. Measured 2026-08-27 on one checkout, six committed days and 2,237 items: **1,766,682 gzipped bytes**, growing **489,843 bytes** for the one extra day that carried 621 stories. The page a reader opened to find one story carried all of them. It is **2,912 bytes** now, and one more day of 621 stories costs it **24 bytes** ([../../reference/site-weight.md](../../reference/site-weight.md#the-archive-stops-carrying-the-corpus)).
 
 What it renders now, top to bottom:
 
@@ -483,7 +483,7 @@ still grows with days:
 Both fixture archives cover the same 24 months, so the difference between the
 two rows of each column is days and nothing else. Measured 2026-09-01 on Intel
 Core a developer machine / / node 24.12.0; method and the full numbers in
-[../../reference/measurements-site.md](../../reference/measurements-site.md#the-archive-day-list-stops-growing-a-row-a-day).
+[../../reference/site-weight.md](../../reference/site-weight.md#the-archive-day-list-stops-growing-a-row-a-day).
 
 #### Design rationale
 
@@ -679,7 +679,7 @@ Four things make it check rather than look like it checks.
 
 **A GitHub Release asset cannot serve this**, which is why the second origin is the hub rather than a copy we publish. Measured the same day: no `Access-Control-Allow-Origin` on any hop, 15 refusals in 15 attempts.
 
-**The release that was built for that leg is deleted, and the decision is taken.** Tag `encoder-2026-08-22` at commit `5f1eaf60`, and the release under it carrying the five weight files as flat assets, were made on 2026-09-09 for the failover the measurement above killed. Nothing referenced them: not `config/`, not `asset-base.js`, not a test - only `backend/utilities/encoder_origin_probe.mjs`, which is a hand-run operator tool that joins no suite. **What they cost was not disk.** A tag pins that commit's whole tree - `corpus/` and its article text included - reachable for ever, and `.github/workflows/prune.yml` pushes no tags, so for that one commit it would have quietly undone the thing CLAUDE.md section 8 grants the prune its force-push exception to achieve. That cost had not arrived yet: measured 2026-09-10, `git rev-list 5f1eaf60 --not origin/main` was empty, so the tag held nothing `main` did not already hold. It would have arrived on the day the next prune reached that range, which is exactly when nobody would be looking. **What the deletion cost is stated rather than implied:** the five assets a browser trace verified have no published copy now, and any later argument about that leg starts from a fresh measurement. The measurement itself survives in [../../reference/measurements-site.md](../../reference/measurements-site.md), which is what an argument would cite anyway. Owner decision, 2026-09-10, taken over the alternative of keeping the tag and recording a deliberate hole in the section 8 exception. The probe now reads the weights at `main` rather than at a tag, and its two release target families are gone with the release.
+**The release that was built for that leg is deleted, and the decision is taken.** Tag `encoder-2026-08-22` at commit `5f1eaf60`, and the release under it carrying the five weight files as flat assets, were made on 2026-09-09 for the failover the measurement above killed. Nothing referenced them: not `config/`, not `asset-base.js`, not a test - only `backend/utilities/encoder_origin_probe.mjs`, which is a hand-run operator tool that joins no suite. **What they cost was not disk.** A tag pins that commit's whole tree - `corpus/` and its article text included - reachable for ever, and `.github/workflows/prune.yml` pushes no tags, so for that one commit it would have quietly undone the thing CLAUDE.md section 8 grants the prune its force-push exception to achieve. That cost had not arrived yet: measured 2026-09-10, `git rev-list 5f1eaf60 --not origin/main` was empty, so the tag held nothing `main` did not already hold. It would have arrived on the day the next prune reached that range, which is exactly when nobody would be looking. **What the deletion cost is stated rather than implied:** the five assets a browser trace verified have no published copy now, and any later argument about that leg starts from a fresh measurement. The measurement itself survives in [../../reference/site-weight.md](../../reference/site-weight.md), which is what an argument would cite anyway. Owner decision, 2026-09-10, taken over the alternative of keeping the tag and recording a deliberate hole in the section 8 exception. The probe now reads the weights at `main` rather than at a tag, and its two release target families are gone with the release.
 
 **What it costs a reader, said before they press the button.** The search panel's sentence names this site as the source, and adds one conditional clause: if this site cannot serve the files, the browser asks Hugging Face instead - about 50 MB rather than 43, because the hub does not compress the weights - and they would see the request. The unconditional half stays first and stays true either way: nothing a reader types leaves their browser. Almost nobody pays the conditional half, so it does not open the sentence; a reader deciding whether to start is still told before they start.
 
@@ -773,7 +773,7 @@ stood empty beside the prose, at every width from 1,280px up. The frame is not
 the problem and was not widened: at 801px the item already takes 91.9 percent of
 the frame. What is spendable is one column of at most 27.1rem, once a
 68-character measure and a 1.75rem source mark are paid for
-([../../reference/measurements-site.md](../../reference/measurements-site.md#what-the-reading-page-does-with-a-wide-screen-2026-09-02)).
+([../../reference/site-weight.md](../../reference/site-weight.md#what-the-reading-page-does-with-a-wide-screen-2026-09-02)).
 
 **One trailing column at a time.** The item's own footer rail wants the same
 slot, and keeping both leaves the summary 570px against a measure of 659.81. So
@@ -955,7 +955,7 @@ one ended up drawing a chart that already existed; a scale library returns a
 number. The beneficiary feature Guardrail #8 asks for is the whole console: four
 charts that agree on what a pixel is. The cost is measured rather than argued -
 the gzipped route weight was measured and written into
-`docs/reference/measurements.md`, and Carmack made measuring it a condition of
+`docs/reference/pipeline-cost.md`, and Carmack made measuring it a condition of
 accepting the dependency at all. That condition still holds; what was dropped on
 2026-08-30 is the per-route gate that failed every later branch until somebody
 retyped the number. Authority: Jony and Carmack, 2026-08-25, owner accepted.
