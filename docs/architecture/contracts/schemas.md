@@ -66,7 +66,7 @@ The shapes, and where each one lives once written:
 | `StorySimilarityDistribution` | `story-similarity-distribution` | the whole of `state/story-similarity/score-distribution.json`, rewritten - a fixed row of slots and three counts each, so the fit reads one file of a size that never changes (Guardrail #12) |
 | `FittedSimilarityThreshold` | `fitted-similarity-threshold` | one appended row of `state/story-similarity/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` - what the merge line was, what the evidence proposed, and what the run applied |
 | `SimilarityHoldoutPair` | `similarity-holdout-pair` | one row of `state/story-similarity/holdout-pairs.csv`, typed by a person - two addresses, two headlines, and whether they are one story |
-| `ValidationRow` | `validation-row` | one appended row of `state/validation-<date>.csv` |
+| `ValidationRow` | `validation-row` | one row of `state/<run.trial_state_dirname>/validation/<YYYY>/<MM>/<DD>.csv`, folded in from a segment |
 | `RunManifest` | `run-manifest` | `.../<DD>/run.json`, append-only per date |
 | `DigestDay` | `digest-day` | `.../<DD>/digest.json` and each `run-<N>.json` |
 | `SearchIndex` | `search-index` | `frontend/public/assist/index/<YYYY-MM>.json`, with its vectors in a sibling `.bin` |

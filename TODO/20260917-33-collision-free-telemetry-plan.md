@@ -79,14 +79,14 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Segment store and the `compact` stage, shipped inert | - | A | DONE | p33a1 | #862 | - |
 | 5 | Machine page stops lying about a day with no rows | - | A | DONE | p33r5 | #864 | - |
-| 6 | The validation ledger leaves the root of `state/` | - | A | PENDING | - | - | - |
+| 6 | The validation ledger leaves the root of `state/` | - | A | IN-FLIGHT | p33a6 | - | - |
 | 7 | OS memory and load, per item | - | A | DONE | p33r7b | #865 | - |
 | 2 | `host-fingerprint` writes segments | 1 | B | DONE | p33b2 | #866 | - |
 | 3 | `item-health`, `scores`, `score-index` write segments | 2 | B | IN-FLIGHT | p33b3 | - | - |
 | 4 | `span-rollup` writes segments | 3 | B | IN-FLIGHT | p33b4 | - | - |
 | 17 | `runtime-counters` writes segments | 4 | B | IN-FLIGHT | p33b17 | - | - |
 | 10 | `model_load_ms` and `job_seconds` join `host-fingerprint` | 2 | C | IN-FLIGHT | p33c10 | #887 | - |
-| 12 | Delete the merge machinery | 2, 3, 4, 17 | D | PENDING | - | - | - |
+| 12 | Delete the merge machinery | 2, 3, 4, 6, 17 | D | PENDING | - | - | - |
 | 13 | Compaction lag and free swap on the console band | 1, 5, 7, 12 | D | PENDING | - | - | - |
 | 11 | Delete `runtime-counters` and everything that reads it | 7, 10, 17 | E | PENDING | - | - | - |
 | 15 | Generated TypeScript contracts replace the hand-written ones | 10, 11 | F | PENDING | - | - | - |

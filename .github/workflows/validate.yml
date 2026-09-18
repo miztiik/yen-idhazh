@@ -470,16 +470,47 @@ jobs:
           merge-multiple: true
           path: backend/var/qualification/
 
+      # The third copy of the scratch config, and the last job that had none.
+      # `qualify-decide` writes this dispatch's verdict, and until 2026-09-18 it
+      # wrote it to `state/validation-<date>.csv` off the repository root - so a
+      # candidate judged on a trial state root still wrote the tree a published
+      # day is built from. `trial_state` matches the two jobs above it.
+      - name: Build the candidate config
+        uses: ./.github/actions/candidate-config
+        with:
+          models_file: ${{ needs.plan.outputs.candidate_models_file }}
+          trial_state: pipeline-tests
+
       # Non-zero when a gate fails, deliberately: that verdict is an ESCALATE
       # and a green build would let it pass unread.
+      #
+      # `--execution ${{ github.run_id }}` is what keeps two candidates apart.
+      # GitHub allocates that number and no second dispatch can reproduce it, so
+      # the verdict's run id - and the segment filename built from it - differ
+      # even when both dispatches judge the same day. Left out, the run counts
+      # off the last committed manifest and two dispatches read the same answer.
       - name: Run the gates
         id: gates
         continue-on-error: true
         run: |
           python -m idhazh qualify-decide \
+            --config backend/var/candidate-config \
             --date "${{ needs.plan.outputs.date }}" \
+            --execution "${{ github.run_id }}" \
             --job-budget-minutes "${{ fromJSON(inputs.job_budget_minutes) }}" \
             --runner ubuntu-latest
+
+      # The gates write a segment rather than the day file, so this is what turns
+      # it into the row the step below commits. `--config` points it at the same
+      # trial state root the gates wrote to, so the segment it drains is the one
+      # this dispatch left and no production head is opened.
+      #
+      # `if: always()` for the same reason the commit step carries it: a failed
+      # gate still leaves a verdict, and that is the dispatch whose record is
+      # worth having.
+      - name: Fold the verdict into its day
+        if: always()
+        run: python -m idhazh compact --config backend/var/candidate-config
 
       # The ten gates, failures first. `if: always()` because the step above
       # exits non-zero on an ESCALATE, and that is precisely the verdict a
@@ -488,12 +519,23 @@ jobs:
         if: always()
         run: cat backend/var/qualification/report.md >> "$GITHUB_STEP_SUMMARY" || true
 
+      # The trial root, and `state` whole until 2026-09-18 - which staged every
+      # production ledger in the checkout, so a dispatch could commit whatever
+      # else happened to be dirty in the tree. This job's whole state root is
+      # redirected here by the config step above, so everything under this path
+      # that is dirty on this runner was written by this runner.
+      #
+      # The trial root rather than `state/pipeline-tests/validation`, and that is
+      # the same trade the telemetry fold records: `git add` on a path the
+      # checkout does not hold aborts the whole step under `set -e`, and a
+      # dispatch whose gates wrote no verdict has no validation directory at all.
+      # The trial root is in every checkout.
       - name: Commit the validation ledger
         env:
           COMMIT_MESSAGE: "qualify: ${{ needs.plan.outputs.candidate_id }} ${{ needs.plan.outputs.date }}"
           NOTHING_STAGED_MESSAGE: "the gates wrote no ledger row"
           PUSH_FAILED_MESSAGE: "could not push the validation ledger after three attempts"
-        run: bash .github/scripts/commit-and-push.sh state
+        run: bash .github/scripts/commit-and-push.sh state/pipeline-tests
 
       - uses: actions/upload-artifact@v7
         with:

@@ -21,6 +21,11 @@ from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.runtime_counters import RuntimeCountersRow, ServerJob
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
+from idhazh.contracts.validation_row import (
+    LeaderboardProvenance,
+    ValidationRow,
+    ValidationVerdict,
+)
 from idhazh.stages import compact
 
 pytestmark = pytest.mark.contract
@@ -865,3 +870,124 @@ def test_one_digest_written_by_two_jobs_is_indexed_once(tmp_path: Path) -> None:
 
     rows = _rows(ledger.score_index_path(state, TODAY))
     assert [row["observation_digest"] for row in rows] == ["a" * 64]
+
+
+def _verdict(
+    date: str, run_id: str, *, model_id: str, qualified: bool, **cells: object
+) -> ValidationRow:
+    return ValidationRow.model_validate(
+        {
+            "version": ValidationRow.schema_version(),
+            "model_id": model_id,
+            "is_incumbent": False,
+            "selected": qualified,
+            "leaderboard_hhem": None,
+            "leaderboard_provenance": LeaderboardProvenance.NOT_REPORTED,
+            "measured_hhem": 0.9,
+            "articles": 30,
+            "date": date,
+            "run_id": run_id,
+            "commit_sha": "c" * 40,
+            "runner": "ubuntu-latest",
+            "verdict": (
+                ValidationVerdict.QUALIFIED if qualified else ValidationVerdict.NOT_QUALIFIED
+            ),
+            "detail": f"every gate passed on 30 frozen articles for {model_id}",
+            **cells,
+        }
+    )
+
+
+def test_two_candidates_of_one_date_land_two_rows_in_one_verdict_day(tmp_path: Path) -> None:
+    """The row's oracle. Two dispatches, two filenames, one day head, both verdicts.
+
+    Driven through `ledger.write_segment`, the call both decide stages make,
+    because what this asks is whether two candidates dispatched at once can
+    record their verdicts without taking each other's path. They shared
+    `state/validation-<date>.csv` until 2026-09-18, and `merge=union` was the
+    only thing keeping the two apart - which Row #12 deletes.
+
+    What it cannot settle is whether two real dispatches on two runners produce
+    this; the first live pair is that check.
+    """
+    state = tmp_path / ledger.STATE_DIRNAME
+    other_run = f"{TODAY}-900000003"
+    for run_id, model_id, qualified in (
+        (RUN, "gemma-4-e4b", True),
+        (other_run, "qwen3-9b", False),
+    ):
+        ledger.write_segment(
+            state,
+            ledger.SegmentLedger.VALIDATION,
+            [_verdict(TODAY, run_id, model_id=model_id, qualified=qualified)],
+            run_id=run_id,
+            attempt=1,
+            job=ServerJob.DECIDE,
+            shard=0,
+        )
+
+    waiting = ledger.segment_files(state, ledger.SegmentLedger.VALIDATION)
+    assert len({path.name for path in waiting}) == 2, "two candidates, two filenames"
+
+    report = compact.stage_compact(state)
+
+    head = ledger.validation_path(state, TODAY)
+    assert head == state / "validation" / "2026" / "09" / "17.csv"
+    rows = _rows(head)
+    assert sorted((row["run_id"], row["model_id"]) for row in rows) == sorted(
+        [(RUN, "gemma-4-e4b"), (other_run, "qwen3-9b")]
+    )
+    assert report.rows_superseded == 0, "two candidates settle nothing against each other"
+    assert report.heads_written == (ledger.validation_relpath(TODAY),)
+    assert not ledger.segment_files(state), "a folded segment is removed, not left behind"
+
+
+def test_two_dispatches_of_one_candidate_stay_two_verdicts(tmp_path: Path) -> None:
+    """One model judged twice in a day is two facts, so the run id is in the key.
+
+    The ledger this replaced held exactly that pair: four rows on 2026-08-22,
+    two models judged by two runs against two trees. A key of date and model
+    alone would keep one of each and lose the other tree's answer.
+    """
+    state = tmp_path / ledger.STATE_DIRNAME
+    later_run = f"{TODAY}-900000004"
+    for run_id in (RUN, later_run):
+        ledger.write_segment(
+            state,
+            ledger.SegmentLedger.VALIDATION,
+            [_verdict(TODAY, run_id, model_id="gemma-4-e4b", qualified=True)],
+            run_id=run_id,
+            attempt=1,
+            job=ServerJob.DECIDE,
+            shard=0,
+        )
+
+    compact.stage_compact(state)
+
+    rows = _rows(ledger.validation_path(state, TODAY))
+    assert sorted(row["run_id"] for row in rows) == sorted([RUN, later_run])
+
+
+def test_a_second_attempt_at_one_dispatch_corrects_the_first(tmp_path: Path) -> None:
+    """A re-run keeps the run id, so without the attempt element it takes its own path.
+
+    The two attempts judge the same candidate under the same run, so they hold
+    one key and the later one wins the cells they disagree on.
+    """
+    state = tmp_path / ledger.STATE_DIRNAME
+    for attempt, qualified in ((1, False), (2, True)):
+        ledger.write_segment(
+            state,
+            ledger.SegmentLedger.VALIDATION,
+            [_verdict(TODAY, RUN, model_id="gemma-4-e4b", qualified=qualified)],
+            run_id=RUN,
+            attempt=attempt,
+            job=ServerJob.DECIDE,
+            shard=0,
+        )
+
+    report = compact.stage_compact(state)
+
+    rows = _rows(ledger.validation_path(state, TODAY))
+    assert [row["verdict"] for row in rows] == [ValidationVerdict.QUALIFIED.value]
+    assert report.rows_superseded == 1
