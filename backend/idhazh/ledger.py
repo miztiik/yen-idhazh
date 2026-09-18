@@ -113,6 +113,7 @@ from idhazh.contracts.chrome_line import ChromeLineRow
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.feed_retirement import FeedRetirementRow
+from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import (
     DROPPED_CELLS,
@@ -137,6 +138,17 @@ SPAN_ROLLUP_DIRNAME: Final = "span-rollup"
 PUBLISHED_DIRNAME: Final = "published"
 VISUAL_PRUNES_DIRNAME: Final = "visual-prunes"
 COUNTERFACTUAL_SCORES_DIRNAME: Final = "counterfactual-scores"
+
+#: The one nested store under `state/`. Everything the adaptive merge line writes
+#: hangs off this word - the scored pairs, the fitted lines, the hand-marked
+#: holdout and the score record - so a reader of the commit step sees the whole
+#: feature's footprint in one prefix rather than in four unrelated top-level
+#: names.
+STORY_SIMILARITY_DIRNAME: Final = "story-similarity"
+SCORED_PAIRS_DIRNAME: Final = "scored-pairs"
+FITTED_THRESHOLDS_DIRNAME: Final = "fitted-thresholds"
+SIMILARITY_HOLDOUT_FILENAME: Final = "holdout-pairs.csv"
+SCORE_DISTRIBUTION_FILENAME: Final = "score-distribution.json"
 RUNTIME_COUNTERS_FILENAME: Final = "runtime-counters.csv"
 FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
 CHROME_FILENAME: Final = "chrome.csv"
@@ -208,6 +220,13 @@ VISUAL_PRUNE_KEY: Final = ("date", "run_id")
 #: planned on its own: the same address on two desks is two scores, and dropping
 #: one of them as a repeat would lose a fact.
 COUNTERFACTUAL_SCORE_KEY: Final = ("date", "run_id", "vertical", "url_key")
+
+#: What makes two fitted-line rows the same record. One run fits one line for one
+#: date, so a second row under those two cells is a second attempt at one
+#: execution rather than a second answer. Both attempts read the same score
+#: record and walk the same counts, so the first row wins and there is nothing
+#: for a preference rule to choose between.
+STORY_SIMILARITY_THRESHOLD_KEY: Final = ("date", "run_id")
 
 #: What makes two retirement rows the same record. The address and nothing else:
 #: a retirement is permanent for one endpoint key, so a second row for it says
@@ -537,6 +556,69 @@ def counterfactual_scores_path(state_dir: Path, date: str) -> Path:
     read or delete weeks nobody asked for.
     """
     return state_dir / COUNTERFACTUAL_SCORES_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+
+
+def scored_pairs_relpath(date: str) -> str:
+    """`state/story-similarity/scored-pairs/<YYYY>/<MM>/<DD>.csv` - POSIX, for a log line."""
+    stem = f"{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+    return f"{STATE_DIRNAME}/{STORY_SIMILARITY_DIRNAME}/{SCORED_PAIRS_DIRNAME}/{stem}"
+
+
+def scored_pairs_path(state_dir: Path, date: str) -> Path:
+    """The day file this date's judged pairs are appended to.
+
+    A day, and the read asks for it as well as the writer: a fold reads one
+    date's pairs and then never opens that file again, and the retention pass
+    deletes by day. A month file would make the fold read weeks it has already
+    counted.
+    """
+    root = state_dir / STORY_SIMILARITY_DIRNAME / SCORED_PAIRS_DIRNAME
+    return root / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+
+
+def fitted_thresholds_relpath(date: str) -> str:
+    """`state/story-similarity/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` - POSIX, for a log line."""
+    stem = f"{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+    return f"{STATE_DIRNAME}/{STORY_SIMILARITY_DIRNAME}/{FITTED_THRESHOLDS_DIRNAME}/{stem}"
+
+
+def fitted_thresholds_path(state_dir: Path, date: str) -> Path:
+    """The day file this date's runs write their fitted line into.
+
+    A day rather than a month for the reason the cleanup record files by day:
+    two runs collide on a file only when they are the same day, and a day taken
+    back off the record is one `rm`. The guard's own read is the last fourteen
+    rows, which `day_partition` answers by walking days backwards.
+    """
+    root = state_dir / STORY_SIMILARITY_DIRNAME / FITTED_THRESHOLDS_DIRNAME
+    return root / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+
+
+def similarity_holdout_relpath() -> str:
+    """`state/story-similarity/holdout-pairs.csv` - the POSIX form, for a log line."""
+    return f"{STATE_DIRNAME}/{STORY_SIMILARITY_DIRNAME}/{SIMILARITY_HOLDOUT_FILENAME}"
+
+
+def similarity_holdout_path(state_dir: Path) -> Path:
+    """One flat file, and the read over it carries no clock.
+
+    A person types this file and nothing else writes it, so there is no run to
+    partition by and no date a reader would ask for. It grows with how many
+    pairs somebody has sat down and marked, never with the archive (Guardrail
+    #12). `state/chrome.csv` is the precedent.
+    """
+    return state_dir / STORY_SIMILARITY_DIRNAME / SIMILARITY_HOLDOUT_FILENAME
+
+
+def score_distribution_path(state_dir: Path) -> Path:
+    """The one score record every fit reads, whole.
+
+    Not a ledger: it is rewritten rather than appended to, and its size is fixed
+    by the band and the slot width rather than by how many days have been folded
+    into it. That is the whole point - the fit reads a file of a size that never
+    changes instead of sorting every pair ever judged (Guardrail #12).
+    """
+    return state_dir / STORY_SIMILARITY_DIRNAME / SCORE_DISTRIBUTION_FILENAME
 
 
 def shards_in_window(today: str, within_days: int) -> list[str]:
@@ -1695,6 +1777,14 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     one file a recorded month where every dated entry beside it names one a day.
     The run's own cover is a month file too, and it is still one file: a run
     appends under one date, and one date is in one month.
+
+    `state/story-similarity/fitted-thresholds/` is registered before anything
+    writes it, for the reason `state/feed-retirements.csv` was: the settlement
+    runs over whatever it finds, a missing file settles to nothing, and
+    registering the shape rather than its first writer is what stops two stale
+    checkouts leaving one date fitted twice. Its sibling `scored-pairs/` is
+    deliberately absent until the step that appends to it lands - a key with no
+    writer is a claim about rows nobody can produce.
     """
     flat: list[KeyedLedger] = [
         KeyedLedger(runtime_counters_path(state_dir), RUNTIME_COUNTERS_KEY, RuntimeCountersRow),
@@ -1723,6 +1813,11 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
                 HostFingerprintRow,
             ),
             KeyedLedger(
+                fitted_thresholds_path(state_dir, date),
+                STORY_SIMILARITY_THRESHOLD_KEY,
+                FittedSimilarityThreshold,
+            ),
+            KeyedLedger(
                 span_rollup_path(state_dir, date[:7]), SPAN_ROLLUP_KEY, SpanRollupRow
             ),
         ]
@@ -1747,6 +1842,12 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
         *(
             KeyedLedger(path, HOST_FINGERPRINT_KEY, HostFingerprintRow)
             for path in day_partition.day_files(state_dir / HOST_FINGERPRINT_DIRNAME)
+        ),
+        *(
+            KeyedLedger(path, STORY_SIMILARITY_THRESHOLD_KEY, FittedSimilarityThreshold)
+            for path in day_partition.day_files(
+                state_dir / STORY_SIMILARITY_DIRNAME / FITTED_THRESHOLDS_DIRNAME
+            )
         ),
         *(
             KeyedLedger(path, SPAN_ROLLUP_KEY, SpanRollupRow)
