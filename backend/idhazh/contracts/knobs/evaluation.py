@@ -130,6 +130,33 @@ class EvaluationConfig(Model):
             "2026-08-26 over 150 of them, against 330 minutes for the job."
         ),
     )
+    qualification_min_per_band: int = Field(
+        default=3,
+        ge=0,
+        description=(
+            "Articles a qualification corpus aims at in each summarize band. It "
+            "describes the measuring stick rather than the candidate, so a corpus "
+            "short of it is reported on the verdict and blocks nothing - the gate "
+            "that refuses a thin run is scored_denominator, which counts what was "
+            "actually scored."
+        ),
+    )
+    qualification_min_over_cap: int = Field(
+        default=2,
+        ge=0,
+        description=(
+            "Articles the corpus aims at that are long enough to be truncated. They "
+            "are the only ones that exercise the cap at all."
+        ),
+    )
+    qualification_min_brief: int = Field(
+        default=2,
+        ge=0,
+        description=(
+            "Articles the corpus aims at that take the brief prompt, which is a "
+            "different prompt - a corpus without one says nothing about that path."
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod
