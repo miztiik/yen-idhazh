@@ -462,9 +462,8 @@ def stage_qualify(
     scores: list[ItemScore] = []
     samples: list[SummarySample] = []
     # Repeats on the outside, items on the inside. The other order would let
-    # each repeat land on a warm prompt cache, and an identical reply that
-    # skipped its own prefill is weaker evidence of determinism than one that
-    # did the arithmetic again.
+    # each repeat land on a warm prompt cache, so `wording_spread` would be
+    # measuring the cache rather than the sampler.
     for repeat in range(1, repeats + 1):
         for entry in frozen:
             answer = _answer_one_item(

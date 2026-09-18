@@ -103,12 +103,11 @@
       "type": "object"
     },
     "GateName": {
-      "description": "The eleven gates that block adoption. Closed set, never free text.\n\nEvery run asks ten of them. `OPTIONAL_GATES` below names the one a run may\nleave unevaluated, and says when and why.",
+      "description": "The ten gates that block adoption. Closed set, never free text.\n\nEvery run asks every one of them. A report that omits one is refused by\nname, because a gate nobody asked is a gate nobody can be shown to have\npassed.",
       "enum": [
         "reasoning_leakage",
         "schema_validity",
         "injection_canaries",
-        "determinism",
         "publishable_length",
         "context_fit",
         "identity",
@@ -344,9 +343,9 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "gates may omit determinism, and no other gate.",
-      "version": "2026-09-17",
-      "why": "Above temperature 0 that gate has no question to ask."
+      "change": "determinism is no longer a gate; every gate is required.",
+      "version": "2026-09-18",
+      "why": "A summarizer does not need identical words; wording_spread records the drift."
     },
     {
       "change": "inputs gains turn_markers_sha256, optional.",
@@ -359,9 +358,9 @@
       "why": "Both halves land in one entry because the first was never stamped."
     },
     {
-      "change": "Initial shape: eleven hard gates, the diagnostics, and the corpus digest.",
+      "change": "Earlier shapes are in this file's git history.",
       "version": "2026-08-26",
-      "why": "An adoption gate reporting a pass without its numbers cannot be re-checked."
+      "why": "Git is the archive; every entry here ships inside the generated schema."
     }
   ],
   "description": "The merged verdict: every gate, every diagnostic, one answer.",
@@ -450,7 +449,7 @@
       "$ref": "#/$defs/ScorerIdentity"
     },
     "version": {
-      "default": "2026-09-17",
+      "default": "2026-09-18",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -473,5 +472,5 @@
   ],
   "title": "QualificationReport",
   "type": "object",
-  "version": "2026-09-17"
+  "version": "2026-09-18"
 }
