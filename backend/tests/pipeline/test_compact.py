@@ -15,7 +15,10 @@ from typing import Final
 import pytest
 
 from idhazh import ledger
+from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.stages import compact
@@ -447,3 +450,159 @@ def test_the_segment_name_carries_the_four_cells_that_make_it_unique(tmp_path: P
     assert ledger.parse_segment_name(path) == ledger.SegmentName(
         run_id=RUN, attempt=2, job=ServerJob.WORK, shard=3
     )
+
+def _census(
+    date: str, run_id: str, *, item: str, job: ServerJob | None = None, **cells: object
+) -> str:
+    """One item-census row rendered as a segment file's whole body."""
+    url = f"https://example.com/{item}"
+    row = ItemHealthRow.model_validate(
+        {
+            "version": ItemHealthRow.schema_version(),
+            "date": date,
+            "run_id": run_id,
+            "item_id": item,
+            "source_id": "wire",
+            "url_key": derive_url_key(url),
+            "canonical_url": url,
+            "vertical": "ai",
+            "stage": ItemStage.PUBLISH,
+            "outcome": ItemOutcome.OK,
+            **({"job": job, "shard": 0} if job is not None else {}),
+            **cells,
+        }
+    )
+    return ledger.render_file(ItemHealthRow.csv_columns(), [row.csv_row()])
+
+
+def _digests(*digests: str) -> str:
+    """Score-index rows rendered as a segment file's whole body."""
+    rows = [
+        ObservationIndexRow.model_validate(
+            {"version": ObservationIndexRow.schema_version(), "observation_digest": digest}
+        ).csv_row()
+        for digest in digests
+    ]
+    return ledger.render_file(ObservationIndexRow.csv_columns(), rows)
+
+
+def test_two_jobs_that_recorded_one_item_leave_one_census_row(tmp_path: Path) -> None:
+    """The reason the item census moved onto segments at all.
+
+    A work shard records an item as it settles and `assemble` records the whole
+    day afterwards, so two writers describe one item on one run. They used to
+    append to one day file, and the count of rows in that file feeds a feed's
+    share of the day and the day's own metrics - so a repeat there is a number a
+    reader sees, not an untidy file.
+    """
+    state = tmp_path / "state"
+    _write(
+        state,
+        ledger.SegmentLedger.ITEM_HEALTH,
+        f"{RUN}-1-{ServerJob.WORK.value}-03.csv",
+        _census(TODAY, RUN, item="ai-01", job=ServerJob.WORK),
+    )
+    _write(
+        state,
+        ledger.SegmentLedger.ITEM_HEALTH,
+        f"{RUN}-1-{ServerJob.ASSEMBLE.value}-00.csv",
+        _census(TODAY, RUN, item="ai-01"),
+    )
+
+    report = compact.stage_compact(state)
+
+    rows = _rows(ledger.item_health_path(state, TODAY))
+    assert len(rows) == 1, "one item, one run, one row"
+    assert report.rows_superseded == 1
+    assert ledger.segment_files(state) == []
+
+
+def test_the_row_that_names_a_job_beats_the_row_that_does_not(tmp_path: Path) -> None:
+    """Which of two writers wins has to be the one that knows more, not the one sorted first.
+
+    `ITEM_HEALTH_KEY` has no `job` cell, so both rows are the same record and
+    the fold has to choose. A work shard stamps the job and the shard it ran as
+    - the one moment either is known - and `assemble` runs once for the whole
+    day and leaves both empty. Segment files are read in filename order, and
+    `assemble` sorts before `work`, so without a rule the emptier row would win
+    every time and the pair that takes an item to the machine that read it would
+    be gone.
+    """
+    state = tmp_path / "state"
+    _write(
+        state,
+        ledger.SegmentLedger.ITEM_HEALTH,
+        f"{RUN}-1-{ServerJob.ASSEMBLE.value}-00.csv",
+        _census(TODAY, RUN, item="ai-01"),
+    )
+    _write(
+        state,
+        ledger.SegmentLedger.ITEM_HEALTH,
+        f"{RUN}-1-{ServerJob.WORK.value}-03.csv",
+        _census(TODAY, RUN, item="ai-01", job=ServerJob.WORK),
+    )
+
+    compact.stage_compact(state)
+
+    kept = _rows(ledger.item_health_path(state, TODAY))[0]
+    assert kept["job"] == ServerJob.WORK.value
+    assert kept["shard"] == "0"
+
+
+def test_a_score_index_row_is_filed_by_the_run_that_carried_it(tmp_path: Path) -> None:
+    """The index has no date of its own, so the segment's run id is where the date comes from.
+
+    Every other ledger here reads the date off the row. `ObservationIndexRow` is
+    a stamp and a digest - it is filed beside the scores it describes and never
+    says which day that is - so the fold takes the date from the run that wrote
+    the segment. A run id opens on its own date, and the only writer of an eval
+    row files it under the run's date too, so the two always agree.
+    """
+    state = tmp_path / "state"
+    _write(
+        state,
+        ledger.SegmentLedger.SCORE_INDEX,
+        f"{RUN}-1-{ServerJob.WORK.value}-00.csv",
+        _digests("a" * 64),
+    )
+    _write(
+        state,
+        ledger.SegmentLedger.SCORE_INDEX,
+        f"{OLD_RUN}-1-{ServerJob.WORK.value}-00.csv",
+        _digests("b" * 64),
+    )
+
+    compact.stage_compact(state)
+
+    today = _rows(ledger.score_index_path(state, TODAY))
+    older = _rows(ledger.score_index_path(state, THREE_DAYS_OLD))
+    assert [row["observation_digest"] for row in today] == ["a" * 64]
+    assert [row["observation_digest"] for row in older] == ["b" * 64]
+
+
+def test_one_digest_written_by_two_jobs_is_indexed_once(tmp_path: Path) -> None:
+    """The index is what the eval writer reads to know a measurement is already held.
+
+    A digest listed twice would cost nothing but bytes today. It is settled
+    anyway because `OBSERVATION_INDEX_KEY` is the whole row: two index rows for
+    one digest carry no cell that can disagree, so the fold has nothing to weigh
+    and keeping both would only make the file grow with the runs.
+    """
+    state = tmp_path / "state"
+    _write(
+        state,
+        ledger.SegmentLedger.SCORE_INDEX,
+        f"{RUN}-1-{ServerJob.WORK.value}-00.csv",
+        _digests("a" * 64),
+    )
+    _write(
+        state,
+        ledger.SegmentLedger.SCORE_INDEX,
+        f"{RUN}-1-{ServerJob.ASSEMBLE.value}-00.csv",
+        _digests("a" * 64),
+    )
+
+    compact.stage_compact(state)
+
+    rows = _rows(ledger.score_index_path(state, TODAY))
+    assert [row["observation_digest"] for row in rows] == ["a" * 64]
