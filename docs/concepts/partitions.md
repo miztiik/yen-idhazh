@@ -307,7 +307,7 @@ commitment to convert any of them.
 | Collection | Path | Writer | Why not |
 | --- | --- | --- | --- |
 | Pipeline fingerprints | `state/fingerprints.csv` | `fingerprint.append_new`, from `stages.assemble.stage_assemble` | "Has this exact input run before" carries no window. Never pruned. |
-| Runtime counters | `state/runtime-counters.csv` | `ledger.append_runtime_counters` | Read one run at a time by an audit with no time bound, and the slowest-growing ledger here. |
+| Runtime counters | `state/runtime-counters.csv` | `stages.compact.stage_compact`, folding the segments `telemetry.host.stage_counters` writes | Read one run at a time by an audit with no time bound, and the slowest-growing ledger here. Each model-server job writes its own segment from 2026-09-18, so the one file has one writer again. |
 | Feed retirements | `state/feed-retirements.csv` | `ledger.append_retirements` | A retirement is permanent for one address. A run that forgot one would start asking a dead server again. |
 | Day validations | `state/day-validations.csv` | `stages.validate_days.stage_validate_days`, through `stages.validate_days._record_receipts` | A receipt file, read once a run. No window, so a partition would open every file anyway. |
 | Model validation | `state/validation-<YYYY-MM-DD>.csv` | `evals.writer.append_validation`, path from `evals.golden` | Dated, not partitioned: one file per validation, which is a one-off rather than a series. |
