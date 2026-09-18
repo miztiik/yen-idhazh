@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-18
 Traps in the commands that decide whether a change is done: the test selector,
 pytest, ruff, mypy, the schema drift gate, the build, the canary day, and the
 measurement recipes that run on top of them. Index and scope:
@@ -143,7 +143,7 @@ That needs the canary already built, and it does not re-check the build fingerpr
 
 **Killing a queued build under the lock leaves the tree unservable.** The waiter and the build it wraps are one process tree, so the kill can land after `vite build` has cleared `.svelte-kit/output/` - `vite preview` then reports `Server files not found` on a checkout that built cleanly minutes earlier, while `frontend/build/` is still there and still looks complete. The fix is one more `npm run build`.
 
-**Do not run the whole backend suite inside `gate_lock.py`.** `backend/tests/test_gate_lock.py` spawns five workers and asserts all five overlap; running the suite under the lock puts that test in a queue behind itself. Even unlocked it is load-sensitive: on 2026-09-14 it reported `assert 4 == 5` with four intervals recorded, and passed on three consecutive retries with nothing changed. **The tell is a count one short of `WORKERS` and no other failure in the suite.** Retry it on its own with `-n 0` before believing it.
+**Do not run the whole backend suite inside `gate_lock.py`.** `backend/tests/test_gate_lock.py` spawns five workers and asserts all five overlap; running the suite under the lock puts that test in a queue behind itself. Even unlocked it is load-sensitive: on 2026-09-14 it reported `assert 4 == 5`, and on 2026-09-18 `assert 3 == 5` while a full suite ran on another worktree - both passed on retry with nothing changed. **The tell is a count SHORT of `WORKERS` and no other failure that names the lock.** It can be more than one short, so do not read a bigger gap as a real defect. Retry it on its own with `-n 0`, on an idle box, before believing it.
 
 `os.kill(pid, 0)` is not a liveness probe on Windows: CPython routes every signal but the two console events to `TerminateProcess`, so the textbook probe can kill the process it was only asking about. `OpenProcess` alone is not enough either - it still opens a handle for an exited process while anything holds one - so only the wait separates them, 258 (`WAIT_TIMEOUT`) running against 0 exited.
 
