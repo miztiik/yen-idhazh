@@ -676,24 +676,24 @@ def test_a_copied_long_article_does_not_fail_the_brief_ceiling() -> None:
 
 
 def test_the_registered_corpus_definition_is_met() -> None:
-    assert qualify.corpus_shortfalls(a_passing_corpus(), summarize=SUMMARIZE) == []
+    assert qualify.corpus_shortfalls(a_passing_corpus(), summarize=SUMMARIZE, evaluation=EVALUATION) == []
 
 
 def test_a_missing_length_tier_is_named() -> None:
     thin = [row for row in a_passing_corpus() if row.band_index != 0]
-    shortfalls = qualify.corpus_shortfalls(thin, summarize=SUMMARIZE)
+    shortfalls = qualify.corpus_shortfalls(thin, summarize=SUMMARIZE, evaluation=EVALUATION)
     assert any("band 0" in line for line in shortfalls)
 
 
 def test_a_corpus_with_no_brief_item_is_named() -> None:
     thin = [row for row in a_passing_corpus() if not row.brief]
-    assert any("brief-path" in line for line in qualify.corpus_shortfalls(thin, summarize=SUMMARIZE))
+    assert any("brief-path" in line for line in qualify.corpus_shortfalls(thin, summarize=SUMMARIZE, evaluation=EVALUATION))
 
 
 def test_a_corpus_with_no_truncated_item_is_named() -> None:
     thin = [row for row in a_passing_corpus() if not row.truncated]
     assert any(
-        "truncation cap" in line for line in qualify.corpus_shortfalls(thin, summarize=SUMMARIZE)
+        "truncation cap" in line for line in qualify.corpus_shortfalls(thin, summarize=SUMMARIZE, evaluation=EVALUATION)
     )
 
 
