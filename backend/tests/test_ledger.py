@@ -39,6 +39,7 @@ from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.evals import writer
 from idhazh.evals.writer import OBSERVATION_KEY
+from idhazh.stages import compact as compact_stage
 from idhazh.stages.dedupe_ledgers import stage_dedupe_ledgers
 from utilities import split_published_ledger as split_ledger
 from utilities import split_visual_prunes as split_prunes
@@ -150,6 +151,29 @@ def fingerprint_row(*, on: str = DATE, shard: int = 0, cpu: str = "one") -> Host
             "cpu_model": cpu,
         }
     )
+
+
+def a_fingerprint_day(
+    state_dir: Path, rows: list[HostFingerprintRow], *, attempt: int = 1
+) -> None:
+    """The machine day built the way production builds it: a segment each, then the fold.
+
+    Nothing appends to this head any more. Ten jobs of one run each draw a
+    machine and each write their own segment, and the compaction is the one
+    writer of the day file - so a test that wants a day asks for it the same way
+    rather than reaching past the writer that no longer exists.
+    """
+    for row in rows:
+        ledger.write_segment(
+            state_dir,
+            ledger.SegmentLedger.HOST_FINGERPRINT,
+            [row],
+            run_id=row.run_id,
+            attempt=attempt,
+            job=row.job,
+            shard=row.shard,
+        )
+    compact_stage.stage_compact(state_dir)
 
 
 def span_fold_row(*, on: str = DATE, shard: int = 0, total_ms: int = 16) -> SpanRollupRow:
@@ -1915,7 +1939,7 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     ledger.append_runtime_counters(tmp_path, [counters_row(0)])
     ledger.append_visual_prunes(tmp_path, DATE, [prune_row(on=DATE)])
     ledger.append_counterfactual_scores(tmp_path, DATE, [counterfactual_row()])
-    ledger.append_host_fingerprint(tmp_path, DATE, [fingerprint_row()])
+    a_fingerprint_day(tmp_path, [fingerprint_row()])
     ledger.append_span_rollup(tmp_path, DATE, [span_fold_row()])
     ledger.append_story_similarity_pairs(tmp_path, DATE, [pair_row()])
     item_health = ledger.item_health_path(tmp_path, DATE)
@@ -1975,7 +1999,7 @@ def test_a_repeated_fingerprint_is_settled_inside_the_day_that_holds_it(
     attempt pushed, so it appends its own. The first row wins.
     """
     state = tmp_path / "state"
-    ledger.append_host_fingerprint(state, DATE, [fingerprint_row(cpu="first")])
+    a_fingerprint_day(state, [fingerprint_row(cpu="first")])
     path = ledger.host_fingerprint_path(state, DATE)
     clean = path.read_text(encoding="utf-8")
     second_attempt = clean.splitlines()[1].replace(",first,", ",second,")
@@ -2027,7 +2051,7 @@ def test_the_full_pass_reaches_a_fingerprint_day_and_a_fold_month_no_run_named(
     """
     state = tmp_path / "state"
     older = "2026-07-04"
-    ledger.append_host_fingerprint(state, older, [fingerprint_row(on=older)])
+    a_fingerprint_day(state, [fingerprint_row(on=older)])
     ledger.append_span_rollup(state, older, [span_fold_row(on=older)])
 
     every = {target.path: target.key for target in ledger.keyed_paths(state, date=None)}
