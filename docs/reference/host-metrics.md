@@ -305,7 +305,7 @@ drift guard to a file rather than to a question is what let a second writer
 through**, and what replaced both names no file - it charges each store to the
 job whose `python -m idhazh <verb>` step reaches its writer, so a fourth job that
 records a machine and stages nothing fails without an edit
-([github-actions.md](github-actions.md#the-commit-steps-push-through-a-rebase-and-the-one-that-can-rebuild-rebuilds)).
+([../architecture/publishing/committing.md](../architecture/publishing/committing.md#the-commit-steps-push-through-a-rebase-and-the-one-that-can-rebuild-rebuilds)).
 
 **A repeated row now settles, and it could not have before.** `ledger.keyed_paths`
 is the registry the post-merge pass walks, and this ledger was not in it - which
