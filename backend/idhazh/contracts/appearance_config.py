@@ -499,6 +499,11 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-18",
+            change="console.precision_axis_multiple, additive, default 10.0.",
+            why="The precision line needed a fixed axis, and a bare 10 is a hard-coded one.",
+        ),
+        ChangelogEntry(
             version="2026-09-16T00:40",
             change="digest.draw_same_story, additive, default true.",
             why="The page folds a group into one card, and this is the one-edit revert.",
@@ -512,11 +517,6 @@ class AppearanceConfig(Contract):
             version="2026-09-13T23:00",
             change="digest.pill_move_min added, defaulting to 2 and bounded 1 to 3.",
             why="The topic row reorders five times a day and needed a margin to stay still.",
-        ),
-        ChangelogEntry(
-            version="2026-09-13",
-            change="digest.lead_shared_subject_weight is reworded and keeps its value of 0.2.",
-            why="Carriage became a flat step, so the bound this sits under stopped multiplying.",
         ),
         ChangelogEntry(
             version="2026-08-29",
