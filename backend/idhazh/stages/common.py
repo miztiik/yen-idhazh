@@ -76,10 +76,14 @@ VALIDATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "validation"
 QUALIFICATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "qualification"
 
 
-#: Where a day's draw of borderline pairs waits for the legs that judge it. A
-#: sibling of `VAR_ROOT` and never under `state/`: a drawn row carries no verdict
-#: yet and the legs rewrite it, while a row reaches `state/` once, already
-#: judged, and is never edited afterwards. The relative spelling is the one a log
+#: Where a day's judging leaves its draw and its verdicts. A sibling of
+#: `VAR_ROOT` rather than a child: a judging leg is not a work shard, it
+#: downloads none of the run artifacts, and the two trees are uploaded and
+#: retained separately. Nothing here is ever committed - a drawn row carries no
+#: verdict yet and the legs rewrite it, while a row reaches `state/` once,
+#: already judged, and is never edited afterwards. `state/**/*.csv` merges by
+#: union, so committing a row that is later rewritten would stack both versions
+#: with nothing to say which is current. The relative spelling is the one a log
 #: line prints, so the path written and the path reported cannot drift apart.
 JUDGE_ROOT_RELPATH: Final = "backend/var/judge"
 JUDGE_ROOT: Final = config.REPO_ROOT / JUDGE_ROOT_RELPATH

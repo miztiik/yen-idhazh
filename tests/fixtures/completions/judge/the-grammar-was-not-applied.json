@@ -1,0 +1,37 @@
+{
+  "completion_probabilities": [
+    {
+      "bytes": [84, 104, 101, 115, 101],
+      "id": 9485,
+      "logprob": -0.4131,
+      "token": "These",
+      "top_logprobs": [
+        {
+          "bytes": [84, 104, 101, 115, 101],
+          "id": 9485,
+          "logprob": -0.4131,
+          "token": "These"
+        },
+        {
+          "bytes": [66, 111, 116, 104],
+          "id": 20629,
+          "logprob": -1.9,
+          "token": "Both"
+        }
+      ]
+    }
+  ],
+  "content": "These two reports describe the same event, so the answer is YES.",
+  "stop_type": "eos",
+  "timings": {
+    "cache_n": 402,
+    "predicted_ms": 1402.8,
+    "predicted_n": 14,
+    "prompt_ms": 4098.4,
+    "prompt_n": 358
+  },
+  "tokens_cached": 774,
+  "tokens_evaluated": 760,
+  "tokens_predicted": 14,
+  "truncated": false
+}

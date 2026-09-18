@@ -1,0 +1,43 @@
+{
+  "completion_probabilities": [
+    {
+      "bytes": [85, 78],
+      "id": 1861,
+      "logprob": -0.0512,
+      "token": "UN",
+      "top_logprobs": [
+        {
+          "bytes": [85, 78],
+          "id": 1861,
+          "logprob": -0.0512,
+          "token": "UN"
+        },
+        {
+          "bytes": [78, 79],
+          "id": 8996,
+          "logprob": -3.2,
+          "token": "NO"
+        },
+        {
+          "bytes": [89, 69, 83],
+          "id": 14004,
+          "logprob": -4.9,
+          "token": "YES"
+        }
+      ]
+    }
+  ],
+  "content": "UNCLEAR",
+  "stop_type": "eos",
+  "timings": {
+    "cache_n": 402,
+    "predicted_ms": 291.8,
+    "predicted_n": 3,
+    "prompt_ms": 4102.9,
+    "prompt_n": 359
+  },
+  "tokens_cached": 764,
+  "tokens_evaluated": 761,
+  "tokens_predicted": 3,
+  "truncated": false
+}

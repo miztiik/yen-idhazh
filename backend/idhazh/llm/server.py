@@ -348,6 +348,20 @@ def flash_attention_state(server_log: str) -> FlashAttention:
 
 
 @dataclass(frozen=True, slots=True)
+class TokenChoice:
+    """One token the server said it could have written here, and how likely it was.
+
+    `logprob` is the natural log llama-server reports, carried as it arrived. An
+    exponential taken here would be a scale this class chose; the caller that
+    wants a probability is the one that knows what it is subtracting from what.
+    """
+
+    token_id: int
+    token: str
+    logprob: float
+
+
+@dataclass(frozen=True, slots=True)
 class Completion:
     """What came back, before anything has been believed about it."""
 
@@ -374,6 +388,11 @@ class Completion:
     #: one place that can see whether the server reported `cache_n`: an absent
     #: field is a server that did not say, not a call that reused nothing.
     prefix_reused: bool | None = None
+    #: What the server said it could have written at the FIRST generated
+    #: position, likeliest first, on a request that asked for alternatives.
+    #: Empty where none were asked for and where the reply carried none, which
+    #: is a server that did not say rather than a position with one candidate.
+    first_token_choices: tuple[TokenChoice, ...] = ()
 
     @property
     def hit_the_budget(self) -> bool:
@@ -609,6 +628,50 @@ def completion_payload(
     }
 
 
+def grammar_completion_payload(
+    *,
+    model_id: str,
+    system: str,
+    user: str,
+    grammar: str,
+    inference: InferenceConfig,
+    turns: TurnsConfig,
+    max_answer_tokens: int,
+    first_token_alternatives: int,
+) -> dict[str, Any]:
+    """The request body for a reply that is a word rather than a document.
+
+    `grammar` is the control here, and it is the same control `json_schema` is
+    one level up: text inside the user turn can change which word comes back and
+    cannot change that a word is what comes back. The two are never sent
+    together - llama.cpp would have to pick one, and which one it picks is a
+    property of a build nothing here pins.
+
+    `n_probs` asks the server what else it could have written at each position.
+    Only the first one is ever read, because a grammar of a few literals has
+    nothing left to be uncertain about afterwards; what the reading is for is
+    the case where the grammar picked a word the model gave almost no weight to,
+    which is a reply that parses, enters the record, and means nothing.
+
+    `cache_prompt` is stated for the reason `completion_payload` states it: the
+    build's own default is not readable off `/props`, and nothing pins the
+    build. Here the shared prefix is the system turn, which a day of pairs pays
+    once instead of once a call.
+    """
+    return {
+        "model": model_id,
+        "prompt": render_prompt(system=system, user=user, turns=turns),
+        "temperature": inference.temperature,
+        "top_p": inference.top_p,
+        "seed": inference.seed,
+        "n_predict": max_answer_tokens,
+        "n_probs": first_token_alternatives,
+        "stream": False,
+        "cache_prompt": True,
+        "grammar": grammar,
+    }
+
+
 def thinking_span(
     answer: Mapping[str, Any], *, turns: TurnsConfig, max_think_tokens: int | None
 ) -> dict[str, Any]:
@@ -765,6 +828,38 @@ def _reported(value: object) -> int | None:
     return value
 
 
+def _first_token_choices(payload: Mapping[str, Any]) -> tuple[TokenChoice, ...]:
+    """What the server said it could have written first, likeliest first.
+
+    Read out of `top_logprobs`, which is the one spelling llama-server answers
+    `n_probs` with, and out of nothing else. A reply shaped some other way
+    leaves this empty rather than being guessed at: the column it fills is
+    nullable, and an alternative reconstructed from a field that meant something
+    else reads downstream as a measurement somebody took.
+
+    Only the first position. Every later one is bound by whatever the first one
+    opened, so a grammar of three literals has nothing left to be uncertain
+    about and the reading would be a report on the grammar.
+    """
+    positions = payload.get("completion_probabilities")
+    if not isinstance(positions, list) or not positions:
+        return ()
+    first = positions[0]
+    alternatives = first.get("top_logprobs") if isinstance(first, Mapping) else None
+    if not isinstance(alternatives, list):
+        return ()
+    choices = [
+        TokenChoice(
+            token_id=int(entry["id"]),
+            token=str(entry["token"]),
+            logprob=float(entry["logprob"]),
+        )
+        for entry in alternatives
+        if isinstance(entry, Mapping) and {"id", "token", "logprob"} <= entry.keys()
+    ]
+    return tuple(sorted(choices, key=lambda choice: choice.logprob, reverse=True))
+
+
 def parse_completion(body: str) -> Completion:
     """Read the envelope. Nothing here trusts the content yet.
 
@@ -801,6 +896,7 @@ def parse_completion(body: str) -> Completion:
     slot_id = _reported(payload.get("id_slot"))
     slot_tokens_held = _reported(payload.get("tokens_cached"))
     prefix_reused = cached_tokens > 0 if "cache_n" in timings else None
+    first_token_choices = _first_token_choices(payload)
     if "choices" in payload:
         choices = payload.get("choices") or []
         if not choices:
@@ -819,6 +915,7 @@ def parse_completion(body: str) -> Completion:
             slot_id=slot_id,
             slot_tokens_held=slot_tokens_held,
             prefix_reused=prefix_reused,
+            first_token_choices=first_token_choices,
         )
     if "content" not in payload:
         raise ValueError("the runtime returned neither a choice nor a completion")
@@ -834,6 +931,7 @@ def parse_completion(body: str) -> Completion:
         slot_id=slot_id,
         slot_tokens_held=slot_tokens_held,
         prefix_reused=prefix_reused,
+        first_token_choices=first_token_choices,
     )
 
 
@@ -1263,7 +1361,7 @@ def _rendered_by_the_server(endpoint: str, *, turns: TurnsConfig, timeout: float
     return prompt
 
 
-def _token_ids(endpoint: str, text: str, *, timeout: float) -> list[int]:
+def token_ids(endpoint: str, text: str, *, timeout: float) -> list[int]:
     """What the server would really read. `add_special` off on both strings.
 
     Both sides are tokenised the same way, so a sequence token the template
@@ -1312,8 +1410,8 @@ def prove_the_entry(
     ours = render_prompt(system=PROBE_SYSTEM, user=PROBE_USER, turns=model.turns)
     theirs = _rendered_by_the_server(endpoint, turns=model.turns, timeout=timeout)
     the_render_agrees(
-        ours=_token_ids(endpoint, ours, timeout=timeout),
-        theirs=_token_ids(endpoint, theirs, timeout=timeout),
+        ours=token_ids(endpoint, ours, timeout=timeout),
+        theirs=token_ids(endpoint, theirs, timeout=timeout),
     )
 
     schema, only = one_document_schema(output_schema)
