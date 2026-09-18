@@ -10,7 +10,8 @@ Every summary already gets a faithfulness score (HHEM) the day it is written. Th
 display badge and nothing else: the item publishes whatever the badge says. This plan closes the loop
 plan 34 opened for the merge line, for summary quality: measure every summary on four axes, fit a band
 to each axis from its own rolling distribution with no human in the loop, and let the band decide
-whether a summary publishes, publishes with a marker, or is withheld.
+whether a summary publishes or is withheld - and a withheld summary is absent from the reader's day,
+tracked in item-health telemetry and surfaced in the console, never a reader-facing card (section 0e).
 
 **The one sentence that orders every decision here, taken from plan 34 and still true: withholding a
 story the reader never sees is an invisible loss; publishing a weak summary is a visible, recoverable
@@ -102,7 +103,9 @@ in the same commit as Row 5.
 The rows were written against 0b (D1-D8) and never reshaped to absorb the 0c corrections (E1-E10). Two
 custom agents verified against the tree: most E-items float in 0c with no row owning them, and the
 single biggest hole is that **E4 turned "withhold" into a link-only CARD but no row builds it** - Row 8
-still says a withheld item "is absent". These corrections bind the rows and add **Row 11**.
+still says a withheld item "is absent". These corrections bind the rows and add **Row 11**. (Section 0e,
+2026-09-19, later REVERSED the E4 link-only card that G1/G2/G3 describe and repurposed Row 11 - read 0e
+first; the link-only references in this section are historical.)
 
 **Table A - corrections-to-rows (each floating E-item and gap now has an owner)**
 
@@ -117,11 +120,11 @@ still says a withheld item "is absent". These corrections bind the rows and add 
 | G7 | E2 seed keys on the HHEM instrument sub-identity, not `scorer_version`. | Rows 4, 5 | Row 4 folds faithfulness by the HHEM sub-identity (`hhem_rev@rev + weights_digest + window=900/150/anchored`), not the whole `scorer_version` (plan 35 changes it -> 0 of 11,140 match). Row 5 seeds from that key. |
 | G8 | E3 symmetric damping floats. | Row 5 | Row 5 dec 2 + oracle: symmetric damping for every watch floor (the withhold is absolute+undamped; a watch floor is an operator signal, so asymmetric damping only ratchets the alarm down under noise). |
 | G9 | Row 5 seed is a growing read + a test that walks committed data. | Row 5 | The production seed declares Guardrail #12's escape-hatch (what it reads, why a bounded input cannot answer); the seed TEST uses a bounded fixture, never the committed archive (section 13); cite the PROPERTY ("rows at the current HHEM identity"), never the rotting cardinal 8,461. |
-| G10 | E6 coherence 3-model RAM is unowned; plan 36 inherits same-day/next-day. | Rows 4, 5 | Plan 36 does NOT measure the peak (that is plan 35 Row 8 + owner). Declare a hard dependency on plan 35 having resolved coherence's DAY; Rows 4/5 fold/fit coherence on whichever day plan-35 state says; coherence's action is `watch` (never gates). |
+| G10 | E6 coherence 3-model RAM. **Refined by 0e H5-H7: Row 11 now owns the measurement + the sequential-eviction fallback.** | Rows 4, 5, 11 | Row 11 measures the 3-model peak and, if it busts 16 GB, evicts the summariser server so coherence scores from the on-disk summaries (0e H6). Rows 4/5 fold/fit coherence on whichever cadence Row 11 settles; coherence's action stays `watch` (never gates). |
 | G11 | E8 rename touch-points; E9 Row 6/10 sequencing. | Rows 6, 10 | If the `LLM-COUNCIL` rename lands, Row 6 edits only `name:`, `concurrency.group`, `_harness.py`. Row 6's leg timeout is a LABELLED estimate x generous margin and does NOT hard-block on Row 10 (E9); Row 10 measures the merged call after. E10(b): Row 6 canary asserts containment (`geval` never reaches `publish_decision`) + thinking off. |
-| G12 | Row 3 dec 1 stale premise; the `downgraded` dead value. | Row 3 | Fix dec 1: under E4 a withheld item is PRESENT (link-only), not absent - the stamp stays on `EvalRow` because it records every scored item including link-only. Resolve `publish_decision`: values are `published` \| `withheld`; keep `downgraded` only if reserved for a named future promotion, else drop. |
+| G12 | Row 3 dec 1 stale premise; the `downgraded` dead value. | Row 3 | Fix dec 1: a withheld item is ABSENT from the day but recorded in item-health telemetry (0e H1/H2); the `EvalRow` stamp still records every scored item including the withheld. Resolve `publish_decision`: values are `published` \| `withheld`; keep `downgraded` only if reserved for a named future promotion, else drop. |
 | G13 | Row 2 omits the contract fixtures + `export.py` tuple. | Row 2 | Name `tests/fixtures/contracts/<stem>/` fixtures for both new contracts and the `CONTRACTS` tuple + import in `export.py`. |
-| G14 | The design-of-record doc lags the corrections. | Row 5 commit | Widen the reconciliation: `docs/concepts/summary-quality-autotune.md` drops the faithfulness-downgrades-below-adaptive-floor language (E1), the `block p01` phrasing, and the asymmetric "damp the raise" (E3); adds the E4 link-only card to the publish-gate section. |
+| G14 | The design-of-record doc lags the corrections. | Row 5 + Row 8 commits | Widen the reconciliation: `docs/concepts/summary-quality-autotune.md` drops the faithfulness-downgrades-below-adaptive-floor language (E1), the `block p01` phrasing, and the asymmetric "damp the raise" (E3); the publish-gate section says withhold = absent + item-health telemetry, surfaced in the console (0e H1/H2/H4), NOT a link-only card. |
 
 **Table B - PR-wave grouping (9 PRs across 4 waves; each PR independently green)**
 
@@ -133,9 +136,9 @@ still says a withheld item "is absent". These corrections bind the rows and add 
 | geval-leg | 2 | 6 | disjoint island (`quality/geval.py` + the council workflow) | eval-columns |
 | publish-gate | 3 | 7 | backend veto chain, record-only, stamps `EvalRow` | metric-fold-fit |
 | geval-measure | 3 | 10 | MEASURES -> runs alone (`measure.yml` on a clean runner) | geval-leg |
-| link-only-card | 3 | 11 | reader-facing card, ships inert; the E4 surface | eval-columns |
-| console-panels | 3 | 9 | frontend island on `/console/judgement/` | metric-fold-fit, publish-gate |
-| apply-gate | 4 | 8 | ESCALATE, owner sign-off, first published-day change; uses Row 11's card, carries E7 contracts | publish-gate, link-only-card |
+| coherence-ram | 1 | 11 | measure the 3-model peak RSS; the sequential server-eviction fallback + shard timeout 220; runs alone (0e H5-H7) | 35 coherence scorer |
+| console-panels | 3 | 9 | frontend island on `/console/judgement/`; + the not-published/withhold panel from item-health (0e H4) | metric-fold-fit, publish-gate |
+| apply-gate | 4 | 8 | ESCALATE, owner sign-off, first published-day change; withhold = absent + item-health (0e H1-H3, E7 placement) | publish-gate |
 
 **Peak pool width 2** (Carmack): Rows 1 and 3 are TWO co-roots from t0, not one width-1 head. The serial
 spine is `1 -> 2 -> 4 -> 5 -> 7 -> 8` (6 deep); the width-1 point is the TAIL (Row 8), by owner mandate.
@@ -151,6 +154,28 @@ Provision 2 workers; `Parallel N = 4` never binds.
 | Measuring (6->10) | wait on `main` | Row 10 must call the merged `geval.py`; runs alone anyway |
 | ESCALATE / Level-5 (7->8) | wait on `main` + owner sign-off | first change to a published day; lands alone |
 | EvalRow width vs the external plan-35 widening | HARD wait on `main` (never optimistic) | `state/scores` is `merge=union`; two open widenings stack silently. After any EvalRow merge, census committed shards for a stacked header. |
+
+### Section 0e - owner rulings, 2026-09-19 (supersede 0d G1/G2/G3, refine E6/G10)
+
+The owner reversed the E4 link-only card and set the coherence-RAM approach. User approval supersedes
+the Editor's link-only recommendation and every advisor (CLAUDE.md section 0).
+
+**Table A - the withhold surface (supersedes E4, G1, G2, G3)**
+
+| id | Ruling |
+| --- | --- |
+| H1 | **A withheld item is NOT published - it is ABSENT from the reader's day.** No link-only card, no reader-facing surface. Row 11's link-only card is RETIRED. Rationale: a below-0.50 faithfulness says our prose is untrustworthy; the reader sees nothing rather than a card, and the signal lives on the operator surface. |
+| H2 | **The withhold is a METRIC in item-health telemetry.** A withheld item is `ItemOutcome.failed` with a NEW `FailureCode` member (the summary was written but failed the faithfulness floor) + the `detail`. "Expand columns are necessary" - the enum member is that expansion. The item-health census already feeds the console, so the metric ships with no new persisted reader surface. |
+| H3 | **Row 8 simplifies.** The `DigestDay` `link_only` arithmetic term (old G2) is DROPPED - a withheld item counts in `failed`, so `published + failed <= planned` already holds and `digest_day.py` is not touched. The E7 "drop BEFORE `collapse_same_story`" placement STILL applies (promote the next-best duplicate). |
+| H4 | **The console surfaces the signal (Row 9).** A not-published/withhold panel on `/console/judgement/` reads item-health: the withhold count, the ~11% baseline (E5), and the reason breakdown by `FailureCode` - the operator's view of what the gate withheld and why. |
+
+**Table B - coherence RAM: sequential model execution (owner, refines E6/G10)**
+
+| id | Ruling |
+| --- | --- |
+| H5 | **Measure first, then decide.** Row 11 (repurposed) measures the 3-model peak RSS (summariser server ~14.31 GiB + HHEM in-process + MiniLM). If it fits 16 GB, coherence runs inline same-day. If it busts, run models SEQUENTIALLY (H6). Runs alone (a measuring row). |
+| H6 | **Sequential eviction is feasible because the data is already on disk.** Verified: `extract` -> `{item_id}.article.json` and `summary` -> `{item_id}.summary.json` are persisted per-item BEFORE scoring ([stages/work.py](../backend/idhazh/stages/work.py)). So after the shard summarises all items, STOP the llama-server (free ~14.31 GiB), then score coherence from the on-disk summaries with MiniLM. **Two things must be built, both absent today:** (a) a server-STOP step - the server is started by `.github/scripts/start-llama-server.sh` (nohup, PID in `llama-server.pid`) and dies only at job end, so nothing stops it mid-job; (b) the work shard splits into two phases (summarise-all -> stop server -> score-coherence-from-disk). HHEM stays inline (server + HHEM is today's peak and fits); only coherence moves to the post-server phase, so the 3-model peak never occurs. |
+| H7 | **Shard timeout -> 220 minutes (APPROVED).** `run.shard_timeout_minutes` 200 -> 220 (6 h job cap = 360, ample headroom), covering the two-pass path. Carried in Row 11 and applied at EXECUTION, not in this docs PR. The HHEM anchored-window saving (~15 s/shard, arriving with plan 35's cap raise) gives further headroom. Next-day coherence (the E6 fallback) remains the no-restructure alternative if the measurement or the restructure cost rules against eviction. |
 
 ## Section 1 - Status Reckoner
 
@@ -168,9 +193,9 @@ disjointness check, never the letter (execute-a-plan.md).
 | 6 | G-Eval fluency judge in the council (estimate x margin timeout) | 3 | W2 / geval-leg | PENDING | - | - | - |
 | 7 | The veto-chain publish gate, record-only | 2, 3, 5 | W3 / publish-gate | PENDING | - | - | - |
 | 10 | Measure a real G-Eval call; replace the estimate | 6 | W3 / geval-measure (alone) | PENDING | - | - | - |
-| 11 | Link-only card surface (E4), ships inert | 3 | W3 / link-only-card | PENDING | - | - | - |
-| 9 | Console: the quality bands on `/console/judgement/` | 5, 7 | W3 / console-panels | PENDING | - | - | - |
-| 8 | Flip the flag: assemble acts on the stamp (link-only, E7) | 7, 11 | W4 / apply-gate (alone) | PENDING (ESCALATE) | - | - | - |
+| 11 | 3-model RAM: measure peak, sequential-eviction fallback, shard timeout 220 | 35 coherence | W1 / coherence-ram (alone) | PENDING | - | - | - |
+| 9 | Console: the quality bands + the not-published/withhold panel | 5, 7 | W3 / console-panels | PENDING | - | - | - |
+| 8 | Flip the flag: withhold = absent + item-health telemetry (E7 placement) | 7 | W4 / apply-gate (alone) | PENDING (ESCALATE) | - | - | - |
 
 ## Section 2 - Row detail
 
@@ -330,38 +355,41 @@ disjointness check, never the letter (execute-a-plan.md).
 ### Row #8 - flip the flag - ESCALATE
 
 - **Scope:** assemble reads the `EvalRow` stamp and acts. A `withheld` (below-absolute-floor)
-  faithfulness item does NOT vanish - it degrades to Row 11's link-only card (headline + source +
-  "we could not verify our summary" marker, no summary), so the loss is visible and recoverable, not
-  invisible (E4). The drop/relegate happens BEFORE `collapse_same_story`
+  faithfulness item does NOT publish - it is ABSENT from the reader's day, no card, no reader-facing
+  surface (0e H1). The withhold is recorded in item-health telemetry as `ItemOutcome.failed` with a new
+  `FailureCode` (the summary was written but failed the faithfulness floor) + the `detail`, so the
+  operator has the metric and the reason (0e H2). The drop/relegate happens BEFORE `collapse_same_story`
   ([assemble.py:2038](../backend/idhazh/assemble.py)) so the next-best duplicate promotes (E7). A length
   pre-filter never summarises a sub-200-word stub (E5). Behind `publish_gate.enabled`, ships off; the
   first row that changes a published day.
-- **Files touched:** `backend/idhazh/stages/assemble.py` (write `link_only`+`withheld_reason`, relegate
-  before the fold, recompute run/vertical/desk counts), `backend/idhazh/contracts/digest_day.py`
-  (`planned = published + failed + link_only`, validator rewrite + schema/version/changelog, E7),
-  `RunManifest` (the link-only count + schema stamp), `config/idhazh.json` (`publish_gate.enabled` +
-  the stub-length floor, removal condition on the declaring line).
+- **Files touched:** `backend/idhazh/stages/assemble.py` (drop a withheld item before the fold, record
+  the item-health row, recompute run/vertical/desk counts), `backend/idhazh/contracts/item_health.py`
+  (the new `FailureCode` member + schema/version/changelog, 0e H2), `config/idhazh.json`
+  (`publish_gate.enabled` + the stub-length floor, removal condition on the declaring line).
+  `digest_day.py` is NOT touched - a withheld item counts in `failed`, so `published + failed <= planned`
+  already holds (0e H3).
 - **Acceptance gates:** integration over the canary day, built once gate-off and once gate-on, asserting
-  a withheld item is PRESENT as a link-only card WITHOUT a summary (not absent, E4/G3), a count-invariant
-  test that `planned = published + failed + link_only` closes (E7), and that corpus-harvest output is
-  byte-identical gate-off vs gate-on (a link-only item is still harvested upstream of assemble, E10a);
-  browser smoke that the day renders with an item link-only and when the band tree is absent.
+  a withheld item is ABSENT from the day and PRESENT in item-health with the new `FailureCode` + detail
+  (0e H2), the `published + failed <= planned` invariant still closes, and corpus-harvest output is
+  byte-identical gate-off vs gate-on (a withheld item is still harvested upstream of assemble, E10a);
+  browser smoke that the day renders with an item withheld and when the band tree is absent.
 - **Oracle:** with the flag off, every published day is byte-identical to today; with it on, a
-  below-absolute-floor item is a link-only card the manifest counts, the story's next-best duplicate is
-  promoted, and the counts close; it cannot settle the editorial cost of a thin day (D8 - the link-only
-  rate is watched on the console at the stated ~11% baseline, E5).
+  below-absolute-floor item is absent from the day and carries an item-health row naming why, and the
+  story's next-best duplicate is promoted; it cannot settle the editorial cost of a thin day (D8 - the
+  not-published rate is watched on the console at the stated ~11% baseline, E5).
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
   | 1 | Lands alone, after a corpus turn of record-only review; owner sign-off (Level 5) | owner, Fowler |
-  | 2 | Only faithfulness withholds by default; coverage/coherence downgrade only if the owner promotes them; the owner sets the floor and permits withholding (reader-safety boundary) | Editor, owner |
+  | 2 | Only faithfulness withholds; coverage/coherence are watch-only (E1) and never withhold; the owner sets the absolute floor and permits withholding (reader-safety boundary) | Editor, owner |
 
 ### Row #9 - console: the quality bands
 
 - **Scope:** add panels to `/console/judgement/` drawing each metric's distribution, its fitted floors
-  over time, the withhold-and-downgrade rate, and the record-only counterfactual list a person reviews
-  before Row 8.
+  over time, and the record-only counterfactual list a person reviews before Row 8. Add a not-published
+  / withhold panel that reads item-health: the withhold count, the ~11% baseline (E5), and the reason
+  breakdown by `FailureCode` - the operator's view of what the gate withheld and why (0e H4).
 - **Files touched:** `frontend/src/routes/console/judgement/*.svelte`, a console reader under
   `frontend/src/lib/console/`, the affected browser specs.
 - **Acceptance gates:** frontend `test:changed`; browser smoke per section 12, including the data-absent
@@ -372,7 +400,7 @@ disjointness check, never the letter (execute-a-plan.md).
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | The withhold rate is a first-class panel with its own alarm (D8) | Editor |
+  | 1 | The not-published/withhold rate is a first-class panel with its own alarm, read from item-health (D8, 0e H4) | Editor |
   | 2 | A tiny glyph links each metric to `docs/concepts/summary-quality-autotune.md` | Susan |
 
 ### Row #10 - measure a real G-Eval call
@@ -392,32 +420,35 @@ disjointness check, never the letter (execute-a-plan.md).
   | --- | --- | --- |
   | 1 | Measure prefill (summary + rubric) and decode (confirm it is one digit, not generated CoT) separately; worst x 30 sizes the leg, never the mean | Carmack |
 
-### Row #11 - the link-only card surface (E4), ships inert
+### Row #11 - 3-model RAM: measure the peak, the sequential-eviction fallback, shard timeout 220
 
-- **Scope:** build the reader-facing surface a withheld item degrades to, so "withhold" is a visible,
-  recoverable loss and never an invisible deletion (E4). Add published `DigestViewItem.link_only`
-  (bool, default false) + `withheld_reason` (nullable) fields and the card that renders when `link_only`
-  is true: headline + source + a strong "we could not verify our summary" marker, carrying NO summary
-  text. Ships INERT - the field is always false until Row 8 flips the gate, so this row changes no
-  published day.
-- **Files touched:** `backend/idhazh/contracts/digest_view.py` (the two additive fields + schema +
-  version + changelog), `frontend/src/lib/payload/project.ts` (the `ITEM_FIELDS` allow-list),
-  `frontend/src/lib/payload/types.ts` (generated), a link-only card component under `frontend/src/lib/`,
-  the affected browser specs.
-- **Acceptance gates:** contract drift gate (the field regenerates byte-identical); frontend
-  `test:changed`; browser smoke - a fixture item with `link_only=true` renders the card WITHOUT a
-  summary and with the marker, a normal item is unchanged, and the day renders when the field is absent
-  from an older payload (defaults false).
-- **Oracle:** a built `DigestViewItem` with `link_only=true` renders the marker and no summary, and with
-  the field defaulted the page is byte-identical to today; it cannot settle whether the card reads with
-  the right tone (Susan's sufficiency check; Editor owns the copy).
+- **Scope:** decide how coherence (plan 35's MiniLM scorer) coexists with the summariser server and
+  HHEM without busting 16 GB (0e H5-H7). MEASURE the 3-model peak RSS first; runs alone. If it fits,
+  coherence runs inline same-day and only the timeout bump lands. If it busts, build the sequential
+  path: after the shard summarises all items, STOP the llama-server (free ~14.31 GiB), then score
+  coherence from the on-disk `{item_id}.summary.json` with MiniLM, so the 3-model peak never occurs.
+  Raise `run.shard_timeout_minutes` 200 -> 220 either way.
+- **Files touched:** a measuring utility under `backend/utilities/` + a `workflow_dispatch` measure job,
+  `docs/reference/benchmarks/what-three-models-peak.md`, `docs/reference/measurements.md`; IF the
+  sequential path is needed: a server-STOP step (kill the recorded `llama-server.pid`) invoked from
+  `.github/workflows/digest.yml`, the two-phase split in `backend/idhazh/stages/work.py` (summarise-all
+  -> stop server -> score-coherence-from-disk); `config/idhazh.json` (`shard_timeout_minutes` 200 -> 220,
+  applied at execution, not in the docs PR).
+- **Acceptance gates:** the measurement reports the 3-model peak RSS on a stock `ubuntu-latest` with all
+  three models resident, hardware + date + spread named (Guardrail #10); IF the sequential path lands,
+  integration that a summary's coherence score is byte-identical inline vs post-eviction on the canary
+  day (the restructure changes only WHEN the score is taken, reading the same on-disk summary), the
+  shard still finishes inside 220 min, and the server-stop step leaves no orphan process.
+- **Oracle:** the measurement reproduces from the committed readings; the sequential path's oracle is
+  that a summary's coherence score is identical whether scored inline or after eviction. It cannot
+  settle the editorial cost of a slower shard (that is the timeout budget, approved at 220).
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | The card is a published-payload field, not an `EvalRow` read: the site reads only committed output, so the withhold reason must reach the browser as published data | Fowler |
-  | 2 | Ships inert (field default false) so the reader-facing surface lands and is smoke-tested BEFORE the ESCALATE flag flip that uses it (Row 8) | Fowler, owner |
-  | 3 | The marker copy is Editor's; the card omits the summary entirely, so there is no false claim to make | Editor |
+  | 1 | Measure the 3-model peak before choosing inline vs sequential; a measuring row runs alone (E6) | Carmack, owner |
+  | 2 | Sequential eviction is feasible because extract + summary persist per-item to disk before scoring; it needs a server-stop step + a two-phase work shard, both absent today | Carmack |
+  | 3 | Shard timeout 200 -> 220 approved; applied at execution. Next-day coherence stays the no-restructure fallback | owner |
 
 ## Section 3 - the loop, and where it is documented
 
