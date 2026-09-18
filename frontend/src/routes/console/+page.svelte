@@ -73,6 +73,7 @@
 		type DayReadout
 	} from '$lib/charts/frame';
 	import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
+	import { extractionTrend, extractionTrendColumns } from '$lib/charts/extraction-trend';
 	import {
 		chartRule,
 		failureMix,
@@ -394,6 +395,30 @@
 	const extraction = $derived(
 		data.extractionByWindow.find((entry) => entry.days === windowDays) ??
 			data.extractionByWindow[0]
+	);
+	/** The same span the reduction above was taken over, so the trend and the
+	 * cards can never cover two different sets of days. It follows the preset
+	 * rather than a pan for the same reason the reduction does. */
+	const extractionSpan = $derived(
+		windowOfDays(publishedDates, data.today, windowDays, data.console.today_anchor)
+	);
+	/** Whether the extractor's yield is falling, which is the direction the
+	 * cards' own lines tell the operator to read and the cards cannot show. */
+	const yieldTrend = $derived(
+		extractionTrend(
+			data.extractionDays.filter(
+				(day) => day.date >= extractionSpan.start && day.date <= extractionSpan.end
+			)
+		)
+	);
+	/** `extractionTrend`'s own plot insets, so a column the pointer lands on is
+	 * the column the strip prints at every width. */
+	const YIELD_GRID = { left: 48, right: 14 };
+	const yieldColumns = $derived(
+		columnStrip(
+			yieldTrend.days.map((day) => shortDate(day.date)),
+			extractionTrendColumns(yieldTrend.days)
+		)
 	);
 	/** The three classes, as rows. `Not yet classified` is named rather than
 	 * folded into `narrative`: an article carrying two figures is not an article
@@ -1302,30 +1327,47 @@
 					title="How much of each prompt was already in memory"
 					note="Prompt tokens the model had to read, against the ones it did not - the instructions in front of every article stay in memory between items."
 				>
-					<div
-						class="cost-track"
-						role="img"
-						data-item-cost-read-tokens={cost.readTokens}
-						data-item-cost-reused-tokens={cost.reusedTokens}
-						data-item-cost-reused-pct={cost.reusedPct}
-						aria-label="{grouped(cost.readTokens)} prompt tokens were read and {grouped(
-							cost.reusedTokens
-						)} were already in memory, which is {cost.reusedPct} percent of the {grouped(
-							cost.readTokens + cost.reusedTokens
-						)} the window needed."
-					>
-						<span
-							class="cost-seg read"
-							style="inline-size: {100 - (cost.reusedPct ?? 0)}%"
-						></span>
-						<span class="cost-seg held" style="inline-size: {cost.reusedPct ?? 0}%"></span>
-					</div>
-					<p class="cost-key" data-item-cost-key>
-						<span class="cost-swatch read"></span>read {grouped(cost.readTokens)} tokens
-						<span class="cost-swatch held"></span>already in memory {grouped(cost.reusedTokens)} tokens
-						({pct(cost.reusedPct)})
-					</p>
+					<!-- Counts, not a track. The two-segment bar that used to sit here
+					     drew one flat share on no time axis, and the note below it told
+					     the reader not to read its direction: a figure a panel disowns
+					     is a figure to remove. What the reader loses is the picture of
+					     the split, and what the split was worth was always the two
+					     counts it was built from. Susan, 2026-09-17.
 
+					     The two groups are labelled because they answer over different
+					     things - the window's whole prompt against one item's - and a
+					     reader who cannot see the seam reads seven figures as one set. -->
+					<p class="cost-group">Over the whole window</p>
+					<div class="cost-figures" data-item-cost-share="figures">
+						<p class="cost-figure">
+							<span
+								class="cost-figure-value tabular-nums"
+								data-item-cost-read-tokens={cost.readTokens}>{grouped(cost.readTokens)}</span
+							>
+							<span class="cost-figure-label"
+								>prompt tokens the model read, over {grouped(cost.counted)} items</span
+							>
+						</p>
+						<p class="cost-figure">
+							<span
+								class="cost-figure-value tabular-nums"
+								data-item-cost-reused-tokens={cost.reusedTokens}>{grouped(cost.reusedTokens)}</span
+							>
+							<span class="cost-figure-label"
+								>it did not, because they were already in memory</span
+							>
+						</p>
+						<p class="cost-figure">
+							<span class="cost-figure-value tabular-nums" data-item-cost-reused-pct={cost.reusedPct}
+								>{pct(cost.reusedPct)}</span
+							>
+							<span class="cost-figure-label"
+								>of the {grouped(cost.readTokens + cost.reusedTokens)} tokens the window needed</span
+							>
+						</p>
+					</div>
+
+					<p class="cost-group">Item by item</p>
 					<div class="cost-figures">
 						<p class="cost-figure">
 							<span class="cost-figure-value tabular-nums" data-item-cost-prompt-tokens={cost.promptTokens}
@@ -1572,7 +1614,8 @@
 				</p>
 			{:else}
 				<p class="text-[0.9375rem] text-text" data-extraction-verdict>{extraction.verdict}</p>
-				<div class="extraction-figures mt-4">
+				<!-- The verdict half: four levels, covering the whole reading. -->
+				<div class="extraction-figures mt-4" data-extraction-question="is it working">
 					<KpiCard
 						label="Articles that could carry a chart"
 						value={grouped(extraction.chartable)}
@@ -1603,6 +1646,66 @@
 							: 'days'}"
 						line="Quantities and dates the reading kept, added over the window. It answers to the patterns alone, so it moves when the reading changes and not when the planner does."
 					/>
+				</div>
+				<!-- The break half. The cards above carry four levels and two of their
+				     own lines say to read the direction instead, which is a direction
+				     nothing on the panel drew. Both counts are articles, so one linear
+				     domain holds them and the gap between the two lines is the material
+				     the planner was handed and did not draw. -->
+				<div class="mt-6" data-extraction-question="what is broken">
+					<h3 class="text-[0.9375rem] font-semibold text-text">Whether the yield is falling</h3>
+					{#if yieldTrend.empty}
+						<p class="mt-2 text-[0.8125rem] text-text-secondary" data-extraction-trend="none">
+							No day in these {windowDays} days carries both counts, so there is no direction to draw.
+						</p>
+					{:else}
+						<p
+							class="mt-1 text-[0.8125rem] text-text-tertiary"
+							data-extraction-trend={yieldTrend.single ? 'single' : 'days'}
+							data-extraction-trend-days={yieldTrend.days.length}
+							data-extraction-trend-ratio={yieldTrend.ratio === null
+								? null
+								: yieldTrend.ratio.toFixed(1)}
+						>
+							{#if yieldTrend.single}
+								One measured day in these {windowDays} days. A single day has a level and no
+								direction, so the point is drawn and the line waits for a second day.
+							{:else}
+								{yieldTrend.days.length} measured days. Both lines count articles, so they share one
+								scale;{yieldTrend.ratio === null
+									? ' no published article in the window carried a chart, so there is no ratio between them.'
+									: ` at their peaks the upper line is ${yieldTrend.ratio.toFixed(1)} times the lower, which is inside the 20 times a shared scale holds.`}
+							{/if}
+						</p>
+						<Chart
+							svg=""
+							option={yieldTrend.option}
+							width={data.console.chart_width}
+							height={220}
+							label="Articles the reading found enough figures of one kind in, against published articles carrying a chart, one point a day over {windowDays} days"
+							columns={yieldColumns}
+							readoutName="extraction-yield"
+							readoutMaxShare={data.chart.readout_max_share}
+							grid={YIELD_GRID}
+							restingNote=", the newest measured day"
+							hint="Point at a day to read both counts. Left and Right step through them, Escape returns to the newest."
+							pending="The day-by-day shape is drawn once the engine loads. Every count is in the list below it."
+						/>
+						<!-- The counts as text, so nothing here needs a pointer. -->
+						<ul class="sr-only" data-extraction-trend-days-list>
+							{#each yieldTrend.days as day (day.date)}
+								<li
+									data-extraction-trend-day={day.date}
+									data-extraction-trend-chartable={day.chartable}
+									data-extraction-trend-charted={day.charted}
+								>
+									{day.date}: {grouped(day.chartable)} articles with enough figures to draw, {grouped(
+										day.charted
+									)} published carrying a chart
+								</li>
+							{/each}
+						</ul>
+					{/if}
 				</div>
 				<div class="console-table mt-4" data-extraction="classes">
 					<table class="w-full text-[0.8125rem]">
@@ -1648,53 +1751,6 @@
    against writing with. Absolute tokens set the geometry and the share is
    printed beside it: a share over a prompt that keeps changing length is not
    the question this panel answers. */
-.cost-track {
-display: flex;
-block-size: 0.75rem;
-overflow: hidden;
-border-radius: var(--radius-sm);
-background: var(--color-surface-sunken);
-}
-
-.cost-seg {
-display: block;
-block-size: 100%;
-}
-
-.cost-seg.read {
-background: var(--chart-1);
-}
-
-.cost-seg.held {
-background: var(--chart-3);
-}
-
-.cost-key {
-display: flex;
-flex-wrap: wrap;
-align-items: center;
-gap: var(--space-2);
-margin: var(--space-2) 0 0;
-font-size: var(--text-xs);
-line-height: var(--leading-xs);
-color: var(--color-text-tertiary);
-}
-
-.cost-swatch {
-display: inline-block;
-inline-size: 0.625rem;
-block-size: 0.625rem;
-border-radius: var(--radius-sm);
-}
-
-.cost-swatch.read {
-background: var(--chart-1);
-}
-
-.cost-swatch.held {
-background: var(--chart-3);
-}
-
 /* Four figures on one auto-fit grid, the same shape the measure cards take.
    Each carries its own denominator, because the two clocks and the token
    counts answer for different numbers of items. */
@@ -1703,6 +1759,22 @@ display: grid;
 grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
 gap: var(--space-4);
 margin-block-start: var(--space-4);
+}
+
+/* What the group under it answers over. Quieter than a heading, because the
+   panel has one of those already and a second would compete with it. */
+.cost-group {
+margin: var(--space-4) 0 0;
+font-size: var(--text-xs);
+line-height: var(--leading-xs);
+font-weight: 600;
+letter-spacing: 0.04em;
+text-transform: uppercase;
+color: var(--color-text-tertiary);
+}
+
+.cost-group + .cost-figures {
+margin-block-start: var(--space-2);
 }
 
 .cost-figure {

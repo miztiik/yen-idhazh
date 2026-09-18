@@ -7,8 +7,9 @@ import { expect, test } from '@playwright/test';
  * record before `build-canary.mjs` writes the item-health ledger it would be
  * reduced from, which is the same reason the record carries no throughput and no
  * stage timing. So this suite proves the panel's absent state - the state
- * `CLAUDE.md` section 12 requires of every surface - and the seven built cases in
- * `extraction-window.spec.ts` prove the loaded one.
+ * `CLAUDE.md` section 12 requires of every surface - and the built cases in
+ * `extraction-window.spec.ts` and `extraction-trend.spec.ts` prove the loaded
+ * one: the first for the four levels, the second for the direction under them.
  */
 
 test.beforeEach(async ({ page }) => {
@@ -26,6 +27,17 @@ test('the panel names its own absence rather than leaving a heading over nothing
 	await expect(absent).toContainText('carries a record of what the extractor found');
 	// Not a blank, and not the loaded state either.
 	await expect(panel.locator('[data-extraction="classes"]')).toHaveCount(0);
+});
+
+test('a panel with no record draws no trend and no empty plot', async ({ page }) => {
+	// The trend is the break half of this panel. With no record there is no
+	// direction to draw, and an axis over nothing would be a claim the data does
+	// not support - so neither half of the loaded state is on the page.
+	const panel = page.locator('[data-console-panel="Extraction"]');
+
+	await expect(panel.locator('[data-extraction-trend]')).toHaveCount(0);
+	await expect(panel.locator('[data-extraction-question]')).toHaveCount(0);
+	await expect(panel.locator('[data-readout-columns]')).toHaveCount(0);
 });
 
 test('the panel says two more classes are coming, whether or not it has data', async ({ page }) => {
