@@ -141,7 +141,7 @@ off the scheduled runs after the merge, not off a flag nobody turned on.
 180-minute bar, with the merge date named. Merged 2026-09-13. The estimate it
 checks is 182 to 185 minutes, built in section 7 from a cap-length call-1 prompt
 at the slowest recorded prefill of 9.43 tokens a second; it is an estimate and
-it is labelled one (Guardrail #10). `docs/reference/measurements.md` carries the
+it is labelled one (Guardrail #10). `docs/reference/pipeline-cost.md` carries the
 same row under "What the two calls cost a work shard, measured rather than
 estimated".
 

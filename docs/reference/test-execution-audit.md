@@ -200,7 +200,7 @@ implied: nothing fails automatically, so a growing step can merge if nobody
 asks.
 
 The numbers behind both are in
-[measurements.md](measurements.md#what-the-suite-paid-to-re-read-the-archive-2026-09-06).
+[pipeline-cost.md](pipeline-cost.md#what-the-suite-paid-to-re-read-the-archive-2026-09-06).
 The one that reframed the work: the `browser` job was 462 s and the entire
 backend suite was 63 s, so deleting backend tests buys about zero wall clock.
 None of this was done for speed on the day; it was done because the cost

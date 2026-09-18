@@ -1499,7 +1499,7 @@ not lose. The gate failed on `replied: false` - the model returned no usable
 summary for that item. Four canaries were neutralised, and the fifth was never
 exercised, because there was nothing to check. The artifact quote, the local
 sweep, its hardware and the command that reproduces it are in
-[../reference/measurements.md](../reference/measurements.md#the-fifth-canary-was-never-exercised).
+[../reference/pipeline-cost.md](../reference/pipeline-cost.md#the-fifth-canary-was-never-exercised).
 
 **Guardrail #11 held. Guardrail #10 broke.** Fetched text is data and never instruction,
 and the sanitizer plus the schema are the controls that rule names - both did

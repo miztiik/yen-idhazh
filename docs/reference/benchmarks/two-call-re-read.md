@@ -191,7 +191,7 @@ the article length in the same sentence.
 
 - **Nothing about a runner.** The milliseconds are a developer laptop with other
   work on it and are an order-of-magnitude check
-  ([`../measurements.md`](../measurements.md)). The token counts name the runtime
+  ([`../pipeline-cost.md`](../pipeline-cost.md)). The token counts name the runtime
   and the date and do travel.
 - **Nothing about a distribution.** One run, no spread, three articles.
 - **Nothing about what the replies said.** Only item 3's label call ran to a stop;

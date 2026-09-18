@@ -1135,7 +1135,7 @@ worth more than the space. Recorded here rather than waved through, per
 The other two console routes moved 2 B and 4 B, inside the build noise floor, so
 the change reaches one route. The live ceilings use one convention, `gzip -5`,
 and the live numbers are in
-[../../reference/measurements-site.md](../../reference/measurements-site.md#the-page-guardrails-and-what-each-route-weighs-2026-09-10)
+[../../reference/site-weight.md](../../reference/site-weight.md#the-page-guardrails-and-what-each-route-weighs-2026-09-10)
 and what to do when one fires is in
 [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md).
 
@@ -1778,7 +1778,7 @@ it counts is **articles**: `(cap - bytes) / bytesPerItem`. Published days are re
 articles a day, and that knob bounds one **run**, not one day. Up to five runs a day is normal, so
 the band priced a day at 160 articles while the days it measured ran a median of
 334, and the printed runway was 2.09 times too long
-([../../reference/measurements-site.md](../../reference/measurements-site.md#days-to-the-1-gb-pages-ceiling)).
+([../../reference/site-weight.md](../../reference/site-weight.md#days-to-the-1-gb-pages-ceiling)).
 Articles need no daily rate at all, which is why the fix removed the assumption
 instead of correcting it. Where no published day grew the tree over an article
 it published there is no rate, so the fact says there is no runway instead of
@@ -1998,4 +1998,4 @@ heading.
 - [telemetry-series.md](telemetry-series.md) - the published projection and the grain of every figure.
 - [../sources/health.md](../sources/health.md) - the feed ledger these panels render, and the quarantine rule they mirror.
 - [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md) - the page ceilings and what to do when one fires.
-- [../../reference/measurements.md](../../reference/measurements.md) - the instrument log behind every number here.
+- [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md) - the instrument log behind every number here.

@@ -427,7 +427,7 @@ is never affected. The same cancellation applies to `digest.yml`, which
 has one group on purpose - a day has one digest.
 
 What a swap costs the cache is a reading, and it lives in the instrument log:
-[The cache transition](measurements.md#the-cache-transition-measured-2026-08-27).
+[The cache transition](pipeline-cost.md#the-cache-transition-measured-2026-08-27).
 
 ## Vector backfill
 
@@ -500,7 +500,7 @@ fails the job when they disagree, because an address that 404s would otherwise
 leave one case with one item and three rows of plausible numbers.
 
 **Three cases, in sequence, on one runner, and never a matrix.** Prefill spans
-4.2x between GitHub-hosted runners ([measurements.md](measurements.md)), which
+4.2x between GitHub-hosted runners ([pipeline-cost.md](pipeline-cost.md)), which
 is larger than anything a case here is looking for, so three jobs would report
 the three hosts they drew. Sequential on one box cancels the host.
 

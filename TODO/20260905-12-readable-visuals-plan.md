@@ -231,7 +231,7 @@ deletion plus a drawing over data already on the wire.
 ## 8. Row #6 - A whole day, again
 
 - **Scope:** Plan 01's whole-day browser check re-run against the new renderer, at day scale, both themes, phone and desktop.
-- **Files touched:** `frontend/tests/whole-day.spec.ts`, `docs/how-to/run-the-gates.md`, `docs/reference/measurements.md`
+- **Files touched:** `frontend/tests/whole-day.spec.ts`, `docs/how-to/run-the-gates.md`, `docs/reference/pipeline-cost.md`
 - **Acceptance gates:** the browser suite; the section 12 smoke; `idhazh site-weight`.
 - **Oracle:** On the heaviest committed day: zero console errors, zero responses at 400 or above, zero horizontal overflow, every visual clearing both floors, **and more than one rendered type on the page**. A day publishing a single shape is a recorded defect, and only a day-scale check can see it.
 

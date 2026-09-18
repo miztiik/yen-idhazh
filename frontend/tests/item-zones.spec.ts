@@ -34,7 +34,7 @@
  * items, because the canary publishes one desk and a block allowing two stories
  * a desk needs three to draw. That case is measured on the committed digest
  * instead, with hardware and date, in
- * `docs/reference/measurements.md`. What is checked here is each half - the
+ * `docs/reference/pipeline-cost.md`. What is checked here is each half - the
  * item's tracks on a day with no aside, and the aside's own geometry against
  * the stylesheet the build shipped.
  */

@@ -107,7 +107,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 ## 5. Row #4 - Tracing switches on
 
 - **Scope:** `observability.tracing_enabled` becomes `true`; the file sink stays the only sink CI runs.
-- **Files touched:** `config/idhazh.json`, `backend/tests/test_telemetry.py` (the two assertions that are about the committed file and must be deselected or re-pointed), `docs/concepts/telemetry.md`, `docs/reference/measurements.md`
+- **Files touched:** `config/idhazh.json`, `backend/tests/test_telemetry.py` (the two assertions that are about the committed file and must be deselected or re-pointed), `docs/concepts/telemetry.md`, `docs/reference/pipeline-cost.md`
 - **Acceptance gates:** the full suite in both switch positions; one `workflow_dispatch` of `digest.yml`; `idhazh site-weight`.
 - **Oracle:** The live dispatch writes a rollup row per shard per span, **and** the shard's measured wall clock is within 1 percent of the same shard's clock on the previous run. Turning an instrument on must not move the thing it measures.
 

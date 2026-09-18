@@ -67,7 +67,7 @@ def test_the_alarm_buys_the_days_it_was_derived_to_buy() -> None:
     assert bought >= WARNING_DAYS_REQUIRED, (
         f"{config.site_budget_mb} MB buys {bought} days at "
         f"{FASTEST_MEASURED_KB_PER_DAY} KB/day; re-derive it in "
-        f"docs/reference/measurements.md before changing it here"
+        f"docs/reference/pipeline-cost.md before changing it here"
     )
 
 

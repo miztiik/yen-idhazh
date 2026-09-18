@@ -22,7 +22,7 @@ The sentence encoder this project commits and serves from its own origin.
 The revision row was blank until 2026-09-09. A date says when somebody fetched;
 it does not say what they got, because `main` moves. The 40-hex commit does, and
 these five files are the bytes at it - checked two ways, in
-[`../../../../../../docs/reference/measurements.md`](../../../../../../docs/reference/measurements.md):
+[`../../../../../../docs/reference/pipeline-cost.md`](../../../../../../docs/reference/pipeline-cost.md):
 the file tree at that commit returns a git blob SHA-1 for each small file and an
 LFS SHA-256 for the model, and all five equal what is committed here.
 

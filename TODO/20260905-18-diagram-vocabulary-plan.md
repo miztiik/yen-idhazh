@@ -164,7 +164,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 ## 7. Row #6 - A whole day, once more
 
 - **Scope:** The whole-day browser check re-run with every vocabulary family live.
-- **Files touched:** `frontend/tests/whole-day.spec.ts`, `docs/how-to/run-the-gates.md`, `docs/reference/measurements.md`
+- **Files touched:** `frontend/tests/whole-day.spec.ts`, `docs/how-to/run-the-gates.md`, `docs/reference/pipeline-cost.md`
 - **Acceptance gates:** the browser suite; the section 12 smoke; `idhazh site-weight`.
 - **Oracle:** On the heaviest committed day with every family enabled: zero console errors, zero responses at 400 or above, zero horizontal overflow, every visual clearing both floors, more than one rendered type, and the page settling within a stated time.
 

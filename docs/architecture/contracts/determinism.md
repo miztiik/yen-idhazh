@@ -226,5 +226,5 @@ the record lie (Guardrail #10).
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the run, which measures every item it produces because nothing skips.
 - [../../concepts/evaluation.md](../../concepts/evaluation.md) - what an eval row measures, and why an empty re-run must not write one.
 - [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md) - the identity and replay requirements for a model change.
-- [../../reference/measurements.md](../../reference/measurements.md) - where a measured number carries its hardware and date.
+- [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md) - where a measured number carries its hardware and date.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #10, section 11.

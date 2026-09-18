@@ -494,5 +494,5 @@ is a figure that stops existing on a date nobody chose.
 - [../models/gemma-4-e4b-qat.md](../models/gemma-4-e4b-qat.md) - Gemma's draws and what its draft head is worth.
 - [../models/ornith-1.5-9b-q5km.md](../models/ornith-1.5-9b-q5km.md) - Ornith's draws.
 - [../models/qwen3.5-9b-q4km.md](../models/qwen3.5-9b-q4km.md) - the incumbent's draws.
-- [../measurements.md](../measurements.md) - the instrument log.
+- [../pipeline-cost.md](../pipeline-cost.md) - the instrument log.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #2 (the runner is the architecture) and Guardrail #10 (a number carries its hardware, date and spread).

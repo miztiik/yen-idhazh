@@ -3,7 +3,7 @@
 Read-only, offline, and not a stage. It runs when somebody wants one of these
 three numbers, never on the daily pipeline's critical path. It is committed
 rather than kept as a private script so anyone can re-derive the figures in
-`docs/reference/measurements.md` from a fork or a stale branch, which is the
+`docs/reference/pipeline-cost.md` from a fork or a stale branch, which is the
 same reason `reconcile_prefill.py` lives beside it.
 
 **1. Unaccounted shard wall-clock.** A `work` shard's own clock, minus the

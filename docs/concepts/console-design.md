@@ -149,7 +149,7 @@ page so that the day the cap moves, the number that says the move went too far
 is already being printed. The cap has moved three times since and the count is
 still zero by arithmetic: the longest single-call prompt the committed cap can
 produce sizes at 25,156 tokens, which is 38 percent of the 65,536 window
-([../reference/measurements.md](../reference/measurements.md)). **What that
+([../reference/pipeline-cost.md](../reference/pipeline-cost.md)). **What that
 window is held open for is the two-call pair, which the counter does not read**
 - it sizes at 54,887 tokens
 ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)). So
@@ -663,7 +663,7 @@ and a single number cannot carry it.
 **A fixed benchmark figure never appears on the console.** It was taken on
 another machine against another workload, so a gap between it and a run reads as
 a regression nobody measured. Those numbers stay in
-[../reference/measurements.md](../reference/measurements.md).
+[../reference/pipeline-cost.md](../reference/pipeline-cost.md).
 
 ## A chart with a shared column prints every series together, in a fixed strip
 
@@ -1052,7 +1052,7 @@ on 2026-09-09, so no median payload arrival exists yet to derive it from. The
 shell-and-fetch migration was meant to take that measurement and could not:
 the number is a reader's wait, and a reader-facing timing measurement was
 ruled out of that plan's scope (owner, 2026-09-08). What would settle it is
-in [../reference/measurements.md](../reference/measurements.md). Taking it inside the user-interface row was refused: a
+in [../reference/pipeline-cost.md](../reference/pipeline-cost.md). Taking it inside the user-interface row was refused: a
 user-interface row is not a measurement harness, and a number measured on a
 laptop's loopback would be the wrong number twice over. Fowler, 2026-09-08.
 
@@ -1117,5 +1117,5 @@ wrong trade.
 - [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md) - what each console panel is, and where its data comes from.
 - [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md) - the published projection and the grain of every figure.
 - [config.md](config.md) - the knobs these rules read.
-- [../reference/measurements.md](../reference/measurements.md) - the instrument log the console never quotes from.
+- [../reference/pipeline-cost.md](../reference/pipeline-cost.md) - the instrument log the console never quotes from.
 - [../../CLAUDE.md](../../CLAUDE.md) - section 0b (voice) and Guardrail #10 (every number carries its conditions).

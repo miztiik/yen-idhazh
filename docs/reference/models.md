@@ -51,7 +51,7 @@ are in that position: the retired Qwen3-8B-Q4_K_M summarizer, the Qwen3-4B-Q4_K_
 visual planner whose job retired on 2026-09-13, and the
 `vectara/hallucination_evaluation_model` faithfulness scorer, which grades
 offline and never touches a published summary. Their figures stay where they were
-taken, in [measurements.md](measurements.md), each labelled with whose they are.
+taken, in [pipeline-cost.md](pipeline-cost.md), each labelled with whose they are.
 Writing them a dossier would move readings nothing reads; the rule that would
 bring one here is a model taking a live role.
 
@@ -108,7 +108,7 @@ definitions.
 - [models/qwen3.5-9b-q4km.md](models/qwen3.5-9b-q4km.md) - the configured summarizer.
 - [models/gemma-4-e4b-qat.md](models/gemma-4-e4b-qat.md) - a benched candidate, and the one that declares a draft head.
 - [models/ornith-1.5-9b-q5km.md](models/ornith-1.5-9b-q5km.md) - a benched candidate.
-- [measurements.md](measurements.md) - the instrument log: everything measured that is not a property of one model.
+- [pipeline-cost.md](pipeline-cost.md) - the instrument log: everything measured that is not a property of one model.
 - [documentation-structure.md](documentation-structure.md) - where each kind of page lives, and what a dossier may not hold.
 - [../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md) - measure a candidate, adopt it in one line, and put the old one back in the same line.
 - [../architecture/summarize/model-boundary.md](../architecture/summarize/model-boundary.md) - what a swap invalidates, and what has to be retaken.

@@ -227,7 +227,7 @@ sources**, which is a source-selection question rather than an extraction bug.
 
 | Row | State | Waiting on |
 | --- | --- | --- |
-| 9 - Image renderer | **DESCOPED on measurement** | Nothing. Measured 2026-08-23 on `ubuntu-latest`, run `32654562728`: Z-Image-Turbo at bfloat16 loads in 159.2 s at 9.2 GB resident and spends 527 s per denoising step at 512x512 - about 79 minutes for one image, against a 60-minute `route` bound. Cancelled at step 7 of 9; 768px and the byte counts were never reached. The plan's second candidate, `alpha-vllm/Anima-2.9B`, answers 401 Repository Not Found and does not exist. ESCALATE trigger #3 fired and the row closes. Recorded in [`../docs/reference/measurements.md`](../docs/reference/measurements.md) and [`../docs/architecture/publishing/visuals.md`](../docs/architecture/publishing/visuals.md). |
+| 9 - Image renderer | **DESCOPED on measurement** | Nothing. Measured 2026-08-23 on `ubuntu-latest`, run `32654562728`: Z-Image-Turbo at bfloat16 loads in 159.2 s at 9.2 GB resident and spends 527 s per denoising step at 512x512 - about 79 minutes for one image, against a 60-minute `route` bound. Cancelled at step 7 of 9; 768px and the byte counts were never reached. The plan's second candidate, `alpha-vllm/Anima-2.9B`, answers 401 Repository Not Found and does not exist. ESCALATE trigger #3 fired and the row closes. Recorded in [`../docs/reference/pipeline-cost.md`](../docs/reference/pipeline-cost.md) and [`../docs/architecture/publishing/visuals.md`](../docs/architecture/publishing/visuals.md). |
 | 23 - Browser chat SLM | **DESCOPED on measurement** | Nothing. Every candidate's smallest single weight file exceeds GitHub's 100 MB hard limit, the smallest by 3.5x. Splitting a file evades the limit rather than meeting it, and fetching weights from a third-party origin makes a stranger's server part of the reading experience. Recorded in [`../docs/architecture/overview.md`](../docs/architecture/overview.md). |
 
 ### Row #23: the ESCALATE fired
@@ -315,11 +315,11 @@ than not having the feature. On-device **search** ships and stays; on-device
 ## Row #2 - Measurement harness: throughput + corpus shape
 
 - **Scope:** Replace every estimated number in the design with a measured one, on a stock `ubuntu-latest`.
-- **Files touched:** `.github/workflows/measure.yml`, `backend/utilities/summarise_bench.py`, `backend/utilities/bench_image.py`, `backend/utilities/measure_corpus.py`, `docs/reference/measurements.md`
-- **Acceptance gates:** workflow completes on a real runner; emits `bench-llm` and `bench-image` artifacts; `docs/reference/measurements.md` carries hardware, date and stddev for every figure.
-- **Oracle:** coverage - every row currently marked "estimate" in `docs/reference/measurements.md` has a measured replacement with a stddev, or an explicit "still unmeasured" line.
+- **Files touched:** `.github/workflows/measure.yml`, `backend/utilities/summarise_bench.py`, `backend/utilities/bench_image.py`, `backend/utilities/measure_corpus.py`, `docs/reference/pipeline-cost.md`
+- **Acceptance gates:** workflow completes on a real runner; emits `bench-llm` and `bench-image` artifacts; `docs/reference/pipeline-cost.md` carries hardware, date and stddev for every figure.
+- **Oracle:** coverage - every row currently marked "estimate" in `docs/reference/pipeline-cost.md` has a measured replacement with a stddev, or an explicit "still unmeasured" line.
 
-**The canonical ledger is now [`docs/reference/measurements.md`](../docs/reference/measurements.md).** Sections 2.1 and 2.2 below are the working record that produced it and are deleted when this row closes. The harness landed 2026-08-21 - `measure_corpus.py`, a `corpus` job, and a `cache-state.txt` that distinguishes a cache-hit run from a cache-miss one. What remains is executing the workflow on a real runner, which needs the owner to dispatch it (or to authorise the agent to push and dispatch).
+**The canonical ledger is now [`docs/reference/pipeline-cost.md`](../docs/reference/pipeline-cost.md).** Sections 2.1 and 2.2 below are the working record that produced it and are deleted when this row closes. The harness landed 2026-08-21 - `measure_corpus.py`, a `corpus` job, and a `cache-state.txt` that distinguishes a cache-hit run from a cache-miss one. What remains is executing the workflow on a real runner, which needs the owner to dispatch it (or to authorise the agent to push and dispatch).
 
 | # | Decision | Authority |
 | --- | --- | --- |
@@ -688,7 +688,7 @@ The tests are all about the failure paths, because a summarizer that handles a g
 ## Row #7 - Model validation gate (ESCALATE)
 
 - **Scope:** Confirm the row 6 model pick survives contact with our own prompt and our own extraction, or re-derive it.
-- **Files touched:** `docs/reference/measurements.md`, `config/idhazh.json`, `evals/validation-<date>.csv`
+- **Files touched:** `docs/reference/pipeline-cost.md`, `config/idhazh.json`, `evals/validation-<date>.csv`
 - **Acceptance gates:** 20 golden articles scored end-to-end through the real pipeline; results recorded with date and commit SHA.
 - **Oracle:** decision rule - if mean HHEM is more than 0.10 below what the leaderboard rank predicts, re-score the other candidates; if any scores >= 0.05 better than Qwen3-8B on our pipeline, switch the pick and re-golden. PAUSE for sign-off before switching.
 
@@ -727,7 +727,7 @@ The tests are all about the failure paths, because a summarizer that handles a g
 ## Row #9 - Image model selection + renderer
 
 - **Scope:** Choose the CPU diffusion model on measured cost, then render narrative-routed items behind the canary gate.
-- **Files touched:** `backend/idhazh/render/image.py`, `config/idhazh.json`, `docs/reference/measurements.md`, `backend/tests/test_image_prompt.py`
+- **Files touched:** `backend/idhazh/render/image.py`, `config/idhazh.json`, `docs/reference/pipeline-cost.md`, `backend/tests/test_image_prompt.py`
 - **Acceptance gates:** Z-Image-Turbo and Anima-2.9B both timed at 512 and 768 on 4 threads; chosen model recorded with its seconds-per-image; image-prompt allowlist enforced; row 5 canaries re-run against the chosen model.
 - **Oracle:** all five canaries fail to inject through the image-prompt hop. No model ships without this passing.
 

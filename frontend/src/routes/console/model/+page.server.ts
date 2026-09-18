@@ -315,7 +315,7 @@ export async function load() {
 		// Every fixed benchmark figure lives in the write-up and none of them is
 		// copied onto this page: two machines and two workloads, so a gap between a
 		// bench number and a run reads as a regression nobody measured.
-		measurementsReference: `${uiConfig().repo_url.replace(/\/+$/, '')}/blob/main/docs/reference/measurements.md`,
+		measurementsReference: `${uiConfig().repo_url.replace(/\/+$/, '')}/blob/main/docs/reference/pipeline-cost.md`,
 		// One entry per committed day, each holding the item count and summed
 		// new-fact rate per length band. The browser filters this to the open window
 		// and divides once, so the strip is a mean over the window's items and never

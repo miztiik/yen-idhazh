@@ -177,8 +177,8 @@ page.** If that sentence needs the old page's title in it, do not split - the
 page was long and it was not confused, and a long page beats a set nobody can
 navigate.
 
-What a real split looks like: `measurements.md` became the producer and
-`measurements-site.md` became what the reader downloads, because "how fast does
+What a real split looks like: `pipeline-cost.md` became the producer and
+`site-weight.md` became what the reader downloads, because "how fast does
 the model write" and "how big is the page I ship" are two questions and a person
 arrives holding one or the other. What it never looks like: `measurements-1.md`
 and `measurements-2.md`.

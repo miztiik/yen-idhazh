@@ -48,7 +48,7 @@ HOLDOUT_MARGIN: Final = 0.0083
 #: Wall clock for one judge call at 764 read tokens, in seconds. Derived from the
 #: repository's own reading of 9.85 tokens a second - median over 4,117 timed
 #: rows, slowest 8.25, fastest 44.71, taken 2026-09-09 on a stock ubuntu-latest
-#: (docs/reference/measurements.md). It is here because pair_budget is bounded
+#: (docs/reference/pipeline-cost.md). It is here because pair_budget is bounded
 #: against the leg timeout and that arithmetic needs a seconds-a-call figure with
 #: a source. Row 17 replaces it with a reading taken on the judge prompt itself.
 SECONDS_A_CALL: Final = 77.6

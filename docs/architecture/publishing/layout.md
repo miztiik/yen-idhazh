@@ -284,7 +284,7 @@ The copy, its three clauses and where the threshold lives are in
 
 `frontend/public/assist/index/<YYYY-MM>.json` is one month of published items in published order, and `<YYYY-MM>.bin` is that month's vectors laid end to end as raw int8. The contract is `backend/idhazh/contracts/search_index.py`; the writer is `assemble.rebuild_search_index`. The archive's story list reads the JSON, and on-device search reads both.
 
-The shard that exists costs **109.3 KB gzipped for 2,237 items, and 545 KB for their 2,235 vectors** ([../../reference/measurements-site.md](../../reference/measurements-site.md#the-month-search-index-as-written)). An entry is **50.03 gzipped bytes**, which is 10 percent more than the 45.5 the shape study above priced, because a real entry carries real key names and a vector offset the study's did not.
+The shard that exists costs **109.3 KB gzipped for 2,237 items, and 545 KB for their 2,235 vectors** ([../../reference/site-weight.md](../../reference/site-weight.md#the-month-search-index-as-written)). An entry is **50.03 gzipped bytes**, which is 10 percent more than the 45.5 the shape study above priced, because a real entry carries real key names and a vector offset the study's did not.
 
 **A month shard does not break the bounded-request rule above, and here is why.** That rule rejects a scheme whose request count or index size grows with *total history*. A month shard's size is a function of one month, and the month ends; the hundredth month costs a reader exactly what the first one did. Request count is bounded the same way: a page reads the months it shows, which is one for a day page and a fixed pan for an archive view, not one per published day and never one per item. What the rule forbids is the file that has to get bigger every day forever, which is the global index in the rejected-alternatives table - measured at 12.7 MB of browse entries for a single year at the structural ceiling.
 
@@ -676,7 +676,7 @@ A megabyte figure and a headroom figure are both levels. **Neither is a rate, so
 
 **`by_directory` - the top-level children of `build/`.** One total cannot say whether the visuals grew or the telemetry did, so the day the total moves is the day somebody starts guessing. The split is asserted to sum exactly to the total, because a split that quietly loses bytes names the wrong directory on the one occasion it is used to decide what to cut.
 
-**`bytes_per_published_item` - the unit that holds still.** A rate per day is not stable here: the day rate moves with the item mix, where the per-item figure holds. So the day rate is derived - per-item times `run.safety_ceiling_per_run`, the ceiling in force - rather than averaged over whichever days happen to be on disk. That is a worst-case day by construction, which is what a runway needs (Guardrail #10). The readings are in [../../reference/measurements-site.md](../../reference/measurements-site.md#days-to-the-1-gb-pages-ceiling).
+**`bytes_per_published_item` - the unit that holds still.** A rate per day is not stable here: the day rate moves with the item mix, where the per-item figure holds. So the day rate is derived - per-item times `run.safety_ceiling_per_run`, the ceiling in force - rather than averaged over whichever days happen to be on disk. That is a worst-case day by construction, which is what a runway needs (Guardrail #10). The readings are in [../../reference/site-weight.md](../../reference/site-weight.md#days-to-the-1-gb-pages-ceiling).
 
 **`days_to_alarm` and `days_to_cap` - the runway.** Headroom divided by that rate, in published days rather than calendar days. It is printed on every run, including the runs nowhere near either line, because the day the alarm fires is not the day anybody wanted to first learn the date.
 
@@ -751,8 +751,8 @@ A megabyte figure and a headroom figure are both levels. **Neither is a rate, so
 - [frontend.md](frontend.md) - the two dashboards these routes serve.
 - [../contracts/schemas.md](../contracts/schemas.md) - the payload contracts and the versioning rules a deletion has to honour.
 - [../../archive/measurements-2026-08.md](../../archive/measurements-2026-08.md#sizing-the-archive-index) - what a browse entry, a vector and a month shard actually cost.
-- [../../reference/measurements-site.md](../../reference/measurements-site.md#days-to-the-1-gb-pages-ceiling) - the cap date, the per-published-day growth rate, and the units error that made both wrong until 2026-08-27.
+- [../../reference/site-weight.md](../../reference/site-weight.md#days-to-the-1-gb-pages-ceiling) - the cap date, the per-published-day growth rate, and the units error that made both wrong until 2026-08-27.
 - [../../archive/measurements-2026-08.md](../../archive/measurements-2026-08.md#the-site-page-by-page-after-the-payload-narrowing-2026-08-27) - what each page and the whole site weigh today.
-- [../../reference/measurements-site.md](../../reference/measurements-site.md#the-month-search-index-as-written) - the shard that exists: its bytes, its rebuild cost, and the bijection it holds.
+- [../../reference/site-weight.md](../../reference/site-weight.md#the-month-search-index-as-written) - the shard that exists: its bytes, its rebuild cost, and the bijection it holds.
 - [../../concepts/config.md](../../concepts/config.md) - where the retention knobs live and the build-time versus shipped-config rule.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - the engineering contract, including schema versioning (section 11) and git hygiene (section 8).

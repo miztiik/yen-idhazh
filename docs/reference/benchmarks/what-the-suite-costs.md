@@ -123,6 +123,6 @@ same answer: the same 53 unmarked modules and the same 33/38/7/14 modules a mark
 
 ## See also
 
-- [`../measurements.md`](../measurements.md) - the instrument log, which carries the figure now in force and links here.
+- [`../pipeline-cost.md`](../pipeline-cost.md) - the instrument log, which carries the figure now in force and links here.
 - [`../test-execution-audit.md`](../test-execution-audit.md) - which tests were run unnecessarily, a different question from what they cost.
 - [`../../how-to/run-the-gates.md`](../../how-to/run-the-gates.md) - the commands, and which case is authoritative.

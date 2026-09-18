@@ -608,7 +608,7 @@ class TestTheThreeSlotFacts:
 
     Driven from the same recorded reply as the class above, because these three
     arrive on the route the summarizer already posts to and cost no extra
-    request (`docs/reference/measurements.md`, 2026-09-15). The recording is
+    request (`docs/reference/pipeline-cost.md`, 2026-09-15). The recording is
     build b10444-5f754ea0e and carries no `id_slot`; the pinned build
     b10598-56db501e7 does, and reads `0` at `-np 1`. So the case the recording
     cannot reach is built on top of it, one field at a time, the way the stop
@@ -953,7 +953,7 @@ def test_the_server_is_asked_to_describe_itself_only_when_configured() -> None:
     At llama-server's default verbosity of 3 one start prints twelve lines, and
     no line among them names the attention state, the KV buffer or the compute
     buffer - so a check on any of those reads back the flag we passed instead of
-    the decision the runtime took (`docs/reference/measurements.md`, 2026-09-09).
+    the decision the runtime took (`docs/reference/pipeline-cost.md`, 2026-09-09).
     Unset, the flag is absent and the runtime keeps its own default.
     """
     from idhazh.contracts.knobs.models import ModelRef

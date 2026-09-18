@@ -23,7 +23,7 @@ count, a prefill rate and a decode rate all belong to a tokenizer and an
 architecture, so a swap retires every one of them at a stroke. The retired
 Qwen3-8B-Q4_K_M's figures stay where they were taken, in the instrument log,
 labelled as the retired incumbent's
-([measurements.md](../measurements.md)).
+([pipeline-cost.md](../pipeline-cost.md)).
 
 ## Identity
 
@@ -107,7 +107,7 @@ not be compared with any other model's separate download observation.
 
 What the cache actually held on the day this model replaced the last one, entry
 by entry, is a dated record of that transition rather than a property of these
-weights: [The cache transition](../measurements.md#the-cache-transition-measured-2026-08-27).
+weights: [The cache transition](../pipeline-cost.md#the-cache-transition-measured-2026-08-27).
 
 ## What the tokenizer costs
 
@@ -190,13 +190,13 @@ a token to read as a short one.
 
 **The live digest path corroborates the 4,850-token row** over 4,117 real items
 across nine days, which is the strongest corroboration on this page
-([How often the truncation cap actually bites](../measurements.md#how-often-the-truncation-cap-actually-bites-2026-09-09)).
+([How often the truncation cap actually bites](../pipeline-cost.md#how-often-the-truncation-cap-actually-bites-2026-09-09)).
 
 **This is not a comparison with the retired model.** The retired incumbent's rows
 were taken in a different job, on a different CPU model and on llama.cpp
 `b10580`. They establish that model's throughput and this one's; they do not
 establish a delta between them, and **no such delta was ever measured**
-([Still unmeasured](../measurements.md#still-unmeasured)).
+([Still unmeasured](../pipeline-cost.md#still-unmeasured)).
 
 ## Memory
 
@@ -223,12 +223,12 @@ came.** Most of it is mapped weight pages the kernel can drop under pressure, so
 subtracting it from the machine's total does not yield headroom. That subtraction
 was published once and is retracted; the retraction, and what would settle the
 question, are on the instrument log
-([Summed RSS reaches 14.31 GiB](../measurements.md#summed-rss-reaches-1431-gib-and-that-does-not-say-how-near-the-edge-the-job-came)).
+([Summed RSS reaches 14.31 GiB](../pipeline-cost.md#summed-rss-reaches-1431-gib-and-that-does-not-say-how-near-the-edge-the-job-came)).
 
 **The committed ledger's own peak column is not a reading of this model.**
 `state/runtime-counters.csv` carries no column naming the weights and its rows
 span both this model and the retired one, so its range is a reading of the job
-([The ledger's own worst row](../measurements.md#the-ledgers-own-worst-row-moved-to-1382-gib)).
+([The ledger's own worst row](../pipeline-cost.md#the-ledgers-own-worst-row-moved-to-1382-gib)).
 
 ### Model load time
 
@@ -304,14 +304,14 @@ incumbent Qwen3-8B-Q4_K_M: no paired corpus, no side-by-side scores, no human
 review. The faithfulness mean in that table is one model on one corpus and is not
 a delta, and nothing on this page may be cited as if it were (Guardrail #10).
 What would settle it is written down
-([Still unmeasured](../measurements.md#still-unmeasured)).
+([Still unmeasured](../pipeline-cost.md#still-unmeasured)).
 
 **The `injection_canaries` failure is not a security finding about this model.**
 The fifth canary was never exercised: the sanitizer stripped every marker before
 the prompt was built, and the gate failed on the model returning no summary. The
 correction, and why it is a lesson about the instrument rather than about the
 weights, is on the instrument log
-([The fifth canary was never exercised](../measurements.md#the-fifth-canary-was-never-exercised)).
+([The fifth canary was never exercised](../pipeline-cost.md#the-fifth-canary-was-never-exercised)).
 
 ## The records behind this page
 
@@ -328,7 +328,7 @@ and a re-run replaces its page rather than adding a second one.
 
 - [../models.md](../models.md) - the index, one row a model.
 - [../benchmarks/four-candidates-on-one-news-day.md](../benchmarks/four-candidates-on-one-news-day.md) - these weights with the reasoning channel ON, on 2026-09-17: no valid reply in 24 attempts. That arm is a separate config entry, not the one this dossier describes.
-- [../measurements.md](../measurements.md) - the instrument log: everything measured that is not a property of one model.
+- [../pipeline-cost.md](../pipeline-cost.md) - the instrument log: everything measured that is not a property of one model.
 - [../../../config/models/qwen3.5-9b-q4km.json](../../../config/models/qwen3.5-9b-q4km.json) - where the identity above is declared. `config/idhazh.json` names this file in one line, `models_file`, and that line is the whole of a swap.
 - [../../../backend/idhazh/measured.py](../../../backend/idhazh/measured.py) - the readings a gate or a test reads, including which are pinned to these weights.
 - [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md) - the procedure that produced the verdict above.

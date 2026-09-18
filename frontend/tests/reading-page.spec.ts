@@ -39,7 +39,7 @@
  * is the case that skips: seven of sixteen tests there, and none on a real
  * published day. `item-zones.spec.ts` set the same precedent for the aside.
  * What the canary cannot reach is measured on the committed digest instead,
- * with hardware and date, in `docs/reference/measurements.md`.
+ * with hardware and date, in `docs/reference/pipeline-cost.md`.
  *
  * **Two cases at the end were written failing and now pass.** Composing the rows
  * broke two things: the dated document counted the stories in its own hand

@@ -140,7 +140,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 ## 6. Row #5 - The ceilings are re-recorded by the plan that grew them
 
 - **Scope:** `page_weight.ceilings_bytes` for `/console/`, `/console/model/` and `/console/machine/` re-derived on this plan's tree, with headroom sized in published days.
-- **Files touched:** `config/idhazh.json`, `backend/tests/contracts/`, `docs/reference/measurements.md`, `docs/how-to/run-the-gates.md`
+- **Files touched:** `config/idhazh.json`, `backend/tests/contracts/`, `docs/reference/pipeline-cost.md`, `docs/how-to/run-the-gates.md`
 - **Acceptance gates:** `bundle-gate` green; the contracts module; the full suite.
 - **Oracle:** The recorded ceiling equals the heaviest of at least five builds plus a stated number of published days at the measured per-day rate plus the tolerance, and the arithmetic is printed in the commit so the two terms can be checked to sum.
 

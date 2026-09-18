@@ -461,5 +461,5 @@ puts `static/assist/` back and `build/assist` reappears.
 - [troubleshoot-one-url.md](troubleshoot-one-url.md) - fetch, extract and summarize one URL without publishing a digest.
 - [`run-the-pipeline.md`](run-the-pipeline.md) - the run and its stages.
 - [`set-up-local-inference.md`](set-up-local-inference.md) - llama.cpp in more detail.
-- [`../reference/measurements.md`](../reference/measurements.md) - every measured number, with hardware and date.
+- [`../reference/pipeline-cost.md`](../reference/pipeline-cost.md) - every measured number, with hardware and date.
 - [`../concepts/evaluation.md`](../concepts/evaluation.md) - what the scores mean.

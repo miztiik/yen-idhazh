@@ -319,7 +319,7 @@ Spread 0.45 GiB. Three of four shards are already under the 1.0 GiB the trigger
 asks for, at `n_ctx` 8,192. The independent second instrument agrees: the widened
 `state/runtime-counters.csv` now holds 225 rows over 56 runs, worst
 `peak_rss_bytes` 13.82 GiB - 0.64 GiB above the 13.18 GiB
-`docs/reference/measurements.md` recorded on 2026-09-01, with no model or window
+`docs/reference/pipeline-cost.md` recorded on 2026-09-01, with no model or window
 change in between.
 
 **Trigger 2 - the instrument - is RESOLVED, by PR #530.** It was raised because
@@ -376,7 +376,7 @@ to clear.
 ## 2. Row #1 - Six numbers the job already has and throws away
 
 - **Scope:** `kv_cache_bytes`, `compute_buffer_bytes`, `n_ctx_configured`, `model_buffer_bytes`, `python_peak_rss_bytes` and `cgroup_peak_bytes` added to the runtime counters row, all from data the job already collects.
-- **Files touched:** `backend/idhazh/contracts/runtime_counters.py`, `schemas/runtime-counters-row.schema.json`, `backend/idhazh/llm/**` (the server-log reader), `.github/workflows/digest.yml`, `tests/fixtures/contracts/runtime-counters-row/*.json`, `state/runtime-counters.csv` (widened), `backend/tests/contracts/`, `docs/reference/measurements.md`
+- **Files touched:** `backend/idhazh/contracts/runtime_counters.py`, `schemas/runtime-counters-row.schema.json`, `backend/idhazh/llm/**` (the server-log reader), `.github/workflows/digest.yml`, `tests/fixtures/contracts/runtime-counters-row/*.json`, `state/runtime-counters.csv` (widened), `backend/tests/contracts/`, `docs/reference/pipeline-cost.md`
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; one dispatch writing the new cells.
 - **Oracle:** The widened ledger re-parses every existing row with the new values absent, and the byte delta equals exactly the new commas plus the new header characters - counted, not estimated. A widening that moved a cell would fail that arithmetic.
 
@@ -422,7 +422,7 @@ to clear.
 ## 4. Row #3 - The window doubles and flash attention pays for it
 
 - **Scope:** `n_ctx` 8,192 to 16,384 and `flash_attention` on, in **one** commit.
-- **Files touched:** `config/idhazh.json`, `backend/idhazh/llm/server.py`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json`, `frontend/src/lib/server/config.ts`, `backend/tests/**`, `docs/reference/measurements.md`
+- **Files touched:** `config/idhazh.json`, `backend/idhazh/llm/server.py`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json`, `frontend/src/lib/server/config.ts`, `backend/tests/**`, `docs/reference/pipeline-cost.md`
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; one dispatch reading the server's own startup lines.
 - **Oracle:** Flash attention is asserted **active from the server's own startup line**, not from the flag having been passed - and the measured worst peak stays at least 1.0 GiB below the 14.90 GiB usable. A flag that was accepted and ignored is the failure this oracle exists to catch.
 
@@ -449,7 +449,7 @@ to clear.
 ## 5. Row #4 - One run prices the runtime and nothing else
 
 - **Scope:** One frozen-set run after rows 1 to 3, recording what the runtime change alone did to memory, wall clock and the words.
-- **Files touched:** `docs/reference/measurements.md`, `state/fingerprints.csv` (a new stamp lands naturally)
+- **Files touched:** `docs/reference/pipeline-cost.md`, `state/fingerprints.csv` (a new stamp lands naturally)
 - **Acceptance gates:** the full suite; one dispatch with nothing else in flight.
 - **Oracle:** The recorded numbers carry the model entry, the runner, the date and the spread, and the `pipeline_fingerprint` moved - which is free, external evidence that the config change actually ran rather than being merely committed.
 
@@ -529,12 +529,12 @@ decision 3 already refused that claim for a different reason.
 | `pipeline_fingerprint` | `state/fingerprints.csv` | it MUST have moved. `n_ctx` and `truncation_cap_tokens` are both digested, so a stamp that did not move means the config change did not reach the run |
 
 Every number written from this run carries the model entry, the runner, the date
-and the spread (Guardrail #10), and lands in `docs/reference/measurements.md`.
+and the spread (Guardrail #10), and lands in `docs/reference/pipeline-cost.md`.
 
 ### The six readings, against the six predictions above (2026-09-09)
 
 Full working, hardware and spread in
-[`../docs/reference/measurements.md`](../docs/reference/measurements.md), section
+[`../docs/reference/pipeline-cost.md`](../docs/reference/pipeline-cost.md), section
 "What the doubled window and the doubled cap cost". Five predictions held. One
 was wrong, and it is named as wrong below.
 
@@ -624,7 +624,7 @@ what has yet arrived. Plan 11 sizes against 15,889, as row 5 already ruled.
 ### The 16.8 percent figure in row 5's findings is corrected to 21.9 percent
 
 Row 5's write-up above, and the section it landed in
-`docs/reference/measurements.md`, said `truncate_to_tokens` overran "by 16.8
+`docs/reference/pipeline-cost.md`, said `truncate_to_tokens` overran "by 16.8
 percent" on the worst article. **That figure is not reproducible from the
 numbers beside it and has been corrected.** The working:
 

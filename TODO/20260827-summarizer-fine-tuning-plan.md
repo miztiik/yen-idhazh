@@ -1146,7 +1146,7 @@ A critical read of this plan against the repo as it actually stands. Six finding
 ## Row #6 - Train the adapter, then merge and quantise
 
 - **Scope:** A committed notebook that reads the model from config, trains a LoRA adapter, checkpoints to Drive. Then a local merge and quantise.
-- **Files:** `notebooks/finetune.ipynb`, `docs/how-to/fine-tune-a-model.md`, `docs/reference/measurements.md`
+- **Files:** `notebooks/finetune.ipynb`, `docs/how-to/fine-tune-a-model.md`, `docs/reference/pipeline-cost.md`
 - **Gates:** the corpus holds at least `min_rows`; **the first cell resolves `hf_base_repo` from the model entry and stops loudly if that repo does not exist or its architecture does not match the GGUF's base**; **no sampled `url_key` appears in `corpus/holdout.txt`, and the loader raises rather than warns**; the notebook runs top to bottom on the tier from input #6; every hyperparameter is in one cell at the top; **no model name appears in the notebook** - it resolves `finetune.teacher` against `config/idhazh.json`; the output is a Q4_K_M GGUF with its SHA-256 and byte count printed; actual GPU, wall-clock and cost recorded (Guardrail #10).
 - **Oracle:** **The loss mask, asserted on a real batch before training starts.** Decode the positions where `labels != -100` for one example. If it is not the assistant turn's JSON, stop. Measured 2026-08-27: median article seen 599 words against a median summary of 99 - about **six input words per output word**. Without the mask, roughly 86 percent of the training signal goes into learning to write other people's news articles.
 - **Decisions:**
@@ -1173,7 +1173,7 @@ A critical read of this plan against the repo as it actually stands. Six finding
 ## Row #7 - Publish the weights
 
 - **Scope:** Upload the GGUF to a public Hugging Face repo we own, point the config at it.
-- **Files:** `config/idhazh.json`, `docs/how-to/fine-tune-a-model.md`, `docs/reference/measurements.md`
+- **Files:** `config/idhazh.json`, `docs/how-to/fine-tune-a-model.md`, `docs/reference/pipeline-cost.md`
 - **Gates:** a public repo under a licence compatible with the base model's; the upload commit recorded as `revision`; the SHA-256 matching the bytes the resolve URL serves, read from the git-LFS pointer at that commit.
 - **Oracle:** A clean checkout with the config pointing at the new model downloads and starts it with no code change and no new secret. If anything but `config/idhazh.json` has to move, the row is not done.
 - **Decisions:**
@@ -1193,7 +1193,7 @@ A critical read of this plan against the repo as it actually stands. Six finding
 ## Row #8 - Judge and decide
 
 - **Scope:** Put the incumbent and the tuned model side by side on held-out articles, score with two independent tools, run the eleven gates, read blind, decide.
-- **Files:** `backend/idhazh/evals/alignscore.py`, `backend/utilities/compare_models.py`, `docs/how-to/fine-tune-a-model.md`, `docs/reference/measurements.md`
+- **Files:** `backend/idhazh/evals/alignscore.py`, `backend/utilities/compare_models.py`, `docs/how-to/fine-tune-a-model.md`, `docs/reference/pipeline-cost.md`
 - **Gates:** both models see identical input bytes; articles come from the holdout and the reference test slice only; model identity hidden until after you decide; the tuned model runs through `python -m idhazh qualify` unchanged, with **no gate threshold edited**.
 - **Oracle:** The eleven existing gates, unmodified, plus your verdict on the blind pairs. A gate that had to be loosened to let the model through is a failed row, not a passed one.
 - **Decisions:**
@@ -1215,7 +1215,7 @@ A critical read of this plan against the repo as it actually stands. Six finding
 ## Row #9 - Distil into the student
 
 - **Scope:** Train the student on the teacher's outputs, then judge it exactly as row 8.
-- **Files:** `notebooks/distil.ipynb`, `backend/utilities/compare_models.py`, `docs/how-to/fine-tune-a-model.md`, `docs/reference/measurements.md`
+- **Files:** `notebooks/distil.ipynb`, `backend/utilities/compare_models.py`, `docs/how-to/fine-tune-a-model.md`, `docs/reference/pipeline-cost.md`
 - **Gates:** the teacher is named by SHA-256; the student passes the same eleven gates; the measured production decode rate is recorded with hardware, date and spread; the same blind read as row 8.
 - **Oracle:** Speed measured where it matters - in a real shard, with the faithfulness scorer resident and the real worker population, not only in `llama-bench`. The 8B benched 7.28 tok/s and delivered 5.05 in production, a **31 percent gap**, so a bench number alone would overstate the prize.
 - **Decisions:**
@@ -1238,7 +1238,7 @@ A critical read of this plan against the repo as it actually stands. Six finding
 **Level 5. ESCALATE. Nothing in this row runs without explicit approval** (CLAUDE.md section 6, ESCALATE trigger 3). It is written down so that phase C has an owner, not so that it can start.
 
 - **Scope:** Point production at the tuned weights, or record why we did not. This is the only row in the plan that changes what a reader receives.
-- **Files:** `config/idhazh.json`, `docs/reference/measurements.md`, `docs/how-to/fine-tune-a-model.md`. A new fingerprint row appears under `state/` on the next run, written by the pipeline, not by hand.
+- **Files:** `config/idhazh.json`, `docs/reference/pipeline-cost.md`, `docs/how-to/fine-tune-a-model.md`. A new fingerprint row appears under `state/` on the next run, written by the pipeline, not by hand.
 - **Gates:** the diff in `config/` is the four lines and nothing else; `python -m idhazh qualify` passes with **no gate threshold edited**; the new `model_id` slug appears nowhere in `state/fingerprints`; production decode measured in a real shard and recorded with hardware, date and spread (Guardrail #10).
 - **Oracle:** A clean checkout runs the pipeline end to end on the new model with no code change and no new secret. If anything but `config/idhazh.json` had to move, rows 6 and 7 were not finished.
 - **Decisions:**
@@ -1246,7 +1246,7 @@ A critical read of this plan against the repo as it actually stands. Six finding
   | # | Decision | Why |
   | --- | --- | --- |
   | 1 | **Adoption is a row, not a footnote.** | **Added by review 2026-08-28.** The plan previously ended at "decide", which left the config swap, the qualify run, the fingerprint slug and the measurements entry as work nobody owned. Phase B produces weights on Hugging Face; without this row nothing brings them home. |
-  | 2 | **"Keep the incumbent" completes this row.** It costs one paragraph in `docs/reference/measurements.md` saying what was measured and what was decided. | Row 8 decision 9 already calls that an expected outcome. An expected outcome that leaves no record is a measurement thrown away. |
+  | 2 | **"Keep the incumbent" completes this row.** It costs one paragraph in `docs/reference/pipeline-cost.md` saying what was measured and what was decided. | Row 8 decision 9 already calls that an expected outcome. An expected outcome that leaves no record is a measurement thrown away. |
   | 3 | The rollback is the previous four lines, one commit, one run. | `repo`, `revision`, `file`, `sha256` is the entire state of a model swap, which is what makes this row Level 5 by consequence rather than by complexity. |
   | 4 | A fresh `model_id` slug, and the old one is never reused. | `pipeline_fingerprint` passes the model id as chat-template identity. A reused slug collapses two models onto one stamp, and the ledger then cannot tell the tuned run from the untuned one - which destroys the only before-and-after this whole plan exists to produce. |
   | 5 | The tuned and incumbent models are never both live. | Two models in one run means the ledger carries rows from both under one run id, and no daily number is attributable. |

@@ -585,7 +585,7 @@ cost and zero in CI, which runs each check once in its own job and never
 re-certifies a tree. It rises by whatever a published day adds to
 `frontend/public/digest/` - about 0.96 MB and its share of the files, at the
 slope measured on 2026-09-10
-([../reference/measurements.md](../reference/measurements.md)). Nothing here is a
+([../reference/pipeline-cost.md](../reference/pipeline-cost.md)). Nothing here is a
 per-reader or per-run pipeline cost.
 
 **What a real cover would take.** Not a window, and not a stat: it is hashing a

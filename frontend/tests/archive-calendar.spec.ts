@@ -20,7 +20,7 @@ import { archiveCalendar, dayDate, type ArchiveDay } from '../src/lib/archive-ca
  * and its links navigate with scripting switched off.
  *
  * What this file does NOT hold is the page's weight. That was measured by hand
- * on two fixture archives and is recorded in `docs/reference/measurements.md`;
+ * on two fixture archives and is recorded in `docs/reference/pipeline-cost.md`;
  * there is no ratchet file to keep it, and a build-to-build byte comparison on
  * a developer machine is noise (`docs/reference/agent-notes.md`).
  */

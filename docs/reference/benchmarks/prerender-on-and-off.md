@@ -222,7 +222,7 @@ does not list.
 
 ## See also
 
-- [`../measurements-site.md`](../measurements-site.md) - the instrument log, which carries the figure now in force and links here.
+- [`../site-weight.md`](../site-weight.md) - the instrument log, which carries the figure now in force and links here.
 - [`../agent-notes/gates-and-builds.md`](../agent-notes/gates-and-builds.md) - the pin, the `EPERM` trap, and why `vite build` alone is not the build.
 - [`../../architecture/publishing/frontend.md`](../../architecture/publishing/frontend.md) - what the prerendered routes are for.
 - [`../../../TODO/20260911-26-retire-prerender-plan.md`](../../../TODO/20260911-26-retire-prerender-plan.md) - section 0.2 is the ruling this priced, section 6 is the reversal it prices.

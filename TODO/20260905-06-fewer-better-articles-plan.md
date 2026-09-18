@@ -39,7 +39,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 ## 2. Row #1 - How much of a day is the same story twice
 
 - **Scope:** Count, over every committed day payload, how many items carry `also_covered_by` - the upper bound on what a plan-time cut could save.
-- **Files touched:** `docs/reference/measurements.md`
+- **Files touched:** `docs/reference/pipeline-cost.md`
 - **Acceptance gates:** none beyond the docs check; no code moves.
 - **Oracle:** The recorded figure names the day count, the item count and the distribution, not a single mean - and states that it is an **upper bound**, because `also_covered_by` is computed after summarisation and a plan-time pass sees less.
 
@@ -112,7 +112,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 ## 5. Row #4 - Half the day, and the clock the next plans need
 
 - **Scope:** `run.safety_ceiling_per_run` 160 to 80, and `run.shard_timeout_minutes` 150 to 200.
-- **Files touched:** `config/idhazh.json`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json`, `frontend/src/lib/server/config.ts`, `backend/tests/contracts/`, `docs/concepts/config.md`, `docs/concepts/freshness.md`, `docs/concepts/vision.md`, `docs/concepts/digest.md`, `docs/reference/measurements.md`
+- **Files touched:** `config/idhazh.json`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/tuned.json`, `frontend/src/lib/server/config.ts`, `backend/tests/contracts/`, `docs/concepts/config.md`, `docs/concepts/freshness.md`, `docs/concepts/vision.md`, `docs/concepts/digest.md`, `docs/reference/pipeline-cost.md`
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; one dispatch of `digest.yml`; `bundle-gate`.
 - **Oracle:** The dispatched run plans 80 items across 4 workers at 20 each, and every one of the seven places that assert "a normal day never reaches the ceiling" has been re-read and corrected. `git grep -n 'safety_ceiling_per_run'` returns no sentence that is now false.
 

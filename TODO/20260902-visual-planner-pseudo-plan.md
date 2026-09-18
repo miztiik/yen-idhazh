@@ -1499,7 +1499,7 @@ Guardrail #10: an unmeasured number may not justify a design. Each row blocks so
 
 | # | Measurement | Cost | Verdict | Blocks |
 |---|---|---|---|---|
-| M1 | Memory headroom on the runner | **already taken** | **CLOSED.** 72 rows, peak 13.29 GiB worst on a 14.90 GiB box. Write it into `docs/reference/measurements.md` | Was blocking `n_ctx`; no longer |
+| M1 | Memory headroom on the runner | **already taken** | **CLOSED.** 72 rows, peak 13.29 GiB worst on a 14.90 GiB box. Write it into `docs/reference/pipeline-cost.md` | Was blocking `n_ctx`; no longer |
 | M2 | **Marginal MB per published day** | **one command** | **TAKE TODAY.** The two available readings differ by 18x - 3.90 MB/day from the per-item figure, 70.2 MB/day from the built-to-payload ratio, which is 172 days to the alarm or 9.6. Difference `retention.measure()` on two committed dates | `image_months`, off-Pages hosting, the coverage target, E3 |
 | M10 | Repository pack growth per day | **one command** | **TAKE WITH M2.** Pack size at two commits, differenced. Rides along free | Whether the remote carrier trades a hard cap for a worse soft one |
 | M7 | How often an article states a whole | **one command** over the committed corpus | Take it - nearly free - but it gates the vocabulary doc only, not the critical path | `pie` and `stacked_bar` template value |

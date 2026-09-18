@@ -1,18 +1,18 @@
-# Source Measurements
+# What our sources give us
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-18
 
 What our sources actually give us, and what the rules around them cost: how many
 configured feeds resolve, what the `robots.txt` policy recovered, what the robots
 parser costs as a dependency, and why an extracted item fails.
 
 This is the third of three measurement pages and the only one about the world
-outside the pipeline. [measurements.md](measurements.md) holds the producer - the
-model, the runner, memory and throughput. [measurements-site.md](measurements-site.md)
+outside the pipeline. [pipeline-cost.md](pipeline-cost.md) holds the producer - the
+model, the runner, memory and throughput. [site-weight.md](site-weight.md)
 holds what the reader downloads. A person arrives holding one of the three and
 never two.
 
-Both rules from [measurements.md](measurements.md) bind here unchanged: a figure
+Both rules from [pipeline-cost.md](pipeline-cost.md) bind here unchanged: a figure
 is either measured, with its date and spread, or it is listed as unmeasured; and
 **a second belongs to the box that took it, where a count does not.** Where a
 figure was taken off a developer machine and a runner disagreed with it, both are
@@ -229,8 +229,8 @@ movement count.
 
 ## See also
 
-- [measurements.md](measurements.md) - the producer: the model, the runner, memory and throughput.
-- [measurements-site.md](measurements-site.md) - what the reader downloads.
+- [pipeline-cost.md](pipeline-cost.md) - the producer: the model, the runner, memory and throughput.
+- [site-weight.md](site-weight.md) - what the reader downloads.
 - [../archive/measurements-2026-08.md](../archive/measurements-2026-08.md) - finished experiments and superseded levels.
 - [../architecture/sources/health.md](../architecture/sources/health.md) - the feed ledger and the quarantine rule these figures feed.
 - [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md) - the robots rule the parser enforces.

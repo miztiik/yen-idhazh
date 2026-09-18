@@ -59,7 +59,7 @@ test('unknown inputs and backend subpackages fail toward full coverage', () => {
 });
 
 test('documentation alone starts no code suite and cannot hide a mixed edit', () => {
-	assert.deepEqual(selectPaths(['docs/reference/measurements.md', 'TODO/a-plan.md']).groups, []);
+	assert.deepEqual(selectPaths(['docs/reference/pipeline-cost.md', 'TODO/a-plan.md']).groups, []);
 	const mixed = selectPaths(['docs/a.md', 'frontend/src/routes/console/+page.svelte']);
 	assert.deepEqual(mixed.groups, ['logic', 'console', 'publishing']);
 	assert.equal(mixed.reasons.length, 2);
@@ -67,7 +67,7 @@ test('documentation alone starts no code suite and cannot hide a mixed edit', ()
 
 test('a change carrying no code buys no code job, on a merge as well as a branch', () => {
 	for (const isPr of [true, false]) {
-		assert.equal(ciAnswer(['docs/reference/measurements.md', 'TODO/a-plan.md'], isPr).code, false);
+		assert.equal(ciAnswer(['docs/reference/pipeline-cost.md', 'TODO/a-plan.md'], isPr).code, false);
 		// Anything that is not documentation, including a path nobody classified.
 		for (const set of [
 			['docs/a.md', 'frontend/src/app.html'],
@@ -158,7 +158,7 @@ const PULL_REQUEST_SCOPE = [
 	['unknown-area/module.ts', true, false],
 	// Cannot reach a page at all.
 	['frontend/tests/frame.spec.ts', false, false],
-	['docs/reference/measurements.md', false, false],
+	['docs/reference/pipeline-cost.md', false, false],
 	['backend/tests/test_discover.py', false, false],
 	['backend/idhazh/discover.py', false, false],
 	['TODO/some-plan.md', false, false]
@@ -195,7 +195,7 @@ const LEAVES_THE_ARCHIVE_ALONE = [
 	'frontend/src/styles/tokens.css',
 	'backend/idhazh/discover.py',
 	'backend/tests/test_discover.py',
-	'docs/reference/measurements.md'
+	'docs/reference/pipeline-cost.md'
 ];
 
 test('only a change that can invalidate a committed day re-reads every day', () => {
@@ -231,7 +231,7 @@ test('a merge to main runs every group, which is what the deferral leans on', ()
 
 test('one reaching path in a mixed change still buys the browser suite', () => {
 	const mixed = ciAnswer(
-		['docs/reference/measurements.md', 'frontend/src/routes/+page.svelte'],
+		['docs/reference/pipeline-cost.md', 'frontend/src/routes/+page.svelte'],
 		true
 	);
 	assert.equal(mixed.browser, true);

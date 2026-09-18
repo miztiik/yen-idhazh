@@ -31,7 +31,7 @@ shard against 13.16 GiB for the server alone.
 pages the kernel can evict and counts any page the two share twice, so the sum
 bounds what was held rather than measuring what the machine committed - and
 subtracting it from 16 GB reserves nothing for the kernel or the runner agent.
-What the machine had free was never captured. `docs/reference/measurements.md`
+What the machine had free was never captured. `docs/reference/pipeline-cost.md`
 carries the retraction of the 0.59 GiB figure this docstring used to quote, and
 the `/proc/meminfo` columns the sampler took up on 2026-09-09 to close it.
 
@@ -51,7 +51,7 @@ become a committed row.
 the sum of the tokens over the sum of the seconds - never the mean of the
 per-shard rates. A rate is a ratio, and averaging ratios weighs a shard that did
 20 items the same as one that did 40
-(`docs/reference/measurements.md`). Deliberately there is no per-row rate
+(`docs/reference/pipeline-cost.md`). Deliberately there is no per-row rate
 property here: the pooling lives in `backend/utilities/reconcile_prefill.py`,
 where it can only be done the one correct way.
 

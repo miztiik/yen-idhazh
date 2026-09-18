@@ -66,7 +66,7 @@ BROWSER_SCOPE_CASES: Final = (
     ("frontend/src/routes/console/+page.svelte", True, True, True, False),
     ("frontend/src/routes/[date]/+page.svelte", True, True, False, False),
     ("config/idhazh.json", True, True, False, True),
-    ("docs/reference/measurements.md", False, False, False, False),
+    ("docs/reference/pipeline-cost.md", False, False, False, False),
 )
 
 def test_the_selector_tests_use_the_same_node_as_the_ci_selector() -> None:
@@ -156,7 +156,7 @@ def test_one_reaching_path_in_a_mixed_change_still_buys_the_browser_suite(
     """A pull request is a set, not one file. Docs beside a frontend edit is the
     ordinary shape of this repo's changes, and the frontend edit decides.
     """
-    mixed = ["docs/reference/measurements.md", "frontend/src/routes/+page.svelte"]
+    mixed = ["docs/reference/pipeline-cost.md", "frontend/src/routes/+page.svelte"]
     assert _browser_scope(tmp_path, mixed)["browser"] == "true"
 
 

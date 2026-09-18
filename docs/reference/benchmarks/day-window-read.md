@@ -75,7 +75,7 @@ rows of reading on this box.
 ## What it does not settle
 
 - **Nothing about a runner.** A duration taken on a developer machine is an
-  order-of-magnitude check ([`../measurements.md`](../measurements.md)). The
+  order-of-magnitude check ([`../pipeline-cost.md`](../pipeline-cost.md)). The
   file and row counts are arithmetic and do travel; the milliseconds do not.
 - **Nothing about the other four ledgers.** Sight rows are 118.5 bytes; the
   score row is wider and the seen row is the narrowest of the five, so the
@@ -87,6 +87,6 @@ rows of reading on this box.
 
 ## See also
 
-- [`../measurements.md`](../measurements.md) - the instrument log, which carries the figure now in force and links here.
+- [`../pipeline-cost.md`](../pipeline-cost.md) - the instrument log, which carries the figure now in force and links here.
 - [`../../concepts/partitions.md`](../../concepts/partitions.md) - what a partition is at either grain.
 - [`../../concepts/growing-reads.md`](../../concepts/growing-reads.md) - what a read over a growing collection declares.

@@ -38,7 +38,7 @@ three different ceilings - 200 until 2026-08-26, 160 until 2026-09-07, 80 since
 7.4 ms - and as slow as 68.6 ms while other jobs shared the box, which is the
 number to remember before reading any wall clock here as a property of the file.
 See
-`docs/reference/measurements.md`.
+`docs/reference/pipeline-cost.md`.
 
 `state/feed-health/<YYYY>/<MM>/<DD>.csv` answers "is this source still
 working?" One row per feed per run, read through `HEALTH_WINDOW_DAYS`. It files

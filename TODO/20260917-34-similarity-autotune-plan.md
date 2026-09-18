@@ -1158,7 +1158,7 @@ HOLDOUT_MARGIN: Final = 0.0083
 #: Wall clock for one judge call at 764 read tokens, in seconds. Derived from the
 #: repository's own reading of 9.85 tokens a second - median over 4,117 timed
 #: rows, slowest 8.25, fastest 44.71, taken 2026-09-09 on a stock ubuntu-latest
-#: (docs/reference/measurements.md). It is here because pair_budget is bounded
+#: (docs/reference/pipeline-cost.md). It is here because pair_budget is bounded
 #: against the leg timeout and that arithmetic needs a seconds-a-call figure with
 #: a source. Row 17 replaces it with a reading taken on the judge prompt itself.
 SECONDS_A_CALL: Final = 77.6
@@ -3644,7 +3644,7 @@ by equality.
 | Where | What | Rule it follows |
 | --- | --- | --- |
 | `docs/reference/benchmarks/what-a-judge-call-costs.md` | The run: conditions, method, every case, the raw figures, and what it settles and does not | Named for what it measured, no date in the filename, no sequence in the filename. A re-run REPLACES this page and moves **Last Updated** |
-| `docs/reference/measurements.md` | One row: the figure now in force, with a link to the record | The instrument log holds the figure, the record holds the run |
+| `docs/reference/pipeline-cost.md` | One row: the figure now in force, with a link to the record | The instrument log holds the figure, the record holds the run |
 | `SimilarityThresholdConfig.pair_budget` description | The reading replaces the 77.6 seconds a call derived from the summarizer's own throughput | Guardrail #10: a measurement retires the derivation it replaces, and the derivation is deleted rather than left beside it |
 | `RunConfig.judge_shard_timeout_minutes` description | The same, plus the recomputed leg arithmetic | The same |
 | `SimilarityThresholdConfig`'s `SECONDS_A_CALL` constant | The measured median replaces 77.6, and its comment carries the new provenance | The constant bounds `pair_budget` against the leg timeout, so a stale value silently admits a budget that cannot finish |
@@ -3653,7 +3653,7 @@ by equality.
 **The record names the weights it was taken against.** A token count belongs to
 the tokenizer, and a summarizer swap retires every token figure on the page at
 one stroke while leaving each one looking exactly as good as it did - which
-`docs/reference/measurements.md` records happening once already, unnoticed for
+`docs/reference/pipeline-cost.md` records happening once already, unnoticed for
 seventeen days.
 
 **Conditions block, copied in shape from
@@ -3723,7 +3723,7 @@ the module that already owns `measure.yml`.
 - Raise `judge_shard_timeout_minutes` to fit a slow reading. The 6 h job ceiling
   is GitHub's and an agent surfaces it rather than overruling it; the required
   next move is the design that fits and what it traded.
-- Append the run to `docs/reference/measurements.md`. The log holds the figure
+- Append the run to `docs/reference/pipeline-cost.md`. The log holds the figure
   now in force and one link; the record holds the run.
 - Add a second benchmark page on a re-run. A re-run replaces
   `what-a-judge-call-costs.md` and moves its **Last Updated**; git history holds

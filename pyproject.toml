@@ -71,7 +71,7 @@ dependencies = [
     # adds one line to `pip list` and moves no version that was already there,
     # so this is not a repeat of `.[faithfulness]`. It ships `py.typed`, so
     # `mypy --strict` needs no override. Full method and the developer-box
-    # contrast in docs/reference/measurements.md.
+    # contrast in docs/reference/pipeline-cost.md.
     #
     # Beneficiary: one reading of robots.txt on every interpreter we support.
     "protego==0.6.2",
