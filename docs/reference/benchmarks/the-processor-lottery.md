@@ -1,6 +1,6 @@
 # What processor a run draws, and what it does to a reading
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-19
 
 GitHub gives a job whatever machine is free. This page is the record of what that
 choice is worth, measured over seventeen bench dispatches between 2026-08-23 and
@@ -136,6 +136,31 @@ that is two readings rather than one.
 `35086412536` also timed a cold weights download, 134.368 s for 6.19 GiB on
 n = 1. **That measures the network, not the processor**, so it belongs in Ornith's
 dossier and is not a row here.
+
+### Sixteen jobs in one morning drew five processor models
+
+A qualification dispatches one job a shard, so four candidates at four shards
+is sixteen independent draws inside two hours. On 2026-09-17 they came out
+9 EPYC 7763, 4 EPYC 9V74, and one each of EPYC 9V45, Xeon 8370C and Xeon 8573C.
+The per-shard table is in
+[four-candidates-on-one-news-day.md](four-candidates-on-one-news-day.md); it is
+not repeated here, because that run measured summaries rather than `llama-bench`
+and its columns are not these columns.
+
+**Two things it adds to this page's own question.**
+
+The draw is lumpy at this size. One arm drew the two newest chips in the pool
+and the arm it was being compared against drew neither, which decided that
+comparison before a token was decoded. **A four-shard arm is not a sample of the
+fleet; it is four draws.**
+
+And the processor is not the biggest term. Holding the arm and the processor
+model both fixed, three Ornith shards on an EPYC 7763 ran at 0.79, 1.60 and
+1.71 output tokens a second - **2.2x apart on one processor model** - because
+each shard read different articles. This page's 8.8 percent is measured on
+`llama-bench`, which replays one fixed prompt; a stage that reads whatever the
+feeds offered carries a second source of spread that is larger. **Controlling
+for the chip and not for the corpus controls for the smaller of the two.**
 
 ## What it settles
 
