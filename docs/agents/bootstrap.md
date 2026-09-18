@@ -22,6 +22,8 @@ Then read the one page that owns the thing you are changing.
 | Whether two items are the same story, or why one ran twice | [`../architecture/publishing/same-story.md`](../architecture/publishing/same-story.md) - the flowchart near the top is the whole rule |
 | A prompt, or anything fetched text reaches | `CLAUDE.md` Guardrail #11, then `docs/architecture/summarize/` |
 | Which model runs, or a figure that belongs to one | [`../reference/models.md`](../reference/models.md) - one row a model, pointing at its dossier |
+| What a column on the eval row means | [`../concepts/summary-metrics.md`](../concepts/summary-metrics.md) - arrive holding the column name |
+| Whether a candidate model may be adopted, or why a qualification went red | [`../concepts/qualification.md`](../concepts/qualification.md) |
 | Swapping the summarizer, or putting the old one back | [`../how-to/evaluate-new-summarizer-model.md`](../how-to/evaluate-new-summarizer-model.md) - the swap is one line in `config/idhazh.json` and the revert is the same line back |
 | A workflow, a gate, or what CI runs | [`../how-to/run-the-gates.md`](../how-to/run-the-gates.md) |
 | Anything whose cost grows as the repository grows | [`../concepts/growing-reads.md`](../concepts/growing-reads.md) |
