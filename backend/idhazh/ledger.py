@@ -1322,30 +1322,14 @@ def recorded_runtime_counters(path: Path) -> set[tuple[str, ...]]:
     return {tuple(row[name] for name in RUNTIME_COUNTERS_KEY) for row in _read_rows(path)}
 
 
-def append_span_rollup(state_dir: Path, date: str, rows: Iterable[SpanRollupRow]) -> int:
-    """Append one shard's folded span counts to the month shard. Never windowed here.
-
-    Filters against `SPAN_ROLLUP_KEY` the way `append_runtime_counters` does. The
-    row is a fold of a shard's spans, so a re-run of a failed shard recomputes the
-    same numbers and a second row would double a count rather than add a fact. The
-    first row wins.
-
-    Returns how many landed, so a caller can log the count.
-    """
-    path = span_rollup_path(state_dir, date[:7])
-    already = recorded_span_rollup(path)
-    landing = []
-    for row in rows:
-        key = _key_of(row, SPAN_ROLLUP_KEY)
-        if key in already:
-            continue
-        already.add(key)
-        landing.append(row)
-    return _append(path, SpanRollupRow.csv_columns(), landing)
-
-
 def recorded_span_rollup(path: Path) -> set[tuple[str, ...]]:
-    """Every (date, run, shard, span) the month's shard already carries a fold for."""
+    """Every (date, run, shard, span) the month's shard already carries a fold for.
+
+    A reader and no longer half of a writer. A work shard folds its spans into
+    its own segment and `stage_compact` merges that into the month head, so the
+    question this answers is what the head already holds rather than what an
+    append is about to skip.
+    """
     return {tuple(row[name] for name in SPAN_ROLLUP_KEY) for row in _read_rows(path)}
 
 

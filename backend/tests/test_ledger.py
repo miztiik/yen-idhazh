@@ -20,6 +20,7 @@ from conftest import (
     FIXTURES_DIR,
     read_text,
     seed_item_health,
+    seed_span_rollup,
 )
 
 from idhazh import cli, config, day_partition, ledger
@@ -1955,7 +1956,7 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     ledger.append_visual_prunes(tmp_path, DATE, [prune_row(on=DATE)])
     ledger.append_counterfactual_scores(tmp_path, DATE, [counterfactual_row()])
     a_fingerprint_day(tmp_path, [fingerprint_row()])
-    ledger.append_span_rollup(tmp_path, DATE, [span_fold_row()])
+    seed_span_rollup(tmp_path, DATE, [span_fold_row()])
     ledger.append_story_similarity_pairs(tmp_path, DATE, [pair_row()])
     item_health = ledger.item_health_path(tmp_path, DATE)
     item_health.parent.mkdir(parents=True, exist_ok=True)
@@ -2038,7 +2039,7 @@ def test_a_repeated_span_fold_is_settled_inside_the_month_that_holds_it(
     a run appends under one date, and one date is in one month.
     """
     state = tmp_path / "state"
-    ledger.append_span_rollup(state, DATE, [span_fold_row(total_ms=16)])
+    seed_span_rollup(state, DATE, [span_fold_row(total_ms=16)])
     path = ledger.span_rollup_path(state, DATE[:7])
     clean = path.read_text(encoding="utf-8")
     second_attempt = clean.splitlines()[1].replace(",20,16,", ",20,999,")
@@ -2066,7 +2067,7 @@ def test_the_full_pass_reaches_a_fingerprint_day_and_a_fold_month_no_run_named(
     state = tmp_path / "state"
     older = "2026-07-04"
     a_fingerprint_day(state, [fingerprint_row(on=older)])
-    ledger.append_span_rollup(state, older, [span_fold_row(on=older)])
+    seed_span_rollup(state, older, [span_fold_row(on=older)])
 
     every = {target.path: target.key for target in ledger.keyed_paths(state, date=None)}
     this_run = {target.path for target in ledger.keyed_paths(state, date=DATE)}
