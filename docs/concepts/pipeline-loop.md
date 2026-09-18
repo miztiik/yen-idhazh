@@ -93,6 +93,39 @@ Four invariants hold regardless of how the batches are sized:
  failed and introduced. Its `verticals[].published` count is the number of
  items introduced by that run for that vertical, not the accumulated day total.
 
+## The judge runs on its own clock
+
+**`LLM-JUDGES` is a second loop, once a night at 22:00 UTC, and it reads
+yesterday.** It draws the day's borderline same-story pairs, asks a model which
+of them are one story, folds the answers into a fixed-size record and fits the
+merge line off it. Four legs judge in parallel, one `llama-server` each, and
+none of them commits anything: a `fold` job downloads every leg's verdicts and
+makes the writes, so two processes never share a path.
+
+**It is a separate workflow because of the budget the design permits, not the
+day the pipeline usually has.** At the configured cap of 200 pairs, judged in
+both orders, 400 calls at 77.6 seconds is 8.6 hours of model time serially -
+past the 6 h job ceiling, where GitHub kills the job and nothing is written
+(Guardrail #2). Today's median day of 33 pairs would fit inside `digest.yml`
+comfortably, which is exactly why sizing the shape off the median is the wrong
+move: the first busy day crosses the ceiling and writes nothing.
+
+**A leg that dies costs its own pairs and nothing else.** `fail-fast` is off and
+the fold runs anyway, appending every row the surviving legs produced. What it
+will not do is fold a day with a leg missing into the record: the record counts
+a date once and refuses a second fold, so three legs of four would make the
+fourth leg's verdicts unreachable for ever. The day's fitted row says
+`legs_missing` instead, and re-dispatching that date folds it cleanly.
+
+**It adds zero bytes to the cache.** The `judge` job writes the same weights key
+the daily run's work job writes, so it restores what is already there - and the
+throughput reading this feature is sized against was taken on those same
+weights.
+
+Nothing it writes reaches a reader until
+`assemble.same_story.adaptive_dedup_threshold.enabled` is turned on
+([../architecture/publishing/layout.md](../architecture/publishing/layout.md)).
+
 ## What one run leaves for the next
 
 There is no database (Guardrail #1), so anything a later run must read has to survive
