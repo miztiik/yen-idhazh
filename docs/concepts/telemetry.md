@@ -255,7 +255,7 @@ Assemble then writes the whole day's census, including a `not_attempted` row for
 every planned item no article payload arrived for. That keeps the denominator in
 the same file as the failure count.
 
-**The row comes off the shard that did the work.** A worker validates 113 cells
+**The row comes off the shard that did the work.** A worker validates 119 cells
 an item at a time and seals them beside the article and the summary, so both
 writers read that file and prefer it. What a rebuild can say is only what those
 two payloads carry: on the committed fixture day, 40 of the 113 columns against
