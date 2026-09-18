@@ -35,8 +35,9 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 16 | 12 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 11 |
-| [20260914-29-found-once-plan.md](20260914-29-found-once-plan.md) | 17 | 14 | 3 | 2 |
+| [20260914-29-found-once-plan.md](20260914-29-found-once-plan.md) | 17 | 14 | 1 | 1 |
 | [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 28 | 0 | 27 | 3 |
+| [20260917-34-similarity-autotune-plan.md](20260917-34-similarity-autotune-plan.md) | 17 | 2 | 15 | 1 |
 
 ## In flight - 2
 
@@ -84,13 +85,13 @@ section 3 is where it is answered.
 | #9 | 27 | D | A cut reply keeps its summary | 1 |
 | #10 | 27 | D | A killed shard keeps the work it finished | - |
 | #11 | 27 | E | Two articles, three arms, one runner | 4 |
-| #12 | 29 | - | Label the sheet, then set the weights | - |
 | #16 | 29 | - | Refuse boilerplate, on a week of evidence | 13 |
 | #5 | 33 | A | Machine page stops lying about a day with no rows | - |
 | #6 | 33 | A | One concurrency group for `digest`, `validate`, `measure` | - |
 | #7 | 33 | A | OS memory and load, per item | - |
+| #2 | 34 | - | The four contracts, shipped inert with header-only files | - |
 
-## Waiting on another row - 71
+## Waiting on another row - 84
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -142,7 +143,6 @@ section 3 is where it is answered.
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
-| #15 | 29 | - | The weights and the 0.88 floor | 12 is PENDING |
 | #2 | 33 | B | `host-fingerprint` writes segments | 1 is IN-FLIGHT |
 | #3 | 33 | B | `item-health`, `scores`, `score-index` write segments | 2 is PENDING |
 | #4 | 33 | B | `span-rollup` writes segments | 3 is PENDING |
@@ -165,6 +165,20 @@ section 3 is where it is answered.
 | #27 | 33 | K | Route grouping and panel order | 20 is PENDING; 26 is PENDING |
 | #14 | 33 | - | The per-item machine load panel | - |
 | #8 | 33 | - | Memory split by prefill and decode | - |
+| #3 | 34 | - | The knob block, defaults only, nothing reads it | 2 is PENDING |
+| #5 | 34 | - | Score and select the borderline pairs, write the day shard | 2 is PENDING; 3 is PENDING |
+| #6 | 34 | - | The judge: prompt, grammar, token-id assertion, order swap | 2 is PENDING; 3 is PENDING |
+| #7 | 34 | - | Fold the day into the fixed-size record | 2 is PENDING; 5 is PENDING; 6 is PENDING |
+| #8 | 34 | - | Fit, damp, clamp, and write the day's row - the knob still unread | 3 is PENDING; 7 is PENDING |
+| #9 | 34 | - | Assemble reads the fitted line. **First row that changes a published day** | 8 is PENDING |
+| #10 | 34 | - | The `LLM-JUDGES` workflow, 4 matrix legs, two commit calls | 5 is PENDING; 6 is PENDING; 7 is PENDING; 8 is PENDING |
+| #11 | 34 | - | The sample sheet utility | 7 is PENDING; 8 is PENDING; 10 is PENDING |
+| #12 | 34 | - | Console: merge count and holdout - the two model-free panels | panel A1: nothing / panel A2: 2 names no row; 8 is PENDING |
+| #13 | 34 | - | Console: the threshold chart, applied solid and proposed dotted | 8 is PENDING; 12 is PENDING |
+| #14 | 34 | - | Console: judge self-agreement, and the record filling | 8 is PENDING; 12 is PENDING |
+| #15 | 34 | - | Console: the confusion matrix | 7 is PENDING; 8 is PENDING; 12 is PENDING |
+| #16 | 34 | - | The design document, prose plus a mermaid diagram | 9 is PENDING |
+| #17 | 34 | - | Measure a judge call on a stock runner and replace the estimate | 5 is PENDING; 6 is PENDING |
 
 ## Finished - 18 plans with no live row
 
