@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import hashlib
 from enum import StrEnum
-from typing import ClassVar, Final, Self
+from typing import ClassVar, Self
 
 from pydantic import Field, model_validator
 
@@ -45,16 +45,16 @@ from idhazh.contracts.fingerprint import PipelineInputs
 
 
 class GateName(StrEnum):
-    """The eleven gates that block adoption. Closed set, never free text.
+    """The ten gates that block adoption. Closed set, never free text.
 
-    Every run asks ten of them. `OPTIONAL_GATES` below names the one a run may
-    leave unevaluated, and says when and why.
+    Every run asks every one of them. A report that omits one is refused by
+    name, because a gate nobody asked is a gate nobody can be shown to have
+    passed.
     """
 
     REASONING_LEAKAGE = "reasoning_leakage"
     SCHEMA_VALIDITY = "schema_validity"
     INJECTION_CANARIES = "injection_canaries"
-    DETERMINISM = "determinism"
     PUBLISHABLE_LENGTH = "publishable_length"
     CONTEXT_FIT = "context_fit"
     IDENTITY = "identity"
@@ -62,21 +62,6 @@ class GateName(StrEnum):
     SCORED_DENOMINATOR = "scored_denominator"
     FAITHFULNESS_FLOOR = "faithfulness_floor"
     BRIEF_COPYING_CEILING = "brief_copying_ceiling"
-
-
-#: The gates a run may leave unevaluated, and why each one is here.
-#:
-#: `DETERMINISM` asks whether repeated calls produced identical words. That
-#: question has an answer at `temperature == 0` and none above it, where the
-#: repeats are meant to differ - so above zero the run records `wording_spread`
-#: as a diagnostic and reports no outcome for this gate (owner ruling,
-#: 2026-09-17, `docs/architecture/contracts/determinism.md`).
-#:
-#: **Optional is not weaker.** A gate listed here is held to its own bar exactly
-#: as before wherever it IS reported; what moved is the set of runs that can ask
-#: it. Every other gate is still required of every report, and a report that
-#: omits one is refused by name.
-OPTIONAL_GATES: Final = frozenset({GateName.DETERMINISM})
 
 
 class GateStatus(StrEnum):
@@ -448,9 +433,9 @@ class QualificationReport(Contract):
     __schema_stem__: ClassVar[str] = "qualification-report"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-09-17",
-            change="gates may omit determinism, and no other gate.",
-            why="Above temperature 0 that gate has no question to ask.",
+            version="2026-09-18",
+            change="determinism is no longer a gate; every gate is required.",
+            why="A summarizer does not need identical words; wording_spread records the drift.",
         ),
         ChangelogEntry(
             version="2026-09-14T04:00",
@@ -464,8 +449,8 @@ class QualificationReport(Contract):
         ),
         ChangelogEntry(
             version="2026-08-26",
-            change="Initial shape: eleven hard gates, the diagnostics, and the corpus digest.",
-            why="An adoption gate reporting a pass without its numbers cannot be re-checked.",
+            change="Earlier shapes are in this file's git history.",
+            why="Git is the archive; every entry here ships inside the generated schema.",
         ),
     )
 
@@ -495,7 +480,7 @@ class QualificationReport(Contract):
         seen = [outcome.gate for outcome in self.gates]
         if len(set(seen)) != len(seen):
             raise ValueError("a gate reported twice is two answers to one question")
-        missing = sorted(set(GateName) - OPTIONAL_GATES - set(seen))
+        missing = sorted(set(GateName) - set(seen))
         if missing:
             raise ValueError(f"gates never evaluated: {[gate.value for gate in missing]}")
         return self
