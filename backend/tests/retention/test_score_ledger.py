@@ -188,7 +188,7 @@ def test_a_month_with_real_volume_summarises_to_a_fraction_of_its_shard(tmp_path
     summarise LARGER than it held, and a month with a run's worth of rows in it
     does not. Fourteen-month-old months are the full ones, which is why this
     direction is the one that matters. The measured figure and its date are in
-    `docs/reference/measurements.md`.
+    `docs/reference/pipeline-cost.md`.
     """
     state = tmp_path / "state"
     day = "2025-01-09"

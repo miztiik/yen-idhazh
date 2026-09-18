@@ -353,5 +353,5 @@ gets the segment rather than being left on the shared path. Authority: Carmack,
 
 - [../concepts/telemetry.md](../concepts/telemetry.md) - the instrument as a whole, and the two finer grains this sits beside.
 - [benchmarks/the-processor-lottery.md](benchmarks/the-processor-lottery.md) - what the fleet does to a reading, and why this record exists.
-- [measurements.md](measurements.md) - the instrument log.
+- [pipeline-cost.md](pipeline-cost.md) - the instrument log.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #10 (a number carries its hardware) and Guardrail #12 (a growing read declares itself).

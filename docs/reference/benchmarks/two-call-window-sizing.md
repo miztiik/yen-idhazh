@@ -100,7 +100,7 @@ than one cap-length article in twenty pays the full 8,733.
 | 65,536 | 2,048.00 MiB | 50.25 MiB | 160.02 MiB | 8,024.61 MiB | 10,282.88 MiB = 10.04 GiB | 10,167,992,320 B |
 
 **KV is exactly 32 KiB a token and the projection in
-[`../measurements.md`](../measurements.md) was exact.** It runs over **8
+[`../pipeline-cost.md`](../pipeline-cost.md) was exact.** It runs over **8
 attention layers of 32** - the other 24 are recurrent and carry a fixed 50.25 MiB
 whatever the window is, which is why doubling the window does not double the
 footprint.
@@ -126,7 +126,7 @@ the cap or change the extractor.
 
 **And a cap-length prompt may not be affordable at all.** The one 8,741-token
 prompt the pipeline has actually sent cost 927 s of prefill on the runner
-([`../measurements.md`](../measurements.md)). A 28,041-token label-call prompt is
+([`../pipeline-cost.md`](../pipeline-cost.md)). A 28,041-token label-call prompt is
 3.2 times that. The window costs memory; the tokens cost time, and the same
 tokens cost the same time at any window - so this is plan 11 row #5b's question
 and the cap's, not the window's.
@@ -152,4 +152,4 @@ the row that owns it is row #3d's.
 
 - [`two-call-re-read.md`](two-call-re-read.md) - where the summarize-and-plan call's re-read tokens go. Its sizing table is superseded by this record; its re-read findings are not.
 - [`../../architecture/summarize/prompt.md`](../../architecture/summarize/prompt.md) - the page that owns the window, and what the assertion reads.
-- [`../measurements.md`](../measurements.md) - the instrument log, which carries the memory table above.
+- [`../pipeline-cost.md`](../pipeline-cost.md) - the instrument log, which carries the memory table above.

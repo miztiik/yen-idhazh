@@ -214,7 +214,7 @@ both cases and B equals C exactly. Competition is the only mechanism left.
 **The slide has a rate, and the rate is the point.** Measured over all eleven
 committed days on one instrument in one run - the eleven points, their corpus
 sizes and the fit are in
-[../reference/measurements-site.md](../reference/measurements-site.md#how-fast-archive-search-slides-under-a-frozen-label-set) -
+[../reference/site-weight.md](../reference/site-weight.md#how-fast-archive-search-slides-under-a-frozen-label-set) -
 recall falls **0.0134 for every published day** and **0.0000479 for every
 published item** once the labels close on 2026-08-26. The series reproduces the
 record: its 2026-08-26 point is 0.75571 over 2,237 items, against the 0.756 over
@@ -415,5 +415,5 @@ from what a reader gets for the same week. Authority: Andre, Guardrail #10.
 - [digest.md](digest.md) - what a reader is searching over.
 - [config.md](config.md) - `assist.recall_min` and the similarity floor.
 - [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md) - the search control and what it downloads.
-- [../reference/measurements-site.md](../reference/measurements-site.md) - the index weight and the recall series.
+- [../reference/site-weight.md](../reference/site-weight.md) - the index weight and the recall series.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #10 (measured, not estimated).

@@ -244,7 +244,7 @@ word would lose the whole item over a label.
 The envelope also says which prefix-cache slot answered the call. Three fields
 carry it, and all three arrive on the route the summarizer already posts to, so
 reading them costs no extra request (measured 2026-09-15 on build
-`b10598-56db501e7`, [measurements.md](../../reference/measurements.md)).
+`b10598-56db501e7`, [pipeline-cost.md](../../reference/pipeline-cost.md)).
 
 | Census column | Reply field | What it says |
 | --- | --- | --- |
@@ -410,7 +410,7 @@ configured, so the columns are legible on every day either way.
 **Three things it costs.** A second download and its checksum, both in the same
 steps as the target's so the two cannot drift apart. Memory for a second set of
 weights, which comes out of the headroom
-[`measurements.md`](../../reference/measurements.md) records rather than out of
+[`pipeline-cost.md`](../../reference/pipeline-cost.md) records rather than out of
 the KV budget. And the draft's own digest in the run record, so a day that was
 drafted can be told from a day that was not - a run that cannot answer that
 cannot explain its own throughput.
@@ -610,4 +610,4 @@ Model](../../how-to/evaluate-new-summarizer-model.md) is the procedure.
 - [../../concepts/config.md](../../concepts/config.md) - the config shape and every knob on it.
 - [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md) - the runbook for benchmarking, adopting and reverting.
 - [../../how-to/fine-tune-a-model.md](../../how-to/fine-tune-a-model.md) - the training corpus, and what a base swap does to an adapter.
-- [../../reference/measurements.md](../../reference/measurements.md) - the instrument log.
+- [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md) - the instrument log.

@@ -491,7 +491,7 @@ Three properties of how it is written, and each one is load-bearing:
 
 With diagram drawing off, measured on the 145 items of run `32804437110` with no model and no network:
 **68 items (46.9%) never reach the model**, and 77 do. The histogram of widest unit group per
-article is in [`../../reference/measurements.md`](../../reference/measurements.md).
+article is in [`../../reference/pipeline-cost.md`](../../reference/pipeline-cost.md).
 
 The denominator moves when this is on: the same charts sit over a smaller decided set, so a chart
 rate quoted against `items_routed` alone climbs without a single extra chart existing. Quote it
@@ -745,7 +745,7 @@ Three things changed, and each one addresses a different link in that chain:
 **The budget stop is not a rare event, and that is now measured.** Over the eleven committed runs
 that decided anything, the stage spends its **whole** budget on ten of them and leaves items
 undecided on nine, at a median of 48.9 seconds an asked item and a median of 18 items left
-([`../../reference/measurements.md`](../../archive/measurements-2026-08.md#the-route-stages-per-item-cost-over-every-run)).
+([`../../reference/pipeline-cost.md`](../../archive/measurements-2026-08.md#the-route-stages-per-item-cost-over-every-run)).
 So a run that hits the bound is the normal case rather than a symptom, and **a single run's figure
 must not be quoted as what the stage costs** - the fastest run on record is 1.7 times faster per
 item than the next, which is enough to make an ordinary run look like a regression. What would

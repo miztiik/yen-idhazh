@@ -375,7 +375,7 @@ say what was left.** llama.cpp maps the weights with no `-lm`, so their resident
 pages are file-backed and evictable and count in every RSS figure, and a page
 two processes share is counted twice. Adding the marks up and subtracting from
 16 GB is a number this project has already withdrawn
-([../../reference/measurements.md](../../reference/measurements.md)).
+([../../reference/pipeline-cost.md](../../reference/pipeline-cost.md)).
 
 Six `os_` columns are the kernel's own account instead, read from
 `/proc/meminfo` by the same watch that fills `cpu_busy_max`:
@@ -663,7 +663,7 @@ shard also commits what its server counted for the whole shard, as one row of
 sides of a run and prints the gap, which is how a rate quoted off this file stops
 being an assertion. Measured on run `2026-08-26-5`: 11.1755 tok/s from this
 ledger against 11.1796 from the server, 0.037 percent apart
-([../../reference/measurements.md](../../reference/measurements.md)).
+([../../reference/pipeline-cost.md](../../reference/pipeline-cost.md)).
 
 **Visual planning and rendering are not here.** An item that got a chart and an item that got
 nothing write the same row. A render failure degrades an item and never fails
@@ -898,5 +898,5 @@ by the row identity above. Authority: Fowler, over Carmack's original ruling.
 - [trust-boundary.md](trust-boundary.md) - how fetched bytes become sanitized text.
 - [../contracts/schemas.md](../contracts/schemas.md) - the contract and schema rules.
 - [../../concepts/telemetry.md](../../concepts/telemetry.md) - logs as evidence, ledgers as records.
-- [../../reference/measurements.md](../../reference/measurements.md) - the sizes and rates quoted above.
+- [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md) - the sizes and rates quoted above.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #3, Guardrail #11, and section 11.

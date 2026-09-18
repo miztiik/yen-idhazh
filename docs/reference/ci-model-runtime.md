@@ -230,7 +230,7 @@ removed is the literal DEFAULT behind it. A dispatch that fills nothing in now
 measures, or re-qualifies, the model config names.
 
 The values for a model under adoption live in
-[measurements.md](measurements.md), where a target is declared - not in a
+[pipeline-cost.md](pipeline-cost.md), where a target is declared - not in a
 workflow file, where nothing would ever check them against the run.
 
 ### Every download names a commit

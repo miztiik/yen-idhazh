@@ -517,6 +517,6 @@ somebody wants them.
 - [layout.md](layout.md) - what a run writes, and the addresses a reader reaches.
 - [../../concepts/config.md](../../concepts/config.md) - the retention knobs and their defaults.
 - [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - Guardrail #12's escape hatch, and what a growing read has to declare.
-- [../../reference/measurements-site.md](../../reference/measurements-site.md) - the site's weight, its growth rate and the alarm point.
+- [../../reference/site-weight.md](../../reference/site-weight.md) - the site's weight, its growth rate and the alarm point.
 - [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md) - the page ceilings and what to do when one fires.
 - [../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #2 (the runner is the architecture) and Guardrail #12 (nothing costs more as the repository grows).

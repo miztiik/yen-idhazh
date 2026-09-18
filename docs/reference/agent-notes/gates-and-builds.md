@@ -205,7 +205,7 @@ A throwaway spec under `frontend/tests/` would be swept up by the shared selecto
 
 **`trafilatura` drops a repeated paragraph**, so a page built to a chosen length by repetition comes out short - about 150 words whether the page holds 30 copies or 3,000, and nothing errors. Give each copy an ordinal, and count the prefix you added: 320 unique 12-word sentences extracted to 3,783 words against 3,840 asked for, where the identical-sentence version of the same page gave 121 (2026-08-26).
 
-**Every performance number carries the hardware, the date and the spread** (`CLAUDE.md` Guardrail #10). Where the working matters, it lives in [../measurements.md](../measurements.md), not here.
+**Every performance number carries the hardware, the date and the spread** (`CLAUDE.md` Guardrail #10). Where the working matters, it lives in [../pipeline-cost.md](../pipeline-cost.md), not here.
 
 ## A clean merge is not a working merge
 
@@ -252,4 +252,4 @@ A total of zero on a push to `main` means no workflow was created. The recovery 
 - [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md) - the gate commands themselves.
 - [browser.md](browser.md) - the browser suite's own failure modes.
 - [git-and-github.md](git-and-github.md) - reading a CI run and merging.
-- [../measurements.md](../measurements.md) - the numbers and their working.
+- [../pipeline-cost.md](../pipeline-cost.md) - the numbers and their working.

@@ -23,7 +23,7 @@ those come from one `host_facts()` call.
 peak file - one `open()` each, against a median 475,890 ms of model time.
 `psutil` would be a dependency, its install time and its shipped bytes for
 arithmetic that is four lines (Guardrail #8). What one reading costs is in
-`docs/reference/measurements.md`.
+`docs/reference/pipeline-cost.md`.
 
 **The arithmetic is not written twice.** `contracts.runtime_counters` already
 differences two `/proc/stat` captures into a busy share, and this module calls
