@@ -1,6 +1,6 @@
 # Qwen3.5-9B-Q4_K_M
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-19
 **Status: incumbent.** It has summarized every published item since 2026-08-27.
 `incumbent` is one of three words a dossier's status line may hold - `evaluated`,
 `incumbent`, `superseded` - and this line is the only place this model's
@@ -92,6 +92,53 @@ item and the window headroom both move, and neither has a reading - the arm
 exists to take them. `max_think_tokens` is null on both files, so the span ends
 on the marker above or on the window and on nothing else
 ([../../architecture/summarize/throughput.md](../../architecture/summarize/throughput.md#what-a-thinking-span-costs-and-the-one-part-that-is-still-an-estimate)).
+
+## Sampling: what we set, against what the publisher asks for
+
+**Every sampler value this entry pins is outside the range Qwen publishes for
+these weights.** That is a fact about the gap, not a defect finding - nobody has
+measured what the gap costs on a summarizing task - but it is the kind of gap
+that should be on the record before it is quoted as a tuning.
+
+Read from the model card on 2026-09-19
+([Qwen/Qwen3.5-9B](https://huggingface.co/Qwen/Qwen3.5-9B), Best Practices). The
+publisher names **four** recipes, one a mode and task type:
+
+| Mode and task | temperature | top_p | top_k | min_p | presence_penalty |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Thinking, general | 1.0 | 0.95 | 20 | 0.0 | 1.5 |
+| Thinking, precise coding | 0.6 | 0.95 | 20 | 0.0 | 0.0 |
+| Instruct (non-thinking), general | 0.7 | 0.80 | 20 | 0.0 | 1.5 |
+| Instruct (non-thinking), reasoning | 1.0 | 1.00 | 40 | 0.0 | 2.0 |
+| **`config/models/qwen3.5-9b-q4km.json`** | **0.2** | **1.00** | unset | unset | unset |
+
+**0.2 is below every one of them.** The lowest the card names anywhere is 0.6,
+and that is for precise coding rather than for writing. The owner pinned 0.2 on
+2026-09-17 for every committed entry at once
+([../../architecture/contracts/determinism.md](../../architecture/contracts/determinism.md)),
+which is a deliberate decision on the record; what has never been taken is a
+reading of this model at its own recipe against 0.2 on the same corpus.
+
+**Three knobs the card asks for are not set at all.** `top_k`, `min_p` and
+`presence_penalty` appear in all four recipes and in none of our entries. The
+card says of the last one: *"you can adjust the `presence_penalty` parameter
+between 0 and 2 to reduce endless repetitions."* Unset is not the same as zero
+in every runtime, so what llama.cpp actually applies is itself unrecorded.
+
+**Thinking is on by default in these weights**, and Qwen3.5 does not support the
+`/think` and `/nothink` soft switch its predecessor had - it is turned off
+through the chat template. That is why this repository carries two entries over
+one set of weights rather than one entry with a flag.
+
+**The card recommends 32,768 output tokens for most queries.** This entry pins
+`max_answer_tokens: 900`, which is a summariser's budget rather than a
+disagreement with the card - but it is the number to look at first if a
+thinking-on run returns nothing, because the span and the answer share it.
+
+**The same question is open on the other two entries and is not answered here.**
+Ornith and Gemma also pin 0.2, and nobody has read their publishers' recipes.
+What would settle it is the same five minutes spent on each model card, written
+onto each dossier.
 
 ## On disk, and what it costs the cache
 
