@@ -1,6 +1,6 @@
 # Adaptive Pruning
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-18
 
 One question, asked of every file this project writes:
 
@@ -183,7 +183,7 @@ is the count of month shards a console read opens, and no read opens a visual
 | `state/fingerprints.csv` | Keep | none | one stamp a run |
 | `state/day-validations.csv` | Keep | none | one receipt a day, from `idhazh validate-days` |
 | `state/labels.csv` | **Keep, always** | never | the only ground truth here, and the one file in `state/` a person wrote rather than a machine. No committed instance yet |
-| `state/validation-2026-08-22.csv` | **No policy, and no writer** | none | see below |
+| `state/<run.trial_state_dirname>/validation/` | Keep | none of its own | one verdict a dispatch, filed on the day tree. It lands under the trial root because only a qualification writes it, and `prune-state` already bounds that root |
 
 ### `corpus/` - the rolling training window
 
@@ -215,8 +215,8 @@ project and what it costs is stated there.
 
 ## What the register found on its first pass
 
-Two entries have no policy. They are rows rather than gaps because that is the
-whole value of writing the register down.
+One entry has no policy, and one was closed. They are rows rather than gaps
+because that is the whole value of writing the register down.
 
 **`frontend/public/assist/index/` accumulates and nothing bounds it.**
 `assist.search_months` looks like an age and is not - it is a read cover, the
@@ -228,11 +228,16 @@ The three questions answer it - a run appends, and no read reaches past
 `assist.search_months` widened by `assist.search_min_days` - so its honest policy
 is delete, with an age of its own. Nobody has set one, so the row reads none.
 
-**`state/validation-2026-08-22.csv` has no writer.** Four rows under a header,
-recording one day's model qualification, at the root of `state/` where nothing
-else sits loose. No code names it and no reader opens it. It is not deleted here
-because deleting a record is a decision for whoever owns model qualification, not
-a tidy-up.
+**`state/validation-2026-08-22.csv` was deleted on 2026-09-18.** Four rows under
+a header, recording one day's model qualification, at the root of `state/` where
+nothing else sat loose. The register recorded it as having no writer, which was
+already wrong when it was written - `evals.writer.append_validation` wrote it, and
+the path came from a hardcoded string joined to the repository root, so no config
+could move it and a qualification dispatch wrote production state. Nothing read
+it, and the shape had moved on far enough that today's reader could not have
+parsed it: the file carries no `leaderboard_provenance` column. Git is the
+archive (CLAUDE.md section 8). The verdict now goes to the day tree in the row
+above, and the owner ruled the deletion on 2026-09-18.
 
 ## Design rationale
 

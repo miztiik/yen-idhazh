@@ -9,6 +9,8 @@ from __future__ import annotations
 from idhazh import (
     assemble,
     config,
+    ledger,
+    run_context,
 )
 from idhazh.contracts.base import fit_field
 from idhazh.contracts.qualification import (
@@ -17,18 +19,20 @@ from idhazh.contracts.qualification import (
     QualificationShard,
     corpus_digest,
 )
+from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.contracts.validation_row import (
     LeaderboardProvenance,
     ValidationRow,
     ValidationVerdict,
 )
-from idhazh.evals import golden, qualification_summary, qualify, validation, writer
+from idhazh.evals import qualification_summary, qualify, validation
 from idhazh.stages import common
 from idhazh.stages.common import LOG
+from idhazh.stages.decide import DECIDE_SHARD
 
 
 def stage_qualify_decide(
-    *, settings: config.Settings, date: str, job_budget_minutes: float, runner: str
+    *, settings: config.Settings, date: str, run_id: str, job_budget_minutes: float, runner: str
 ) -> int:
     """Merge the shards, run the gates this run can ask, and say which number failed.
 
@@ -107,8 +111,14 @@ def stage_qualify_decide(
     mean_hhem = (
         sum(score.hhem for score in frozen.scores) / len(frozen.scores) if frozen.scores else 0.0
     )
-    writer.append_validation(
-        config.REPO_ROOT / golden.ledger_relpath(date),
+    # This dispatch's own segment, never the day file. Two candidates can be
+    # dispatched at once and both judge the same day, so the run id in the
+    # filename is what keeps their verdicts off one path. The state root is the
+    # one the config names, so a qualification writes nothing a published day
+    # is built from.
+    ledger.write_segment(
+        common.STATE_ROOT,
+        ledger.SegmentLedger.VALIDATION,
         [
             ValidationRow(
                 version=ValidationRow.schema_version(),
@@ -119,7 +129,8 @@ def stage_qualify_decide(
                 leaderboard_provenance=LeaderboardProvenance.NOT_REPORTED,
                 measured_hhem=mean_hhem,
                 articles=max(len(frozen.scores), 1),
-                measured_on=date,
+                date=date,
+                run_id=run_id,
                 commit_sha=report.commit_sha,
                 runner=fit_field(
                     runner, model=ValidationRow, field="runner", absent=validation.UNNAMED_RUNNER
@@ -134,6 +145,10 @@ def stage_qualify_decide(
                 ),
             )
         ],
+        run_id=run_id,
+        attempt=run_context.run_attempt(),
+        job=ServerJob.DECIDE,
+        shard=DECIDE_SHARD,
     )
 
     for outcome in outcomes:

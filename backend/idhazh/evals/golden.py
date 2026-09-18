@@ -66,8 +66,3 @@ def results_in(directory: Path) -> list[GoldenResult]:
         GoldenResult.from_json(path.read_text(encoding="utf-8"))
         for path in sorted(directory.glob("*.json"))
     ]
-
-
-def ledger_relpath(date: str) -> str:
-    """`state/validation-<date>.csv` - POSIX and dated, per the row's own spec."""
-    return f"state/validation-{date}.csv"

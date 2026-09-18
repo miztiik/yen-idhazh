@@ -128,6 +128,7 @@ from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow
+from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 
 STATE_DIRNAME: Final = "state"
@@ -140,6 +141,11 @@ SPAN_ROLLUP_DIRNAME: Final = "span-rollup"
 PUBLISHED_DIRNAME: Final = "published"
 VISUAL_PRUNES_DIRNAME: Final = "visual-prunes"
 COUNTERFACTUAL_SCORES_DIRNAME: Final = "counterfactual-scores"
+
+#: What a qualification dispatch leaves behind. It sat at the top of `state/` as
+#: `validation-<date>.csv` until 2026-09-18, built off the repository root, so no
+#: config could move it and a trial run wrote production state.
+VALIDATION_DIRNAME: Final = "validation"
 
 #: The eval ledger and the record of what is in it. Both are spelled here rather
 #: than in `evals.writer`, which is where they were until 2026-09-18: the head
@@ -276,6 +282,14 @@ OBSERVATION_KEY: Final = ("url_key", "output_digest", "scorer_version")
 #: What makes two index rows the same record. The digest is the whole row apart
 #: from the stamp, so two of them say one thing twice and the fold keeps one.
 OBSERVATION_INDEX_KEY: Final = ("observation_digest",)
+
+#: What makes two validation rows the same record. One candidate, judged once,
+#: by one execution. `run_id` is in the key because two dispatches of one model
+#: on one day are two verdicts about two trees, and the committed ledger held
+#: exactly that pair - drop it and the fold would keep whichever landed first.
+#: `model_id` is in it because a dispatch judges one candidate and the golden
+#: set judges several, so a date and a run alone would collapse them.
+VALIDATION_KEY: Final = ("date", "run_id", "model_id")
 
 #: How far back a health read looks. Not a policy - just enough history to reach
 #: into last month's shard, so a quarantine decided on the first of the month can
@@ -503,10 +517,30 @@ def score_index_path(state_dir: Path, date: str) -> Path:
     return state_dir / SCORE_INDEX_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
 
 
+def validation_relpath(date: str) -> str:
+    """`state/validation/<YYYY>/<MM>/<DD>.csv` - the POSIX form, for a log line."""
+    return f"{STATE_DIRNAME}/{VALIDATION_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+
+
+def validation_path(state_dir: Path, date: str) -> Path:
+    """The day file this date's verdicts land in, written only by the compaction.
+
+    A day tree rather than `validation-<date>.csv` at the top of `state/`, for
+    the reason `item_health_path` gives and with one of its own: the old name was
+    built from the repository root, so no config could move it and a candidate
+    qualified on a trial state root still wrote the production tree.
+
+    Two candidates can be dispatched at once and both judge the same day, so
+    neither opens this file. Each writes its own segment and the compaction folds
+    them in - the filename is what keeps the pair apart, and `merge=union` was
+    the only thing doing that before.
+    """
+    return state_dir / VALIDATION_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+
+
 def telemetry_aggregate_relpath(month: str) -> str:
     """`state/telemetry-aggregate/<YYYY-MM>.csv` - the POSIX form, for a log line."""
     return f"{STATE_DIRNAME}/{TELEMETRY_AGGREGATE_DIRNAME}/{month}.csv"
-
 
 def telemetry_aggregate_path(state_dir: Path, month: str) -> Path:
     """Where the folded summary of one item-health month lives.
@@ -1509,6 +1543,7 @@ class SegmentLedger(StrEnum):
     SCORES = SCORES_DIRNAME
     SCORE_INDEX = SCORE_INDEX_DIRNAME
     RUNTIME_COUNTERS = RUNTIME_COUNTERS_DIRNAME
+    VALIDATION = VALIDATION_DIRNAME
 
 
 class SegmentName(NamedTuple):
@@ -1631,6 +1666,12 @@ _SEGMENT_HEADS: Final[dict[SegmentLedger, _HeadShape]] = {
         _runtime_counters_head_relpath,
         RUNTIME_COUNTERS_KEY,
         RuntimeCountersRow,
+    ),
+    SegmentLedger.VALIDATION: _HeadShape(
+        validation_path,
+        validation_relpath,
+        VALIDATION_KEY,
+        ValidationRow,
     ),
 }
 

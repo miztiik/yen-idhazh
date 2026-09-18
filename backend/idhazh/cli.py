@@ -708,7 +708,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.stage == "decide":
         return decide.stage_decide(
-            settings=settings, date=date, commit_sha=args.commit, runner=args.runner
+            settings=settings,
+            date=date,
+            run_id=plan_stage._run_id(date, args.execution),
+            commit_sha=args.commit,
+            runner=args.runner,
         )
 
     if args.stage == "qualify":
@@ -745,6 +749,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return qualify_decide.stage_qualify_decide(
             settings=settings,
             date=date,
+            run_id=plan_stage._run_id(date, args.execution),
             job_budget_minutes=args.job_budget_minutes,
             runner=args.runner,
         )

@@ -744,16 +744,19 @@ publication question, and filtering on it made the corpus depend on what
 production happened to publish that week. The count does not move - 3 shards of
 10 - only which addresses fill it.
 
-**`qualify-decide` is deliberately not redirected, and that is the one
-exception.** It writes the run's verdict to `state/validation-<YYYY-MM-DD>.csv`,
-which is the record the dispatch exists to leave. `evals.writer.append_validation`
-is handed a path off the repository root rather than off the state root, so that
-row lands in `state/` whatever `run.trial_state_dirname` says, and its job builds
-no scratch copy for a `--config` flag to point at.
+**`qualify-decide` was the last stage outside this rule, and it is inside it from
+2026-09-18.** It writes the run's verdict, which is the record the dispatch exists
+to leave, and `evals.golden.ledger_relpath` returned `state/validation-<date>.csv`
+for both callers to join to the repository root - so that row landed in production
+`state/` whatever `run.trial_state_dirname` said. The verdict now goes to
+`state/pipeline-tests/validation/<YYYY>/<MM>/<DD>.csv`, its `decide` job builds the
+scratch copy like the two jobs before it, and the segment it writes is folded by
+`idhazh compact` in the same job.
 `backend/tests/workflows/test_validation_state_root.py` holds the assertions;
 `test_no_validation_stage_can_reach_the_production_state_root` asserts the
-redirect and names this exception for every stage any job in that file runs,
-present or future.
+redirect for every stage any job in that file runs, present or future, and
+`test_a_decide_run_on_a_trial_config_writes_nothing_outside_its_own_tree` runs the
+stage and lists every file it wrote.
 
 ## What is not on this page
 
