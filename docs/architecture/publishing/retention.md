@@ -279,13 +279,25 @@ primitive pointed at the repository is the one accident nobody can undo.
 | `item-health` | `observability.item_health_full_grain_months` |
 | `score-index` | `observability.scores_full_grain_months` |
 | `scores` | `observability.scores_full_grain_months` |
+| `story-similarity-fitted-thresholds` | nothing today - one row a day at about 400 bytes across 33 columns is 146 KB a year at any `pair_budget` |
+| `story-similarity-scored-pairs` | nothing today - at most `pair_budget` rows a day, 200 on the committed knobs |
 | `visual-prunes` | nothing today - it is bounded by arithmetic, above |
 
 The rule that decides membership is one line: a store files
-`<YYYY>/<MM>/<DD>.csv` day files, and is not one of the two below. The word an
-operator types **is** the directory name under `state/`, taken from the module
-that owns the store rather than spelled again, so a store that is renamed
-renames its target with it (Guardrail #6).
+`<YYYY>/<MM>/<DD>.csv` day files, and is not one of the two below. A flat
+store's word **is** its directory name under `state/`, and a nested store's word
+joins its two directory names with a hyphen. Both halves come from the module
+that owns the store rather than being spelled again, so a store that is renamed
+renames its target with it (Guardrail #6). The hyphen is what keeps the
+vocabulary closed: a slash in the word would make the argument look like a path,
+and a deletion primitive that resolved its argument against the file system is
+the one accident nobody can undo.
+
+**The two story-similarity stores are not a pair and either can go on its own.**
+The judged pairs are folded into `score-distribution.json` once and never read
+again, so deleting a day of them takes nothing away from the fit. Deleting a
+fitted row does take something away: it leaves a day out of the step-change
+guard's median and out of what step 4 compares this week against.
 
 **`state/day-metrics/` and `state/traces/` are day-shaped and deliberately
 outside it.** They file `<DD>.json` and `<DD>-<run>-<shard>.jsonl`, which
