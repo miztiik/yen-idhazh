@@ -1,9 +1,0 @@
-{
-  "first_seen": "2026-08-18",
-  "host": "example-daily.test",
-  "last_seen": "2026-09-16",
-  "line_hash": "2ec8ecdb0f3f0e2e79b4f2f77a0b8d9c9dbd0b05c9b58d3b9c7fcf3f8f1a2b3c",
-  "line_rule": "nfkc-casefold-collapse-v1",
-  "pages_seen": 166,
-  "version": "2026-09-17"
-}

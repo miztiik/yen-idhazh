@@ -65,7 +65,6 @@ set is what an unpublish has to answer for:
 | `state/score-index/<Y>/<M>/<D>.csv` | day | remove |
 | `state/item-health/<Y>/<M>/<D>.csv` | day | remove |
 | `state/runtime-counters.csv` | append-only | rewrite without the day |
-| `state/chrome.csv` | one file, rewritten | re-fold without the day. `stages.prune_state._prune_chrome_lines` is what enforces the bound: it drops a line no page has carried for `extract.chrome_forget_days` and re-applies the per-host cap a `merge=union` may have undone ([../extraction/chrome.md](../extraction/chrome.md)) |
 | `corpus/corpus.jsonl` | rolling window | rewrite without the day |
 
 The month-grain rows are the trap. Three of them are shards a later run appends

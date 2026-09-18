@@ -326,11 +326,7 @@ in `ledger.keyed_paths`, the registry the post-merge settlement walks, and a
 ledger that declares none must be absent from it. The two sides are compared as
 sets rather than as a subset, so the registry's one deliberate absence has to stay
 the one its own docstring claims. `state/span-rollup` was staged from 2026-09-15
-and settled by nothing until 2026-09-16, which is the gap this closes. The one
-writer that replaces its file rather than appending to it - `write_chrome` - names
-no key as it writes, because there is no repeat for it to drop at write time; it
-is still registered, because `merge=union` stacks two runs' folds and only the
-settlement can take one back out.
+and settled by nothing until 2026-09-16, which is the gap this closes.
 
 A rebase refuses to start while a tracked file is modified. Run `32671663130`
 died that way: one file was CRLF against a `text eol=lf` attribute, so every

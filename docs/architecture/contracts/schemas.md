@@ -56,7 +56,6 @@ The shapes, and where each one lives once written:
 | `PublishedRow` | `published-row` | one appended row of `state/published/YYYY/MM/DD.csv` |
 | `FeedHealthRow` | `feed-health-row` | one appended row of `state/feed-health/<YYYY>/<MM>/<DD>.csv` |
 | `FeedRetirementRow` | `feed-retirement-row` | one appended row of `state/feed-retirements.csv` |
-| `ChromeLineRow` | `chrome-line-row` | one row of `state/chrome.csv` - a host, a line's hash, and how many of that host's pages carried it |
 | `ItemHealthRow` | `item-health-row` | one appended row of `state/item-health/<YYYY>/<MM>/<DD>.csv` |
 | `PublicTelemetryRow` | `public-telemetry` | one row of `frontend/public/telemetry/<YYYY-MM>.csv`, the browser-safe projection of the row above |
 | `TelemetryAggregateRow` | `telemetry-aggregate-row` | one row of `state/telemetry-aggregate/<YYYY-MM>.csv`, rewritten whole |
@@ -157,7 +156,6 @@ mirrors the digest tree its rows are derived from.
 | `state/score-archive/` | monthly documents | what did a month past `scores_full_grain_months` do, in totals and distributions - and which measurements did it hold? | it inherits the shard boundary of the file it replaces |
 | `state/runtime-counters.csv` | one file | what did the model server itself count? | no - the audit reads one run |
 | `state/feed-retirements.csv` | one file | is this address gone for good? | no - a retirement is permanent for one endpoint |
-| `state/chrome.csv` | one file | what does this host print on every page? | no - chrome learned in August is chrome in September, so every partition would be opened anyway. It is bounded by `extract.chrome_lines_per_host_max` times the hosts we read, and pruned past `extract.chrome_forget_days` ([../extraction/chrome.md](../extraction/chrome.md)). **The one ledger whose writer rewrites rather than appends**, because a row is a running count and appending two would make a reader add a count to itself |
 | `state/day-validations.csv` | one file | which frozen days have passed, and against what? | no - a receipt file, read once a run |
 | `state/day-metrics/` | day files | what did one published day do, in totals? | it is addressed by day: the site opens the dates a page names and walks nothing |
 | `state/visual-prunes/` | day files | is the picture backlog shrinking? | no, and the layout saves this read nothing - see below |

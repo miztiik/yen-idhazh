@@ -19,7 +19,6 @@ from urllib.parse import urlsplit
 import trafilatura
 from trafilatura.metadata import extract_metadata
 
-from idhazh import chrome
 from idhazh.contracts.article import Article, ArticleStatus, TitleSource, UntrustedLine
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome
@@ -495,19 +494,16 @@ def to_article_with_source(
 def boilerplate_ratio(lines: list[str], seen_elsewhere: set[str]) -> float:
     """Share of an item's lines that also appear on sibling items from the same host.
 
-    Comparing pages against each other beats any faithfulness score for this
-    failure, because a summary of navigation chrome is perfectly faithful to the
-    chrome it was given.
-
-    `seen_elsewhere` is a set of HASHES, not of lines, and the reduction is
-    `chrome.reduce_line`'s. Storing the lines themselves would put fetched text
-    in a file this pipeline later reads (Guardrail #11); hashing both sides here
-    means the comparison never needs them. It also makes the match survive a
-    template that renders one space differently on two pages, which a raw
-    string comparison did not.
+    **Nothing supplies `seen_elsewhere`, so this returns 0.0 on every page.** A
+    store that fed it shipped on 2026-09-17 and was reverted the same day: over
+    one full run it moved the signal exactly zero times, against 12,917 committed
+    item-health rows carrying no `boilerplate` cell at all. Comparing a page to
+    its siblings is still the right idea and a bad page is still perfectly
+    faithful to the furniture it was handed - but the comparison has to earn its
+    keep before it is built again, and last time it did not.
     """
     meaningful = [line for line in lines if line.strip()]
     if not meaningful:
         return 0.0
-    shared = sum(1 for line in meaningful if chrome.hash_line(line) in seen_elsewhere)
+    shared = sum(1 for line in meaningful if line.strip() in seen_elsewhere)
     return shared / len(meaningful)

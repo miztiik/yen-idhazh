@@ -1953,7 +1953,6 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     named = [
         ("runtime-counters.csv", ledger.RUNTIME_COUNTERS_KEY),
         ("feed-retirements.csv", ledger.FEED_RETIREMENT_KEY),
-        ("chrome.csv", ledger.CHROME_LINE_KEY),
         (f"visual-prunes/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv", ledger.VISUAL_PRUNE_KEY),
         (
             f"counterfactual-scores/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",

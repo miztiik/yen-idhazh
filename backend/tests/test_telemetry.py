@@ -21,7 +21,7 @@ import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import StringConstraints, TypeAdapter, ValidationError
 
-from idhazh import chrome, config, extract, ledger, summarize, telemetry
+from idhazh import config, extract, ledger, summarize, telemetry
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import column_bounds, derive_url_key, field_column
 from idhazh.contracts.call_cost import COST_FIELDS, DERIVED_FIELDS, CallCost, CallKind
@@ -195,12 +195,9 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                 config=settings.app.extract,
                 fetched_at="2026-08-21T06:00:00Z",
                 seen_elsewhere={
-                    chrome.hash_line(line)
-                    for line in (
-                        "Shared navigation",
-                        "This sentence has enough words to count as article prose today.",
-                        "Another sentence has enough words to count as article prose today.",
-                    )
+                    "Shared navigation",
+                    "This sentence has enough words to count as article prose today.",
+                    "Another sentence has enough words to count as article prose today.",
                 },
             )
             return telemetry.classify_item(

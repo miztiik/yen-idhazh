@@ -230,7 +230,7 @@ def test_the_console_fallback_bands_match_the_committed_ladder() -> None:
 
 
 def test_recorded_item_health_codes_never_count_against_a_source() -> None:
-    assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 18
+    assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 19
     assert FailureCode.NOT_ATTEMPTED in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.MODEL_UNREACHABLE in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.MODEL_REFUSED in SOURCE_NEUTRAL_FAILURE_CODES
@@ -238,15 +238,17 @@ def test_recorded_item_health_codes_never_count_against_a_source() -> None:
     assert FailureCode.HTTP_CLIENT_ERROR not in SOURCE_NEUTRAL_FAILURE_CODES
 
 
-def test_a_page_that_is_mostly_its_hosts_furniture_counts_against_that_host() -> None:
-    """`boilerplate` is the one code that has ever left the source-neutral set.
+def test_a_signal_that_cannot_fire_is_never_charged_to_a_source() -> None:
+    """`boilerplate` left the neutral set on 2026-09-17 and came back the same day.
 
-    It was neutral because nothing fed the comparison it rests on, so the ratio
-    divided by an empty set and answered 0.0 on every page ever fetched.
-    `state/chrome.csv` gives that comparison its other side, and a host serving
-    a page that is mostly its own navigation is the source's doing.
+    It moved out when a store started feeding the comparison it rests on. Over one
+    full run that store changed the signal exactly zero times - 12,917 committed
+    item-health rows, no `boilerplate` cell among them - so the store was reverted
+    and the code is back to dividing by an empty set. A signal that cannot fire
+    must not count against a publisher, because the only thing it could ever do
+    then is be wrong.
     """
-    assert FailureCode.BOILERPLATE not in SOURCE_NEUTRAL_FAILURE_CODES
+    assert FailureCode.BOILERPLATE in SOURCE_NEUTRAL_FAILURE_CODES
 
 
 @pytest.mark.parametrize(

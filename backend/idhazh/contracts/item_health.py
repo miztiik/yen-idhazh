@@ -322,14 +322,13 @@ FAILURE_CODE_STAGES: Final[Mapping[FailureCode, frozenset[ItemStage]]] = Mapping
 #: The failures that say nothing about the source, so a source-health read
 #: ignores them.
 #:
-#: **`BOILERPLATE` left this set on 2026-09-17, and it is the only member that
-#: has ever left.** It was neutral because it could not be anything else: nothing
-#: fed the comparison, so the ratio divided by an empty set and answered 0.0 on
-#: every page the pipeline ever fetched - zero `boilerplate` cells in 12,277
-#: committed item-health rows. `state/chrome.csv` gives the comparison its other
-#: side, and once the signal can fire it is a fact about the source: it means
-#: this host served a page that was mostly its own furniture. That is precisely
-#: what a source-health read is for.
+#: **`BOILERPLATE` is here because it cannot fire.** `extract.boilerplate_ratio`
+#: compares a page to lines the same host printed elsewhere, and nothing supplies
+#: that second set, so it divides by an empty set and answers 0.0 on every page.
+#: A store that fed it shipped on 2026-09-17 and was reverted the same day: over
+#: a full run it moved the signal zero times, against 12,917 committed rows with
+#: no `boilerplate` cell among them. A signal that cannot fire must not count
+#: against a publisher - the only thing it could do is be wrong.
 SOURCE_NEUTRAL_FAILURE_CODES: Final[frozenset[FailureCode]] = frozenset(
     {
         FailureCode.NOT_ATTEMPTED,
@@ -337,6 +336,7 @@ SOURCE_NEUTRAL_FAILURE_CODES: Final[frozenset[FailureCode]] = frozenset(
         FailureCode.ROBOTS_UNREACHABLE,
         FailureCode.BLOCKED_ADDRESS,
         FailureCode.HTTP_RATE_LIMITED,
+        FailureCode.BOILERPLATE,
         FailureCode.TOO_SHORT,
         FailureCode.MODEL_UNREACHABLE,
         FailureCode.MODEL_REFUSED,
