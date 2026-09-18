@@ -74,9 +74,7 @@ than through anything this rule asked for, and a detail is not a rule - so the c
 written out, and `backend/tests/retention/test_telemetry_fold.py::test_the_month_readers_all_agree_on_what_a_month_is`
 holds all four readers to it.
 
-Authority: Guardrail #5 - a structural fix rather than a third copy of the rule. Found while
-[re-measuring the state prunes](../architecture/publishing/layout.md#the-state-prunes-were-already-constant-cost-and-the-premise-that-said-otherwise-was-wrong-2026-09-08),
-2026-09-08.
+Authority: Guardrail #5 - a structural fix rather than a third copy of the rule.
 
 ## What counts as a day file
 

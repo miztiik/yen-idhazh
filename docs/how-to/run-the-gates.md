@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-18
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -586,7 +586,7 @@ Remove-Item Env:IDHAZH_TEST_BUILD
 Run it before `build:canary`, which overwrites the same `build/`
 directory. **Two of its cases are expected to fail and are annotated
 `test.fail`**, because the composed page has two defects nobody has decided
-how to fix ([../architecture/publishing/layout.md](../architecture/publishing/layout.md#what-the-composed-page-got-wrong-and-what-shipped-2026-09-02)).
+how to fix ([../architecture/publishing/layout.md](../architecture/publishing/layout.md#two-rules-a-reading-page-owes-an-address)).
 An expected failure turns the suite red the day it starts passing, which is
 when the annotation comes off.
 
