@@ -597,7 +597,7 @@ def _rewritten_stores() -> set[str]:
     A writer that replaces settles nothing as it writes, so it names no key. The
     post-merge key is still right for it: the file is `merge=union`, so two runs'
     folds stack in the merged copy and the settler is the only thing that can take
-    one of them back out again. `state/chrome.csv` is the case (`ledger.write_chrome`).
+    one of them back out again.
 
     A head the compaction fills is the same case one step further out. It settles its
     rows by key as it folds them (`stages.compact._settle`) rather than as it writes,

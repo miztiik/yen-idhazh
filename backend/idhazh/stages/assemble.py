@@ -11,7 +11,7 @@ from datetime import date as date_type
 from datetime import timedelta
 from pathlib import Path
 
-from idhazh import assemble, chrome, config, ledger, rank, telemetry
+from idhazh import assemble, config, ledger, rank, telemetry
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.fingerprint import PipelineInputs
@@ -332,7 +332,6 @@ def stage_assemble(
     landed = writer.append(common.STATE_ROOT, rows)
     published = ledger.append_published(common.STATE_ROOT, day.date, _published_rows(day, plan))
     item_health = ledger.append_item_health(common.STATE_ROOT, plan.date, item_health_rows)
-    chrome_lines = _fold_chrome(plan, items_dir, settings)
     # Before the publishers and never after them. Every projection below reads a
     # head off disk, so a compaction that ran afterwards would publish a page
     # built from a record this run had not finished writing.
@@ -379,7 +378,7 @@ def stage_assemble(
     _report_nothing_published(day, plan)
     LOG.info(
         "published date=%s items=%s partial=%s eval_rows=%s addresses=%s item_health_rows=%s "
-        "search_index=%s/%s day_metrics=%s chrome_lines=%s projections=%s",
+        "search_index=%s/%s day_metrics=%s projections=%s",
         plan.date,
         len(day.items),
         day.partial,
@@ -389,7 +388,6 @@ def stage_assemble(
         len(index.entries),
         index.vector_bytes // index.dimensions,
         day_metrics.day_metrics_relpath(plan.date),
-        chrome_lines,
         ",".join(instrument.dispatched),
     )
     return day
@@ -446,36 +444,6 @@ def _retire_low_yield_sources(
         "config/sources.json to ask it again."
     )
     return landed
-
-
-def _fold_chrome(plan: RunPlan, items_dir: Path, settings: config.Settings) -> int:
-    """Count what each host printed on more than one of today's pages.
-    **Here rather than in the work shard, and that placement is the design.** The
-    question is how many DISTINCT pages of a host carried one line, and a shard
-    sees `index % shards` of the day - so eight shards would each answer a
-    fraction of it and eight partial answers would race into one file through a
-    `merge=union` that cannot add numbers. This stage is the one place the day's
-    whole item set exists.
-
-    Every article the day fetched, not only the ones that published. A page that
-    degraded is exactly where a template shows through, so dropping those would
-    throw away the evidence the signal is for.
-
-    Returns how many lines the store now holds, so the stage line can say it.
-    """
-    pages = [
-        chrome.page_lines(payload.article.canonical_url, (payload.article.text or "").splitlines())
-        for payload in _item_payloads(plan, items_dir)
-        if payload.article is not None
-    ]
-    knobs = settings.app.extract
-    folded = chrome.fold(
-        pages,
-        known=ledger.load_chrome(common.STATE_ROOT),
-        date=plan.date,
-        lines_per_host_max=knobs.chrome_lines_per_host_max,
-    )
-    return ledger.write_chrome(common.STATE_ROOT, folded)
 
 
 def _published_rows(day: DigestDay, plan: RunPlan) -> list[PublishedRow]:

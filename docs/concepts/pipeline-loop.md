@@ -157,12 +157,11 @@ be news, and a long article can be empty. Extract therefore records `too_short`,
 paywall, an unsupported form, or genuine missing text stops the item. Authority:
 Owner override O3.
 
-`boilerplate` was inert until 2026-09-17: it compares a page against lines the
-same host printed elsewhere, and nothing supplied that comparison, so it said no
-to every page the pipeline ever fetched. Assemble now folds each host's repeated
-lines into `state/chrome.csv` and the next run's shards read it
-([../architecture/extraction/chrome.md](../architecture/extraction/chrome.md)).
-The default is unchanged: the signal is recorded and the item publishes.
+`boilerplate` is inert: it compares a page against lines the same host printed
+elsewhere, and nothing supplies that comparison, so it says no to every page the
+pipeline fetches. A store that supplied it shipped on 2026-09-17 and was reverted
+the same day - over a full run it moved the signal zero times, so it was cost
+with no reader on the other end.
 
 ## See also
 
