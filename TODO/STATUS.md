@@ -35,7 +35,6 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 16 | 12 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 11 |
-| [20260914-29-found-once-plan.md](20260914-29-found-once-plan.md) | 17 | 14 | 1 | 1 |
 | [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 28 | 0 | 27 | 1 |
 | [20260917-34-similarity-autotune-plan.md](20260917-34-similarity-autotune-plan.md) | 17 | 2 | 15 | 1 |
 
@@ -50,7 +49,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | #18 | 33 | H | Chart-craft doctrine - the thirteen rules, written once | p33r18 |
 | #28 | 33 | H | Pipeline panels: the share track goes, Extraction gains a trend | p33h28 |
 
-## Ready now - 34
+## Ready now - 33
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -89,7 +88,6 @@ section 3 is where it is answered.
 | #9 | 27 | D | A cut reply keeps its summary | 1 |
 | #10 | 27 | D | A killed shard keeps the work it finished | - |
 | #11 | 27 | E | Two articles, three arms, one runner | 4 |
-| #16 | 29 | - | Refuse boilerplate, on a week of evidence | 13 |
 | #6 | 33 | A | One concurrency group for `digest`, `validate`, `measure` | - |
 | #2 | 34 | - | The four contracts, shipped inert with header-only files | - |
 
@@ -180,9 +178,9 @@ section 3 is where it is answered.
 | #16 | 34 | - | The design document, prose plus a mermaid diagram | 9 is PENDING |
 | #17 | 34 | - | Measure a judge call on a stock runner and replace the estimate | 5 is PENDING; 6 is PENDING |
 
-## Finished - 18 plans with no live row
+## Finished - 19 plans with no live row
 
-20260815-digest-pipeline-plan.md, 20260905-01-visible-chart-plan.md, 20260905-02-retire-the-route-name-plan.md, 20260905-03-console-backfill-plan.md, 20260905-04-site-cap-defence-plan.md, 20260905-05-span-tree-plan.md, 20260905-06-fewer-better-articles-plan.md, 20260905-07-better-summaries-plan.md, 20260905-08-element-table-plan.md, 20260905-09-pin-the-runtime-plan.md, 20260905-10-visual-plan-contract-plan.md, 20260905-11-two-call-planner-plan.md, 20260906-constant-cost-reads-plan.md, 20260907-growing-reads-window-plan.md, 20260910-24-day-sharded-ledgers-plan.md, 20260911-26-retire-prerender-plan.md, 20260912-27-adaptive-guardrails-plan.md, 20260913-reference-dataset-2-plan.md
+20260815-digest-pipeline-plan.md, 20260905-01-visible-chart-plan.md, 20260905-02-retire-the-route-name-plan.md, 20260905-03-console-backfill-plan.md, 20260905-04-site-cap-defence-plan.md, 20260905-05-span-tree-plan.md, 20260905-06-fewer-better-articles-plan.md, 20260905-07-better-summaries-plan.md, 20260905-08-element-table-plan.md, 20260905-09-pin-the-runtime-plan.md, 20260905-10-visual-plan-contract-plan.md, 20260905-11-two-call-planner-plan.md, 20260906-constant-cost-reads-plan.md, 20260907-growing-reads-window-plan.md, 20260910-24-day-sharded-ledgers-plan.md, 20260911-26-retire-prerender-plan.md, 20260912-27-adaptive-guardrails-plan.md, 20260913-reference-dataset-2-plan.md, 20260914-29-found-once-plan.md
 
 ## See also
 
