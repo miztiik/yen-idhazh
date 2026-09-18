@@ -54,7 +54,7 @@ Four things bite first. The runner budget: 4 vCPU and no GPU is the machine, a j
 
 Two rules carry standing exceptions. `.github/workflows/prune.yml` force-pushes `main` on a schedule to bound the history the committed corpus adds (CLAUDE.md sections 0a and 8). The one-time attribution repair approved on 2026-09-14 is recorded in [CLAUDE.md section 8](CLAUDE.md#8-git-hygiene); it grants no continuing force-push permission. The operator console prints a counterfactual cost in currency, labelled a counterfactual and never a bill (Guardrail #10, owner decision 2026-08-30); no other surface prints money.
 
-One property bounds every model verdict, so a plan full of model-written labels is checked against it rather than against a list of banned mechanisms. **The property is one sentence: a model verdict that reaches no reader and selects nothing to publish is not a section 0a deviation.** Two things stay banned whether or not a verdict satisfies the property, and those two are the whole of the ban. **A model may not grade a published summary, and it may not grade a published visual.** **A model may not select what publishes** - a label says what a story is about; it never decides whether the story runs. Those verdicts are deterministic or human. A verdict that is neither of those two is permitted. [`CLAUDE.md`](CLAUDE.md) section 0a is canonical.
+**LLM-as-judge is primary evaluation where applicable.** A model verdict may run in a production workflow, may score live content, and may determine publication. [`CLAUDE.md`](CLAUDE.md) section 1a is canonical.
 
 ## See also
 
