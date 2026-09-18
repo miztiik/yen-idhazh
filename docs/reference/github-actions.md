@@ -4,12 +4,14 @@
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
 
-**Two workflows push to `main`.** `digest.yml` does it on every run. `measure.yml`
-does it only from the `runtime` job, and only the machine that job drew - one row
-under `state/pipeline-tests/host-fingerprint/`. Nothing else in `measure.yml`
-writes anything back; every other job uploads an artifact and the runner takes
-the rest with it. The permission is raised on that one job rather than at
-workflow level, so the others still cannot.
+**Three workflows push to `main`.** `digest.yml` does it on every run.
+`prune.yml` does it on the first wake `finetune.prune_every_days` allows, and it
+is the one force-push this repository permits. `measure.yml` does it only from
+the `runtime` job, and only the machine that job drew - one row under
+`state/pipeline-tests/host-fingerprint/`. Nothing else in `measure.yml` writes
+anything back; every other job uploads an artifact and the runner takes the rest
+with it. The permission is raised on that one job rather than at workflow level,
+so the others still cannot.
 
 ## Trigger reference
 
@@ -22,7 +24,7 @@ workflow level, so the others still cannot.
 | `validate.yml` | `Model validation` | none | yes |
 | `measure.yml` | `Measurements` | none | yes |
 | `probe.yml` | `Runtime probe` | none | yes |
-| `prune.yml` | `Corpus prune` | every `finetune.prune_every_days` | yes |
+| `prune.yml` | `Corpus prune` | `37 23 * * *`; squashes on the first wake `finetune.prune_every_days` allows | yes |
 | `backfill.yml` | `Vector backfill` | none | yes |
 | `idhazh-pipeline-tests.yaml` | `Pipeline tests` | none | yes |
 
@@ -40,6 +42,42 @@ it, and refusing to publish would leave a good day unread for up to four hours.
 That path publishes the branch tip rather than the triggering commit, because a
 run's `head_sha` is the commit it started from and the day it wants published is
 the commit it made afterwards.
+
+## The one force-push wakes when no digest can be running
+
+`prune.yml` ends in `git push --force origin main`, the only force-push this
+repository allows ([../../CLAUDE.md](../../CLAUDE.md) section 8). A digest job
+pushes the day it just built, so a force-push landing while one is in flight can
+discard it.
+
+**The hour is derived from the digest cron list rather than chosen.** A scheduled
+run starts 40 to 70 minutes after its cron minute and then takes 164 to 184
+minutes end to end (`ubuntu-latest`, 2026-08-23/24, n=3 -
+[../architecture/sources/freshness.md](../architecture/sources/freshness.md)), so
+each `Content refresh` line at H:20 occupies H+1:00 to H+4:34:
+
+| Cron line | Occupied, UTC |
+| :--- | :--- |
+| `20 2 * * *` | 03:00 - 06:34 |
+| `20 6 * * *` | 07:00 - 10:34 |
+| `20 10 * * *` | 11:00 - 14:34 |
+| `20 14 * * *` | 15:00 - 18:34 |
+| `20 18 * * *` | 19:00 - 22:34 |
+
+That leaves four gaps of 26 minutes and one of 266, from 22:34 to 03:00. Prune
+needs a 60-minute window - 40 minutes of queue drift through its own 30-minute
+`timeout-minutes` - so no short gap can hold it and the long one can. Centred
+there it has 103 minutes of margin on each side, which is `37 23 * * *`: the job
+starts between 00:17 and 00:47 and has pushed by 01:17. The old `20 4 * * *` sat
+inside the 02:20 run's span, so a prune that did fire force-pushed inside the
+digest window nearly every day.
+
+**This lowers the odds; it does not close them.** GitHub queues scheduled runs by
+load, so a run later than the recorded normal still reaches 23:37 - the section
+below is why that cannot be relied on either way. Closing it needs a lock across
+two workflows, which GitHub does not offer. `concurrency` governs one group, and
+putting `prune` in the `digest` group would let a waiting prune be deleted, which
+is a prune that never bounds the repository.
 
 ## The schedule asks for five runs a day and gets fewer
 
