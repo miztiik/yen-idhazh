@@ -1,13 +1,13 @@
 # Agent Notes - Git and GitHub
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-19
 
 Traps in `git`, worktrees, merges and the `gh` CLI. Index and scope:
 [../agent-notes.md](../agent-notes.md).
 
 ## Commit identity
 
-**A guessed GitHub noreply email can credit a stranger.** `noreply@users.noreply.github.com` maps to the real `noreply` account, not an anonymous placeholder. GitHub's contributor list uses author credit; the authenticated pusher is a different fact, available from the repository activity API. On 2026-09-14, both affected pushes named `miztiik`. Local `user.name` and `user.email` override global settings, and changing either does not change an old commit. Check `git var GIT_AUTHOR_IDENT` and `git var GIT_COMMITTER_IDENT` before committing; do not replace configured identities with test placeholders. A guessed `yen-idhazh@users.noreply.github.com` address does not reserve that GitHub account either.
+**A guessed GitHub noreply email can credit a stranger.** `noreply@users.noreply.github.com` maps to the real `noreply` account, not an anonymous placeholder. GitHub's contributor list uses author credit; the authenticated pusher is a different fact, available from the repository activity API. Both affected pushes named `miztiik`. Local `user.name` and `user.email` override global settings, and changing either does not change an old commit. Check `git var GIT_AUTHOR_IDENT` and `git var GIT_COMMITTER_IDENT` before committing; do not replace configured identities with test placeholders. A guessed `yen-idhazh@users.noreply.github.com` address does not reserve that GitHub account either.
 
 **The one-time attribution repair changes commit IDs, not the recorded files.** Under the [owner approval in CLAUDE.md section 8](../../../CLAUDE.md#8-git-hygiene), `b8cd2c41` becomes `b615a0b4` and `83d47ac3` becomes `172e259e`. Their `noreply` fields use `yen-idhazh <yen-idhazh@users.noreply.github.com>` instead. Their descendants receive new IDs too. A complete local Git bundle keeps the original history; the repair checks every affected file tree, message, date, parent mapping and unaffected identity.
 
@@ -17,17 +17,17 @@ Traps in `git`, worktrees, merges and the `gh` CLI. Index and scope:
 
 **More than one agent shares this checkout, so a listing from earlier in the session is fiction.** Worktrees appear and disappear mid-task. Read `git worktree list` immediately before you stage, and never `git add.` in a checkout you did not create - it sweeps another branch's work into your commit.
 
-**`git checkout -b` in the shared checkout branches off whatever `HEAD` happens to be.** A parallel agent moves `HEAD` between your commands; on 2026-08-25 a branch was cut while `HEAD` sat on a sibling's work and carried its unmerged commit as the parent. Always name the start-point and take your own worktree:
+**`git checkout -b` in the shared checkout branches off whatever `HEAD` happens to be.** A parallel agent moves `HEAD` between your commands; a branch was cut while `HEAD` sat on a sibling's work and carried its unmerged commit as the parent. Always name the start-point and take your own worktree:
 
 ```powershell
 git worktree add <repo>.worktrees/<name> -b <branch> origin/main
 ```
 
-**Every worktree goes in that one container, never beside the checkout.** They accumulate - 38 on one box by 2026-09-02 - and scattered siblings bury the repository among directories that are copies of it. It may not go inside the checkout either: `ruff check.` and `mypy` walk gitignored paths, `git grep` and the site-weight gate glob the tree, and each worktree carries its own `frontend/node_modules`. Name it for the row it serves, `<plan letter><row number>`.
+**Every worktree goes in that one container, never beside the checkout.** They accumulate - dozens on one box - and scattered siblings bury the repository among directories that are copies of it. It may not go inside the checkout either: `ruff check.` and `mypy` walk gitignored paths, `git grep` and the site-weight gate glob the tree, and each worktree carries its own `frontend/node_modules`. Name it for the row it serves, `<plan letter><row number>`.
 
-**Branch before the first edit, not after the work is done.** A 35-file change built uncommitted in the shared checkout on 2026-08-28 survived only by luck: the owner committed underneath it, `origin/main` gained 22 commits, and an earlier `git add` had been undone by another process. `git switch -c <branch>` carries an uncommitted tree onto a new branch, so the recovery is cheap - but it defers the merge to the worst moment.
+**Branch before the first edit, not after the work is done.** A 35-file change built uncommitted in the shared checkout survived only by luck: the owner committed underneath it, `origin/main` gained 22 commits, and an earlier `git add` had been undone by another process. `git switch -c <branch>` carries an uncommitted tree onto a new branch, so the recovery is cheap - but it defers the merge to the worst moment.
 
-**A `git worktree add` the terminal kills leaves a directory that is not a worktree.** On 2026-08-30 the checkout was cut at 69 percent of 697 files: the tree is most of the way there, `git rev-parse` inside says `not a git repository`, and `git worktree list` does not mention it - so there is nothing to remove and the branch name is taken. Clean up all three pieces, then retry from a detached script:
+**A `git worktree add` the terminal kills leaves a directory that is not a worktree.** The checkout can be cut at 69 percent of 697 files: the tree is most of the way there, `git rev-parse` inside says `not a git repository`, and `git worktree list` does not mention it - so there is nothing to remove and the branch name is taken. Clean up all three pieces, then retry from a detached script:
 
 ```powershell
 Remove-Item -LiteralPath <path> -Recurse -Force; git worktree prune; git branch -D <branch>
@@ -41,7 +41,7 @@ Check `Test-Path <path>\.git` afterwards; progress lines reaching 100 percent do
 Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*<worktree>*' }
 ```
 
-**Nothing removes a finished worktree on its own, and `git worktree prune` is not that thing** - it only clears the entry for a directory that has already gone. Measured 2026-09-02: 38 abandoned sibling directories holding 156,482 files, every one a row whose pull request had merged days earlier, because the closing step is the one a worker killed mid-row never reaches. Sweep them, and read the report before removing, because a sibling creates a worktree between any two commands:
+**Nothing removes a finished worktree on its own, and `git worktree prune` is not that thing** - it only clears the entry for a directory that has already gone. One sweep found 38 abandoned sibling directories holding 156,482 files, every one a row whose pull request had merged days earlier, because the closing step is the one a worker killed mid-row never reaches. Sweep them, and read the report before removing, because a sibling creates a worktree between any two commands:
 
 ```powershell
 python backend/utilities/sweep_worktrees.py # report, change nothing
@@ -50,7 +50,7 @@ python backend/utilities/sweep_worktrees.py --remove # remove what it named
 
 It keeps a tree unless the pull request is `MERGED`, the branch is gone from the remote, and the tree is clean. All three are needed: a squash merge leaves the branch a non-ancestor, so ancestry cannot say whether the row landed, and a branch with no pull request is pending work rather than stale work.
 
-**Two process classes hold a dead tree's files and only one is safe to kill.** An `esbuild` service whose executable is inside the tree keeps running after the row ends - stop it. The editor's **Svelte language server** loads `rollup`, `lightningcss` and `tailwindcss-oxide` `.node` out of every worktree it has indexed (14 dead trees at once on 2026-09-02); it runs as `Code.exe`, so match on the command line (`svelte-language-server/bin/server.js`), never on the name. Stopping it released all 42 files and the editor respawned it untouched. Find any holder by loaded module:
+**Two process classes hold a dead tree's files and only one is safe to kill.** An `esbuild` service whose executable is inside the tree keeps running after the row ends - stop it. The editor's **Svelte language server** loads `rollup`, `lightningcss` and `tailwindcss-oxide` `.node` out of every worktree it has indexed (many dead trees at once); it runs as `Code.exe`, so match on the command line (`svelte-language-server/bin/server.js`), never on the name. Stopping it released all 42 files and the editor respawned it untouched. Find any holder by loaded module:
 
 ```powershell
 Get-Process | ForEach-Object { try { $_.Modules | Where-Object { $_.FileName -like '<worktree>*' } } catch { } }
@@ -58,11 +58,11 @@ Get-Process | ForEach-Object { try { $_.Modules | Where-Object { $_.FileName -li
 
 ## The moving base
 
-**`origin/main` moves under you without you fetching, because every worktree shares one `.git`.** A sibling's `git fetch` updates the ref for all of them, and the scheduled pipeline pushes several times an hour. On 2026-08-31 a merge was taken against an eleven-commit `origin/main` and twenty minutes later the range listed twelve, so a cleanly auto-merged file read as though the merge had deleted a paragraph. **Diff against the sha you merged, never against the moving ref**, and re-`fetch` and re-`merge` immediately before you push.
+**`origin/main` moves under you without you fetching, because every worktree shares one `.git`.** A sibling's `git fetch` updates the ref for all of them, and the scheduled pipeline pushes several times an hour. A merge can be taken against an eleven-commit `origin/main` and twenty minutes later the range can list twelve, so a cleanly auto-merged file read as though the merge had deleted a paragraph. **Diff against the sha you merged, never against the moving ref**, and re-`fetch` and re-`merge` immediately before you push.
 
 **Your own feature branch can move too, and one of the two causes is benign.** `git reflog -8` tells them apart: `merge origin/main: Fast-forward` is a background process advancing the branch and your commits are still there; `checkout: moving from X to Y` is a parallel agent switching branches in the checkout, so the tree you are about to stage is not the tree you think it is.
 
-**A pull request that reads `CONFLICTING` may have nothing left to resolve.** GitHub judges the head it was pushed, and a worktree handed over mid-row often already holds the merge commit that settles it. On 2026-09-13 PR #669 read `DIRTY`/`CONFLICTING` while its worktree sat on an unpushed merge of `origin/main`; pushing that commit was the whole fix. Ask the two questions before you resolve anything - what GitHub is judging, and whether your own tree still conflicts:
+**A pull request that reads `CONFLICTING` may have nothing left to resolve.** GitHub judges the head it was pushed, and a worktree handed over mid-row often already holds the merge commit that settles it. A pull request can read `DIRTY`/`CONFLICTING` while its worktree sat on an unpushed merge of `origin/main`; pushing that commit was the whole fix. Ask the two questions before you resolve anything - what GitHub is judging, and whether your own tree still conflicts:
 
 ```powershell
 gh pr view <n> --repo <owner/repo> --json headRefOid,mergeable,mergeStateStatus
@@ -101,7 +101,7 @@ git worktree add <repo>.worktrees/<name> -b <branch> origin/main
 git apply --3way.tmp_mine.patch
 ```
 
-**A dirty checkout can be a restored checkpoint, not unfinished work.** The agent host commits the whole tree to `refs/agents/<session>/checkpoints/turn/<n>`; a tree restored from one reads as ordinary uncommitted work. The tell is the direction of the diff - on 2026-08-28 the shared checkout added 132 lines and removed 5,240, un-writing a contract field, its validator, its changelog entry and its fixture. Confirm by matching blobs, not by reading the diff:
+**A dirty checkout can be a restored checkpoint, not unfinished work.** The agent host commits the whole tree to `refs/agents/<session>/checkpoints/turn/<n>`; a tree restored from one reads as ordinary uncommitted work. The tell is the direction of the diff - the shared checkout added 132 lines and removed 5,240, un-writing a contract field, its validator, its changelog entry and its fixture. Confirm by matching blobs, not by reading the diff:
 
 ```powershell
 git for-each-ref --sort=-committerdate --format='%(committerdate:iso) %(refname)' refs/agents/
@@ -128,11 +128,11 @@ main_tree=$(git rev-parse origin/main^{tree})
 [ "$(git merge-tree --write-tree origin/main <branch> | head -1)" = "$main_tree" ]
 ```
 
-**That test has one false negative, and it is the common case for a plan-doc.** If both sides added the same file the merge is an add/add conflict, so the branch reads as unmerged. Compare the blobs before believing it - identical object ids mean the content landed verbatim (`git rev-parse <branch>:<path> <squash>:<path>`, needs `MSYS_NO_PATHCONV=1`). Observed 2026-08-28: one branch of four flagged this way was fully merged.
+**That test has one false negative, and it is the common case for a plan-doc.** If both sides added the same file the merge is an add/add conflict, so the branch reads as unmerged. Compare the blobs before believing it - identical object ids mean the content landed verbatim (`git rev-parse <branch>:<path> <squash>:<path>`, needs `MSYS_NO_PATHCONV=1`). One branch of four flagged this way can be fully merged.
 
 ## Reading the tree with `git grep`
 
-**A hit count says a symbol is everywhere when nothing calls it.** Counting `visual_planner` across this repository on 2026-09-12 named 56 files, which reads as a live subsystem. Three of them were under `backend/idhazh/` and **all three were docstring prose**; the only real import outside `backend/tests/` was an offline harness under `backend/utilities/`. A plan row was dispatched to retire that subsystem on the strength of a replacement that had never been wired to anything, and the count is what made the replacement look live. **"Is it mentioned" and "is it called" can answer 56 and 0**, and only the second one says whether deleting the old thing breaks the site. Ask for import statements, and read the production package on its own:
+**A hit count says a symbol is everywhere when nothing calls it.** Counting `visual_planner` across this repository named 56 files, which reads as a live subsystem. Three of them were under `backend/idhazh/` and **all three were docstring prose**; the only real import outside `backend/tests/` was an offline harness under `backend/utilities/`. A plan row was dispatched to retire that subsystem on the strength of a replacement that had never been wired to anything, and the count is what made the replacement look live. **"Is it mentioned" and "is it called" can answer 56 and 0**, and only the second one says whether deleting the old thing breaks the site. Ask for import statements, and read the production package on its own:
 
 ```powershell
 git grep -nE '^\s*(from|import)\s+.*<module>' -- backend/idhazh backend/utilities
@@ -142,7 +142,7 @@ A module imported only by tests and by `backend/utilities/` is built and unwired
 
 ## Ledgers under merge
 
-**A header migration cannot survive a rebase, because `state/*.csv` is `merge=union`.** Union merge keeps every line from both sides - right for an append-only ledger, wrong for a file whose every line changed. Measured 2026-08-27: 4,349 data rows where 2,232 were expected, and the tell was a data row whose `run_id` cell read `run_id`. Do not resolve by hand:
+**A header migration cannot survive a rebase, because `state/*.csv` is `merge=union`.** Union merge keeps every line from both sides - right for an append-only ledger, wrong for a file whose every line changed. One merge produced 4,349 data rows where 2,232 were expected, and the tell was a data row whose `run_id` cell read `run_id`. Do not resolve by hand:
 
 ```powershell
 git checkout origin/main -- state/scores.csv
@@ -153,7 +153,7 @@ Expect to redo it on every rebase. Two guards make the redo safe: refuse to writ
 
 **A MERGE does the same thing and never conflicts, which is worse.** Union merge has no conflict state, so `git merge origin/main` over a rewritten shard exits 0, prints `Auto-merging`, and leaves one file with two headers and two row widths. Any recipe that waits for a conflict marker misses it. Make the repair unconditional after every merge and every rebase.
 
-**A change of grain fails in the directory rather than in the file, so census the directory.** Moving a store from `<YYYY-MM>.csv` to `<YYYY>/<MM>/<DD>.csv` deletes a file the scheduled `digest.yml` run is still appending to: that run is pinned to the sha it started on, so it keeps writing the month shard your branch removed. After the merge the store holds both grains. Nothing reads as corrupt - `day_partition.day_files` refuses a name it cannot place, so every read of that store stops instead. `state/scores/` was migrated twice on 2026-09-13 for this. Restore the store from the trunk and re-run the migration utility; do not resolve by hand, and count the files in the directory afterwards rather than only reading the one you edited.
+**A change of grain fails in the directory rather than in the file, so census the directory.** Moving a store from `<YYYY-MM>.csv` to `<YYYY>/<MM>/<DD>.csv` deletes a file the scheduled `digest.yml` run is still appending to: that run is pinned to the sha it started on, so it keeps writing the month shard your branch removed. After the merge the store holds both grains. Nothing reads as corrupt - `day_partition.day_files` refuses a name it cannot place, so every read of that store stops instead. A store can need the same migration twice for this. Restore the store from the trunk and re-run the migration utility; do not resolve by hand, and count the files in the directory afterwards rather than only reading the one you edited.
 
 **`frontend/public/telemetry/*.csv` is the opposite case, and the conflict it raises is the feature.** That path is deliberately not union-merged, so a branch that widens the projection collides loudly. The cause is not another agent: a scheduled `digest.yml` run stages that directory from a checkout pinned to its start sha, so a run in flight while your pull request is open republishes both shards with the **old** publisher. Both sides are machine output, so keep neither:
 
@@ -164,7 +164,7 @@ python -m idhazh.telemetry.publish.public_telemetry
 
 Before merging anything that rewrites `frontend/public/`, check `gh run list --workflow digest.yml --limit 3` for a run in flight and wait it out.
 
-**Waiting it out does not converge when the pipeline appends faster than CI finishes, and that is the usual case rather than the exception.** Measured 2026-09-12 on pull request #636, which widened `state/item-health` from 29 columns to 42 and rebuilt the projection from it: a full CI cycle takes about eight minutes, with the browser job the pole at 5m12s, and the pipeline appended to `state/item-health/2026-09.csv` three times inside one such window. Each append re-conflicted the branch, so the branch reached green and mergeable at different moments and never both at once. Three repair cycles produced three identical repairs. **The way out is to stop treating the data rows as part of the change under test.** Repair, push, and merge on `MERGEABLE/UNSTABLE` rather than waiting for a fourth cycle: the code was already green on an earlier head, and everything added since came from `main` itself plus a re-derivation a committed utility performs deterministically. Then census the trunk immediately, because the squash merge itself runs the union driver on GitHub's side and can concatenate one last time:
+**Waiting it out does not converge when the pipeline appends faster than CI finishes, and that is the usual case rather than the exception.** A pull request that widened `state/item-health` from 29 columns to 42 and rebuilt the projection from it: a full CI cycle takes about eight minutes, with the browser job the pole at 5m12s, and the pipeline appended to `state/item-health/2026-09.csv` three times inside one such window. Each append re-conflicted the branch, so the branch reached green and mergeable at different moments and never both at once. Three repair cycles produced three identical repairs. **The way out is to stop treating the data rows as part of the change under test.** Repair, push, and merge on `MERGEABLE/UNSTABLE` rather than waiting for a fourth cycle: the code was already green on an earlier head, and everything added since came from `main` itself plus a re-derivation a committed utility performs deterministically. Then census the trunk immediately, because the squash merge itself runs the union driver on GitHub's side and can concatenate one last time:
 
 ```powershell
 python -c "import csv,pathlib,collections;w=collections.Counter();[w.update([len(r)]) for p in pathlib.Path('state/item-health').glob('*.csv') for r in csv.reader(p.open(encoding='utf-8',newline=''))];print(dict(w))"
@@ -172,7 +172,7 @@ python -c "import csv,pathlib,collections;w=collections.Counter();[w.update([len
 
 One width for every row and one header per shard, or repair on the trunk. What this costs, stated rather than hidden: a merge on `UNSTABLE` is a merge whose final check set nobody read, so it is right only when the delta since the last green head is data the trunk wrote and a deterministic re-derivation of it. A code change in that delta makes it the wrong call.
 
-**A test that reads the newest committed day is racing the pipeline**, so it goes red in the morning and green by evening. The digest publishes several times a day and appends to the same payload, so the newest date on disk is always the one still being written - measured 2026-09-06, 78 stories at 09:00 against 374 to 582 on a finished day. Take the newest day that is **not** the newest date on disk, or better, use a bounded fixture (`CLAUDE.md` Guardrail #12).
+**A test that reads the newest committed day is racing the pipeline**, so it goes red in the morning and green by evening. The digest publishes several times a day and appends to the same payload, so the newest date on disk is always the one still being written - one morning sample read 78 stories at 09:00 against 374 to 582 on a finished day. Take the newest day that is **not** the newest date on disk, or better, use a bounded fixture (`CLAUDE.md` Guardrail #12).
 
 ## Line endings
 
@@ -196,7 +196,7 @@ One width for every row and one header per shard, or repair on the trunk. What t
 gh api "repos/<owner>/<repo>/commits/<sha>/check-runs" --jq '.check_runs[]|.name+"="+.status+"/"+(.conclusion//"-")'
 ```
 
-**`gh pr checks --watch` answers about the run it already knew about.** Called within seconds of a push it reports the PREVIOUS run's conclusions as `pass` - observed 2026-08-25 on PR #94, immediately after updating the branch. Bind the question to the head commit (`gh pr view <n> --json headRefOid`), and read an empty result as "not registered yet", which is a different answer from `pass`.
+**`gh pr checks --watch` answers about the run it already knew about.** Called within seconds of a push it reports the PREVIOUS run's conclusions as `pass` - observed immediately after updating a branch. Bind the question to the head commit (`gh pr view <n> --json headRefOid`), and read an empty result as "not registered yet", which is a different answer from `pass`.
 
 **`gh pr checks` exit codes: 8 while anything is pending, 0 when every check is green, 1 when one failed.** It also prints `no checks reported` for about a minute after a push. A job can report `status: in_progress` with `conclusion: success` while the run is complete, so a settle loop keyed on exit 0 polls for ever - key it on `gh run view <id> --json status,conclusion` instead.
 
@@ -217,7 +217,7 @@ $runs = gh run list --repo <owner/repo> --branch <branch> --limit 10 --json name
 
 **No log of any kind is readable while the run is going.** `gh run view <runId> --job <jobId> --log` and the run-level form both exit 1 with `logs will be available when it is complete`, even for a job that finished twenty minutes ago - and redirecting makes it worse, because the file is then 82 bytes of that sentence. What IS readable mid-run is the artifacts: `gh run download <runId> --name plan` gives the run plan, and each `items-<n>` appears as its shard finishes.
 
-**A completed run fails the other way round, so keep both commands.** On 2026-09-02 `gh run view <runId> --log` exited 0 and wrote a zero-byte file while `gh api repos/<owner>/<repo>/actions/jobs/<jobId>/logs` returned the whole log. Neither endpoint is the reliable one; when the first answer is empty, ask the other.
+**A completed run fails the other way round, so keep both commands.** `gh run view <runId> --log` can exit 0 and wrote a zero-byte file while `gh api repos/<owner>/<repo>/actions/jobs/<jobId>/logs` returned the whole log. Neither endpoint is the reliable one; when the first answer is empty, ask the other.
 
 **Filtering that log by a marker string drops the output you asked for**, because the lines worth reading carry no marker - the marker is what your own `echo` printed around them. Find the marker line numbers, then slice between them:
 
@@ -231,7 +231,7 @@ $log[($at[0])..($at[1] - 2)]
 
 **A grep for a string the build never writes matches nothing for ever, and reads as a broken step.** `system_info` was grepped from the visuals job's server log on nine consecutive runs and matched zero times: llama.cpp `b10598` writes no line containing it. Before treating a silent grep as a regression, confirm the build emits the string at all.
 
-**`gh run download` can exit 0 on a partial artifact.** On 2026-08-25 one download extracted 25 of 37 items with no warning on either stream; an identical re-run gave all 124 files. Count what landed against what the run declares before computing anything from it - a measurement taken from a silently truncated artifact is wrong in a direction nobody checks:
+**`gh run download` can exit 0 on a partial artifact.** One download extracted 25 of 37 items with no warning on either stream; an identical re-run gave all 124 files. Count what landed against what the run declares before computing anything from it - a measurement taken from a silently truncated artifact is wrong in a direction nobody checks:
 
 ```powershell
 gh api "repos/<owner>/<repo>/actions/runs/<id>/artifacts" --jq '[.artifacts[].name]|length'
@@ -246,9 +246,9 @@ gh api "repos/<owner>/<repo>/actions/runs/<id>/artifacts" --jq '[.artifacts[].na
 if ($checks.Count -gt 0 -and $pending.Count -eq 0) {... }
 ```
 
-**"The evidence expired" is usually wrong - check the artifact AND the job log.** A short `retention-days` is not the same as gone: `runtime-log-*` keeps two days, so yesterday's run still hands over the raw bodies, and the job log keeps far longer than any artifact. Get job ids from `gh api "repos/<owner>/<repo>/actions/runs/<run-id>/jobs?per_page=100"`. Used on 2026-08-27 to recover four real `/metrics` bodies, which is why `tests/fixtures/runtime/` holds captures rather than something plausible somebody typed.
+**"The evidence expired" is usually wrong - check the artifact AND the job log.** A short `retention-days` is not the same as gone: `runtime-log-*` keeps two days, so yesterday's run still hands over the raw bodies, and the job log keeps far longer than any artifact. Get job ids from `gh api "repos/<owner>/<repo>/actions/runs/<run-id>/jobs?per_page=100"`. Use both to recover real `/metrics` bodies; that is why `tests/fixtures/runtime/` holds captures rather than something plausible somebody typed.
 
-**The `items-*` artifacts are the only corpus of real article text.** Nothing commits an article body, so a rule that reads `Article.text` cannot be measured against `frontend/public/digest/` at all; the measurable corpus is a completed run's artifacts. Two things bite: filter on `status == "ok"` (a failed article is a real payload with no text, and deflated every percentage by 24 percent on the run measured 2026-08-26), and artifacts expire, so the number carries its run id and not just its date.
+**The `items-*` artifacts are the only corpus of real article text.** Nothing commits an article body, so a rule that reads `Article.text` cannot be measured against `frontend/public/digest/` at all; the measurable corpus is a completed run's artifacts. Two things bite: filter on `status == "ok"` (a failed article is a real payload with no text, and deflated every percentage by 24 percent on the measured run), and artifacts expire, so the number carries its run id and not just its date.
 
 **An upstream README can be behind the binary it documents.** llama.cpp `b10598` publishes `llamacpp:prompt_tokens_cached_total` and describes `prompt_tokens_total` as excluding cached tokens; its own `tools/server/README.md` at that exact tag carries neither the extra series nor the four words that decide whether a number is a read rate or a prompt rate. A field's meaning comes from a capture, never from the document about it. Where the instrument publishes a derived value beside its inputs, reproduce it as a free self-check - `prompt_tokens_seconds` is exactly `prompt_tokens_total / prompt_seconds_total`, which proves which definition the counter is using with no second source needed.
 
@@ -256,11 +256,11 @@ if ($checks.Count -gt 0 -and $pending.Count -eq 0) {... }
 
 ## The Actions cache
 
-**A cache key that does not name what it holds freezes that thing silently.** `digest.yml` once cached `backend/models` and `backend/bin` together under a key naming only the weights, while the step that fetched the llama.cpp release was skipped on a cache hit - so the server that started was whatever binary happened to be saved first, and nothing in the run said which one. The symptom is a step that reads as live code and has not executed for days. Closed 2026-08-25 by putting the build id in the key; kept because the shape generalises to any cache key that omits an input the cached bytes depend on.
+**A cache key that does not name what it holds freezes that thing silently.** `digest.yml` once cached `backend/models` and `backend/bin` together under a key naming only the weights, while the step that fetched the llama.cpp release was skipped on a cache hit - so the server that started was whatever binary happened to be saved first, and nothing in the run said which one. The symptom is a step that reads as live code and has not executed for days. The shape generalises to any cache key that omits an input the cached bytes depend on.
 
 ## The plan queue
 
-**A status an agent is told to write is a status that does not get written.** Measured 2026-09-12: thirteen rows had been dispatched and merged and no cell anywhere read `IN-FLIGHT`, so for a whole session the only record of what was being worked was a chat log no later agent can read. Measured 2026-09-11, the same failure at the other end: the first row executed under the execution contract merged in a pull request that touched no Reckoner line, and hours later the row still read `PENDING` with an empty `PR` column while the work was on the trunk. **The instruction to flip it had been written down and read by the agent that did not do it** - which is the finding worth keeping. Wording alone does not hold, so the update moved inside the diff that is reviewed, and the plan-queue reader fails when a merged pull request names a row that never learned it landed.
+**A status an agent is told to write is a status that does not get written.** Thirteen rows had been dispatched and merged and no cell anywhere read `IN-FLIGHT`, so for a whole session the only record of what was being worked was a chat log no later agent can read. The same failure happens at the other end: the first row executed under the execution contract merged in a pull request that touched no Reckoner line, and hours later the row still read `PENDING` with an empty `PR` column while the work was on the trunk. **The instruction to flip it had been written down and read by the agent that did not do it** - which is the finding worth keeping. Wording alone does not hold, so the update moved inside the diff that is reviewed, and the plan-queue reader fails when a merged pull request names a row that never learned it landed.
 
 **A plan asserting its parallel rows touch different files is making a claim, not stating a fact.** A 33-row plan stated the rule outright and was wrong on its first wave: three rows shared one stylesheet and three components, two more shared one config file, and a sixth needed a component that a row in a later group had not created yet. The evidence was in the plan the whole time, because the rows' own `Files touched` lists disagreed with the sentence above them. Diff the lists; never trust the sentence.
 
