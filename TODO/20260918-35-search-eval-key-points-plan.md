@@ -3,16 +3,17 @@
 **Last Updated**: 2026-09-18
 **Level**: mixed, up to 5 (published `DigestItem`/`DigestViewItem`; `EvalRow` ledger; summariser decode shape)
 
-**Status: decisions resolved; ready to size once the two ESCALATE rows are acknowledged.** The owner
+**Status: decisions resolved; execution authorized (owner, 2026-09-19).** The owner
 resolved all four K-items and the five flags on 2026-09-18 (sections 0b, 0c), overruling advisors
-where noted; the 2026-09-18 convergence debate (Andre, Carmack, Fowler) settled the eval design. The
+where noted; the 2026-09-18 convergence debate (Andre, Carmack, Fowler) settled the eval design; and on
+2026-09-19 the owner confirmed the complete `key_points` removal (0e C1) and authorized execution. The
 auto-tuning feedback loop is split OUT to a separate plan (#36, section 0d) per Fowler; this plan
 does the cleanup, the search, the chart, and the recorded-only scorers.
 
 **Execution stamp** (per [`docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md)):
 
 ```
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
 ```
 
 ## Section 0 - Operating contract
@@ -24,7 +25,21 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Hard scope - out | the auto-tune loop, adaptive bands, publish gate and G-Eval council (all -> plan #36); UniEval (a new runtime beside llama.cpp); RAGAS retriever metrics (no retriever here); see table below |
 | ESCALATE triggers | (1) F1 - Row 4 removes internal `Summary.key_points`, retiring the facts-first decode and reshaping the corpus. (2) F2 - Row 6 removes `key_point_weight`, a committed field on plan #34's `StorySimilarityDistribution`. (3) any `EvalRow`/published-payload field removal (Level 5, section 11). |
 | Chosen strategy | Cleanup + search + recorded-only scorers here; the closed loop (fold/fit/gate/G-Eval) is plan #36, after #34, reusing its `Fit` and `LLM-JUDGES` workflow. Owner + convergence debate, 2026-09-18. |
-| Execution | Parallel N = 4 default; the running-pool orchestration + 5-PR wave grouping is section 0e. Stamp above; AUTHOR-AND-STOP until the user authorizes. |
+| Execution | AUTHORIZED (owner, 2026-09-19); ready to run. Parallel N = 4 default; the running-pool orchestration + 5-PR wave grouping is section 0e. |
+| Intent | `key_points` is fully retired and the read cap raised: the summariser stops producing key points, the published day and the corpus row drop them, the `output_digest` formula and the deterministic metrics built on them go, and the live page gains instant + semantic search - with the faithfulness chart re-labelled and recorded-only coherence + coverage added. The contracts each row names FOLLOW this intent; when a contract and the intent disagree, the contract changes, not the intent (CLAUDE.md 0d). |
+
+### Onboarding (cold start - read these first, zero context assumed)
+
+A worker picks up any row with no prior context by reading, in order: [`CLAUDE.md`](../CLAUDE.md) (the
+engineering contract), [`docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) (how this plan
+runs), [`docs/agents/bootstrap.md`](../docs/agents/bootstrap.md) (which page owns the surface a row
+touches), and [`docs/how-to/run-the-gates.md`](../docs/how-to/run-the-gates.md) (the gate commands). The
+owning pages per surface: contracts + schema versioning -> [`docs/architecture/contracts/schemas.md`](../docs/architecture/contracts/schemas.md);
+the summariser decode + prompt -> [`docs/architecture/summarize/prompt.md`](../docs/architecture/summarize/prompt.md);
+the corpus + fine-tune -> [`docs/how-to/fine-tune-a-model.md`](../docs/how-to/fine-tune-a-model.md);
+evaluation + the console chart -> [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md). Every
+row's `Files touched` is the exact surface; every persisted change stamps its schema `version` +
+`changelog` (CLAUDE.md section 11).
 
 ### Hard scope - out
 
@@ -76,7 +91,7 @@ landed surface, and the eval work serializes on two shared files. The correction
 
 | id | Correction | Why it bites |
 | --- | --- | --- |
-| C1 | **`output_digest` depends on `key_points` (Level-5 landmine).** `derive_output_digest(summary, key_points, title)` at [base.py:532](../backend/idhazh/contracts/base.py) / [summary.py:204](../backend/idhazh/contracts/summary.py). Row 4 must decouple the digest input from the retired decode field - derive the digest text from the body at digest time, or pin it to `[summary, title]` and ship a read-side migration. | Removing `key_points` from the formula makes every committed `Summary` fail its `output_digest` recompute on read - a contract break, release blocker (section 11). |
+| C1 | **RESOLVED (owner, 2026-09-19): complete removal, accept the narrow break.** The `output_digest` formula drops `key_points` -> `derive_output_digest(summary, *, title)` ([base.py:531](../backend/idhazh/contracts/base.py)). The ONLY recompute-against-committed-data is `published_is_the_scored_one` ([corpus.py:266](../backend/idhazh/corpus.py)), the corpus join, which returns `False` (no crash) for a pre-change `EvalRow` whose digest was taken with `key_points`. Every other committed carrier (`EvalRow`, `LabelRow`, `QualificationRow`, published `DigestItem`/`DigestViewItem`, `observation_index`) STORES the digest and never recomputes it, so committed reads do not break. `Summary` self-validates the digest but is a run intermediate, consistent within a run. Migration = rewriting every committed eval-row digest via a join = complicated, so per the owner's rule we MOVE FORWARD AS A BREAKING CHANGE: the corpus re-harvest resets to post-change days (the prune bounds the corpus anyway). A test pins the new formula and that a `key_points`-era digest no longer false-matches. | The break is narrow and does not crash - it silently stops joining pre-change eval rows, which Row 4 makes explicit. |
 | C2 | **Row 4 undercounts the retire surface.** It must ALSO touch: frontend `payload/project.ts` ITEM_FIELDS + `payload/types.ts` (or the drift gate fails); the 12 browser specs naming `key_points` + a browser smoke; the decode knobs `key_points_min/max` in `knobs/summarize.py` + `config/idhazh.json` + `app-config.schema.json`; the 3 prompt files (`summarize.txt`, `summarize_and_plan_visual.txt`, `write_about_the_item.txt`) + their committed classify fixtures + the pipeline fingerprint move; `stages/common.py`, `stages/work.py`, `telemetry/spans.py`. The frontend `key_points` ownership is Row 4's, not Row 5's. | As written Row 4 fails its own contract-drift gate and leaves orphaned frontend/prompt/decode surface. |
 | C3 | **Row 6 undercounts the `key_point_weight` coupling.** Beyond stamps.py/placement.py/fold.py/`without_retired_keys` (already named), ALSO the landed #34 stages [judge_draw.py:73](../backend/idhazh/stages/judge_draw.py) and [judge_fit.py:190](../backend/idhazh/stages/judge_fit.py) (both read it), `evals/archive.py`, the `new_fact_rate` name in `day_metrics.py`, and 6 similarity test modules. **D5:** `assemble.py` and `judge_fit.py` recompute `cosine*cw + key_point*kpw` and must drop the second term in lockstep or crash. Browser smoke for the removed panel. | Runtime `AttributeError` on landed #34 code; the weight-sum validator rewrite (decision 2) is incomplete without the recompute sites. |
 | C4 | **Row 7 undercounts the `lead_coverage` coupling.** Beyond corpus.py/qualify.py/`scorer_version` (already named), ALSO `day_metrics.py` (`lead_missing` field + the sum validator -> a `day-metrics.schema.json` change if the bucket goes), `qualification.py` (`lead_coverage` field), `stages/assemble.py` and `stages/qualify.py` (both pass `lead_coverage=`), `telemetry/publish/day_metrics.py`. Browser smoke for the removed panel. | Payload-parse failure on committed day-metrics; orphaned writers. |
@@ -123,7 +138,7 @@ row) in the opening window, sustained **2**, collapsing to **1** on the serial s
 | 8 | Add coherence + coverage scorers (recorded-only) | - | A / eval-core | PENDING | - | - | - |
 | 2 | Redesign + re-label the faithfulness chart; docs glyph-link | 8 | B / chart | PENDING | - | - | - |
 | 3 | Reword recorded-only copy; relabel `compression` | 8 | B / chart | PENDING | - | - | - |
-| 4 | Retire `key_points` (published + internal + corpus + `output_digest`, C1/C2) | 5, 6, 7 | B / retire | PENDING (F1 ack) | - | - | - |
+| 4 | Retire `key_points` completely (published + internal + corpus + `output_digest`) | 5, 6, 7 | B / retire | PENDING | - | - | - |
 
 ## Section 2 - Row detail
 
@@ -181,28 +196,59 @@ row) in the opening window, sustained **2**, collapsing to **1** on the serial s
   | 1 | "Each dot is one day's middle score: half of that day's summaries scored higher, half lower." | Susan |
   | 2 | Keep `compression`, relabel as a length covariate | Andre |
 
-### Row #4 - Retire `key_points` (published + internal + corpus) - ESCALATE F1
+### Row #4 - Retire `key_points` completely (published + internal + corpus + `output_digest`) - Level 5
 
-- **Scope:** `key_points` leaves the published payload, the summariser decode shape, and the corpus
-  row. Decode stops producing it (facts-first retires); corpus row becomes `[title, summary]`.
-- **Files touched:** `backend/idhazh/contracts/digest_day.py`, `digest_view.py`, `summary.py`
-  (+ regen schemas, version + changelog + read-side tolerance), `backend/idhazh/summarize.py`
-  (`SummaryDraft`, prompt), `backend/idhazh/classify/calls.py`, `backend/idhazh/corpus.py`,
-  `backend/tests/test_corpus_contract.py`, `docs/how-to/fine-tune-a-model.md`,
-  `backend/utilities/build_canary_day.py`, `backend/utilities/data_wrangler.py`,
-  `backend/utilities/entity_gap.py`.
-- **Acceptance gates:** contract drift gate; backend `test:changed` over corpus/summarize/contract;
-  a fixture-driven read of an old `digest.json` that still carries `key_points` (tolerated, not
-  required). Easy path per owner: make the field optional, stop writing, tolerate old - no historical
-  delete-migration.
-- **Oracle:** a contract test proves a payload without `key_points` validates and one with it still
-  reads; it cannot settle whether summary quality moved without the facts-first scaffold (unmeasured).
+- **Intent:** `key_points` is GONE everywhere (owner, 2026-09-19) - the field is removed, not made
+  optional. The summariser stops producing key points, the published day and the corpus row drop them,
+  and the `output_digest` formula drops them (C1). Nothing reads `key_points` afterwards, so nothing
+  looks for it. The contracts below follow this intent (CLAUDE.md 0d).
+- **Scope + files touched (the exhaustive surface; every site removes `key_points`):**
+  - **Published contracts + the digest formula:** `backend/idhazh/contracts/base.py`
+    (`derive_output_digest` signature + payload: drop `key_points` -> `(summary, *, title)`);
+    `summary.py` (`Summary.key_points` + the `_output_digest_is_rebuilt_not_trusted` validator's call);
+    `digest_day.py` (`DigestItem.key_points`); `digest_view.py` (`DigestViewItem.key_points`); regen the
+    `summary` / `digest-day` / `digest-view` schemas; `version` + `changelog` on each (section 11).
+  - **Internal decode + knobs:** `backend/idhazh/summarize.py` (`SummaryDraft.key_points`,
+    `_distinct_key_points`, `key_point_rail`, the `Summary(...)` construction and its two
+    `derive_output_digest(...)` sites); `contracts/knobs/summarize.py` (`key_points_min/max`, the
+    `min <= max` validator, the five band presets + the band docstring); `config/idhazh.json` (the five
+    band `key_points_min/max` pairs); `backend/idhazh/classify/calls.py` (`key_point_rail` use, the turn
+    fields, the band union).
+  - **Prompts (the pipeline fingerprint moves; state the re-run):** `backend/idhazh/prompts/summarize.txt`,
+    `summarize_and_plan_visual.txt`, `write_about_the_item.txt` - drop the key-points instruction and the
+    `$key_points_*` placeholders.
+  - **Same-story terms + scored text (a behaviour change, not just a field drop):**
+    `backend/idhazh/assemble.py` - the same-story terms come from `title + summary` instead of
+    `key_points` ([assemble.py:777](../backend/idhazh/assemble.py)), and `DigestItem(... key_points=...)`
+    drops it; `backend/idhazh/stages/common.py` (line 588) - the scored `reply` text becomes
+    `title + summary`. Both change what clustering and scoring see; the row states it, does not hide it.
+  - **Corpus:** `backend/idhazh/corpus.py` (`Published.key_points`, the `published_is_the_scored_one`
+    digest call, `rescored`); the corpus row becomes `[title, summary]`; `backend/tests/test_corpus_contract.py`
+    + `test_corpus_harvest.py` + the `corpus-row` fixture; `docs/how-to/fine-tune-a-model.md`.
+  - **Frontend:** `frontend/src/lib/payload/types.ts` (the field + the projected-field union),
+    `payload/project.ts` (`ITEM_FIELDS` + the defending comment), `lib/day-shape.ts` (the search
+    index stops folding `key_points`), `lib/assist/day.ts` (the read-time check), `lib/server/config.ts`
+    (`key_points_min/max` + the band defaults).
+  - **Telemetry:** `backend/idhazh/telemetry/spans.py` (`AttrKey.KEY_POINTS` + the `span.set(...)`).
+  - **Tests + canary:** `backend/tests/conftest.py`, `test_summarize.py` (the key-point count / floor /
+    restatement tests go), `test_canaries.py`, `backend/utilities/build_canary_day.py`.
+- **Acceptance gates:** contract drift gate (all three schemas regenerate byte-identical, versioned +
+  changelogged); backend `test:changed` over contracts / summarize / corpus / assemble; a unit test that
+  `derive_output_digest` no longer accepts `key_points` and that `published_is_the_scored_one` returns
+  `False` for a `key_points`-era digest (the accepted break is intended, C1); the day still renders when
+  an old `digest.json` carries a stray `key_points` (the published read path ignores extra keys); the
+  frontend browser smoke that the day + search render with no `key_points` (section 12).
+- **Oracle:** a contract test proves a payload with no `key_points` validates and `output_digest` is
+  taken over `(summary, title)`; a corpus test proves the row is `[title, summary]`. It cannot settle
+  whether summary quality moved without the facts-first scaffold (unmeasured; the eval loop watches it).
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | Full removal; optional-then-stop-writing; tolerate old | owner (K1, F1) |
-  | 2 | Decode stops producing key points | owner (F1); Carmack confirms the decode saving is real |
+  | 1 | COMPLETE removal - the field is gone, not optional; nothing reads `key_points` afterwards | owner (K1, 2026-09-19) |
+  | 2 | `output_digest` drops `key_points`; the corpus-join break is ACCEPTED, not migrated (C1) | owner (2026-09-19) |
+  | 3 | Decode stops producing key points (facts-first retires); the ~21 s/item decode saving is real | owner (F1); Carmack |
+  | 4 | Same-story terms + scored text fall back to `title + summary`; the clustering/scoring change is stated, not hidden | Fowler |
 
 ### Row #5 - Live-day search: instant + semantic
 

@@ -21,7 +21,7 @@ a false claim, and the floor that withholds is an absolute line that does not dr
 **Execution stamp** (per [`docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md)):
 
 ```
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes, and until plan 34's fit core and plan 35's EvalRow churn are on main.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. Execution is AUTHORIZED (owner, 2026-09-19); it begins once plan 34's fit core and plan 35's EvalRow churn are on main.
 ```
 
 ## Section 0 - Operating contract
@@ -33,7 +33,22 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Hard scope - out | see table below |
 | ESCALATE triggers | (1) Row 8 flips the flag and withholds items - the first change to a published day, lands alone, owner sign-off. (2) promoting any metric's action from `watch`/`downgrade` to `block` - owner, on a track record. |
 | Chosen strategy | Reuse plan 34 wholesale: extract its fit core direction-parameterised, mint data-parameterised per-metric contracts, host G-Eval on the existing `LLM-JUDGES` workflow, ship the gate record-only behind a flag. Owner + convergence debate, 2026-09-18. |
-| Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md, after the two dependencies land. Parallel N = 4; the running-pool orchestration + 8-PR wave grouping is section 0d. Stamp above; AUTHOR-AND-STOP until the user authorizes. |
+| Execution | AUTHORIZED (owner, 2026-09-19); begins once plan 34's fit core and plan 35's EvalRow churn are on main. Parallel N = 4; the running-pool orchestration + 9-PR wave grouping is section 0d Table B. |
+| Intent | Every summary is measured on four axes; an adaptive band is fit to each from its own rolling distribution with no human in the loop; and the band decides whether a summary publishes or is withheld - a withheld item is absent from the reader's day and recorded as an item-health metric surfaced in the console (section 0e). The contracts each row names FOLLOW this intent; when a contract and the intent disagree, the contract changes, not the intent (CLAUDE.md 0d). |
+
+### Onboarding (cold start - read these first, zero context assumed)
+
+A worker picks up any row with no prior context by reading, in order: [`CLAUDE.md`](../CLAUDE.md) (the
+engineering contract), [`docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) (how this plan
+runs), [`docs/agents/bootstrap.md`](../docs/agents/bootstrap.md) (which page owns the surface a row
+touches), and [`docs/how-to/run-the-gates.md`](../docs/how-to/run-the-gates.md) (the gate commands). The
+design of record is [`docs/concepts/summary-quality-autotune.md`](../docs/concepts/summary-quality-autotune.md)
+(the four metrics, the fold-fit loop, the publish gate). The loop this plan mirrors is
+[`20260917-34-similarity-autotune-plan.md`](20260917-34-similarity-autotune-plan.md) - Row 1 extracts its
+fit core. Owning pages per surface: contracts + schema versioning ->
+[`docs/architecture/contracts/schemas.md`](../docs/architecture/contracts/schemas.md); evaluation + the
+console -> [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md). Every row's `Files touched`
+is the exact surface; every persisted change stamps its schema `version` + `changelog` (CLAUDE.md 11).
 
 ### Hard scope - out
 
@@ -86,8 +101,8 @@ decisions (E4, E6) and gate their rows.
 | E1 | **All adaptive floors are WATCH-only (fleet-rate alarms), none downgrades per item.** Measured: faithfulness p05 = 0.14, but the absolute block 0.50 sits at the ~11th percentile, so the adaptive faithfulness floor is BELOW the block and the "downgrade" band is empty by construction - it can never fire. The only per-item faithfulness reader action is the absolute 0.50 block plus the EXISTING 0.80/0.50 display bands. | D1, D3 | Andre (A2) |
 | E2 | **The seed keys on the HHEM instrument sub-identity** (`hhem_rev@rev + weights_digest + window=900/150/anchored`), NOT the whole `scorer_version`. Plan 35 changes `scorer_version` (drops `;lead=`, bumps `metrics-3`->`4`), so a whole-version filter matches 0 of 11,140 rows and day one is empty. Keying on HHEM identity keeps ~8,461 current-geometry rows. | D5 | Andre (A1) |
 | E3 | **Symmetric damping for every watch floor.** "Damp the raise" belonged to plan 34's INVISIBLE-deletion trigger; here the withhold is absolute and undamped, and a watch/downgrade floor is a visible/operator signal, so asymmetric damping only ratchets the alarm down under noise and silences it. Resolve now, not after a fortnight. | D6 | Andre (B1) |
-| E4 | **Withhold = suppress our summary, keep the link (owner decision).** A below-0.50 faithfulness says OUR PROSE is untrustworthy, not that no story exists. Recommended: a blocked item degrades to a LINK-ONLY card (headline + source + a strong "we could not verify our summary" marker) - it carries no summary, so no false claim, and it is the visible/recoverable loss not the invisible one. The owner rules whether a below-0.50 (high-salience) story may appear link-only, and the max-withhold-fraction floor below which the least-bad items publish link-only rather than the digest going hollow. | D2, D8 | Editor proposes; owner rules (reader-safety boundary) |
-| E5 | **State the ~11% steady-state block rate; add a length pre-filter.** The 0.50 line is the ~11th percentile, so Row 8 turns ~11% of items link-only every day, and 24% of that tail is sub-200-word stubs. A length pre-filter (never summarise a stub) and the stated baseline keep D8's alarm from reading 11% as an anomaly. | D8, Row 8 | Andre (B2), Editor |
+| E4 | **SUPERSEDED by 0e H1 (2026-09-19): the reader sees nothing; the withhold is an item-health metric, not a card.** Historical rationale (no longer in force): the Editor proposed degrading a below-0.50 item to a link-only card so the loss stayed visible; the owner instead ruled the item ABSENT from the day and the signal an operator-only item-health metric surfaced in the console. | D2, D8 | Editor proposed; superseded by owner (0e H1) |
+| E5 | **State the ~11% steady-state withhold rate; add a length pre-filter.** The 0.50 line is the ~11th percentile, so Row 8 withholds (does not publish) ~11% of items every day, and 24% of that tail is sub-200-word stubs. A length pre-filter (never summarise a stub) and the stated baseline keep D8's alarm from reading 11% as an anomaly. | D8, Row 8 | Andre (B2), Editor |
 | E6 | **Coherence RAM (owner decision, plan 35 Row 8's premise too).** MiniLM would be a THIRD resident model on the digest worker (summariser server ~14.31 GiB = 96% of 16 GB, + HHEM in-process, + MiniLM); "encoder already loaded" is FALSE (it loads in the plan job, not the work shard). Measure the 3-model peak RSS before coherence ships same-day; if the margin is under MiniLM's footprint, coherence runs NEXT-DAY (it is summary-only) and only coverage stays same-day. | Row 8 (35), Row 8 (36) | Carmack (A1/A2); owner on the measurement |
 | E7 | **Where the block lands: BEFORE `collapse_same_story`.** Withdrawing a same-story group's representative after the fold silently deletes every duplicate folded into it and trips `DigestDay`/placement count invariants. Drop/relegate before the fold so the next-best duplicate is promoted, and recompute run/vertical/desk counts. `DigestDay`'s `planned = published + failed` gains a `link_only` term (`planned = published + failed + link_only`), counted on `RunManifest`, with a test that the arithmetic closes. | Row 8 | Fowler (A1, B5) |
 | E8 | **The daily judge workflow may be renamed `LLM-JUDGES` -> `LLM-COUNCIL`.** The plan declares ONE dependency line and uses name-agnostic prose ("the daily judge council workflow") everywhere; the runtime (cache key, server start, matrix) is name-independent, so a rename touches only `name:`, `concurrency.group`, and the `_harness.py` expectation in one commit. | 0a, Row 6 | Fowler (B2), Carmack (A6) |
@@ -148,7 +163,7 @@ Provision 2 workers; `Parallel N = 4` never binds.
 
 | Edge class | Dispatch base | Why |
 | --- | --- | --- |
-| Disjoint (1 vs 3; 4 vs 6; 5 vs 10; 11 vs 8-frontend) | `origin/main`, at once | no shared file |
+| Disjoint (1 vs 3; 4 vs 6; 5 vs 10; 11 vs 8) | `origin/main`, at once | no shared file (Row 11 is a backend measure utility, Row 8 is `assemble.py`) |
 | Shared-file, shape settled + mechanical (1->2 once `ClampOutcome`/`FitEnd` settle; 4->5 once the `ledger.py` helper settles) | predecessor's BRANCH tip, pre-merge | shape cannot move; pool never idles on CI |
 | New persisted contract (2->4/5/7) | wait on `main` | the contract shape is exactly what review moves; fold/fit WRITE it |
 | Measuring (6->10) | wait on `main` | Row 10 must call the merged `geval.py`; runs alone anyway |
@@ -253,9 +268,10 @@ disjointness check, never the letter (execute-a-plan.md).
 
 ### Row #3 - `EvalRow`: the three new columns
 
-- **Scope:** add `geval` (fluency 0-1, nullable), `publish_decision` (`published`|`downgraded`|`withheld`,
-  default `published`), `withheld_reason` (a `MetricId`-or-`unsupported_number` enum, nullable) to the
-  committed eval ledger. Expand only; nothing writes the decision yet.
+- **Scope:** add `geval` (fluency 0-1, nullable), `publish_decision` (`published`|`withheld`, default
+  `published`; `downgraded` is a RESERVED future-promotion value that nothing stamps today - E1 makes the
+  per-item downgrade band empty, G6/G12), `withheld_reason` (a `MetricId`-or-`unsupported_number` enum,
+  nullable) to the committed eval ledger. Expand only; nothing writes the decision yet.
 - **Files touched:** `backend/idhazh/contracts/eval_row.py` (+ schema + changelog + version), the
   read-side tolerance for old shards, the affected tests.
 - **Acceptance gates:** contract drift gate; a fixture read of an old shard that omits all three columns
@@ -339,9 +355,9 @@ disjointness check, never the letter (execute-a-plan.md).
 - **Files touched:** new `backend/idhazh/quality/gate.py` (the veto chain),
   `backend/idhazh/evals/score.py` (`to_eval_row` stamps the decision), the console reader.
 - **Acceptance gates:** unit tests over built items and built bands: a faithfulness reading below the
-  absolute block floor stamps `withheld`; below the watch floor stamps `downgraded`; a low coverage
-  stamps nothing under the default `watch`; the bite - flip coverage's action to `block` and the same
-  item stamps `withheld`.
+  absolute block floor stamps `withheld`; a reading in the watch band stamps nothing per item (watch is
+  a fleet-rate alarm, not a per-item action - E1); a low coverage stamps nothing under the default
+  `watch`; the bite - flip coverage's action to `block` and the same item stamps `withheld`.
 - **Oracle:** the veto chain stamps the most severe action any metric earned and names the metric that
   earned it; it changes no published day (record-only).
 - **Decisions:**
@@ -349,7 +365,7 @@ disjointness check, never the letter (execute-a-plan.md).
   | # | Decision | Authority |
   | --- | --- | --- |
   | 1 | Veto chain, not a composite; the reason names the metric (D4) | Andre, Fowler |
-  | 2 | Record-only first; a person reads the counterfactual withheld/downgraded list once as go/no-go before Row 8 (D7) | Fowler, Editor |
+  | 2 | Record-only first; a person reads the counterfactual withheld list once as go/no-go before Row 8 (D7) | Fowler, Editor |
   | 3 | A displayed "overall", if built, is labelled a display aggregate that feeds no action | Andre |
 
 ### Row #8 - flip the flag - ESCALATE
