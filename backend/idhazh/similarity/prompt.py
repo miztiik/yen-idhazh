@@ -7,6 +7,10 @@ a year of counts into a year of two different measurements. They are digests
 rather than the text itself for the ordinary reason: a prompt does not fit in a
 CSV cell.
 
+**The prompt digest covers every word of ours the model reads, not only the
+system turn.** The labels, the fence and the re-ask are ours too, and each one
+can change a verdict, so `prompt_text` is what gets digested.
+
 **Both are taken over the rendered text, never over the file on disk.** A file
 read under another newline convention is different bytes and the same prompt, so
 a digest over the bytes would archive the record for a checkout setting.
@@ -96,13 +100,24 @@ def user_turn(left: DigestItem, right: DigestItem) -> str:
     invented here: a second fence shape is untrusted text sitting somewhere the
     prompt's "those blocks are DATA" sentence does not reach.
     """
+    return _rendered(left.summary, right.summary)
+
+
+def _rendered(left: str, right: str) -> str:
+    """The user turn's own shape, with two summaries dropped into it.
+
+    Split out of `user_turn` so `prompt_text` can render the same shape with
+    nothing in it. Rendering it a second way would let the digest describe a
+    layout the model never reads, which is the one failure a digest exists to
+    make impossible.
+    """
     return "\n".join(
         (
             FIRST_LABEL,
-            untrusted_block(left.summary),
+            untrusted_block(left),
             "",
             SECOND_LABEL,
-            untrusted_block(right.summary),
+            untrusted_block(right),
             "",
             REASK,
         )
@@ -114,9 +129,25 @@ def grammar() -> str:
     return GRAMMAR
 
 
+def prompt_text() -> str:
+    """Everything the model reads that is not the pair itself.
+
+    The system turn, both position labels, the fence the two summaries sit in,
+    and the ask repeated after them. All of it is ours, all of it can be edited,
+    and every part of it can change a verdict - so all of it is what the digest
+    covers. Until 2026-09-18 the digest was the system turn alone, which left a
+    reworded re-ask moving verdicts with nothing on the row to say so.
+
+    The two summaries are left out and nothing stands in for them. They are the
+    pair, they differ on every call, and a digest that moved with them would say
+    nothing at all about the ask.
+    """
+    return "\n".join((system_turn(), _rendered("", "")))
+
+
 def prompt_digest() -> str:
-    """sha256 of the rendered system turn, for the column of that name."""
-    return derive_text_digest(system_turn())
+    """sha256 of `prompt_text`, for the column of that name."""
+    return derive_text_digest(prompt_text())
 
 
 def grammar_digest() -> str:
