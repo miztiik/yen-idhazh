@@ -71,8 +71,10 @@ def _fingerprints(*rows: dict[str, str]) -> str:
     return ledger.render_file(HostFingerprintRow.csv_columns(), rows)
 
 
-def _rollup(date: str, run_id: str, *, shard: int, span: RollupSpan, total_ms: int) -> str:
-    row = SpanRollupRow.model_validate(
+def _rollup_row(
+    date: str, run_id: str, *, shard: int, span: RollupSpan, total_ms: int
+) -> dict[str, str]:
+    return SpanRollupRow.model_validate(
         {
             "date": date,
             "run_id": run_id,
@@ -81,8 +83,16 @@ def _rollup(date: str, run_id: str, *, shard: int, span: RollupSpan, total_ms: i
             "count": 1,
             "total_ms": total_ms,
         }
-    )
-    return ledger.render_file(SpanRollupRow.csv_columns(), [row.csv_row()])
+    ).csv_row()
+
+
+def _rollups(*rows: dict[str, str]) -> str:
+    return ledger.render_file(SpanRollupRow.csv_columns(), rows)
+
+
+def _rollup(date: str, run_id: str, *, shard: int, span: RollupSpan, total_ms: int) -> str:
+    """One fold rendered as a segment file's whole body."""
+    return _rollups(_rollup_row(date, run_id, shard=shard, span=span, total_ms=total_ms))
 
 
 def _write(state: Path, which: ledger.SegmentLedger, name: str, body: str) -> Path:
@@ -237,6 +247,105 @@ def test_every_waiting_row_reaches_the_head_its_own_date_names(tmp_path: Path) -
         )
     )
     assert report.oldest_segment_date == THREE_DAYS_OLD
+
+
+def test_two_dates_of_one_month_fold_into_one_head_carrying_both(tmp_path: Path) -> None:
+    """The span fold files by month, so two dates share a head and must stay apart on it.
+
+    A shard that runs across midnight leaves a segment dated yesterday for a
+    compaction that runs today, and both dates are in the same month for all but
+    one night a month. Every shard of both runs folds into `2026-09.csv`, so the
+    head is the one file a whole month of runs reaches.
+
+    Unique across `SPAN_ROLLUP_KEY` is the half that matters. A repeated key is
+    one shard's spans counted twice, and the console divides that number, so a
+    doubled row does not look like an error - it looks like a slower run.
+    """
+    state = tmp_path / ledger.STATE_DIRNAME
+    yesterday = "2026-09-16"
+    overnight = f"{yesterday}-900000003"
+    for shard in (0, 1):
+        _write(
+            state,
+            ledger.SegmentLedger.SPAN_ROLLUP,
+            f"{overnight}-1-{ServerJob.WORK.value}-{shard:02d}.csv",
+            _rollup(
+                yesterday, overnight, shard=shard, span=RollupSpan.ITEM, total_ms=90 + shard
+            ),
+        )
+    _write(
+        state,
+        ledger.SegmentLedger.SPAN_ROLLUP,
+        f"{RUN}-1-{ServerJob.WORK.value}-00.csv",
+        _rollups(
+            _rollup_row(TODAY, RUN, shard=0, span=RollupSpan.ITEM, total_ms=120),
+            _rollup_row(TODAY, RUN, shard=0, span=RollupSpan.ROBOTS, total_ms=8),
+        ),
+    )
+
+    report = compact.stage_compact(state)
+
+    assert report.heads_written == (ledger.span_rollup_relpath(TODAY[:7]),)
+    rows = _rows(ledger.span_rollup_path(state, TODAY[:7]))
+    assert {row["date"] for row in rows} == {yesterday, TODAY}
+    keys = [tuple(row[name] for name in ledger.SPAN_ROLLUP_KEY) for row in rows]
+    assert len(keys) == 4, f"one fold went missing or arrived twice: {keys}"
+    assert len(set(keys)) == len(keys), f"two rows share a key: {keys}"
+    assert ledger.segment_files(state) == []
+
+
+def test_a_fold_left_over_a_month_boundary_reaches_the_month_its_own_rows_name(
+    tmp_path: Path,
+) -> None:
+    """The case no real run can be asked to produce: the night the month changes.
+
+    A shard that starts at 23:59 UTC on the last of the month writes its segment
+    on one date and the compaction that reads it runs on another - and once a
+    month those two dates are in different months. Routing is off each row's own
+    `date` cell rather than off the clock the compaction runs on, so August's
+    fold reaches August's head and September's reaches September's.
+
+    Built here for the reason the file's own heading gives: the archive has never
+    produced this night and cannot be made to, and a compaction that read its
+    own clock would pass every other test in this file.
+    """
+    state = tmp_path / ledger.STATE_DIRNAME
+    last_of_august = "2026-08-31"
+    first_of_september = "2026-09-01"
+    before_midnight = f"{last_of_august}-900000004"
+    after_midnight = f"{first_of_september}-900000005"
+    _write(
+        state,
+        ledger.SegmentLedger.SPAN_ROLLUP,
+        f"{before_midnight}-1-{ServerJob.WORK.value}-00.csv",
+        _rollup(
+            last_of_august, before_midnight, shard=0, span=RollupSpan.ITEM, total_ms=61
+        ),
+    )
+    _write(
+        state,
+        ledger.SegmentLedger.SPAN_ROLLUP,
+        f"{after_midnight}-1-{ServerJob.WORK.value}-00.csv",
+        _rollup(
+            first_of_september, after_midnight, shard=0, span=RollupSpan.ITEM, total_ms=59
+        ),
+    )
+
+    report = compact.stage_compact(state)
+
+    assert report.heads_written == tuple(
+        sorted(
+            (
+                ledger.span_rollup_relpath(last_of_august[:7]),
+                ledger.span_rollup_relpath(first_of_september[:7]),
+            )
+        )
+    )
+    august = _rows(ledger.span_rollup_path(state, last_of_august[:7]))
+    september = _rows(ledger.span_rollup_path(state, first_of_september[:7]))
+    assert [(row["date"], row["total_ms"]) for row in august] == [(last_of_august, "61")]
+    assert [(row["date"], row["total_ms"]) for row in september] == [(first_of_september, "59")]
+    assert report.oldest_segment_date == last_of_august
 
 
 def test_the_higher_attempt_wins_the_cell_the_two_disagree_on(tmp_path: Path) -> None:
