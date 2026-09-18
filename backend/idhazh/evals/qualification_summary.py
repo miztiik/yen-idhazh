@@ -194,15 +194,29 @@ def render_report(report: QualificationReport) -> str:
         lines += [f"- **`{outcome.gate.value}`** - {outcome.detail}" for outcome in failed]
         lines.append("")
 
+    if report.corpus_shortfalls:
+        lines += [
+            "### The corpus was thinner than the config asks for",
+            "",
+            "No gate reads these. They say how good a measuring stick this run had, "
+            "not how good the candidate is - a tier with no articles in it means the "
+            "run says nothing about that tier, in either direction. The gate that "
+            "refuses a run for too little evidence is `scored_denominator` above.",
+            "",
+        ]
+        lines += [f"- {shortfall}" for shortfall in report.corpus_shortfalls]
+        lines.append("")
+
     if report.diagnostics:
         lines += [
             "### Recorded, and blocked on by nothing",
             "",
-            "| Diagnostic | Value | Observations |",
-            "| --- | --- | --- |",
+            "| Diagnostic | Value | Counted in | Observations |",
+            "| --- | --- | --- | --- |",
         ]
         lines += [
-            f"| {diagnostic.name} | {diagnostic.value} | {diagnostic.denominator} |"
+            f"| {diagnostic.name} | {diagnostic.value} | {diagnostic.unit} "
+            f"| {diagnostic.denominator} |"
             for diagnostic in report.diagnostics
         ]
         lines.append("")

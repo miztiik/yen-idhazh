@@ -61,13 +61,11 @@ def stage_qualify_decide(
         required_canaries=len(sorted(common.CANARY_DIR.glob("*.json"))),
         turns=settings.models.summarize.turns,
     )
-    shortfalls = qualify.corpus_shortfalls(frozen.items, summarize=settings.app.summarize)
-    if shortfalls:
-        # Not a gate. These describe the measuring stick, and a thin corpus is a
-        # run to repeat rather than a model to reject.
-        for shortfall in shortfalls:
-            LOG.error("corpus is not adequate: %s", shortfall)
-        raise SystemExit("the frozen corpus does not meet the registered definition")
+    shortfalls = qualify.corpus_shortfalls(
+        frozen.items, summarize=settings.app.summarize, evaluation=evaluation
+    )
+    for shortfall in shortfalls:
+        LOG.warning("the corpus is thinner than the config asks for: %s", shortfall)
 
     failed = [outcome for outcome in outcomes if outcome.status is GateStatus.FAILED]
     report = QualificationReport(
@@ -83,6 +81,7 @@ def stage_qualify_decide(
         repeats=frozen.repeats,
         scored=len(frozen.scores),
         gates=outcomes,
+        corpus_shortfalls=shortfalls,
         diagnostics=[
             *qualify.stratification(frozen.items, summarize=settings.app.summarize),
             *qualify.wording_spread(

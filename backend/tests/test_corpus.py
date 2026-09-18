@@ -31,6 +31,7 @@ from idhazh.stages.qualify import _freeze, corpus_share
 
 SETTINGS = config.load()
 SUMMARIZE = SETTINGS.app.summarize
+EVALUATION = SETTINGS.app.evaluation
 BANDS = len(SUMMARIZE.bands)
 CAP_WORDS = int(SETTINGS.app.extract.truncation_cap_tokens / extract.TOKENS_PER_WORD)
 
@@ -67,7 +68,7 @@ def words_for_band(index: int) -> int:
         midpoint = (floor + SUMMARIZE.bands[index + 1].min_source_words) // 2
         return max(floor + WORDS_PER_SENTENCE, midpoint)
     # No band sits above the top tier, so it is placed past the truncation cap
-    # as well as past its own floor. `qualify.MIN_OVER_CAP` wants truncated
+    # as well as past its own floor. `evaluation.qualification_min_over_cap` wants truncated
     # items and this is the only tier that can supply one at any cap.
     return max(floor, CAP_WORDS) + 1200
 
@@ -173,14 +174,14 @@ def test_a_payload_written_before_the_field_reads_its_post_cap_count() -> None:
 def test_every_tier_is_filled_when_the_slice_can_supply_it() -> None:
     """`keep` is the definition's own minimum here - four tiers at three items -
     so one shard alone clears it and the union has room to spare."""
-    keep = BANDS * qualify.MIN_PER_BAND
+    keep = BANDS * EVALUATION.qualification_min_per_band
     items, layout = a_plan(dict.fromkeys(range(BANDS), 4))
     chosen, attempted, unmet = _freeze(
-        items, SETTINGS, fetcher_for(layout), keep=keep, share=corpus_share()
+        items, SETTINGS, fetcher_for(layout), keep=keep, share=corpus_share(EVALUATION)
     )
     assert unmet == []
     assert attempted <= len(items)
-    assert qualify.corpus_shortfalls([entry.row for entry in chosen], summarize=SUMMARIZE) == []
+    assert qualify.corpus_shortfalls([entry.row for entry in chosen], summarize=SUMMARIZE, evaluation=EVALUATION) == []
 
 
 def test_a_tier_the_slice_cannot_supply_is_named(caplog: pytest.LogCaptureFixture) -> None:
@@ -191,7 +192,7 @@ def test_a_tier_the_slice_cannot_supply_is_named(caplog: pytest.LogCaptureFixtur
     items, layout = a_plan(counts)
     with caplog.at_level(logging.ERROR):
         chosen, _, unmet = _freeze(
-            items, SETTINGS, fetcher_for(layout), keep=10, share=corpus_share()
+            items, SETTINGS, fetcher_for(layout), keep=10, share=corpus_share(EVALUATION)
         )
     assert any(f"band {BANDS - 1}" in line for line in unmet)
     assert not any(entry.row.band_index == BANDS - 1 for entry in chosen)
@@ -206,7 +207,7 @@ def test_the_walk_continues_past_the_pool_floor_to_reach_a_scarce_tier() -> None
     layout = {item.canonical_url: words_for_band(1) for item in common}
     layout |= {item.canonical_url: words_for_band(BANDS - 1) for item in scarce}
     chosen, attempted, _ = _freeze(
-        [*common, *scarce], SETTINGS, fetcher_for(layout), keep=keep, share=corpus_share()
+        [*common, *scarce], SETTINGS, fetcher_for(layout), keep=keep, share=corpus_share(EVALUATION)
     )
     assert attempted > floor
     assert any(entry.row.band_index == BANDS - 1 for entry in chosen)
@@ -217,7 +218,7 @@ def test_the_scarce_tier_is_not_crowded_out_by_the_common_one() -> None:
     counts = {0: 0, 1: 20, 2: 0, BANDS - 1: 2}
     items, layout = a_plan(counts)
     chosen, _, _ = _freeze(
-        items, SETTINGS, fetcher_for(layout), keep=4, share=corpus_share()
+        items, SETTINGS, fetcher_for(layout), keep=4, share=corpus_share(EVALUATION)
     )
     assert sum(1 for entry in chosen if entry.row.band_index == BANDS - 1) == 2
 
@@ -240,7 +241,7 @@ def test_a_tier_that_falls_in_one_shard_survives_the_split() -> None:
     counts[1] = 12
     items, layout = a_plan(counts)
     # Every long read at a position the round-robin hands to shard 0.
-    scarce = [planned(100 + n, BANDS - 1) for n in range(qualify.MIN_PER_BAND)]
+    scarce = [planned(100 + n, BANDS - 1) for n in range(EVALUATION.qualification_min_per_band)]
     layout |= {item.canonical_url: words_for_band(BANDS - 1) for item in scarce}
     ordered: list[PlannedItem] = []
     for index, item in enumerate(items):
@@ -274,21 +275,21 @@ def test_a_tier_that_falls_in_one_shard_survives_the_split() -> None:
             SETTINGS,
             fetcher_for(layout),
             keep=keep,
-            share=corpus_share(),
+            share=corpus_share(EVALUATION),
         )
         union.extend(entry.row for entry in chosen)
     assert len({row.url_key for row in union}) == len(union)
-    assert qualify.corpus_shortfalls(union, summarize=SUMMARIZE) == []
+    assert qualify.corpus_shortfalls(union, summarize=SUMMARIZE, evaluation=EVALUATION) == []
 
 
 def test_the_selection_does_not_move_when_the_pool_is_reordered() -> None:
     """Registered by hash before any output is read, so it cannot be re-rolled."""
     items, layout = a_plan(dict.fromkeys(range(BANDS), 4))
     first, _, _ = _freeze(
-        items, SETTINGS, fetcher_for(layout), keep=8, share=corpus_share()
+        items, SETTINGS, fetcher_for(layout), keep=8, share=corpus_share(EVALUATION)
     )
     again, _, _ = _freeze(
-        items, SETTINGS, fetcher_for(layout), keep=8, share=corpus_share()
+        items, SETTINGS, fetcher_for(layout), keep=8, share=corpus_share(EVALUATION)
     )
     assert [entry.row.url_key for entry in first] == [entry.row.url_key for entry in again]
 

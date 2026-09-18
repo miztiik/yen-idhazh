@@ -289,6 +289,15 @@ casts before it selects. It is a floor and not a cap: a shard whose slice has no
 yet offered every length tier keeps walking. Raising it buys fetch seconds and
 never model minutes, because the model still sees `corpus_per_shard` articles.
 
+`evaluation.qualification_min_per_band`, `qualification_min_over_cap` and
+`qualification_min_brief` say what shape that corpus should come out. They
+describe the measuring stick rather than the candidate, so a run that falls short
+records the shortfall on its verdict and keeps going - the gate that refuses a
+run with too little evidence is `scored_denominator`, which counts what was
+actually scored. They were literals in `evals/qualify.py` until 2026-09-18, the
+only qualification thresholds that were not config, and the only ones that could
+end a run before it wrote anything down.
+
 `config.sources` can declare `form: "abstract"` on a feed. That is a curator's
 fact about the feed, not a detector over page text. NBER uses it; arXiv and SSRN
 should use the same field if those feeds are added.

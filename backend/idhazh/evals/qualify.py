@@ -120,38 +120,44 @@ def band_index(source_words: int, summarize: SummarizeConfig) -> int:
     return chosen
 
 
-#: What the corpus definition demands before any gate is worth evaluating. Not
-#: a gate: these describe the measuring stick, not the candidate. A thin corpus
-#: is a run to repeat, never a model to reject.
-MIN_PER_BAND: Final = 3
-MIN_OVER_CAP: Final = 2
-MIN_BRIEF: Final = 2
-
-
-def corpus_shortfalls(items: Sequence[CorpusItem], *, summarize: SummarizeConfig) -> list[str]:
-    """Where the frozen corpus falls short of the definition the row registered.
+def corpus_shortfalls(
+    items: Sequence[CorpusItem], *, summarize: SummarizeConfig, evaluation: EvaluationConfig
+) -> list[str]:
+    """Where the frozen corpus falls short of the shape the config asks for.
 
     A stratified corpus is the difference between measuring a model and
     measuring whichever articles the feeds offered that morning. Every length
     tier has its own prompt band, the over-cap items are the only ones that
     exercise truncation, and the brief path takes a different prompt entirely -
     a corpus missing any of them cannot speak about that path at all.
+
+    **This describes the measuring stick and not the candidate, so every line it
+    returns is recorded and none of it blocks.** The gate that refuses a run
+    with too little evidence is `scored_denominator`, which counts what was
+    actually scored; a second refusal here would fail a run twice for one fact
+    and throw away the nine verdicts that did not need the missing tier.
     """
     counts = dict.fromkeys(range(len(summarize.bands)), 0)
     for item in items:
         counts[item.band_index] = counts.get(item.band_index, 0) + 1
+    per_band = evaluation.qualification_min_per_band
     short = [
         f"band {index} (min_source_words {band.min_source_words}) has "
-        f"{counts.get(index, 0)}, needs {MIN_PER_BAND}"
+        f"{counts.get(index, 0)}, the corpus asks for {per_band}"
         for index, band in enumerate(summarize.bands)
-        if counts.get(index, 0) < MIN_PER_BAND
+        if counts.get(index, 0) < per_band
     ]
     over_cap = sum(1 for item in items if item.truncated)
-    if over_cap < MIN_OVER_CAP:
-        short.append(f"over the truncation cap: {over_cap}, needs {MIN_OVER_CAP}")
+    if over_cap < evaluation.qualification_min_over_cap:
+        short.append(
+            f"over the truncation cap: {over_cap}, the corpus asks for "
+            f"{evaluation.qualification_min_over_cap}"
+        )
     briefs = sum(1 for item in items if item.brief)
-    if briefs < MIN_BRIEF:
-        short.append(f"brief-path items: {briefs}, needs {MIN_BRIEF}")
+    if briefs < evaluation.qualification_min_brief:
+        short.append(
+            f"brief-path items: {briefs}, the corpus asks for {evaluation.qualification_min_brief}"
+        )
     return short
 
 
@@ -690,11 +696,13 @@ def wording_spread(
         Diagnostic(
             name="items_whose_repeats_differed",
             value=f"{len(varied)} of {len(counted)} at temperature {inference.temperature}",
+            unit="articles",
             denominator=len(counted),
         ),
         Diagnostic(
             name="distinct_wordings_per_item_mean",
             value=f"{_mean(float(count) for count in distinct):.4f} of {repeats} repeats",
+            unit="wordings an article",
             denominator=len(counted),
         ),
     ]
@@ -724,65 +732,91 @@ def diagnostics(corpus: Corpus, *, evaluation: EvaluationConfig) -> list[Diagnos
         if o.summarize_seconds > 0 and o.completion_tokens
     ]
     return [
-        Diagnostic(name="unsupported_numbers_total", value=str(unsupported), denominator=n),
+        Diagnostic(
+            name="unsupported_numbers_total",
+            value=str(unsupported),
+            unit="numbers",
+            denominator=n,
+        ),
         Diagnostic(
             name="unsupported_numbers_rate",
             value=f"{(unsupported / n if n else 0.0):.4f}",
+            unit="numbers an article",
             denominator=n,
         ),
-        Diagnostic(name="hedge_dropped_total", value=str(hedges), denominator=n),
         Diagnostic(
-            name="hedge_dropped_rate", value=f"{(hedges / n if n else 0.0):.4f}", denominator=n
+            name="hedge_dropped_total", value=str(hedges), unit="articles", denominator=n
+        ),
+        Diagnostic(
+            name="hedge_dropped_rate",
+            value=f"{(hedges / n if n else 0.0):.4f}",
+            unit="share of articles",
+            denominator=n,
         ),
         Diagnostic(
             name="below_lead_coverage_min_share",
             value=f"{(thin_lead / n if n else 0.0):.4f}",
+            unit="share of articles",
             denominator=n,
         ),
         Diagnostic(
             name="extractiveness_mean_non_brief",
             value=f"{_mean(s.extractiveness for s in non_brief):.4f}",
+            unit="share of the summary copied word for word",
             denominator=len(non_brief),
         ),
         Diagnostic(
             name="verbatim_run_mean_non_brief",
             value=f"{_mean(s.verbatim_run for s in non_brief):.4f}",
+            unit="longest copied stretch, as a share of the summary",
             denominator=len(non_brief),
         ),
-        Diagnostic(name="hhem_mean", value=f"{_mean(hhem):.4f}", denominator=n),
+        Diagnostic(
+            name="hhem_mean",
+            value=f"{_mean(hhem):.4f}",
+            unit="faithfulness, 0 to 1, higher is better",
+            denominator=n,
+        ),
         Diagnostic(
             name="hhem_spread",
             value=(f"{min(hhem):.4f}-{max(hhem):.4f}" if hhem else "no scored items"),
+            unit="faithfulness, 0 to 1, lowest to highest",
             denominator=n,
         ),
         Diagnostic(
             name="hhem_delta_mean",
             value=f"{_mean(s.hhem - s.hhem_full for s in scores):.4f}",
+            unit="faithfulness points lost to the truncation cap",
             denominator=n,
         ),
         Diagnostic(
             name="compression_mean",
             value=f"{_mean(s.compression for s in scores):.4f}",
+            unit="summary words per source word",
             denominator=n,
         ),
         Diagnostic(
             name="evidential_density_mean",
             value=f"{_mean(s.evidential_density for s in scores):.4f}",
+            unit="attributions a word of the article",
             denominator=n,
         ),
         Diagnostic(
             name="speculative_density_mean",
             value=f"{_mean(s.speculative_density for s in scores):.4f}",
+            unit="unconfirmed claims a word of the article",
             denominator=n,
         ),
         Diagnostic(
             name="generated_title_fallback_rate",
             value=f"{(titles / n if n else 0.0):.4f}",
+            unit="share of articles",
             denominator=n,
         ),
         Diagnostic(
             name="decode_tokens_per_second_median",
             value=f"{(statistics.median(decode) if decode else 0.0):.2f}",
+            unit="tokens a second over the whole call, prefill included",
             denominator=len(decode),
         ),
     ]
@@ -797,6 +831,7 @@ def stratification(items: Sequence[CorpusItem], *, summarize: SummarizeConfig) -
         Diagnostic(
             name=f"band_{index}_min_source_words_{band.min_source_words}",
             value=str(counts.get(index, 0)),
+            unit="articles",
             denominator=len(items),
         )
         for index, band in enumerate(summarize.bands)
@@ -805,6 +840,7 @@ def stratification(items: Sequence[CorpusItem], *, summarize: SummarizeConfig) -
         Diagnostic(
             name="over_truncation_cap",
             value=str(sum(1 for item in items if item.truncated)),
+            unit="articles",
             denominator=len(items),
         )
     )
@@ -812,6 +848,7 @@ def stratification(items: Sequence[CorpusItem], *, summarize: SummarizeConfig) -
         Diagnostic(
             name="brief_path",
             value=str(sum(1 for item in items if item.brief)),
+            unit="articles",
             denominator=len(items),
         )
     )

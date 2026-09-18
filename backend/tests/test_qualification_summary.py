@@ -20,7 +20,10 @@ pytestmark = pytest.mark.contract
 
 
 def a_report(
-    *, failing: GateName | None = None, omit: GateName | None = None
+    *,
+    failing: GateName | None = None,
+    omit: GateName | None = None,
+    shortfalls: list[str] | None = None,
 ) -> QualificationReport:
     """Eleven gates, one of them optionally red or absent. Built, never read off a run.
 
@@ -54,7 +57,15 @@ def a_report(
         repeats=3,
         scored=12,
         gates=gates,
-        diagnostics=[Diagnostic(name="mean compression", value="0.31", denominator=12)],
+        corpus_shortfalls=shortfalls or [],
+        diagnostics=[
+            Diagnostic(
+                name="mean compression",
+                value="0.31",
+                unit="summary words per source word",
+                denominator=12,
+            )
+        ],
         qualified=failing is None,
         detail="every gate passed" if failing is None else "faithfulness_floor measured 0.612",
     )

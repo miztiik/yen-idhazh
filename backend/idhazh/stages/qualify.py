@@ -94,12 +94,12 @@ class _Share(NamedTuple):
     brief: int
 
 
-def corpus_share() -> _Share:
-    """The registered definition, as one shard's target."""
+def corpus_share(evaluation: EvaluationConfig) -> _Share:
+    """The corpus shape the config asks for, as one shard's target."""
     return _Share(
-        per_band=qualify.MIN_PER_BAND,
-        over_cap=qualify.MIN_OVER_CAP,
-        brief=qualify.MIN_BRIEF,
+        per_band=evaluation.qualification_min_per_band,
+        over_cap=evaluation.qualification_min_over_cap,
+        brief=evaluation.qualification_min_brief,
     )
 
 
@@ -418,7 +418,7 @@ def stage_qualify(
 
     plan = _load_plan(date)
     mine = shard_of(plan, shard=shard, shards=shards)
-    share = corpus_share()
+    share = corpus_share(settings.app.evaluation)
     frozen, attempted, unmet = _freeze(mine, settings, read_url, keep=corpus_per_shard, share=share)
 
     root = common.QUALIFICATION_ROOT / date / f"shard-{shard}"

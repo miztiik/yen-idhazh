@@ -111,10 +111,21 @@ class Diagnostic(Model):
     Every one carries its denominator. A rate over four items is not a rate, and
     a diagnostic that hides its denominator is how an unmeasured number gets
     cited later as if it were evidence (Guardrail #10).
+
+    **And every one carries its unit**, because `0.0412` answers nothing on its
+    own: the reader cannot tell a share from a count from a rate per second, and
+    a number nobody can act on is the failure this project keeps finding.
+    `name` is deliberately a string rather than a closed set - `stratification`
+    mints a row per configured band, so the vocabulary is only knowable once the
+    config is read.
     """
 
     name: str = Field(min_length=1)
     value: str = Field(min_length=1)
+    unit: str = Field(
+        min_length=1,
+        description="What the value is counted in - articles, a share, tokens a second.",
+    )
     denominator: int = Field(ge=0, description="How many observations produced the value.")
 
 
@@ -448,6 +459,11 @@ class QualificationReport(Contract):
     __schema_stem__: ClassVar[str] = "qualification-report"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-18T12:00",
+            change="Added corpus_shortfalls; every diagnostic carries a unit.",
+            why="A thin corpus is recorded rather than fatal, and a bare number answers nothing.",
+        ),
+        ChangelogEntry(
             version="2026-09-17",
             change="gates may omit determinism, and no other gate.",
             why="Above temperature 0 that gate has no question to ask.",
@@ -464,8 +480,8 @@ class QualificationReport(Contract):
         ),
         ChangelogEntry(
             version="2026-08-26",
-            change="Initial shape: eleven hard gates, the diagnostics, and the corpus digest.",
-            why="An adoption gate reporting a pass without its numbers cannot be re-checked.",
+            change="Earlier shapes are in this file's git history.",
+            why="Git is the archive; every entry here ships inside the generated schema.",
         ),
     )
 
@@ -486,6 +502,15 @@ class QualificationReport(Contract):
     repeats: int = Field(ge=1)
     scored: int = Field(ge=0)
     gates: list[GateOutcome]
+    corpus_shortfalls: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Where the frozen corpus fell short of the shape `evaluation` asks for. "
+            "Empty on a corpus that met it. A line here describes the measuring "
+            "stick rather than the candidate and blocks nothing - the gate that "
+            "refuses a run with too little evidence is `scored_denominator`."
+        ),
+    )
     diagnostics: list[Diagnostic] = Field(default_factory=list)
     qualified: bool
     detail: str = Field(min_length=1)
