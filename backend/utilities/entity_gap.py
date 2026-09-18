@@ -38,7 +38,7 @@ table says.
 
 The report carries no clock and no host, so the same tree always prints the same
 bytes and a re-run is a check rather than a new reading. Guardrail #10's hardware and
-date belong beside the figure in `docs/reference/measurements.md`, where a reader
+date belong beside the figure in `docs/reference/pipeline-cost.md`, where a reader
 looks the number up.
 
 Usage, from the root of a checkout:

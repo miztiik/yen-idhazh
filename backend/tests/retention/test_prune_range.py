@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Final
 
 import pytest
+from conftest import seed_item_health
 
 from idhazh import day_partition, ledger
 from idhazh.contracts.item_health import ItemStage
@@ -44,6 +45,11 @@ pytestmark = pytest.mark.contract
 #: the store. The test below holds this against `prune.TARGETS`, so a target
 #: added to the vocabulary without a store that files by day fails here rather
 #: than by quietly selecting nothing.
+#:
+#: The two nested keys are spelled the way an operator types them - two directory
+#: names joined by a hyphen - and the value is the two-segment path the same
+#: module files at. That pairing is the whole of what makes a nested store
+#: prunable, so it is the pairing this file holds.
 DAY_PATHS: Final[dict[str, Callable[[Path, str], Path]]] = {
     ledger.COUNTERFACTUAL_SCORES_DIRNAME: ledger.counterfactual_scores_path,
     ledger.HEALTH_DIRNAME: ledger.health_path,
@@ -51,6 +57,12 @@ DAY_PATHS: Final[dict[str, Callable[[Path, str], Path]]] = {
     ledger.VISUAL_PRUNES_DIRNAME: ledger.visual_prunes_path,
     score_writer.INDEX_DIRNAME: score_writer.index_path,
     score_writer.LEDGER_DIRNAME: score_writer.ledger_path,
+    f"{ledger.STORY_SIMILARITY_DIRNAME}-{ledger.SCORED_PAIRS_DIRNAME}": (
+        ledger.scored_pairs_path
+    ),
+    f"{ledger.STORY_SIMILARITY_DIRNAME}-{ledger.FITTED_THRESHOLDS_DIRNAME}": (
+        ledger.fitted_thresholds_path
+    ),
 }
 
 
@@ -71,7 +83,7 @@ def a_census(state_root: Path, days: Iterable[str] = DAYS) -> Path:
     writes, and a tree assembled by hand could be a shape no run produces.
     """
     for number, day in enumerate(days):
-        ledger.append_item_health(
+        seed_item_health(
             state_root,
             day,
             [health_row(day=day, run=1, number=number, stage=ItemStage.PUBLISH)],

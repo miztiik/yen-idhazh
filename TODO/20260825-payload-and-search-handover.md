@@ -141,5 +141,5 @@ Everything else follows from that answer. If the search has its own index, the a
 - [`../docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md) - the console-charts work that first recorded these findings; it shipped 2026-08-25 and its rules live here now.
 - [`../docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md) - what the published surface loads today.
 - [`../docs/architecture/publishing/layout.md`](../docs/architecture/publishing/layout.md) - what Assemble writes and the retention rules.
-- [`../docs/reference/measurements.md`](../docs/reference/measurements.md) - where any new number belongs.
+- [`../docs/reference/pipeline-cost.md`](../docs/reference/pipeline-cost.md) - where any new number belongs.
 - [`../docs/how-to/author-a-plan.md`](../docs/how-to/author-a-plan.md) - the format for the plan this research produces.

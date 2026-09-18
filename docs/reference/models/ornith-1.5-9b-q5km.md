@@ -146,4 +146,4 @@ other.
 - [../benchmarks/four-candidates-on-one-news-day.md](../benchmarks/four-candidates-on-one-news-day.md) - this model beside three others on 2026-09-17, gate by gate, with the summaries it wrote. No row moved here from it: the corpus was too thin to rank anything.
 - [../benchmarks/the-processor-lottery.md](../benchmarks/the-processor-lottery.md) - what machine a run draws, and what it does to a reading.
 - [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md) - how a candidate gets measured and what has to pass before it serves.
-- [../measurements.md](../measurements.md) - the instrument log.
+- [../pipeline-cost.md](../pipeline-cost.md) - the instrument log.

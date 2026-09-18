@@ -1,6 +1,6 @@
 # The model boundary
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-18
 
 How the summarizer stays generic while the model behind it changes. This page
 owns the shape of the boundary - what crosses it, which side each fact lives
@@ -140,7 +140,7 @@ whenever the model digest moved. Per-model wording means a prompt edit made
 swap that carried it. The one alarm that survives a model change stops working
 on exactly the day it is needed.
 
-**Qualification would stop measuring one thing.** The eleven gates compare two
+**Qualification would stop measuring one thing.** The ten gates compare two
 models on one frozen corpus. Different words on each side measures two changes
 and reports one number.
 
@@ -159,7 +159,7 @@ moves it exactly as a reworded instruction would - measured 2026-09-14: the
 same two turns render 28 bytes shorter under the fold and the digest moves. The
 qualification run's stamp does not. `stages/qualify.py` hands `build_inputs`
 the content-only digest from `summarize.prompt_inputs`, which takes no envelope
-and carries no turn marker, so nothing on `turns` can move it - and the eleven
+and carries no turn marker, so nothing on `turns` can move it - and the ten
 gates are what adopt a model. A candidate compared through a digest that is
 blind to how its turns were written needs the envelope stated on the entry and
 checked against the running server, which is case 1 of the start-up proof.
@@ -244,7 +244,7 @@ word would lose the whole item over a label.
 The envelope also says which prefix-cache slot answered the call. Three fields
 carry it, and all three arrive on the route the summarizer already posts to, so
 reading them costs no extra request (measured 2026-09-15 on build
-`b10598-56db501e7`, [measurements.md](../../reference/measurements.md)).
+`b10598-56db501e7`, [pipeline-cost.md](../../reference/pipeline-cost.md)).
 
 | Census column | Reply field | What it says |
 | --- | --- | --- |
@@ -359,7 +359,7 @@ flowchart LR
   C --> B
   B -->|"fits"| Q
   B -->|"does not fit"| X
-  Q -->|"eleven gates pass, a person decides"| AD
+  Q -->|"ten gates pass, a person decides"| AD
   Q -->|"any gate fails"| X
   AD -.->|"quality drops in the archive"| RV
 
@@ -410,7 +410,7 @@ configured, so the columns are legible on every day either way.
 **Three things it costs.** A second download and its checksum, both in the same
 steps as the target's so the two cannot drift apart. Memory for a second set of
 weights, which comes out of the headroom
-[`measurements.md`](../../reference/measurements.md) records rather than out of
+[`pipeline-cost.md`](../../reference/pipeline-cost.md) records rather than out of
 the KV budget. And the draft's own digest in the run record, so a day that was
 drafted can be told from a day that was not - a run that cannot answer that
 cannot explain its own throughput.
@@ -521,7 +521,7 @@ What case 2 records that case 1 cannot:
 | Prompt-cache hit between calls | Only observable on the real call sequence |
 | Output digests | Determinism, by replaying the same rows |
 
-Case 2 never scores quality. The eleven gates judge quality and they live
+Case 2 never scores quality. The ten gates judge quality and they live
 elsewhere; a scorer inside a bench becomes the thing that selects, and the
 alarm stops being able to detect drift.
 
@@ -610,4 +610,4 @@ Model](../../how-to/evaluate-new-summarizer-model.md) is the procedure.
 - [../../concepts/config.md](../../concepts/config.md) - the config shape and every knob on it.
 - [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md) - the runbook for benchmarking, adopting and reverting.
 - [../../how-to/fine-tune-a-model.md](../../how-to/fine-tune-a-model.md) - the training corpus, and what a base swap does to an adapter.
-- [../../reference/measurements.md](../../reference/measurements.md) - the instrument log.
+- [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md) - the instrument log.

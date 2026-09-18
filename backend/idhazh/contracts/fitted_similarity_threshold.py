@@ -62,6 +62,11 @@ class FittedSimilarityThreshold(Contract):
     __schema_stem__: ClassVar[str] = "fitted-similarity-threshold"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-18T12:00",
+            change="pairs_in_band counts the pairs the draw dealt, not the pairs in the band.",
+            why="The count before the budget is persisted nowhere, so nothing could write it.",
+        ),
+        ChangelogEntry(
             version="2026-09-18",
             change="Initial shape: the four steps, the gates, and what the record held.",
             why="A line that moves itself has to leave a row on the days it did not move.",
@@ -192,8 +197,11 @@ class FittedSimilarityThreshold(Contract):
     pairs_in_band: int = Field(
         ge=0,
         description=(
-            "How many pairs scored at or above band_low before the budget was applied. A "
-            "day that hit the cap reads as partial rather than as a quiet truncation."
+            "How many distinct pairs the day file holds - what the draw dealt the legs, "
+            "after pair_budget cut the band down. Equal to the budget on a day that hit "
+            "the cap, which is how a truncated day reads as partial rather than as a quiet "
+            "one. The count before the budget is not persisted anywhere, so no writer "
+            "could put it here."
         ),
     )
     pairs_judged: int = Field(

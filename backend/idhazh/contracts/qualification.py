@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import hashlib
 from enum import StrEnum
-from typing import ClassVar, Final, Self
+from typing import ClassVar, Self
 
 from pydantic import Field, model_validator
 
@@ -45,16 +45,16 @@ from idhazh.contracts.fingerprint import PipelineInputs
 
 
 class GateName(StrEnum):
-    """The eleven gates that block adoption. Closed set, never free text.
+    """The ten gates that block adoption. Closed set, never free text.
 
-    Every run asks ten of them. `OPTIONAL_GATES` below names the one a run may
-    leave unevaluated, and says when and why.
+    Every run asks every one of them. A report that omits one is refused by
+    name, because a gate nobody asked is a gate nobody can be shown to have
+    passed.
     """
 
     REASONING_LEAKAGE = "reasoning_leakage"
     SCHEMA_VALIDITY = "schema_validity"
     INJECTION_CANARIES = "injection_canaries"
-    DETERMINISM = "determinism"
     PUBLISHABLE_LENGTH = "publishable_length"
     CONTEXT_FIT = "context_fit"
     IDENTITY = "identity"
@@ -62,21 +62,6 @@ class GateName(StrEnum):
     SCORED_DENOMINATOR = "scored_denominator"
     FAITHFULNESS_FLOOR = "faithfulness_floor"
     BRIEF_COPYING_CEILING = "brief_copying_ceiling"
-
-
-#: The gates a run may leave unevaluated, and why each one is here.
-#:
-#: `DETERMINISM` asks whether repeated calls produced identical words. That
-#: question has an answer at `temperature == 0` and none above it, where the
-#: repeats are meant to differ - so above zero the run records `wording_spread`
-#: as a diagnostic and reports no outcome for this gate (owner ruling,
-#: 2026-09-17, `docs/architecture/contracts/determinism.md`).
-#:
-#: **Optional is not weaker.** A gate listed here is held to its own bar exactly
-#: as before wherever it IS reported; what moved is the set of runs that can ask
-#: it. Every other gate is still required of every report, and a report that
-#: omits one is refused by name.
-OPTIONAL_GATES: Final = frozenset({GateName.DETERMINISM})
 
 
 class GateStatus(StrEnum):
@@ -234,10 +219,31 @@ class ItemObservation(Model):
         ge=0, description="The complete rendered request, as counted by the runtime."
     )
     completion_tokens: int = Field(ge=0)
+    prefill_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Milliseconds the runtime spent reading the prompt, summed over the "
+            "item's calls. Null where the runtime reported no timings. Kept apart "
+            "from decode because one scales with the article and the other with the "
+            "summary, so a single rate over both describes neither."
+        ),
+    )
+    decode_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description="Milliseconds spent writing the reply, summed over the item's calls.",
+    )
     fits_context_predicted: bool = Field(
         description="What `summarize.fits_context` said before the call."
     )
-    summarize_seconds: float = Field(ge=0.0)
+    summarize_seconds: float = Field(
+        ge=0.0,
+        description=(
+            "The item's whole wall clock, the seam between its calls included. It is "
+            "wider than prefill plus decode and is not their sum."
+        ),
+    )
 
 
 class ItemScore(Model):
@@ -307,6 +313,11 @@ class QualificationShard(Contract):
     __schema_stem__: ClassVar[str] = "qualification-shard"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-18",
+            change="An observation gains prefill_ms and decode_ms, both optional.",
+            why="The runtime reports the split on every reply and the shard was dropping it.",
+        ),
+        ChangelogEntry(
             version="2026-09-16",
             change="An observation's finish_reason is nullable.",
             why="A reply that named no reason no longer reaches this row as a clean stop.",
@@ -320,11 +331,6 @@ class QualificationShard(Contract):
             version="2026-09-14T04:00",
             change="inputs gains turn_markers_sha256, optional.",
             why="The turn envelope is a control, so a verdict has to record which one it ran.",
-        ),
-        ChangelogEntry(
-            version="2026-09-13T22:00",
-            change="Removed pipeline_fingerprint.",
-            why="`inputs` beside it records the same controls by name.",
         ),
         ChangelogEntry(
             version="2026-08-26",
@@ -464,9 +470,9 @@ class QualificationReport(Contract):
             why="A thin corpus is recorded rather than fatal, and a bare number answers nothing.",
         ),
         ChangelogEntry(
-            version="2026-09-17",
-            change="gates may omit determinism, and no other gate.",
-            why="Above temperature 0 that gate has no question to ask.",
+            version="2026-09-18",
+            change="determinism is no longer a gate; every gate is required.",
+            why="A summarizer does not need identical words; wording_spread records the drift.",
         ),
         ChangelogEntry(
             version="2026-09-14T04:00",
@@ -520,7 +526,7 @@ class QualificationReport(Contract):
         seen = [outcome.gate for outcome in self.gates]
         if len(set(seen)) != len(seen):
             raise ValueError("a gate reported twice is two answers to one question")
-        missing = sorted(set(GateName) - OPTIONAL_GATES - set(seen))
+        missing = sorted(set(GateName) - set(seen))
         if missing:
             raise ValueError(f"gates never evaluated: {[gate.value for gate in missing]}")
         return self

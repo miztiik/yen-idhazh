@@ -36,7 +36,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 ## 2. Row #1 - What is durable, and where it already lives
 
 - **Scope:** Walk both working documents; for every durable finding, check whether the living doc already holds it, and write the ones that do not.
-- **Files touched:** `docs/concepts/digest.md`, `docs/concepts/design-system.md`, `docs/concepts/evaluation.md`, `docs/concepts/telemetry.md`, `docs/concepts/adaptive-pruning.md`, `docs/architecture/**`, `docs/reference/agent-notes.md`, `docs/reference/measurements.md`
+- **Files touched:** `docs/concepts/digest.md`, `docs/concepts/design-system.md`, `docs/concepts/evaluation.md`, `docs/concepts/telemetry.md`, `docs/concepts/adaptive-pruning.md`, `docs/architecture/**`, `docs/reference/agent-notes.md`, `docs/reference/pipeline-cost.md`
 - **Acceptance gates:** the full suite; the docs cross-link check; `backend/tests/contracts/`'s ASCII and LF check.
 - **Oracle:** Every owner decision, correction, gap and contradiction in the pseudo-plan is accounted for by exactly one of: **implemented** (name the plan and the PR), **recorded** (name the living doc and the section), or **superseded** (name what replaced it). A table with no fourth column - because a fourth column is where a lost decision hides.
 
@@ -64,7 +64,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 ## 3. Row #2 - The numbers, taken again on the tree that shipped
 
 - **Scope:** Re-measure everything the group moved, on the tree that actually shipped, and record it with hardware, date and spread.
-- **Files touched:** `docs/reference/measurements.md`, `config/idhazh.json` (any ceiling whose runway has expired)
+- **Files touched:** `docs/reference/pipeline-cost.md`, `config/idhazh.json` (any ceiling whose runway has expired)
 - **Acceptance gates:** `bundle-gate`; `idhazh site-weight`; the full suite; the browser suite.
 - **Oracle:** Every number recorded carries the hardware, the date and the spread, and any figure quoted from the working documents is either reproduced or **corrected with the correction stated**. A closure that reprints an old number without re-taking it has recorded a claim about a tree nobody built.
 

@@ -1,6 +1,6 @@
 # Swap the Summarizer Model
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-18
 The swap is one line in `config/idhazh.json`:
 
 ```json
@@ -589,15 +589,24 @@ nothing there is a second measurement that could disagree with the artifact -
 and neither page spells a model name, so it cannot describe a model the run did
 not serve.
 
-What the shard page carries that the gates do not: **which items drifted**. The
-determinism gate reports a count, and a count sends the next reader to the
-artifact to diff digests by hand. The shard page names them - and above zero
-temperature that page is the whole of the drift story, since the gate is not
-there to report one.
+What the shard page carries that the gates do not: **which articles the sampler
+worded more than one way**. `wording_spread` reports a count, and a count sends
+the next reader to the artifact to diff digests by hand. The shard page names
+them. Nothing there is a defect - above zero temperature a second wording is the
+sampler working, and no gate reads it.
 
 Both steps run under `if: always()`, on purpose. A run that died half way is
 exactly the one whose counts somebody wants, and `decide` exits non-zero on an
 ESCALATE - which is precisely the verdict the reader opened the page for.
+
+**When a page is not enough, the run kept the text.** Each shard uploads
+`captures-<shard>`: every prompt sent and every reply received, one file per
+call per item per repeat, for 30 days. That is what to open when a score is bad
+and the page cannot say why - a count never can.
+[analyze-a-pipeline-artifact.md](analyze-a-pipeline-artifact.md) is the
+procedure. Note what it costs: a prompt carries the article body, this
+repository is public, and GitHub asks only for read access to download an
+artifact (owner decision, 2026-09-18).
 
 ### 1.6 Decide
 
@@ -736,7 +745,7 @@ gh cache delete <old-summary-cache-id>
 **Measure the cache, do not derive it.** The key names the model file and the
 pinned llama.cpp build, so the outgoing model may already have aged out and
 there may be nothing to delete
-([../reference/measurements.md](../reference/measurements.md#the-cache-transition-measured-2026-08-27)).
+([../reference/pipeline-cost.md](../reference/pipeline-cost.md#the-cache-transition-measured-2026-08-27)).
 
 Production derives the worker count as
 `min(ceil(items / run.shard_size), run.max_parallel)`, so a full day at
@@ -804,6 +813,6 @@ and health before normal workers resume.
 - [../concepts/config.md](../concepts/config.md) - model and runtime knobs.
 - [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - rendered bands, decoder rails and prompt controls.
 - [../architecture/summarize/throughput.md](../architecture/summarize/throughput.md) - read/write rates and prompt reuse.
-- [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md) - the fingerprint contract.
-- [../reference/measurements.md](../reference/measurements.md) - runner numbers and open measurements.
+- [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md) - what a run records about its own inputs.
+- [../reference/pipeline-cost.md](../reference/pipeline-cost.md) - runner numbers and open measurements.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrails #2, #3, #6, #9, #10 and #11.

@@ -28,7 +28,7 @@ class InferenceConfig(Model):
             "layers of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB "
             "whatever the window is. Whether that fits is decided by what the machine "
             "had free and never by what the processes held - "
-            "docs/reference/measurements.md."
+            "docs/reference/pipeline-cost.md."
         ),
     )
     n_threads: int = Field(default=4, ge=1)
@@ -108,8 +108,7 @@ class InferenceConfig(Model):
             "reading of one model's weights, and a number that suited one family "
             "applied to weights nobody has run is a setting somebody will trust. "
             "Every committed entry pins its own. Above 0.0 the seed stops being dead "
-            "code and becomes the control that decides which token is drawn, and the "
-            "determinism gate stops having a question to ask - "
+            "code and becomes the control that decides which token is drawn - "
             "docs/architecture/contracts/determinism.md."
         ),
     )

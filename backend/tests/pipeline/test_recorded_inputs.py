@@ -9,8 +9,9 @@ import pytest
 from conftest import CONFIG_DIR, read_text
 from pytest import MonkeyPatch
 
-from idhazh import config, ledger, telemetry
+from idhazh import config, ledger, run_context, telemetry
 from idhazh.contracts.run_manifest import RunManifest
+from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.fingerprint import prose_changed_alone, text_digest
 from idhazh.stages import common
@@ -123,11 +124,11 @@ def test_a_second_run_over_the_same_inputs_reports_no_prose_change(
     assert prose_changed_alone(recorded, reworded) == ("prompt_sha256",)
 
 
-def test_a_traced_work_shard_commits_a_reconciling_span_rollup(
+def test_a_traced_work_shard_writes_a_reconciling_span_rollup(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    """Row #4: tracing on, a work shard folds its own spans into the committed
-    rollup and the item row's residual reconciles against the shard wall clock.
+    """Tracing on, a work shard folds its own spans into its own segment and the
+    item row's residual reconciles against the shard wall clock.
 
     The model is a closed loopback, so the summaries fail - which is fine, the
     fold is over the spans the shard opened (the item, the tagger, the prompt
@@ -135,6 +136,11 @@ def test_a_traced_work_shard_commits_a_reconciling_span_rollup(
     time than the shard ran, so a residual on the item row is proof they did not.
     The raw trace lands under state/traces/, the committed path the sink now
     writes in place of the gitignored one.
+
+    Read at the segment rather than at the month head, because the shard is no
+    longer what writes the head: eight of them fold one month, so each writes
+    `state/segments/span-rollup/<run>-<attempt>-work-<shard>.csv` and
+    `stage_compact` merges them. The head is `tests/pipeline/test_compact.py`.
     """
     run_plan = plan()
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
@@ -149,7 +155,17 @@ def test_a_traced_work_shard_commits_a_reconciling_span_rollup(
         model_endpoint=closed_loopback_endpoint(),
     )
 
-    shard = ledger.span_rollup_path(common.STATE_ROOT, run_plan.date[:7])
+    shard = ledger.segment_path(
+        common.STATE_ROOT,
+        ledger.SegmentLedger.SPAN_ROLLUP,
+        run_id=run_plan.run_id,
+        # Asked for rather than assumed: the stage names its file from
+        # GITHUB_RUN_ATTEMPT, which is 2 on a re-run of a CI job, so a hardcoded
+        # 1 here goes red on a button nobody pressed in this repository.
+        attempt=run_context.run_attempt(),
+        job=ServerJob.WORK,
+        shard=0,
+    )
     rows = [
         SpanRollupRow.from_csv_row(raw)
         for raw in csv.DictReader(shard.read_text(encoding="utf-8").splitlines())

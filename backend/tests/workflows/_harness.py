@@ -37,6 +37,7 @@ EXPECTED_WORKFLOWS: Final = {
     "digest.yml": ("Content refresh", frozenset({"schedule", "workflow_dispatch"})),
     "drift.yml": ("Drift review", frozenset({"schedule", "workflow_dispatch"})),
     "idhazh-pipeline-tests.yaml": ("Pipeline tests", frozenset({"workflow_dispatch"})),
+    "llm-judges.yml": ("LLM-JUDGES", frozenset({"schedule", "workflow_dispatch"})),
     "measure.yml": ("Measurements", frozenset({"workflow_dispatch"})),
     "pages.yml": (
         "Pages publication",
@@ -76,6 +77,9 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("drift.yml", "baseline_days"): "^[0-9]{1,4}$",
     ("drift.yml", "recent_days"): "^[0-9]{1,4}$",
     ("idhazh-pipeline-tests.yaml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
+    # The judge's own date, shaped by the same pattern and for the same reason:
+    # it becomes the address the judged rows and the fitted row file under.
+    ("llm-judges.yml", "date"): "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$",
     ("measure.yml", "candidate_models_file"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "corpus_links"): "^[1-9][0-9]{0,4}$",
     ("measure.yml", "runtime_candidate"): DISPATCH_CHOICE,
@@ -178,7 +182,14 @@ PINNED_LLAMA_SHA256: Final = "d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b
 # asserted over: a second build downloaded anywhere is a second binary, and a
 # number measured on one of them describes the other (Guardrail #10).
 LLAMA_RUNTIME_WORKFLOWS: Final = frozenset(
-    {"digest.yml", "idhazh-pipeline-tests.yaml", "measure.yml", "probe.yml", "validate.yml"}
+    {
+        "digest.yml",
+        "idhazh-pipeline-tests.yaml",
+        "llm-judges.yml",
+        "measure.yml",
+        "probe.yml",
+        "validate.yml",
+    }
 )
 
 # The shared steps that install the build, the file that decides which build,
@@ -200,7 +211,7 @@ LLAMA_SHARED_SCRIPTS: Final = (LLAMA_RUNTIME_SCRIPT, LLAMA_INSTALL_SCRIPT)
 LLAMA_PIN_SCRIPT: Final = "llama-cpp-pin.sh"
 
 LLAMA_SCRIPT_CALLERS: Final = frozenset(
-    {"digest.yml", "idhazh-pipeline-tests.yaml", "probe.yml", "validate.yml"}
+    {"digest.yml", "idhazh-pipeline-tests.yaml", "llm-judges.yml", "probe.yml", "validate.yml"}
 )
 
 LLAMA_INLINE_RUNTIME_WORKFLOWS: Final = LLAMA_RUNTIME_WORKFLOWS - LLAMA_SCRIPT_CALLERS
@@ -250,6 +261,12 @@ WEIGHTS_CHECKS: Final = {
         '["summarize"]["sha256"]',
     ),
     ("idhazh-pipeline-tests.yaml", "cases"): (
+        "Fetch runtime and weights",
+        "Verify the weights",
+        "Start the model",
+        '["summarize"]["sha256"]',
+    ),
+    ("llm-judges.yml", "judge"): (
         "Fetch runtime and weights",
         "Verify the weights",
         "Start the model",
@@ -495,6 +512,7 @@ SERVER_STARTERS: Final[dict[tuple[str, str], tuple[tuple[str, str | None], ...]]
         ("Start the model", "backend/var/cases/baseline/config"),
         ("Restart the model with two slots", "backend/var/cases/parallel-2/config"),
     ),
+    ("llm-judges.yml", "judge"): (("Start the model", "config"),),
     ("measure.yml", "budgets"): (("Start the tokenizer", "backend/var/candidate-config"),),
     ("validate.yml", "qualify"): (("Start the candidate", "backend/var/candidate-config"),),
 }
@@ -727,26 +745,20 @@ COMMIT_STAGED_PATHS: Final = {
     "plan": [
         "state",
     ],
-    # `state/score-index` is beside `state/scores` because it is the record of
-    # what those rows are, and the writer reads it instead of them. A shard
-    # committed without its index is a month the next run cannot recognise, so
-    # it would append every measurement in it a second time.
+    # `state/span-rollup` joined on 2026-09-15 and left on 2026-09-18. A shard is
+    # the only thing that writes the fold, and until the first of those days
+    # nothing staged it, so nine days of folded spans were measured and then
+    # thrown away with the runner. `state/traces` is the raw evidence the fold is
+    # taken from and was missed the same way.
     #
-    # `state/span-rollup` joined on 2026-09-15. A shard is the only thing that
-    # writes it, and until that day nothing staged it, so nine days of folded
-    # spans were measured and then thrown away with the runner. `state/traces`
-    # is the raw evidence the fold is taken from and was missed the same way.
-    #
-    # `state/segments` replaced `state/host-fingerprint` on 2026-09-17. The
-    # machine probe used to append to the day file that ten jobs of one run all
-    # opened; it now writes its own segment and `assemble` folds them in, so this
-    # job stages the segment store and no longer stages a head it does not write.
+    # `state/segments` replaced `state/host-fingerprint` on 2026-09-17, and
+    # `state/item-health`, `state/scores`, `state/score-index`,
+    # `state/span-rollup` and `state/runtime-counters.csv` followed it on
+    # 2026-09-18. Each of those heads used to be appended to by up to eight work
+    # shards and by assemble; every writer now writes its own segment and
+    # `assemble` folds them in, so this job stages the segment store and no
+    # longer stages a head it does not write.
     "work": [
-        "state/item-health",
-        "state/scores",
-        "state/score-index",
-        "state/runtime-counters.csv",
-        "state/span-rollup",
         "state/traces",
         "state/segments",
     ],
@@ -896,10 +908,18 @@ CLOCK_STEP: Final = "Stamp the shard clock and the host"
 
 CLOCK_VARIABLES: Final = ("JOB_STARTED_AT", "CPU_MODEL", "CPU_STAT_AT_START")
 
+# The other end of `FINGERPRINT_STEP`. The probe runs before the model server so
+# the bandwidth reading gets an idle machine; the job's own clock and what the
+# weights cost to open are only knowable once the job is over. Both halves go to
+# the one segment this job owns and the fold unites them.
+JOB_CLOCK_STEP: Final = "What this job cost"
+
+JOB_CLOCK_COMMAND: Final = "python -m idhazh job-clock"
+
 # Neither of the work job's two steps may fail the shard. See the comment above
 # them in the workflow for which loss is the cheaper one. `BaseLoader` keeps
 # every scalar a string, so the value to compare is the word, not the boolean.
-WORK_LEDGER_STEPS: Final = (RECORD_STEP, COUNTERS_STEP, COMMIT_STEPS["work"])
+WORK_LEDGER_STEPS: Final = (RECORD_STEP, COUNTERS_STEP, JOB_CLOCK_STEP, COMMIT_STEPS["work"])
 
 TOLERATED: Final = "true"
 

@@ -39,11 +39,13 @@ def _spread(values: Sequence[float]) -> str:
     )
 
 
-def _determinism_violations(observations: Iterable[ItemObservation]) -> list[str]:
-    """Items whose repeats did not agree, by item.
+def _items_with_several_wordings(observations: Iterable[ItemObservation]) -> list[str]:
+    """Items whose repeats came back worded differently, by item.
 
-    The gate reports one number for the shard. A reader fixing it needs to know
-    WHICH item drifted, and that is not in the gate's own words.
+    `wording_spread` reports one number for the shard. A reader asking how far
+    the sampler travels wants to know WHICH articles moved, and that is not in
+    the diagnostic's own words. Nothing here is a defect: above zero temperature
+    a second wording is the sampler working.
     """
     digests: dict[str, set[str]] = {}
     for observation in observations:
@@ -89,7 +91,7 @@ def render_shard(shard: QualificationShard, *, worst_items: int = 5) -> str:
     """
     calls = shard.observations
     ok = [call for call in calls if call.ok]
-    drifted = _determinism_violations(calls)
+    reworded = _items_with_several_wordings(calls)
 
     lines = [
         f"## Qualification shard {shard.shard} of {shard.shards}",
@@ -105,7 +107,7 @@ def render_shard(shard: QualificationShard, *, worst_items: int = 5) -> str:
         f"| Items that answered | {_percent(len(ok), len(calls))} |",
         f"| Schema-valid summaries | {_percent(sum(c.schema_valid for c in calls), len(calls))} |",
         f"| Summaries needing repair | {sum(c.repaired for c in calls)} |",
-        f"| Items whose repeats disagreed | {len(drifted)} of {len(shard.corpus)} |",
+        f"| Items worded more than one way | {len(reworded)} of {len(shard.corpus)} |",
         f"| One item, summarized | {_spread([c.summarize_seconds for c in calls])} |",
         "",
     ]
@@ -120,11 +122,11 @@ def render_shard(shard: QualificationShard, *, worst_items: int = 5) -> str:
             f"`{code}` {count}" for code, count in sorted(failures.items())
         ), ""]
 
-    if drifted:
+    if reworded:
         lines += [
-            "**Repeats that disagreed.** The determinism gate allows none, and it "
-            "names a count rather than an item, so they are named here: "
-            + ", ".join(f"`{item}`" for item in drifted),
+            "**Articles the sampler worded more than one way.** No gate reads this - "
+            "above zero temperature a second wording is the sampler working: "
+            + ", ".join(f"`{item}`" for item in reworded),
             "",
         ]
 

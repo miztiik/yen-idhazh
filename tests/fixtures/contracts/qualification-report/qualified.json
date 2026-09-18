@@ -52,14 +52,6 @@
     },
     {
       "detail": "recorded from the merged shards",
-      "gate": "determinism",
-      "measured": "see the run log",
-      "source": "config/idhazh.json",
-      "status": "passed",
-      "threshold": "see the row"
-    },
-    {
-      "detail": "recorded from the merged shards",
       "gate": "publishable_length",
       "measured": "see the run log",
       "source": "config/idhazh.json",

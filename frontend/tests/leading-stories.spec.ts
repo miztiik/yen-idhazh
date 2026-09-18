@@ -50,6 +50,9 @@ async function renderer(name: string): Promise<(props: Record<string, unknown>) 
 
 const tokens = readFileSync(path.join(frontend, 'src', 'styles', 'tokens.css'), 'utf8');
 
+/** Two decimal places, for a failure message that names the gap it measured. */
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
 async function show(
 	page: import('@playwright/test').Page,
 	out: Rendered,
@@ -129,6 +132,44 @@ test.describe('the day gets its first screen from the block it was handed', () =
 			.first()
 			.evaluate((node) => (node.textContent ?? '').trim());
 		expect(opening.startsWith(FIVE[0].title)).toBe(true);
+	});
+
+	test('a lead has one right edge, however wide the block gets', async ({ page }) => {
+		// Below the wide breakpoint this block is a full-width part of the stream
+		// (app.css), so the measure binds and a step is visible. It used to have
+		// two: `.measure` on the title resolved `68ch` at `--text-xl` and the same
+		// class on the reason resolved it at `--text-base`, which are different
+		// widths. A long title and a long reason, so both reach the cap.
+		const draw = await renderer('LeadingStories');
+		const wordy: LeadingStory[] = [
+			{
+				item_id: 'ai-0000000001',
+				title:
+					'A grid operator orders four small modular reactors from a vendor that has not yet built one anywhere',
+				reason:
+					'The same report reached us through three of our feeds, and it is the lead story on our Energy desk today.'
+			}
+		];
+		await show(page, draw({ stories: wordy }), 1200);
+
+		const edges = await page.evaluate(() => {
+			const lead = document.querySelector('[data-lead]') as HTMLElement;
+			const round = (n: number) => Math.round(n * 100) / 100;
+			return {
+				title: round(lead.querySelector('a')!.getBoundingClientRect().right),
+				reason: round(lead.querySelector('p')!.getBoundingClientRect().right),
+				host: round((document.querySelector('#host') as HTMLElement).getBoundingClientRect().right)
+			};
+		});
+
+		expect(edges.title, 'the measure did not bind, so this proves nothing').toBeLessThan(
+			edges.host
+		);
+		expect(
+			edges.title,
+			`the title ends at ${edges.title}px and the reason at ${edges.reason}px, ` +
+				`so the lead has two right edges ${round2(edges.title - edges.reason)}px apart`
+		).toBeCloseTo(edges.reason, 1);
 	});
 
 	test('an empty block draws nothing at all, not an empty heading', async ({ page }) => {

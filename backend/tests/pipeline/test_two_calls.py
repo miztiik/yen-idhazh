@@ -137,7 +137,7 @@ class TestTheWorkStageDispatchesBothCalls:
         `-np 1` server produces - that is the point of it.
 
         The numbers come off the recorded rendered reply and the 2026-09-15 probe
-        (`docs/reference/measurements.md`); the fixtures these are written onto
+        (`docs/reference/pipeline-cost.md`); the fixtures these are written onto
         are shared by every test in this file and none of the others reads a
         count off them. The `usage` blocks are written here for the same reason
         and are what make the two cache counts mean anything - without them both

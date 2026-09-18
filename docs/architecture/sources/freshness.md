@@ -1,6 +1,6 @@
 # Freshness and Identity
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-18
 
 How often the pipeline runs, what makes an article worth today's slot, what stops the same article being published twice, and how an item keeps its name across the runs of one day. This page owns the decisions the planning step makes before any model loads.
 
@@ -107,7 +107,7 @@ skip, so the partition had to land first even though it buys nothing on its own.
 
 **The grain is a day, and neither speed nor repository size is a reason for it.**
 Both measurements went the other way and
-[../../reference/measurements.md](../../reference/measurements.md) records them:
+[../../reference/pipeline-cost.md](../../reference/pipeline-cost.md) records them:
 over a synthetic year of 176,295 rows, day files take twice the wall clock of
 month files for a 120-day window, and after packing they leave the largest
 `.git`. Three reasons survive. The digest tree is already day-partitioned and
@@ -118,7 +118,7 @@ And two runs collide on a file only when they are the same day, where a month
 file is shared by about 150 runs.
 
 The bound this costs, measured 2026-08-26 and recorded in
-[../../reference/measurements.md](../../reference/measurements.md): 2,213 rows
+[../../reference/pipeline-cost.md](../../reference/pipeline-cost.md): 2,213 rows
 at 110.7 B, so 40.4 MB a year at the structural ceiling of 1,000 rows a day.
 `load_published` peaks at 498.1 B a row while it reads, which is 182 MB at that
 ceiling - 1.1 percent of the runner's 16 GB, in the one job that loads no model.
@@ -228,7 +228,7 @@ was wrong.** This page used to call it a crash guard that a normal day was
 nowhere near, and quoted 149 as the largest day ever planned. Both statements
 were false by 2026-08-25 and stayed here: `items_planned` has been **exactly the
 ceiling on every run since**, first at 200, then 160, and now 80
-([../../reference/measurements.md](../../reference/measurements.md)). Supply
+([../../reference/pipeline-cost.md](../../reference/pipeline-cost.md)). Supply
 overtook the guard, and a guard sitting inside the working range is a cap.
 
 It is now a cap on purpose. Owner decision, 2026-09-05: the number comes down to
@@ -466,7 +466,7 @@ pipeline.** The other bounds are `run.safety_ceiling_per_run` and
 choosing: the plan job on
 2026-08-25 logged `safety ceiling reached planned=221 ceiling=200`, so what
 decided the size of that run was the crash guard and not the score
-([../../reference/measurements.md](../../reference/measurements.md)). A budget
+([../../reference/pipeline-cost.md](../../reference/pipeline-cost.md)). A budget
 truncates an ordered list at a second arbitrary point. A score floor rejects an
 item for not being worth reading, which is the question actually being asked.
 **The trigger:** a floor needs an instrument that can say what a score is worth,
@@ -497,9 +497,9 @@ and guessing it is what this refusal is about.
 
 - [discovery.md](discovery.md) - what the sources are, how they are tiered, and how the score is built.
 - [../contracts/schemas.md](../contracts/schemas.md) - the row contracts under `state/`, and the rule that decides when a ledger shards.
-- [../../reference/measurements.md](../../reference/measurements.md) - the ledger sizes, the read cost, and the ceiling measurement quoted above.
+- [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md) - the ledger sizes, the read cost, and the ceiling measurement quoted above.
 - [health.md](health.md) - the record of what every feed did, and the quarantine that reads it.
-- [../contracts/determinism.md](../contracts/determinism.md) - the fingerprint that makes "this re-run changed nothing" checkable.
+- [../contracts/determinism.md](../contracts/determinism.md) - the recorded input manifest that makes "this re-run changed nothing" checkable.
 - [../publishing/visuals.md](../publishing/visuals.md) - what a picture costs, and the picture-side version of the budget refused above.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the stages, and which of them see the whole day.
 - [../../concepts/config.md](../../concepts/config.md) - where these knobs live and the knob-versus-fact rule.

@@ -1,6 +1,6 @@
 # Published Console
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-18
 The operator's surface: which panel is on which route, the question each one
 answers, and the ruling behind its shape. `/console/` tells the owner what
 happened to the pipeline, where the digest tells a reader what happened in the
@@ -60,34 +60,30 @@ strip. It was three; it took a fourth and a fifth on 2026-09-12:
 | `/console/judgement/` | **Judgement** | What the model made of each article, and where we disagreed. |
 | `/console/voices/` | **Voices** | Who supplied the day, and how far each feed is discounted. |
 
-Pipelines answered three questions until 2026-09-14 and its description said so:
-*did the runs work, which feeds broke, and what each stage cost*. The middle
-clause went with the four feed and source panels that moved to Voices. The
-description is written in two places -
+Pipelines answers two questions: did the runs work, and what each stage cost.
+The feed and source panels belong to Voices, so Pipelines does not describe
+which feeds broke. The description is written in two places -
 [console_band.py](../../../backend/idhazh/telemetry/publish/console_band.py) for
 the published band and
 [band.ts](../../../frontend/src/lib/console/band.ts) for the fallback - and both
-moved in the same commit, because the strip a reader sees is whichever one
-answered.
+must agree, because the strip a reader sees is whichever one answered.
 
 `/console/` keeps its path. It is the one an operator types and the one every
 existing bookmark points at, so moving it to `/console/pipelines/` would have
 cost a redirect and bought a symmetry nobody asked for.
 
-**Two of the three labels changed on 2026-08-31 and no address moved with
-them.** `Model` became **Summaries**, because every panel on that route is about
-a published summary - its length, its cost, how long it took, what the checker
-doubted - and none is about the model as an artefact. `Machine` became
-**Hardware**, which is the plainest word for a processor, a memory, a clock and
-a context window; `Runner` was refused because it is a term the build system
-uses on itself rather than a term for a reader (`CLAUDE.md` section 0b), and
-`Model` was refused for the middle route because it would put that word on the
-page about the box rather than the page about the output. The route ids stay
-`pipelines` / `model` / `machine`, and every `href` is unchanged - a label is not
-an address. There are no per-route page ceilings to move: `page_weight.ceilings_bytes`
-named the three console routes until 2026-09-10 and now names only `/404` and
-`/evals/`, because a route whose weight grows every time the pipeline publishes
-cannot be held to a byte count somebody wrote down once.
+**A label is not an address.** `Summaries` is the label because every panel on
+that route is about a published summary - its length, its cost, how long it took,
+what the checker doubted - and none is about the model as an artefact.
+`Hardware` is the plainest word for a processor, a memory, a clock and a context
+window; `Runner` was refused because it is a term the build system uses on
+itself rather than a term for a reader (`CLAUDE.md` section 0b), and `Model` was
+refused for the middle route because it would put that word on the page about
+the box rather than the page about the output. The route ids stay `pipelines` /
+`model` / `machine`, and every `href` is unchanged. There are no per-route page
+ceilings to move: `page_weight.ceilings_bytes` names only `/404` and `/evals/`,
+because a route whose weight grows every time the pipeline publishes cannot be
+held to a byte count somebody wrote down once.
 [../../../frontend/tests/console-title.spec.ts](../../../frontend/tests/console-title.spec.ts)
 asserts both halves in one file. Authority: owner, 2026-08-31.
 
@@ -222,8 +218,8 @@ declines nothing, so it is stamping every article it is shown, and at the ceilin
 it declines everything, which is the same instrument dead from the other side.
 Either way every other figure on the route is fiction, including the figures a
 reader would use to decide the day was fine. The rule is two-sided because the
-failure is - it carried only the floor end until 2026-09-11, and a classifier
-that had stopped answering would have printed a reassuring tab. The two bounds
+failure is two-sided: a floor-only rule would let a classifier that had stopped
+answering print a reassuring tab. The two bounds
 are arguments and not literals (Guardrail #6); row #12 of the placement plan moves
 them to `console.decline_rate_floor` and `console.decline_rate_ceiling`. The
 fraction itself is null until the classifier lands, so the rule fires on nothing
@@ -276,7 +272,7 @@ and publishes it as `console/band.json`; the console fetches it once in
 and draws it once in
 [../../../frontend/src/routes/console/+layout.svelte](../../../frontend/src/routes/console/+layout.svelte),
 above all five route panels, so they cannot disagree about which route is
-worst. It was derived in the browser build until 2026-09-09; see
+worst. A browser-build derivation was rejected; see
 [console-payloads.md](console-payloads.md).
 
 **The band was 340px on a desktop and 586px on a phone - 69 percent of an 844px
@@ -298,10 +294,10 @@ form.** `15 feeds resting` on a label becomes `15 feeds are resting, so nothing
 they carry reaches the digest. Each is asked again after 5 runs.` in the band.
 The retry count comes from `availability_strikes_before_rest` and never from a
 literal.
-The two said the same words until 2026-08-31, 337px apart on a phone. Nothing in
-the sentence invents a task: quarantine is self-terminating, so what it asks is
-that the operator knows the digest is short of sources until the retry
-([../sources/health.md](../sources/health.md)).
+Repeating the strip's short form in the band was rejected: it would put the
+same words 337px apart on a phone. Nothing in the sentence invents a task:
+quarantine is self-terminating, so what it asks is that the operator knows the
+digest is short of sources until the retry ([../sources/health.md](../sources/health.md)).
 
 **A resting feed no longer outranks a failed run on a tie.** Both rank BROKEN
 and the sort is stable, so listing the feeds first handed every tie to the state
@@ -566,7 +562,7 @@ weight pages the kernel can evict. So the panel says which shard ran nearest the
 track, and nothing more. What decides whether a bigger model fits is free
 memory, and the run of 2026-09-09 is the first to measure it: `MemAvailable`
 bottomed out at 6.84 GiB
-([MemAvailable went up by 1.21 GiB](../../reference/measurements.md#memavailable-went-up-by-121-gib-and-the-runner-is-why)).
+([MemAvailable went up by 1.21 GiB](../../reference/benchmarks/a-run-at-the-doubled-window-and-cap.md#memavailable-went-up-by-121-gib-and-the-runner-is-why)).
 
 **No tint and no band.** Nobody has agreed how near 16 GB is too near, and a
 colour would publish a threshold that does not exist. Authority: Susan.
@@ -606,14 +602,13 @@ Each day is a track that grows with the room the strip has, floored at 16px with
 a 4px gap, and a label may never widen a track - two days apart must measure
 twice one day apart, whatever the date under it says.
 
-**A column with no square is a day nothing ran, and it is drawn.** Until
-2026-09-01 the strip drew one column per day a manifest exists for, so at the
-default thirty-day window over the committed ledger it drew eleven columns:
-measured 2026-09-01 at 1440 on node 24.12.0,
-**464px of a 1,326px frame - 35.0 percent**, with the other 862px empty on the
-right. That reads as a chart that failed to load. The window's own calendar
-draws thirty columns at 1,290px, **97.3 percent**, and the gaps in it are the
-fact this panel is the only place to see: a day the schedule dropped.
+**A column with no square is a day nothing ran, and it is drawn.** A strip with
+one column per manifest is rejected: at the default thirty-day window over the
+committed ledger it drew eleven columns, measured 2026-09-01 at 1440 on node
+24.12.0, **464px of a 1,326px frame - 35.0 percent**, with the other 862px empty
+on the right. That reads as a chart that failed to load. The window's own
+calendar draws thirty columns at 1,290px, **97.3 percent**, and the gaps in it
+are the fact this panel is the only place to see: a day the schedule dropped.
 
 **`CELL_MAX` was not what left the margin, and the plan row that ordered this
 said it was.** The ceiling is 34px and the frame offers 35.4px a column at thirty
@@ -642,10 +637,10 @@ printed on the first label that changes it and not again. The arithmetic lives i
 so it can be tested without a browser. Eleven narrow columns had room for four
 labels; thirty have room for the cadence the axis was written for.
 
-**A day is read through the shared readout strip, not through a `title`.** The
-only way to read a square was a native tooltip until 2026-09-01, and a native
-tooltip needs a hover - so on a phone the run's verdict did not exist - takes no
-styling, and prints one square where a reader wants the day. The strip below the
+**A day is read through the shared readout strip, not through a `title`.** A
+native tooltip is rejected: it needs a hover, so on a phone the run's verdict
+does not exist; it takes no styling; and it prints one square where a reader
+wants the day. The strip below the
 plot prints every run of the hovered day, each with the swatch it is drawn in
 and the word for what it did, and the arrow keys step through the days. The
 `title` and the `aria-label` stay on each square, because nothing the readout
@@ -658,13 +653,14 @@ one fact drawn twice is how two of them drift. The rule the key's red entry
 carried, `failed, or under N% published`, is a rule and not a legend, so it is
 in the panel's note where the rest of the reading instructions are.
 
-**A strip that cannot fill its frame is centred in it.** Until 2026-09-01 it
-started at the left edge and the spare room piled up on the right - and the
-right of a time axis whose last column is today is where a reader looks for the
-days that just happened, so the room read as a run that had stopped. That was
-the right answer while the strip drew only the days that carried a run, because
-then the right-hand room really was "days not yet published"; with the window's
-calendar drawn, the last column is today and there is nothing to the right of it.
+**A strip that cannot fill its frame is centred in it.** Left alignment is
+rejected when the window calendar is drawn: the spare room piles up on the right,
+and the right of a time axis whose last column is today is where a reader looks
+for the days that just happened, so the room reads as a run that has stopped.
+Left alignment is only right when the strip draws only the days that carried a
+run, because then the right-hand room really is "days not yet published"; with
+the window's calendar drawn, the last column is today and there is nothing to the
+right of it.
 `centreOffset` returns zero once the strip overflows, because a scrolling strip
 has no spare room to divide and an offset would push its first column out of
 reach. At the default window the strip fills, so the rule is only visible at the
@@ -709,9 +705,9 @@ Three colours, and the boundaries are read from config rather than chosen by the
 **The red threshold is the same knob CI uses to decide whether a run opens an issue.** A red square and an open issue can never disagree, because there is one number and both read it.
 
 **The squares are painted from the fill ramp, not the confidence ramp.** A 16px
-solid is not type, and until 2026-08-30 it was painted in colours that are:
-measured against the panel's surface, `--band-medium` is 5.43:1 and `--band-low`
-6.12:1, which is text weight, and on screen they read as olive and brick. The
+solid is not type. Measured against the panel's surface, `--band-medium` is
+5.43:1 and `--band-low` 6.12:1, which is text weight, and on screen they read as
+olive and brick. The
 band tokens stay text colours because four other surfaces read them as type;
 `--fill-high`, `--fill-medium` and `--fill-low` are the parallel set, and
 [../../concepts/design-system.md](../../concepts/design-system.md) owns the band
@@ -721,16 +717,38 @@ a fill value has to land in.
 
 Beneath the strip, the section leads with its own denominator: **how many feeds did not fail, out of how many the pipeline read, over how many runs** - 152 of 179 across 44 runs, measured 2026-09-03. Four broken feeds out of eight is a collapse and four out of two hundred is a Tuesday, and until this landed the page drew both identically. The clean feeds are NAMED behind a `<details>`, alphabetically, with no bars and no order, and the summary says why there is no order: a feed is read once a run, so every clean feed has the same record. Under `console.min_attempts_for_rate` runs the sentence prints the same counts and says the record is too shallow to read as reliability - two runs deep, "did not fail" means "did not fail twice". The rule is `reliability` in `frontend/src/lib/feed-health.ts`, reading the same `failing` the quarantine reads ([../sources/health.md](../sources/health.md)).
 
-**The sentence names its span, since 2026-09-09, because it never had one.** It said feeds "have never failed", and the read behind it is `feedResults(shardMonths(widest))` - the newest five month shards, which is what the widest window preset can reach and no further. "Never" claimed every run there has been over a read that opens a bounded set of files, so the page was making a claim only a growing read could support (`CLAUDE.md` Guardrail #12, owner decision 2026-09-08). It now says the feeds "did not fail a read in these 44 runs", with the count from the record rather than a literal. The windowed sentence is also the more useful one: a feed that broke once in August and has answered every run since is permanently disqualified by "never failed", and the question on the desk is whether anything is broken now. `tests/console-window-claims.spec.ts` holds it - it reads the three built console documents, strips scripts and every attribute but `aria-label`, and refuses a claim in the present perfect.
+**The sentence names its span, because a bounded read cannot prove "never".**
+The read behind it is `feedResults(shardMonths(widest))` - the newest five month
+shards, which is what the widest window preset can reach and no further.
+"Never" claims every run there has been over a read that opens a bounded set of
+files, so it is a claim only a growing read could support (`CLAUDE.md` Guardrail
+#12, owner decision 2026-09-08). The sentence says the feeds "did not fail a
+read in these 44 runs", with the count from the record rather than a literal.
+The windowed sentence is also the more useful one: a feed that broke once in
+August and has answered every run since is permanently disqualified by "never
+failed", and the question on the desk is whether anything is broken now.
+`tests/console-window-claims.spec.ts` holds it - it reads the three built console
+documents, strips scripts and every attribute but `aria-label`, and refuses a
+claim in the present perfect.
 
 **What that guard does not catch, said out loud.** It bans a grammar, not a word: "has never failed" and "has ever reached" place a claim in an unbounded past, while "runs are never pooled" and "a counterfactual, never a bill" state rules and read over no span at all. Measured on the canary build 2026-09-09, the three console documents carry **42 remaining uses of `never` or `ever`, and every one is a rule, a domain term or a statement about named items** - 24 of them are the cell `Never checked:`, which is one of the checker's five reason names. A word list would have fired on all 42. A bare past tense - "the feeds that never failed" - makes the same claim as the perfect and is not matched, because the only pattern that would catch it is a list of verbs, and that list fires on "the part the machine never read" two sections up the same page. Those strings are held by review and by the assertions in `console.spec.ts`.
 
-**A refusal is not an ask, and until 2026-09-03 it was.** A row that preserves the strike streak - a rest, or a robots answer - never asked the feed whether it still works, so it can make the feed neither clean nor broken. The old rule dropped only the rests, so a source the pipeline has been refused by on every single run sat in the clean count and the page reported it as reliable delivery. Measured over the committed ledger that day, **5 feeds of 184** were in that state and every one had given the digest nothing: `anthropic-engineering`, `anthropic-research`, `axios-business`, `cbc-world`, `cnbc-top`. They are now a third count with their own disclosure, and the predicate that decides it is `preserves` - the same one the strike rule runs on, so an ask means one thing in both places. The section's own explanatory paragraph already said "a feed nobody has asked is in neither count"; the code was what disagreed with it.
+**A refusal is not an ask.** A row that preserves the strike streak - a rest,
+or a robots answer - never asked the feed whether it still works, so it can make
+the feed neither clean nor broken. Dropping only rests is rejected: a source the
+pipeline is refused by on every single run would sit in the clean count and the
+page would report it as reliable delivery. Measured 2026-09-03 over the committed
+ledger, **5 feeds of 184** were in that state and every one had given the digest
+nothing: `anthropic-engineering`, `anthropic-research`, `axios-business`,
+`cbc-world`, `cnbc-top`. They are a third count with their own disclosure, and
+the predicate that decides it is `preserves` - the same one the strike rule runs
+on, so an ask means one thing in both places. The section's own explanatory
+paragraph says "a feed nobody has asked is in neither count".
 
 ## Four facts about every source we may ask
 
-**On `/console/voices/` since 2026-09-14**, with the failure list, the clean-read
-count and the truncation-cap cost. Its heading on the page is `Sources we may
+**On `/console/voices/`**, with the failure list, the clean-read count and the
+truncation-cap cost. Its heading on the page is `Sources we may
 ask, and what they yield`; "four facts" is what the panel does rather than what
 it is called, and the phrase is load-bearing here because it is the argument
 against combining them into a score.
@@ -796,11 +814,11 @@ Stage timing medians read from `state/item-health/<YYYY>/<MM>/<DD>.csv`, not fro
 can answer "is it getting slower" even when the scorer did not run. The score
 ledger still owns faithfulness and scorer time for the scored subset.
 
-**The timing chart draws three stages, and `score_ms` is not one of them.** It
-was a fourth line until 2026-08-31. The chart is titled `Time per item, by
+**The timing chart draws three stages, and `score_ms` is not one of them.** A
+fourth `score_ms` line is rejected. The chart is titled `Time per item, by
 stage`, so every line on it is something an item waits on - and the scorer reads
 a summary the model has already finished, so nothing waits on it. A fourth line
-there read as a fourth constraint on the run. It is on the Summaries route now,
+there would read as a fourth constraint on the run. It is on the Summaries route now,
 under `What one summary cost`, beside the cost of writing the summary it checks,
 and it prints its middle and its slowest one in twenty over the summaries it
 timed. An empty cell is one fewer item timed, never a zero; a zero is the value
@@ -896,12 +914,12 @@ a client redraw that can disagree about the span. A window that published
 nothing prints the count and no strip at all, because thirty bars of zero is an
 empty plot area and a card is still a card without one.
 
-**`Articles published` sits beside it, and it is the denominator.** Until
-2026-09-01 the strip printed how many visuals were drawn and nothing said what
-they were drawn for, so a reader could not tell a busy day from a
-well-illustrated one - 185 visuals is most of a quiet fortnight and a rounding
-error on one heavy day. The two cards read left to right as the fraction they
-are, articles first, and each carries its own total for the window on screen.
+**`Articles published` sits beside it, and it is the denominator.** A strip that
+prints how many visuals were drawn without saying what they were drawn for is
+rejected: a reader could not tell a busy day from a well-illustrated one - 185
+visuals is most of a quiet fortnight and a rounding error on one heavy day. The
+two cards read left to right as the fraction they are, articles first, and each
+carries its own total for the window on screen.
 
 **One function draws both strips, and each is drawn against its own busiest
 day.** `publishedSkyline` takes the measure as an argument, so the two cannot
@@ -918,16 +936,11 @@ and the smaller card would stop saying which of its own days were heavy.
 slopes that means nothing, and one axis flattens the smaller series to nothing.
 Authority: Jony, plan row #10.
 
-The card was labelled `Charts published` until 2026-09-01. It counts visuals in
-state `rendered`, the section above it is `Visuals drawn for articles` and the
-table column is `Visuals published`, so the card was the last reader-facing
-string on the page still calling a drawn thing a chart. Its label is also a test
-selector, and the selector moved in the same commit.
-
-The page intro carried two counts of rows on record until 2026-08-30 - scored
-items, and item-health rows. Both only ever grow, so neither could indicate a
-state, and nothing on the page or off it acted on either. They are gone, and
-their server-side computation went with them in the same commit.
+The card is labelled `Visuals published`. It counts visuals in state
+`rendered`, the section above it is `Visuals drawn for articles` and the table
+column is `Visuals published`, so calling the card `Charts published` would name
+a drawn thing with the wrong word. Its label is also a test selector, so the
+selector must move with the reader-facing string.
 
 **The prerendered seed carries that same window, and no more.** The server used
 to concatenate every committed month and inline all of it, so the console
@@ -975,7 +988,7 @@ however many the repository has accumulated.
 
 The Summaries route draws the five reasons a summary failed to reach the top
 band, one column a day, over the window the page shares. The measure cards above
-it say how often the checker stopped; this says what was wrong.
+it say how often the checker stopped; this says which check failed.
 
 **It reads the committed day payloads, not `state/scores/`.** `band_reason` is
 decided by `verdict` and written onto the published item by
@@ -1120,10 +1133,9 @@ worth more than the space. Recorded here rather than waved through, per
 **The three panels cost 5,930 gzipped bytes on `/console/model/`**, measured
 2026-09-06 over five builds against `origin/main`'s own source on the same tree.
 The other two console routes moved 2 B and 4 B, inside the build noise floor, so
-the change reaches one route. Every ceiling this section used to derive was
-superseded on 2026-09-10, when all three were re-aimed on one convention at
-`gzip -5` and `/console/` fell by a factor of 6.4; the live numbers are in
-[../../reference/measurements-site.md](../../reference/measurements-site.md#the-page-guardrails-and-what-each-route-weighs-2026-09-10)
+the change reaches one route. The live ceilings use one convention, `gzip -5`,
+and the live numbers are in
+[../../reference/site-weight.md](../../reference/site-weight.md#the-page-guardrails-and-what-each-route-weighs-2026-09-10)
 and what to do when one fires is in
 [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md).
 
@@ -1177,9 +1189,9 @@ ones it did not - and the share beside them as whole percent. Four more figures
 sit under those three: the middle prompt, the middle summary, the middle item's
 own share, and how many items were read whole with nothing held over.
 
-**It drew the split as a two-segment track until 2026-09-17, and the track is
-gone.** One flat bar on no time axis, under a note telling the reader not to
-read its direction: a figure a panel disowns is a figure to remove. **What the
+**A two-segment track is refused, and the track is gone.** One flat bar on no
+time axis, under a note telling the reader not to read its direction: a figure a
+panel disowns is a figure to remove. **What the
 reader loses, named:** the picture of the split, which is now three printed
 counts instead. What the split was ever worth was the counts it was built from,
 and the track carried no fact they do not. Susan, 2026-09-17.
@@ -1274,9 +1286,9 @@ carry `data-extraction-question="is it working"`.
 
 The **break half** is one chart, `Whether the yield is falling`, carrying
 `data-extraction-question="what is broken"`. Two of the cards' own lines tell the
-operator to read the direction rather than the level, and until 2026-09-17 the
-panel drew no direction at all. It plots one point a day: articles the reading
-found enough figures in, against published articles carrying a chart. That pair
+operator to read the direction rather than the level, so the panel plots one
+point a day: articles the reading found enough figures in, against published
+articles carrying a chart. That pair
 is the discrimination the panel exists for - the planner stopping and the
 extractor stopping look identical in the published chart count alone, and they
 have different fixes ([../../concepts/evaluation.md](../../concepts/evaluation.md)).
@@ -1310,9 +1322,9 @@ in, and it totals the whole open window rather than one day - a single day's fou
 numbers are already legible in the table under it, and "where do items go" is a
 question about the window.
 
-**It was a funnel until 2026-08-30, and a funnel could not answer the question
-it was on the page for.** A funnel draws a monotonic sequence as a taper, so it
-says how much is left at each step and nothing about where the rest went. The
+**A funnel is rejected because it cannot answer the question this page asks.** A
+funnel draws a monotonic sequence as a taper, so it says how much is left at
+each step and nothing about where the rest went. The
 three drops here have three different causes and three different fixes: an item
 can be answered without the model being asked at all, the model can be asked and
 draw nothing, and a drafted chart can fail the checks that run after it. A taper
@@ -1401,11 +1413,10 @@ Authority: the shape, Jony, 2026-08-30; the chunk, Carmack, 2026-08-30.
 `Visuals drawn for articles` is the only console section carrying a written
 decision rule in its own prose: over a stated span chart drawing is retired if the
 median day spends more than a set number of minutes per published visual, or
-puts a visual on fewer than a set share of the items it published. Until
-2026-08-30 the section printed that rule in a paragraph and then showed none of
-the three numbers in it. Seven columns of daily counts sat where the answer
-should have been, and the operator was asked to take a fourteen-day median of a
-ratio, twice, against two limits that were nowhere on the screen.
+puts a visual on fewer than a set share of the items it published. A paragraph
+with the rule but none of the three numbers is rejected. Seven columns of daily
+counts cannot ask the operator to take a fourteen-day median of a ratio, twice,
+against two limits that are nowhere on the screen.
 
 The section leads with the two figures the rule names. Each is a `TargetBar` -
 the track at the threshold's own scale, the fill at the window median, a rule
@@ -1424,9 +1435,9 @@ look wrong.
 
 **All three numbers are config.** `console.chart_rule_days`,
 `console.chart_minutes_target` and `console.chart_coverage_pct` live in
-`config/appearance.json`, bounded by `ConsoleConfig`. They were constants in a
-TypeScript module until 2026-08-30, which made the one section that states a
-threshold the one section an operator could not move a threshold on (Guardrail #6).
+`config/appearance.json`, bounded by `ConsoleConfig`. Hard-coded TypeScript constants are rejected because they would make the one
+section that states a threshold the one section an operator could not move a
+threshold on (Guardrail #6).
 The contract also refuses a preset list whose widest span cannot reach
 `chart_rule_days`: a rule no preset can show would print the
 widen-the-window notice at every setting of the control, which reads as a broken
@@ -1480,11 +1491,9 @@ element, Jony, 2026-08-30.
 ### Both daily tables follow the window, and shut they are not cards
 
 The Pipelines table and the Summaries table are the two `<details>` on the
-console that hold a row per day. Until 2026-08-31 neither followed the control
-above it: the cards on Summaries said 7 days while the rows under them held
-every day either ledger ever wrote, and on Pipelines the rule's own medians were
-taken over the window while the table below them was not. Two answers to one
-question on one page is exactly what a shared control was built to remove.
+console that hold a row per day. Both follow the control above them, because two
+answers to one question on one page is exactly what a shared control was built
+to remove.
 
 Both are windowed now, and both take one name, byte-identical at the same
 preset: **Show these figures day by day, over these N days.** `Show the daily
@@ -1570,9 +1579,9 @@ starts there and says the strong thing; the narrower rule is drawn with its own
 dates, so the move is visible rather than averaged away.
 
 **Every margin on this plot is measured, and the label column moves rather than
-the plot.** Three constants sized it until 2026-09-01: a 168px gutter for the
-source names, a 34px row pitch, and a 130px threshold past which a cap label
-flips to read right to left. Measured 2026-09-01 on the built console, the
+the plot.** Fixed margins are rejected: a 168px gutter for the source names, a
+34px row pitch, and a 130px threshold past which a cap label flips to read right
+to left do not fit every frame. Measured 2026-09-01 on the built console, the
 gutter was 12 percent of a 1,342px frame at 1440 and **52 percent of a 324px one
 at 390** - so on a phone the names took more of the chart than the plot did, and
 the six tracks drew inside 91px of it.
@@ -1699,10 +1708,9 @@ mismatch renames a persisted field.
 
 ## The site's size is a rate, and the level beside it says which tree
 
-The console asks one size question - is the site going to outgrow the 1 GB Pages
-cap - and until 2026-08-30 it answered with two levels and no date. A waterfall
-drew megabytes added per day, and a table drew the running total. Neither says
-when.
+The console asks one size question: is the site going to outgrow the 1 GB Pages
+cap. Two levels with no date are rejected: a waterfall of megabytes added per
+day and a table of the running total do not say when.
 
 **The waterfall drew the item ceiling and called it site growth.** Measured
 2026-08-30 over the ten committed manifests, a day's gain ran 0.04 MB to 2.82 MB
@@ -1724,13 +1732,13 @@ that is what a chart owes anybody who cannot see it, and it is also the only way
 the flags can be checked: `frontend/tests/console-site-size.spec.ts` recomputes
 the band from exactly those numbers and fails if the marks disagree.
 
-**The panel says what it is for, and until 2026-09-01 it never had.** Its note
-described its own axes - bytes gained, over articles published - and a reader
-met a chart of four-digit numbers with nothing to hold them against. It is not
-a chart of data growth across days; it is the marginal cost of one more article,
-and it is on the page to answer how long the project can keep publishing under
-the 1 GB Pages cap. The note now opens with that question and the panel closes
-with the answer.
+**The panel says what it is for.** Its note must do more than describe its own
+axes - bytes gained, over articles published - because a reader would meet a
+chart of four-digit numbers with nothing to hold them against. It is not a chart
+of data growth across days; it is the marginal cost of one more article, and it
+is on the page to answer how long the project can keep publishing under the 1 GB
+Pages cap. The note opens with that question and the panel closes with the
+answer.
 
 **The horizon is two measured rates over one set of days.** `publishingHorizon`
 divides the headroom by the window's median cost, which gives articles, and then
@@ -1752,11 +1760,10 @@ the room is the most we have and never the least - the two trees were 14.63
 times apart on 2026-08-30 and the multiple is not stable. A figure that printed
 a date without that clause would be optimistic by a multiple nobody can see.
 
-**The chart measures its container.** It was handed a literal `760` until
-2026-09-01 while every other chart on the page read `console.chart_width`; the
-drawn width already tracked, because `Chart.svelte` owns it from mount onward
-through a `ResizeObserver`, so what changed is that the seed is no longer a
-number somebody typed. Measured 2026-09-01 at 1440, 768 and 390, the SVG is its
+**The chart measures its container.** A literal `760` seed is rejected because
+every other chart on the page reads `console.chart_width`; the drawn width
+already tracks, because `Chart.svelte` owns it from mount onward through a
+`ResizeObserver`. Measured 2026-09-01 at 1440, 768 and 390, the SVG is its
 host's width to within a pixel at all three.
 
 **The window bounds what is drawn and never what is differenced.** A day's cost
@@ -1767,12 +1774,11 @@ time it moved.
 
 **The `Site size` fact carries the level, a track against the cap, the window's
 delta and a runway.** The runway is headroom over the per-article cost, and what
-it counts is **articles**: `(cap - bytes) / bytesPerItem`. It was published days
-until 2026-08-31, divided by `run.safety_ceiling_per_run` articles a day - and
-that knob bounds one **run**, not one day. Up to five runs a day is normal, so
+it counts is **articles**: `(cap - bytes) / bytesPerItem`. Published days are rejected because they divide by `run.safety_ceiling_per_run`
+articles a day, and that knob bounds one **run**, not one day. Up to five runs a day is normal, so
 the band priced a day at 160 articles while the days it measured ran a median of
 334, and the printed runway was 2.09 times too long
-([../../reference/measurements-site.md](../../reference/measurements-site.md#days-to-the-1-gb-pages-ceiling)).
+([../../reference/site-weight.md](../../reference/site-weight.md#days-to-the-1-gb-pages-ceiling)).
 Articles need no daily rate at all, which is why the fix removed the assumption
 instead of correcting it. Where no published day grew the tree over an article
 it published there is no rate, so the fact says there is no runway instead of
@@ -1820,21 +1826,20 @@ is what the per-article chart now answers directly.
 
 ### Design rationale
 
-**`/console/judgement/` failed the "does it use the screen it is on"
-sufficiency check until 2026-09-17, and shipped anyway for five days.** It was a
-heading, two sentences and one bordered panel; at 1440px most of the frame was
-empty. The other three checks passed and were inherited rather than invented -
-figure separated from ground through the shared `.console-panel` border, surface
-and shadow; the panel was the only block in the route's own content, so there
-was one thing the eye landed on; and the route took the page title, the five-tab
-strip and the standing band from the layout before it drew anything of its own.
+**`/console/judgement/` must use the screen it is on.** A heading, two
+sentences and one bordered panel leave most of the frame empty at 1440px. The
+other three sufficiency checks were inherited rather than invented - figure
+separated from ground through the shared `.console-panel` border, surface and
+shadow; the panel was the only block in the route's own content, so there was one
+thing the eye landed on; and the route took the page title, the five-tab strip
+and the standing band from the layout before it drew anything of its own.
 
 **`Stories the day merged` is what cleared it.** The route now draws a chart the
 full width of the console frame with a window control above it, so the screen
 carries a figure rather than a promise.
 
-`/console/voices/` was the other half of this entry until 2026-09-14. It passes
-the check too: row #13 moved four panels onto it, two of which draw a chart.
+`/console/voices/` passes the check too: row #13 moved four panels onto it, two
+of which draw a chart.
 
 **The check could not have been passed before a figure existed.** The only way
 to fill the frame of a page with no data is to put something on it that is not a
@@ -1879,9 +1884,9 @@ alternative, and it was refused: the window is what makes "which source is the
 cap costing us most, lately" answerable at all, and removing it to fit the route
 would have cost the reader a question to protect a sentence.
 
-**No page ceiling and no payload ceiling were added for this route.** The row's
-acceptance gate asked for a `payload_ceilings_bytes` entry and the clause was
-corrected on 2026-09-14, because there is no instrument that can hold it.
+**No page ceiling and no payload ceiling were added for this route.** A
+`payload_ceilings_bytes` entry is rejected because there is no instrument that
+can hold it.
 `payload_ceilings_bytes` keys resolve against the build directory and
 `frontend/public/source-health.json` never reaches it - `copy-visuals.mjs` stages
 seven named console directories and that file is in none of them - so the key
@@ -1956,12 +1961,12 @@ heading.
 | Clamping a zero stage timing into the bottom decade | It draws a plunge to the floor of the plot, which says the stage got a thousand times faster on a day it was merely quick. | Jony |
 | A caret beside the line for a zero stage timing | A second shape for a fact the open dot already carries, and one more thing to learn before the chart can be read. | Jony |
 | A dashed bridge across a stage-timing gap | A slope between two days that share no measurement is a number nobody took. | Jony |
-| A fifth sub-millisecond decade on the stage-timing axis | It moves every mark on a 30-day chart to hold ten rows from one day. The axis is not the thing that was wrong. | Jony |
+| A fifth sub-millisecond decade on the stage-timing axis | It moves every mark on a 30-day chart to hold ten rows from one day. The axis is not the defect. | Jony |
 | A linear/log toggle on the stage-timing axis | A toggle is an admission that we could not decide which axis is correct. | Jony |
 | A density-binned scatter, or reducing the mark opacity | Both keep the two-axis reading the band split removes, and the second makes a paler blob. | Jony |
 | `uplot` on the compression scatter | It drew a second, smaller chart beneath a complete SVG, and the pan and zoom it was bought for live in the viewport control, not in the plot. | Jony, Guardrail #8 |
 | Fading the per-point band lines instead of collapsing them | The wash is a node count, not an alpha value. One fact drawn 1166 times is still drawn 1166 times at any opacity, and the fact has one value per configured band. | Jony, Carmack |
-| A drawing library for the console charts - `echarts`, `@observablehq/plot`, `chart.js`, a component library | 336 KB gz on canvas, 128 KB gz and a DOM shim to prerender, 67 KB gz on canvas, and a component set is worst of all where every chart is bespoke. All of them own the element and the theme; the console needed the arithmetic. This was reversed for the console on 2026-08-29 on three named conditions, and it still binds a reader route. | Jony, Carmack |
+| A drawing library for the console charts - `echarts`, `@observablehq/plot`, `chart.js`, a component library | 336 KB gz on canvas, 128 KB gz and a DOM shim to prerender, 67 KB gz on canvas, and a component set is worst of all where every chart is bespoke. All of them own the element and the theme; the console needed the arithmetic. The console exception has three named conditions, and it still binds a reader route. | Jony, Carmack |
 | `d3-scale` from a CDN | The HTTP cache is partitioned per site, so the shared-cache argument is dead, and the repo's `script-src` allows `self` only. | Carmack |
 | Fixing the units by hand instead of taking the dependency | `.nice` and `ticks` are exactly the part hand-rolling gets wrong, and an axis labelled 0, 37, 74 is an axis nobody reads a value off. | Jony |
 | A `console.chart_width` default per chart shape | One knob names the width the reading column leaves; a chart sharing a row divides it. Four knobs would be four ways to disagree about one column. | Jony |
@@ -1993,4 +1998,4 @@ heading.
 - [telemetry-series.md](telemetry-series.md) - the published projection and the grain of every figure.
 - [../sources/health.md](../sources/health.md) - the feed ledger these panels render, and the quarantine rule they mirror.
 - [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md) - the page ceilings and what to do when one fires.
-- [../../reference/measurements.md](../../reference/measurements.md) - the instrument log behind every number here.
+- [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md) - the instrument log behind every number here.

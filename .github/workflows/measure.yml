@@ -1005,7 +1005,7 @@ jobs:
     # the whole result. Nothing else in this file measures that.
     #
     # One job, never a matrix. The ratio is only meaningful self-paired -
-    # prefill spans 3.4x across runner hosts (docs/reference/measurements.md),
+    # prefill spans 3.4x across runner hosts (docs/reference/pipeline-cost.md),
     # so two matrix members would compare hardware and call it batching. Three
     # repeats run as three processes inside this one job so a level that dies
     # still leaves the earlier repeats on disk.
@@ -1017,7 +1017,7 @@ jobs:
       MODEL_FILE: ${{ needs.models.outputs.summarize_file }}
       # Fixed here rather than dispatchable, so a later reading stays
       # comparable to the recorded one. The lengths round the medians of the
-      # 293 requests behind docs/reference/measurements.md's one-slot
+      # 293 requests behind docs/reference/pipeline-cost.md's one-slot
       # observation, 2026-08-24: prompt p50 877 - the tokens prefill evaluates
       # once the shared system prompt is cached, not the whole context - and
       # generated p50 279. Parallel level 4 is a read the bench gives away

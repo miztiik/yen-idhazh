@@ -343,7 +343,7 @@ export function siteCost(
  * a day. So a day was priced at 160 articles while the ten committed published
  * days ran 4 to 731, median 334 - and the printed runway was 1,950 days where
  * the measured median rate gives 934, too long by 2.09 times (measured
- * 2026-08-31, `docs/reference/measurements.md`).
+ * 2026-08-31, `docs/reference/pipeline-cost.md`).
  *
  * Headroom over the per-article cost needs no daily rate at all, and articles
  * are the unit the pipeline actually spends. A reader who wants a date can

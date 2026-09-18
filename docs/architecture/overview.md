@@ -139,7 +139,7 @@ ever run. What passed, what failed and what is still open are in
 [`../concepts/evaluation.md`](../concepts/evaluation.md).
 
 The full ledger, including what is still unmeasured, is
-[`../reference/measurements.md`](../reference/measurements.md).
+[`../reference/pipeline-cost.md`](../reference/pipeline-cost.md).
 
 ## Two features the measurements ruled out
 

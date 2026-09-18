@@ -38,7 +38,7 @@ three different ceilings - 200 until 2026-08-26, 160 until 2026-09-07, 80 since
 7.4 ms - and as slow as 68.6 ms while other jobs shared the box, which is the
 number to remember before reading any wall clock here as a property of the file.
 See
-`docs/reference/measurements.md`.
+`docs/reference/pipeline-cost.md`.
 
 `state/feed-health/<YYYY>/<MM>/<DD>.csv` answers "is this source still
 working?" One row per feed per run, read through `HEALTH_WINDOW_DAYS`. It files
@@ -110,6 +110,7 @@ from typing import Final, NamedTuple, Protocol
 from idhazh import day_partition, month_partition
 from idhazh.contracts.base import RUN_ID_PATTERN
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
+from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
@@ -121,6 +122,7 @@ from idhazh.contracts.item_health import (
     ItemOutcome,
 )
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.runtime_counters import RuntimeCountersRow, ServerJob
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.span_rollup import SpanRollupRow
@@ -139,6 +141,14 @@ PUBLISHED_DIRNAME: Final = "published"
 VISUAL_PRUNES_DIRNAME: Final = "visual-prunes"
 COUNTERFACTUAL_SCORES_DIRNAME: Final = "counterfactual-scores"
 
+#: The eval ledger and the record of what is in it. Both are spelled here rather
+#: than in `evals.writer`, which is where they were until 2026-09-18: the head
+#: table below has to name the file a segment drains into, and `evals.writer`
+#: imports this module. One definition, and the direction of the import decides
+#: which end it lives at. `evals.writer` still exports its own names for them.
+SCORES_DIRNAME: Final = "scores"
+SCORE_INDEX_DIRNAME: Final = "score-index"
+
 #: The one nested store under `state/`. Everything the adaptive merge line writes
 #: hangs off this word - the scored pairs, the fitted lines, the hand-marked
 #: holdout and the score record - so a reader of the commit step sees the whole
@@ -155,7 +165,13 @@ SCORE_DISTRIBUTION_FILENAME: Final = "score-distribution.json"
 #: archive is written only on the rare day a stamp changed - `git add` on a path
 #: the checkout does not hold aborts the whole step.
 SCORE_ARCHIVE_DIRNAME: Final = "archive"
-RUNTIME_COUNTERS_FILENAME: Final = "runtime-counters.csv"
+
+#: The one head that is a flat file and still takes segments. The word is spelled
+#: once and the filename is built from it, so the transit directory under
+#: `state/segments/` and the file it drains into cannot be named two different
+#: things (`SegmentLedger` takes the directory name).
+RUNTIME_COUNTERS_DIRNAME: Final = "runtime-counters"
+RUNTIME_COUNTERS_FILENAME: Final = f"{RUNTIME_COUNTERS_DIRNAME}.csv"
 FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
 
 #: Where a writer puts its rows before a compaction folds them into a head. Not
@@ -248,6 +264,19 @@ STORY_SIMILARITY_PAIR_KEY: Final = ("date", "run_id", "pair_key")
 #: that feed's URL already produces a different key.
 FEED_RETIREMENT_KEY: Final = ("endpoint_key",)
 
+#: What makes two eval rows the same measurement. The address says which article,
+#: the digest says which words came out, and the scorer version says which
+#: instrument read them. Change any one and the row is a new measurement worth
+#: keeping. `item_id` is deliberately absent: it is a slot on a page, not an
+#: identity. It carries no date either - re-measuring an article a year later is
+#: the same measurement - so it is the one key here that settles two rows of one
+#: day file and leaves the cross-day question to `evals.writer.append_segment`.
+OBSERVATION_KEY: Final = ("url_key", "output_digest", "scorer_version")
+
+#: What makes two index rows the same record. The digest is the whole row apart
+#: from the stamp, so two of them say one thing twice and the fold keeps one.
+OBSERVATION_INDEX_KEY: Final = ("observation_digest",)
+
 #: How far back a health read looks. Not a policy - just enough history to reach
 #: into last month's shard, so a quarantine decided on the first of the month can
 #: still see the failures that caused it.
@@ -307,17 +336,6 @@ class KeyedLedger(NamedTuple):
     carried: frozenset[str] = frozenset()
 
 
-def _key_of(row: CsvRecord, key: tuple[str, ...]) -> tuple[str, ...]:
-    """The cells that make this row's record, as the file spells them.
-
-    Read off `csv_row` rather than off the attributes, so a filter compares what
-    is on disk against what is about to be written rather than against a Python
-    value that has still to be rendered.
-    """
-    cells = row.csv_row()
-    return tuple(cells[name] for name in key)
-
-
 def _feed_health_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
     """`contracts.feed_health.supersedes`, over the two lines as they were read.
 
@@ -333,10 +351,33 @@ def _feed_health_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
         return False
 
 
+def _item_health_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
+    """A row that names the job which ran the item beats one that does not.
+
+    `ITEM_HEALTH_KEY` carries no `job` cell, and two jobs write a row for the
+    same item: a work shard as the item settles, and assemble over the whole day
+    afterwards. For an item a shard sealed a record for the two rows agree cell
+    for cell (`telemetry.census_row` prefers the sealed row on both sides), so
+    this decides nothing. For an item no shard sealed one, the shard's rebuild
+    carries `job` and `shard` - the one moment either is known - and assemble's
+    rebuild leaves both empty, because it runs once for the whole day on a
+    machine that read none of the items.
+
+    Until 2026-09-18 that was settled by arrival order: the work job committed
+    first and `append_item_health` kept the first row for a key. The compaction
+    reads filenames in sorted order, where `assemble` comes before `work`, so
+    the order would have silently reversed. The preference says out loud what
+    the order used to decide.
+    """
+    return bool(later.get("job")) and not kept.get("job")
+
+
 #: The keys whose repeats can disagree, and how each one picks a winner.
 FEED_HEALTH_RULE: Final[Preference] = _feed_health_rule
+ITEM_HEALTH_RULE: Final[Preference] = _item_health_rule
 _PREFERENCES: Final[dict[tuple[str, ...], Preference]] = {
     FEED_HEALTH_KEY: FEED_HEALTH_RULE,
+    ITEM_HEALTH_KEY: ITEM_HEALTH_RULE,
 }
 
 
@@ -422,6 +463,44 @@ def host_fingerprint_path(state_dir: Path, date: str) -> Path:
     because that is what happened.
     """
     return state_dir / HOST_FINGERPRINT_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+
+
+def scores_relpath(date: str) -> str:
+    """`state/scores/<YYYY>/<MM>/<DD>.csv` - the POSIX form, for a log line."""
+    return f"{STATE_DIRNAME}/{SCORES_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+
+
+def scores_path(state_dir: Path, date: str) -> Path:
+    """The day file one date's measurements land in, written only by the compaction.
+
+    A day rather than a month, for the reason `published_path` gives: a run
+    writes one day, two runs collide on a file only when they are the same day,
+    and taking a day back is one `rm` rather than an edit inside a shared shard,
+    which `merge=union` cannot express. Nothing mirrors this store into
+    `frontend/public/`.
+
+    Two jobs of one run measure items - a work shard as each item settles, and
+    assemble over the whole day afterwards - so neither opens this file. Each
+    writes its own segment and the compaction folds them in, which is what stops
+    a lost push race costing the rows rather than a merge.
+    """
+    return state_dir / SCORES_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+
+
+def score_index_relpath(date: str) -> str:
+    """`state/score-index/<YYYY>/<MM>/<DD>.csv` - the POSIX form, for a log line."""
+    return f"{STATE_DIRNAME}/{SCORE_INDEX_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+
+
+def score_index_path(state_dir: Path, date: str) -> Path:
+    """The record of what one day's measurements are, beside the rows themselves.
+
+    The same grain as `scores_path` and filed by the same date, because
+    `evals.writer.refresh_index` fills a partition with no index from the
+    partition beside it - two grains in one relationship would be a mapping
+    somebody maintains.
+    """
+    return state_dir / SCORE_INDEX_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
 
 
 def telemetry_aggregate_relpath(month: str) -> str:
@@ -918,10 +997,6 @@ def _append(path: Path, columns: tuple[str, ...], rows: Sequence[CsvRecord]) -> 
       `contracts.feed_health.supersedes` rather than by which line landed first.
     - **item-health** - two stages write it, so it cannot rely on a caller's own
       guarantee. `append_item_health` filters against `ITEM_HEALTH_KEY` instead.
-    - **runtime-counters** - one writer, but the row is a cumulative total rather
-      than an event, so a re-run of a failed shard would make a run-level sum
-      count that shard twice. `append_runtime_counters` filters against
-      `RUNTIME_COUNTERS_KEY`.
 
     Both filters read the file the job checked out, which is frozen at the
     commit its run was triggered at, so neither can see a row a second attempt
@@ -1164,47 +1239,6 @@ def _header_and_keys(
         }
 
 
-def append_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]) -> int:
-    """Append this run's verdict on every planned item it has not already recorded.
-
-    The only ledger here that filters, because it is the only one with two
-    writers. The `work` job commits a row the moment its item settles, so the
-    rows survive a run that dies before it publishes; `stage_assemble` then
-    writes the whole day's census, which covers the same items again. A repeat is
-    not free: `public_telemetry` copies every row into the file the console
-    reads, so one duplicated row is one item counted twice on the dashboard.
-
-    `merge=union` on the shard cannot help - it keeps the lines from both sides,
-    which is right for two runs appending different rows and exactly wrong for
-    two writers appending the same one. The filter runs before the write, on the
-    committed file each writer can see.
-
-    **The day file is read once.** That one pass answers both questions this
-    needs - which header the file carries, and which items it already records -
-    and the header answer is what says whether the rare second branch is needed
-    at all. `migrate_header` re-files the file when it was written under a
-    different generation of this row; it is the one contract here that has
-    retired a heading, so it is the one whose day file can arrive carrying a
-    generation this writer does not name.
-
-    Returns how many landed, so a caller can log the count.
-    """
-    path = item_health_path(state_dir, date)
-    columns = ItemHealthRow.csv_columns()
-    header, already = _header_and_keys(path, ITEM_HEALTH_KEY)
-    if header and header != columns:
-        migrate_header(path, columns, _as_item_health_row, carried=ITEM_HEALTH_CARRIED)
-        _, already = _header_and_keys(path, ITEM_HEALTH_KEY)
-    landing = []
-    for row in rows:
-        key = _key_of(row, ITEM_HEALTH_KEY)
-        if key in already:
-            continue
-        already.add(key)
-        landing.append(row)
-    return _append(path, columns, landing)
-
-
 def recorded_item_health(path: Path) -> set[tuple[str, ...]]:
     """Every planned item this day's file already has a verdict for.
 
@@ -1253,56 +1287,25 @@ def load_retirements(state_dir: Path) -> list[FeedRetirementRow]:
     return rows
 
 
-def append_runtime_counters(state_dir: Path, rows: Iterable[RuntimeCountersRow]) -> int:
-    """Append what each job's model server counted. Never windowed.
-
-    Filters against `RUNTIME_COUNTERS_KEY` because the cells are cumulative
-    totals rather than events: a second row for a shard is not a second fact, it
-    is the same shard's tokens added to themselves by whatever pools the run.
-
-    Returns how many landed, so a caller can log the count.
-    """
-    path = runtime_counters_path(state_dir)
-    already = recorded_runtime_counters(path)
-    landing = []
-    for row in rows:
-        key = _key_of(row, RUNTIME_COUNTERS_KEY)
-        if key in already:
-            continue
-        already.add(key)
-        landing.append(row)
-    return _append(path, RuntimeCountersRow.csv_columns(), landing)
-
-
 def recorded_runtime_counters(path: Path) -> set[tuple[str, ...]]:
-    """Every shard the file already carries a snapshot for."""
+    """Every shard the file already carries a snapshot for.
+
+    A reader and no longer half of a writer, the way `recorded_span_rollup` is.
+    Each model-server job writes its counters into its own segment and
+    `stage_compact` folds them into this head, so the question this answers is
+    what the head already holds rather than what an append is about to skip.
+    """
     return {tuple(row[name] for name in RUNTIME_COUNTERS_KEY) for row in _read_rows(path)}
 
 
-def append_span_rollup(state_dir: Path, date: str, rows: Iterable[SpanRollupRow]) -> int:
-    """Append one shard's folded span counts to the month shard. Never windowed here.
-
-    Filters against `SPAN_ROLLUP_KEY` the way `append_runtime_counters` does. The
-    row is a fold of a shard's spans, so a re-run of a failed shard recomputes the
-    same numbers and a second row would double a count rather than add a fact. The
-    first row wins.
-
-    Returns how many landed, so a caller can log the count.
-    """
-    path = span_rollup_path(state_dir, date[:7])
-    already = recorded_span_rollup(path)
-    landing = []
-    for row in rows:
-        key = _key_of(row, SPAN_ROLLUP_KEY)
-        if key in already:
-            continue
-        already.add(key)
-        landing.append(row)
-    return _append(path, SpanRollupRow.csv_columns(), landing)
-
-
 def recorded_span_rollup(path: Path) -> set[tuple[str, ...]]:
-    """Every (date, run, shard, span) the month's shard already carries a fold for."""
+    """Every (date, run, shard, span) the month's shard already carries a fold for.
+
+    A reader and no longer half of a writer. A work shard folds its spans into
+    its own segment and `stage_compact` merges that into the month head, so the
+    question this answers is what the head already holds rather than what an
+    append is about to skip.
+    """
     return {tuple(row[name] for name in SPAN_ROLLUP_KEY) for row in _read_rows(path)}
 
 
@@ -1406,6 +1409,65 @@ def load_story_similarity_pairs(state_dir: Path, date: str) -> list[StorySimilar
     ]
 
 
+def append_fitted_thresholds(
+    state_dir: Path, date: str, rows: Iterable[FittedSimilarityThreshold]
+) -> int:
+    """Append a run's fitted row into that day's own file.
+
+    Settled against `STORY_SIMILARITY_THRESHOLD_KEY` straight after the write,
+    the way `append_story_similarity_pairs` is. The key is date and run, so a
+    second RUN of one date keeps its own row - two runs fitted two records and
+    both are facts - and only a second attempt at one execution is collapsed.
+
+    **The day file is created even when the fit was held**, and a held day writes
+    a row like any other: a line that moves itself has to leave a record on the
+    days it stayed put, or a reader cannot tell a held day from a day nothing
+    ran. The empty-file half is the same reason `append_counterfactual_scores`
+    gives - the commit step names this directory and a missing path aborts it
+    under `set -euo pipefail`.
+
+    Returns how many rows the file gained, so a caller can log the count.
+    """
+    path = fitted_thresholds_path(state_dir, date)
+    columns = FittedSimilarityThreshold.csv_columns()
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
+    landed = _append(path, columns, list(rows))
+    return landed - drop_repeated_rows(path, STORY_SIMILARITY_THRESHOLD_KEY)
+
+
+def load_fitted_thresholds(
+    state_dir: Path, *, today: str, within_days: int
+) -> list[FittedSimilarityThreshold]:
+    """Every fitted row in the window, oldest day first.
+
+    **Guardrail #12 declaration.** `day_partition.days_in_window` names both
+    ends, so a cover of `n` days opens at most `n + 1` files and reads exactly
+    those days. The tree is never walked, so the read costs the same on the
+    thousandth day as on the third.
+
+    **The window is in days and the guard's median is in rows, and the caller is
+    what reconciles them.** One missed run leaves thirteen rows inside a
+    fourteen-day cover, the median returns nothing, and a guard that silently
+    never fires is worse than one that fires too readily. The fit therefore asks
+    for `max(settled_window_days, step_change_window_rows * 2)` days and takes the
+    newest rows it finds - a bound set by two knobs rather than by the archive.
+
+    A day the fit never ran has no file, which is not a fault. A row that no
+    longer parses stops the read rather than being skipped: the guard takes a
+    median over these rows, and a silently short list moves that median instead
+    of costing a decision some evidence.
+    """
+    rows: list[FittedSimilarityThreshold] = []
+    for day in reversed(day_partition.days_in_window(today, within_days)):
+        rows.extend(
+            FittedSimilarityThreshold.from_csv_row(raw)
+            for raw in _read_rows(fitted_thresholds_path(state_dir, day))
+        )
+    return rows
+
+
 def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
     """Every cleanup pass on record, oldest day first. Never windowed.
 
@@ -1444,6 +1506,9 @@ class SegmentLedger(StrEnum):
     ITEM_HEALTH = ITEM_HEALTH_DIRNAME
     HOST_FINGERPRINT = HOST_FINGERPRINT_DIRNAME
     SPAN_ROLLUP = SPAN_ROLLUP_DIRNAME
+    SCORES = SCORES_DIRNAME
+    SCORE_INDEX = SCORE_INDEX_DIRNAME
+    RUNTIME_COUNTERS = RUNTIME_COUNTERS_DIRNAME
 
 
 class SegmentName(NamedTuple):
@@ -1500,6 +1565,20 @@ def _span_rollup_head_relpath(date: str) -> str:
     return span_rollup_relpath(date[:7])
 
 
+# The one flat head, so a row's date says nothing about which file it lands in.
+# Every date names this same file, which is what lets the ledger stop being a
+# collider without also being moved to a day tree it is about to be deleted
+# from. The fold reads a head whole, so this one costs the whole file rather
+# than a day of it - still fewer reads than the scan-before-append it replaced,
+# which paid that same cost once per model-server job (Guardrail #12).
+def _runtime_counters_head(state_dir: Path, date: str) -> Path:
+    return runtime_counters_path(state_dir)
+
+
+def _runtime_counters_head_relpath(date: str) -> str:
+    return runtime_counters_relpath()
+
+
 class _HeadShape(NamedTuple):
     """One ledger's answer to "which file, and what settles two of its rows"."""
 
@@ -1508,6 +1587,7 @@ class _HeadShape(NamedTuple):
     key: tuple[str, ...]
     model: type[CsvContract]
     carried: frozenset[str] = frozenset()
+    dates_from_run: bool = False
 
 
 #: Which file a row of a given date belongs in, per ledger. A declared table
@@ -1533,7 +1613,43 @@ _SEGMENT_HEADS: Final[dict[SegmentLedger, _HeadShape]] = {
         SPAN_ROLLUP_KEY,
         SpanRollupRow,
     ),
+    SegmentLedger.SCORES: _HeadShape(
+        scores_path,
+        scores_relpath,
+        OBSERVATION_KEY,
+        EvalRow,
+    ),
+    SegmentLedger.SCORE_INDEX: _HeadShape(
+        score_index_path,
+        score_index_relpath,
+        OBSERVATION_INDEX_KEY,
+        ObservationIndexRow,
+        dates_from_run=True,
+    ),
+    SegmentLedger.RUNTIME_COUNTERS: _HeadShape(
+        _runtime_counters_head,
+        _runtime_counters_head_relpath,
+        RUNTIME_COUNTERS_KEY,
+        RuntimeCountersRow,
+    ),
 }
+
+
+def segment_dates_from_run(ledger: SegmentLedger) -> bool:
+    """Whether this ledger's rows are dated by the segment rather than by a cell.
+
+    True for exactly one ledger, and the reason is a column that is not there.
+    `ObservationIndexRow` is a stamp and a digest: it is the record of what the
+    rows beside it are, and it is filed beside them rather than dated itself.
+    Giving it a date column to route by would move a persisted shape to answer a
+    question the filename already answers - the only producer of an eval row
+    stamps it with the run's own date, which is the first ten characters of the
+    run id the segment is named for.
+
+    Every other ledger here names its own day, which is what lets a segment a
+    run left behind three days ago compact into that day rather than into today.
+    """
+    return _SEGMENT_HEADS[ledger].dates_from_run
 
 
 def segment_head(state_dir: Path, ledger: SegmentLedger, date: str) -> SegmentHead:
@@ -1651,6 +1767,52 @@ def write_segment(
     scratch = state_dir / SEGMENTS_DIRNAME / f"{path.stem}.{os.getpid()}.tmp"
     scratch.write_text(
         render_file(columns, [row.csv_row() for row in rows]), encoding="utf-8", newline=""
+    )
+    scratch.replace(path)
+    return len(rows)
+
+
+def extend_segment(
+    state_dir: Path,
+    ledger: SegmentLedger,
+    rows: Sequence[CsvRecord],
+    *,
+    run_id: str,
+    attempt: int,
+    job: ServerJob,
+    shard: int,
+) -> int:
+    """Add rows to this writer's own segment, keeping the ones it wrote earlier.
+
+    `write_segment` is for a step that has everything its job will ever say. This
+    is for a job that learns something later: the machine probe runs before the
+    heaviest step because the bandwidth reading wants an idle host, and the job's
+    own clock is only known once the job is over. Two steps, one writer, one
+    file - the grammar in `segment_path` names the job and not the step, so a
+    second file is not something this store can express.
+
+    The earlier rows are read and written back unchanged. Nothing is edited and
+    nothing is settled here: the arriving row carries the cells it has, the
+    earlier row keeps the cells it had, and `stages.compact` is the one place
+    that decides what two rows of one key mean.
+
+    Whole through a temp file and a rename for `write_segment`'s reason - a
+    writer killed mid-write leaves the file it already had rather than half a
+    row.
+
+    Returns how many rows it added, so a caller can log the count.
+    """
+    if not rows:
+        return 0
+    path = segment_path(state_dir, ledger, run_id=run_id, attempt=attempt, job=job, shard=shard)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    columns = _SEGMENT_HEADS[ledger].model.csv_columns()
+    held = [{name: row.get(name, "") for name in columns} for row in _read_rows(path)]
+    scratch = state_dir / SEGMENTS_DIRNAME / f"{path.stem}.{os.getpid()}.tmp"
+    scratch.write_text(
+        render_file(columns, held + [row.csv_row() for row in rows]),
+        encoding="utf-8",
+        newline="",
     )
     scratch.replace(path)
     return len(rows)
