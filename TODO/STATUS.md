@@ -39,13 +39,14 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 28 | 0 | 27 | 1 |
 | [20260917-34-similarity-autotune-plan.md](20260917-34-similarity-autotune-plan.md) | 17 | 2 | 15 | 1 |
 
-## In flight - 4
+## In flight - 5
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
 | #1 | 33 | A | Segment store and the `compact` stage, shipped inert | p33a1 |
 | #5 | 33 | A | Machine page stops lying about a day with no rows | p33r5 |
 | #7 | 33 | A | OS memory and load, per item | p33r7b |
+| #2 | 33 | B | `host-fingerprint` writes segments | p33b2 |
 | #18 | 33 | H | Chart-craft doctrine - the thirteen rules, written once | p33r18 |
 
 ## Ready now - 34
@@ -91,7 +92,7 @@ section 3 is where it is answered.
 | #6 | 33 | A | One concurrency group for `digest`, `validate`, `measure` | - |
 | #2 | 34 | - | The four contracts, shipped inert with header-only files | - |
 
-## Waiting on another row - 84
+## Waiting on another row - 83
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -143,12 +144,11 @@ section 3 is where it is answered.
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
-| #2 | 33 | B | `host-fingerprint` writes segments | 1 is IN-FLIGHT |
-| #3 | 33 | B | `item-health`, `scores`, `score-index` write segments | 2 is PENDING |
+| #3 | 33 | B | `item-health`, `scores`, `score-index` write segments | 2 is IN-FLIGHT |
 | #4 | 33 | B | `span-rollup` writes segments | 3 is PENDING |
 | #17 | 33 | B | `runtime-counters` writes segments | 4 is PENDING |
-| #10 | 33 | C | `model_load_ms` and `job_seconds` join `host-fingerprint` | 2 is PENDING |
-| #12 | 33 | D | Delete the merge machinery | 2 is PENDING; 3 is PENDING; 4 is PENDING; 17 is PENDING |
+| #10 | 33 | C | `model_load_ms` and `job_seconds` join `host-fingerprint` | 2 is IN-FLIGHT |
+| #12 | 33 | D | Delete the merge machinery | 2 is IN-FLIGHT; 3 is PENDING; 4 is PENDING; 17 is PENDING |
 | #13 | 33 | D | Compaction lag and free swap on the console band | 1 is IN-FLIGHT; 5 is IN-FLIGHT; 7 is IN-FLIGHT; 12 is PENDING |
 | #11 | 33 | E | Delete `runtime-counters` and everything that reads it | 7 is IN-FLIGHT; 10 is PENDING; 17 is PENDING |
 | #15 | 33 | F | Generated TypeScript contracts replace the hand-written ones | 10 is PENDING; 11 is PENDING |
