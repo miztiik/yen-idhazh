@@ -1,6 +1,7 @@
 # Plan 34 - the merge line fits itself
 
 **Created**: 2026-09-17
+**Last Updated**: 2026-09-18
 **Supersedes**: [`20260914-29-found-once-plan.md`](20260914-29-found-once-plan.md) rows #12 and #15
 **Correction level**: 5 - a model verdict moves a number that decides what publishes
 
@@ -239,30 +240,49 @@ O2 removed it. Three things carry its job instead.
 
 ## Status Reckoner
 
-Every row below carries a body further down this page. A row's body is written
-for somebody who has never opened this repository, so it names the file, the
-class, the function, the test and the thing the row must not do. **Read the row
-body, not this table.** The table says what is blocked; the body says what to
-build.
+**This table is what is left.** A row that landed is gone from it, because a
+worker picking this plan up needs the four things still to build, not the twelve
+already in the repository. Git is where a finished row's history lives, and the
+pull request numbers below are how a reader finds it.
+
+Every row here carries a body further down this page. A row's body is written for
+somebody who has never opened this repository, so it names the file, the class,
+the function, the test and the thing the row must not do. **Read the row body,
+not this table.** The table says what is blocked; the body says what to build.
 
 | # | Row | Depends on | Wave | Status |
 | --- | --- | --- | --- | --- |
-| 1 | Three pages disagree on whether a model may select what publishes | - | A | DONE `09c680c4` |
-| 2 | The four contracts, shipped inert with header-only files | - | A | PENDING |
-| 3 | The knob block, defaults only, nothing reads it | 2 | A | PENDING |
-| 4 | Nested `state/` support: the inventory glob and the prune vocabulary | - | A | DONE `c0cb75f7` |
-| 5 | Score and select the borderline pairs, write the day shard | 2,3 | B | PENDING |
-| 6 | The judge: prompt, grammar, token-id assertion, order swap | 2,3 | B | PENDING |
-| 7 | Fold the day into the fixed-size record | 2,5,6 | B | PENDING |
-| 8 | Fit, damp, clamp, and write the day's row - the knob still unread | 3,7 | C | PENDING |
-| 9 | Assemble reads the fitted line. **First row that changes a published day** | 8 | C | PENDING |
-| 10 | The `LLM-JUDGES` workflow, 4 matrix legs, two commit calls | 5,6,7,8 | C | PENDING |
 | 11 | The sample sheet utility | 7,8,10 | C | PENDING |
-| 12 | Console: merge count and holdout - the two model-free panels | **panel A1: nothing** / panel A2: 2,8 | D | PENDING |
-| 13 | Console: the threshold chart, applied solid and proposed dotted | 8,12 | D | PENDING |
-| 14 | Console: judge self-agreement, and the record filling | 8,12 | D | PENDING |
+| 12 | Console: the holdout panel. **The merge count landed in #874; this is the other half** | 2,8 | D | PENDING |
 | 15 | Console: the confusion matrix | 7,8,12 | D | PENDING |
-| 16 | The design document, prose plus a mermaid diagram | 9 | D | PENDING |
+| 16 | The design document. **Mostly overtaken - see below** | 9 | D | PENDING |
+
+**Landed, in the order they merged:** row 1 `09c680c4`, row 4 `c0cb75f7` and the
+prune vocabulary in [#885](https://github.com/miztiik/yen-idhazh/pull/885), rows
+2 and 3 in [#870](https://github.com/miztiik/yen-idhazh/pull/870), row 5 in
+[#871](https://github.com/miztiik/yen-idhazh/pull/871), row 6 in
+[#872](https://github.com/miztiik/yen-idhazh/pull/872), row 7 in
+[#875](https://github.com/miztiik/yen-idhazh/pull/875), row 17 in
+[#876](https://github.com/miztiik/yen-idhazh/pull/876), row 8 in
+[#885](https://github.com/miztiik/yen-idhazh/pull/885), row 10 in
+[#890](https://github.com/miztiik/yen-idhazh/pull/890), row 9 in
+[#889](https://github.com/miztiik/yen-idhazh/pull/889), row 12's merge-count
+panel in [#874](https://github.com/miztiik/yen-idhazh/pull/874), row 13 in
+[#899](https://github.com/miztiik/yen-idhazh/pull/899) and row 14 in
+[#904](https://github.com/miztiik/yen-idhazh/pull/904).
+
+**Row 9 landed with the flag off.** `assemble.same_story.adaptive_dedup_threshold.enabled`
+is `false` in the committed config, so every published day is still grouped at
+`floor_min`. Turning the feature on is a one-character edit to `config/idhazh.json`,
+and turning it off again is the same edit.
+
+**Row 16 shrank while this plan was being built, and the reason is somebody
+else's work.** [#896](https://github.com/miztiik/yen-idhazh/pull/896) split the
+same-story rules out of `docs/architecture/publishing/layout.md` into
+`docs/architecture/publishing/same-story.md`, which was the split this row was
+going to pay for. Row 9 then put the fitted line's own prose on that page. What
+is left of this row is the loop diagram and the two lists - the rationale and the
+rejected alternatives - distilled out of this plan as it is deleted.
 | 17 | Measure a judge call on a stock runner and replace the estimate | 5,6 | B | PENDING |
 
 Row 1 dropped out of row 2's dependency list because it has landed. **Row 12's
