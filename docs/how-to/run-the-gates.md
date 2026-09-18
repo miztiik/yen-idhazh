@@ -329,7 +329,7 @@ share, the same suite spans a factor of three depending on who else is working,
 and `-n auto` can read slower than serial because two performance cores shared
 six ways have nothing to hand a second worker. The figure that decides anything
 is the runner's, and it is in
-[../reference/measurements.md](../reference/measurements.md).
+[../reference/pipeline-cost.md](../reference/pipeline-cost.md).
 
 **A test may not walk a collection a run appends to**, because its cost then
 grows with every published day rather than with the code it checks (Guardrail #12 and
@@ -416,7 +416,7 @@ Naming no day checks every committed day, which is what a push to `main` does.
 run over nothing - a workflow typo must not read as a pass. Opening a published
 day costs a fraction of a second, so a year of them is about a hundred seconds a
 run, which is the reason the scope step decides
-([../reference/measurements.md](../reference/measurements.md)).
+([../reference/pipeline-cost.md](../reference/pipeline-cost.md)).
 
 `site-weight` is the fourth, and it is the only one that measures the whole
 site rather than one page. It sums `frontend/build/` - the directory the Pages
@@ -462,7 +462,7 @@ failing it.
 understates the wire - on a number meant to catch growth, by more growth than the
 number is watching for. `-5` lands within a fraction of a percent of what the
 Pages origin serves; the readings are in
-[../reference/measurements-site.md](../reference/measurements-site.md).
+[../reference/site-weight.md](../reference/site-weight.md).
 
 **The payload guardrail bounds a file a browser fetches**, which no page
 guardrail can see. `page_weight.payload_ceilings_bytes` maps a build-relative
@@ -489,7 +489,7 @@ outcome is a bigger number catches nothing.
 drifts loose above the page it bounds, so a check that cannot tell correct from
 far-too-loose is not an instrument, and no value of the constant fixes that. The
 readings are in
-[../reference/measurements-site.md](../reference/measurements-site.md#the-page-guardrails-and-what-each-route-weighs-2026-09-10).
+[../reference/site-weight.md](../reference/site-weight.md#the-page-guardrails-and-what-each-route-weighs-2026-09-10).
 
 **What stands in their place checks the cause instead of the symptom.** The one
 regression this surface has ever had is a layout inlining a day payload, and that
@@ -543,7 +543,7 @@ npm run test:browser
 
 **Read the ratio rather than the seconds**, because a developer box shares its
 cores with whatever else is running. The readings are in
-[../reference/measurements.md](../reference/measurements.md).
+[../reference/pipeline-cost.md](../reference/pipeline-cost.md).
 
 **`PLAYWRIGHT_WORKERS` sets how many run at once: one locally, four in CI, and
 the two machines disagree about which is right.** A runner is 4 vCPU with

@@ -107,6 +107,6 @@ Largest KV occupancy on the run, `n_tokens_max`, was **9,082 of 16,384 cells -
 
 ## See also
 
-- [../measurements.md](../measurements.md) - the figure this record puts in force, beside every other producer figure.
+- [../pipeline-cost.md](../pipeline-cost.md) - the figure this record puts in force, beside every other producer figure.
 - [../documentation-structure.md](../documentation-structure.md) - what a benchmark record carries, and why a re-run replaces it.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #10, which is why every number here carries its conditions.

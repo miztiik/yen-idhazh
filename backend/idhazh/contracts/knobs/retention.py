@@ -53,7 +53,7 @@ class RetentionConfig(Model):
             "14 at 130.0. Those are 18.6 MiB apart against a one-spread band of "
             "47.6 MiB, so the byte budget cannot separate them and the owner's 13 "
             "stands (Carmack, 2026-09-13). The derivation is "
-            "docs/reference/measurements-site.md, 'What a published day adds in "
+            "docs/reference/site-weight.md, 'What a published day adds in "
             "rendered visuals'."
         ),
     )
@@ -104,6 +104,6 @@ class RetentionConfig(Model):
             "8,537 KB/day, 2026-08-23), against a 14-day target. The target is a "
             "judgement about one maintainer acting on one warning, not a measurement "
             "(Guardrail #10). The arithmetic and its inputs are in "
-            "docs/reference/measurements.md, 'Where the alarm fires, and what it buys'."
+            "docs/reference/pipeline-cost.md, 'Where the alarm fires, and what it buys'."
         ),
     )

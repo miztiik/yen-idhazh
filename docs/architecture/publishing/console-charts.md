@@ -533,5 +533,5 @@ neutral ink; console chart-craft plan Row #3, 2026-08-31.
 - [../../concepts/console-design.md](../../concepts/console-design.md) - how a console figure may be worded, ranked and tinted.
 - [telemetry-series.md](telemetry-series.md) - the grain every figure was measured at.
 - [console-payloads.md](console-payloads.md) - what a browser may fetch.
-- [../../reference/measurements-site.md](../../reference/measurements-site.md) - what the engine chunk and each console route weigh.
+- [../../reference/site-weight.md](../../reference/site-weight.md) - what the engine chunk and each console route weigh.
 - [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md) - the page ceilings a chart has to stay under.

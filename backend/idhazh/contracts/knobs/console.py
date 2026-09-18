@@ -124,7 +124,7 @@ class ConsoleConfig(Model):
             "authorised the fetch (2026-09-08). Everything measurable instead is "
             "localhost, where arrival is a few milliseconds and any threshold "
             "derived from it is one nobody ever crosses. What would settle it is "
-            "in docs/reference/measurements.md under Still unmeasured. "
+            "in docs/reference/pipeline-cost.md under Still unmeasured. "
             "`config/appearance.json` owns the value, as `console.shimmer_after_ms`."
         ),
     )

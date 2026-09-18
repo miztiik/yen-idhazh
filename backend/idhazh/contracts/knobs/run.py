@@ -67,7 +67,7 @@ class RunConfig(Model):
             "The most workers a run may derive for itself. It is four rather than the "
             "eight digest.yml lets an operator dispatch, because eight has never "
             "published a day; the three conditions that would move it are in "
-            "docs/reference/measurements.md."
+            "docs/reference/pipeline-cost.md."
         ),
     )
     shard_timeout_minutes: int = Field(

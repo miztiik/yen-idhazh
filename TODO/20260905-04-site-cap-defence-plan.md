@@ -38,7 +38,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 - **Scope:** Difference the site measurement across two committed dates to get one growth rate, and difference the repository pack size across the same two commits.
 - **Files touched:**
-  - `docs/reference/measurements.md`
+  - `docs/reference/pipeline-cost.md`
   - `backend/idhazh/retention.py` (only if the measurement exposes a defect in what it counts)
 - **Acceptance gates:** `ruff`; `mypy --strict`; the retention test module; the full suite if any code moved.
 - **Oracle:** The recorded figure names the **built bundle** bytes and the **payload tree** bytes separately, with the item count taken from the **same tree** as the bytes, and a per-item rate beside the per-day rate. Two independent methods must land inside 10 percent of each other, or neither is recorded.

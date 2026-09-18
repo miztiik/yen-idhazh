@@ -216,14 +216,14 @@ Parsing the 1,444 articles took **0.43 s at best and 3.21 s at worst over six
 separate invocations**, spread 2.78 s, and a whole sweep of five windows and four
 cases finished inside four seconds on the quiet runs. Those are developer-machine
 durations and an order-of-magnitude check and nothing more
-([`../measurements.md`](../measurements.md)), taken on **Windows 11 build 26200
+([`../pipeline-cost.md`](../pipeline-cost.md)), taken on **Windows 11 build 26200
 with four other agents working on the box**, which is most of why the worst
 reading is seven times the best. The point they support is only that this is a
 thing a person runs while waiting, not a thing that needs a job.
 
 ## See also
 
-- [`../measurements.md`](../measurements.md) - the instrument log, which carries the figure now in force and links here.
+- [`../pipeline-cost.md`](../pipeline-cost.md) - the instrument log, which carries the figure now in force and links here.
 - [`../../architecture/publishing/visuals.md`](../../architecture/publishing/visuals.md) - the declared-whole rule this count sizes, and `share_of_declared_whole`.
 - [`../../concepts/growing-reads.md`](../../concepts/growing-reads.md) - what a read over a growing collection declares.
 - [`../../../TODO/20260905-16-composition-vocabulary-plan.md`](../../../TODO/20260905-16-composition-vocabulary-plan.md) - the plan this row belongs to, and the owner decision that `pie` ships either way.
