@@ -62,6 +62,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_assemble_embeddings",
         "test_backfill_vectors",
         "test_canary_day",
+        "test_capture_root",
         "test_classify",
         "test_corpus",
         "test_corpus_harvest",

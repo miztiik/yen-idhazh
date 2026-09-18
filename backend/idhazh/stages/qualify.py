@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Sequence
+from pathlib import Path
 from typing import NamedTuple
 
 from idhazh import (
@@ -63,8 +64,10 @@ from idhazh.stages.common import (
     _load_plan,
     _one_call,
     _run_canaries,
+    _run_dir,
     shard_of,
 )
+from idhazh.telemetry.record import Flags, ItemRecorder
 
 
 class _Frozen(NamedTuple):
@@ -272,6 +275,8 @@ def _observe(
         summary_word_count=len((summary.summary or "").split()),
         prompt_tokens=sum(reply.prompt_tokens for reply in answered),
         completion_tokens=sum(reply.completion_tokens for reply in answered),
+        prefill_ms=sum(reply.prefill_ms for reply in answered) or None,
+        decode_ms=sum(reply.decode_ms for reply in answered) or None,
         fits_context_predicted=summarize.fits_context(article, inference, turns=turns),
         summarize_seconds=seconds,
     )
@@ -296,7 +301,13 @@ def calls_per_item(run: RunConfig) -> int:
 
 
 def _answer_one_item(
-    article: Article, settings: config.Settings, *, date: str, endpoint: str
+    article: Article,
+    settings: config.Settings,
+    *,
+    date: str,
+    endpoint: str,
+    recorder: ItemRecorder | None = None,
+    capture_root: Path | None = None,
 ) -> _Answer:
     """Summarize one corpus item the way this run is configured to summarize.
 
@@ -308,6 +319,14 @@ def _answer_one_item(
     qualification scores writing, and drawing it would cost a decode per item
     to produce something no gate reads.
 
+    **`recorder` is what makes this the digest's telemetry and not a quieter
+    copy of it.** Without one the shared path substitutes a silent recorder with
+    every flag off, so no prompt and no reply is written anywhere and the run
+    leaves nothing a person can read. `capture_root` is separate because a
+    capture is named for the item and the call: a second reading of one article
+    would overwrite the first, and on the pair the second prompt carries the
+    first call's reply, so two readings of one article do not share a prompt.
+
     The clock is this function's rather than the call's. On the pair it has to
     be - the two calls are timed separately and the seam between them is real
     time the item spent - and taking it the same way on both sides keeps the
@@ -318,7 +337,14 @@ def _answer_one_item(
     if not settings.app.run.qualify_on_the_production_path:
         summary, completion, seconds = _one_call(article, settings, endpoint=endpoint)
         return _Answer(summary, (completion,), seconds)
-    both = two_calls.two_calls_one_item(article, settings, date=date, endpoint=endpoint)
+    both = two_calls.two_calls_one_item(
+        article,
+        settings,
+        date=date,
+        endpoint=endpoint,
+        recorder=recorder,
+        capture_root=capture_root,
+    )
     return _Answer(both.summary, (both.label_reply, both.answer_reply), time.monotonic() - started)
 
 
@@ -461,14 +487,25 @@ def stage_qualify(
     observations: list[ItemObservation] = []
     scores: list[ItemScore] = []
     samples: list[SummarySample] = []
+    captures = _run_dir(date) / common.CAPTURES_DIRNAME
     # Repeats on the outside, items on the inside. The other order would let
-    # each repeat land on a warm prompt cache, and an identical reply that
-    # skipped its own prefill is weaker evidence of determinism than one that
-    # did the arithmetic again.
+    # each repeat land on a warm prompt cache, so `wording_spread` would be
+    # measuring the cache rather than the sampler.
     for repeat in range(1, repeats + 1):
         for entry in frozen:
+            recorder = ItemRecorder(
+                run_id=f"{date}-qualify-{shard}-{repeat}",
+                flags=Flags.of(settings.app.logging),
+                now=assemble.utc_now,
+                log=LOG,
+            )
             answer = _answer_one_item(
-                entry.article, settings, date=date, endpoint=model_endpoint
+                entry.article,
+                settings,
+                date=date,
+                endpoint=model_endpoint,
+                recorder=recorder,
+                capture_root=captures / f"repeat-{repeat}",
             )
             summary = answer.summary
             observations.append(

@@ -1,4 +1,4 @@
-"""The eleven hard gates, as arithmetic rather than as an argument.
+"""The ten hard gates, as arithmetic rather than as an argument.
 
 One model runs. There is no incumbent case, so no gate here reads a second
 model's number: the owner ruled on 2026-08-26 that the candidate is qualified
@@ -10,13 +10,12 @@ A gate never moves to let a candidate through. The only two ways past one are a
 better model and a threshold the owner changed on the record, in config, in its
 own commit.
 
-**Ten of the eleven are asked of every run. `determinism` is asked only at
-`temperature == 0`**, because that is the one setting where "did the repeats
-agree?" has an answer - above it they are meant to differ. The owner pinned
-0.2 on the record, in config, in its own commit on 2026-09-17, which is the
-second of the two ways above. The gate's own bar did not move a step: wherever
-it is asked it still refuses a single drifted item. What a run at temperature
-above zero records instead is `wording_spread`, and a diagnostic blocks nothing.
+**Every gate is asked of every run.** There was an eleventh until 2026-09-18 -
+`determinism`, which asked whether repeated calls produced identical words - and
+the owner retired it: a summarizer does not need to say a thing the same way
+twice, so the question was buying a guarantee nobody wanted
+(`docs/architecture/contracts/determinism.md`). What a run records in its place
+is `wording_spread`, and a diagnostic blocks nothing.
 
 Everything else the run measures is a diagnostic: recorded with its
 denominator, printed, and never allowed to block. Andre demoted the relative
@@ -349,44 +348,6 @@ def injection_canaries(canaries: Sequence[CanaryObservation], *, required: int) 
     )
 
 
-def determinism(observations: Sequence[ItemObservation], *, repeats: int) -> GateOutcome:
-    """Identical inputs produced identical words, every repeat.
-
-    Only items that succeeded on every repeat can be judged - a failed call has
-    no digest to compare, and counting it as a violation would make a fetch
-    failure look like a decoding one. Those items are named in the denominator
-    instead, where the schema gate has already failed on them.
-
-    **It is asked only at `temperature == 0`**, which is the one setting where it
-    has an answer. Above zero, repeats are meant to differ, so a run records
-    `wording_spread` instead and this gate is not evaluated at all. That is not
-    the gate moving to let a candidate through: its bar is still zero violations
-    and it still refuses any drift wherever it is asked. `gates` owns the
-    condition.
-    """
-    by_item: dict[str, set[str]] = {}
-    successes: dict[str, int] = {}
-    for observation in observations:
-        if not observation.ok:
-            continue
-        by_item.setdefault(observation.item_id, set()).add(observation.output_digest)
-        successes[observation.item_id] = successes.get(observation.item_id, 0) + 1
-    counted = {item for item, hits in successes.items() if hits == repeats}
-    violations = sorted(item for item in counted if len(by_item[item]) > 1)
-    return _outcome(
-        GateName.DETERMINISM,
-        passed=bool(counted) and not violations,
-        measured=f"{len(violations)} violations over {len(counted)} items x {repeats} repeats",
-        threshold="zero violations; one output_digest per item",
-        source=_ANDRE,
-        detail=(
-            f"items that drifted: {violations}"
-            if violations
-            else "every repeat returned the same words at temperature 0"
-        ),
-    )
-
-
 def publishable_length(
     observations: Sequence[ItemObservation], summarize: SummarizeConfig
 ) -> GateOutcome:
@@ -618,18 +579,13 @@ def gates(
     reasoning the entry never asked for, or reasoning it asked for and the
     discard failed to remove.
 
-    **`determinism` is the one gate a run can legitimately not ask.** It asks
-    whether repeated calls produced identical words, and that question has an
-    answer at `temperature == 0` and none above it, where repeats are meant to
-    differ. Above zero the run records `wording_spread` instead - the same
-    counts, printed and blocking nothing. The owner set the temperature on the
-    record, in config, in its own commit (2026-09-17), which is the shape this
-    module's own rule asks for; the gate itself did not move, and every run that
-    does ask it is held to zero violations exactly as before.
+    **Every gate is asked of every run.** There is no conditional gate and no
+    optional one: a report that is missing an outcome is refused by name, so a
+    candidate cannot be adopted on a question nobody put to it.
     """
     corpus = merge(shards)
     pinned = all(shard.scorer.pinned for shard in shards) and bool(shards)
-    asked = [
+    return corpus, [
         reasoning_leakage(corpus.observations, thinking=turns is not None and turns.thinks),
         schema_validity(corpus.observations),
         injection_canaries(corpus.canaries, required=required_canaries),
@@ -641,9 +597,6 @@ def gates(
         faithfulness_floor(corpus, evaluation=evaluation, pinned=pinned),
         brief_copying_ceiling(corpus, evaluation=evaluation),
     ]
-    if inference.temperature == 0:
-        asked.insert(3, determinism(corpus.observations, repeats=corpus.repeats))
-    return corpus, asked
 
 
 # --- recorded, never blocked ------------------------------------------------
@@ -659,20 +612,17 @@ def wording_spread(
 ) -> list[Diagnostic]:
     """How far apart the repeats of one item landed, above zero temperature.
 
-    **It is not the determinism gate under another name, and it is not called
-    one.** The gate asks whether every repeat was the same words and refuses any
-    that were not. This counts how many distinct wordings a sampler produced,
-    which is a spread rather than a violation - at `temperature > 0` a second
-    wording is the sampler working, so a number here is evidence about how far
-    the sampler travels and never evidence of a defect.
+    **A spread is not a violation.** This counts how many distinct wordings a
+    sampler produced. At `temperature > 0` a second wording is the sampler
+    working, so a number here is evidence about how far the sampler travels and
+    never evidence of a defect - which is why it blocks nothing and why no gate
+    reads it.
 
-    Two rows, each with the denominator the gate used, so the two surfaces are
-    read against the same population: only items that succeeded on every repeat
-    can be compared at all.
+    Two rows, each carrying the denominator, so a reader can see the population:
+    only items that succeeded on every repeat can be compared at all.
 
-    Empty at `temperature == 0`, where the gate speaks and a second surface
-    saying the same thing in softer words is the failure this project keeps
-    finding - a number nobody can act on, printed beside one somebody must.
+    Empty at `temperature == 0`, where every repeat is the same words by
+    construction and a row saying so is a row nobody can act on.
     """
     if inference.temperature == 0:
         return []

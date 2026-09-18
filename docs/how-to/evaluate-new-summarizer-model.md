@@ -578,15 +578,24 @@ nothing there is a second measurement that could disagree with the artifact -
 and neither page spells a model name, so it cannot describe a model the run did
 not serve.
 
-What the shard page carries that the gates do not: **which items drifted**. The
-determinism gate reports a count, and a count sends the next reader to the
-artifact to diff digests by hand. The shard page names them - and above zero
-temperature that page is the whole of the drift story, since the gate is not
-there to report one.
+What the shard page carries that the gates do not: **which articles the sampler
+worded more than one way**. `wording_spread` reports a count, and a count sends
+the next reader to the artifact to diff digests by hand. The shard page names
+them. Nothing there is a defect - above zero temperature a second wording is the
+sampler working, and no gate reads it.
 
 Both steps run under `if: always()`, on purpose. A run that died half way is
 exactly the one whose counts somebody wants, and `decide` exits non-zero on an
 ESCALATE - which is precisely the verdict the reader opened the page for.
+
+**When a page is not enough, the run kept the text.** Each shard uploads
+`captures-<shard>`: every prompt sent and every reply received, one file per
+call per item per repeat, for 30 days. That is what to open when a score is bad
+and the page cannot say why - a count never can.
+[analyze-a-pipeline-artifact.md](analyze-a-pipeline-artifact.md) is the
+procedure. Note what it costs: a prompt carries the article body, this
+repository is public, and GitHub asks only for read access to download an
+artifact (owner decision, 2026-09-18).
 
 ### 1.6 Decide
 
