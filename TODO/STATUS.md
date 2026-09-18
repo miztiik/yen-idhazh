@@ -35,18 +35,19 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 16 | 12 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 11 |
-| [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 28 | 6 | 21 | 1 |
+| [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 29 | 6 | 22 | 2 |
 | [20260917-34-similarity-autotune-plan.md](20260917-34-similarity-autotune-plan.md) | 17 | 2 | 15 | 1 |
 
-## In flight - 3
+## In flight - 4
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
 | #3 | 33 | B | `item-health`, `scores`, `score-index` write segments | p33b3 |
 | #4 | 33 | B | `span-rollup` writes segments | p33b4 |
+| #17 | 33 | B | `runtime-counters` writes segments | p33b17 |
 | #10 | 33 | C | `model_load_ms` and `job_seconds` join `host-fingerprint` | p33c10 |
 
-## Ready now - 33
+## Ready now - 34
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -85,10 +86,11 @@ section 3 is where it is answered.
 | #9 | 27 | D | A cut reply keeps its summary | 1 |
 | #10 | 27 | D | A killed shard keeps the work it finished | - |
 | #11 | 27 | E | Two articles, three arms, one runner | 4 |
-| #6 | 33 | A | One concurrency group for `digest`, `validate`, `measure` | - |
+| #6 | 33 | A | The validation ledger leaves the root of `state/` | - |
+| #29 | 33 | J | `prune.yml` wakes outside the digest window | - |
 | #2 | 34 | - | The four contracts, shipped inert with header-only files | - |
 
-## Waiting on another row - 79
+## Waiting on another row - 78
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -140,10 +142,9 @@ section 3 is where it is answered.
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
-| #17 | 33 | B | `runtime-counters` writes segments | 4 is IN-FLIGHT |
-| #12 | 33 | D | Delete the merge machinery | 3 is IN-FLIGHT; 4 is IN-FLIGHT; 17 is PENDING |
+| #12 | 33 | D | Delete the merge machinery | 3 is IN-FLIGHT; 4 is IN-FLIGHT; 17 is IN-FLIGHT |
 | #13 | 33 | D | Compaction lag and free swap on the console band | 12 is PENDING |
-| #11 | 33 | E | Delete `runtime-counters` and everything that reads it | 10 is IN-FLIGHT; 17 is PENDING |
+| #11 | 33 | E | Delete `runtime-counters` and everything that reads it | 10 is IN-FLIGHT; 17 is IN-FLIGHT |
 | #15 | 33 | F | Generated TypeScript contracts replace the hand-written ones | 10 is IN-FLIGHT; 11 is PENDING |
 | #16 | 33 | G | Docs, and the orphan sweep | all names no row |
 | #19 | 33 | I | The shard board | 11 is PENDING |
