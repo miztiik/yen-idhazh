@@ -1154,7 +1154,14 @@ gone.** One flat bar on no time axis, under a note telling the reader not to
 read its direction: a figure a panel disowns is a figure to remove. **What the
 reader loses, named:** the picture of the split, which is now three printed
 counts instead. What the split was ever worth was the counts it was built from,
-and the track carried no fact they do not. Susan, 19C8.
+and the track carried no fact they do not. Susan, 2026-09-17.
+
+**The deleted track and the Hardware route's `Prompt cache` panel were one
+subject at the two questions.** This panel carried the level - how much of the
+window's prompt the model already held - and `Prompt cache` carries the
+direction, one column a day. With the level deleted the Hardware panel is the
+whole answer rather than half of one, so the gap a later reader sees here is a
+subject already covered and not a figure to rebuild.
 
 **A falling share here does not mean the cache got worse, and the panel still
 says so.** Measured 2026-09-05 over the same 6,104 items, `cached_tokens` is
@@ -1259,7 +1266,12 @@ and says in words that a single day has a level and no direction. A window with
 no measured day draws no axis at all and says so: an axis over nothing is a claim
 the data does not support.
 
-Authority: Susan, 19A8, 19C11 and 19D11, 2026-09-17.
+Authority: Susan, 2026-09-17. The four rules this panel is built to - a panel
+names which of the two questions it serves, a title that asks a trend question
+draws a time axis, two series share one axis under twenty times with the ratio
+printed, and a value domain is fixed only where a ceiling is the comparison -
+are in
+[../../concepts/console-design.md](../../concepts/console-design.md#thirteen-rules-hold-for-every-chart-on-this-console).
 
 ## The chart drawing is a flow, and every drop leaves it as a named branch
 
