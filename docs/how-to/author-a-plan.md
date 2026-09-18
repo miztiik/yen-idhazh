@@ -1,6 +1,6 @@
 # How to author an execution-ready plan-doc
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-18
 
 The procedure for turning a rough idea or draft into a `TODO/<YYYYMMDD>-<slug>-plan.md` that an autonomous agent can run end-to-end with no further instruction. This is the canonical home for the authoring ritual; the [`prepare-plan`](../../.claude/skills/prepare-plan/SKILL.md) skill is a thin wrapper that points here, mirroring how [`bootstrap`](../../.claude/skills/bootstrap/SKILL.md) points at [../agents/bootstrap.md](../agents/bootstrap.md).
 
@@ -13,6 +13,12 @@ When editing agent/customization Markdown, use ASCII only: "-", "->", ">=", "sec
 ## When this fires
 
 A user says "make a plan", "prepare a plan", "plan this out", or "write an execution-ready plan for X". You produce ONE file: `TODO/<YYYYMMDD>-<slug>-plan.md`. You do NOT start coding the work.
+
+## Precondition: rows are sized against a settled contract
+
+A row is sized against a settled contract, never against a to-do line. Three questions are answered before step 1 below: what the user wants to be true when the work is done, which way was chosen to achieve it, and which persisted shapes that way moves ([take-an-item-to-plan.md](take-an-item-to-plan.md)).
+
+Where a request arrives without them, run that page first and come back with its brief. Sizing rows against an unsettled contract is what produces a plan that reads as finished while the worker still has to invent a field (Guardrail #3).
 
 ## Procedure
 
@@ -79,6 +85,7 @@ The plan is a tabular instrument for parallel dispatch, not a narrative. It cont
 
 ## See also
 
+- [take-an-item-to-plan.md](take-an-item-to-plan.md) - the intent, the way and the contracts this doc's rows are sized against.
 - [execute-a-plan.md](execute-a-plan.md) - the orchestrator contract that runs the plan this doc writes.
 - [distill-a-plan.md](distill-a-plan.md) - where a finding goes when no page owns it yet.
 - [handle-scope-change.md](handle-scope-change.md) - STOP-AND-SURFACE when scope shifts mid-plan.
