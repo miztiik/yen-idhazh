@@ -1,6 +1,6 @@
 # Agent Bootstrap
 
-**Last Updated**: 2026-09-14
+**Last Updated**: 2026-09-18
 
 What to read before answering. Not a ritual - a routing table. Read the page
 that owns what you are about to change, and stop.
@@ -25,6 +25,7 @@ Then read the one page that owns the thing you are changing.
 | Swapping the summarizer, or putting the old one back | [`../how-to/evaluate-new-summarizer-model.md`](../how-to/evaluate-new-summarizer-model.md) - the swap is one line in `config/idhazh.json` and the revert is the same line back |
 | A workflow, a gate, or what CI runs | [`../how-to/run-the-gates.md`](../how-to/run-the-gates.md) |
 | Anything whose cost grows as the repository grows | [`../concepts/growing-reads.md`](../concepts/growing-reads.md) |
+| A rough item on a to-do list that is not a plan yet | [`../how-to/take-an-item-to-plan.md`](../how-to/take-an-item-to-plan.md) - intent, then the way, then the contracts, then the sequence |
 | Anything you cannot place | [`../reference/documentation-structure.md`](../reference/documentation-structure.md) says who owns what |
 
 [`CLAUDE.md`](../../CLAUDE.md) is the contract. Read the section that bears on
@@ -50,6 +51,7 @@ seven and what each one rules are in `CLAUDE.md` section 14.
 
 ## See also
 
+- [`../how-to/take-an-item-to-plan.md`](../how-to/take-an-item-to-plan.md) - one item to a settled intent, way and contract.
 - [`../how-to/author-a-plan.md`](../how-to/author-a-plan.md) - authoring a plan-doc.
 - [`../how-to/execute-a-plan.md`](../how-to/execute-a-plan.md) - the execution contract.
 - [`../how-to/run-the-gates.md`](../how-to/run-the-gates.md) - what to run locally and what to leave to CI.
