@@ -223,10 +223,31 @@ class ItemObservation(Model):
         ge=0, description="The complete rendered request, as counted by the runtime."
     )
     completion_tokens: int = Field(ge=0)
+    prefill_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Milliseconds the runtime spent reading the prompt, summed over the "
+            "item's calls. Null where the runtime reported no timings. Kept apart "
+            "from decode because one scales with the article and the other with the "
+            "summary, so a single rate over both describes neither."
+        ),
+    )
+    decode_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description="Milliseconds spent writing the reply, summed over the item's calls.",
+    )
     fits_context_predicted: bool = Field(
         description="What `summarize.fits_context` said before the call."
     )
-    summarize_seconds: float = Field(ge=0.0)
+    summarize_seconds: float = Field(
+        ge=0.0,
+        description=(
+            "The item's whole wall clock, the seam between its calls included. It is "
+            "wider than prefill plus decode and is not their sum."
+        ),
+    )
 
 
 class ItemScore(Model):
@@ -296,6 +317,11 @@ class QualificationShard(Contract):
     __schema_stem__: ClassVar[str] = "qualification-shard"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-18",
+            change="An observation gains prefill_ms and decode_ms, both optional.",
+            why="The runtime reports the split on every reply and the shard was dropping it.",
+        ),
+        ChangelogEntry(
             version="2026-09-16",
             change="An observation's finish_reason is nullable.",
             why="A reply that named no reason no longer reaches this row as a clean stop.",
@@ -309,11 +335,6 @@ class QualificationShard(Contract):
             version="2026-09-14T04:00",
             change="inputs gains turn_markers_sha256, optional.",
             why="The turn envelope is a control, so a verdict has to record which one it ran.",
-        ),
-        ChangelogEntry(
-            version="2026-09-13T22:00",
-            change="Removed pipeline_fingerprint.",
-            why="`inputs` beside it records the same controls by name.",
         ),
         ChangelogEntry(
             version="2026-08-26",

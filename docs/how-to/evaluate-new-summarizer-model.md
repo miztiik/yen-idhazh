@@ -1,6 +1,6 @@
 # Swap the Summarizer Model
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-18
 The swap is one line in `config/idhazh.json`:
 
 ```json
@@ -587,6 +587,15 @@ there to report one.
 Both steps run under `if: always()`, on purpose. A run that died half way is
 exactly the one whose counts somebody wants, and `decide` exits non-zero on an
 ESCALATE - which is precisely the verdict the reader opened the page for.
+
+**When a page is not enough, the run kept the text.** Each shard uploads
+`captures-<shard>`: every prompt sent and every reply received, one file per
+call per item per repeat, for 30 days. That is what to open when a score is bad
+and the page cannot say why - a count never can.
+[analyze-a-pipeline-artifact.md](analyze-a-pipeline-artifact.md) is the
+procedure. Note what it costs: a prompt carries the article body, this
+repository is public, and GitHub asks only for read access to download an
+artifact (owner decision, 2026-09-18).
 
 ### 1.6 Decide
 
