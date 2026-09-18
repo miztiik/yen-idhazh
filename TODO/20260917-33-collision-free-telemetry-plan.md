@@ -102,7 +102,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 20 | Timing panels merge and move to Pipeline | 24 | I | PENDING | - | - | - |
 | 26 | Machine cards: L3 and bandwidth as bars - AMENDS Row #5 | 5, 11, 18 | I | PENDING | - | - | - |
 | 27 | Route grouping and panel order | 20, 26 | K | PENDING | - | - | - |
-| 29 | `prune.yml` wakes outside the digest window | - | J | PENDING | - | - | - |
+| 29 | `prune.yml` wakes outside the digest window | - | J | IN-FLIGHT | p33j29 | - | - |
 | 14 | The per-item machine load panel | - | - | **ABSORBED into #21** | - | - | - |
 | 9 | Server batching counters, per item | - | - | **COLLAPSED into #7** | - | - | - |
 | 8 | Memory split by prefill and decode | - | - | **ESCALATED - not dispatchable** | - | - | - |

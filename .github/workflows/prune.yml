@@ -32,9 +32,23 @@ on:
     # would fire on the 1st and 31st of a month and then again on the 1st.
     # `finetune.prune_every_days` is the cadence; this cron is only the wake-up.
     #
-    # 04:20 UTC sits between the 02:20 and 06:20 digest runs, so a prune that
-    # does fire is least likely to be racing a push.
-    - cron: '20 4 * * *'
+    # The MINUTE is derived, not chosen. A scheduled run starts 40 to 70 minutes
+    # after its cron minute and then takes 164 to 184 minutes end to end
+    # (`ubuntu-latest`, 2026-08-23/24, n=3 - docs/architecture/sources/freshness.md),
+    # so each `digest.yml` line at H:20 occupies H+1:00 to H+4:34. Those five
+    # spans leave one idle gap long enough to hold anything: 22:34 to 03:00, 266
+    # minutes. This job's force-push is its last step, so what has to fit is 40
+    # minutes of queue drift through its own 30-minute bound - a 60-minute
+    # window. Centred in the gap it leaves 103 minutes of margin on each side,
+    # which puts the wake-up at 23:37 and the push between 00:17 and 01:17.
+    #
+    # The old 04:20 sat inside the 02:20 run's 03:00-06:34 span, so a prune that
+    # did fire force-pushed inside the digest window nearly every day.
+    #
+    # This lowers the odds; it does not close them. GitHub queues scheduled runs
+    # by load, so a digest run later than the recorded normal still reaches this
+    # hour, and no workflow here can hold a lock against another one.
+    - cron: '37 23 * * *'
   workflow_dispatch:
     inputs:
       force:

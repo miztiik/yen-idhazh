@@ -50,6 +50,15 @@ EXPECTED_WORKFLOWS: Final = {
 
 CONTENT_REFRESH_UTC_HOURS: Final = (2, 6, 10, 14, 18)
 
+# What the platform and the pipeline cost the clock, measured on `ubuntu-latest`
+# over 2026-08-23/24, n=3: a scheduled run starts 40 to 70 minutes after its cron
+# minute, then takes 164 to 184 minutes end to end
+# (docs/architecture/sources/freshness.md). A schedule that has to miss a digest
+# run derives its span from these two, rather than naming an hour.
+SCHEDULED_START_DRIFT_MINUTES: Final = (40, 70)
+
+CONTENT_REFRESH_RUN_MINUTES: Final = (164, 184)
+
 # Every `workflow_dispatch` input in the repository, and the evidence that its
 # value is shaped before anything acts on it. Discovery is closed-world, so a
 # new input fails here until somebody writes down which of the three it is and
