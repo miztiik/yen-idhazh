@@ -1,6 +1,6 @@
 # Site Measurements
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-18
 Every number about **what the reader downloads**: the compression level the
 origin serves, each page's ceiling, what a cold load costs, how fast the site
 fills, and the weight of the archive, the search index and the published ledger.
@@ -872,7 +872,7 @@ is what a date-only feed date parses to and also what a story genuinely
 published at midnight parses to. That figure is why a midnight stamp still
 prints a clock: blanking it would hide the real midnight stories
 inside the same 1.0 percent, and the payload cannot say which they are
-([../architecture/publishing/layout.md](../architecture/publishing/layout.md#the-items-own-stamp-is-what-reads-it-and-what-it-can-and-cannot-say-2026-09-12)).
+([../architecture/publishing/layout.md](../architecture/publishing/layout.md#the-items-own-stamp-is-what-reads-it-and-what-it-can-and-cannot-say)).
 
 ### A phone gets no rail column, and this is the number that decided it
 

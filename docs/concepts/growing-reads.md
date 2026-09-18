@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-18
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**
@@ -228,7 +228,6 @@ listed: its cover is its argument. These are `backend/`'s;
 | `ledger.load_seen` | day files of `state/seen/` | `collect.seen_window_days`, committed at 90 |
 | `ledger.load_health` | day files of `state/feed-health/` | `ledger.HEALTH_WINDOW_DAYS`, 31 |
 | `ledger.load_item_health` | day files of `state/item-health/` | the caller's `within_days` |
-| `ledger.load_fitted_thresholds` | day files of `state/story-similarity/fitted-thresholds/` | the caller's `within_days`, and the fit asks for `max(settled_window_days, step_change_window_rows * 2)` - 28 days on the committed knobs. **The cover is in days and the guard's median is in rows, which is why it is twice the row count rather than equal to it.** One missed run leaves 13 rows inside a 14-day cover, the median returns nothing, and a guard that silently never fires is worse than one that fires too readily. A bound set by two knobs, never by what the archive holds |
 | the window refusal count | the same day files, through `load_item_health` | 30 days ending at the run date. **It took no new read.** The question - how many items the two-call sequence would not fit the window - is about the recent tail, and an answer over a longer span is dominated by shapes the pipeline no longer sends. The 30 dates are named by date arithmetic inside `load_item_health`, never by a directory walk, so the cost is 30 file opens whatever the archive holds. Read once on 2026-09-13 and written up in [the throughput page](../architecture/summarize/throughput.md); it is a verb a person types, off the daily path |
 | `ledger.reliability` | the feed-health day files in range | `collect.reliability_window_days` |
 | `ledger.load_published` | day files of `state/published/` | `collect.published_window_days`, **committed at `-1`** |
@@ -244,7 +243,6 @@ listed: its cover is its argument. These are `backend/`'s;
 | `stages.validate_days.stage_validate_days` | one `stat` a day, plus `state/day-validations.csv` | a receipt on payload length, digest and validator identity |
 | `ledger.append_counterfactual_scores` | one day file of `state/counterfactual-scores/` | one date, and inside it the run's own bounded pool - every item the run took plus `lens_weights.counterfactual_refused_per_desk` refused candidates a desk. A run's write costs the same on a five-year archive as on a fresh clone |
 | `ledger.load_settled_failures` | one item-health day file | one date |
-| `ledger.load_story_similarity_pairs` | one day file of `state/story-similarity/scored-pairs/` | one date. The fold counts a date into `score-distribution.json` once and the fit then reads only that record, so the day tree is opened by name and never walked. It costs the same on the thousandth day as on the third |
 | `ledger.load_source_counts` | one item-health day file | one date |
 | `ledger.load_runtime_counters` | streams `state/runtime-counters.csv` | one run |
 | `fingerprint.append_new` | streams `state/fingerprints.csv` | the identities on record, not the file |
@@ -631,9 +629,7 @@ to is a sort of names already in hand. Guardrail #10 says the design changes whe
 measurement contradicts it, so the optimisation was not written. The row shipped
 the defect the measurement uncovered instead: three month-name recognisers
 disagreed, and one was deleting files the other two protected. The rule they now
-share is [what counts as a month name](partitions.md#what-counts-as-a-month-name),
-and the full working is
-[in the layout doc](../architecture/publishing/layout.md#the-state-prunes-were-already-constant-cost-and-the-premise-that-said-otherwise-was-wrong-2026-09-08).
+share is [what counts as a month name](partitions.md#what-counts-as-a-month-name).
 
 Both are worth more on this page than a clean sweep would have been. A rule whose
 inventory only records the reads that bent to it teaches nothing about the ones
