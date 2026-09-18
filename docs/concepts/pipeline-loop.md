@@ -115,13 +115,17 @@ Three rules hold for all of them:
 - **Nothing under `state/` is ever served.** The console reads it at build time and bakes the numbers into the page. A reader gets the figures, never the file.
 
 **A ledger more than one job writes gets its rows through `state/segments/`.** A
-writer appends to a file named for its run, its attempt at that run, its job and
+writer writes one file named for its run, its attempt at that run, its job and
 its shard, so no two writers of one ledger ever share a path - which is what a
 lost push race needs in order to cost a merge rather than the rows. `idhazh
 compact` folds each waiting segment into the head its own rows name and deletes
 it. Two callers: `assemble`, before it publishes anything, and the next run's
 `plan` job, which is the only thing that reaches a segment left by a run that
 died before its assemble.
+
+`state/host-fingerprint/` is the first ledger through it, from 2026-09-17. Ten
+jobs of one run each draw a machine and each record it, and on 2026-09-16 those
+ten pushes raced and left the day file with nothing but its header.
 
 The compaction is the one writer here that rewrites a head rather than appending
 to it, and the segment store is what makes that safe: a rewrite is a race only
