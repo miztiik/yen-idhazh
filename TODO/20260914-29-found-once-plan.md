@@ -163,10 +163,10 @@ which is the same family.
 | 9 | The same story is one story for 36 hours, not one day | - | C | DONE | - | - | p29-r9 |
 | 10 | A story that has been running ranks below one that broke today | - | C | DONE | - | - | p29-r10 |
 | 11 | The lead is a weighted score, and the page says how | 10 | C | DONE | - | - | p29-r11 |
-| 12 | Label the sheet, then set the weights | - | C | PENDING | - | - | - |
+| 12 | Label the sheet, then set the weights | - | C | SUPERSEDED | - | - | - |
 | 13 | A source's quality decides its own future | - | C | DONE | - | - | p29-r13 |
 | 14 | The composite score, proving it changed nothing | - | C | DONE | - | #799 | p29-r14 |
-| 15 | The weights and the 0.88 floor | 12, 14 | D | PENDING | - | - | - |
+| 15 | The weights and the 0.88 floor | 12, 14 | D | SUPERSEDED | - | - | - |
 | 16 | Refuse boilerplate, on a week of evidence | 13 | D | DESCOPED | - | - | - |
 | 17 | Does a short extraction publish at all | - | D | DONE | - | - | p29-r17 |
 
@@ -628,7 +628,22 @@ but `rank_score` set to zero reproduces today's order exactly.
 
 ## Row #12 - label the sheet, then set the floor
 
-**Intent.** No floor is chosen by taste, and no weight in row #11 is either.
+**SUPERSEDED, 2026-09-17, by [`20260917-34-similarity-autotune-plan.md`](20260917-34-similarity-autotune-plan.md).**
+The owner ruled that the labelling is done by a model rather than a person, that
+the line fits itself daily, and that there is no hard floor. That is a subsystem
+rather than a row, so it has its own plan. Row #15 goes with it: the floor is no
+longer a number somebody picks once.
+
+**What this row got right and the new plan keeps.** No floor is chosen by taste.
+The sheet is blind. Precision and recall are different questions and a sample
+drawn only from below the line can measure just one of them.
+
+**What it got wrong.** The band it named, `[0.82, 0.94]`, stops at the floor, so
+it contains no pair the shipped rule calls positive and cannot measure the
+precision of what ships at all. The new plan's band is `[0.88, 1.00]`.
+
+**Intent, as written.** No floor is chosen by taste, and no weight in row #11 is
+either.
 
 **What labelling is, since it has been asked.** It is **not** training a model
 and it produces no model. A person reads two headlines and says whether they are

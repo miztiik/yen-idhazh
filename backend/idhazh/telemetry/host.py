@@ -19,10 +19,10 @@ fact that does not change inside a job - the processor, the runner label - and
 those come from one `host_facts()` call.
 
 **Every source is a local file read.** `/proc/stat`, `/proc/loadavg`,
-`/proc/self/status`, `/proc/<server pid>/status` and the cgroup peak file - one
-`open()` each, against a median 475,890 ms of model time. `psutil` would be a
-dependency, its install time and its shipped bytes for arithmetic that is four
-lines (Guardrail #8). What one reading costs is in
+`/proc/meminfo`, `/proc/self/status`, `/proc/<server pid>/status` and the cgroup
+peak file - one `open()` each, against a median 475,890 ms of model time.
+`psutil` would be a dependency, its install time and its shipped bytes for
+arithmetic that is four lines (Guardrail #8). What one reading costs is in
 `docs/reference/measurements.md`.
 
 **The arithmetic is not written twice.** `contracts.runtime_counters` already
@@ -64,6 +64,17 @@ PROC_STAT: Final = Path("/proc/stat")
 
 #: One-minute load, first field.
 LOADAVG: Final = Path("/proc/loadavg")
+
+#: The whole machine's own account of its memory. Every other reading in this
+#: module is about a PROCESS, and no sum of process marks answers what is left:
+#: llama.cpp maps the weights with no `-lm`, so their resident pages are
+#: file-backed and evictable in every RSS figure, and a page two processes share
+#: is counted twice.
+MEMINFO: Final = Path("/proc/meminfo")
+
+#: The five `/proc/meminfo` lines this project reads, spelled the kernel's way.
+#: One open answers all five, because five opens would describe five instants.
+MEMINFO_KEYS: Final = ("MemTotal", "MemAvailable", "Cached", "SwapFree", "SwapTotal")
 
 #: Where a process reports its own resident and peak-resident memory.
 PROC: Final = Path("/proc")
@@ -120,6 +131,34 @@ def load_1m() -> float | None:
         return float(cells[0])
     except ValueError:
         return None
+
+
+def meminfo_bytes(reported: str | None = None) -> dict[str, int | None]:
+    """The five `/proc/meminfo` lines this project reads, in bytes.
+
+    One open for five readings, because they have to describe one instant. The
+    kernel reports these in kilobytes, so the conversion is here rather than at
+    each reader.
+
+    A machine with no `/proc/meminfo` answers five unknowns and never raises,
+    which is what every machine this project is written on does. A key the file
+    does not carry is unknown for the same reason, and unknown is not zero
+    (CLAUDE.md section 1a) - a box with no swap writes a real `SwapTotal: 0`,
+    and that is a different fact from a box that was never asked.
+    """
+    text = _text(MEMINFO) if reported is None else reported
+    found: dict[str, int | None] = dict.fromkeys(MEMINFO_KEYS)
+    if text is None:
+        return found
+    for line in text.splitlines():
+        name, marked, rest = line.partition(":")
+        key = name.strip()
+        if not marked or key not in found:
+            continue
+        cells = rest.split()
+        if cells and cells[0].isdigit():
+            found[key] = int(cells[0]) * _KB
+    return found
 
 
 def cgroup_peak_bytes(reported: str | None = None) -> int | None:
@@ -283,16 +322,30 @@ class HostReading:
     llama_rss_bytes: int | None
     llama_rss_peak_bytes: int | None
     python_rss_bytes: int | None
+    #: What the MACHINE had at this instant, against the four process marks
+    #: above. `mem_available_bytes` is the kernel's own estimate of what a new
+    #: allocation could get, which is the question a headroom decision asks.
+    mem_available_bytes: int | None
+    mem_total_bytes: int | None
+    mem_cached_bytes: int | None
+    swap_free_bytes: int | None
+    swap_total_bytes: int | None
 
 
 def read_now(*, server_pid: int | None = None) -> HostReading:
     """Every point-in-time reading, taken together so they describe one instant."""
+    machine = meminfo_bytes()
     return HostReading(
         cpu_stat=_text(PROC_STAT),
         load_1m=load_1m(),
         llama_rss_bytes=_status_kb(server_pid, "VmRSS"),
         llama_rss_peak_bytes=_status_kb(server_pid, "VmHWM"),
         python_rss_bytes=_status_kb(os.getpid(), "VmRSS"),
+        mem_available_bytes=machine["MemAvailable"],
+        mem_total_bytes=machine["MemTotal"],
+        mem_cached_bytes=machine["Cached"],
+        swap_free_bytes=machine["SwapFree"],
+        swap_total_bytes=machine["SwapTotal"],
     )
 
 
@@ -313,6 +366,15 @@ class HostCells:
     llama_rss_peak_bytes: int | None
     python_rss_bytes: int | None
     cgroup_peak_bytes: int | None
+    #: What the machine had, against the four process marks above. The last one
+    #: is the only cell here taken over the window rather than at its end: the
+    #: closest this item took the machine to running out.
+    os_mem_available_bytes: int | None
+    os_mem_total_bytes: int | None
+    os_mem_cached_bytes: int | None
+    os_swap_free_bytes: int | None
+    os_swap_total_bytes: int | None
+    os_mem_available_min_bytes: int | None
 
     def cells(self) -> dict[str, float | int | None]:
         """The cells by the names `ItemHealthRow` gives them."""
@@ -325,6 +387,12 @@ class HostCells:
             "llama_rss_peak_bytes": self.llama_rss_peak_bytes,
             "python_rss_bytes": self.python_rss_bytes,
             "cgroup_peak_bytes": self.cgroup_peak_bytes,
+            "os_mem_available_bytes": self.os_mem_available_bytes,
+            "os_mem_total_bytes": self.os_mem_total_bytes,
+            "os_mem_cached_bytes": self.os_mem_cached_bytes,
+            "os_swap_free_bytes": self.os_swap_free_bytes,
+            "os_swap_total_bytes": self.os_swap_total_bytes,
+            "os_mem_available_min_bytes": self.os_mem_available_min_bytes,
         }
 
 
@@ -355,6 +423,7 @@ class Watch:
         "_busy",
         "_facts",
         "_first",
+        "_headroom",
         "_interval",
         "_last",
         "_on_tick",
@@ -376,10 +445,22 @@ class Watch:
         self._on_tick = on_tick
         self._facts = facts
         self._busy: list[float] = []
+        self._headroom: list[int] = []
         self._first = read_now(server_pid=server_pid)
+        self._note_headroom(self._first)
         self._last = self._first
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+
+    def _note_headroom(self, reading: HostReading) -> None:
+        """Keep what the kernel said was left, so the item's floor is this item's.
+
+        The window matters more than the arithmetic. A shard's job is about nine
+        times an item's model time and most items overlap, so a floor taken over
+        the job would put one number on nearly every row.
+        """
+        if reading.mem_available_bytes is not None:
+            self._headroom.append(reading.mem_available_bytes)
 
     def __enter__(self) -> Watch:
         if self._interval > 0:
@@ -398,6 +479,7 @@ class Watch:
             share = cpu_busy_pct_between(previous.cpu_stat, now.cpu_stat)
             if share is not None:
                 self._busy.append(share)
+            self._note_headroom(now)
             self._last = now
             previous = now
             if self._on_tick is not None:
@@ -417,6 +499,7 @@ class Watch:
             self._thread = None
         end = read_now(server_pid=self._pid)
         self._last = end
+        self._note_headroom(end)
         whole = cpu_busy_pct_between(self._first.cpu_stat, end.cpu_stat)
         seen = [*self._busy, *([] if whole is None else [whole])]
         peaks = [
@@ -437,6 +520,12 @@ class Watch:
             llama_rss_peak_bytes=max(peaks) if peaks else None,
             python_rss_bytes=end.python_rss_bytes,
             cgroup_peak_bytes=peak,
+            os_mem_available_bytes=end.mem_available_bytes,
+            os_mem_total_bytes=end.mem_total_bytes,
+            os_mem_cached_bytes=end.mem_cached_bytes,
+            os_swap_free_bytes=end.swap_free_bytes,
+            os_swap_total_bytes=end.swap_total_bytes,
+            os_mem_available_min_bytes=min(self._headroom) if self._headroom else None,
         )
 
 

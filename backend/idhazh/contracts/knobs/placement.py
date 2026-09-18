@@ -12,6 +12,15 @@ from pydantic import Field, model_validator
 from idhazh.contracts.base import Model
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 
+# The band rule is one rule and the record owns the number. Imported rather than
+# re-declared: two literals for one tolerance drift the first time somebody
+# loosens one, and then a band this file accepts is a band the record refuses,
+# hours later and on the first fold. The `as` spelling is deliberate - it is how
+# a module says a re-export is intended rather than accidental.
+from idhazh.contracts.story_similarity_distribution import (
+    GRID_TOLERANCE as GRID_TOLERANCE,
+)
+
 #: The knobs `assemble` used to carry, and where each one went. Spelled as a
 #: whole path because the floor moved down a level rather than changing its
 #: name, and an operator sent to `assemble.floor_min` is sent to a key that does
@@ -25,6 +34,317 @@ SUPERSEDED_ASSEMBLE_NAMES: Final[Mapping[str, str]] = MappingProxyType(
 #: binary sum is 0.9999999999999999, so exact equality refuses a split nothing
 #: is wrong with. A billionth is far below any weight worth setting.
 _WEIGHTS_TOLERANCE: Final = 1e-9
+
+#: The gap between TODAY's floor and the highest-scoring pair a person marked as
+#: TWO stories - Ontario's pushback against the lake renaming, at 0.9317, against
+#: a floor of 0.94. Measured 2026-09-01 on Intel Core i7-1265U / Windows 11 /
+#: Python 3.14.2 over 3,978 items across eleven committed days. It is a reading
+#: of one moment rather than a property of the system: the live margin is
+#: applied - 0.9317, and it shrinks every time the line falls. A single downward
+#: step larger than this reading can cross the margin in one day, which is why it
+#: bounds max_down_step rather than sitting in a comment.
+HOLDOUT_MARGIN: Final = 0.0083
+
+#: Wall clock for one judge call at 764 read tokens, in seconds. Derived from the
+#: repository's own reading of 9.85 tokens a second - median over 4,117 timed
+#: rows, slowest 8.25, fastest 44.71, taken 2026-09-09 on a stock ubuntu-latest
+#: (docs/reference/measurements.md). It is here because pair_budget is bounded
+#: against the leg timeout and that arithmetic needs a seconds-a-call figure with
+#: a source. Row 17 replaces it with a reading taken on the judge prompt itself.
+SECONDS_A_CALL: Final = 77.6
+
+
+class SimilarityThresholdConfig(Model):
+    """How the merge line fits itself, and the gates it has to clear before it may.
+
+    Nested inside `SameStoryConfig` rather than flat under `assemble`, for the
+    reason that model's own docstring gives: a knob whose legal value depends on
+    another knob's value belongs where a validator can see both. `max_down_step`
+    is bounded by a margin measured against `floor_min`, and `band_low` has to
+    sit below the line `floor_min` currently holds.
+
+    **Nothing reads this block yet.** It ships with `enabled` off, so a fresh
+    clone publishes exactly what it published before the block existed.
+    """
+
+    enabled: bool = Field(
+        default=False,
+        description=(
+            "Whether assemble reads the fitted line instead of floor_min. Ships off, so a "
+            "fresh clone publishes exactly what it published before this feature existed. "
+            "Removal condition: delete this flag once row 9 has run 14 days and the fitted "
+            "line has moved no published group a person disagreed with."
+        ),
+    )
+    band_low: float = Field(
+        default=0.88,
+        gt=0.0,
+        lt=1.0,
+        description=(
+            "The lowest score worth judging. Below it two items are nowhere near one "
+            "story, so a verdict costs a model call and moves nothing. 0.88 is where the "
+            "measured pairs start: the highest pair a person marked as two stories sits at "
+            "0.9317, so the band opens well below every decision the line has to get right."
+        ),
+    )
+    band_high: float = Field(
+        default=1.0,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "The top of the band. 1.00, because a cosine goes no higher and a pair at 0.999 "
+            "is still a pair the record should hold a slot for."
+        ),
+    )
+    bin_width: float = Field(
+        default=0.001,
+        gt=0.0,
+        le=0.01,
+        description=(
+            "How finely the record slices the band, and therefore the resolution of the "
+            "fitted line. 0.001 is eight times finer than the 0.0083 margin the line has to "
+            "stay above, so the slot edge is never what puts the line on the wrong side of a "
+            "hand-marked pair. Finer costs slots and coarser costs precision on the one "
+            "number this feature exists to set."
+        ),
+    )
+    discard_share: float = Field(
+        default=0.01,
+        gt=0.0,
+        lt=0.5,
+        description=(
+            "What share of judged NO pairs the fit sets aside at the top before placing the "
+            "line. 0.01 is what stops one bad verdict setting the number: a single NO at "
+            "0.97 would otherwise pin the line at 0.971 for ever, because the line is the "
+            "stopped slot's upper edge. floor(total * 0.01) sets one pair aside at 100 "
+            "negatives and two at 200, which is what minimum_negatives waits for."
+        ),
+    )
+    smoothing_weight: float = Field(
+        default=0.15,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "How much of a DOWNWARD move lands today. 0.15 means a relaxation arrives over "
+            "five to seven days while a tightening arrives whole, because raising the line "
+            "reduces wrong merges and lowering it increases them. Symmetric damping would "
+            "make the safe move a week late."
+        ),
+    )
+    max_down_step: float = Field(
+        default=0.005,
+        gt=0.0,
+        lt=HOLDOUT_MARGIN,
+        description=(
+            "The furthest the line may fall in one day. 0.005 leaves TODAY's 0.0083 gap "
+            "uncrossable in one day. The gap is not a constant: it is applied minus 0.9317, "
+            "so it shrinks as the line falls, and once the line reaches 0.9367 one legal "
+            "step lands on the marked pair. That is why the holdout report is read on every "
+            "day rather than once. The owner proposed 0.010, which is larger than today's "
+            "gap, so it would have crossed on its first step."
+        ),
+    )
+    step_change_multiple: float = Field(
+        default=5.0,
+        gt=1.0,
+        le=50.0,
+        description=(
+            "How far out of line one day's evidence has to be before the guard holds. "
+            "Measured against the median daily shift of the last fourteen rows, never a "
+            "standard deviation: the daily shift shrinks as 1/days and is not normally "
+            "distributed, so a sigma is the wrong ruler. 5 is an ESTIMATE. What replaces it "
+            "is the spread of the first fourteen written rows."
+        ),
+    )
+    step_change_guard_enforced: bool = Field(
+        default=False,
+        description=(
+            "Whether the guard actually holds the line or only records that it would have. "
+            "Ships off, because enforcing a hold on a multiple nobody has measured lets an "
+            "unchecked number freeze the line. Removal condition: delete this flag once "
+            "step_change_multiple carries a value measured from fourteen written rows."
+        ),
+    )
+    pair_budget: int = Field(
+        default=200,
+        ge=1,
+        description=(
+            "How many pairs a day may be judged. 200 pairs judged twice is 400 calls, which "
+            "is 100 calls on each of four legs, which at 77.6 seconds a call is 2 hours 9 "
+            "minutes of model time a leg. That figure is derived from 9.85 tokens a second "
+            "measured on a stock runner, not from a judge call; row 17 measures a real one. "
+            "Raising it is a job-timeout question before it is a quality one, and a "
+            "validator refuses a value that does not fit the leg."
+        ),
+    )
+    shards: int = Field(
+        default=4,
+        ge=1,
+        le=8,
+        description=(
+            "How many judging legs split the day. 4 legs, one llama-server each, because one "
+            "server on the configured weights already peaks at 12.57 to 13.16 GiB and "
+            "reaches 14.31 GiB with the shard's python - 96.0 percent of the 16 GB runner, "
+            "measured 2026-09-08 over four shards of run 2026-08-29-3. A second server on "
+            "one runner does not fit at all. The ceiling of 8 is what a GitHub matrix leg "
+            "costs rather than a measured limit."
+        ),
+    )
+    judge_temperature: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=2.0,
+        description=(
+            "How far the judge's sampler may stray from the likeliest word. 0.0, because "
+            "every pair is read twice with the two summaries swapped and the two readings "
+            "are then compared: at 0.0 a disagreement is position bias, which is the thing "
+            "disagreement_max gates on. Above 0.0 the same pair can answer differently with "
+            "nothing swapped at all, so the comparison measures sampling noise instead and "
+            "the gate stops meaning what its own name says. It sits here rather than on "
+            "models.summarize.inference because that entry pins its temperature for writing "
+            "summaries, which is a different job on the same weights."
+        ),
+    )
+    minimum_negatives: int = Field(
+        default=200,
+        ge=1,
+        description=(
+            "Agreed NO verdicts the record needs before the fit may set the line at all. "
+            "200, because discard_share is 0.01 and one percent of anything smaller sets "
+            "aside less than two pairs, which is the same as setting aside none."
+        ),
+    )
+    minimum_above_line: int = Field(
+        default=30,
+        ge=1,
+        description=(
+            "Judged pairs at or above the current line the record needs before the fit runs. "
+            "30 is an ESTIMATE of enough to notice a wrong merge rate; what replaces it is "
+            "the first month of holdout readings. These pairs are the entire precision "
+            "measurement and are never sampled away."
+        ),
+    )
+    minimum_days: int = Field(
+        default=10,
+        ge=1,
+        description=(
+            "Distinct dates the record needs before the fit runs. 10, so the line is never "
+            "set by a fortnight of one kind of news."
+        ),
+    )
+    disagreement_max: float = Field(
+        default=0.15,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "How often the two orders may disagree before the run holds with judge_unstable. "
+            "0.15 means one pair in seven flipping with the order, at which point the "
+            "verdicts are reading the prompt layout rather than the articles. An ESTIMATE; "
+            "what replaces it is the first fourteen written rows."
+        ),
+    )
+    unclear_max: float = Field(
+        default=0.35,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "What share of readings may be UNCLEAR before the run holds with "
+            "judge_uncertain. 0.35 is where the middle bucket starves the two the line is "
+            "fitted on. UNCLEAR means the text does not say enough, never that the pair is "
+            "halfway between. An ESTIMATE, replaced the same way."
+        ),
+    )
+    settled_window_days: int = Field(
+        default=7,
+        ge=1,
+        le=90,
+        description=(
+            "How far back step 4 looks to ask whether a whole week of fresh judgements "
+            "changed the answer. 7 days, because that is a week of news rather than a "
+            "statistical window: the damping already carries a day-to-day correlation of "
+            "0.85, so a shorter window asks the smoothing whether the smoothing worked."
+        ),
+    )
+    settled_delta: float = Field(
+        default=0.001,
+        gt=0.0,
+        le=0.01,
+        description=(
+            "How small the week-on-week move has to be to count as settled. 0.001, which is "
+            "one bin width, so settling is measured at the line's own resolution and never "
+            "at a precision the fit cannot produce."
+        ),
+    )
+    applied_lookback_days: int = Field(
+        default=7,
+        ge=1,
+        le=90,
+        description=(
+            "How many days back assemble will look for a fitted line before it falls back to "
+            "the config floor. 7, because the fit writes a row every day, so a gap longer "
+            "than a week means the judge has been down a week and the committed config value "
+            "is the honest answer."
+        ),
+    )
+    step_change_window_rows: int = Field(
+        default=14,
+        ge=2,
+        le=90,
+        description=(
+            "How many written rows the guard's median is taken over. 14 rows, counted as "
+            "rows rather than as days: a window in days returns fewer rows than it names "
+            "after any missed run, and a median over four rows would let the guard fire on "
+            "noise. The fit reads a window of days wide enough to find them and takes the "
+            "newest 14 it has."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _the_band_divides_into_whole_slots(self) -> Self:
+        """A band that ends mid-slot leaves a part-slot whose counts mean something else.
+
+        Checked here as well as on the record, because the record's own
+        validator would refuse the first fold hours after the config edit, in
+        CI, with nothing on the row saying which of three knobs to move. The
+        message names both numbers and the remainder for the same reason.
+        """
+        span = self.band_high - self.band_low
+        slots = span / self.bin_width
+        remainder = abs(slots - round(slots))
+        if remainder > GRID_TOLERANCE:
+            raise ValueError(
+                f"a band of {self.band_low} to {self.band_high} is {span} wide, which does "
+                f"not divide into whole slots of {self.bin_width}: it leaves "
+                f"{remainder * self.bin_width} over. Move band_high, band_low or bin_width"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _the_band_opens_below_where_it_closes(self) -> Self:
+        """A band that opens at or above its own top holds no slots at all."""
+        if self.band_low >= self.band_high:
+            raise ValueError(
+                f"the band opens at {self.band_low} and closes at {self.band_high}, so it "
+                "holds no scores"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _a_move_may_not_cross_the_margin_in_one_day(self) -> Self:
+        """One step may not carry the line past the closest pair a person marked apart.
+
+        Spelled as a validator as well as a field bound so that the refusal
+        names the margin and the measurement instead of printing a bare `lt`
+        failure (Guardrail #10).
+        """
+        if self.max_down_step >= HOLDOUT_MARGIN:
+            raise ValueError(
+                f"max_down_step is {self.max_down_step}, and the gap between today's floor "
+                f"and the highest pair a person marked as two stories is {HOLDOUT_MARGIN} "
+                "(0.94 against 0.9317, measured 2026-09-01). A step that size crosses the "
+                "margin in one day"
+            )
+        return self
 
 
 class SameStoryConfig(Model):
@@ -104,6 +424,9 @@ class SameStoryConfig(Model):
             "which is what the shipped weights still score."
         ),
     )
+    adaptive_dedup_threshold: SimilarityThresholdConfig = Field(
+        default_factory=SimilarityThresholdConfig
+    )
 
     @model_validator(mode="after")
     def _the_weights_sum_to_one(self) -> Self:
@@ -125,6 +448,24 @@ class SameStoryConfig(Model):
                 f"the same_story weights must sum to 1.0, and these sum to {total} "
                 f"({spelled}). Every term runs 0 to 1, so the weights are what keep "
                 "the score on the same scale as floor_min"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _the_band_opens_below_the_line_it_replaces(self) -> Self:
+        """A band that opens above today's floor can only ever confirm what already merges.
+
+        Every pair it judges is a pair the pass merges anyway, so the record
+        fills with agreements and the line can never come down - while every
+        number in the file still looks legal. Checked on this model because
+        `floor_min` is this model's field and a nested model cannot see it.
+        """
+        band_low = self.adaptive_dedup_threshold.band_low
+        if band_low >= self.floor_min:
+            raise ValueError(
+                f"adaptive_dedup_threshold.band_low is {band_low} and floor_min is "
+                f"{self.floor_min}, so every pair in the band already merges and the "
+                "fitted line could only ever rise"
             )
         return self
 

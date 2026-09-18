@@ -360,6 +360,11 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-17T18:00",
+            change="Six os_ columns: what the machine had, not only what a process held.",
+            why="An RSS mark counts evictable weight pages, so it cannot answer headroom.",
+        ),
+        ChangelogEntry(
             version="2026-09-17T12:00",
             change="Retired runner_name; the host record carries it at job grain.",
             why="Nothing read the item-row copy, and a second copy is a thing that can disagree.",
@@ -373,11 +378,6 @@ class ItemHealthRow(Contract):
             version="2026-09-16T12:30",
             change="The three slot columns carry the item's first call.",
             why="All three were declared with no producer; the pinned build reports them.",
-        ),
-        ChangelogEntry(
-            version="2026-09-16",
-            change="label_ms and summary_ms are a stopwatch; both finish reasons may be null.",
-            why="A clock that was its two neighbours summed could not see a wait.",
         ),
         ChangelogEntry(
             version="2026-08-23",
@@ -911,6 +911,70 @@ class ItemHealthRow(Contract):
     )
     failed_rule: OneLine | None = Field(
         default=None, description="The rule that refused it, named by our own validator."
+    )
+
+    # --- What the machine had ------------------------------------------------
+    #
+    # Every memory cell above is what a PROCESS held, and no sum of those
+    # answers what was left: llama.cpp maps the weights with no `-lm`, so their
+    # resident pages are file-backed and evictable in every RSS figure, and a
+    # page two processes share is counted twice. These six are the kernel's own
+    # account, sampled by the same `Watch` over the same model window.
+    #
+    # They sit at the end rather than beside the RSS cells because
+    # `csv_columns()` is declaration order: a column filed in the middle would
+    # move every later value one place left under a reader that maps by
+    # position, across every day file an earlier run wrote.
+    os_mem_available_bytes: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Memory the kernel says a new allocation could have when the item ended, "
+            "from /proc/meminfo MemAvailable. This is headroom; an RSS mark is not."
+        ),
+    )
+    os_mem_total_bytes: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "What the machine has, from /proc/meminfo MemTotal. Constant within a job; "
+            "recorded per item so a row means something on its own."
+        ),
+    )
+    os_mem_cached_bytes: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Page cache when the item ended, from /proc/meminfo Cached. Most of the model "
+            "weights sit here, so a drop is the kernel evicting what the next item has to "
+            "read again."
+        ),
+    )
+    os_swap_free_bytes: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Swap left when the item ended, from /proc/meminfo SwapFree. A fall here is "
+            "the machine in trouble before the cgroup kill."
+        ),
+    )
+    os_swap_total_bytes: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Swap this machine has, from /proc/meminfo SwapTotal. Recorded because a free "
+            "figure of zero says 'no swap on this box' and 'swap fully consumed' equally, "
+            "and only the second is an emergency."
+        ),
+    )
+    os_mem_available_min_bytes: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Lowest MemAvailable seen while the model was working on this item, from "
+            "/proc/meminfo sampled by that item's own watch. The closest this item took "
+            "the machine to its limit."
+        ),
     )
 
     @property

@@ -1,6 +1,29 @@
 {
   "assemble": {
     "same_story": {
+      "adaptive_dedup_threshold": {
+        "applied_lookback_days": 7,
+        "band_high": 1.0,
+        "band_low": 0.88,
+        "bin_width": 0.001,
+        "disagreement_max": 0.15,
+        "discard_share": 0.01,
+        "enabled": false,
+        "judge_temperature": 0.0,
+        "max_down_step": 0.005,
+        "minimum_above_line": 30,
+        "minimum_days": 10,
+        "minimum_negatives": 200,
+        "pair_budget": 200,
+        "settled_delta": 0.001,
+        "settled_window_days": 7,
+        "shards": 4,
+        "smoothing_weight": 0.15,
+        "step_change_guard_enforced": false,
+        "step_change_multiple": 5.0,
+        "step_change_window_rows": 14,
+        "unclear_max": 0.35
+      },
       "cosine_weight": 1.0,
       "floor_min": 0.94,
       "key_point_weight": 0.0
@@ -245,6 +268,7 @@
     "site_budget_mb": 800
   },
   "run": {
+    "judge_shard_timeout_minutes": 200,
     "max_parallel": 4,
     "safety_ceiling_per_day": 400,
     "safety_ceiling_per_run": 80,

@@ -22,9 +22,9 @@ import { splitByMachine } from '$lib/charts/machine-split';
 import { machineCards, type MachineCards } from '$lib/charts/machine-cards';
 import { machineKeys, machineRamp } from '$lib/charts/machine-colour';
 import { fleetOverWindow, type FleetView } from '$lib/charts/fleet';
-import { hostFingerprints, watchedFlags } from '$lib/server/host-fingerprint';
+import { hostFingerprints, machineRecordDays, watchedFlags } from '$lib/server/host-fingerprint';
 import { windowOfDays } from '$lib/charts/viewport';
-import { recordingNotes, type RecordingNotes } from '$lib/console/recording';
+import { recordingNotes, type LostDay, type RecordingNotes } from '$lib/console/recording';
 import {
 	chartConfig,
 	consoleConfig,
@@ -32,7 +32,7 @@ import {
 	observabilityConfig,
 	runConfig
 } from '$lib/server/config';
-import { itemHealthRows, evalRows, loadManifests, shardDays, shardMonths } from '$lib/server/payload';
+import { itemHealthRows, evalRows, loadDay, loadManifests, shardDays, shardMonths } from '$lib/server/payload';
 import { pipelineChanges } from '$lib/server/model-work';
 import {
 	CLOCKS_AGREE_WITHIN_PCT,
@@ -83,6 +83,9 @@ export interface MachineWindow {
 	runsRead: number;
 	refused: RefusedRun[];
 	recording: RecordingNotes;
+	/** What the MACHINE record was doing, which is a different instrument from
+	 * the counters above and can be in a different state on the same day. */
+	machineRecord: RecordingNotes;
 	cacheDays: CacheDay[];
 	batching: { highest: number | null; from: number; outOf: number };
 	cpuBusySpan: FigureSpan;
@@ -152,6 +155,23 @@ export async function load() {
 	const fingerprints = hostFingerprints(days);
 	const flagNames = watchedFlags();
 
+	// **The third state this route has to be able to say.** A day the machine
+	// record opened a file for and kept no row of, that published articles
+	// anyway, lost what it measured - the run worked, the measurement did not
+	// survive. It is not the day the record had not started on, and it is not a
+	// quiet day, and until 2026-09-17 all three drew the same sentence.
+	//
+	// A day payload is opened only for a candidate, and a candidate is a day
+	// whose record file exists and holds nothing. A healthy archive has none, so
+	// this costs nothing on a healthy archive and stays bounded by the same
+	// cover on a broken one (`CLAUDE.md` Guardrail #12).
+	const recordedDays = new Set(fingerprints.map((row) => row.date));
+	const lostDays: LostDay[] = machineRecordDays(days)
+		.filter((date) => !recordedDays.has(date))
+		.map((date) => ({ date, articles: loadDay(date)?.items.length ?? 0 }))
+		.filter((day) => day.articles > 0)
+		.sort((left, right) => left.date.localeCompare(right.date));
+
 	// **One ramp for the whole page, assigned over every machine any panel can
 	// show at any preset.** Assigned per panel or per span, a machine would change
 	// colour when the operator moved the window - and comparing spans is what the
@@ -177,6 +197,8 @@ export async function load() {
 			rows.filter((row) => row.date >= span.start && row.date <= span.end);
 
 		const runs = inSpan(counters.runs);
+		const lostInSpan = inSpan(lostDays);
+		const spanDays = [...new Set(inSpan(dates.map((date) => ({ date }))).map((row) => row.date))].sort();
 		const healthRows = health.filter(
 			(row) => (row.date ?? '') >= span.start && (row.date ?? '') <= span.end
 		);
@@ -205,10 +227,20 @@ export async function load() {
 				enabled: observability.runtime_counters_scrape,
 				rate: observability.sample_rate,
 				recorded: [...new Set(runs.map((run) => run.date))].sort(),
-				window: [...new Set(inSpan(dates.map((date) => ({ date }))).map((row) => row.date))].sort(),
+				window: spanDays,
 				coveredElsewhere: [...new Set(healthRows.map((row) => row.date ?? ''))]
 					.filter((date) => date !== '')
 					.sort()
+			}),
+			// The machine record is the other instrument on this route, and it has
+			// its own three states. It carries no sampling knob, so it owes no
+			// sampling caveat and passes no rate.
+			machineRecord: recordingNotes({
+				enabled: observability.host_fingerprint,
+				recorded: [...new Set(inSpan(fingerprints).map((row) => row.date))].sort(),
+				window: spanDays,
+				lost: lostInSpan,
+				figures: 'machine record'
 			}),
 			cacheDays: cacheByDay(runs),
 			batching: {
@@ -232,7 +264,8 @@ export async function load() {
 				ramp,
 				keys,
 				start: span.start,
-				end: span.end
+				end: span.end,
+				lost: lostInSpan
 			}),
 			tokens,
 			tokenTotals: tokens.reduce(
@@ -303,7 +336,10 @@ export async function load() {
 		colourStops: console_.machine_colour_stops,
 		recording: observability.host_fingerprint,
 		ramp,
-		keys
+		keys,
+		// A snapshot like the panels around it, so the loss is this run's own day
+		// rather than anything the window says.
+		lost: lostDays.find((day) => day.date === (newest?.date ?? '')) ?? null
 	});
 	const clocks = clockAgreement(newest, health, CLOCKS_AGREE_WITHIN_PCT);
 	const clocksPlot = clocksChart(clocks.pairs);

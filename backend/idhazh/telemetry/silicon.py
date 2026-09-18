@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
-from idhazh import ledger
+from idhazh import ledger, run_context
 from idhazh.contracts.host_fingerprint import WATCHED_FLAGS, HostFingerprintRow
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.runtime_counters import WORK_JOB, ServerJob
@@ -293,6 +293,12 @@ def stage_fingerprint(
     the model server in `work`, the embeddings and the site build in `assemble`.
     A probe taken at the end of a job would measure that step rather than the
     host.
+
+    The row goes to this job's own segment, never to the day file. Ten jobs of
+    one run each draw a machine and each record it, so ten runners would be
+    appending to one path at once; on 2026-09-16 that race left the day
+    header-only. `assemble` folds the segments into the head, and the attempt is
+    in the name so a re-run corrects its first try rather than colliding with it.
     """
     knobs = settings.app.observability
     if not knobs.host_fingerprint:
@@ -305,11 +311,20 @@ def stage_fingerprint(
         shard=shard,
         probe_mib=knobs.host_fingerprint_bandwidth_mib,
     )
-    landed = ledger.append_host_fingerprint(state_root, plan.date, [row])
+    attempt = run_context.run_attempt()
+    landed = ledger.write_segment(
+        state_root,
+        ledger.SegmentLedger.HOST_FINGERPRINT,
+        [row],
+        run_id=plan.run_id,
+        attempt=attempt,
+        job=job,
+        shard=shard,
+    )
     LOG.info(
         "fingerprint job=%s shard=%s run=%s id=%s cpu=%s family=%s model=%s stepping=%s "
         "flags=%s l3_bytes=%s memcpy_gib_s=%s probe_mib=%s vm_size=%s zone=%s "
-        "boot_seconds=%s mhz=%s rows=%s",
+        "boot_seconds=%s mhz=%s rows=%s segment=%s",
         job,
         shard,
         plan.run_id,
@@ -327,5 +342,12 @@ def stage_fingerprint(
         row.boot_seconds,
         row.mhz_at_probe,
         landed,
+        ledger.segment_relpath(
+            ledger.SegmentLedger.HOST_FINGERPRINT,
+            run_id=plan.run_id,
+            attempt=attempt,
+            job=job,
+            shard=shard,
+        ),
     )
     return row

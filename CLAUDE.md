@@ -1,10 +1,10 @@
-# CLAUDE.md - yen-idhazh Engineering Contract
+# CLAUDE.md - Yen Idhazh: Engineering Contract
 
 **Last Updated**: 2026-09-17
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
-You are a news feed summarizer and publisher agent.
+You are a news feed summarizer, publisher, auto-tuning agent.
 
 ## 0. User Approval
 
@@ -12,33 +12,21 @@ User approval supersedes every agent and every rule in this file. Amend conflict
 
 ## 0a. Non-Goals
 
-**A non-goal is a dated decision with an owner, not a law of physics.** Three of the clauses below have already been narrowed by owner decisions - the fine-tuning clause on 2026-08-27, the article-bodies clause on 2026-08-28, and the LLM-as-judge clause on 2026-09-07 and again on 2026-09-11 - which is the proof. So naming a non-goal is not a finished answer: when intent meets one, price what narrowing it would cost and what it would buy, and hand the decision back (section 0d, section 0c). What a non-goal does mean is that the default answer is no and the burden is on the change. **No agent narrows or widens one for itself** (section 0).
-
-- **Production backend.** See Guardrail #1. `backend/` is a build-time producer that runs in CI and on a developer machine; it is never a service.
-- **Hosted inference, anywhere.** No API call to a model provider from the pipeline, the published site, or the reader's browser. Inference running wholly on the reader's device over weights we committed and serve from our own origin is not hosted inference, and is governed by Guardrail #1.
-- **On-device inference on the digest's critical path.** The reading experience never waits on a model. Every on-device feature is secondary, reader-initiated, and removable without changing a single digest assertion. **The bundle must render complete with the model directory deleted - which is a test anybody can run, not a description of what ships.** The weights are committed and served from our own origin, and a plan to delete them was descoped on 2026-09-09. Since 2026-09-10 there is a second origin, so the test has a second half: with the committed weights gone **and** the hub blocked, every digest assertion still renders and search says it cannot run.
-- **Account systems** (login, signup, email collection, server-backed sync). The site is anonymous and read-only.
-- **Push notifications.** The reader decides when to read.
-- **Runtime telemetry / analytics SDKs / third-party scripts that fetch at runtime.** Static-first means no runtime calls home.
-- **Republishing article bodies to a reader.** The digest publishes a link and our own summary. A reader-facing page never carries the source text. `corpus/` is the one exception: it holds source text as training samples, and nothing renders it, links to it, or serves it. Owner decision, 2026-08-28.
-- **Paywalled or login-walled sources.** If `robots.txt` or a paywall says no, the answer is no.
-- **LLM-as-judge evaluation.** A judge that shares the failure modes of the thing judged is not a measurement. **The property is one sentence: a model verdict that reaches no reader and selects nothing to publish is not a section 0a deviation.** Two things stay banned whether or not a verdict satisfies the property, and those two are the whole of the ban. **A model may not grade a published summary, and it may not grade a published visual.** **A model may not select what publishes** - a label says what a story is about; it never decides whether the story runs. Those verdicts are deterministic or human. A verdict that is neither of those two is permitted. **The two bans stand in addition to the property, never as instances of it**, and the witness is a model pre-label sitting in a human label queue: it reaches no reader and it selects nothing, so the property on its own would permit a grade of a published summary. The offline write-critique-revise prompt loop is the worked example rather than a carve-out - a model judge proposes a revised summariser prompt, deterministic model-free scorers dispose, the judge's preference promotes nothing, and nothing it produces reaches a reader ([`docs/concepts/evaluation.md`](docs/concepts/evaluation.md)). Owner decisions, 2026-09-07 (the loop) and 2026-09-11 (the property), under section 0.
-- **Training on the runner, GPU runners, and models that do not fit the runner.** See Guardrail #2. Training a model elsewhere is not a non-goal. The runner only ever opens finished weights and reads bytes, so where those weights were trained does not change what the runner has to do. A fine-tuned model is an ordinary candidate: one entry in `config/idhazh.json`, the same qualification, the same SHA-256.
+** No agent narrows or widens one for itself (section 0).**
 - **Accessibility framework / audit tooling** (axe-core, WCAG-level gating, automated contrast checks). Descoped at project level. Basic ARIA and keyboard navigation ARE in scope: visible focus rings, labelled controls, semantic landmarks, keyboard-reachable interactive surfaces. Design-level accessibility is encouraged; merge-gating on audit tooling is not.
 
 ## 0b. Voice
 
 This is the canonical writing rule. It binds every agent, every persona under `.github/agents/`, **every answer an agent gives a user**, every doc, every commit message, and every reader-facing string. Cite it as "section 0b".
 
-- Write in plain, direct language. Use short sentences with one idea each.
+- Write in plain ASD-STE100, direct language. Use short sentences with one idea each.
 - Use the active voice.
 - Do not use corporate or self-invented tech jargon.
 - Lead with the core answer. Skip all introductory fluff.
 - Keep answers short unless asked for depth.
 - **Say what a number means, next to the number.** `1.055x` is not an answer; "5.5 percent faster, and we needed 40 percent" is. This is the one clause of this section that can be checked mechanically, so it is the one that catches a drift the others cannot.
-- **A term from a subsystem is not a term for a user.** `aggregate decode`, `spread`, `prefill` and `recorded input manifest` are correct in the doc that owns them and wrong in an answer, unless the answer defines them in the same sentence.
+- **A term from a subsystem is not a term for a user.**
 - **A third-party product name is not a design vocabulary.** Name the artefact and the property - "a reliability scorecard", "a tinted status card", "a target marker on a bar" - never the vendor whose screenshot it came from. This binds a design doc, a plan-doc, a code comment, a commit message, a branch name and a filename equally. Naming the artefact is also the more useful sentence: it says what to look at, where the product name only said where somebody once saw it.
-- Use ASD-STE100.
 
 Everywhere else restates this section rather than inventing its own style rule (Guardrail #4): [`AGENTS.md`](AGENTS.md) carries it for agent tools that read that file instead of this one.
 
@@ -84,21 +72,19 @@ Not legitimate: naming the limitation and stopping. **A limitation named with no
 
 **A scope boundary is not an answer either.** A plan's out-of-scope line, a rejected alternative, and a non-goal are all dated decisions somebody made with what they knew then. When intent meets one, it is priced and handed back exactly as section 0a requires of a non-goal. **A refusal that cites only what was decided, and not what that decision costs today, is an unfinished answer.**
 
-**What this does not license.** It does not license routing around a person's ruling (section 0), the two runner numbers that fail a run - the 6 h job and the 1 GB site (Guardrail #2) - or the trust boundary (Guardrail #11): those are surfaced, not overruled. And it does not license a larger change than the intent needs: intent is what the user asked for, not what you would have asked for.
+**What this does not license.** It does not license routing around a person's ruling (section 0), the runner number that fail a run - the 6 h job; or the trust boundary (Guardrail #11): those are surfaced, not overruled. And it does not license a larger change than the intent needs: intent is what the user asked for, not what you would have asked for.
 
 ## 1. Adaptive Guardrails (Read First, Every Session)
 
 **When a guardrail bites, that is feedback, not a verdict.** Two responses are legitimate - adapt it, saying what changed and why, or take a named exception recorded next to the work - and two are not: quietly routing around it, or reading it as advice because it is inconvenient. **Every deviation carries a person's name, and no agent may adapt a guardrail or take an exception for itself**: it proposes, a person disposes, and the decision is written into the commit that carries it. Each guardrail carries its reason, the reason is the load-bearing part, and **a guardrail cited without its reason is a half-quote** - so a guardrail whose reason no longer holds is one to change, and saying so is the job. **Three of the twelve carry a boundary rather than an adaptable constraint** - static-first publication (#1), the two runner numbers that fail a run (#2: the 6 h job and the 1 GB site) and the trust boundary (#11) - which an agent surfaces and never overrules, because the first two are set outside this project and the third protects a reader. **In #2 that clause covers those two numbers and no others**; the rest of its figures are costs to price.
 
 1. **Static-first publication** What we have is: the repository is the backend, the browser is our compute, and telemetry exists - the pipeline's own measurements are committed, and the console fetches them at runtime. A static asset may be fetched, including from a third party. Boundary: Pages is the platform, so a design that needs a server is reported, never adapted.
-2. **The github stock runner** is the production target, and measuring elsewhere is legitimate. Production is a stock ubuntu-latest. A benchmark may run on any hardware and says which (Guardrail #10); it just cannot answer whether the step finishes inside the job. **A number below is quoted with what crossing it does. Quoted alone it is a half-quote and settles nothing**, because these figures are not one kind of thing and only two of them can fail a run.
+2. **The github stock runner** is the production target, and measuring elsewhere is legitimate. Production is a stock ubuntu-latest. A benchmark may run on any hardware and says which (Guardrail #10); it just cannot answer whether the step finishes inside the job. **A number below is quoted with what crossing it does. Quoted alone it is a half-quote and settles nothing**, 
    - **6 h per job.** GitHub kills the job. A design that does not fit is a design failure, and the required next move is to name the design that does fit and what it traded - fewer items, a smaller model, a shorter context, a shard that splits - never a refusal.
    - **1 GB published site.** Pages refuses the deploy. Same move as the timeout.
-   - **4 vCPU, 16 GB RAM, no GPU.** That is the machine, not a line to stay under. It decides which model can run at all.
+   - **4 vCPU, 16 GB RAM, no GPU.** That is the machine, not a line to stay under.
    - **20 concurrent jobs.** Past it a job waits its turn. A queue is not a failure.
-   - **10 GB cache.** GitHub manages this one, not us. Over the allowance it still saves the new entry, then evicts by oldest last-access until the total is under; it deletes anything untouched for 7 days either way. Crossing it costs a re-download on the next miss and never a failed run. It bills nothing unless somebody raises this repository's configured limit above 10 GB, and nobody has. What it holds today, and the one entry whose eviction is worth caring about, are in [`docs/reference/ci-caches.md`](docs/reference/ci-caches.md).
-   - **500 MB artifacts.** A private-repository quota. This repository is public and standard-runner usage is free, so the figure meters nothing here. Keep artifacts small so a person reading a run finds the one they want, not because a bill is coming.
-
+   - **10 GB cache.** GitHub manages this one, not us. 
    Boundary: the 6 h job and the 1 GB site are GitHub's and they fail a run, so an agent surfaces those two and never overrules them. That clause covers those two and nothing else on this list.
 3. **Contracts before logic**. Every persisted shape is declared once in `backend\idhazh\contracts\` - as a `schemas\`, before any logic reads or writes it - using whatever validation library is native to its own language. Every downstream artifact (DB migration, API spec, frontend type, cross-service binding) is generated from that schema, never hand-written. A shape nobody declared is a shape nobody can validate, migrate, or generate a binding for, so it survives instead as a hand-written copy that drifts quietly out of sync.
 4. **docs/ is the memory, and a decision lives on the page it impacts**. Pipeline rules, published shapes, tuning knobs and current subsystem contracts live under `docs\`; a choice that clears the bar is recorded IN the living doc it impacts as a `## Design rationale` section, never as a standalone record. There is no ADR file and no `decisions/` directory - a decision written beside the thing it governs is read by the person about to change it, and one filed in a register is read by nobody. **A private note store is a cache of** `docs\`, **never the only copy**: a fact learned with no page to hold it gets a page, or goes to `docs\reference\agent-notes.md`, in the same session.
@@ -122,16 +108,18 @@ These operationalize the guardrails and shape every subsystem.
 - **Config-driven, sane defaults.** Both `frontend/` and `backend/` read tunable behaviour from `config/`; every knob has a sane default; a fresh clone runs on the defaults (Guardrail #6).
 - **Schema-first.** Every config file and every persisted payload conforms to a generated schema in `schemas/`; a config or payload that fails its schema fails the build (Guardrail #3).
 - **Degrade, do not fail.** A missing visual, a failed extraction, or an unreachable source degrades that item and records why. It never takes down the run.
+- **LLM-as-judge evaluation** LLM-as-judge is primary evaluation where applicable. Model verdicts are no longer restricted to offline write-critique loops, non-reader-facing environments, or human triage queues; they may operate directly in production workflows, score live content, and determine publication without constituting a section 0a deviation (`docs/concepts/evaluation.md`).
+- **Naming Conventions:** All files, modules, configs, and variables must be self-descriptive nouns; all functions and actions must be self-descriptive verbs.
 
 ## 1b. Logging
 
 Logging is local by construction. There is no log sink, no log service, and no runtime call home (Guardrail #1).
 
 - **Backend.** Structured records to stderr through the standard library `logging` module, configured once at the entry point. Level from `config/`; default `INFO`..
-- **Backend, CI.** The same stderr stream. GitHub Actions captures it and retains it with the run - that IS the log store. Nothing is uploaded anywhere else. Anything a later run needs to read is a committed artifact or an eval row, not a log line.
 - **Frontend.** The browser console, and only the browser console. A published page logs what a reader would need to hand back when something looks wrong. No SDK, no beacon, no `fetch` to a collector.
 - **Every log record is the event payload.** A stage logs the same structured envelope it emits (section 1a), so a log line and a persisted payload never disagree about what happened.
 - **Secrets never reach a log record.** Not a token, not a signed URL, not a request header.
+- **Observability telemetry** Backend telemetry collated and persisted through commits under `/state`, sharded by time granularity—preferably daily, or falling back to month or year. A single central module manages all telemetry operations through explicit verbs, including a prune verb to clean up records for a target time period.
 
 ## 2. Path Conventions
 
@@ -168,7 +156,7 @@ These are boundaries rather than guardrails because each is a structural invaria
 - ASCII-only in all repo text: commit messages, docs, code comments, log strings, agent markdown, CLI output (use `-`, `->`, `>=`, and "section"). No curly quotes, em-dashes, or non-ASCII symbols.
 - **Process docs stay domain-neutral.** Everything under `docs/how-to/` that describes *how work is done*, and `docs/reference/documentation-structure.md`, are written to be copied between projects unchanged: they cite `CLAUDE.md` by section number rather than restating a project-specific rule. A process doc that cannot be stated neutrally says so and names why.
 - A decision is recorded IN the living doc it impacts, never as a standalone record. **There is no ADR file and no `decisions/` directory.** Git history is the immutable record of when it changed.
-- **Code never cites a plan. It carries the reason instead.** A comment pointing at `TODO/<plan>.md row N` tells the reader where a decision was argued, not what it was: they have to leave the file to learn anything, and once that plan is distilled and deleted they cannot learn it at all. Write the one or two lines the pointer was standing in for. An identifier is bound by the same rule - a name says what the thing is, never which row asked for it. This covers a docstring, a comment, a `Field(description=...)` and a reader-facing string equally. Owner ruling, 2026-09-17.
+- **Code never cites a plan. It carries the reason instead.** A name says what the thing is one or maximum two sentences, never which plan row asked for it. This covers a docstring, changelog, a comment, a `Field(description=...)` and a reader-facing string equally.
 - Open questions live in the active plan-doc under `TODO/`, not in this file.
 
 The tiers, the depth limit, the elements every page carries, the three tests that decide a split, where a benchmark run is written up, and what makes a sentence worth keeping are all in [`docs/reference/documentation-structure.md`](docs/reference/documentation-structure.md).
@@ -210,11 +198,9 @@ Avoid (broad / lossy / history-rewriting):
 - Amending pushed commits
 - Leaving a merged PR's remote branch undeleted or its `: gone]` local tracking branches unpruned.
 
-**The standing exception is `.github/workflows/prune.yml`.** It squashes commits older than `finetune.prune_keep_days` and force-pushes `main`, every `finetune.prune_every_days`. Apart from the one-time repair below, nothing else in this repository may force-push, and no person may. The standing exception exists because the corpus commits article text (section 0a) and git history is append-only, so deleting a row does not delete its bytes - the only way to bound the repository is to rewrite the range those bytes are in.
+**The standing exception is `.github/workflows/prune.yml`.** It squashes commits older than `finetune.prune_keep_days` and force-pushes `main`, every `finetune.prune_every_days`. The standing exception exists because the corpus commits article text (section 0a) and git history is append-only, so deleting a row does not delete its bytes - the only way to bound the repository is to rewrite the range those bytes are in.
 
 What it costs, stated rather than implied: a squash boundary is per-commit, not per-path, so the range it collapses carries `backend/`, `docs/` and `state/` as well as `corpus/`. `git blame` and `git bisect` reach back `prune_keep_days` to `prune_keep_days + prune_every_days` and no further, and a commit SHA older than that stops resolving. A clone taken before a prune has to be re-fetched.
-
-**One-time repair, approved by repository owner `miztiik` on 2026-09-14.** Correct the `noreply@users.noreply.github.com` author and committer fields on commits formerly known as `b8cd2c41` and `83d47ac3` to `yen-idhazh <yen-idhazh@users.noreply.github.com>`. The owner explicitly requested that other agents not be stopped. Use an isolated copy and a complete local backup. Verify every rewritten commit's file tree, message, dates, parent mapping and unaffected identities. Publish only `main`, using `--force-with-lease=refs/heads/main:<checked-sha>` so a concurrent push cannot be discarded. Descendant commit IDs change and their old signatures cannot survive. Do not rewrite another branch or another author's details. This permission ends when the repair is published; it does not permit later force-pushes. The attribution and old-branch hazards are recorded in [docs/reference/agent-notes/git-and-github.md](docs/reference/agent-notes/git-and-github.md#commit-identity).
 
 Safe workflow: `git status --porcelain`, leave unrelated dirty files alone, stage only explicit paths, verify with `git diff --cached --name-only`, small reversible commits on a named branch, push, merge after gates pass.
 
@@ -300,7 +286,7 @@ Four tiers - **Unit / Contract / Integration / End-to-end**. Change without an a
 
 **A test's cost belongs to the code it checks, never to what the pipeline has piled up.** So a test does not walk a collection that a run appends to - the committed days, the telemetry and state shards, the search index, the corpus, or any collection added after this sentence was written (Guardrail #12). A per-item rule is driven from a bounded fixture, and the canary day under `backend/var/canary/` is the one to reach for: it is fixed in size and it can carry a case the archive has never produced. Where a question really is about the whole tree, it is asked once and asserted on the total rather than once per story - and the producer has already validated every payload at write time, so re-checking a frozen day on every later run buys nothing. Where a walk is genuinely the right answer, Guardrail #12's escape hatch applies: say next to the test what it reads and why a fixture cannot answer it. What a walk actually costs, measured: [`docs/concepts/growing-reads.md`](docs/concepts/growing-reads.md).
 
-**A test checks code functionality, not data hygiene, and it is driven with a built parameter rather than a loop.** A check that reads committed data to ask whether the data is well-formed is not a test, whatever file it sits in. It has three legal fates and no fourth: delete it where a fixture-driven test already covers the same rule; move it into the producer that writes the data (the one-picture-one-story rule now lives in `idhazh validate-days`); or make it an operator surface under `backend/utilities/`, which pytest does not run. A scheduled pytest job is not one of the three. Where the awkward shape is the point, that shape is **built**, because a built one also carries the case the archive has never produced. Owner ruling, 2026-09-06.
+**A test checks code functionality, not data hygiene, and it is driven with a built parameter rather than a loop.** A check that reads committed data to ask whether the data is well-formed is not a test, whatever file it sits in. It has three legal fates and no fourth: delete it where a fixture-driven test already covers the same rule; move it into the producer that writes the data (the one-picture-one-story rule now lives in `idhazh validate-days`); or make it an operator surface under `backend/utilities/`, which pytest does not run. 
 
 **A walk over committed data tends to carry a fuse, and that is the second reason to refuse one.** A test that counts how many committed entries still *lack* a new field is timed to go red on the day the last unmigrated payload ages out of retention - a date on the calendar rather than a change anybody made. A read-side migration is proved by removing the key from a fixture, which cannot age out. [`docs/reference/agent-notes.md`](docs/reference/agent-notes.md) records the day one of these fired and took every open pull request red at once.
 

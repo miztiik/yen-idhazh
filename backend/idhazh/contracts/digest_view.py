@@ -64,6 +64,7 @@ from idhazh.contracts.base import (
     DateStamp,
     ItemId,
     Model,
+    Prose,
     RelPath,
     Slug,
     Timestamp,
@@ -221,7 +222,7 @@ class DigestViewItem(Model):
         ),
     )
     title: UntrustedLine
-    summary: str = Field(min_length=1)
+    summary: Prose = Field(min_length=1)
     reader_note: str | None = Field(
         default=None,
         description="Our sentence explaining a source limitation, never a badge.",
@@ -348,6 +349,11 @@ class DigestView(Contract):
     __schema_stem__: ClassVar[str] = "digest-view"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-17",
+            change="DigestViewItem.summary is Prose - paragraphs split by one blank line.",
+            why="A long summary is two paragraphs, and read-side folding keeps old days readable.",
+        ),
+        ChangelogEntry(
             version="2026-09-16T00:40",
             change="Added DigestViewItem.same_story_as and .covered_by.",
             why="The page folds a group into one card, which has to name the other outlets.",
@@ -361,11 +367,6 @@ class DigestView(Contract):
             version="2026-09-12T18:40",
             change="item_id accepts a second shape: sixteen Crockford base32 symbols.",
             why="Ten decimal digits is 33 bits of an address, which collides on a busy day.",
-        ),
-        ChangelogEntry(
-            version="2026-09-12T06:56",
-            change="Added DigestViewItem.desk, so a served item says which topic it sat under.",
-            why="A browser fetches this copy, and the reading page groups stories by desk.",
         ),
         ChangelogEntry(
             version="2026-08-31T12:00",

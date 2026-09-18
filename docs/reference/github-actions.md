@@ -313,9 +313,10 @@ ledger side was in Python, the staging side was in YAML, and nothing read both.
 reads both. It takes every store from the `*_relpath` helpers the store modules
 already export, charges each one to the job whose `python -m idhazh <verb>` step
 reaches its writer, and fails naming the store, the job, the workflow file and
-the step to add the path to. A ledger is written by an `append_*` call and the
-trace tree by a file sink opened on its own path helper; both count, because both
-die with the runner. It names no store itself, so a thirteenth one is covered the
+the step to add the path to. A ledger is written by an `append_*` call, the trace
+tree by a file sink opened on its own path helper, and a head by the compaction
+reading its own declared table of them; all three count, because all three die
+with the runner. It names no store itself, so a thirteenth one is covered the
 day its writer lands rather than the day somebody remembers to add it to a list -
 which is why the three hand-written lists it replaced were deleted on 2026-09-17
 rather than kept beside it.
@@ -361,6 +362,16 @@ one in the run log. **A path this job did not stage is a path it is not pushing*
 so removing it costs the push nothing it was going to carry, and every path that
 WAS staged still lands. Everything else untracked survives: `llama-server.log`
 and the memory samples are untracked, and later steps upload them.
+
+**Staging a path ten jobs share is a repair, not a fix, and the machine record is
+where that was settled.** `state/host-fingerprint/2026/09/16.csv` was staged,
+committed and pushed by ten jobs of one run, and it is header-only. From
+2026-09-17 each job writes
+`state/segments/host-fingerprint/<run>-<attempt>-<job>-<shard>.csv` instead - a
+name no second writer can take - the work job stages `state/segments` rather than
+the head, and `idhazh compact` inside `assemble` folds the segments into the day.
+The head has one writer per run, which is what the rebase loop was never able to
+give it. Ledger by ledger, so one revert takes one ledger.
 
 **There are two ways to lose the push race, and they need different answers.**
 
@@ -665,7 +676,7 @@ flowchart TB
 
 **The scratch config differs from the committed tree in the line an adoption moves.** Both workflows copy `config/`, move `models_file`, and change no control - so every setting the numbers are read under is the committed one by construction, and a candidate is measured through the exact line an adoption later moves. Until 2026-09-14 the step rebuilt the entry field by field and copied the incumbent's `inference` and `turns` blocks across with their digests overwritten, which asserted that numbers measured for one model held for another.
 
-**The bench copy carries one more key, and it is not a control.** `run.trial_state_dirname` says where that run's own ledgers land, not what the run measures. The bench passes `pipeline-tests`, so every ledger the dispatch writes goes under `state/pipeline-tests/` and none of it is beside the rows the console reads - which has been true of every stage the bench runs since 2026-09-17, and of the `plan` step only since then ([Design rationale](#what-a-validation-or-bench-run-must-never-share-with-production)). `Model validation` and the budget retake pass nothing and build exactly the copy they always did. Why the rows are split rather than filtered is on [host-metrics.md](host-metrics.md#design-rationale).
+**Both candidate copies carry one more key, and it is not a control.** `run.trial_state_dirname` says where that run's own ledgers land, not what the run measures. The bench and `Model validation` both pass `pipeline-tests`, so every ledger either dispatch writes goes under `state/pipeline-tests/` and none of it is beside the rows the console reads - true of every stage the bench runs since 2026-09-17, of the bench's `plan` step only since then, and of `Model validation` since the same day ([Design rationale](#what-a-validation-or-bench-run-must-never-share-with-production)). The budget retake passes nothing and builds exactly the copy it always did. Why the rows are split rather than filtered is on [host-metrics.md](host-metrics.md#design-rationale).
 
 Each Measurements dispatch selects exactly one target:
 
@@ -700,6 +711,22 @@ a tenth and a third of a whole dispatch
 file, and takes every candidate fact from there. It names no model of its own.
 [Swap the Summarizer Model](../how-to/evaluate-new-summarizer-model.md) owns the
 procedure and the acceptance requirements.
+
+**Several candidates can be dispatched at once, and until 2026-09-17 most of
+them were silently cancelled.** `Model validation` grouped every run under
+`concurrency: group: validate`, so a comparison fired four candidates wide
+queued three of them - and GitHub keeps only **one** pending run per group, each
+new one cancelling the last. The operator got the run that started, the case
+dispatched last, and two cancelled runs with no error on them. The group is now
+`validate-${{ inputs.candidate_models_file || 'the-configured-model' }}`: the
+candidate file is the whole of what makes two dispatches different questions, so
+it is what names the group. Two dispatches of one candidate still queue, which
+is right. An empty field means the configured model, and it is named rather than
+left as a bare trailing dash for every empty dispatch to collide on. `inputs` is
+a legal context on a `concurrency` key and this workflow is dispatch-only, so it
+is always populated. `measure.yml` has no `concurrency` block at all, so a bench
+was never affected. The same cancellation still applies to `digest.yml`, which
+has one group on purpose - a day has one digest.
 
 **What a swap costs the 10 GB cache is a reading, and it lives in the instrument
 log.** This page carried a second copy of the 2026-08-27 table until 2026-09-17;
@@ -1031,25 +1058,49 @@ points at, the production ledgers under `state/`, the seen store inside them,
 the run id and the date a production day is keyed on, and article text, which
 never leaves the job that fetched it.
 
-**One of those six was open until 2026-09-17 and is now closed for the bench.**
-`run.trial_state_dirname` moves a run's whole state root, and the bench passes
-`pipeline-tests` - but its `plan` step ran without `--config`, so it loaded the
-committed config, which redirects nothing. `plan` appends to the seen store,
-feed health, feed retirements and the counterfactual scores, so every bench
-dispatch wrote four production ledgers, and the seen store is the one that
-bites: a marked address makes the next production day skip that story with
-nothing in the log to say why. The step now reads the scratch config, and
+**One of those six was open until 2026-09-17 and is now closed in both
+workflows.** `run.trial_state_dirname` moves a run's whole state root, and the
+bench passes `pipeline-tests` - but its `plan` step ran without `--config`, so
+it loaded the committed config, which redirects nothing. `plan` appends to the
+seen store, feed health, feed retirements and the counterfactual scores, so
+every bench dispatch wrote four production ledgers, and the seen store is the
+one that bites: a marked address makes the next production day skip that story
+with nothing in the log to say why. The step now reads the scratch config, and
 `test_no_bench_stage_can_reach_the_production_state_root` asserts it for every
 stage any job in that file runs, present or future.
 
-**`validate.yml`'s plan job still has it, and that is a decision rather than an
-oversight.** Its `Read the feeds` step runs `plan` against the committed config
-in a job that builds no scratch config at all. Redirecting it is two lines, and
-the cost is not two lines: `plan` reads the seen store as well as writing it, so
-a redirected qualification would plan from an empty one and draw different
-articles. That changes which corpus a qualification is judged on, which is the
-evaluation owner's call and not a workflow edit's. What settles it is one
-dispatch each way, comparing the drawn addresses.
+**`validate.yml` closed it the same day, and the closure changes which articles
+a qualification draws.** Its `Read the feeds` step ran `plan` against the
+committed config in a job that built no scratch copy at all. The fix is the
+bench's: the `plan` job now builds the same copy the `qualify` job does, both
+pass `pipeline-tests`, and the step reads it.
+
+**The cost is not the two lines, and it was declined once for that reason.**
+`plan` reads the seen store as well as writing it, so a redirected qualification
+plans from an empty one and draws articles a production day already covered. The
+owner took the trade on 2026-09-17, before a four-arm comparison. A
+qualification measures how well a model summarizes text; whether a reader has
+already seen the story is a publication question, and filtering on it made the
+corpus depend on what production happened to publish that week. The count does
+not move - 3 shards of 10 - only which addresses fill it.
+
+**No qualification has been shown to move a production row, and that is not what
+the fix rests on.** The `plan` job has no commit step; only `decide` runs
+`commit-and-push.sh`, from its own checkout on a different runner, so those rows
+died with the runner. The distance between a job that can reach the production
+state root and one that commits it is a single step, this workflow already holds
+`contents: write`, and a sibling job already commits `state` whole.
+
+**`qualify-decide` is deliberately not redirected, and that is the one
+exception.** It writes the run's verdict to `state/validation-<YYYY-MM-DD>.csv`,
+which is the record the dispatch exists to leave. `evals.writer.append_validation`
+is handed a path off the repository root rather than off the state root, so that
+row lands in `state/` whatever `run.trial_state_dirname` says, and its job builds
+no scratch copy for a `--config` flag to point at.
+`backend/tests/workflows/test_validation_state_root.py` holds the assertions;
+`test_no_validation_stage_can_reach_the_production_state_root` asserts the
+redirect and names this exception for every stage any job in that file runs,
+present or future.
 
 ## What is not on this page
 

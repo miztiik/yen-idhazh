@@ -5,6 +5,7 @@ import { stacked } from '../src/lib/charts/stacked';
 import {
 	countersWithoutScores,
 	measurementOff,
+	recordDestroyed,
 	recordingNotes,
 	recordingStarted,
 	sampledAt,
@@ -185,6 +186,78 @@ test.describe('what the recording was doing, in the owner words', () => {
 			coveredElsewhere: ['2026-08-28', '2026-08-29']
 		});
 		expect(notes.scoresOnly).toBe(scoresWithoutCounters());
+	});
+
+	test('a day that published and kept no row is a loss, not a quiet day', () => {
+		// The fixture is the state that destroyed 303 rows on 2026-09-16: the day
+		// file exists and holds only its header, and the digest for that date
+		// carries articles. Built, never read off the archive - a case the archive
+		// holds today ages out of every window, and a test timed to go red on a
+		// date nobody set is a fuse (`CLAUDE.md` section 13).
+		const notes = recordingNotes({
+			enabled: true,
+			recorded: ['2026-09-17'],
+			window: ['2026-09-16', '2026-09-17'],
+			lost: [{ date: '2026-09-16', articles: 431 }],
+			figures: 'machine record'
+		});
+		// The whole point. Counted as a gap, the lost day would date the record's
+		// own start to the day AFTER the loss and hand that back as the reason.
+		expect(notes.startedMidWindow).toBeNull();
+		expect(notes.recordDestroyed).toBe(
+			'This day published 431 articles and its machine record is missing. The run worked; what it measured about the machine did not survive.'
+		);
+	});
+
+	test('a gap and a loss are told apart inside one window', () => {
+		// A window wide enough to reach days before the record shipped AND to hold
+		// the day it lost. Both sentences are owed, and neither may absorb the
+		// other: one says go and look at the instrument, one says open an incident.
+		const notes = recordingNotes({
+			enabled: true,
+			recorded: ['2026-09-17'],
+			window: ['2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17'],
+			lost: [{ date: '2026-09-16', articles: 431 }],
+			figures: 'machine record'
+		});
+		expect(notes.startedMidWindow).toContain('The 2 days before it have no machine record');
+		expect(notes.recordDestroyed).not.toBeNull();
+	});
+
+	test('a day the record kept a row of is never counted as lost', () => {
+		// The caller does the join over two ledgers, so the one thing this can be
+		// handed is a date the record answered for after all.
+		const notes = recordingNotes({
+			enabled: true,
+			recorded: ['2026-09-16', '2026-09-17'],
+			window: ['2026-09-16', '2026-09-17'],
+			lost: [{ date: '2026-09-16', articles: 431 }]
+		});
+		expect(notes.recordDestroyed).toBeNull();
+	});
+
+	test('several lost days are one sentence that counts them', () => {
+		expect(recordDestroyed([])).toBeNull();
+		expect(
+			recordDestroyed([
+				{ date: '2026-09-15', articles: 400 },
+				{ date: '2026-09-16', articles: 31 }
+			])
+		).toBe(
+			'2 days published 431 articles between them and their machine record is missing. The runs worked; what they measured about the machine did not survive.'
+		);
+		// One article reads as one article, because "1 articles" is the tell that a
+		// sentence was assembled rather than written.
+		expect(recordDestroyed([{ date: '2026-09-16', articles: 1 }])).toContain('published 1 article and');
+	});
+
+	test('an instrument with no sampling knob owes no sampling caveat', () => {
+		const notes = recordingNotes({
+			enabled: true,
+			recorded: ['2026-09-17'],
+			window: ['2026-09-17']
+		});
+		expect(notes.sampled).toBeNull();
 	});
 });
 

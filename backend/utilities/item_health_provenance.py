@@ -57,7 +57,7 @@ RECORD_SINK: Final = ItemRecorder.note.__name__
 
 #: The module that declares the row. It names every column by construction and
 #: produces none of them - a contract says what a cell may be, never what it
-#: is - so the class rule below would otherwise make it the answer to all 113.
+#: is - so the class rule below would otherwise make it the answer to all 119.
 CONTRACT_MODULE: Final = ItemHealthRow.__module__.replace(".", "/") + ".py"
 
 
@@ -69,7 +69,7 @@ class Group(NamedTuple):
     columns: tuple[str, ...]
 
 
-#: **The eight questions this row grew by.** It reached 113 columns one
+#: **The eight questions this row grew by.** It reached 119 columns one
 #: question at a time, and a reader meeting the flat list cannot see that.
 #: Which question a column serves is editorial - nothing in the contract says
 #: it - so the membership is declared here and checked against
@@ -224,6 +224,12 @@ GROUPS: Final[tuple[Group, ...]] = (
             "llama_rss_peak_bytes",
             "python_rss_bytes",
             "cgroup_peak_bytes",
+            "os_mem_available_bytes",
+            "os_mem_total_bytes",
+            "os_mem_cached_bytes",
+            "os_swap_free_bytes",
+            "os_swap_total_bytes",
+            "os_mem_available_min_bytes",
             "slot_id",
             "kv_tokens_at_start",
             "prefix_shared_with_previous",

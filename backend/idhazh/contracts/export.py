@@ -28,6 +28,7 @@ from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.evidence import EvidenceItem
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.feed_retirement import FeedRetirementRow
+from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.icon_manifest import IconManifest
 from idhazh.contracts.item_health import ItemHealthRow
@@ -59,9 +60,12 @@ from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.score_archive import ScoreArchive
 from idhazh.contracts.search_index import SearchIndex
 from idhazh.contracts.seen import PublishedRow, SeenRow
+from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.span_rollup import SpanRollupRow
+from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
+from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import Taxonomy
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow
@@ -91,6 +95,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     EvidenceItem,
     FeedHealthRow,
     FeedRetirementRow,
+    FittedSimilarityThreshold,
     IconManifest,
     HostFingerprintRow,
     ItemHealthRow,
@@ -120,9 +125,12 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     ScoreArchive,
     SearchIndex,
     SeenRow,
+    SimilarityHoldoutPair,
     SourceHealthView,
     Sources,
     SpanRollupRow,
+    StorySimilarityDistribution,
+    StorySimilarityPair,
     Summary,
     Taxonomy,
     TelemetryAggregateRow,

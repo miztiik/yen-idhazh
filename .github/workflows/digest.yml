@@ -255,6 +255,31 @@ jobs:
           --date "${{ steps.decide.outputs.date }}"
           --execution "${{ github.run_id }}"
 
+      # The catch-up, and it is the only caller besides `assemble`. A run whose
+      # assemble never ran leaves its segments in the tree, and nothing else
+      # would ever fold them: this job runs five times a day, so a segment waits
+      # at most 4.8 hours.
+      #
+      # On the normal path it costs nothing measurable. The assemble of the run
+      # before this one drained the store and committed the deletions, and the
+      # `digest` concurrency group above stops this run starting before that one
+      # finished - so this lists an empty directory and writes nothing.
+      #
+      # BEFORE this job's own probe, and that ordering is the whole of why a head
+      # still has one writer a run. The probe below writes a segment; a fold that
+      # ran after it would find that segment and write the day file here, and
+      # `assemble` would then write the same file again. The fold is idempotent
+      # so nothing would be lost - but two head writers in one run is the shape
+      # this design exists to remove, and a third arrives by looking like the
+      # second.
+      #
+      # Never `prune.yml`. That workflow commits nothing on 29 of 30 wakes,
+      # stages only `corpus` on the day it is due, and ends in a force push, so a
+      # compaction there would delete every waiting segment from a runner that
+      # then throws itself away.
+      - name: Fold any segments an earlier run left behind
+        run: python -m idhazh compact
+
       # Every job draws its own runner, so every job records the one it drew. A
       # run is only as fast as its slowest job, and until now only `work` said
       # what machine it was on - so the two jobs either side of it cost time
@@ -314,26 +339,20 @@ jobs:
       # A bad day is exactly the day worth measuring, so waiting for a successful
       # publish would lose the records that matter most.
       #
-      # `state/feed-retirements.csv` is the third, and it is staged on every run
-      # even though most runs add no row: `git add` runs under `set -euo
-      # pipefail`, so a path missing from the checkout aborts the whole step and
-      # costs the two ledgers beside it. The file ships with its header for that
-      # reason.
+      # `state` whole, and it used to be five paths named one at a time. The
+      # catch-up step above is why: it folds a segment into whichever head that
+      # segment's own rows name, so what this job writes is no longer knowable
+      # when the list is written. A hand-listed set would commit the segment
+      # deletions and leave the heads behind - a catch-up that loses the rows it
+      # caught, with nothing able to see it, because the loss is in what `git
+      # add` was not given. The two assemble commits stage `state` whole for the
+      # same reason and have since before this step existed.
       #
-      # `state/counterfactual-scores` is the fourth, added 2026-09-14. It is the
-      # pair of scores each candidate got - at the committed lens weights and at
-      # a candidate weight - and it is committed here for the same reason as the
-      # sight ledger: the refused half of a run's pool exists nowhere else, and
-      # the next run rebuilds its candidate list from feeds that have moved on.
-      # It ships with one header-only day file, the way the retirement ledger
-      # ships with its header and for the same reason, and
-      # `append_counterfactual_scores` writes the header for its own day even
-      # when the run has no rows - so neither a fresh clone nor a quiet run can
-      # make this the missing path that aborts the step.
-      #
-      # `state/host-fingerprint` is the fifth, added 2026-09-17 with the step
-      # above. The work job has staged it since 2026-09-16; this job wrote no row
-      # at all until now, so a run's plan machine was never recorded anywhere.
+      # Naming the directory rather than its contents is also what makes the step
+      # survive a fresh clone: `git add` runs under `set -euo pipefail`, so a
+      # path missing from the checkout aborts the whole step and costs every
+      # ledger beside it. `state` is in every checkout; a collection inside it
+      # need not be.
       #
       # `append_health` settles the day file it wrote, but against the checkout,
       # which is frozen at the commit this run was triggered at - so a SECOND
@@ -359,8 +378,7 @@ jobs:
             python -m idhazh dedupe-ledgers --date ${{ steps.decide.outputs.date }}
         run: >-
           bash .github/scripts/commit-and-push.sh
-          state/seen state/feed-health state/feed-retirements.csv
-          state/counterfactual-scores state/host-fingerprint
+          state
 
       - uses: actions/upload-artifact@v7
         with:
@@ -791,15 +809,21 @@ jobs:
       # path and no merge driver is needed - unlike the four ledgers above, which
       # is why `merge=union` covers `state/**/*.csv` and not this.
       #
-      # `state/host-fingerprint` is the third of that kind and the oldest. The
-      # step `What machine this job drew` above writes one row a job into
-      # `state/host-fingerprint/<YYYY>/<MM>/<DD>.csv` before the model server
-      # starts, and no list has ever named the path - so `git ls-files` found not
-      # one fingerprint this project has taken. It is written by its own
-      # subcommand rather than inside `stage_work`, which is why the guard that
-      # reads the stage's own ledger calls never saw it. The day file is settled
-      # by the same `--date` pass: the key opens with `date`, so a repeat can only
-      # be in the day file this run wrote.
+      # `state/segments` is the newest of that kind, and it is where this shard's
+      # machine row now goes. The step `What machine this job drew` above used to
+      # append to `state/host-fingerprint/<YYYY>/<MM>/<DD>.csv`, which ten jobs of
+      # one run opened at once; on 2026-09-16 that race left the day header-only.
+      # Each job writes its own
+      # `state/segments/host-fingerprint/<run>-<attempt>-<job>-<shard>.csv`
+      # instead, so two writers never share a path, and `assemble` folds them
+      # into the head. The head is no longer staged here because this job no
+      # longer writes it.
+      #
+      # `.gitattributes` gives that path `-merge` rather than the union driver
+      # the four ledgers above carry, for the reason `state/traces` is outside
+      # it: a segment is named for one shard of one run, so there is nothing for
+      # a merge driver to settle and a union of two would silently stack copies
+      # of a file that is meant to have one writer.
       - name: Commit what this shard measured
         if: always()
         continue-on-error: true
@@ -812,7 +836,7 @@ jobs:
         run: >-
           bash .github/scripts/commit-and-push.sh
           state/item-health state/scores state/score-index state/runtime-counters.csv
-          state/span-rollup state/traces state/host-fingerprint
+          state/span-rollup state/traces state/segments
 
       - name: Prompt cache log summary
         if: always()
@@ -1206,6 +1230,7 @@ jobs:
             state/span-rollup
             state/traces
             state/host-fingerprint
+            state/segments
           REGENERATE_COMMAND: >-
             python -m idhazh assemble --date ${{ needs.plan.outputs.date }}
             --commit ${{ github.sha }} --runner ubuntu-latest

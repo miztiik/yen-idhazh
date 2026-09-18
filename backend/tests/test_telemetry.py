@@ -526,7 +526,7 @@ _BY_PATTERN: Final[Mapping[str, str]] = {
 _BY_TYPE: Final[Mapping[type, object]] = {bool: True, int: 1, float: 1.0, str: "fixture"}
 
 #: Every column no production writer fills today, and the reason each one is
-#: empty. **It is empty, and that is the ratchet at its tightest**: all 113
+#: empty. **It is empty, and that is the ratchet at its tightest**: all 119
 #: columns have a producer, so the assertion below reads "no column of this row
 #: is None on the way through" with no exceptions to read past. The last three
 #: left on 2026-09-16, when the slot columns started carrying the item's first
@@ -611,8 +611,8 @@ def test_no_census_column_is_silently_unowned() -> None:
     Two ways to fail, which is why the assertion is an exact equality. A column
     the shard records that the census drops fails on the left: that was the
     defect this row closes, when the census rebuilt from two payloads that
-    between them could say 43 of 113 things. A column nothing writes and nobody
-    declared fails on the right, naming itself.
+    between them could say 43 of the 113 columns the row carried then. A column
+    nothing writes and nobody declared fails on the right, naming itself.
 
     **`UNFILLED` is empty, so the right side is the empty set** and this is one
     assertion rather than three. The two that checked the map's contents - that

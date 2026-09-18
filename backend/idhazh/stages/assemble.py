@@ -28,6 +28,7 @@ from idhazh.fingerprint import (
     prose_changed_alone,
 )
 from idhazh.stages import common
+from idhazh.stages import compact as compact_stage
 from idhazh.stages.common import (
     INPUTS_PAYLOAD,
     LOG,
@@ -186,7 +187,7 @@ def stage_assemble(
     decisions: list[VisualDecision] = []
     # Every planned item's census row. A shard that reached the item sealed the
     # row itself and left it beside the payloads, so this prefers that row: it
-    # carries 113 cells where the article and the summary between them carry 40,
+    # carries 119 cells where the article and the summary between them carry 40,
     # and it names the worker and the workflow job that ran the item. The rebuild
     # is what an item no shard reached gets, which is what keeps the denominator
     # in this file - and it passes neither `shard` nor `job`, because this stage
@@ -331,6 +332,10 @@ def stage_assemble(
     landed = writer.append(common.STATE_ROOT, rows)
     published = ledger.append_published(common.STATE_ROOT, day.date, _published_rows(day, plan))
     item_health = ledger.append_item_health(common.STATE_ROOT, plan.date, item_health_rows)
+    # Before the publishers and never after them. Every projection below reads a
+    # head off disk, so a compaction that ran afterwards would publish a page
+    # built from a record this run had not finished writing.
+    compact_stage.stage_compact(common.STATE_ROOT)
     # Every projection of the instrument, in the one order `dispatch` names. It
     # runs after the ledgers this stage appended and reads those files rather
     # than anything in memory here, so a run that failed to append publishes the

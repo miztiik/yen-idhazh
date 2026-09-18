@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import json
 import re
+import textwrap
 from functools import lru_cache
 from pathlib import Path
 from string import Template
@@ -44,7 +45,13 @@ from pydantic import (
 )
 
 from idhazh.contracts.article import Article, ArticleStatus
-from idhazh.contracts.base import canonical_json, derive_output_digest
+from idhazh.contracts.base import (
+    PARAGRAPH_BREAK,
+    canonical_json,
+    derive_output_digest,
+    normalize_prose,
+    paragraphs_of,
+)
 from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
@@ -262,6 +269,41 @@ def output_schema_text(
     )
 
 
+def paragraph_rule(ask: SummarizeConfig) -> str:
+    """The sentence telling the model how many paragraphs a summary may hold.
+
+    Derived here rather than written into either template, because `Template`
+    has no conditional and `paragraphs_max` is a knob: a rule spelled in the
+    file could not be turned off by the config, which is the substitution test
+    Guardrail #6 sets.
+
+    **It takes the config and never a band**, which is the constraint that
+    shaped it. The two-call path renders this into a system turn that takes no
+    article at all, so that turn is the same bytes on every item and holds one
+    prefix-cache slot; a sentence that varied with the article's band would
+    evict the cache on every alternation. So the threshold is named as a number
+    the model applies to the length it was already asked for, rather than as a
+    question answered here per band.
+
+    It is an ASK and not a control. What a reply's shape ends up being is
+    whatever `normalize_prose` folds it into.
+    """
+    if ask.paragraphs_max < 2:
+        sentence = "Write the summary as one paragraph."
+    else:
+        sentence = (
+            f"Write the summary as one paragraph, or as at most {ask.paragraphs_max} "
+            "paragraphs with one empty line between them. Use a second paragraph only "
+            f"where the summary runs to {ask.second_paragraph_from_words} words or more "
+            "and the subject turns. A break in a short summary makes two half-thoughts."
+        )
+    # Wrapped to the width both prompt files are written at. The model does not
+    # care; the person reviewing a rendered prompt fixture does, and one
+    # 240-character line in a file of 78-character ones is where a stray edit
+    # hides.
+    return textwrap.fill(sentence, width=76, initial_indent="  ", subsequent_indent="  ")
+
+
 def system_prompt(
     prompt_config: SummarizeConfig | None = None,
     *,
@@ -290,7 +332,13 @@ def system_prompt(
     """
     ask = prompt_config or SummarizeConfig()
     band = ask.band_for(0 if brief else source_words)
-    return _template().substitute({**ask.model_dump(), **band.model_dump()})
+    return _template().substitute(
+        {
+            **ask.model_dump(),
+            **band.model_dump(),
+            "paragraph_rule": paragraph_rule(ask),
+        }
+    )
 
 
 def prompt_inputs(prompt_config: SummarizeConfig | None = None) -> str:
@@ -355,12 +403,19 @@ def fits_context(
     answer, so the sum carries both. `turns` is optional because the number it
     adds is zero on an envelope that does not think, which is where a caller
     with no entry in hand sits.
+
+    **An uncapped thinking span is not reserved for, it spends the headroom.**
+    `inference.max_think_tokens` null means the span ends on the closing marker
+    or on the window, so there is no number to add and this sum reserves the
+    answer alone. What it still refuses is an article that leaves no headroom at
+    all; what it can no longer promise is that the headroom is enough.
     """
     rendered = system_prompt(
         prompt_config, source_words=article.band_source_words, brief=article.brief
     )
     overhead = len(rendered.split()) * 2
-    thinking = inference.max_think_tokens if turns is not None and turns.thinks else 0
+    thinks = turns is not None and turns.thinks
+    thinking = inference.max_think_tokens or 0 if thinks else 0
     reply = inference.max_answer_tokens + thinking
     return article.token_count + reply + overhead <= inference.n_ctx
 
@@ -437,9 +492,14 @@ def parse_draft(
     fenced = _FENCED_JSON.match(content)
     if fenced:
         content = fenced.group(1)
-    return draft_model(
-        prompt_config, source_words=source_words, brief=brief
-    ).model_validate_json(content)
+    ask = prompt_config or SummarizeConfig()
+    draft = draft_model(ask, source_words=source_words, brief=brief).model_validate_json(content)
+    # The sanitizer is the control and the prompt is untrusted text like any
+    # other (Guardrail #11). The prompt ASKS for a blank line between paragraphs;
+    # this is what makes one, and what stops anything else a decoder emitted -
+    # a tab, a lone newline, four blank lines - reaching a published field.
+    draft.summary = normalize_prose(draft.summary, paragraphs_max=ask.paragraphs_max)
+    return draft
 
 
 class LengthVerdict(NamedTuple):
@@ -511,18 +571,29 @@ def trim_to_words(summary: str, ceiling: int) -> str:
     Never a mid-sentence cut. A summary with no sentence end inside the budget is
     returned whole and published long: a dangling half-clause reads as a bug to a
     reader, where an over-long paragraph reads only as an over-long paragraph.
+
+    Paragraph by paragraph, and the break is kept. Joining everything with a
+    space was how the old trimmer worked, which destroyed the break on exactly
+    the summaries long enough to have earned one - a trim fires because a reply
+    ran long, and a long reply is the only kind this pipeline asks to break.
     """
-    kept: list[str] = []
+    kept: list[list[str]] = []
     running = 0
-    for sentence in _SENTENCE.findall(summary.strip()):
-        length = len(sentence.split())
-        if running + length > ceiling:
+    for block in paragraphs_of(summary.strip()):
+        sentences: list[str] = []
+        for sentence in _SENTENCE.findall(block):
+            length = len(sentence.split())
+            if running + length > ceiling:
+                break
+            sentences.append(sentence.strip())
+            running += length
+        if sentences:
+            kept.append(sentences)
+        if running >= ceiling:
             break
-        kept.append(sentence)
-        running += length
     if not kept:
         return summary
-    return " ".join(part.strip() for part in kept)
+    return PARAGRAPH_BREAK.join(" ".join(block) for block in kept)
 
 
 def _cost_of(completion: Completion) -> CallCost:

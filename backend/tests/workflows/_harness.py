@@ -434,6 +434,14 @@ BENCH_CORPUS_STEP: Final = "Build the fixed bench corpus"
 
 BENCH_FINGERPRINT_STEP: Final = "What machine this bench drew"
 
+#: The step that turns the probe's segment into the row the bench commits. The
+#: probe writes `state/pipeline-tests/segments/host-fingerprint/...`, and this
+#: workflow has no `assemble` to drain it - so without this step the bench stages
+#: a day file nothing wrote and records no machine at all.
+BENCH_COMPACT_STEP: Final = "Fold the machine record into its day"
+
+BENCH_COMPACT_COMMAND: Final = "python -m idhazh compact"
+
 #: The one composite action in this repository. The step above was byte-identical
 #: in two workflows apart from the job it read the models file from, and a step
 #: duplicated across two files is a step that drifts the day one of them is
@@ -679,6 +687,11 @@ COMMIT_STEPS: Final = {
     "bench": "Commit the machine this bench drew",
 }
 
+#: The catch-up for a run whose assemble never drained the segment store. The
+#: `plan` job is its only caller, and `prune.yml` may never be: that workflow
+#: ends in a force push and commits nothing on 29 of 30 wakes.
+COMPACT_STEP: Final = "Fold any segments an earlier run left behind"
+
 COMMIT_BASE_ENV: Final = frozenset(
     {"COMMIT_MESSAGE", "NOTHING_STAGED_MESSAGE", "PUSH_FAILED_MESSAGE"}
 )
@@ -706,16 +719,13 @@ COMMIT_SCRIPT_ENV: Final = {
 }
 
 COMMIT_STAGED_PATHS: Final = {
-    # `state/host-fingerprint` joined on 2026-09-17 with this job's own probe.
-    # The work job has staged the directory since 2026-09-16; this job wrote no
-    # row into it at all until now, so the machine a run planned on was never
-    # recorded anywhere.
+    # `state` whole since 2026-09-17, where this was five paths named one at a
+    # time. The catch-up compaction runs in this job and folds a segment into
+    # whichever head that segment's own rows name, so what the job writes is not
+    # knowable when the list is written - and a hand-listed set would commit the
+    # segment deletions while leaving the heads behind.
     "plan": [
-        "state/seen",
-        "state/feed-health",
-        "state/feed-retirements.csv",
-        "state/counterfactual-scores",
-        "state/host-fingerprint",
+        "state",
     ],
     # `state/score-index` is beside `state/scores` because it is the record of
     # what those rows are, and the writer reads it instead of them. A shard
@@ -727,10 +737,10 @@ COMMIT_STAGED_PATHS: Final = {
     # spans were measured and then thrown away with the runner. `state/traces`
     # is the raw evidence the fold is taken from and was missed the same way.
     #
-    # `state/host-fingerprint` joined on 2026-09-16 and had been missed since the
-    # probe shipped: it is written by its own subcommand rather than from inside
-    # `stage_work`, so the guard that reads the stage's own ledger calls never
-    # saw it, and `git ls-files` found not one committed fingerprint.
+    # `state/segments` replaced `state/host-fingerprint` on 2026-09-17. The
+    # machine probe used to append to the day file that ten jobs of one run all
+    # opened; it now writes its own segment and `assemble` folds them in, so this
+    # job stages the segment store and no longer stages a head it does not write.
     "work": [
         "state/item-health",
         "state/scores",
@@ -738,7 +748,7 @@ COMMIT_STAGED_PATHS: Final = {
         "state/runtime-counters.csv",
         "state/span-rollup",
         "state/traces",
-        "state/host-fingerprint",
+        "state/segments",
     ],
     "assemble": [
         "frontend/public/digest",
@@ -972,6 +982,7 @@ COMMIT_REFRESH_PATHS: Final = {
         "state/span-rollup",
         "state/traces",
         "state/host-fingerprint",
+        "state/segments",
     ],
 }
 
@@ -1307,6 +1318,41 @@ def _step(
     matches = [step for step in _steps(workflow, job_name) if step.get(key) == value]
     assert len(matches) == 1, f"job {job_name} must have one step with {key}={value}"
     return matches[0]
+
+
+def _stage_invocations(
+    workflow: dict[str, object], workflow_name: str
+) -> list[tuple[str, str, str, list[str]]]:
+    """Every `python -m idhazh <stage>` a workflow runs, as (job, step, stage, words).
+
+    One reader, because two workflows ask the same question of their own jobs -
+    can a dispatch that is not a production run reach the state root a published
+    day is built from? - and a walker copied into both is a walker that drifts
+    the day one of them is edited.
+
+    Every job is walked rather than the ones that run a stage today, so a job
+    that starts running one is caught by a test rather than by a production day
+    that came up short.
+
+    An Actions expression is not shell, so it is blanked before the line is
+    split. What the platform puts there cannot turn a stage invocation into a
+    different one.
+    """
+    jobs = _mapping(workflow.get("jobs"), f"{workflow_name} jobs")
+    found: list[tuple[str, str, str, list[str]]] = []
+    for job_name in sorted(jobs):
+        for step in _steps(workflow, job_name):
+            script = step.get("run")
+            if not isinstance(script, str):
+                continue
+            blanked = re.sub(r"\$\{\{.*?\}\}", "expression", script, flags=re.DOTALL)
+            for line in blanked.replace("\\\n", " ").splitlines():
+                if not re.search(r"\bpython3?\s+-m\s+idhazh\b", line):
+                    continue
+                words = shlex.split(line)
+                stage = words[words.index("idhazh") + 1]
+                found.append((job_name, str(step.get("name")), stage, words))
+    return found
 
 
 def _strings(node: object) -> Iterator[str]:

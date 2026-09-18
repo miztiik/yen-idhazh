@@ -18,6 +18,7 @@ import pytest
 from idhazh import ledger
 from idhazh.contracts.feed_retirement import FeedRetirementRow
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
+from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 from utilities.check_seeded_stores import audit, main, report, seeded_stores
 
 pytestmark = pytest.mark.contract
@@ -30,7 +31,7 @@ def write_header(path: Path, columns: tuple[str, ...]) -> None:
 
 
 def a_seeded_checkout(root: Path) -> Path:
-    """Both stores present under the header this checkout would append with."""
+    """Every store present under the header this checkout would append with."""
     for store in seeded_stores():
         write_header(root / store.relpath, store.columns)
     return root
@@ -48,17 +49,18 @@ def test_the_audit_names_every_store_whose_header_ships_with_the_contract() -> N
     assert declared == {
         ledger.runtime_counters_relpath(): RuntimeCountersRow.csv_columns(),
         ledger.feed_retirements_relpath(): FeedRetirementRow.csv_columns(),
+        ledger.similarity_holdout_relpath(): SimilarityHoldoutPair.csv_columns(),
     }
 
 
-def test_a_checkout_carrying_both_stores_passes(tmp_path: Path) -> None:
+def test_a_checkout_carrying_every_store_passes(tmp_path: Path) -> None:
     findings = audit(a_seeded_checkout(tmp_path))
 
     assert [finding.store.relpath for finding in findings] == [
         store.relpath for store in seeded_stores()
     ]
     assert all(finding.ok for finding in findings)
-    assert "2 of 2 seeded stores" in report(findings)
+    assert "3 of 3 seeded stores" in report(findings)
 
 
 def test_a_missing_store_is_named_rather_than_counted(tmp_path: Path) -> None:

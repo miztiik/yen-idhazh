@@ -98,16 +98,21 @@ from __future__ import annotations
 
 import csv
 import io
-from collections.abc import Callable, Collection, Iterable, Iterator, Sequence
+import os
+import re
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from datetime import date as date_type
 from datetime import timedelta
+from enum import StrEnum
 from pathlib import Path
 from typing import Final, NamedTuple, Protocol
 
 from idhazh import day_partition, month_partition
+from idhazh.contracts.base import RUN_ID_PATTERN
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.feed_retirement import FeedRetirementRow
+from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import (
     DROPPED_CELLS,
@@ -116,9 +121,10 @@ from idhazh.contracts.item_health import (
     ItemOutcome,
 )
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
-from idhazh.contracts.runtime_counters import RuntimeCountersRow
+from idhazh.contracts.runtime_counters import RuntimeCountersRow, ServerJob
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.span_rollup import SpanRollupRow
+from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 
@@ -132,8 +138,33 @@ SPAN_ROLLUP_DIRNAME: Final = "span-rollup"
 PUBLISHED_DIRNAME: Final = "published"
 VISUAL_PRUNES_DIRNAME: Final = "visual-prunes"
 COUNTERFACTUAL_SCORES_DIRNAME: Final = "counterfactual-scores"
+
+#: The one nested store under `state/`. Everything the adaptive merge line writes
+#: hangs off this word - the scored pairs, the fitted lines, the hand-marked
+#: holdout and the score record - so a reader of the commit step sees the whole
+#: feature's footprint in one prefix rather than in four unrelated top-level
+#: names.
+STORY_SIMILARITY_DIRNAME: Final = "story-similarity"
+SCORED_PAIRS_DIRNAME: Final = "scored-pairs"
+FITTED_THRESHOLDS_DIRNAME: Final = "fitted-thresholds"
+SIMILARITY_HOLDOUT_FILENAME: Final = "holdout-pairs.csv"
+SCORE_DISTRIBUTION_FILENAME: Final = "score-distribution.json"
+
+#: Where a record goes when the inputs under it moved. It ships with a
+#: `.gitkeep`, because the commit step stages this directory on every run and an
+#: archive is written only on the rare day a stamp changed - `git add` on a path
+#: the checkout does not hold aborts the whole step.
+SCORE_ARCHIVE_DIRNAME: Final = "archive"
 RUNTIME_COUNTERS_FILENAME: Final = "runtime-counters.csv"
 FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
+
+#: Where a writer puts its rows before a compaction folds them into a head. Not
+#: a ledger of its own: nothing reads a segment except the compaction, and a
+#: segment the compaction has read is deleted. It sits outside every ledger root
+#: on purpose - a day tree refuses a name it cannot place, and a skip clause in
+#: the one walk whose value is that it skips nothing is how a new writer arrives
+#: unnoticed.
+SEGMENTS_DIRNAME: Final = "segments"
 
 #: What makes two feed-health rows the same record. One feed, read once, in one
 #: run. The ledger always meant that - `docs/architecture/sources/health.md`
@@ -194,6 +225,21 @@ VISUAL_PRUNE_KEY: Final = ("date", "run_id")
 #: planned on its own: the same address on two desks is two scores, and dropping
 #: one of them as a repeat would lose a fact.
 COUNTERFACTUAL_SCORE_KEY: Final = ("date", "run_id", "vertical", "url_key")
+
+#: What makes two fitted-line rows the same record. One run fits one line for one
+#: date, so a second row under those two cells is a second attempt at one
+#: execution rather than a second answer. Both attempts read the same score
+#: record and walk the same counts, so the first row wins and there is nothing
+#: for a preference rule to choose between.
+STORY_SIMILARITY_THRESHOLD_KEY: Final = ("date", "run_id")
+
+#: What makes two judged-pair rows the same record. `run_id` is in the key
+#: because two runs of one day judge the same pair against different articles,
+#: and both readings are facts worth keeping. Drop it and the settlement would
+#: keep whichever landed first, which is the opposite of what a re-run means -
+#: the fold picks the newest run itself, over the whole day, rather than letting
+#: a line-by-line rewrite decide.
+STORY_SIMILARITY_PAIR_KEY: Final = ("date", "run_id", "pair_key")
 
 #: What makes two retirement rows the same record. The address and nothing else:
 #: a retirement is permanent for one endpoint key, so a second row for it says
@@ -294,6 +340,16 @@ _PREFERENCES: Final[dict[tuple[str, ...], Preference]] = {
 }
 
 
+def preference_for(key: tuple[str, ...]) -> Preference | None:
+    """How two rows holding one key settle, where the key declares it.
+
+    One vocabulary for the question, not two: the post-merge settlement reads
+    this table and so does the compaction, so a key whose repeats can disagree
+    gives the same answer whichever pass reaches it first.
+    """
+    return _PREFERENCES.get(key)
+
+
 def seen_relpath(date: str) -> str:
     """`state/seen/<YYYY>/<MM>/<DD>.csv` - the POSIX form, for a log line or a manifest."""
     return f"{STATE_DIRNAME}/{SEEN_DIRNAME}/{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
@@ -353,12 +409,17 @@ def host_fingerprint_relpath(date: str) -> str:
 
 
 def host_fingerprint_path(state_dir: Path, date: str) -> Path:
-    """The day file a run on this date records its machines in.
+    """The day file this date's machines land in, written only by the compaction.
 
     A day rather than a flat file, for the reason `item_health_path` gives, and
     with a second reason of its own: this collection only earns its keep when
     somebody counts across it, and a day tree is the shape a bounded window can
     read (Guardrail #12).
+
+    Ten jobs of one run each record the machine they drew, so none of them opens
+    this file. Each writes its own segment and the compaction folds them in, which
+    is what stops a lost push race emptying the day - `2026-09-16` is header-only
+    because that is what happened.
     """
     return state_dir / HOST_FINGERPRINT_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
 
@@ -465,6 +526,86 @@ def counterfactual_scores_path(state_dir: Path, date: str) -> Path:
     return state_dir / COUNTERFACTUAL_SCORES_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
 
 
+def scored_pairs_relpath(date: str) -> str:
+    """`state/story-similarity/scored-pairs/<YYYY>/<MM>/<DD>.csv` - POSIX, for a log line."""
+    stem = f"{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+    return f"{STATE_DIRNAME}/{STORY_SIMILARITY_DIRNAME}/{SCORED_PAIRS_DIRNAME}/{stem}"
+
+
+def scored_pairs_path(state_dir: Path, date: str) -> Path:
+    """The day file this date's judged pairs are appended to.
+
+    A day, and the read asks for it as well as the writer: a fold reads one
+    date's pairs and then never opens that file again, and the retention pass
+    deletes by day. A month file would make the fold read weeks it has already
+    counted.
+    """
+    root = state_dir / STORY_SIMILARITY_DIRNAME / SCORED_PAIRS_DIRNAME
+    return root / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+
+
+def fitted_thresholds_relpath(date: str) -> str:
+    """`state/story-similarity/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` - POSIX, for a log line."""
+    stem = f"{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+    return f"{STATE_DIRNAME}/{STORY_SIMILARITY_DIRNAME}/{FITTED_THRESHOLDS_DIRNAME}/{stem}"
+
+
+def fitted_thresholds_path(state_dir: Path, date: str) -> Path:
+    """The day file this date's runs write their fitted line into.
+
+    A day rather than a month for the reason the cleanup record files by day:
+    two runs collide on a file only when they are the same day, and a day taken
+    back off the record is one `rm`. The guard's own read is the last fourteen
+    rows, which `day_partition` answers by walking days backwards.
+    """
+    root = state_dir / STORY_SIMILARITY_DIRNAME / FITTED_THRESHOLDS_DIRNAME
+    return root / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+
+
+def similarity_holdout_relpath() -> str:
+    """`state/story-similarity/holdout-pairs.csv` - the POSIX form, for a log line."""
+    return f"{STATE_DIRNAME}/{STORY_SIMILARITY_DIRNAME}/{SIMILARITY_HOLDOUT_FILENAME}"
+
+
+def similarity_holdout_path(state_dir: Path) -> Path:
+    """One flat file, and the read over it carries no clock.
+
+    A person types this file and nothing else writes it, so there is no run to
+    partition by and no date a reader would ask for. It grows with how many
+    pairs somebody has sat down and marked, never with the archive (Guardrail
+    #12).
+    """
+    return state_dir / STORY_SIMILARITY_DIRNAME / SIMILARITY_HOLDOUT_FILENAME
+
+
+def score_distribution_path(state_dir: Path) -> Path:
+    """The one score record every fit reads, whole.
+
+    Not a ledger: it is rewritten rather than appended to, and its size is fixed
+    by the band and the slot width rather than by how many days have been folded
+    into it. That is the whole point - the fit reads a file of a size that never
+    changes instead of sorting every pair ever judged (Guardrail #12).
+    """
+    return state_dir / STORY_SIMILARITY_DIRNAME / SCORE_DISTRIBUTION_FILENAME
+
+
+def score_distribution_archive_relpath(stamp: str) -> str:
+    """`state/story-similarity/archive/<stamp>.json` - POSIX, for a log line."""
+    return f"{STATE_DIRNAME}/{STORY_SIMILARITY_DIRNAME}/{SCORE_ARCHIVE_DIRNAME}/{stamp}.json"
+
+
+def score_distribution_archive_path(state_dir: Path, stamp: str) -> Path:
+    """Where the record is put down when its own stamp no longer describes the run.
+
+    Named by the stamp rather than by a date, because the stamp is what the
+    counts inside it were taken under. Two archives from one day are two
+    different questions and get two files; one input moved back to what it was
+    and the archive it produces is the file already there.
+    """
+    root = state_dir / STORY_SIMILARITY_DIRNAME / SCORE_ARCHIVE_DIRNAME
+    return root / f"{stamp}.json"
+
+
 def shards_in_window(today: str, within_days: int) -> list[str]:
     """The month stems a window of days can touch, newest first.
 
@@ -516,6 +657,24 @@ def _csv_line(columns: tuple[str, ...], payload: dict[str, str]) -> str:
     csv.DictWriter(buffer, fieldnames=columns, lineterminator="\n").writerow(
         {name: payload[name] for name in columns}
     )
+    return buffer.getvalue()
+
+
+def render_file(columns: tuple[str, ...], rows: Iterable[Mapping[str, str]]) -> str:
+    """A whole ledger file as one document: the header, then every row.
+
+    Beside `_csv_line` because a head the compaction rewrites and a row an append
+    adds have to be the same bytes. Written two ways, a file the compaction
+    touched would read as changed line by line the next time anything diffed it.
+
+    Returned rather than written, so the caller owns the temp-file-plus-rename
+    and this module keeps its rule that a row is rendered in exactly one place.
+    """
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=columns, lineterminator="\n")
+    writer.writeheader()
+    for payload in rows:
+        writer.writerow({name: payload[name] for name in columns})
     return buffer.getvalue()
 
 
@@ -984,7 +1143,7 @@ def _header_and_keys(
     """The file's own header and every record it already holds, in one pass.
 
     One `csv.reader` rather than a `DictReader`, and one open rather than two.
-    `DictReader` builds a dict of every column for each row, which is 113 keys on
+    `DictReader` builds a dict of every column for each row, which is 119 keys on
     an item-health shard to read three cells; the positions are taken off the
     header once and the cells are read by index after that.
 
@@ -1120,27 +1279,6 @@ def recorded_runtime_counters(path: Path) -> set[tuple[str, ...]]:
     return {tuple(row[name] for name in RUNTIME_COUNTERS_KEY) for row in _read_rows(path)}
 
 
-def append_host_fingerprint(state_dir: Path, date: str, rows: Iterable[HostFingerprintRow]) -> int:
-    """Append what machine each job drew. One row a job, so a re-read is not a second fact.
-
-    Filters on the same key as the counter snapshot: a job runs on one machine,
-    so a second row for that job is the same machine written twice, and counting
-    a fingerprint twice is exactly what would make the distribution lie.
-
-    Returns how many landed, so a caller can log the count.
-    """
-    path = host_fingerprint_path(state_dir, date)
-    _, already = _header_and_keys(path, HOST_FINGERPRINT_KEY)
-    landing = []
-    for row in rows:
-        key = _key_of(row, HOST_FINGERPRINT_KEY)
-        if key in already:
-            continue
-        already.add(key)
-        landing.append(row)
-    return _append(path, HostFingerprintRow.csv_columns(), landing)
-
-
 def append_span_rollup(state_dir: Path, date: str, rows: Iterable[SpanRollupRow]) -> int:
     """Append one shard's folded span counts to the month shard. Never windowed here.
 
@@ -1219,6 +1357,55 @@ def append_counterfactual_scores(
     return landed - drop_repeated_rows(path, COUNTERFACTUAL_SCORE_KEY)
 
 
+def append_story_similarity_pairs(
+    state_dir: Path, date: str, rows: Iterable[StorySimilarityPair]
+) -> int:
+    """Append a day's judged pairs into that day's own file.
+
+    Settled against `STORY_SIMILARITY_PAIR_KEY` straight after the write, the
+    way `append_counterfactual_scores` is. The key carries `run_id`, so a second
+    RUN of one date keeps its own rows and only a second attempt at one
+    execution is collapsed - both attempts judged the same pair under the same
+    prompt against the same day, so the first row wins and there is nothing to
+    choose between them. Which of two runs the record counts is decided over the
+    whole day when the day is folded, never line by line here.
+
+    **The day file is created even when the day judged nothing**, for the reason
+    `append_counterfactual_scores` gives: the commit step names this directory,
+    `git add` runs under `set -euo pipefail`, and a path missing from the working
+    tree aborts the step and costs the ledgers staged beside it.
+
+    Returns how many rows the file gained, so a caller can log the count.
+    """
+    path = scored_pairs_path(state_dir, date)
+    columns = StorySimilarityPair.csv_columns()
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
+    landed = _append(path, columns, list(rows))
+    return landed - drop_repeated_rows(path, STORY_SIMILARITY_PAIR_KEY)
+
+
+def load_story_similarity_pairs(state_dir: Path, date: str) -> list[StorySimilarityPair]:
+    """One named day's judged pairs, and never a second file.
+
+    **Guardrail #12 declaration, and it is the whole point of this store's
+    shape.** The fold counts one date into the record and the record is then the
+    only thing the fit reads, so this opens the file the date names and stops.
+    It costs the same on the thousandth day as on the third whatever the tree
+    holds beside it.
+
+    A row that no longer parses stops the read rather than being skipped. A
+    report may drop a day it cannot read; this is evidence being counted into a
+    record that is rewritten whole, and a silently short count is a record that
+    cannot be told from a quiet day.
+    """
+    return [
+        StorySimilarityPair.from_csv_row(raw)
+        for raw in _read_rows(scored_pairs_path(state_dir, date))
+    ]
+
+
 def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
     """Every cleanup pass on record, oldest day first. Never windowed.
 
@@ -1240,6 +1427,302 @@ def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
             except (KeyError, ValueError):
                 continue
     return rows
+
+
+class SegmentLedger(StrEnum):
+    """Which head a segment belongs to. A closed set, and that is the whole point.
+
+    A directory under `state/segments/` naming something outside this set is a
+    writer that arrived without anyone choosing it, which is the failure the
+    segment store exists to stop. Every value is the head's own `*_DIRNAME`
+    constant rather than a string repeated here, so the transit directory and
+    the file it drains into cannot be spelled two different ways.
+
+    A ledger joins this set in the row that moves its writer, never before it.
+    """
+
+    ITEM_HEALTH = ITEM_HEALTH_DIRNAME
+    HOST_FINGERPRINT = HOST_FINGERPRINT_DIRNAME
+    SPAN_ROLLUP = SPAN_ROLLUP_DIRNAME
+
+
+class SegmentName(NamedTuple):
+    """A segment filename read back: who wrote it, and on which try.
+
+    `attempt` is the cell that is in the name and in no column. GitHub keeps the
+    run id stable across a re-run, so without it a second attempt writes the
+    path the first one took.
+    """
+
+    run_id: str
+    attempt: int
+    job: ServerJob
+    shard: int
+
+
+#: `<run_id>-<attempt>-<job>-<shard>.csv`. The run id is spelled from the
+#: contract's own pattern and the jobs from the enum, so neither is a second
+#: list to keep in step. `re.ASCII` because a `\\d` in a `str` pattern otherwise
+#: takes another script's numerals, and `int` takes them too - the name would
+#: then carry a digit no later glob matches.
+_SEGMENT_NAME: Final = re.compile(
+    rf"(?P<run_id>{RUN_ID_PATTERN[1:-1]})"
+    r"-(?P<attempt>[0-9]+)"
+    rf"-(?P<job>{'|'.join(job.value for job in ServerJob)})"
+    r"-(?P<shard>[0-9]{2})",
+    re.ASCII,
+)
+
+SEGMENT_SUFFIX: Final = ".csv"
+
+
+class SegmentHead(NamedTuple):
+    """Where one ledger's rows of one date land, and what settles two of them.
+
+    `KeyedLedger`'s three travel together here for the same reason, plus the
+    POSIX form: the compaction reports what it wrote, and a report naming an
+    absolute path is a report nobody can compare between two machines
+    (CLAUDE.md section 2).
+    """
+
+    path: Path
+    relpath: str
+    key: tuple[str, ...]
+    model: type[CsvContract]
+    carried: frozenset[str] = frozenset()
+
+
+def _span_rollup_head(state_dir: Path, date: str) -> Path:
+    return span_rollup_path(state_dir, date[:7])
+
+
+def _span_rollup_head_relpath(date: str) -> str:
+    return span_rollup_relpath(date[:7])
+
+
+class _HeadShape(NamedTuple):
+    """One ledger's answer to "which file, and what settles two of its rows"."""
+
+    path: Callable[[Path, str], Path]
+    relpath: Callable[[str], str]
+    key: tuple[str, ...]
+    model: type[CsvContract]
+    carried: frozenset[str] = frozenset()
+
+
+#: Which file a row of a given date belongs in, per ledger. A declared table
+#: rather than a rule the compaction re-derives: a month head and a day head are
+#: two shapes, and which one a ledger has is a fact about the ledger.
+_SEGMENT_HEADS: Final[dict[SegmentLedger, _HeadShape]] = {
+    SegmentLedger.ITEM_HEALTH: _HeadShape(
+        item_health_path,
+        item_health_relpath,
+        ITEM_HEALTH_KEY,
+        ItemHealthRow,
+        ITEM_HEALTH_CARRIED,
+    ),
+    SegmentLedger.HOST_FINGERPRINT: _HeadShape(
+        host_fingerprint_path,
+        host_fingerprint_relpath,
+        HOST_FINGERPRINT_KEY,
+        HostFingerprintRow,
+    ),
+    SegmentLedger.SPAN_ROLLUP: _HeadShape(
+        _span_rollup_head,
+        _span_rollup_head_relpath,
+        SPAN_ROLLUP_KEY,
+        SpanRollupRow,
+    ),
+}
+
+
+def segment_head(state_dir: Path, ledger: SegmentLedger, date: str) -> SegmentHead:
+    """The head a row of this date belongs in, with what settles two of its rows.
+
+    The date comes off the row, never off the clock. A segment a run left behind
+    three days ago compacts into that day's head, which is the whole of the
+    recovery path.
+    """
+    shape = _SEGMENT_HEADS[ledger]
+    return SegmentHead(
+        shape.path(state_dir, date),
+        shape.relpath(date),
+        shape.key,
+        shape.model,
+        shape.carried,
+    )
+
+
+def segment_contract(ledger: SegmentLedger) -> type[CsvContract]:
+    """The model that reads one of this ledger's rows.
+
+    Asked before a head is named, because the head is chosen by a row's date
+    cell and a date cell is only a date once the contract has read it. Naming a
+    file from an unread cell is how a path is built out of something nobody
+    validated.
+    """
+    return _SEGMENT_HEADS[ledger].model
+
+
+def _segment_name(*, run_id: str, attempt: int, job: ServerJob, shard: int) -> str:
+    """The grammar in 2.3, spelled once, so a path and its POSIX form cannot differ."""
+    return f"{run_id}-{attempt}-{job.value}-{shard:02d}{SEGMENT_SUFFIX}"
+
+
+def segment_path(
+    state_dir: Path,
+    ledger: SegmentLedger,
+    *,
+    run_id: str,
+    attempt: int,
+    job: ServerJob,
+    shard: int,
+) -> Path:
+    """Where this writer puts its rows. Nobody else writes this path.
+
+    The four elements are what make one writer's file its own: the run, the try
+    at that run, the job, and the shard inside it. Two jobs of one run cannot
+    collide, and neither can two attempts - which is the difference between a
+    lost push race costing a merge and costing the rows.
+
+    There is no date element. The run id opens on the date already, and the head
+    a row lands in is chosen by the row's own date cell, so a second date here
+    would be a cell a writer fills for nothing.
+    """
+    name = _segment_name(run_id=run_id, attempt=attempt, job=job, shard=shard)
+    return state_dir / SEGMENTS_DIRNAME / ledger.value / name
+
+
+def segment_relpath(
+    ledger: SegmentLedger,
+    *,
+    run_id: str,
+    attempt: int,
+    job: ServerJob,
+    shard: int,
+) -> str:
+    """`state/segments/<ledger>/<run_id>-<attempt>-<job>-<shard>.csv`, POSIX form.
+
+    The same grammar as `segment_path`, for a log line and for anything that has
+    to name the store a job fills without holding a state root (CLAUDE.md
+    section 2).
+    """
+    name = _segment_name(run_id=run_id, attempt=attempt, job=job, shard=shard)
+    return f"{STATE_DIRNAME}/{SEGMENTS_DIRNAME}/{ledger.value}/{name}"
+
+
+def write_segment(
+    state_dir: Path,
+    ledger: SegmentLedger,
+    rows: Sequence[CsvRecord],
+    *,
+    run_id: str,
+    attempt: int,
+    job: ServerJob,
+    shard: int,
+) -> int:
+    """This writer's slice of one ledger, written whole. Nobody else writes this path.
+
+    Whole rather than appended, because the file is this writer's alone: there is
+    no earlier row in it to keep and no header to agree with. That is the whole
+    of what the segment store buys - two jobs of one run, and two attempts at one
+    job, never open one file, so a lost push race costs a merge rather than the
+    rows.
+
+    The rows carry the HEAD's columns and the head's contract. A segment gets no
+    shape of its own on purpose: it holds the head's rows in transit, and a
+    second shape for the same rows is the thing that drifts.
+
+    Written through a temp file and a rename, so a writer killed mid-write leaves
+    nothing rather than half a row for the compaction to refuse. The temp file
+    sits at the store's own top rather than beside the target: `segment_files`
+    reads every name inside a ledger's directory and refuses one it cannot place,
+    so a scratch left there by a dead runner would stop every later compaction.
+    The top of the store is the one place that already holds something which is
+    not a segment.
+
+    Returns how many rows it wrote, so a caller can log the count.
+    """
+    if not rows:
+        return 0
+    path = segment_path(state_dir, ledger, run_id=run_id, attempt=attempt, job=job, shard=shard)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    columns = _SEGMENT_HEADS[ledger].model.csv_columns()
+    scratch = state_dir / SEGMENTS_DIRNAME / f"{path.stem}.{os.getpid()}.tmp"
+    scratch.write_text(
+        render_file(columns, [row.csv_row() for row in rows]), encoding="utf-8", newline=""
+    )
+    scratch.replace(path)
+    return len(rows)
+
+
+def parse_segment_name(path: Path) -> SegmentName:
+    """A segment filename read back, or a refusal naming the file.
+
+    A name this cannot place is not skipped. The store holds one kind of file
+    written by one kind of writer, so a name outside the grammar means something
+    else is writing there - and a glob that passed over it would leave those rows
+    in the tree unread and unmentioned, which is how a ledger starts losing rows
+    with nobody noticing.
+    """
+    match = _SEGMENT_NAME.fullmatch(path.stem) if path.suffix == SEGMENT_SUFFIX else None
+    if match is None:
+        raise ValueError(
+            f"{path.name} is not a segment name. A segment is "
+            "<run_id>-<attempt>-<job>-<shard>.csv, and a file under "
+            f"{STATE_DIRNAME}/{SEGMENTS_DIRNAME}/ that is not one was written by "
+            "something nobody here declared."
+        )
+    return SegmentName(
+        run_id=match["run_id"],
+        attempt=int(match["attempt"]),
+        job=ServerJob(match["job"]),
+        shard=int(match["shard"]),
+    )
+
+
+def _declared_ledger(directory: Path) -> SegmentLedger:
+    try:
+        return SegmentLedger(directory.name)
+    except ValueError:
+        declared = ", ".join(sorted(item.value for item in SegmentLedger))
+        raise ValueError(
+            f"{STATE_DIRNAME}/{SEGMENTS_DIRNAME}/{directory.name} names a ledger "
+            f"nothing here declares. The declared set is {declared}. Every segment "
+            "belongs to a head, so a directory outside that set is a writer that "
+            "arrived without anyone choosing it."
+        ) from None
+
+
+def segment_files(state_dir: Path, ledger: SegmentLedger | None = None) -> list[Path]:
+    """Every segment on disk, or one ledger's, oldest name first.
+
+    The only listing there is, and its cost is what is waiting rather than what
+    the project has written: on the normal path a compaction drained the store
+    one run ago, so this reads an empty directory (Guardrail #12).
+
+    **Nothing inside a ledger's directory is skipped**, for the reason
+    `day_partition` gives. The store's own top is different and is allowed to
+    hold something that is not a segment - `state/segments/.gitkeep` is what
+    keeps the empty directory in the checkout at all.
+
+    A missing directory lists nothing, because a fresh clone has no segments and
+    that is not a fault.
+    """
+    root = state_dir / SEGMENTS_DIRNAME
+    if not root.is_dir():
+        return []
+    found: list[Path] = []
+    for entry in sorted(root.iterdir()):
+        if not entry.is_dir():
+            continue
+        declared = _declared_ledger(entry)
+        if ledger is not None and declared is not ledger:
+            continue
+        for candidate in sorted(entry.iterdir()):
+            parse_segment_name(candidate)
+            found.append(candidate)
+    return found
 
 
 def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
@@ -1309,6 +1792,14 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     one file a recorded month where every dated entry beside it names one a day.
     The run's own cover is a month file too, and it is still one file: a run
     appends under one date, and one date is in one month.
+
+    `state/story-similarity/fitted-thresholds/` is registered before anything
+    writes it, for the reason `state/feed-retirements.csv` was: the settlement
+    runs over whatever it finds, a missing file settles to nothing, and
+    registering the shape rather than its first writer is what stops two stale
+    checkouts leaving one date fitted twice. Its sibling `scored-pairs/` joins on
+    the same terms: `run_id` is in its key, so what settles there is a second
+    attempt at one execution and never a second run of the day.
     """
     flat: list[KeyedLedger] = [
         KeyedLedger(runtime_counters_path(state_dir), RUNTIME_COUNTERS_KEY, RuntimeCountersRow),
@@ -1336,6 +1827,16 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
                 HostFingerprintRow,
             ),
             KeyedLedger(
+                fitted_thresholds_path(state_dir, date),
+                STORY_SIMILARITY_THRESHOLD_KEY,
+                FittedSimilarityThreshold,
+            ),
+            KeyedLedger(
+                scored_pairs_path(state_dir, date),
+                STORY_SIMILARITY_PAIR_KEY,
+                StorySimilarityPair,
+            ),
+            KeyedLedger(
                 span_rollup_path(state_dir, date[:7]), SPAN_ROLLUP_KEY, SpanRollupRow
             ),
         ]
@@ -1360,6 +1861,18 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
         *(
             KeyedLedger(path, HOST_FINGERPRINT_KEY, HostFingerprintRow)
             for path in day_partition.day_files(state_dir / HOST_FINGERPRINT_DIRNAME)
+        ),
+        *(
+            KeyedLedger(path, STORY_SIMILARITY_THRESHOLD_KEY, FittedSimilarityThreshold)
+            for path in day_partition.day_files(
+                state_dir / STORY_SIMILARITY_DIRNAME / FITTED_THRESHOLDS_DIRNAME
+            )
+        ),
+        *(
+            KeyedLedger(path, STORY_SIMILARITY_PAIR_KEY, StorySimilarityPair)
+            for path in day_partition.day_files(
+                state_dir / STORY_SIMILARITY_DIRNAME / SCORED_PAIRS_DIRNAME
+            )
         ),
         *(
             KeyedLedger(path, SPAN_ROLLUP_KEY, SpanRollupRow)

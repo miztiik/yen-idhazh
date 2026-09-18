@@ -24,9 +24,9 @@ writes the whole day's census afterwards. A worker also leaves its own copy of
 the row beside the item's other payloads, which is
 [the file below](#the-row-on-the-shard-before-the-ledger-has-it).
 
-The row carries 113 columns. `ItemHealthRow.csv_columns` in
+The row carries 119 columns. `ItemHealthRow.csv_columns` in
 `backend/idhazh/contracts/item_health.py` is the list, and this page does not
-restate it - a second copy of 113 names is a second thing to keep in step, and
+restate it - a second copy of 119 names is a second thing to keep in step, and
 it drifts. [item-health-columns.md](item-health-columns.md) is the generated
 answer to "where does this cell come from": every column, the eight questions
 they group into, which module puts a value under each name, whether that value
@@ -245,7 +245,7 @@ the same temp-file-then-rename every per-item payload uses. The payload is
 `ItemHealthRow` and nothing else, so there is no second shape to version.
 
 **It exists because the row used to die with the shard.** The recorder validates
-all 113 cells an item at a time, and until 2026-09-15 the only place they went
+all 119 cells an item at a time, and until 2026-09-15 the only place they went
 was a log line - a CI artifact with its own expiry. The durable row was rebuilt
 afterwards from the article and the summary payloads, which between them cannot
 carry most of those cells, so a cell the shard measured correctly still reached
@@ -358,6 +358,40 @@ that job ran, so the contract refuses it. A shard with no job is what every row
 written before 2026-09-17 holds, and `ledger.append_item_health` reads those
 rows back through `from_csv_row` before it appends - so a two-directional rule
 would refuse the whole archive on the first run after the column landed.
+
+### What the machine had, against what a process held
+
+Eight memory and processor cells on this row are about a PROCESS - the model
+server's resident set, the worker's, the job's cgroup peak. **None of them can
+say what was left.** llama.cpp maps the weights with no `-lm`, so their resident
+pages are file-backed and evictable and count in every RSS figure, and a page
+two processes share is counted twice. Adding the marks up and subtracting from
+16 GB is a number this project has already withdrawn
+([../../reference/measurements.md](../../reference/measurements.md)).
+
+Six `os_` columns are the kernel's own account instead, read from
+`/proc/meminfo` by the same watch that fills `cpu_busy_max`:
+
+| Column | What it is |
+| --- | --- |
+| `os_mem_available_bytes` | What the kernel says a new allocation could have, at the end of the item. This is headroom |
+| `os_mem_total_bytes` | What the machine has. Constant inside a job, recorded per item so a row means something alone |
+| `os_mem_cached_bytes` | Page cache. Most of the weights sit here, so a fall is the kernel evicting what the next item re-reads |
+| `os_swap_free_bytes` | Swap left. A fall here is the machine in trouble before the cgroup kill |
+| `os_swap_total_bytes` | Swap the machine has. Without it a free figure of zero says "no swap here" and "swap consumed" equally |
+| `os_mem_available_min_bytes` | The lowest headroom seen while the model worked on THIS item |
+
+**The last one is the only cell taken over a window rather than at an instant,
+and the window is the reason it is worth having.** The watch opens when the
+model starts on an item and closes when it stops. Selecting samples on
+`item_started_at .. item_ended_at` instead would be the queue window, which
+measured nine times longer, with 19 items of 20 open at the same instant - so
+almost every row would carry the whole job's low-water mark rather than its own
+(Carmack, 2026-09-17, against `state/item-health/2026/09/16.csv`).
+
+**An item whose machine never answered records six nulls, never six zeros.**
+`/proc/meminfo` does not exist on the machines this project is written on, and a
+zero in the headroom cell would read as a machine with no memory left.
 
 ## Stages and outcomes
 
@@ -665,11 +699,13 @@ your copy, which drops the rows the pipeline wrote while the branch was open.
 
 ## Scaling
 
-Measured 2026-09-17 on the committed repository. The row still carries 113
-columns: `job` arrived and `runner_name` went, so the count is unchanged and
-the names are not. The previous reading was taken on 2026-09-15 against the
-113-column row this one replaced; the shape has moved since, so it was a stale
-reading rather than history and has been replaced (Guardrail #10).
+Measured 2026-09-17 on the committed repository, and the row moved again the
+same day: six `os_` columns landed, so it carries **119**. Every byte figure
+below was taken against the 113-column row, which makes each one a floor rather
+than a reading of today's width - what the six add is on its own line under the
+table. The previous reading was taken on 2026-09-15 against a row that has since
+moved twice, so it was a stale reading rather than history and has been replaced
+(Guardrail #10).
 
 | Quantity | Value | How |
 | --- | --- | --- |
@@ -679,7 +715,7 @@ reading rather than history and has been replaced (Guardrail #10).
 | Widest day, `2026/08/25.csv` | 1,000 rows, 396,015 bytes | `stat` |
 | Rows on a full day | **800** | 5 runs x the 160-item `safety_ceiling_per_run` |
 | A full day at the current width | **~351 KB** | 800 x 439.3 |
-| Published projection `frontend/public/telemetry/2026-09.csv` | 1,373,976 bytes, 49 of the 113 columns | `stat` |
+| Published projection `frontend/public/telemetry/2026-09.csv` | 1,373,976 bytes, 49 of the 119 columns | `stat` |
 | Mean published row | 180.5 bytes raw, **41.3 bytes gzipped** (4.4x) | gzip at maximum level |
 
 What the 2026-09-17 column change costs the archive, one time, on the first
@@ -690,6 +726,12 @@ append to each day file:
 | `job` added | **+12,933** | one comma on each of 12,837 rows, plus `,job` on 24 headers |
 | `runner_name` dropped | **-23,194** | 12,837 commas, 399 filled values totalling 10,069 characters, and `,runner_name` off 24 headers |
 | Net | **-10,261 bytes** | the row gets narrower, not wider |
+
+The six `os_` columns are the next one-time cost, measured the same day against
+a ledger one run wider - 25 day files and 13,157 rows: **+82,267 bytes**, six
+commas on each row plus the six names on each header. Every cell is empty until
+a run writes one, so this is the cost of the columns existing rather than the
+cost of what they hold.
 
 Projected forward at the current cadence and ceiling:
 
@@ -704,7 +746,7 @@ Three limits, in the order they will actually bite:
 1. **The reader's download, first.** The console fetches a whole month shard.
  991 KB gzipped at the end of a busy month is far more than the rest of the
  page. The lever is the projection, not the ledger: the served file carries 49
- of the row's 113 columns and could carry fewer, or become a pre-aggregated
+ of the row's 119 columns and could carry fewer, or become a pre-aggregated
  day-grain file with the per-item rows kept for the operator only. Nothing
  here is measured against a slow connection yet, so that is the next
  measurement rather than the next change.

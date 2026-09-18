@@ -1559,6 +1559,14 @@
     "RunConfig": {
       "additionalProperties": false,
       "properties": {
+        "judge_shard_timeout_minutes": {
+          "default": 200,
+          "description": "How long one judging leg may run before GitHub kills it. 200 minutes is 2 hours 9 minutes of model time at the day's cap of 200 pairs over 4 legs, plus 71 minutes of headroom against a fixed cost of about 6 minutes for the checkout, the weights cache restore and the server start. The model time is derived from 9.85 tokens a second measured on a stock runner on 2026-09-09, not from a judge call; row 17 measures one and replaces this arithmetic.",
+          "maximum": 350,
+          "minimum": 1,
+          "title": "Judge Shard Timeout Minutes",
+          "type": "integer"
+        },
         "max_parallel": {
           "default": 4,
           "description": "The most workers a run may derive for itself. It is four rather than the eight digest.yml lets an operator dispatch, because eight has never published a day; the three conditions that would move it are in docs/reference/measurements.md.",
@@ -1637,6 +1645,9 @@
       "additionalProperties": false,
       "description": "How alike two of a day's items have to be before they are one story.\n\nOne score, and the score is a weighted sum of terms that each run 0 to 1.\nNested rather than three flat knobs under `assemble` because the weights\ncarry an invariant ACROSS them - they sum to 1.0 - and a knob whose legal\nvalue depends on another knob's value belongs in the model where a validator\ncan see both.\n\n**The sum-to-one rule is what keeps the floor meaning something.** The floor\nis a number on the same 0-to-1 scale as every term, so a person reading\n`config/idhazh.json` can compare the floor against a term without first\nworking out what the weights add up to. Let them sum to 1.3 and the floor\nsilently becomes easier to clear every time a weight moves, which is the\nfailure this model exists to make impossible.\n\nIt ships with all the weight on the cosine, which is exactly what the pass\nscored before this model existed. The weights are fitted against hand labels\nin a later change; until then this is a rewrite that changes no published\ngroup rather than a retune.",
       "properties": {
+        "adaptive_dedup_threshold": {
+          "$ref": "#/$defs/SimilarityThresholdConfig"
+        },
         "cosine_weight": {
           "default": 1.0,
           "description": "How much of the score is the cosine between the two vectors the day already carries. 1.0 ships, which is the whole score and is what the pass used before the composite existed - so the composite lands changing no published group, and the weights move against labels rather than against taste. It is the strongest single term measured so far: it separates 97.4 percent of the labelled pairs. NOT comparable to assist.similarity_floor, which scores a reader's query against an item rather than two items against each other, so the two distributions are different shapes.",
@@ -1663,6 +1674,174 @@
         }
       },
       "title": "SameStoryConfig",
+      "type": "object"
+    },
+    "SimilarityThresholdConfig": {
+      "additionalProperties": false,
+      "description": "How the merge line fits itself, and the gates it has to clear before it may.\n\nNested inside `SameStoryConfig` rather than flat under `assemble`, for the\nreason that model's own docstring gives: a knob whose legal value depends on\nanother knob's value belongs where a validator can see both. `max_down_step`\nis bounded by a margin measured against `floor_min`, and `band_low` has to\nsit below the line `floor_min` currently holds.\n\n**Nothing reads this block yet.** It ships with `enabled` off, so a fresh\nclone publishes exactly what it published before the block existed.",
+      "properties": {
+        "applied_lookback_days": {
+          "default": 7,
+          "description": "How many days back assemble will look for a fitted line before it falls back to the config floor. 7, because the fit writes a row every day, so a gap longer than a week means the judge has been down a week and the committed config value is the honest answer.",
+          "maximum": 90,
+          "minimum": 1,
+          "title": "Applied Lookback Days",
+          "type": "integer"
+        },
+        "band_high": {
+          "default": 1.0,
+          "description": "The top of the band. 1.00, because a cosine goes no higher and a pair at 0.999 is still a pair the record should hold a slot for.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Band High",
+          "type": "number"
+        },
+        "band_low": {
+          "default": 0.88,
+          "description": "The lowest score worth judging. Below it two items are nowhere near one story, so a verdict costs a model call and moves nothing. 0.88 is where the measured pairs start: the highest pair a person marked as two stories sits at 0.9317, so the band opens well below every decision the line has to get right.",
+          "exclusiveMaximum": 1.0,
+          "exclusiveMinimum": 0.0,
+          "title": "Band Low",
+          "type": "number"
+        },
+        "bin_width": {
+          "default": 0.001,
+          "description": "How finely the record slices the band, and therefore the resolution of the fitted line. 0.001 is eight times finer than the 0.0083 margin the line has to stay above, so the slot edge is never what puts the line on the wrong side of a hand-marked pair. Finer costs slots and coarser costs precision on the one number this feature exists to set.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 0.01,
+          "title": "Bin Width",
+          "type": "number"
+        },
+        "disagreement_max": {
+          "default": 0.15,
+          "description": "How often the two orders may disagree before the run holds with judge_unstable. 0.15 means one pair in seven flipping with the order, at which point the verdicts are reading the prompt layout rather than the articles. An ESTIMATE; what replaces it is the first fourteen written rows.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Disagreement Max",
+          "type": "number"
+        },
+        "discard_share": {
+          "default": 0.01,
+          "description": "What share of judged NO pairs the fit sets aside at the top before placing the line. 0.01 is what stops one bad verdict setting the number: a single NO at 0.97 would otherwise pin the line at 0.971 for ever, because the line is the stopped slot's upper edge. floor(total * 0.01) sets one pair aside at 100 negatives and two at 200, which is what minimum_negatives waits for.",
+          "exclusiveMaximum": 0.5,
+          "exclusiveMinimum": 0.0,
+          "title": "Discard Share",
+          "type": "number"
+        },
+        "enabled": {
+          "default": false,
+          "description": "Whether assemble reads the fitted line instead of floor_min. Ships off, so a fresh clone publishes exactly what it published before this feature existed. Removal condition: delete this flag once row 9 has run 14 days and the fitted line has moved no published group a person disagreed with.",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "judge_temperature": {
+          "default": 0.0,
+          "description": "How far the judge's sampler may stray from the likeliest word. 0.0, because every pair is read twice with the two summaries swapped and the two readings are then compared: at 0.0 a disagreement is position bias, which is the thing disagreement_max gates on. Above 0.0 the same pair can answer differently with nothing swapped at all, so the comparison measures sampling noise instead and the gate stops meaning what its own name says. It sits here rather than on models.summarize.inference because that entry pins its temperature for writing summaries, which is a different job on the same weights.",
+          "maximum": 2.0,
+          "minimum": 0.0,
+          "title": "Judge Temperature",
+          "type": "number"
+        },
+        "max_down_step": {
+          "default": 0.005,
+          "description": "The furthest the line may fall in one day. 0.005 leaves TODAY's 0.0083 gap uncrossable in one day. The gap is not a constant: it is applied minus 0.9317, so it shrinks as the line falls, and once the line reaches 0.9367 one legal step lands on the marked pair. That is why the holdout report is read on every day rather than once. The owner proposed 0.010, which is larger than today's gap, so it would have crossed on its first step.",
+          "exclusiveMaximum": 0.0083,
+          "exclusiveMinimum": 0.0,
+          "title": "Max Down Step",
+          "type": "number"
+        },
+        "minimum_above_line": {
+          "default": 30,
+          "description": "Judged pairs at or above the current line the record needs before the fit runs. 30 is an ESTIMATE of enough to notice a wrong merge rate; what replaces it is the first month of holdout readings. These pairs are the entire precision measurement and are never sampled away.",
+          "minimum": 1,
+          "title": "Minimum Above Line",
+          "type": "integer"
+        },
+        "minimum_days": {
+          "default": 10,
+          "description": "Distinct dates the record needs before the fit runs. 10, so the line is never set by a fortnight of one kind of news.",
+          "minimum": 1,
+          "title": "Minimum Days",
+          "type": "integer"
+        },
+        "minimum_negatives": {
+          "default": 200,
+          "description": "Agreed NO verdicts the record needs before the fit may set the line at all. 200, because discard_share is 0.01 and one percent of anything smaller sets aside less than two pairs, which is the same as setting aside none.",
+          "minimum": 1,
+          "title": "Minimum Negatives",
+          "type": "integer"
+        },
+        "pair_budget": {
+          "default": 200,
+          "description": "How many pairs a day may be judged. 200 pairs judged twice is 400 calls, which is 100 calls on each of four legs, which at 77.6 seconds a call is 2 hours 9 minutes of model time a leg. That figure is derived from 9.85 tokens a second measured on a stock runner, not from a judge call; row 17 measures a real one. Raising it is a job-timeout question before it is a quality one, and a validator refuses a value that does not fit the leg.",
+          "minimum": 1,
+          "title": "Pair Budget",
+          "type": "integer"
+        },
+        "settled_delta": {
+          "default": 0.001,
+          "description": "How small the week-on-week move has to be to count as settled. 0.001, which is one bin width, so settling is measured at the line's own resolution and never at a precision the fit cannot produce.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 0.01,
+          "title": "Settled Delta",
+          "type": "number"
+        },
+        "settled_window_days": {
+          "default": 7,
+          "description": "How far back step 4 looks to ask whether a whole week of fresh judgements changed the answer. 7 days, because that is a week of news rather than a statistical window: the damping already carries a day-to-day correlation of 0.85, so a shorter window asks the smoothing whether the smoothing worked.",
+          "maximum": 90,
+          "minimum": 1,
+          "title": "Settled Window Days",
+          "type": "integer"
+        },
+        "shards": {
+          "default": 4,
+          "description": "How many judging legs split the day. 4 legs, one llama-server each, because one server on the configured weights already peaks at 12.57 to 13.16 GiB and reaches 14.31 GiB with the shard's python - 96.0 percent of the 16 GB runner, measured 2026-09-08 over four shards of run 2026-08-29-3. A second server on one runner does not fit at all. The ceiling of 8 is what a GitHub matrix leg costs rather than a measured limit.",
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Shards",
+          "type": "integer"
+        },
+        "smoothing_weight": {
+          "default": 0.15,
+          "description": "How much of a DOWNWARD move lands today. 0.15 means a relaxation arrives over five to seven days while a tightening arrives whole, because raising the line reduces wrong merges and lowering it increases them. Symmetric damping would make the safe move a week late.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Smoothing Weight",
+          "type": "number"
+        },
+        "step_change_guard_enforced": {
+          "default": false,
+          "description": "Whether the guard actually holds the line or only records that it would have. Ships off, because enforcing a hold on a multiple nobody has measured lets an unchecked number freeze the line. Removal condition: delete this flag once step_change_multiple carries a value measured from fourteen written rows.",
+          "title": "Step Change Guard Enforced",
+          "type": "boolean"
+        },
+        "step_change_multiple": {
+          "default": 5.0,
+          "description": "How far out of line one day's evidence has to be before the guard holds. Measured against the median daily shift of the last fourteen rows, never a standard deviation: the daily shift shrinks as 1/days and is not normally distributed, so a sigma is the wrong ruler. 5 is an ESTIMATE. What replaces it is the spread of the first fourteen written rows.",
+          "exclusiveMinimum": 1.0,
+          "maximum": 50.0,
+          "title": "Step Change Multiple",
+          "type": "number"
+        },
+        "step_change_window_rows": {
+          "default": 14,
+          "description": "How many written rows the guard's median is taken over. 14 rows, counted as rows rather than as days: a window in days returns fewer rows than it names after any missed run, and a median over four rows would let the guard fire on noise. The fit reads a window of days wide enough to find them and takes the newest 14 it has.",
+          "maximum": 90,
+          "minimum": 2,
+          "title": "Step Change Window Rows",
+          "type": "integer"
+        },
+        "unclear_max": {
+          "default": 0.35,
+          "description": "What share of readings may be UNCLEAR before the run holds with judge_uncertain. 0.35 is where the middle bucket starves the two the line is fitted on. UNCLEAR means the text does not say enough, never that the pair is halfway between. An ESTIMATE, replaced the same way.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Unclear Max",
+          "type": "number"
+        }
+      },
+      "title": "SimilarityThresholdConfig",
       "type": "object"
     },
     "SummarizeConfig": {
@@ -1708,6 +1887,21 @@
           "description": "Longest quotation the prompt allows, and it must be attributed. Long enough to carry a real sentence somebody said, short enough that a summary cannot become the article. The ledger measures the run that actually came back (`verbatim_run`), so this number is the ask and that column is the answer.",
           "minimum": 1,
           "title": "Max Verbatim Words",
+          "type": "integer"
+        },
+        "paragraphs_max": {
+          "default": 2,
+          "description": "Most paragraphs a published summary may hold. One turns the feature off and folds every summary back to a single block, which is what every day published before 2026-09-17 carries. Two is what ships: a reader scanning a wall of 114 words gets one place to breathe, and a third break in a summary this length makes paragraphs that are one sentence each. The cap is enforced by folding the extra text into the last paragraph kept rather than by dropping it, so it can never shorten a summary.",
+          "maximum": 4,
+          "minimum": 1,
+          "title": "Paragraphs Max",
+          "type": "integer"
+        },
+        "second_paragraph_from_words": {
+          "default": 90,
+          "description": "The length, in words of the ASK, at and above which the prompt asks for a second paragraph. Below it the prompt asks for one block, because a break in a 45-word summary makes two half-thoughts rather than two paragraphs. Compared against the band's target_words_max, so the question is asked once per band rather than per article: at the committed bands that is the two longest of five. A request, not a control - the shape a reply actually has is whatever `normalize_prose` folds it into, and a model that writes one paragraph for a long article is published as one.",
+          "minimum": 1,
+          "title": "Second Paragraph From Words",
           "type": "integer"
         },
         "title_words_max": {
@@ -2171,23 +2365,23 @@
   "changelog": [
     {
       "change": "The three extract.chrome_* knobs, removed with the store they governed.",
-      "version": "2026-09-17T18:00",
+      "version": "2026-09-18T11:00",
       "why": "Over a full run the store moved the boilerplate signal zero times."
+    },
+    {
+      "change": "adaptive_dedup_threshold.judge_temperature, additive, default 0.0.",
+      "version": "2026-09-18T10:00",
+      "why": "The swap reads position bias only while the sampler adds no noise of its own."
+    },
+    {
+      "change": "adaptive_dedup_threshold and run.judge_shard_timeout_minutes, additive.",
+      "version": "2026-09-18T09:00",
+      "why": "The merge line was set by one reading and nothing re-read it."
     },
     {
       "change": "extract.reject_too_short, additive, default false. Never rejects an abstract.",
       "version": "2026-09-17T17:00",
       "why": "Two of the three shape signals had a switch and the third did not."
-    },
-    {
-      "change": "bench.run_model_speed_case, additive, default true.",
-      "version": "2026-09-17T16:00",
-      "why": "Testing the bench flow should not cost half an hour of llama-bench."
-    },
-    {
-      "change": "The prune block, additive, dry_run true and two collections.",
-      "version": "2026-09-17T15:00",
-      "why": "GitHub holds 1 GB of artifacts that no file in this repository names."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2268,7 +2462,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-17T18:00",
+      "default": "2026-09-18T11:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2279,5 +2473,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-17T18:00"
+  "version": "2026-09-18T11:00"
 }
