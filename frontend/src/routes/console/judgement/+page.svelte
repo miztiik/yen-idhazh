@@ -21,6 +21,7 @@
 	import MergedStoriesPanel from './MergedStoriesPanel.svelte';
 	import JudgeAgreement from './JudgeAgreement.svelte';
 	import RecordGates from './RecordGates.svelte';
+	import VerdictSplit from './VerdictSplit.svelte';
 
 	let { data } = $props();
 
@@ -119,6 +120,15 @@
 			minimumAboveLine: data.similarity.minimum_above_line
 		}}
 		{viewport}
+	/>
+
+	<VerdictSplit
+		record={data.record}
+		applied={data.lines.at(-1)?.applied ?? data.configuredLine}
+		discardShare={data.similarity.discard_share}
+		axisMultiple={data.console.precision_axis_multiple}
+		width={data.console.chart_width}
+		figures={data.figures}
 	/>
 
 	<h2 class="console-h2">What the model made of each article</h2>
