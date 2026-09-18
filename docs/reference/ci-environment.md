@@ -1,6 +1,6 @@
 # What CI depends on outside its own files
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-18
 
 The settings this repository has to carry and the platform behaviour nobody here
 controls. Both decide how a workflow behaves, and neither is visible in a
@@ -78,17 +78,34 @@ The ceilings themselves are stated once, in `CLAUDE.md` Guardrail #2. What follo
 the behaviour behind them, which is what actually decides a workflow's shape.
 Verified 2026-08-20.
 
-- **Actions minutes are free and unmetered**, because this repository is public.
- The widely quoted 2,000 minutes per month is a private-repository figure and
- does not apply. Wall-clock is the constraint, not a monthly balance.
+- **Actions minutes and artifact storage are free and unmetered**, because this
+ repository is public. The widely quoted 2,000 minutes and 500 MB are GitHub
+ Free *account* figures - the 500 MB shared with Packages - and both meter
+ private repositories only. Wall-clock is the constraint, not a monthly
+ balance, and no artifact total here is charged for. Artifacts expire on their
+ retention window and never under storage pressure, so the only reason to keep
+ the count down is that a person reading a run has to find the one they want.
 - **A cache entry unread for 7 days is deleted**, and a restore is paid once per
  *job* rather than once per run. That is why `digest.yml` gives a worker a
  shard of several items instead of fanning out one job per item: the weights
- restore is the largest fixed cost, and every extra job pays it again. Past the
- shared 10 GB allowance GitHub saves the new entry anyway and evicts by oldest
- last-access until the total is under, so a full cache costs a re-download and
- never a failed save. Which entry each workflow fills, and the bar a new one
- clears, is in [ci-caches.md](ci-caches.md).
+ restore is the largest fixed cost, and every extra job pays it again. It is
+ also why a workflow that runs a few times a month earns no cache of its own -
+ the entry is cold on every dispatch - unless the reader is a sibling job in
+ the same run, which is what `validate.yml` `qualify` and `measure.yml`'s bench
+ both rely on.
+- **The 10 GB cache limit is ours; the eviction is GitHub's.** 10 GB is the
+ default, a repository administrator can raise it - to 10 TB on a user-owned
+ repository - and storage above 10 GB is billed only where it has been raised.
+ At the default nothing can be billed and no save can fail: past the limit
+ GitHub saves the new entry and deletes others by oldest last-access until the
+ total is under, so a full cache costs a re-download. On 2026-09-18 two entries
+ totalling 9.97 GB, both read two days earlier, had gone while five older but
+ smaller ones remained - size pressure rather than the 7-day rule, which is the
+ evidence the limit here is the default.
+- **A cache is scoped to a branch.** A run restores entries from its own branch,
+ from the default branch, and - for a pull request - from the base branch. An
+ entry written by a `pull_request` run lives on the merge ref, so only re-runs
+ of that pull request restore it.
 - **`GITHUB_TOKEN` allows 1,000 API requests per hour per repository**, shared
  across every job of every concurrently running workflow. A step that polls in
  a loop spends a budget the scheduled pipeline also needs.
@@ -145,7 +162,6 @@ Verified 2026-08-20.
 ## See also
 
 - [github-actions.md](github-actions.md) - which workflows exist, when each runs, and what each does.
-- [ci-caches.md](ci-caches.md) - every cache these workflows keep, and what each costs against the ceiling named here.
 - [../how-to/analyze-a-pipeline-artifact.md](../how-to/analyze-a-pipeline-artifact.md) - how to read the one artifact that outlives the day it describes.
 - [../architecture/publishing/retention.md](../architecture/publishing/retention.md) - what the committed record keeps once the artifacts are gone.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #2, which states the ceilings this page explains the behaviour behind.
