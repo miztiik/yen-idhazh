@@ -190,6 +190,21 @@ class SimilarityThresholdConfig(Model):
             "costs rather than a measured limit."
         ),
     )
+    judge_temperature: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=2.0,
+        description=(
+            "How far the judge's sampler may stray from the likeliest word. 0.0, because "
+            "every pair is read twice with the two summaries swapped and the two readings "
+            "are then compared: at 0.0 a disagreement is position bias, which is the thing "
+            "disagreement_max gates on. Above 0.0 the same pair can answer differently with "
+            "nothing swapped at all, so the comparison measures sampling noise instead and "
+            "the gate stops meaning what its own name says. It sits here rather than on "
+            "models.summarize.inference because that entry pins its temperature for writing "
+            "summaries, which is a different job on the same weights."
+        ),
+    )
     minimum_negatives: int = Field(
         default=200,
         ge=1,
