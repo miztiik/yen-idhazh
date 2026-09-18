@@ -22,6 +22,7 @@ from idhazh.contracts.call_cost import COST_FIELDS, CallKind
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
+from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import (
     RETIRED_CELLS,
@@ -1527,6 +1528,73 @@ def test_the_retirement_ledger_is_named_where_the_commit_step_stages_it() -> Non
     assert ledger.feed_retirements_path(Path("state")) == Path("state/feed-retirements.csv")
 
 
+def test_the_hand_marked_holdout_is_named_where_the_commit_step_stages_it() -> None:
+    """The third seeded header, and it needs one for the reason the retirements do.
+
+    A person types this file, so on a fresh clone it holds nothing but its
+    header - and `git add` on a path that is not there aborts the commit step and
+    takes every ledger staged in the same call with it. Whether the checkout
+    carries the file is `backend/utilities/check_seeded_stores.py`'s question
+    (`CLAUDE.md` section 13); what stays here is the path the commit step is
+    handed.
+    """
+    assert ledger.similarity_holdout_relpath() == "state/story-similarity/holdout-pairs.csv"
+    assert ledger.similarity_holdout_path(Path("state")) == Path(
+        "state/story-similarity/holdout-pairs.csv"
+    )
+
+
+def test_the_judged_pairs_are_filed_under_the_day_they_were_drawn_from() -> None:
+    """One nested segment more than every other day tree, and the relpath says so.
+
+    The whole feature hangs off `state/story-similarity/`, so the commit step
+    can stage one prefix. That makes this the first store whose day file sits two
+    directories below `state/` rather than one, and a helper that quietly dropped
+    the nest would write a tree nothing else in this file can find.
+    """
+    date = "2026-09-18"
+    state = Path("state")
+
+    assert (
+        ledger.scored_pairs_relpath(date)
+        == "state/story-similarity/scored-pairs/2026/09/18.csv"
+    )
+    assert ledger.scored_pairs_path(state, date) == Path(
+        "state/story-similarity/scored-pairs/2026/09/18.csv"
+    )
+
+
+def test_the_fitted_line_is_filed_under_the_day_it_was_fitted_for() -> None:
+    """Its sibling's layout, because the guard reads a window of days across both.
+
+    The step-change guard takes a median over the newest fourteen written rows,
+    which `day_partition` answers by walking days backwards. A month file would
+    make that read open weeks it did not ask for.
+    """
+    date = "2026-09-18"
+    state = Path("state")
+
+    assert (
+        ledger.fitted_thresholds_relpath(date)
+        == "state/story-similarity/fitted-thresholds/2026/09/18.csv"
+    )
+    assert ledger.fitted_thresholds_path(state, date) == Path(
+        "state/story-similarity/fitted-thresholds/2026/09/18.csv"
+    )
+
+
+def test_the_score_record_is_one_file_that_never_grows_with_the_archive() -> None:
+    """Not a ledger: it is rewritten, and its size is the band rather than the history.
+
+    That is the whole reason the fit reads it instead of the day tree
+    (Guardrail #12), so the path carries no date and there is nothing here for a
+    partition to place.
+    """
+    assert ledger.score_distribution_path(Path("state")) == Path(
+        "state/story-similarity/score-distribution.json"
+    )
+
+
 def test_the_cleanup_record_is_a_day_tree_and_needs_no_seeded_header() -> None:
     """The header-only file is gone, and the reason it existed went with it.
 
@@ -1809,11 +1877,16 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     else here says what makes two of its rows one record, and everything that
     says so is settled.
 
-    Both covers name the same eight ledgers on a tree with one day of each in it.
+    Both covers name the same ten ledgers on a tree with one day of each in it.
     What separates them is what a second day would add: to the operator's pass, a
     file; to a run's pass, nothing. The span fold is the exception that proves
     the shape - it files by month, so a second day adds nothing to either cover
     and a second month adds one file to the operator's.
+
+    `state/story-similarity/fitted-thresholds/` is registered before anything
+    writes it, which is why it is built here by hand rather than by an append
+    call. Its sibling `scored-pairs/` is deliberately absent: a key with no
+    writer is a claim about rows nobody can produce.
     """
     ledger.append_seen(tmp_path, DATE, [seen_row()])
     ledger.append_health(tmp_path, DATE, [health_row()])
@@ -1825,6 +1898,11 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     item_health = ledger.item_health_path(tmp_path, DATE)
     item_health.parent.mkdir(parents=True, exist_ok=True)
     item_health.write_text(",".join(ItemHealthRow.csv_columns()) + "\n", encoding="utf-8")
+    fitted = ledger.fitted_thresholds_path(tmp_path, DATE)
+    fitted.parent.mkdir(parents=True, exist_ok=True)
+    fitted.write_text(
+        ",".join(FittedSimilarityThreshold.csv_columns()) + "\n", encoding="utf-8"
+    )
     named = [
         ("runtime-counters.csv", ledger.RUNTIME_COUNTERS_KEY),
         ("feed-retirements.csv", ledger.FEED_RETIREMENT_KEY),
@@ -1839,6 +1917,10 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
         (
             f"host-fingerprint/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
             ledger.HOST_FINGERPRINT_KEY,
+        ),
+        (
+            f"story-similarity/fitted-thresholds/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
+            ledger.STORY_SIMILARITY_THRESHOLD_KEY,
         ),
         (f"span-rollup/{DATE[:7]}.csv", ledger.SPAN_ROLLUP_KEY),
     ]
