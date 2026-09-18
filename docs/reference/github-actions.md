@@ -313,9 +313,10 @@ ledger side was in Python, the staging side was in YAML, and nothing read both.
 reads both. It takes every store from the `*_relpath` helpers the store modules
 already export, charges each one to the job whose `python -m idhazh <verb>` step
 reaches its writer, and fails naming the store, the job, the workflow file and
-the step to add the path to. A ledger is written by an `append_*` call and the
-trace tree by a file sink opened on its own path helper; both count, because both
-die with the runner. It names no store itself, so a thirteenth one is covered the
+the step to add the path to. A ledger is written by an `append_*` call, the trace
+tree by a file sink opened on its own path helper, and a head by the compaction
+reading its own declared table of them; all three count, because all three die
+with the runner. It names no store itself, so a thirteenth one is covered the
 day its writer lands rather than the day somebody remembers to add it to a list -
 which is why the three hand-written lists it replaced were deleted on 2026-09-17
 rather than kept beside it.
@@ -365,6 +366,16 @@ one in the run log. **A path this job did not stage is a path it is not pushing*
 so removing it costs the push nothing it was going to carry, and every path that
 WAS staged still lands. Everything else untracked survives: `llama-server.log`
 and the memory samples are untracked, and later steps upload them.
+
+**Staging a path ten jobs share is a repair, not a fix, and the machine record is
+where that was settled.** `state/host-fingerprint/2026/09/16.csv` was staged,
+committed and pushed by ten jobs of one run, and it is header-only. From
+2026-09-17 each job writes
+`state/segments/host-fingerprint/<run>-<attempt>-<job>-<shard>.csv` instead - a
+name no second writer can take - the work job stages `state/segments` rather than
+the head, and `idhazh compact` inside `assemble` folds the segments into the day.
+The head has one writer per run, which is what the rebase loop was never able to
+give it. Ledger by ledger, so one revert takes one ledger.
 
 **There are two ways to lose the push race, and they need different answers.**
 

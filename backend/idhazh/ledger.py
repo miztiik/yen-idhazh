@@ -409,12 +409,17 @@ def host_fingerprint_relpath(date: str) -> str:
 
 
 def host_fingerprint_path(state_dir: Path, date: str) -> Path:
-    """The day file a run on this date records its machines in.
+    """The day file this date's machines land in, written only by the compaction.
 
     A day rather than a flat file, for the reason `item_health_path` gives, and
     with a second reason of its own: this collection only earns its keep when
     somebody counts across it, and a day tree is the shape a bounded window can
     read (Guardrail #12).
+
+    Ten jobs of one run each record the machine they drew, so none of them opens
+    this file. Each writes its own segment and the compaction folds them in, which
+    is what stops a lost push race emptying the day - `2026-09-16` is header-only
+    because that is what happened.
     """
     return state_dir / HOST_FINGERPRINT_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
 
@@ -1271,27 +1276,6 @@ def recorded_runtime_counters(path: Path) -> set[tuple[str, ...]]:
     return {tuple(row[name] for name in RUNTIME_COUNTERS_KEY) for row in _read_rows(path)}
 
 
-def append_host_fingerprint(state_dir: Path, date: str, rows: Iterable[HostFingerprintRow]) -> int:
-    """Append what machine each job drew. One row a job, so a re-read is not a second fact.
-
-    Filters on the same key as the counter snapshot: a job runs on one machine,
-    so a second row for that job is the same machine written twice, and counting
-    a fingerprint twice is exactly what would make the distribution lie.
-
-    Returns how many landed, so a caller can log the count.
-    """
-    path = host_fingerprint_path(state_dir, date)
-    _, already = _header_and_keys(path, HOST_FINGERPRINT_KEY)
-    landing = []
-    for row in rows:
-        key = _key_of(row, HOST_FINGERPRINT_KEY)
-        if key in already:
-            continue
-        already.add(key)
-        landing.append(row)
-    return _append(path, HostFingerprintRow.csv_columns(), landing)
-
-
 def append_span_rollup(state_dir: Path, date: str, rows: Iterable[SpanRollupRow]) -> int:
     """Append one shard's folded span counts to the month shard. Never windowed here.
 
@@ -1528,6 +1512,11 @@ def segment_contract(ledger: SegmentLedger) -> type[CsvContract]:
     return _SEGMENT_HEADS[ledger].model
 
 
+def _segment_name(*, run_id: str, attempt: int, job: ServerJob, shard: int) -> str:
+    """The grammar in 2.3, spelled once, so a path and its POSIX form cannot differ."""
+    return f"{run_id}-{attempt}-{job.value}-{shard:02d}{SEGMENT_SUFFIX}"
+
+
 def segment_path(
     state_dir: Path,
     ledger: SegmentLedger,
@@ -1548,8 +1537,71 @@ def segment_path(
     a row lands in is chosen by the row's own date cell, so a second date here
     would be a cell a writer fills for nothing.
     """
-    name = f"{run_id}-{attempt}-{job.value}-{shard:02d}{SEGMENT_SUFFIX}"
+    name = _segment_name(run_id=run_id, attempt=attempt, job=job, shard=shard)
     return state_dir / SEGMENTS_DIRNAME / ledger.value / name
+
+
+def segment_relpath(
+    ledger: SegmentLedger,
+    *,
+    run_id: str,
+    attempt: int,
+    job: ServerJob,
+    shard: int,
+) -> str:
+    """`state/segments/<ledger>/<run_id>-<attempt>-<job>-<shard>.csv`, POSIX form.
+
+    The same grammar as `segment_path`, for a log line and for anything that has
+    to name the store a job fills without holding a state root (CLAUDE.md
+    section 2).
+    """
+    name = _segment_name(run_id=run_id, attempt=attempt, job=job, shard=shard)
+    return f"{STATE_DIRNAME}/{SEGMENTS_DIRNAME}/{ledger.value}/{name}"
+
+
+def write_segment(
+    state_dir: Path,
+    ledger: SegmentLedger,
+    rows: Sequence[CsvRecord],
+    *,
+    run_id: str,
+    attempt: int,
+    job: ServerJob,
+    shard: int,
+) -> int:
+    """This writer's slice of one ledger, written whole. Nobody else writes this path.
+
+    Whole rather than appended, because the file is this writer's alone: there is
+    no earlier row in it to keep and no header to agree with. That is the whole
+    of what the segment store buys - two jobs of one run, and two attempts at one
+    job, never open one file, so a lost push race costs a merge rather than the
+    rows.
+
+    The rows carry the HEAD's columns and the head's contract. A segment gets no
+    shape of its own on purpose: it holds the head's rows in transit, and a
+    second shape for the same rows is the thing that drifts.
+
+    Written through a temp file and a rename, so a writer killed mid-write leaves
+    nothing rather than half a row for the compaction to refuse. The temp file
+    sits at the store's own top rather than beside the target: `segment_files`
+    reads every name inside a ledger's directory and refuses one it cannot place,
+    so a scratch left there by a dead runner would stop every later compaction.
+    The top of the store is the one place that already holds something which is
+    not a segment.
+
+    Returns how many rows it wrote, so a caller can log the count.
+    """
+    if not rows:
+        return 0
+    path = segment_path(state_dir, ledger, run_id=run_id, attempt=attempt, job=job, shard=shard)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    columns = _SEGMENT_HEADS[ledger].model.csv_columns()
+    scratch = state_dir / SEGMENTS_DIRNAME / f"{path.stem}.{os.getpid()}.tmp"
+    scratch.write_text(
+        render_file(columns, [row.csv_row() for row in rows]), encoding="utf-8", newline=""
+    )
+    scratch.replace(path)
+    return len(rows)
 
 
 def parse_segment_name(path: Path) -> SegmentName:
