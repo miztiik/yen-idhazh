@@ -1,6 +1,6 @@
 # Pipeline Loop
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-18
 
 The stages one article passes through, what each stage owns, and the rule that they talk in payloads rather than calls. This is the build-time equivalent of a product's core loop: it is the thing that happens over and over, and every other concept doc hangs off it.
 
@@ -126,6 +126,12 @@ died before its assemble.
 `state/host-fingerprint/` is the first ledger through it, from 2026-09-17. Ten
 jobs of one run each draw a machine and each record it, and on 2026-09-16 those
 ten pushes raced and left the day file with nothing but its header.
+
+The three item-grain ledgers followed on 2026-09-18 - `state/item-health/`,
+`state/scores/` and `state/score-index/`. Up to eight work shards and assemble
+all record the same day there, which is the same race with more writers in it,
+and the item census is the one where a repeat is visible to a reader: the count
+of rows in a day feeds a feed's share of the day and the day's own metrics.
 
 The compaction is the one writer here that rewrites a head rather than appending
 to it, and the segment store is what makes that safe: a rewrite is a race only

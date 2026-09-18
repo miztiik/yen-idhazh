@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-18
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
 
@@ -372,6 +372,14 @@ name no second writer can take - the work job stages `state/segments` rather tha
 the head, and `idhazh compact` inside `assemble` folds the segments into the day.
 The head has one writer per run, which is what the rebase loop was never able to
 give it. Ledger by ledger, so one revert takes one ledger.
+
+`state/item-health`, `state/scores` and `state/score-index` left the staged list
+the same way on 2026-09-18, and they are the reason the pattern was built rather
+than a second instance of it: up to eight work shards and assemble all record
+the same day there, and a repeat in the item census is a number a reader sees -
+it feeds a feed's share of the day and the day's own metrics. The work job now
+stages `state/segments`, `state/runtime-counters.csv`, `state/span-rollup` and
+`state/traces`, and no head at all.
 
 **There are two ways to lose the push race, and they need different answers.**
 
