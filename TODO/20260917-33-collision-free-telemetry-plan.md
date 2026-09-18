@@ -77,11 +77,11 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Segment store and the `compact` stage, shipped inert | - | A | IN-FLIGHT | p33a1 | - | - |
-| 5 | Machine page stops lying about a day with no rows | - | A | IN-FLIGHT | p33r5 | - | - |
+| 1 | Segment store and the `compact` stage, shipped inert | - | A | DONE | p33a1 | #862 | - |
+| 5 | Machine page stops lying about a day with no rows | - | A | DONE | p33r5 | #864 | - |
 | 6 | One concurrency group for `digest`, `validate`, `measure` | - | A | PENDING | - | - | - |
-| 7 | OS memory and load, per item | - | A | IN-FLIGHT | p33r7b | - | - |
-| 2 | `host-fingerprint` writes segments | 1 | B | IN-FLIGHT | p33b2 | - | - |
+| 7 | OS memory and load, per item | - | A | DONE | p33r7b | #865 | - |
+| 2 | `host-fingerprint` writes segments | 1 | B | DONE | p33b2 | #866 | - |
 | 3 | `item-health`, `scores`, `score-index` write segments | 2 | B | PENDING | - | - | - |
 | 4 | `span-rollup` writes segments | 3 | B | PENDING | - | - | - |
 | 17 | `runtime-counters` writes segments | 4 | B | PENDING | - | - | - |
@@ -91,8 +91,8 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 11 | Delete `runtime-counters` and everything that reads it | 7, 10, 17 | E | PENDING | - | - | - |
 | 15 | Generated TypeScript contracts replace the hand-written ones | 10, 11 | F | PENDING | - | - | - |
 | 16 | Docs, and the orphan sweep | all | G | PENDING | - | - | - |
-| 18 | Chart-craft doctrine - the thirteen rules, written once | - | H | IN-FLIGHT | p33r18 | - | - |
-| 28 | Pipeline panels: the share track goes, Extraction gains a trend | 18 | H | IN-FLIGHT | p33h28 | - | - |
+| 18 | Chart-craft doctrine - the thirteen rules, written once | - | H | DONE | p33r18 | #863 | - |
+| 28 | Pipeline panels: the share track goes, Extraction gains a trend | 18 | H | DONE | p33h28 | #867 | - |
 | 19 | The shard board | 11, 18 | I | PENDING | - | - | - |
 | 21 | Memory and load, three grains - ABSORBS Row #14 | 5, 7, 15, 19 | I | PENDING | - | - | - |
 | 23 | What a run reads against what it writes, in tokens and in seconds | 21 | I | PENDING | - | - | - |
