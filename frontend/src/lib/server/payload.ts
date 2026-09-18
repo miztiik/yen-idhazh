@@ -577,29 +577,53 @@ export function readShards(dir: string, months: number = LEDGER_WINDOW_MONTHS): 
  * stopped - and a refusal here would white-screen a page over a stray file.
  */
 export function readDayShards(dir: string, days: number = LEDGER_WINDOW_DAYS): CsvTable {
-	if (!existsSync(dir)) return { rows: [], columns: [] };
+	const rows: Record<string, string>[] = [];
+	let columns: string[] = [];
+	for (const shard of dayShardFiles(dir, days)) {
+		const table = readCsv(shard.path);
+		if (columns.length === 0 && table.columns.length > 0) columns = table.columns;
+		rows.push(...table.rows);
+	}
+	return { rows, columns };
+}
+
+/** One day file of a day-grain ledger: the date it is filed under, and its path. */
+export interface DayShard {
+	date: string;
+	path: string;
+}
+
+/** The day files of a day-grain ledger the cover reaches, oldest first.
+ *
+ * The walk `readDayShards` reads with, exported because a file is a fact its
+ * rows cannot carry: a day the ledger wrote a file for and kept no row of is a
+ * measurement that did not survive, and a day with no file at all is a day the
+ * instrument did not run. Rows alone cannot tell those two apart.
+ *
+ * Bounded exactly as `readDayShards` is, and by the same call, so a caller
+ * asking which days exist and a caller asking what they hold cannot answer over
+ * two different sets. Pass `-1` to list all of them and say beside the call why
+ * (`docs/concepts/growing-reads.md`).
+ */
+export function dayShardFiles(dir: string, days: number = LEDGER_WINDOW_DAYS): DayShard[] {
+	if (!existsSync(dir)) return [];
 	const named = (at: string, pattern: RegExp): string[] =>
 		readdirSync(at, { withFileTypes: true })
 			.filter((entry) => pattern.test(entry.name))
 			.map((entry) => entry.name)
 			.sort();
-	const found: string[] = [];
+	const found: DayShard[] = [];
 	for (const year of named(dir, /^\d{4}$/)) {
 		for (const month of named(join(dir, year), /^\d{2}$/)) {
 			for (const day of named(join(dir, year, month), /^\d{2}\.csv$/)) {
-				found.push(join(dir, year, month, day));
+				found.push({
+					date: `${year}-${month}-${day.slice(0, 2)}`,
+					path: join(dir, year, month, day)
+				});
 			}
 		}
 	}
-	const kept = unbounded(days) ? found : found.slice(Math.max(0, found.length - days));
-	const rows: Record<string, string>[] = [];
-	let columns: string[] = [];
-	for (const path of kept) {
-		const table = readCsv(path);
-		if (columns.length === 0 && table.columns.length > 0) columns = table.columns;
-		rows.push(...table.rows);
-	}
-	return { rows, columns };
+	return unbounded(days) ? found : found.slice(Math.max(0, found.length - days));
 }
 
 /** One row per planned item per run, read from the newest `days` day files. */

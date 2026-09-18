@@ -113,6 +113,7 @@ from idhazh.contracts.chrome_line import ChromeLineRow
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
 from idhazh.contracts.feed_retirement import FeedRetirementRow
+from idhazh.contracts.fitted_similarity_threshold import FittedSimilarityThreshold
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import (
     DROPPED_CELLS,
@@ -124,6 +125,7 @@ from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.runtime_counters import RuntimeCountersRow, ServerJob
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.span_rollup import SpanRollupRow
+from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow
 from idhazh.contracts.visual_prune import VisualPruneRow
 
@@ -137,6 +139,23 @@ SPAN_ROLLUP_DIRNAME: Final = "span-rollup"
 PUBLISHED_DIRNAME: Final = "published"
 VISUAL_PRUNES_DIRNAME: Final = "visual-prunes"
 COUNTERFACTUAL_SCORES_DIRNAME: Final = "counterfactual-scores"
+
+#: The one nested store under `state/`. Everything the adaptive merge line writes
+#: hangs off this word - the scored pairs, the fitted lines, the hand-marked
+#: holdout and the score record - so a reader of the commit step sees the whole
+#: feature's footprint in one prefix rather than in four unrelated top-level
+#: names.
+STORY_SIMILARITY_DIRNAME: Final = "story-similarity"
+SCORED_PAIRS_DIRNAME: Final = "scored-pairs"
+FITTED_THRESHOLDS_DIRNAME: Final = "fitted-thresholds"
+SIMILARITY_HOLDOUT_FILENAME: Final = "holdout-pairs.csv"
+SCORE_DISTRIBUTION_FILENAME: Final = "score-distribution.json"
+
+#: Where a record goes when the inputs under it moved. It ships with a
+#: `.gitkeep`, because the commit step stages this directory on every run and an
+#: archive is written only on the rare day a stamp changed - `git add` on a path
+#: the checkout does not hold aborts the whole step.
+SCORE_ARCHIVE_DIRNAME: Final = "archive"
 RUNTIME_COUNTERS_FILENAME: Final = "runtime-counters.csv"
 FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
 CHROME_FILENAME: Final = "chrome.csv"
@@ -208,6 +227,21 @@ VISUAL_PRUNE_KEY: Final = ("date", "run_id")
 #: planned on its own: the same address on two desks is two scores, and dropping
 #: one of them as a repeat would lose a fact.
 COUNTERFACTUAL_SCORE_KEY: Final = ("date", "run_id", "vertical", "url_key")
+
+#: What makes two fitted-line rows the same record. One run fits one line for one
+#: date, so a second row under those two cells is a second attempt at one
+#: execution rather than a second answer. Both attempts read the same score
+#: record and walk the same counts, so the first row wins and there is nothing
+#: for a preference rule to choose between.
+STORY_SIMILARITY_THRESHOLD_KEY: Final = ("date", "run_id")
+
+#: What makes two judged-pair rows the same record. `run_id` is in the key
+#: because two runs of one day judge the same pair against different articles,
+#: and both readings are facts worth keeping. Drop it and the settlement would
+#: keep whichever landed first, which is the opposite of what a re-run means -
+#: the fold picks the newest run itself, over the whole day, rather than letting
+#: a line-by-line rewrite decide.
+STORY_SIMILARITY_PAIR_KEY: Final = ("date", "run_id", "pair_key")
 
 #: What makes two retirement rows the same record. The address and nothing else:
 #: a retirement is permanent for one endpoint key, so a second row for it says
@@ -542,6 +576,86 @@ def counterfactual_scores_path(state_dir: Path, date: str) -> Path:
     read or delete weeks nobody asked for.
     """
     return state_dir / COUNTERFACTUAL_SCORES_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+
+
+def scored_pairs_relpath(date: str) -> str:
+    """`state/story-similarity/scored-pairs/<YYYY>/<MM>/<DD>.csv` - POSIX, for a log line."""
+    stem = f"{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+    return f"{STATE_DIRNAME}/{STORY_SIMILARITY_DIRNAME}/{SCORED_PAIRS_DIRNAME}/{stem}"
+
+
+def scored_pairs_path(state_dir: Path, date: str) -> Path:
+    """The day file this date's judged pairs are appended to.
+
+    A day, and the read asks for it as well as the writer: a fold reads one
+    date's pairs and then never opens that file again, and the retention pass
+    deletes by day. A month file would make the fold read weeks it has already
+    counted.
+    """
+    root = state_dir / STORY_SIMILARITY_DIRNAME / SCORED_PAIRS_DIRNAME
+    return root / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+
+
+def fitted_thresholds_relpath(date: str) -> str:
+    """`state/story-similarity/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` - POSIX, for a log line."""
+    stem = f"{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+    return f"{STATE_DIRNAME}/{STORY_SIMILARITY_DIRNAME}/{FITTED_THRESHOLDS_DIRNAME}/{stem}"
+
+
+def fitted_thresholds_path(state_dir: Path, date: str) -> Path:
+    """The day file this date's runs write their fitted line into.
+
+    A day rather than a month for the reason the cleanup record files by day:
+    two runs collide on a file only when they are the same day, and a day taken
+    back off the record is one `rm`. The guard's own read is the last fourteen
+    rows, which `day_partition` answers by walking days backwards.
+    """
+    root = state_dir / STORY_SIMILARITY_DIRNAME / FITTED_THRESHOLDS_DIRNAME
+    return root / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+
+
+def similarity_holdout_relpath() -> str:
+    """`state/story-similarity/holdout-pairs.csv` - the POSIX form, for a log line."""
+    return f"{STATE_DIRNAME}/{STORY_SIMILARITY_DIRNAME}/{SIMILARITY_HOLDOUT_FILENAME}"
+
+
+def similarity_holdout_path(state_dir: Path) -> Path:
+    """One flat file, and the read over it carries no clock.
+
+    A person types this file and nothing else writes it, so there is no run to
+    partition by and no date a reader would ask for. It grows with how many
+    pairs somebody has sat down and marked, never with the archive (Guardrail
+    #12). `state/chrome.csv` is the precedent.
+    """
+    return state_dir / STORY_SIMILARITY_DIRNAME / SIMILARITY_HOLDOUT_FILENAME
+
+
+def score_distribution_path(state_dir: Path) -> Path:
+    """The one score record every fit reads, whole.
+
+    Not a ledger: it is rewritten rather than appended to, and its size is fixed
+    by the band and the slot width rather than by how many days have been folded
+    into it. That is the whole point - the fit reads a file of a size that never
+    changes instead of sorting every pair ever judged (Guardrail #12).
+    """
+    return state_dir / STORY_SIMILARITY_DIRNAME / SCORE_DISTRIBUTION_FILENAME
+
+
+def score_distribution_archive_relpath(stamp: str) -> str:
+    """`state/story-similarity/archive/<stamp>.json` - POSIX, for a log line."""
+    return f"{STATE_DIRNAME}/{STORY_SIMILARITY_DIRNAME}/{SCORE_ARCHIVE_DIRNAME}/{stamp}.json"
+
+
+def score_distribution_archive_path(state_dir: Path, stamp: str) -> Path:
+    """Where the record is put down when its own stamp no longer describes the run.
+
+    Named by the stamp rather than by a date, because the stamp is what the
+    counts inside it were taken under. Two archives from one day are two
+    different questions and get two files; one input moved back to what it was
+    and the archive it produces is the file already there.
+    """
+    root = state_dir / STORY_SIMILARITY_DIRNAME / SCORE_ARCHIVE_DIRNAME
+    return root / f"{stamp}.json"
 
 
 def shards_in_window(today: str, within_days: int) -> list[str]:
@@ -1081,7 +1195,7 @@ def _header_and_keys(
     """The file's own header and every record it already holds, in one pass.
 
     One `csv.reader` rather than a `DictReader`, and one open rather than two.
-    `DictReader` builds a dict of every column for each row, which is 113 keys on
+    `DictReader` builds a dict of every column for each row, which is 119 keys on
     an item-health shard to read three cells; the positions are taken off the
     header once and the cells are read by index after that.
 
@@ -1352,6 +1466,55 @@ def append_counterfactual_scores(
         path.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
     landed = _append(path, columns, list(rows))
     return landed - drop_repeated_rows(path, COUNTERFACTUAL_SCORE_KEY)
+
+
+def append_story_similarity_pairs(
+    state_dir: Path, date: str, rows: Iterable[StorySimilarityPair]
+) -> int:
+    """Append a day's judged pairs into that day's own file.
+
+    Settled against `STORY_SIMILARITY_PAIR_KEY` straight after the write, the
+    way `append_counterfactual_scores` is. The key carries `run_id`, so a second
+    RUN of one date keeps its own rows and only a second attempt at one
+    execution is collapsed - both attempts judged the same pair under the same
+    prompt against the same day, so the first row wins and there is nothing to
+    choose between them. Which of two runs the record counts is decided over the
+    whole day when the day is folded, never line by line here.
+
+    **The day file is created even when the day judged nothing**, for the reason
+    `append_counterfactual_scores` gives: the commit step names this directory,
+    `git add` runs under `set -euo pipefail`, and a path missing from the working
+    tree aborts the step and costs the ledgers staged beside it.
+
+    Returns how many rows the file gained, so a caller can log the count.
+    """
+    path = scored_pairs_path(state_dir, date)
+    columns = StorySimilarityPair.csv_columns()
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
+    landed = _append(path, columns, list(rows))
+    return landed - drop_repeated_rows(path, STORY_SIMILARITY_PAIR_KEY)
+
+
+def load_story_similarity_pairs(state_dir: Path, date: str) -> list[StorySimilarityPair]:
+    """One named day's judged pairs, and never a second file.
+
+    **Guardrail #12 declaration, and it is the whole point of this store's
+    shape.** The fold counts one date into the record and the record is then the
+    only thing the fit reads, so this opens the file the date names and stops.
+    It costs the same on the thousandth day as on the third whatever the tree
+    holds beside it.
+
+    A row that no longer parses stops the read rather than being skipped. A
+    report may drop a day it cannot read; this is evidence being counted into a
+    record that is rewritten whole, and a silently short count is a record that
+    cannot be told from a quiet day.
+    """
+    return [
+        StorySimilarityPair.from_csv_row(raw)
+        for raw in _read_rows(scored_pairs_path(state_dir, date))
+    ]
 
 
 def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
@@ -1747,6 +1910,14 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     one file a recorded month where every dated entry beside it names one a day.
     The run's own cover is a month file too, and it is still one file: a run
     appends under one date, and one date is in one month.
+
+    `state/story-similarity/fitted-thresholds/` is registered before anything
+    writes it, for the reason `state/feed-retirements.csv` was: the settlement
+    runs over whatever it finds, a missing file settles to nothing, and
+    registering the shape rather than its first writer is what stops two stale
+    checkouts leaving one date fitted twice. Its sibling `scored-pairs/` joins on
+    the same terms: `run_id` is in its key, so what settles there is a second
+    attempt at one execution and never a second run of the day.
     """
     flat: list[KeyedLedger] = [
         KeyedLedger(runtime_counters_path(state_dir), RUNTIME_COUNTERS_KEY, RuntimeCountersRow),
@@ -1775,6 +1946,16 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
                 HostFingerprintRow,
             ),
             KeyedLedger(
+                fitted_thresholds_path(state_dir, date),
+                STORY_SIMILARITY_THRESHOLD_KEY,
+                FittedSimilarityThreshold,
+            ),
+            KeyedLedger(
+                scored_pairs_path(state_dir, date),
+                STORY_SIMILARITY_PAIR_KEY,
+                StorySimilarityPair,
+            ),
+            KeyedLedger(
                 span_rollup_path(state_dir, date[:7]), SPAN_ROLLUP_KEY, SpanRollupRow
             ),
         ]
@@ -1799,6 +1980,18 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
         *(
             KeyedLedger(path, HOST_FINGERPRINT_KEY, HostFingerprintRow)
             for path in day_partition.day_files(state_dir / HOST_FINGERPRINT_DIRNAME)
+        ),
+        *(
+            KeyedLedger(path, STORY_SIMILARITY_THRESHOLD_KEY, FittedSimilarityThreshold)
+            for path in day_partition.day_files(
+                state_dir / STORY_SIMILARITY_DIRNAME / FITTED_THRESHOLDS_DIRNAME
+            )
+        ),
+        *(
+            KeyedLedger(path, STORY_SIMILARITY_PAIR_KEY, StorySimilarityPair)
+            for path in day_partition.day_files(
+                state_dir / STORY_SIMILARITY_DIRNAME / SCORED_PAIRS_DIRNAME
+            )
         ),
         *(
             KeyedLedger(path, SPAN_ROLLUP_KEY, SpanRollupRow)

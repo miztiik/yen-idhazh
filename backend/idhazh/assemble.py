@@ -21,7 +21,7 @@ import struct
 import tempfile
 import unicodedata
 from array import array
-from collections.abc import Container, Mapping, Sequence
+from collections.abc import Container, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from datetime import date as date_type
@@ -869,6 +869,12 @@ class _DayScoring:
     keys: Mapping[str, StoryKey]
     points: Mapping[str, frozenset[str]]
     knobs: SameStoryConfig
+    #: Every story the block covers, today's and the window's, by id. Here
+    #: rather than rebuilt by each caller because the masthead a pair crosses is
+    #: read off the item and not off the id.
+    by_id: Mapping[str, DigestItem] = MappingProxyType({})
+    #: Which published day each story belongs to. Null for today's own.
+    day_of: Mapping[str, str | None] = MappingProxyType({})
     #: When each story says it appeared. Null where nothing dated it.
     appeared: Mapping[str, str | None] = MappingProxyType({})
     #: The ids that belong to an earlier published day, and so may only pair
@@ -1005,6 +1011,163 @@ class EarlierDay:
     embeddings: DigestEmbeddings | None
 
 
+@dataclass(frozen=True, slots=True)
+class ScoredPair:
+    """One pair of stories and every term behind what it scored.
+
+    The public shape of `_Terms` with the two ids on it. A caller outside this
+    module records what a pair scored without re-deriving any of it, which is
+    what stops a second copy of the arithmetic becoming a second answer to what
+    a score is.
+    """
+
+    #: The lower of the two item ids.
+    left: str
+    #: The higher of the two item ids.
+    right: str
+    cosine: float
+    key_points: float
+    #: Whether the two reduced headlines matched, which scores 1.0 outright
+    #: instead of the weighted sum. Carried because the two rules give one
+    #: number and a reader of the score alone cannot tell which one ran.
+    headline: bool
+    score: float
+
+
+def _day_scoring(
+    items: Sequence[DigestItem],
+    embeddings: DigestEmbeddings | None,
+    *,
+    same_story: SameStoryConfig | None = None,
+    group_identical_titles: bool = GROUP_IDENTICAL_TITLES,
+    window_hours: float = 0.0,
+    earlier: Sequence[EarlierDay] = (),
+) -> _DayScoring | None:
+    """Build everything a pair's score reads, once for the whole day.
+
+    Separate from the pass that groups the day because two callers need the
+    same block: the pass that decides what publishes, and the draw that records
+    what the day's pairs scored. Nothing here scores a pair - it is the block a
+    score is read out of.
+
+    Nothing when the day carries no vectors, which is the same answer the
+    grouping pass gives such a day: an item without a vector is not grouped,
+    because a published null that becomes a number is a wider claim than this
+    arithmetic is allowed to make.
+    """
+    if embeddings is None or not embeddings.vectors:
+        return None
+
+    today = {item.item_id for item in items}
+    by_id = {item.item_id: item for item in items}
+    blocks: list[tuple[str | None, Sequence[DigestItem], DigestEmbeddings | None]] = [
+        (None, items, embeddings)
+    ]
+    if window_hours > 0.0:
+        blocks.extend((day.date, day.items, day.embeddings) for day in earlier)
+    day_of: dict[str, str | None] = dict.fromkeys(today)
+    for date, block, _ in blocks:
+        if date is None:
+            continue
+        for item in block:
+            # An address published twice is one story, and the newer copy is the
+            # one this run is deciding about. The earlier day keeps its own copy
+            # either way; nothing here ever writes to it.
+            if item.item_id in by_id:
+                continue
+            by_id[item.item_id] = item
+            day_of[item.item_id] = date
+
+    keys: dict[str, StoryKey] = {}
+    if group_identical_titles:
+        for item_id, held in by_id.items():
+            key = story_key(held.title)
+            if key is not None:
+                keys[item_id] = key
+    vectors: dict[str, array[int]] = {}
+    norms: dict[str, float] = {}
+    for date, _block, block_vectors in blocks:
+        if block_vectors is None:
+            continue
+        for item_id, encoded in block_vectors.vectors.items():
+            if day_of.get(item_id, "missing") != date or item_id in vectors:
+                continue
+            raw = _vector_bytes(encoded, block_vectors.dimensions)
+            if raw is None:
+                LOG.warning(
+                    "item %s stores a vector that is not %s bytes wide, so it is not "
+                    "grouped with anything",
+                    item_id,
+                    block_vectors.dimensions,
+                )
+                continue
+            vectors[item_id] = array("b", raw)
+            norms[item_id] = _norm(vectors[item_id])
+
+    return _DayScoring(
+        vectors=vectors,
+        norms=norms,
+        keys=keys,
+        points={item_id: _key_point_words(by_id[item_id]) for item_id in vectors},
+        knobs=same_story or SameStoryConfig(),
+        by_id=by_id,
+        day_of=day_of,
+        appeared={item_id: by_id[item_id].published_at for item_id in vectors},
+        earlier=frozenset(item_id for item_id in vectors if item_id not in today),
+        window_hours=window_hours,
+    )
+
+
+def cross_source_pairs(
+    items: Sequence[DigestItem],
+    embeddings: DigestEmbeddings | None,
+    *,
+    same_story: SameStoryConfig | None = None,
+    group_identical_titles: bool = GROUP_IDENTICAL_TITLES,
+    window_hours: float = 0.0,
+    earlier: Sequence[EarlierDay] = (),
+) -> Iterator[ScoredPair]:
+    """Every pair two different mastheads carried, with what it scored.
+
+    The same four steps `_pair_terms` applies, reported rather than acted on. A
+    pair that pass refuses - a clash of numbers, or a day boundary the window
+    cannot reach across - is not yielded, so a caller sees exactly the pairs the
+    grouping pass would have weighed.
+
+    Across mastheads for the reason the grouping pass is: one newsroom's second
+    piece is a different problem with a different control, and it is where the
+    encoder is least trustworthy, because two releases from one desk share their
+    boilerplate.
+
+    Yielded in item-id order rather than in the order the day happens to hold,
+    so two callers reading one day see one sequence.
+    """
+    day = _day_scoring(
+        items,
+        embeddings,
+        same_story=same_story,
+        group_identical_titles=group_identical_titles,
+        window_hours=window_hours,
+        earlier=earlier,
+    )
+    if day is None:
+        return
+    for left, right in combinations(sorted(day.vectors), 2):
+        if outlet_of(day.by_id[left]) == outlet_of(day.by_id[right]):
+            continue
+        terms = _pair_terms(left, right, day)
+        if terms is None:
+            continue
+        yield ScoredPair(
+            left=left,
+            right=right,
+            cosine=terms.cosine,
+            key_points=terms.key_points,
+            headline=terms.headline,
+            score=terms.score,
+        )
+
+
 def collapse_same_story(
     items: Sequence[DigestItem],
     embeddings: DigestEmbeddings | None,
@@ -1079,66 +1242,19 @@ def collapse_same_story(
     leave the reader with nothing to open. Two stories from earlier days are
     never grouped with each other.
     """
-    if embeddings is None or not embeddings.vectors:
-        return list(items)
-
     knobs = same_story or SameStoryConfig()
     today = {item.item_id for item in items}
-    by_id = {item.item_id: item for item in items}
-    blocks: list[tuple[str | None, Sequence[DigestItem], DigestEmbeddings | None]] = [
-        (None, items, embeddings)
-    ]
-    if window_hours > 0.0:
-        blocks.extend((day.date, day.items, day.embeddings) for day in earlier)
-    day_of: dict[str, str | None] = dict.fromkeys(today)
-    for date, block, _ in blocks:
-        if date is None:
-            continue
-        for item in block:
-            # An address published twice is one story, and the newer copy is the
-            # one this run is deciding about. The earlier day keeps its own copy
-            # either way; nothing here ever writes to it.
-            if item.item_id in by_id:
-                continue
-            by_id[item.item_id] = item
-            day_of[item.item_id] = date
-
-    keys: dict[str, StoryKey] = {}
-    if group_identical_titles:
-        for item_id, held in by_id.items():
-            key = story_key(held.title)
-            if key is not None:
-                keys[item_id] = key
-    vectors: dict[str, array[int]] = {}
-    norms: dict[str, float] = {}
-    for date, _block, block_vectors in blocks:
-        if block_vectors is None:
-            continue
-        for item_id, encoded in block_vectors.vectors.items():
-            if day_of.get(item_id, "missing") != date or item_id in vectors:
-                continue
-            raw = _vector_bytes(encoded, block_vectors.dimensions)
-            if raw is None:
-                LOG.warning(
-                    "item %s stores a vector that is not %s bytes wide, so it is not "
-                    "grouped with anything",
-                    item_id,
-                    block_vectors.dimensions,
-                )
-                continue
-            vectors[item_id] = array("b", raw)
-            norms[item_id] = _norm(vectors[item_id])
-
-    day = _DayScoring(
-        vectors=vectors,
-        norms=norms,
-        keys=keys,
-        points={item_id: _key_point_words(by_id[item_id]) for item_id in vectors},
-        knobs=knobs,
-        appeared={item_id: by_id[item_id].published_at for item_id in vectors},
-        earlier=frozenset(item_id for item_id in vectors if item_id not in today),
+    day = _day_scoring(
+        items,
+        embeddings,
+        same_story=knobs,
+        group_identical_titles=group_identical_titles,
         window_hours=window_hours,
+        earlier=earlier,
     )
+    if day is None:
+        return list(items)
+    by_id, day_of = day.by_id, day.day_of
 
     # Every story from an earlier day starts as a group of its own, and nothing
     # ever joins two of those together. A published day is finished: this pass
@@ -1148,7 +1264,7 @@ def collapse_same_story(
         [held.item_id]
         for held in sorted((by_id[item_id] for item_id in day.earlier), key=_strength_order)
     ]
-    for item in sorted((one for one in items if one.item_id in vectors), key=_strength_order):
+    for item in sorted((one for one in items if one.item_id in day.vectors), key=_strength_order):
         joined: list[str] | None = None
         best = knobs.floor_min
         for cluster in clusters:

@@ -32,9 +32,9 @@ from __future__ import annotations
 import ast
 import inspect
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from types import ModuleType
+from types import MappingProxyType, ModuleType
 from typing import Any, Final
 
 import pytest
@@ -74,6 +74,26 @@ OTHER_DATE: Final = "2027-01-02"
 # holds the trace tree beside them, which a sink writes rather than a writer
 # function - which is why every guard that looked for a writer missed it.
 STORE_MODULES: Final = (ledger, traces)
+
+# A store whose path helper ships ahead of the thing that fills it, and what will
+# fill it. Guardrail #3 puts the shape and the path in first, and
+# `state/feed-retirements.csv` is the precedent: it was registered for settlement
+# one commit before the plan stage wrote a row into it, so that two stale
+# checkouts could not leave one address retired twice from the very first row.
+#
+# It is a list rather than a rule, so a NEW unfilled store fails this file instead
+# of joining it unnoticed. An entry goes when its filler lands, and a name here
+# that has since gained a writer fails too - a store nothing fills is a directory
+# a commit step may be staging for nothing.
+STORES_NOTHING_FILLS_YET: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "state/story-similarity/fitted-thresholds": "the step that fits the merge line",
+        "state/story-similarity/archive": "the fold, on the day a stamp under the record moves",
+        "state/story-similarity/holdout-pairs.csv": (
+            "a person, and no run ever - the file is typed by hand"
+        ),
+    }
+)
 
 # The package the pipeline lives in, and the name its modules import the ledger as.
 PACKAGE: Final = ledger.__name__.split(".")[0]
@@ -122,8 +142,9 @@ def _helper_arguments(date: str) -> dict[str, object]:
     """What to pass a path helper, named by the parameter that asks for it.
 
     A store filed by something other than a date says so in its own signature - the
-    trace tree files by run and by shard, a segment by run, attempt, job and shard -
-    so the value follows the parameter's name rather than the helper's.
+    trace tree files by run and by shard, a segment by run, attempt, job and shard,
+    and an archived record files by the stamp its counts were taken under - so the
+    value follows the parameter's name rather than the helper's.
 
     `ledger` picks one member of the declared set and any member would do: what the
     staging check asks is whether the job that writes a segment stages the store, and
@@ -134,6 +155,7 @@ def _helper_arguments(date: str) -> dict[str, object]:
         "month": date,
         "run_id": f"{date}-1",
         "shard": 0,
+        "stamp": date,
         "ledger": ledger.SegmentLedger.HOST_FINGERPRINT,
         "attempt": 1,
         "job": ServerJob.WORK,
@@ -462,11 +484,25 @@ def test_every_store_is_filled_by_a_writer_this_test_can_follow() -> None:
         f"{sinks.__name__} declares no sink class that takes a path, so the sink half of "
         "the derivation matches nothing and a store written by one is checked by nobody."
     )
-    unwritten = sorted(set(stores.values()) - written)
+    unknown = sorted(set(STORES_NOTHING_FILLS_YET) - set(stores.values()))
+    assert not unknown, (
+        f"{', '.join(unknown)} is excused from needing a writer and no store module "
+        "declares a path helper for it, so the excuse covers nothing. Delete the entry "
+        "from STORES_NOTHING_FILLS_YET."
+    )
+    landed = sorted(set(STORES_NOTHING_FILLS_YET) & written)
+    assert not landed, (
+        f"{', '.join(landed)} now has a public writer and is still excused from having "
+        "one. Delete the entry from STORES_NOTHING_FILLS_YET, so the store is held to "
+        "the staging and settlement checks below from its first row."
+    )
+    unwritten = sorted(set(stores.values()) - written - set(STORES_NOTHING_FILLS_YET))
     assert not unwritten, (
         f"{', '.join(unwritten)} has a path helper and nothing public fills it. Either the "
         "writer is private - make it public, so the staging test can see it - or the "
-        "helper is dead and a commit step is staging a directory nothing fills."
+        "helper is dead and a commit step is staging a directory nothing fills. A helper "
+        "that is deliberately ahead of its writer (Guardrail #3) goes in "
+        "STORES_NOTHING_FILLS_YET, named with what will fill it."
     )
 
     called = {
@@ -586,6 +622,12 @@ def test_every_ledger_that_declares_a_key_is_registered_for_settlement() -> None
     A store whose writer replaces the file is the exception, and it is derived rather
     than named: see `_rewritten_stores`.
 
+    A store registered before its writer exists is the second exception, and that one
+    is named rather than derived: `STORES_NOTHING_FILLS_YET`. Registering the key with
+    the shape rather than with its first writer is what makes the settlement true from
+    the first row instead of from the second, which is the position
+    `state/feed-retirements.csv` was in on 2026-09-02.
+
     `keyed_paths` is asked for one named date, so it returns that day's cover instead
     of globbing the tree, and this test reads no committed file.
     """
@@ -609,7 +651,9 @@ def test_every_ledger_that_declares_a_key_is_registered_for_settlement() -> None
         "dropped. Add it to keyed_paths() in backend/idhazh/ledger.py."
     )
 
-    keyless = sorted(set(registered) - set(declared) - _rewritten_stores())
+    keyless = sorted(
+        set(registered) - set(declared) - _rewritten_stores() - set(STORES_NOTHING_FILLS_YET)
+    )
     assert not keyless, (
         f"{', '.join(keyless)} is registered for settlement, its writer appends rows, and "
         "that writer names no key - so the settler has a key the writer does not use. Name "

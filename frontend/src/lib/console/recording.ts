@@ -2,10 +2,11 @@
  *
  * Every figure on this console is read off a ledger, and a ledger has states
  * that are not "a number". Measurement can be switched off; it can be sampled;
- * it can have started after the window opened; and two instruments that answer
- * about the same day can disagree about whether that day exists at all. None of
- * those is a zero, and printing them as one is how a figure nobody checks gets
- * onto an operator's page.
+ * it can have started after the window opened; it can have run on a day and
+ * lost what it wrote; and two instruments that answer about the same day can
+ * disagree about whether that day exists at all. None of those is a zero, and
+ * printing them as one is how a figure nobody checks gets onto an operator's
+ * page.
  *
  * **The empty state is the panel, not a replacement for it.** Nothing here
  * removes a heading or the sentence under it. Each function returns the one
@@ -78,11 +79,48 @@ export function scoresWithoutCounters(): string {
  * A gap at the left of a chart reads as quiet days. It is not: it is days the
  * instrument did not exist for, and the difference decides whether an operator
  * goes looking for a broken pipeline.
+ *
+ * `figures` names what the days before it have none of, because two instruments
+ * answer this route and "no server figures" is true of only one of them.
  */
-export function recordingStarted(firstRecorded: string | null, daysBefore: number): string | null {
+export function recordingStarted(
+	firstRecorded: string | null,
+	daysBefore: number,
+	figures: string = 'server figures'
+): string | null {
 	if (firstRecorded === null || daysBefore <= 0) return null;
 	const days = daysBefore === 1 ? 'The 1 day before it has' : `The ${daysBefore} days before it have`;
-	return `Recording started on ${shortDate(firstRecorded)}. ${days} no server figures, and the gap in the chart is a gap in the recording, not a quiet day.`;
+	return `Recording started on ${shortDate(firstRecorded)}. ${days} no ${figures}, and the gap in the chart is a gap in the recording, not a quiet day.`;
+}
+
+/** A day that published articles and whose instrument kept no row of it. */
+export interface LostDay {
+	date: string;
+	/** Articles the digest for that date carries. Never zero - a day that
+	 * published nothing is a quiet day, and a quiet day is not a loss. */
+	articles: number;
+}
+
+/** Days that ran, published, and whose measurement did not survive.
+ *
+ * The third state, and the one the console could not say until 2026-09-17.
+ * "This day has no rows" is the sentence a quiet day gets, and it was also the
+ * sentence 2026-09-16 got - a day that published articles and lost 303 measured
+ * rows to a merge collision. The two readings send an operator to opposite
+ * places, so they may not share a sentence.
+ *
+ * The derivation is one join and it carries no judgement: the digest for that
+ * date carries articles, so a run worked, and the instrument's own day file
+ * holds nothing, so what it measured is gone. A day the instrument never opened
+ * a file for is not here - that is a record that had not begun.
+ */
+export function recordDestroyed(lost: readonly LostDay[]): string | null {
+	if (lost.length === 0) return null;
+	const articles = lost.reduce((total, day) => total + day.articles, 0);
+	const counted = `${articles} ${articles === 1 ? 'article' : 'articles'}`;
+	return lost.length === 1
+		? `This day published ${counted} and its machine record is missing. The run worked; what it measured about the machine did not survive.`
+		: `${lost.length} days published ${counted} between them and their machine record is missing. The runs worked; what they measured about the machine did not survive.`;
 }
 
 /** Every state a panel governed by one instrument can be in.
@@ -97,13 +135,15 @@ export interface RecordingNotes {
 	sampled: string | null;
 	startedMidWindow: string | null;
 	scoresOnly: string | null;
+	recordDestroyed: string | null;
 }
 
 export interface RecordingFacts {
 	/** The toggle in `config/idhazh.json` that governs this instrument. */
 	enabled: boolean;
-	/** Its sample rate, 1.0 where it measures everything. */
-	rate: number;
+	/** Its sample rate, 1.0 where it measures everything. Omitted by an
+	 * instrument that has no sampling knob, which owes no caveat either way. */
+	rate?: number;
 	/** The days this instrument recorded, ascending. */
 	recorded: readonly string[];
 	/** The days the window covers, ascending. Anything before the first recorded
@@ -111,18 +151,30 @@ export interface RecordingFacts {
 	window: readonly string[];
 	/** Days another instrument answered for that this one did not. */
 	coveredElsewhere?: readonly string[];
+	/** Days that published articles and that this instrument kept no row of. */
+	lost?: readonly LostDay[];
+	/** What the days before the first recorded one have none of. */
+	figures?: string;
 }
 
 export function recordingNotes(facts: RecordingFacts): RecordingNotes {
 	const recorded = [...facts.recorded].sort();
 	const first = recorded[0] ?? null;
 	const last = recorded.at(-1) ?? null;
-	const before = first === null ? 0 : facts.window.filter((date) => date < first).length;
+	const lost = (facts.lost ?? []).filter((day) => !recorded.includes(day.date));
+	const destroyed = new Set(lost.map((day) => day.date));
+	// A day whose rows were destroyed is not a day before the recording started.
+	// Counted in the gap it would date the instrument's own start to the day after
+	// the loss and hand that back as the reason for it, which is the lie this
+	// third state exists to stop.
+	const before =
+		first === null ? 0 : facts.window.filter((date) => date < first && !destroyed.has(date)).length;
 	const elsewhere = (facts.coveredElsewhere ?? []).filter((date) => !recorded.includes(date));
 	return {
 		off: facts.enabled ? null : measurementOff(last),
-		sampled: facts.enabled ? sampledAt(facts.rate) : null,
-		startedMidWindow: recordingStarted(first, before),
-		scoresOnly: elsewhere.length === 0 ? null : scoresWithoutCounters()
+		sampled: facts.enabled ? sampledAt(facts.rate ?? 1) : null,
+		startedMidWindow: recordingStarted(first, before, facts.figures),
+		scoresOnly: elsewhere.length === 0 ? null : scoresWithoutCounters(),
+		recordDestroyed: recordDestroyed(lost)
 	};
 }

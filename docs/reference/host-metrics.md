@@ -76,6 +76,14 @@ JOIN host_fingerprint hf
  AND hf.job  = ih.job  AND hf.shard  = ih.shard
 ```
 
+**What a machine WAS is here; what it HAD at the moment is on the item row.**
+This table is taken once a job and holds the parts - the processor, its cache,
+its flags. Memory moves inside a job, so it is sampled per item instead: six
+`os_` columns on `state/item-health/` carry what `/proc/meminfo` said, including
+the lowest headroom seen while the model worked on that one item
+([../architecture/sources/item-health.md](../architecture/sources/item-health.md#what-the-machine-had-against-what-a-process-held)).
+Neither table repeats the other's cells.
+
 ## Identity
 
 | Column | Type | What it is |

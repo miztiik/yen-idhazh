@@ -1,0 +1,201 @@
+{
+  "$defs": {
+    "ScoreSlot": {
+      "additionalProperties": false,
+      "description": "One 0.001-wide slice of the band, and what the judge said inside it.",
+      "properties": {
+        "bin_low": {
+          "description": "The slot's lower edge. A pair scoring exactly this lands in this slot; a pair scoring the upper edge lands in the next one.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Bin Low",
+          "type": "number"
+        },
+        "different_count": {
+          "default": 0,
+          "description": "Agreed NO readings. This is the count step 1 walks down and the only one that moves the line.",
+          "minimum": 0,
+          "title": "Different Count",
+          "type": "integer"
+        },
+        "same_count": {
+          "default": 0,
+          "description": "Agreed YES readings in this slot.",
+          "minimum": 0,
+          "title": "Same Count",
+          "type": "integer"
+        },
+        "unclear_count": {
+          "default": 0,
+          "description": "Agreed UNCLEAR readings. Counted and never fitted on, so a rising share here is visible rather than silent.",
+          "minimum": 0,
+          "title": "Unclear Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "bin_low"
+      ],
+      "title": "ScoreSlot",
+      "type": "object"
+    }
+  },
+  "$id": "story-similarity-distribution.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: a fixed row of slots, three counts each, and the dates folded.",
+      "version": "2026-09-18",
+      "why": "A fit that sorted every pair ever judged would cost more every day."
+    }
+  ],
+  "description": "The band, slot by slot, and the dates already counted into it.",
+  "properties": {
+    "band_high": {
+      "description": "The top of the band. 1.00 is the highest a cosine goes, so the top slot is never short of room.",
+      "exclusiveMinimum": 0.0,
+      "maximum": 1.0,
+      "title": "Band High",
+      "type": "number"
+    },
+    "band_low": {
+      "description": "The lowest score the record holds a slot for. Below it nothing was ever judged, so the record can say nothing about it.",
+      "exclusiveMaximum": 1.0,
+      "minimum": 0.0,
+      "title": "Band Low",
+      "type": "number"
+    },
+    "bin_width": {
+      "description": "How wide each slot is. This is the resolution of the fitted line: the fit can only ever answer to the nearest slot edge.",
+      "exclusiveMinimum": 0.0,
+      "maximum": 1.0,
+      "title": "Bin Width",
+      "type": "number"
+    },
+    "cosine_weight": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What the cosine was worth for every count in this record. A different weight puts the same pair in a different slot, so a change archives the record rather than reinterpreting it.",
+      "title": "Cosine Weight"
+    },
+    "folded_dates": {
+      "default": [],
+      "description": "Every date already counted, sorted. A second fold of one date is refused rather than doubling its counts, which makes a re-run free instead of damaging.",
+      "items": {
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+        "type": "string"
+      },
+      "title": "Folded Dates",
+      "type": "array"
+    },
+    "grammar_digest": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "sha256 of the grammar the verdicts were produced under.",
+      "title": "Grammar Digest"
+    },
+    "judge_model": {
+      "anyOf": [
+        {
+          "enum": [
+            "qwen3-5-9b-q4-k-m",
+            "qwen3-5-9b-q4-k-m-thinking",
+            "ornith-1-5-9b-q5-k-m",
+            "gemma-4-e4b-it-qat-ud-q4-k-xl"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Which model produced these verdicts. Null until the first fold.",
+      "title": "Judge Model"
+    },
+    "key_point_weight": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What the key-point term was worth. Same reason as the cosine weight.",
+      "title": "Key Point Weight"
+    },
+    "prompt_digest": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "sha256 of the system turn the verdicts were produced under.",
+      "title": "Prompt Digest"
+    },
+    "scorer_model": {
+      "anyOf": [
+        {
+          "const": "all-minilm-l6-v2-quantized",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Which encoder produced the scores these counts were filed under. Null until the first fold.",
+      "title": "Scorer Model"
+    },
+    "slots": {
+      "description": "The band, slot by slot, lowest first. Fixed size: the record never grows as the archive does, which is why the fit reads it and never the day tree (Guardrail #12).",
+      "items": {
+        "$ref": "#/$defs/ScoreSlot"
+      },
+      "title": "Slots",
+      "type": "array"
+    },
+    "version": {
+      "default": "2026-09-18",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "band_low",
+    "band_high",
+    "bin_width",
+    "slots"
+  ],
+  "title": "StorySimilarityDistribution",
+  "type": "object",
+  "version": "2026-09-18"
+}
