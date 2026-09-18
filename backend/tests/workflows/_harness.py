@@ -752,13 +752,13 @@ COMMIT_STAGED_PATHS: Final = {
     # taken from and was missed the same way.
     #
     # `state/segments` replaced `state/host-fingerprint` on 2026-09-17, and
-    # `state/item-health`, `state/scores`, `state/score-index` and
-    # `state/span-rollup` followed it on 2026-09-18. Each of those heads used to
-    # be appended to by up to eight work shards and by assemble; every writer now
-    # writes its own segment and `assemble` folds them in, so this job stages the
-    # segment store and no longer stages a head it does not write.
+    # `state/item-health`, `state/scores`, `state/score-index`,
+    # `state/span-rollup` and `state/runtime-counters.csv` followed it on
+    # 2026-09-18. Each of those heads used to be appended to by up to eight work
+    # shards and by assemble; every writer now writes its own segment and
+    # `assemble` folds them in, so this job stages the segment store and no
+    # longer stages a head it does not write.
     "work": [
-        "state/runtime-counters.csv",
         "state/traces",
         "state/segments",
     ],

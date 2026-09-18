@@ -20,6 +20,7 @@ from conftest import (
     FIXTURES_DIR,
     read_text,
     seed_item_health,
+    seed_runtime_counters,
     seed_span_rollup,
 )
 
@@ -1900,8 +1901,8 @@ def test_a_repeated_row_is_dropped_and_every_other_byte_is_left_alone(tmp_path: 
     """
     path = tmp_path / "runtime-counters.csv"
     header = ",".join(RuntimeCountersRow.csv_columns())
-    assert ledger.append_runtime_counters(tmp_path, [counters_row(0, prompt_tokens_total=100)]) == 1
-    assert ledger.append_runtime_counters(tmp_path, [counters_row(1, prompt_tokens_total=200)]) == 1
+    assert seed_runtime_counters(tmp_path, [counters_row(0, prompt_tokens_total=100)]) == 1
+    assert seed_runtime_counters(tmp_path, [counters_row(1, prompt_tokens_total=200)]) == 1
     clean = path.read_text(encoding="utf-8")
     assert clean.startswith(header)
 
@@ -1952,7 +1953,7 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     """
     ledger.append_seen(tmp_path, DATE, [seen_row()])
     ledger.append_health(tmp_path, DATE, [health_row()])
-    ledger.append_runtime_counters(tmp_path, [counters_row(0)])
+    seed_runtime_counters(tmp_path, [counters_row(0)])
     ledger.append_visual_prunes(tmp_path, DATE, [prune_row(on=DATE)])
     ledger.append_counterfactual_scores(tmp_path, DATE, [counterfactual_row()])
     a_fingerprint_day(tmp_path, [fingerprint_row()])
@@ -2305,7 +2306,7 @@ def test_the_whole_state_tree_settles_in_one_call(tmp_path: Path) -> None:
     row staged beside the one it just fixed.
     """
     state = tmp_path / "state"
-    ledger.append_runtime_counters(state, [counters_row(0, prompt_tokens_total=100)])
+    seed_runtime_counters(state, [counters_row(0, prompt_tokens_total=100)])
     counters = ledger.runtime_counters_path(state)
     with counters.open("a", encoding="utf-8", newline="") as handle:
         handle.write(counters.read_text(encoding="utf-8").splitlines()[1] + "\n")
@@ -2373,7 +2374,7 @@ def test_a_repeat_in_a_shard_this_run_wrote_is_still_settled(tmp_path: Path) -> 
     """
     state = tmp_path / "state"
     health, items, scores = _month_of_history(state, DATE)
-    ledger.append_runtime_counters(state, [counters_row(0, prompt_tokens_total=100)])
+    seed_runtime_counters(state, [counters_row(0, prompt_tokens_total=100)])
     counters = ledger.runtime_counters_path(state)
     _repeat_last_row(counters)
 
@@ -2507,11 +2508,12 @@ def counters_row(shard: int, **counters: object) -> RuntimeCountersRow:
 def test_every_ledger_a_work_shard_stages_is_named_before_the_first_run() -> None:
     """`git add` on a path that is not there aborts the whole commit step.
 
-    The script runs under `set -euo pipefail` and stages all three of the work
-    job's ledgers in one call, so a `state/runtime-counters.csv` that only
-    appears once the counters stage has succeeded would let a broken scrape cost
-    the shard its item-health rows as well - the exact loss the commit step was
-    added to prevent. The header ships with the contract instead.
+    The script runs under `set -euo pipefail` and stages the work job's paths in
+    one call. The shard no longer stages this head - it writes a segment and
+    `assemble` folds it in - but `assemble` stages `state` whole and the audit
+    that reads the head opens it by name, so a file that only appeared once a
+    scrape had succeeded would still be a read with nothing behind it. The
+    header ships with the contract instead.
 
     The path and its header come from the contract, so a rename or a widening
     breaks this. Whether the file is in the working copy does not: that is a
@@ -2523,17 +2525,21 @@ def test_every_ledger_a_work_shard_stages_is_named_before_the_first_run() -> Non
     assert set(ledger.RUNTIME_COUNTERS_KEY) <= set(RuntimeCountersRow.csv_columns())
 
 
-def test_a_re_run_shard_cannot_be_counted_twice(tmp_path: Path) -> None:
-    """The cells are cumulative totals, so a second row is not a second fact.
+def test_one_runs_shards_are_read_back_in_shard_order(tmp_path: Path) -> None:
+    """The audit asks for one run and gets that run's shards, lowest first.
 
-    A re-run of a failed job starts a fresh server and scrapes it again. Nothing
-    pools two rows for one shard correctly - the tokens would simply be added to
-    themselves - and `merge=union` keeps both lines rather than collapsing them,
-    so the filter has to run before the write.
+    Order is not decoration here: `pool_counters` reports parts as well as a
+    rate, and every surface that quotes a per-shard figure lines it up against
+    the shard rows in this order.
+
+    What settles a second row for one shard is no longer here. The cells are
+    cumulative totals for a server process, so a re-run of a failed shard is its
+    own tokens added to themselves - and that is now decided when the segments
+    fold, by the attempt in the segment's name
+    (`tests/pipeline/test_compact.py`).
     """
-    assert ledger.append_runtime_counters(tmp_path, [counters_row(0, prompt_tokens_total=100)]) == 1
-    assert ledger.append_runtime_counters(tmp_path, [counters_row(0, prompt_tokens_total=999)]) == 0
-    assert ledger.append_runtime_counters(tmp_path, [counters_row(1, prompt_tokens_total=200)]) == 1
+    assert seed_runtime_counters(tmp_path, [counters_row(0, prompt_tokens_total=100)]) == 1
+    assert seed_runtime_counters(tmp_path, [counters_row(1, prompt_tokens_total=200)]) == 1
 
     landed = ledger.load_runtime_counters(tmp_path, run_id=RUN_ID)
     assert [row.shard for row in landed] == [0, 1]
@@ -2547,10 +2553,10 @@ def test_a_shard_whose_server_was_gone_still_counts_as_a_shard(tmp_path: Path) -
     An empty scrape writes nulls, not zeroes, so the row says "this shard ran and
     the server did not answer" rather than "this shard read no tokens".
     """
-    ledger.append_runtime_counters(
+    seed_runtime_counters(
         tmp_path, [counters_row(0, prompt_tokens_total=100, prompt_seconds_total=10.0)]
     )
-    ledger.append_runtime_counters(tmp_path, [counters_row(1)])
+    seed_runtime_counters(tmp_path, [counters_row(1)])
 
     pooled = pool_counters(ledger.load_runtime_counters(tmp_path, run_id=RUN_ID))
 

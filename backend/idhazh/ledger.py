@@ -165,7 +165,13 @@ SCORE_DISTRIBUTION_FILENAME: Final = "score-distribution.json"
 #: archive is written only on the rare day a stamp changed - `git add` on a path
 #: the checkout does not hold aborts the whole step.
 SCORE_ARCHIVE_DIRNAME: Final = "archive"
-RUNTIME_COUNTERS_FILENAME: Final = "runtime-counters.csv"
+
+#: The one head that is a flat file and still takes segments. The word is spelled
+#: once and the filename is built from it, so the transit directory under
+#: `state/segments/` and the file it drains into cannot be named two different
+#: things (`SegmentLedger` takes the directory name).
+RUNTIME_COUNTERS_DIRNAME: Final = "runtime-counters"
+RUNTIME_COUNTERS_FILENAME: Final = f"{RUNTIME_COUNTERS_DIRNAME}.csv"
 FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
 
 #: Where a writer puts its rows before a compaction folds them into a head. Not
@@ -328,17 +334,6 @@ class KeyedLedger(NamedTuple):
     key: tuple[str, ...]
     model: type[CsvContract]
     carried: frozenset[str] = frozenset()
-
-
-def _key_of(row: CsvRecord, key: tuple[str, ...]) -> tuple[str, ...]:
-    """The cells that make this row's record, as the file spells them.
-
-    Read off `csv_row` rather than off the attributes, so a filter compares what
-    is on disk against what is about to be written rather than against a Python
-    value that has still to be rendered.
-    """
-    cells = row.csv_row()
-    return tuple(cells[name] for name in key)
 
 
 def _feed_health_rule(later: dict[str, str], kept: dict[str, str]) -> bool:
@@ -1002,10 +997,6 @@ def _append(path: Path, columns: tuple[str, ...], rows: Sequence[CsvRecord]) -> 
       `contracts.feed_health.supersedes` rather than by which line landed first.
     - **item-health** - two stages write it, so it cannot rely on a caller's own
       guarantee. `append_item_health` filters against `ITEM_HEALTH_KEY` instead.
-    - **runtime-counters** - one writer, but the row is a cumulative total rather
-      than an event, so a re-run of a failed shard would make a run-level sum
-      count that shard twice. `append_runtime_counters` filters against
-      `RUNTIME_COUNTERS_KEY`.
 
     Both filters read the file the job checked out, which is frozen at the
     commit its run was triggered at, so neither can see a row a second attempt
@@ -1296,29 +1287,14 @@ def load_retirements(state_dir: Path) -> list[FeedRetirementRow]:
     return rows
 
 
-def append_runtime_counters(state_dir: Path, rows: Iterable[RuntimeCountersRow]) -> int:
-    """Append what each job's model server counted. Never windowed.
-
-    Filters against `RUNTIME_COUNTERS_KEY` because the cells are cumulative
-    totals rather than events: a second row for a shard is not a second fact, it
-    is the same shard's tokens added to themselves by whatever pools the run.
-
-    Returns how many landed, so a caller can log the count.
-    """
-    path = runtime_counters_path(state_dir)
-    already = recorded_runtime_counters(path)
-    landing = []
-    for row in rows:
-        key = _key_of(row, RUNTIME_COUNTERS_KEY)
-        if key in already:
-            continue
-        already.add(key)
-        landing.append(row)
-    return _append(path, RuntimeCountersRow.csv_columns(), landing)
-
-
 def recorded_runtime_counters(path: Path) -> set[tuple[str, ...]]:
-    """Every shard the file already carries a snapshot for."""
+    """Every shard the file already carries a snapshot for.
+
+    A reader and no longer half of a writer, the way `recorded_span_rollup` is.
+    Each model-server job writes its counters into its own segment and
+    `stage_compact` folds them into this head, so the question this answers is
+    what the head already holds rather than what an append is about to skip.
+    """
     return {tuple(row[name] for name in RUNTIME_COUNTERS_KEY) for row in _read_rows(path)}
 
 
@@ -1532,6 +1508,7 @@ class SegmentLedger(StrEnum):
     SPAN_ROLLUP = SPAN_ROLLUP_DIRNAME
     SCORES = SCORES_DIRNAME
     SCORE_INDEX = SCORE_INDEX_DIRNAME
+    RUNTIME_COUNTERS = RUNTIME_COUNTERS_DIRNAME
 
 
 class SegmentName(NamedTuple):
@@ -1588,6 +1565,20 @@ def _span_rollup_head_relpath(date: str) -> str:
     return span_rollup_relpath(date[:7])
 
 
+# The one flat head, so a row's date says nothing about which file it lands in.
+# Every date names this same file, which is what lets the ledger stop being a
+# collider without also being moved to a day tree it is about to be deleted
+# from. The fold reads a head whole, so this one costs the whole file rather
+# than a day of it - still fewer reads than the scan-before-append it replaced,
+# which paid that same cost once per model-server job (Guardrail #12).
+def _runtime_counters_head(state_dir: Path, date: str) -> Path:
+    return runtime_counters_path(state_dir)
+
+
+def _runtime_counters_head_relpath(date: str) -> str:
+    return runtime_counters_relpath()
+
+
 class _HeadShape(NamedTuple):
     """One ledger's answer to "which file, and what settles two of its rows"."""
 
@@ -1634,6 +1625,12 @@ _SEGMENT_HEADS: Final[dict[SegmentLedger, _HeadShape]] = {
         OBSERVATION_INDEX_KEY,
         ObservationIndexRow,
         dates_from_run=True,
+    ),
+    SegmentLedger.RUNTIME_COUNTERS: _HeadShape(
+        _runtime_counters_head,
+        _runtime_counters_head_relpath,
+        RUNTIME_COUNTERS_KEY,
+        RuntimeCountersRow,
     ),
 }
 
