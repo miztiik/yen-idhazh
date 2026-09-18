@@ -224,10 +224,70 @@ def test_both_digests_are_stable_inside_one_process() -> None:
 
 def test_a_changed_system_turn_changes_the_prompt_digest() -> None:
     """A reworded ask is a different ask, and the column has to say so."""
-    moved = prompt.system_turn().replace("exact same event", "same event")
+    whole = prompt.prompt_text()
+    moved = whole.replace("exact same event", "same event")
 
-    assert moved != prompt.system_turn(), "the replacement found nothing, so this proves nothing"
+    assert moved != whole, "the replacement found nothing, so this proves nothing"
     assert derive_text_digest(moved) != prompt.prompt_digest()
+
+
+def test_a_changed_re_ask_changes_the_prompt_digest() -> None:
+    """The re-ask is the last thing the model reads, so it is part of the ask.
+
+    The case the old digest missed: it covered the system turn alone, so this
+    sentence could be reworded and every row would keep claiming the verdicts
+    were taken under the prompt the rows before them were.
+    """
+    whole = prompt.prompt_text()
+    assert prompt.REASK in whole, "the re-ask is outside what the digest covers"
+
+    moved = whole.replace(prompt.REASK, "Same story? YES, NO or UNCLEAR.")
+
+    assert moved != whole
+    assert derive_text_digest(moved) != prompt.prompt_digest()
+
+
+@pytest.mark.parametrize("part", ["FIRST_LABEL", "SECOND_LABEL", "REASK"])
+def test_every_word_of_ours_in_the_user_turn_is_inside_the_digest(part: str) -> None:
+    """The labels and the re-ask are ours, they are editable, and each can move a verdict.
+
+    Held part by part rather than as one assertion, so a part that falls out of
+    the digest names itself instead of failing a list.
+    """
+    text: str = getattr(prompt, part)
+
+    assert text in prompt.prompt_text()
+
+
+def test_the_digest_is_taken_over_the_text_that_function_returns() -> None:
+    """The two have to be one statement, or every test above proves nothing.
+
+    This is what stops the digest narrowing back to the system turn while
+    `prompt_text` keeps returning the whole ask.
+    """
+    assert prompt.prompt_digest() == derive_text_digest(prompt.prompt_text())
+
+
+def test_the_digest_does_not_move_with_the_pair_it_is_about() -> None:
+    """Two different pairs judged under one ask have to carry one digest.
+
+    `prompt_text` renders the real user turn with nothing in the fences, so the
+    shape is covered and the summaries are not. A digest that moved with the
+    summaries would be a per-call value in a column the whole record is grouped
+    by.
+    """
+    day = _a_day()
+
+    assert day.items[0].summary not in prompt.prompt_text()
+    assert day.items[1].summary not in prompt.prompt_text()
+
+
+def test_the_digest_covers_the_user_turn_the_model_is_actually_sent() -> None:
+    """One renderer, so the digest cannot describe a layout the model never reads."""
+    day = _a_day()
+    ours = _outside_the_fences(prompt.user_turn(day.items[0], day.items[1]))
+
+    assert _outside_the_fences(prompt.prompt_text()).endswith(ours)
 
 
 def test_a_changed_grammar_changes_the_grammar_digest() -> None:
@@ -374,6 +434,32 @@ def test_every_decode_carries_the_grammar_and_asks_for_the_first_position() -> N
         assert body["n_probs"] == 3
         assert body["n_predict"] == prompt.REPLY_TOKENS
         assert "json_schema" not in body, "two controls in one body is a build deciding which wins"
+
+
+def test_the_decode_is_sent_at_the_judging_knob_and_not_the_entry() -> None:
+    """A sampler that strays turns the swap from a bias reading into a noise reading.
+
+    Read off the posted body rather than off the config, because the defect this
+    catches is the builder ignoring the knob - which a config assertion cannot
+    see. The entry's own temperature is asserted to be a different number, so
+    this fails rather than passes by coincidence if the wiring is dropped.
+    """
+    settings = _settings()
+    tuning = settings.app.assemble.same_story.adaptive_dedup_threshold
+    day = _a_day()
+    with JudgeServer(_reply("two-events")) as server:
+        judge.judge_pair(day.items[0], day.items[1], client=_client(server), settings=settings)
+        decodes = server.decodes
+
+    assert decodes, "no body was posted, so this proves nothing"
+    assert tuning.judge_temperature == 0.0, "the committed judging knob is no longer greedy"
+    assert settings.models.summarize.inference.temperature != tuning.judge_temperature, (
+        "the entry and the knob hold the same number, so this test cannot tell them apart"
+    )
+    for body in decodes:
+        assert body["temperature"] == tuning.judge_temperature
+        assert body["top_p"] == settings.models.summarize.inference.top_p
+        assert body["seed"] == settings.models.summarize.inference.seed
 
 
 def test_a_reply_the_grammar_could_not_have_written_fails_the_leg() -> None:

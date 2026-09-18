@@ -75,6 +75,7 @@ from idhazh.stages import (
     dedupe_ledgers,
     harvest,
     judge_draw,
+    judge_fold,
     judge_shard,
     prune_stamp,
     prune_state,
@@ -133,6 +134,7 @@ STAGES: Final[tuple[str, ...]] = (
     "site-weight",
     "validate-days",
     "judge-draw",
+    "judge-fold",
     "judge-shard",
     # Listed so `--help` names every verb, and never parsed: `main` hands the
     # line to the telemetry package before this parser is built.
@@ -581,6 +583,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             settings=settings,
             digest_root=args.digest_root,
             out_dir=args.out_dir,
+        )
+        return 0
+
+    if args.stage == "judge-fold":
+        # Beside its siblings: it reads the legs' files and one committed record,
+        # calls no model, and opens no socket.
+        judge_fold.stage_judge_fold(
+            args.date or _today(),
+            settings=settings,
+            state_dir=args.state_root,
         )
         return 0
 

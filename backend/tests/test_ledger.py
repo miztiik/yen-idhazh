@@ -35,6 +35,7 @@ from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
+from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.evals import writer
 from idhazh.evals.writer import OBSERVATION_KEY
@@ -161,6 +162,28 @@ def span_fold_row(*, on: str = DATE, shard: int = 0, total_ms: int = 16) -> Span
         span_name=RollupSpan.TAG,
         count=20,
         total_ms=total_ms,
+    )
+
+
+def pair_row(*, on: str = DATE) -> StorySimilarityPair:
+    """One judged pair, read from the committed contract fixture and re-dated.
+
+    Read inside the helper rather than at module scope, so a fixture that stops
+    parsing fails the test that asked for a row instead of the whole file
+    (CLAUDE.md section 13).
+    """
+    raw = json.loads(
+        read_text(
+            CONTRACT_FIXTURES_DIR / "story-similarity-pair" / "judged-the-same-in-both-orders.json"
+        )
+    )
+    return StorySimilarityPair.model_validate(
+        raw
+        | {
+            "version": StorySimilarityPair.schema_version(),
+            "date": on,
+            "run_id": f"{on}-1",
+        }
     )
 
 
@@ -1877,7 +1900,7 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     else here says what makes two of its rows one record, and everything that
     says so is settled.
 
-    Both covers name the same ten ledgers on a tree with one day of each in it.
+    Both covers name the same eleven ledgers on a tree with one day of each in it.
     What separates them is what a second day would add: to the operator's pass, a
     file; to a run's pass, nothing. The span fold is the exception that proves
     the shape - it files by month, so a second day adds nothing to either cover
@@ -1885,8 +1908,7 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
 
     `state/story-similarity/fitted-thresholds/` is registered before anything
     writes it, which is why it is built here by hand rather than by an append
-    call. Its sibling `scored-pairs/` is deliberately absent: a key with no
-    writer is a claim about rows nobody can produce.
+    call. Its sibling `scored-pairs/` has a writer and is filled by one.
     """
     ledger.append_seen(tmp_path, DATE, [seen_row()])
     ledger.append_health(tmp_path, DATE, [health_row()])
@@ -1895,6 +1917,7 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     ledger.append_counterfactual_scores(tmp_path, DATE, [counterfactual_row()])
     ledger.append_host_fingerprint(tmp_path, DATE, [fingerprint_row()])
     ledger.append_span_rollup(tmp_path, DATE, [span_fold_row()])
+    ledger.append_story_similarity_pairs(tmp_path, DATE, [pair_row()])
     item_health = ledger.item_health_path(tmp_path, DATE)
     item_health.parent.mkdir(parents=True, exist_ok=True)
     item_health.write_text(",".join(ItemHealthRow.csv_columns()) + "\n", encoding="utf-8")
@@ -1921,6 +1944,10 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
         (
             f"story-similarity/fitted-thresholds/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
             ledger.STORY_SIMILARITY_THRESHOLD_KEY,
+        ),
+        (
+            f"story-similarity/scored-pairs/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
+            ledger.STORY_SIMILARITY_PAIR_KEY,
         ),
         (f"span-rollup/{DATE[:7]}.csv", ledger.SPAN_ROLLUP_KEY),
     ]

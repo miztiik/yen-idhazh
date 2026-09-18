@@ -9,6 +9,7 @@
         "disagreement_max": 0.15,
         "discard_share": 0.01,
         "enabled": false,
+        "judge_temperature": 0.0,
         "max_down_step": 0.005,
         "minimum_above_line": 30,
         "minimum_days": 10,

@@ -1,12 +1,14 @@
-"""What ruler a pair was scored under, as the values rather than as a digest.
+"""What ruler a pair was scored and judged under, as the values rather than as a digest.
 
 A digest says that an input moved. These say WHICH one, which is what a reader
 of a line the run refused to move needs to know: the encoder changed, or a
-weight did. `scorer_stamp` in the contract folds the same three values into the
-one digest the places that need one use, so the two can never disagree.
+weight did, or the judge read a reworded ask. `scorer_stamp` and `judge_stamp`
+in the contract fold the same values into the one digest the places that need
+one use, so the two can never disagree.
 
-The judge half of this question - which model read the pair, under which prompt
-and grammar - arrives with the step that calls a model. Nothing here calls one.
+Nothing here calls a model. The judge half is three values a run already holds -
+which weights the config names, and the two digests `similarity.prompt` takes
+over its own text.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ from dataclasses import dataclass
 from idhazh import config
 from idhazh.contracts.story_similarity_pair import ScorerModelId
 from idhazh.embed import EMBEDDER_ID
+from idhazh.similarity import prompt
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,6 +28,22 @@ class ScorerStamp:
     scorer_model: ScorerModelId
     cosine_weight: float
     key_point_weight: float
+
+
+@dataclass(frozen=True, slots=True)
+class JudgeStamp:
+    """The three values that decide what a verdict means.
+
+    `judge_model` is a plain string where its scorer twin is a literal, and the
+    difference is real rather than untidy: the encoder is a constant this
+    repository declares, and the judge is whichever entry `config/models/`
+    names. Which of the known ids it has to be is checked where the value is
+    written down, by the contract that holds the column.
+    """
+
+    judge_model: str
+    prompt_digest: str
+    grammar_digest: str
 
 
 def scorer_inputs(settings: config.Settings) -> ScorerStamp:
@@ -39,4 +58,18 @@ def scorer_inputs(settings: config.Settings) -> ScorerStamp:
         scorer_model=EMBEDDER_ID,
         cosine_weight=same_story.cosine_weight,
         key_point_weight=same_story.key_point_weight,
+    )
+
+
+def judge_inputs(settings: config.Settings) -> JudgeStamp:
+    """The ruler this run judges with, read off the config and the prompt's own text.
+
+    The model is `models.summarize`, which is the entry a judging leg decodes
+    with. Both digests are taken over the rendered text rather than over a file,
+    so a checkout's newline convention cannot archive a record.
+    """
+    return JudgeStamp(
+        judge_model=settings.models.summarize.id,
+        prompt_digest=prompt.prompt_digest(),
+        grammar_digest=prompt.grammar_digest(),
     )

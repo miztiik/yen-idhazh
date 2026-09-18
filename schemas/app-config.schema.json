@@ -1755,6 +1755,14 @@
           "title": "Enabled",
           "type": "boolean"
         },
+        "judge_temperature": {
+          "default": 0.0,
+          "description": "How far the judge's sampler may stray from the likeliest word. 0.0, because every pair is read twice with the two summaries swapped and the two readings are then compared: at 0.0 a disagreement is position bias, which is the thing disagreement_max gates on. Above 0.0 the same pair can answer differently with nothing swapped at all, so the comparison measures sampling noise instead and the gate stops meaning what its own name says. It sits here rather than on models.summarize.inference because that entry pins its temperature for writing summaries, which is a different job on the same weights.",
+          "maximum": 2.0,
+          "minimum": 0.0,
+          "title": "Judge Temperature",
+          "type": "number"
+        },
         "max_down_step": {
           "default": 0.005,
           "description": "The furthest the line may fall in one day. 0.005 leaves TODAY's 0.0083 gap uncrossable in one day. The gap is not a constant: it is applied minus 0.9317, so it shrinks as the line falls, and once the line reaches 0.9367 one legal step lands on the marked pair. That is why the holdout report is read on every day rather than once. The owner proposed 0.010, which is larger than today's gap, so it would have crossed on its first step.",
@@ -2377,6 +2385,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "adaptive_dedup_threshold.judge_temperature, additive, default 0.0.",
+      "version": "2026-09-18T10:00",
+      "why": "The swap reads position bias only while the sampler adds no noise of its own."
+    },
+    {
       "change": "adaptive_dedup_threshold and run.judge_shard_timeout_minutes, additive.",
       "version": "2026-09-18T09:00",
       "why": "The merge line was set by one reading and nothing re-read it."
@@ -2390,11 +2403,6 @@
       "change": "bench.run_model_speed_case, additive, default true.",
       "version": "2026-09-17T16:00",
       "why": "Testing the bench flow should not cost half an hour of llama-bench."
-    },
-    {
-      "change": "The prune block, additive, dry_run true and two collections.",
-      "version": "2026-09-17T15:00",
-      "why": "GitHub holds 1 GB of artifacts that no file in this repository names."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2475,7 +2483,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-18T09:00",
+      "default": "2026-09-18T10:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2486,5 +2494,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-18T09:00"
+  "version": "2026-09-18T10:00"
 }

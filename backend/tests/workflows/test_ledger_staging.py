@@ -85,8 +85,8 @@ STORE_MODULES: Final = (ledger, traces)
 # a commit step may be staging for nothing.
 STORES_NOTHING_FILLS_YET: Final[Mapping[str, str]] = MappingProxyType(
     {
-        "state/story-similarity/scored-pairs": "the step that judges a day's pairs",
         "state/story-similarity/fitted-thresholds": "the step that fits the merge line",
+        "state/story-similarity/archive": "the fold, on the day a stamp under the record moves",
         "state/story-similarity/holdout-pairs.csv": (
             "a person, and no run ever - the file is typed by hand"
         ),
@@ -140,10 +140,11 @@ def _helper_arguments(date: str) -> dict[str, object]:
     """What to pass a path helper, named by the parameter that asks for it.
 
     A store filed by something other than a date says so in its own signature - the
-    trace tree files by run and by shard - so the value follows the parameter's name
-    rather than the helper's.
+    trace tree files by run and by shard, and an archived record files by the stamp
+    its counts were taken under - so the value follows the parameter's name rather
+    than the helper's.
     """
-    return {"date": date, "month": date, "run_id": f"{date}-1", "shard": 0}
+    return {"date": date, "month": date, "run_id": f"{date}-1", "shard": 0, "stamp": date}
 
 
 def _relpath_for(name: str, helper: Callable[..., Any], date: str) -> str:

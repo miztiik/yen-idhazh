@@ -85,6 +85,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-18T10:00",
+            change="adaptive_dedup_threshold.judge_temperature, additive, default 0.0.",
+            why="The swap reads position bias only while the sampler adds no noise of its own.",
+        ),
+        ChangelogEntry(
             version="2026-09-18T09:00",
             change="adaptive_dedup_threshold and run.judge_shard_timeout_minutes, additive.",
             why="The merge line was set by one reading and nothing re-read it.",
@@ -98,11 +103,6 @@ class AppConfig(Contract):
             version="2026-09-17T16:00",
             change="bench.run_model_speed_case, additive, default true.",
             why="Testing the bench flow should not cost half an hour of llama-bench.",
-        ),
-        ChangelogEntry(
-            version="2026-09-17T15:00",
-            change="The prune block, additive, dry_run true and two collections.",
-            why="GitHub holds 1 GB of artifacts that no file in this repository names.",
         ),
         ChangelogEntry(
             version="2026-08-21",
