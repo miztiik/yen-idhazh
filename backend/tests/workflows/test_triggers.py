@@ -11,15 +11,18 @@ import pytest
 from conftest import CONFIG_DIR
 
 from ._harness import (
+    CONTENT_REFRESH_RUN_MINUTES,
     CONTENT_REFRESH_UTC_HOURS,
     DISPATCH_BOOLEAN,
     DISPATCH_CHOICE,
     DISPATCH_INPUT_SHAPES,
     DISPATCH_READ_BY_NAME,
     EXPECTED_WORKFLOWS,
+    SCHEDULED_START_DRIFT_MINUTES,
     UNPUBLISHABLE_DATES,
     _declared_dispatch_inputs,
     _every_env,
+    _job,
     _load_workflows,
     _mapping,
     _names_the_input,
@@ -34,6 +37,8 @@ from ._harness import (
 pytestmark = pytest.mark.workflow
 
 _DISPATCH_FALLBACK = re.compile(r"^inputs\.(?P<input>[a-z_]+) \|\| '(?P<fallback>[^']+)'$")
+
+_MINUTES_IN_A_DAY = 24 * 60
 
 
 def test_workflow_names_and_trigger_classes_are_pinned() -> None:
@@ -87,6 +92,55 @@ def test_a_scheduled_run_reports_which_slot_it_is_and_how_late() -> None:
     body = str(step.get("run", ""))
     assert "::warning title=Late run::" in body, "it annotates the run summary"
     assert "10#" in body, "every clock field is forced to base ten, or 08 is octal"
+
+
+def _cron_minute_of_day(expression: str) -> int:
+    """The UTC minute a plain daily five-field cron line fires at."""
+    minute, hour, *rest = expression.split()
+    assert rest == ["*", "*", "*"], f"{expression!r} must be a plain daily cron"
+    return int(hour) * 60 + int(minute)
+
+
+def _wall_clock(first: int, last: int) -> set[int]:
+    """Every UTC minute of the day from `first` to `last`, wrapped over midnight."""
+    return {minute % _MINUTES_IN_A_DAY for minute in range(first, last + 1)}
+
+
+def test_the_prune_force_push_wakes_outside_every_digest_run() -> None:
+    """`prune.yml` ends in `git push --force origin main`, so it may not wake while a digest can run.
+
+    The span is derived from `digest.yml`'s own cron list rather than named here.
+    A scheduled run starts 40 to 70 minutes after its cron minute and then takes
+    164 to 184 minutes end to end, so each line at H:20 occupies H+1:00 to
+    H+4:34. Prune's force-push is its last step, so what has to clear those spans
+    is its own cron minute plus the same drift, through its `timeout-minutes`.
+
+    This lowers the odds; it does not close them. GitHub queues scheduled runs by
+    load, so a digest run later than the recorded normal still reaches the prune
+    hour, and no workflow here can hold a lock against another one.
+    """
+    workflows = _load_workflows()
+    earliest_start, latest_start = SCHEDULED_START_DRIFT_MINUTES
+    _, longest_run = CONTENT_REFRESH_RUN_MINUTES
+
+    digest_runs: set[int] = set()
+    for entry in cast(list[dict[str, str]], _triggers(workflows["digest.yml"])["schedule"]):
+        asked = _cron_minute_of_day(entry["cron"])
+        digest_runs |= _wall_clock(asked + earliest_start, asked + latest_start + longest_run)
+
+    prune = workflows["prune.yml"]
+    schedule = cast(list[dict[str, str]], _triggers(prune)["schedule"])
+    assert len(schedule) == 1, "one wake-up line, so there is one hour to place"
+    wakes = _cron_minute_of_day(schedule[0]["cron"])
+    bound = int(str(_job(prune, "prune")["timeout-minutes"]))
+    force_push = _wall_clock(wakes + earliest_start, wakes + latest_start + bound)
+
+    clash = sorted(force_push & digest_runs)
+    assert not clash, (
+        f"prune wakes at {schedule[0]['cron']!r}, and its force-push can land inside a "
+        f"digest run: {len(clash)} shared UTC minutes from "
+        f"{clash[0] // 60:02d}:{clash[0] % 60:02d}"
+    )
 
 
 def test_expensive_workflows_do_not_run_on_pull_request_or_push() -> None:
