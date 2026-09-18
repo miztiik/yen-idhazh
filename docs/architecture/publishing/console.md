@@ -1130,9 +1130,9 @@ and what to do when one fires is in
 ## What one item cost the model is two clocks, drawn apart
 
 `What one item cost the model` is a section of the Pipelines route with two
-distributions and one split bar. It answers what a run total cannot: how long
-the model spent on **one** article, split into the part it spent reading and the
-part it spent writing.
+distributions and seven printed figures. It answers what a run total cannot: how
+long the model spent on **one** article, split into the part it spent reading and
+the part it spent writing.
 
 The Hardware route already pools both quantities per run and per shard, out of
 the model server's own counters. That is a different measurement of a different
@@ -1170,22 +1170,36 @@ linearly would suggest a spread the measurement does not have. `fetch_ms`, whose
 worst is 43,627 ms against a middle of 567, is not in this section at all - it is
 a stage clock and `Time per item, by stage` above already draws it per day.
 
-### The prompt cache is a share, and the share is deliberately not a trend
+### The prompt cache is a share, and the share is printed rather than drawn
 
-The split bar's geometry is **absolute prompt tokens** - the ones the model read
-against the ones it did not - and the share is printed beside it as whole
-percent. Four figures sit under it: the middle prompt, the middle summary, the
-middle item's own share, and how many items were read whole with nothing held
-over.
+The panel prints **absolute prompt tokens** - the ones the model read against the
+ones it did not - and the share beside them as whole percent. Four more figures
+sit under those three: the middle prompt, the middle summary, the middle item's
+own share, and how many items were read whole with nothing held over.
 
-**A falling share here does not mean the cache got worse, and the panel says
-so.** Measured 2026-09-05 over the same 6,104 items, `cached_tokens` is nearly a
-constant: the middle item kept **922** tokens and the widest kept **941**, while
-`input_tokens` runs from a middle of 1,688 to a worst of 7,093. So the share
-moves almost entirely because the denominator moves. Drawn as a line over time
-it would fall on a week of long articles and read as a cache regression, which is
-the one wrong thing an operator could act on. The share is a number and the token
-counts are the picture.
+**It drew the split as a two-segment track until 2026-09-17, and the track is
+gone.** One flat bar on no time axis, under a note telling the reader not to
+read its direction: a figure a panel disowns is a figure to remove. **What the
+reader loses, named:** the picture of the split, which is now three printed
+counts instead. What the split was ever worth was the counts it was built from,
+and the track carried no fact they do not. Susan, 2026-09-17.
+
+**The deleted track and the Hardware route's `Prompt cache` panel were one
+subject at the two questions.** This panel carried the level - how much of the
+window's prompt the model already held - and `Prompt cache` carries the
+direction, one column a day. With the level deleted the Hardware panel is the
+whole answer rather than half of one, so the gap a later reader sees here is a
+subject already covered and not a figure to rebuild.
+
+**A falling share here does not mean the cache got worse, and the panel still
+says so.** Measured 2026-09-05 over the same 6,104 items, `cached_tokens` is
+nearly a constant: the middle item kept **922** tokens and the widest kept
+**941**, while `input_tokens` runs from a middle of 1,688 to a worst of 7,093. So
+the share moves almost entirely because the denominator moves. Drawn as a line
+over time it would fall on a week of long articles and read as a cache
+regression, which is the one wrong thing an operator could act on. That sentence
+is the reason a figure is missing, which is the kind of sentence this console
+keeps.
 
 **The plan's own illustrative range did not survive the measurement.** Plan 03
 Row #2 decision 1 quotes `0.72 to 0.90`. Measured over the committed projection
@@ -1245,6 +1259,47 @@ as two rules.
 Authority: Carmack (Engine & Runtime) on the two clocks and the axis, Fowler
 (Architecture) on one binning shared by four panels, Reader on the sentence
 beside the share; plan 03 Row #2, 2026-09-05.
+
+## Extraction answers both questions, and labels which half is which
+
+`Extraction` is a Pipelines panel in two halves, and it is the console's worked
+example of a panel that serves *is it working* and *what is broken* at once
+rather than choosing.
+
+The **verdict half** is four cards: articles the reading found enough figures of
+one kind in, the share of published chartable articles that went out with no
+chart, the share of articles whose every fact still cuts its own characters, and
+the facts kept over the window. Four levels, covering the whole reading. They
+carry `data-extraction-question="is it working"`.
+
+The **break half** is one chart, `Whether the yield is falling`, carrying
+`data-extraction-question="what is broken"`. Two of the cards' own lines tell the
+operator to read the direction rather than the level, and until 2026-09-17 the
+panel drew no direction at all. It plots one point a day: articles the reading
+found enough figures in, against published articles carrying a chart. That pair
+is the discrimination the panel exists for - the planner stopping and the
+extractor stopping look identical in the published chart count alone, and they
+have different fixes ([../../concepts/evaluation.md](../../concepts/evaluation.md)).
+
+**Both series count articles, so they share one value domain**, and the panel
+prints the ratio it measured. Measured 2026-09-17 over the nine committed day
+records that carry an extraction block: `chartable` peaks at 225 and
+`chartable_charted` at 20, which is **11.3 times** and inside the 20 a shared
+axis holds. The domain is taken from the days drawn rather than fixed - there is
+no ceiling here to measure distance from, so a fixed maximum would only waste the
+plot on a quiet day.
+
+**A window with one measured day draws that day as a point, not an empty plot**,
+and says in words that a single day has a level and no direction. A window with
+no measured day draws no axis at all and says so: an axis over nothing is a claim
+the data does not support.
+
+Authority: Susan, 2026-09-17. The four rules this panel is built to - a panel
+names which of the two questions it serves, a title that asks a trend question
+draws a time axis, two series share one axis under twenty times with the ratio
+printed, and a value domain is fixed only where a ceiling is the comparison -
+are in
+[../../concepts/console-design.md](../../concepts/console-design.md#thirteen-rules-hold-for-every-chart-on-this-console).
 
 ## The chart drawing is a flow, and every drop leaves it as a named branch
 
