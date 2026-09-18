@@ -75,6 +75,7 @@ from idhazh.stages import (
     dedupe_ledgers,
     harvest,
     judge_draw,
+    judge_fit,
     judge_fold,
     judge_shard,
     prune_stamp,
@@ -134,6 +135,7 @@ STAGES: Final[tuple[str, ...]] = (
     "site-weight",
     "validate-days",
     "judge-draw",
+    "judge-fit",
     "judge-fold",
     "judge-shard",
     # Listed so `--help` names every verb, and never parsed: `main` hands the
@@ -593,6 +595,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.date or _today(),
             settings=settings,
             state_dir=args.state_root,
+        )
+        return 0
+
+    if args.stage == "judge-fit":
+        # After the fold in the same job, and beside it here: the fold writes the
+        # record this reads. Nothing reads the line it writes until row 9.
+        judge_fit.stage_judge_fit(
+            args.date or _today(),
+            settings=settings,
+            state_dir=args.state_root,
+            digest_root=args.digest_root,
         )
         return 0
 
