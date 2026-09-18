@@ -12,6 +12,7 @@ from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT,
 
 from idhazh.contracts import canonical_json
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.appearance_config import AppearanceConfig
 from idhazh.contracts.base import Contract
 from idhazh.contracts.export import CONTRACTS
 from idhazh.contracts.knobs.models import ModelsConfig
@@ -23,11 +24,57 @@ from idhazh.contracts.watchlist import Watchlist
 BY_STEM: dict[str, type[Contract]] = {c.__schema_stem__: c for c in CONTRACTS}
 
 CONFIG_FILES: dict[str, type[Contract]] = {
+    "appearance.json": AppearanceConfig,
     "idhazh.json": AppConfig,
     "pipeline-tests.json": PipelineTestsConfig,
     "sources.json": Sources,
     "taxonomy.json": Taxonomy,
     "watchlist.json": Watchlist,
+}
+
+#: The three blocks `AppearanceConfig` re-exposes, as (the key
+#: `config/idhazh.json` still carries, the key `config/appearance.json` carries).
+MOVED_BLOCKS = (("ui", "digest"), ("console", "console"), ("assist", "assist"))
+
+#: Keys `config/idhazh.json` owns although they sit on a moved model, with the
+#: reason each one is not the appearance file's to declare. All four are on
+#: `AssistConfig` and none is drawn, so the frontend's own `AssistConfig`
+#: interface declares none of them. `recall_min` and `eval_corpus_through` are
+#: the retrieval gate's inputs, read by `backend/tests/test_retrieval_eval.py`.
+#: `max_tokens` and `min_readable_letter_share` are the encoder's, read by
+#: `backend/idhazh/embed.py`; the appearance file carried a copy of each with
+#: the same value, which was the middle merge layer doing its job until the
+#: keep-list stopped the page receiving either - and a copy nothing reads is
+#: where `recall_min` was an hour earlier, so both were deleted (2026-09-05).
+PIPELINE_OWNED = {
+    "recall_min",
+    "eval_corpus_through",
+    "max_tokens",
+    "min_readable_letter_share",
+    # Build-owned rather than pipeline-owned, and on this list for the same
+    # reason: the published surface does not draw any of them, so
+    # `config/appearance.json` has nothing to say about them. `vite.config.ts`
+    # and `svelte.config.js` read them from `config/idhazh.json` at build time
+    # and put what a tab needs into the bundle, so they never reach an
+    # appearance file or a prerendered document at all.
+    "model_base_url",
+    "model_cdn_origins",
+    "model_digests",
+    "model_fetch_deadline_ms",
+    "model_revision",
+}
+
+#: Dotted paths a config file's model declares but the file must NOT name,
+#: because another file owns them. Naming a knob in two files is how one of them
+#: goes silent: the frontend merges the appearance block over the legacy one, so
+#: the loser is edited and nothing happens (`test_appearance_config.py`).
+#:
+#: `config/idhazh.json` keeps the three moved blocks only as the read-side
+#: migration's middle layer - a file written before 2026-08-29 still resolves to
+#: what it used to - so it names what it already named and gains nothing.
+CONFIG_NOT_OWNED: dict[str, frozenset[str]] = {
+    "idhazh.json": frozenset(legacy for legacy, _ in MOVED_BLOCKS),
+    "appearance.json": frozenset(f"assist.{key}" for key in PIPELINE_OWNED),
 }
 
 

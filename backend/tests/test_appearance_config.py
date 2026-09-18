@@ -17,6 +17,7 @@ import re
 from pathlib import Path
 
 import pytest
+from contracts._fixtures import MOVED_BLOCKS, PIPELINE_OWNED
 from pydantic import ValidationError
 
 from idhazh.contracts.app_config import AppConfig
@@ -228,39 +229,6 @@ def test_the_moved_blocks_keep_the_same_shape_on_both_sides() -> None:
     assert type(appearance.digest) is type(app.ui)
     assert type(appearance.console) is type(app.console)
     assert type(appearance.assist) is type(app.assist)
-
-
-#: The three blocks `AppearanceConfig` re-exposes, as (the key
-#: `config/idhazh.json` still carries, the key `config/appearance.json` carries).
-MOVED_BLOCKS = (("ui", "digest"), ("console", "console"), ("assist", "assist"))
-
-#: Keys `config/idhazh.json` owns although they sit on a moved model, with the
-#: reason each one is not the appearance file's to declare. All four are on
-#: `AssistConfig` and none is drawn, so the frontend's own `AssistConfig`
-#: interface declares none of them. `recall_min` and `eval_corpus_through` are
-#: the retrieval gate's inputs, read by `backend/tests/test_retrieval_eval.py`.
-#: `max_tokens` and `min_readable_letter_share` are the encoder's, read by
-#: `backend/idhazh/embed.py`; the appearance file carried a copy of each with
-#: the same value, which was the middle merge layer doing its job until the
-#: keep-list stopped the page receiving either - and a copy nothing reads is
-#: where `recall_min` was an hour earlier, so both were deleted (2026-09-05).
-PIPELINE_OWNED = {
-    "recall_min",
-    "eval_corpus_through",
-    "max_tokens",
-    "min_readable_letter_share",
-    # Build-owned rather than pipeline-owned, and on this list for the same
-    # reason: the published surface does not draw any of them, so
-    # `config/appearance.json` has nothing to say about them. `vite.config.ts`
-    # and `svelte.config.js` read them from `config/idhazh.json` at build time
-    # and put what a tab needs into the bundle, so they never reach an
-    # appearance file or a prerendered document at all.
-    "model_base_url",
-    "model_cdn_origins",
-    "model_digests",
-    "model_fetch_deadline_ms",
-    "model_revision",
-}
 
 
 @pytest.mark.parametrize(("legacy_key", "current_key"), MOVED_BLOCKS)
