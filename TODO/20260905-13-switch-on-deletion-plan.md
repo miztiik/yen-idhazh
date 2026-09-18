@@ -68,11 +68,11 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 ## 3. Row #2 - The window takes a value, and nothing is deleted yet
 
 - **Scope:** `retention.image_months` moves from `-1` to a real window derived from plan 04's measurement, with `dry_run` still `true`.
-- **Files touched:** `config/idhazh.json`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`, `backend/tests/retention/`, `docs/concepts/adaptive-pruning.md`, `docs/reference/measurements.md`
+- **Files touched:** `config/idhazh.json`, `backend/idhazh/contracts/app_config.py`, `schemas/app-config.schema.json`, `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`, `backend/tests/retention/`, `docs/concepts/adaptive-pruning.md`, `docs/reference/pipeline-cost.md`
 
   **The fixture is `every-knob-differs-from-the-committed-config.json`, and the `tuned.json` this row named until 2026-09-12 does not exist.** It is the only file under `tests/fixtures/contracts/app-config/`; corrected before dispatch.
 
-  **The rate this row derives its window from is not written down anywhere, re-measured 2026-09-12 before dispatch.** `docs/reference/measurements.md` carries no images-per-day figure, and plan 04's hard scope says outright that `image_months` stays `-1` until this plan - so plan 04 never took it. What exists is one total on [`../docs/concepts/adaptive-pruning.md`](../docs/concepts/adaptive-pruning.md) line 181: **488 visuals weighing 6,213,480 bytes against 24,348,280 bytes of day payload in the same tree, 2026-09-12.** A total is not a rate. **So this row takes the rate itself** - one bounded, once-off read over the dated directories under `frontend/public/digest/`, off the daily path, its cost written beside it, per `CLAUDE.md` Guardrail #12's escape hatch and the way row #1 of plan 26 took its own number. Decision 2 below still binds: the derivation is committed beside the number.
+  **The rate this row derives its window from is not written down anywhere, re-measured 2026-09-12 before dispatch.** `docs/reference/pipeline-cost.md` carries no images-per-day figure, and plan 04's hard scope says outright that `image_months` stays `-1` until this plan - so plan 04 never took it. What exists is one total on [`../docs/concepts/adaptive-pruning.md`](../docs/concepts/adaptive-pruning.md) line 181: **488 visuals weighing 6,213,480 bytes against 24,348,280 bytes of day payload in the same tree, 2026-09-12.** A total is not a rate. **So this row takes the rate itself** - one bounded, once-off read over the dated directories under `frontend/public/digest/`, off the daily path, its cost written beside it, per `CLAUDE.md` Guardrail #12's escape hatch and the way row #1 of plan 26 took its own number. Decision 2 below still binds: the derivation is committed beside the number.
 - **Acceptance gates:** `ruff`; `mypy --strict`; export + drift; the full suite; one dispatch producing a dry-run report.
 - **Oracle:** The dry run lists candidates and **every listed path is a rendered visual under a dated directory older than the window** - asserted by pattern over the whole candidate list, with the list's length printed. A dry run that lists nothing proves nothing, so a non-empty list is part of the oracle.
 
@@ -95,7 +95,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 ## 4. Row #3 - The fuse comes out, and one run is watched
 
 - **Scope:** `retention.dry_run` becomes `false`; one scheduled run is watched end to end and its numbers recorded.
-- **Files touched:** `config/idhazh.json`, `tests/fixtures/contracts/app-config/tuned.json`, `docs/concepts/adaptive-pruning.md`, `docs/reference/measurements.md`
+- **Files touched:** `config/idhazh.json`, `tests/fixtures/contracts/app-config/tuned.json`, `docs/concepts/adaptive-pruning.md`, `docs/reference/pipeline-cost.md`
 - **Acceptance gates:** the full suite; one dispatch; `idhazh site-weight` before and after; `idhazh validate-days`.
 - **Oracle:** After the run, **every published day still validates and every item that names a visual still has one** - the existing published-assets test, run over the whole corpus. Deletion that orphans a reference is the failure this row exists to avoid, and the site-size delta is the evidence it did something.
 
@@ -106,7 +106,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 1 | This lands **after** the new renderer. Flipping the fuse while the old drawings are the only assets on disk deletes a year of visuals with `max_deletes_per_run: 200` the only bound. **Amended 2026-09-13 by the owner ruling that the reader's browser draws the chart** ([`../docs/architecture/publishing/visuals.md`](../docs/architecture/publishing/visuals.md)). Plan 12 row #1b deletes all 495 committed drawings itself, in one reviewed commit, so by the time this row runs **there is no visual asset left for the prune to select**. The dependency is unchanged and it is now a correctness dependency rather than a safety one: run this row first and the fuse eats a year of drawings that row #1b was going to delete anyway, with the 200-per-run cap the only bound and no record of which day lost what. What this row watches after #1b is a prune whose visual arm has nothing to do, which is a real reading and worth taking - it is the first run where `skipped_by_fuse` means the window rather than the backlog | Row 61, O8; owner ruling 2026-09-13 |
 | 2 | It lands **here** rather than at the end of the group, because the Pages cap is the first budget the chain breaches and every plan from 15 to 18 adds a family of drawings | Carmack, 2026-09-05 |
 | 3 | `skipped_by_fuse` is watched, not `deleted`. `deleted` is capped at 200, so it reads the same on a healthy run and a runaway one | Row 62 |
-| 4 | Both figures are re-measured after the run and written into `docs/reference/measurements.md` with the date and the corpus they were taken over | Guardrail #10 |
+| 4 | Both figures are re-measured after the run and written into `docs/reference/pipeline-cost.md` with the date and the corpus they were taken over | Guardrail #10 |
 
 ### Rejected alternatives
 

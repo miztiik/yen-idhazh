@@ -163,7 +163,7 @@ Derived from the rows' own `Files touched` lists on 2026-09-11. **It is derived 
 
 | Group | Rows | What the first row writes | What the second row writes | Where they come closest |
 | --- | --- | --- | --- | --- |
-| A | 1, 2 | `docs/reference/benchmarks/prerender-on-and-off.md`, `docs/reference/measurements-site.md` | `frontend/prerender-guard.js` (deleted), `frontend/svelte.config.js`, `frontend/tests/prerender-guard.spec.ts` (deleted), `frontend/scripts/test-groups.ts`, `docs/architecture/publishing/frontend.md` | Both write under `docs/`. Row #1 writes two files under `docs/reference/`, row #2 writes one under `docs/architecture/publishing/`. **No shared page, and no shared directory** |
+| A | 1, 2 | `docs/reference/benchmarks/prerender-on-and-off.md`, `docs/reference/site-weight.md` | `frontend/prerender-guard.js` (deleted), `frontend/svelte.config.js`, `frontend/tests/prerender-guard.spec.ts` (deleted), `frontend/scripts/test-groups.ts`, `docs/architecture/publishing/frontend.md` | Both write under `docs/`. Row #1 writes two files under `docs/reference/`, row #2 writes one under `docs/architecture/publishing/`. **No shared page, and no shared directory** |
 | B | 3, 4 | `README.md`, `docs/architecture/overview.md`, `docs/how-to/run-the-gates.md`, `backend/tests/workflows/` | `docs/architecture/publishing/frontend.md` | Nothing. Row #3 is the three surfaces outside the living doc plus one test docstring; row #4 is the living doc and only it |
 
 **One file is written by two rows, and they are in different groups for exactly that reason.** `docs/architecture/publishing/frontend.md` is opened by row #2, which must delete the paragraph describing the file it deletes in the same commit, and by row #4, which writes the ruling and corrects a stale table row. Group A completes before group B dispatches, so they never hold it at once. **Merging them was rejected**: row #4 waits on row #1's measurement and the guard deletion must not.
@@ -194,7 +194,7 @@ Build the site twice from one tree - once as it stands, once with the seven `pre
 ### Files touched
 
 - `docs/reference/benchmarks/prerender-on-and-off.md` - new. **Named for the day the reading is taken**, which is 2026-09-12, not the 2026-09-11 an earlier draft of this row assumed.
-- `docs/reference/measurements-site.md` - one line and a link to the record, per `CLAUDE.md` section 5: the log carries the figure now in force and links to the record rather than absorbing it.
+- `docs/reference/site-weight.md` - one line and a link to the record, per `CLAUDE.md` section 5: the log carries the figure now in force and links to the record rather than absorbing it.
 
 ### Acceptance gates
 
@@ -449,7 +449,7 @@ It removes no declaration, changes no build, and edits no other page. It does no
 | Row | Page | What changes |
 | --- | --- | --- |
 | 1 | [`../docs/reference/benchmarks/prerender-on-and-off.md`](../docs/reference/benchmarks/prerender-on-and-off.md) | New. The fourth record in that directory, which plan 24 row #1 created (#609). Corrected by row #1, which read `2026-09-11-...` and "the first record in that directory" |
-| 1 | [`../docs/reference/measurements-site.md`](../docs/reference/measurements-site.md) | One line and a link to the record |
+| 1 | [`../docs/reference/site-weight.md`](../docs/reference/site-weight.md) | One line and a link to the record |
 | 2 | [`../docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md) | Two sentences deleted with the file they describe |
 | 3 | [`../README.md`](../README.md) | One diagram node |
 | 3 | [`../docs/architecture/overview.md`](../docs/architecture/overview.md) | One diagram node |
