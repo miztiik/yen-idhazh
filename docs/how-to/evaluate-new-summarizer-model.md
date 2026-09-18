@@ -1,6 +1,6 @@
 # Swap the Summarizer Model
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 The swap is one line in `config/idhazh.json`:
 
 ```json
@@ -24,10 +24,10 @@ and are not changed here.
 | The revert | the same line back |
 | The walk | one dispatch, about 106 minutes. It says whether the real path runs at all |
 | The bench | one dispatch. It says how fast |
-| The qualification | one dispatch, hours of runner time, eleven gates on a frozen corpus. It says how good |
+| The qualification | one dispatch, hours of runner time, ten gates on a frozen corpus. It says how good |
 | The decision | a person's, and it stays one |
 
-**Qualification will never be one command.** Eleven gates on a frozen corpus is
+**Qualification will never be one command.** Ten gates on a frozen corpus is
 the price of knowing whether a model is good, and no arrangement of the harness
 makes that cheap. What the harness buys is that the price is paid the same way
 every time.
@@ -560,12 +560,13 @@ Then read the verdict:
 python -m idhazh qualify-decide
 ```
 
-The eleven gates and what each one refuses are in
-[../concepts/evaluation.md](../concepts/evaluation.md). **A run asks ten of
-them.** `determinism` is asked only where the entry pins `temperature: 0`,
-because "did the repeats agree?" has an answer there and none above it. Every
-committed entry pins 0.2 since 2026-09-17, so the runs you are about to start
-report ten gates and a `wording_spread` diagnostic beside them. Three gates are
+The ten gates and what each one refuses are in
+[../concepts/qualification.md](../concepts/qualification.md). **Every run asks
+every one of them**, and a report missing an outcome is refused by name. There
+was an eleventh, `determinism`, which asked whether repeated calls produced
+identical words; it was retired on 2026-09-18 because a summarizer does not need
+to say a thing the same way twice, and what a run records instead is a
+`wording_spread` diagnostic that blocks nothing. Three gates are
 hard in a way worth repeating here, because they are the ones a fast model
 fails:
 
@@ -809,7 +810,8 @@ and health before normal workers resume.
 - [test-models-locally.md](test-models-locally.md) - download, serve and measure the local models.
 - [troubleshoot-one-url.md](troubleshoot-one-url.md) - run one real URL through fetch, extraction and summarization.
 - [run-the-gates.md](run-the-gates.md) - the complete local validation commands.
-- [../concepts/evaluation.md](../concepts/evaluation.md) - the eleven gates, the model-choice arithmetic and the metric limits.
+- [../concepts/qualification.md](../concepts/qualification.md) - the ten gates, the model-choice arithmetic, and what a run that judged a candidate actually proves.
+- [../concepts/evaluation.md](../concepts/evaluation.md) - how a published summary is judged, which is the standard the gates grade against.
 - [../concepts/config.md](../concepts/config.md) - model and runtime knobs.
 - [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - rendered bands, decoder rails and prompt controls.
 - [../architecture/summarize/throughput.md](../architecture/summarize/throughput.md) - read/write rates and prompt reuse.

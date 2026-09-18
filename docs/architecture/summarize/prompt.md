@@ -1,6 +1,6 @@
 # The summarizer prompt
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-19
 What the Summarize stage asks a model for, and where every number in that ask
 comes from.
 
@@ -1100,7 +1100,7 @@ declared no closing marker - the flag did not take - and are discarded where it
 did. The `reasoning_leakage` gate counts the same zero either way and says which
 failure it found: reasoning nobody asked for, or a discard that did not happen.
 
-**What proves thinking helped is the eleven gates on the frozen corpus**,
+**What proves thinking helped is the ten gates on the frozen corpus**,
 incumbent against incumbent-with-thinking. No new instrument: faithfulness alone
 rewards bland copying, and entity survival, compression ratio and source overlap
 are the cases that move. A model judge remains banned

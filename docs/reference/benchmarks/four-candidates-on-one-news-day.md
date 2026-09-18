@@ -1,6 +1,6 @@
 # Four summarizer candidates on one news day
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 
 Four `validate.yml` dispatches went out together on 2026-09-17 at 20:54 UTC, one
 a candidate, each 4 shards x 2 articles x 3 repeats. All sixteen shard jobs
@@ -26,25 +26,76 @@ for every word it publishes, where Ornith spends 6.**
 | `35273620159` | Qwen3.5-9B Q4_K_M, thinking on | 4 h 34 | 266 min |
 
 Runtime build `b10598`, temperature 0.2, `ubuntu-latest`. Every shard is its own
-job, so the sixteen jobs drew sixteen machines independently:
+job, so the sixteen jobs drew sixteen machines independently. **What each draw
+got, and what it did with it:**
 
-| Run | shard 0 | shard 1 | shard 2 | shard 3 |
-| --- | --- | --- | --- | --- |
-| Ornith | EPYC 7763 | EPYC 7763 | EPYC 9V74 | EPYC 7763 |
-| Gemma +head | EPYC 7763 | EPYC 7763 | Xeon 8370C | EPYC 7763 |
-| Gemma no head | EPYC 9V74 | EPYC 7763 | EPYC 7763 | EPYC 9V45 |
-| Qwen thinking | EPYC 7763 | EPYC 9V74 | Xeon 8573C | EPYC 9V74 |
+| Arm | Shard | Machine | Job min | Replies | In tok | Out tok | Out tok/s |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| Ornith-1.5-9B | 0 | EPYC 7763 | 71 | 6 | 44,711 | 5,384 | 1.60 |
+| Ornith-1.5-9B | 1 | EPYC 7763 | 118 | 6 | 67,389 | 5,202 | 0.79 |
+| Ornith-1.5-9B | 2 | EPYC 9V74 | 91 | 5 | 96,583 | 8,209 | 2.15 |
+| Ornith-1.5-9B | 3 | EPYC 7763 | 65 | 6 | 46,068 | 5,922 | 1.71 |
+| Gemma +head | 0 | EPYC 7763 | 96 | 6 | 80,454 | 23,130 | 4.90 |
+| Gemma +head | 1 | EPYC 7763 | 133 | 3 | 62,939 | 16,126 | 4.47 |
+| Gemma +head | 2 | Xeon 8370C | 125 | 6 | 107,380 | 35,167 | 4.85 |
+| Gemma +head | 3 | EPYC 7763 | 118 | 6 | 75,347 | 35,756 | 5.34 |
+| Gemma no head | 0 | EPYC 9V74 | 76 | 6 | 81,442 | 25,038 | 6.80 |
+| Gemma no head | 1 | EPYC 7763 | 170 | 5 | 133,578 | 37,499 | 4.39 |
+| Gemma no head | 2 | EPYC 7763 | 130 | 6 | 111,260 | 39,074 | 5.22 |
+| Gemma no head | 3 | EPYC 9V45 | 49 | 6 | 65,686 | 26,097 | 10.09 |
+| Qwen thinking | 0 | EPYC 7763 | 270 | 0 | 0 | 0 | - |
+| Qwen thinking | 1 | EPYC 9V74 | 137 | 0 | 0 | 0 | - |
+| Qwen thinking | 2 | Xeon 8573C | 140 | 0 | 0 | 0 | - |
+| Qwen thinking | 3 | EPYC 9V74 | 137 | 0 | 0 | 0 | - |
 
-**That table is why most of this page cannot compare one arm's speed against
-another's.** Two machines reporting one processor model differ by 8.8 percent
-([the-processor-lottery.md](the-processor-lottery.md)), and these differ by
-model. The speed figures below are readings of an arm on a machine, not a
-ranking.
+`Out tok/s` is completion tokens over the call's whole wall clock, so it
+includes the time spent reading the prompt. It is a floor on the decode rate and
+never the decode rate.
+
+**The draw was not even.** Five processor models appeared across sixteen jobs:
+
+| Machine | Times drawn |
+| --- | ---: |
+| EPYC 7763 | 9 |
+| EPYC 9V74 | 4 |
+| EPYC 9V45 | 1 |
+| Xeon 8370C | 1 |
+| Xeon 8573C | 1 |
+
+**The draw decided the Gemma comparison before a token was decoded.** The
+no-head arm drew the two newest chips in the pool - a 9V74 and a 9V45 - and the
++head arm drew neither. Those two shards are the fastest and third-fastest rows
+in the table. An arm that draws better hardware finishes faster whatever the
+draft head does, which is why the apparent head penalty on this page is not a
+reading of the head.
+
+**One chip is not one speed either.** Hold the arm AND the processor model
+fixed, and shards still disagree, because each shard read different articles:
+
+| Arm | On EPYC 7763 | Slowest to fastest |
+| --- | --- | ---: |
+| Ornith-1.5-9B | 0.79, 1.60, 1.71 | **2.2x** |
+| Gemma +head | 4.47, 4.90, 5.34 | 1.19x |
+| Gemma no head | 4.39, 5.22 | 1.19x |
+
+**So the article mix moves a shard's throughput more than the processor model
+does**, at least on Ornith. A comparison that controls for the chip and not for
+the corpus has controlled for the smaller of the two.
+
+**That is why most of this page cannot compare one arm's speed against
+another's.** Two machines reporting one processor model already differ by 8.8
+percent ([the-processor-lottery.md](the-processor-lottery.md)); these differ by
+model, and by article. The speed figures below are readings of an arm on a
+machine on a corpus, not a ranking.
 
 ## The gates
 
-Ten gates are asked above temperature 0; `determinism` is asked only at
-temperature 0 and did not run.
+Every gate the run asked is below. `determinism` was still on the register that
+day and was not asked, because it had an answer only at temperature 0; it was
+retired outright on 2026-09-18
+([../../architecture/contracts/determinism.md](../../architecture/contracts/determinism.md)),
+so a reader comparing this table against today's register will find ten names
+rather than eleven.
 
 | Gate | Ornith | Gemma +head | Gemma no head | Qwen thinking |
 | --- | --- | --- | --- | --- |
@@ -161,7 +212,9 @@ Comparing the two Gemma arms on the 7 articles both read gives the head a
 29 percent penalty. **That number is the processor lottery and must not be
 quoted.** Only one of the seven article pairs drew the same processor in both
 arms, and on that pair the head costs 6 percent - inside the 8.8 percent two
-machines of one model differ by anyway.
+machines of one model differ by anyway. The per-shard draw above says the same
+thing from the other direction: the no-head arm drew the 9V74 and the 9V45, the
++head arm drew neither.
 
 | Article | +head processor | no-head processor | +head tok/s | no-head tok/s |
 | --- | --- | --- | --- | --- |
