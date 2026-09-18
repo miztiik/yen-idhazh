@@ -216,7 +216,7 @@ of nineteen and looked finished, and its own upkeep grew with the other
 seventeen. Read the rows below to see the three answers in service. Do not read
 them as the set of places the rule applies.
 
-**Twenty-seven reads over a collection a run appends to**, each with the cover or
+**Twenty-six reads over a collection a run appends to**, each with the cover or
 the bound its own code declares. A helper that opens one named file is not
 listed: its cover is its argument. These are `backend/`'s;
 [the site's are below](#the-site-reads-the-same-collections-2026-09-09).
@@ -253,7 +253,6 @@ listed: its cover is its argument. These are `backend/`'s;
 | Read | What it opens | Why no cover |
 | --- | --- | --- |
 | `ledger.load_retirements` | `state/feed-retirements.csv` | a retirement is permanent; forget one and the run asks a dead server again |
-| `ledger.load_chrome` | `state/chrome.csv` | chrome learned in August is chrome in September, so a window in days would forget a template that is still on the page. **Bounded by the file rather than by a clock**: `extract.chrome_lines_per_host_max` lines a host, pruned past `extract.chrome_forget_days`, so it grows with the source registry and stops. `state/traces/` is the precedent. Streamed, so the read costs the answer rather than the file. Both callers - the fold in `stages.assemble` and the shard's one read in `stages.work` - go through it |
 | `ledger.load_visual_prunes` | `state/visual-prunes.csv` | the report is about the whole series |
 | `corpus.read_rows` | `corpus/corpus.jsonl` | already rolling, capped at `finetune.corpus_rows` |
 | `contracts.base.Contract.read` | one payload | a validator cannot skip what it has not read |
