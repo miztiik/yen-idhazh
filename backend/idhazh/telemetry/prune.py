@@ -56,6 +56,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date as date_type
 from pathlib import Path
+from types import MappingProxyType
 from typing import Final
 
 from idhazh import day_partition, ledger
@@ -67,12 +68,16 @@ from idhazh.prune import one_at_a_time
 #: which day files had already gone.
 PruneInterruptedError = one_at_a_time.PruneInterruptedError
 
-#: Every store this command may delete from, alphabetically.
+#: Every store this command may delete from, and where each one lives under
+#: `state/`, alphabetically.
 #:
-#: The word an operator types IS the directory name under `state/`, taken from
-#: the module that owns the store rather than spelled again here - so a store
-#: that is renamed renames its target with it, and neither can drift from the
-#: other (Guardrail #6).
+#: The word an operator types is built from the directory names the module that
+#: owns the store declares, never spelled again here - so a store that is renamed
+#: renames its target with it, and neither can drift from the other (Guardrail
+#: #6). A flat store's word IS its directory. A NESTED store's word joins its two
+#: segments with a hyphen, because a slash in a word turns a closed vocabulary
+#: into something that looks like a path - and a deletion primitive that resolved
+#: its argument against the file system is the one accident nobody can undo.
 #:
 #: The rule that decides membership is one line: a store files
 #: `<YYYY>/<MM>/<DD>.csv` day files, and is not one of the two stores below.
@@ -89,16 +94,30 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: are re-measurable as if new. Prune both over the same range, or repair with
 #: `idhazh rebuild-score-index --month <YYYY-MM>` afterwards. The dry run is
 #: where that is read, which is why it is the default.
-TARGETS: Final[tuple[str, ...]] = tuple(
-    sorted(
-        {
-            ledger.COUNTERFACTUAL_SCORES_DIRNAME,
-            ledger.HEALTH_DIRNAME,
-            ledger.ITEM_HEALTH_DIRNAME,
-            ledger.VISUAL_PRUNES_DIRNAME,
-            score_writer.INDEX_DIRNAME,
-            score_writer.LEDGER_DIRNAME,
-        }
+#:
+#: **`story-similarity-scored-pairs` and `story-similarity-fitted-thresholds` are
+#: not a pair.** The pairs are folded into `score-distribution.json` once and
+#: never read again, so deleting a day of them takes nothing away from the fit;
+#: deleting a fitted row takes a day out of the guard's median and out of what
+#: step 4 compares against. Either can go on its own.
+TARGETS: Final[Mapping[str, str]] = MappingProxyType(
+    dict(
+        sorted(
+            {
+                ledger.COUNTERFACTUAL_SCORES_DIRNAME: ledger.COUNTERFACTUAL_SCORES_DIRNAME,
+                ledger.HEALTH_DIRNAME: ledger.HEALTH_DIRNAME,
+                ledger.ITEM_HEALTH_DIRNAME: ledger.ITEM_HEALTH_DIRNAME,
+                ledger.VISUAL_PRUNES_DIRNAME: ledger.VISUAL_PRUNES_DIRNAME,
+                score_writer.INDEX_DIRNAME: score_writer.INDEX_DIRNAME,
+                score_writer.LEDGER_DIRNAME: score_writer.LEDGER_DIRNAME,
+                f"{ledger.STORY_SIMILARITY_DIRNAME}-{ledger.SCORED_PAIRS_DIRNAME}": (
+                    f"{ledger.STORY_SIMILARITY_DIRNAME}/{ledger.SCORED_PAIRS_DIRNAME}"
+                ),
+                f"{ledger.STORY_SIMILARITY_DIRNAME}-{ledger.FITTED_THRESHOLDS_DIRNAME}": (
+                    f"{ledger.STORY_SIMILARITY_DIRNAME}/{ledger.FITTED_THRESHOLDS_DIRNAME}"
+                ),
+            }.items()
+        )
     )
 )
 
@@ -211,17 +230,22 @@ def add_arguments(parser: argparse.ArgumentParser) -> None:
 
 
 def resolve(target: str) -> str:
-    """The store this target names, or a refusal that says why.
+    """The store this target names, as a path under `state/`, or a refusal that says why.
 
     One place the vocabulary is checked, so the parser, the body and any later
     caller cannot disagree about which words are stores. The distinction between
     an unknown word and a refused one is drawn by `one_at_a_time.refuse_by_name`,
     which the GitHub collections use as well - two vocabularies, one rule about
     what a refusal owes the person reading it.
+
+    What comes back is the path rather than the word, because a nested store's
+    two are not the same string. Every caller wants the path.
     """
-    return one_at_a_time.refuse_by_name(
-        target, allowed=TARGETS, refused=REFUSED, noun="store"
-    )
+    return TARGETS[
+        one_at_a_time.refuse_by_name(
+            target, allowed=tuple(TARGETS), refused=REFUSED, noun="store"
+        )
+    ]
 
 
 def _day(value: str, flag: str) -> str:

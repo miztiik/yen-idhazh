@@ -1406,6 +1406,65 @@ def load_story_similarity_pairs(state_dir: Path, date: str) -> list[StorySimilar
     ]
 
 
+def append_fitted_thresholds(
+    state_dir: Path, date: str, rows: Iterable[FittedSimilarityThreshold]
+) -> int:
+    """Append a run's fitted row into that day's own file.
+
+    Settled against `STORY_SIMILARITY_THRESHOLD_KEY` straight after the write,
+    the way `append_story_similarity_pairs` is. The key is date and run, so a
+    second RUN of one date keeps its own row - two runs fitted two records and
+    both are facts - and only a second attempt at one execution is collapsed.
+
+    **The day file is created even when the fit was held**, and a held day writes
+    a row like any other: a line that moves itself has to leave a record on the
+    days it stayed put, or a reader cannot tell a held day from a day nothing
+    ran. The empty-file half is the same reason `append_counterfactual_scores`
+    gives - the commit step names this directory and a missing path aborts it
+    under `set -euo pipefail`.
+
+    Returns how many rows the file gained, so a caller can log the count.
+    """
+    path = fitted_thresholds_path(state_dir, date)
+    columns = FittedSimilarityThreshold.csv_columns()
+    if not path.exists():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
+    landed = _append(path, columns, list(rows))
+    return landed - drop_repeated_rows(path, STORY_SIMILARITY_THRESHOLD_KEY)
+
+
+def load_fitted_thresholds(
+    state_dir: Path, *, today: str, within_days: int
+) -> list[FittedSimilarityThreshold]:
+    """Every fitted row in the window, oldest day first.
+
+    **Guardrail #12 declaration.** `day_partition.days_in_window` names both
+    ends, so a cover of `n` days opens at most `n + 1` files and reads exactly
+    those days. The tree is never walked, so the read costs the same on the
+    thousandth day as on the third.
+
+    **The window is in days and the guard's median is in rows, and the caller is
+    what reconciles them.** One missed run leaves thirteen rows inside a
+    fourteen-day cover, the median returns nothing, and a guard that silently
+    never fires is worse than one that fires too readily. The fit therefore asks
+    for `max(settled_window_days, step_change_window_rows * 2)` days and takes the
+    newest rows it finds - a bound set by two knobs rather than by the archive.
+
+    A day the fit never ran has no file, which is not a fault. A row that no
+    longer parses stops the read rather than being skipped: the guard takes a
+    median over these rows, and a silently short list moves that median instead
+    of costing a decision some evidence.
+    """
+    rows: list[FittedSimilarityThreshold] = []
+    for day in reversed(day_partition.days_in_window(today, within_days)):
+        rows.extend(
+            FittedSimilarityThreshold.from_csv_row(raw)
+            for raw in _read_rows(fitted_thresholds_path(state_dir, day))
+        )
+    return rows
+
+
 def load_visual_prunes(state_dir: Path) -> list[VisualPruneRow]:
     """Every cleanup pass on record, oldest day first. Never windowed.
 

@@ -29,6 +29,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "pairs_in_band counts the pairs the draw dealt, not the pairs in the band.",
+      "version": "2026-09-18T12:00",
+      "why": "The count before the budget is persisted nowhere, so nothing could write it."
+    },
+    {
       "change": "Initial shape: the four steps, the gates, and what the record held.",
       "version": "2026-09-18",
       "why": "A line that moves itself has to leave a row on the days it did not move."
@@ -189,7 +194,7 @@
       "type": "integer"
     },
     "pairs_in_band": {
-      "description": "How many pairs scored at or above band_low before the budget was applied. A day that hit the cap reads as partial rather than as a quiet truncation.",
+      "description": "How many distinct pairs the day file holds - what the draw dealt the legs, after pair_budget cut the band down. Equal to the budget on a day that hit the cap, which is how a truncated day reads as partial rather than as a quiet one. The count before the budget is not persisted anywhere, so no writer could put it here.",
       "minimum": 0,
       "title": "Pairs In Band",
       "type": "integer"
@@ -302,7 +307,7 @@
       "type": "number"
     },
     "version": {
-      "default": "2026-09-18",
+      "default": "2026-09-18T12:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -333,5 +338,5 @@
   ],
   "title": "FittedSimilarityThreshold",
   "type": "object",
-  "version": "2026-09-18"
+  "version": "2026-09-18T12:00"
 }

@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Final
 
 from idhazh.contracts.knobs.placement import SimilarityThresholdConfig
 from idhazh.contracts.story_similarity_distribution import (
@@ -21,6 +22,11 @@ from idhazh.contracts.story_similarity_distribution import (
 )
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
 from idhazh.similarity.stamps import JudgeStamp, ScorerStamp
+
+#: How far above a slot edge a score may sit, in slots, and still be that edge.
+#: The record's own `GRID_TOLERANCE` is the same allowance on the score scale;
+#: this one is applied to a quotient, which is where the error actually arrives.
+SLOT_TOLERANCE: Final = 1e-9
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,10 +79,16 @@ def slot_index(score: float, *, record: StorySimilarityDistribution) -> int | No
     upper edge lands in the next one, which is the rule `ScoreSlot.bin_low`
     states. `band_high` is the one exception: it has no next slot, so it lands in
     the last one rather than nowhere.
+
+    The tolerance is what makes the first sentence true. `(0.950 - 0.88) / 0.001`
+    is 69.99999999999995 in binary floating point, so an exact slot edge would
+    otherwise file one slot low - and the fit reads the line off a slot edge, so
+    that is a whole bin of error on the one number this feature sets. A billionth
+    of a slot is far below any resolution a score is produced at.
     """
     if score < record.band_low or score > record.band_high:
         return None
-    index = int((score - record.band_low) / record.bin_width)
+    index = int((score - record.band_low) / record.bin_width + SLOT_TOLERANCE)
     return min(index, len(record.slots) - 1)
 
 
