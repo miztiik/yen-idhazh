@@ -263,7 +263,9 @@ body {
 		line-height: var(--leading-base);
 	}
 
-	.day-aside .lead > p {
+	/* A descendant selector, not a child one: the lead's title and reason sit in
+	   a block that carries their shared measure, so `.lead > p` matches nothing. */
+	.day-aside .lead p {
 		font-size: var(--text-sm);
 		line-height: var(--leading-sm);
 	}
