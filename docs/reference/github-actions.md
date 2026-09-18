@@ -234,10 +234,11 @@ the same reason: those rows otherwise ride only in that shard's `items-<shard>`
 artifact, which expires and is never committed.
 
 A worker commits a third row in the same step: what its model server counted for
-the whole shard, read once from `/metrics` at job end and filed in
-`state/runtime-counters.csv`. The raw body still ships in `runtime-log-<shard>`,
-which keeps it for two days - long enough to read a failure, far too short to
-hold a published rate to account. The committed row is what lets
+the whole shard, read once from `/metrics` at job end and filed into this
+shard's own segment, which `assemble` folds into `state/runtime-counters.csv`.
+The raw body still ships in `runtime-log-<shard>`, which keeps it for two days -
+long enough to read a failure, far too short to hold a published rate to
+account. The committed row is what lets
 `backend/utilities/reconcile_prefill.py` check the item-health ledger's read rate
 against a second instrument (Guardrail #10).
 

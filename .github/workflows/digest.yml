@@ -801,25 +801,23 @@ jobs:
             --server-log llama-server.log
 
       # The shape the plan job uses, for the reason written there, and the same
-      # script - eight shards racing one branch is what its rebase loop and the
-      # `merge=union` attribute on these two paths are for. It cannot rebuild
-      # what it commits, so it carries none of the refresh settings.
+      # script - eight shards racing one branch is what its rebase loop is for.
+      # It cannot rebuild what it commits, so it carries none of the refresh
+      # settings.
       #
       # Appending the same row twice is the one thing that would make this worse
       # than the loss it fixes, because `public_telemetry` copies every row into
-      # the file the console reads. The one ledger left here keys a row -
-      # `ledger.append_runtime_counters` by run and shard - so assemble's copy of
-      # those rows lands once. The item census, the eval rows and the span fold
-      # are no longer in that position: each writer puts them in its own segment
-      # and the compaction settles them by key, which is what `state/segments`
-      # below is.
+      # the file the console reads. No ledger head is staged here any more: the
+      # item census, the eval rows, the span fold and the model server's own
+      # counters each go to their writer's own segment, and the compaction
+      # settles them by key - which is what `state/segments` below is.
       #
-      # Those filters read the checkout, which is frozen at the commit this run
-      # was triggered at, so a SECOND ATTEMPT at this same shard cannot see the
-      # rows the first attempt pushed and appends them again. The union merge
-      # then keeps both. `DROP_REPEATED_ROWS_COMMAND` is the half that runs after
-      # the merge, on the merged file - the only place the two attempts have ever
-      # been together.
+      # `DROP_REPEATED_ROWS_COMMAND` stays wired while `.gitattributes` still
+      # gives `state/**/*.csv` the union driver. A second attempt at this shard
+      # sees a checkout frozen at the commit this run was triggered at, so it
+      # cannot see what the first attempt pushed; the pass runs after the merge,
+      # on the merged file, which is the only place two attempts have ever been
+      # together.
       #
       # `--date` is what it settles. This run appended to the files its own date
       # routes to, so those are the only files a repeat can be in, and naming
@@ -839,19 +837,19 @@ jobs:
       # opens a file sink at `state/traces/<YYYY>/<MM>/<DD>-<run>-<shard>.jsonl` on
       # this runner whenever tracing is on, which it has been since 2026-09-06. A
       # trace file is named for one shard of one run, so two shards never write one
-      # path and no merge driver is needed - unlike the counters file above, which
-      # is why `merge=union` covers `state/**/*.csv` and not this.
+      # path and no merge driver is needed - unlike a ledger head, which is why
+      # `merge=union` covers `state/**/*.csv` and not this.
       #
       # `state/segments` is where everything this shard measured now goes, and
       # it is the only ledger path left in the list below. The machine row moved
       # there on 2026-09-17; the item census, the eval rows, the record of what
-      # those rows are, and the span fold followed on 2026-09-18. Each of those
-      # used to be appended to a file that up to eight work shards and assemble
-      # all opened, and each writer now takes
-      # `state/segments/<ledger>/<run>-<attempt>-<job>-<shard>.csv` instead, so
-      # two writers never share a path. `assemble` folds them into the heads,
-      # and the heads are no longer staged here because this job no longer
-      # writes them.
+      # those rows are, the span fold and the model server's own counters
+      # followed on 2026-09-18. Each of those used to be appended to a file that
+      # up to eight work shards and assemble all opened, and each writer now
+      # takes `state/segments/<ledger>/<run>-<attempt>-<job>-<shard>.csv`
+      # instead, so two writers never share a path. `assemble` folds them into
+      # the heads, and the heads are no longer staged here because this job no
+      # longer writes them.
       #
       # `.gitattributes` gives that path `-merge` rather than the union driver
       # the remaining ledgers carry, for the reason `state/traces` is outside
@@ -869,7 +867,7 @@ jobs:
             python -m idhazh dedupe-ledgers --date ${{ needs.plan.outputs.date }}
         run: >-
           bash .github/scripts/commit-and-push.sh
-          state/runtime-counters.csv state/traces state/segments
+          state/traces state/segments
 
       - name: Prompt cache log summary
         if: always()

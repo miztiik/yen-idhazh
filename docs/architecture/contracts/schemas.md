@@ -83,7 +83,7 @@ Everything under `state/` is a row contract rather than a file contract, because
 
 ### A new row ledger ships with its header, not with its first run
 
-`.github/scripts/commit-and-push.sh` runs under `set -euo pipefail` and stages every path a job owns in one `git add "$@"`. A path that is not in the checkout makes that call fail, and `set -e` then abandons the whole commit step - so a ledger that only appears once its producer has succeeded lets a broken producer cost the job the *other* ledgers it was staging beside it. `state/runtime-counters.csv` therefore ships as a header-only file, and a test asserts the committed header equals `RuntimeCountersRow.csv_columns`.
+`.github/scripts/commit-and-push.sh` runs under `set -euo pipefail` and stages every path a job owns in one `git add "$@"`. A path that is not in the checkout makes that call fail, and `set -e` then abandons the whole commit step - so a ledger that only appears once its producer has succeeded lets a broken producer cost the job the *other* ledgers it was staging beside it. `state/runtime-counters.csv` therefore ships as a header-only file, and a test asserts the committed header equals `RuntimeCountersRow.csv_columns`. The work shard stopped staging that path on 2026-09-18 - it writes a segment and `assemble` folds it in - so what keeps the file shipped is now the audit that opens it by name rather than the commit step, and the rule above still binds every other ledger a job stages one path at a time.
 
 That is not "pre-creating an empty module for later" (`CLAUDE.md` section 10). The file is the ledger, and its header is the contract's own column list; what is being avoided is a failure mode in the step that commits it.
 
