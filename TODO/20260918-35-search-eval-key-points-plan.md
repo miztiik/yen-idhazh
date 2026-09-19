@@ -312,7 +312,7 @@ row) in the opening window, sustained **2**, collapsing to **1** on the serial s
   | --- | --- | --- |
   | 1 | Remove both; #29/#34 continue cosine-only, comment-only | owner (K4, F2) |
   | 2 | With `key_point_weight` gone, cosine is the only same-story weight, so `_the_weights_sum_to_one` (`placement.py`) trivially holds and pins `cosine_weight` at 1.0; rewrite it to assert `cosine_weight == 1.0` rather than reference the removed field | owner, Fowler |
-  | 3 | Decide whether the `key_point` VALUE column also leaves `StorySimilarityPair` (its composite validator recomputes `cosine*cosine_weight + key_point*key_point_weight`); if the value stays, the validator drops only the `key_point*key_point_weight` term | Fowler |
+  | 3 | `key_point` goes EVERYWHERE - no prisoners (owner, 2026-09-19): the value column ALSO leaves `StorySimilarityPair`, and the composite validator drops the `key_point*key_point_weight` term entirely (it becomes `cosine*cosine_weight` = `cosine`). Schema, contract, tests and code all lose `key_point` | owner (over Fowler's earlier open question) |
 
 ### Row #7 - Remove `lead_coverage`
 
@@ -346,14 +346,18 @@ row) in the opening window, sustained **2**, collapsing to **1** on the serial s
 ### Row #8 - Add coherence + coverage scorers (recorded-only)
 
 - **Scope:** add coherence (MiniLM mean adjacent-sentence cosine, summary-only) and coverage
-  (ROUGE-recall, needs the source) to the eval row and the console, recorded-only, no band. Both run
-  same-day in the digest job (coverage needs the source).
+  (ROUGE-recall, needs the source) to the eval row and the console, recorded-only, no band. **Coherence
+  runs in the `assemble` job, where MiniLM is ALREADY loaded to build the search index and the
+  summariser is NOT resident - so there is no 3-model peak.** (The `work` shard holds the summariser +
+  HHEM; MiniLM lives only in the `plan`/`assemble` jobs.) Coverage (ROUGE-recall, no model) runs
+  same-day; both are recorded-only.
 - **Files touched:** new `backend/idhazh/evals/embedding_metrics.py`, `backend/idhazh/evals/score.py`
   (`to_eval_row`), `backend/idhazh/contracts/eval_row.py` (add `coherence`, `semantic_coverage` -
   NOT `coverage`, a shifted meaning - nullable, + schema + changelog + `METRICS_VERSION` bump),
   `frontend/src/lib/console/eval-instruments.ts` + the model page (two recorded-only panels).
 - **Acceptance gates:** unit tests reproduce a hand-worked cosine and ROUGE-recall on a fixture;
-  contract drift gate; a runner-cost note (MiniLM already loaded, ~0.16 s/item).
+  contract drift gate; a runner-cost note (MiniLM is already loaded in `assemble` for the search index,
+  so coherence adds ~0.16 s/item and no new model load).
 - **Oracle:** the scorers reproduce a fixture's hand-computed values; human correlation is out of
   scope here - the loop that acts on these numbers is plan #36.
 - **Decisions:**
@@ -378,7 +382,7 @@ row) in the opening window, sustained **2**, collapsing to **1** on the serial s
 | Search: two tiers, and is instant powered by key_points? | Instant = plain-text substring over title + summary only, on keystroke, no download. NO key_points. Semantic = vectors on Enter, 43 MB encoder. |
 | G-Eval input? | The summary ONLY (fluency is summary-only), which is what lets it run next-day when the article is gone. |
 | Can UniEval run on the runner? | Not as a drop-in - it is a T5 encoder-decoder needing a GGUF/llama.cpp path or a second runtime; we are not using it (reuse the summariser for G-Eval). |
-| Where do metrics run? | HHEM + coverage + coherence same-day in the digest job (coverage needs the source; article bodies are gone next-day). G-Eval fluency next-day in the council, sampled. |
+| Where do metrics run? | HHEM same-day in the `work` shard (per item, with the summariser). Coverage (ROUGE, no model) same-day. Coherence in the `assemble` job, reusing the MiniLM already loaded there for the search index - the summariser is gone by then, so no 3-model peak. G-Eval fluency next-day in the council, sampled. |
 | Feedback-loop contracts? | Extend `EvalRow`; new fixed-size `MetricScoreDistribution` + per-day `FittedMetricBand` (mirror #34's `Fit`); a `publish_decision` stamp on the item. All in plan #36. |
 | Model context fit for 30000? | `n_ctx` 65536 - fits with >50% headroom. |
 | Decode saving from dropping key_points? | Real at 4 tok/s: ~21 s/item typical, ~1.75 h off a 300-item day. |

@@ -103,7 +103,7 @@ decisions (E4, E6) and gate their rows.
 | E3 | **Symmetric damping for every watch floor.** "Damp the raise" belonged to plan 34's INVISIBLE-deletion trigger; here the withhold is absolute and undamped, and a watch/downgrade floor is a visible/operator signal, so asymmetric damping only ratchets the alarm down under noise and silences it. Resolve now, not after a fortnight. | D6 | Andre (B1) |
 | E4 | **SUPERSEDED by 0e H1 (2026-09-19): the reader sees nothing; the withhold is an item-health metric, not a card.** Historical rationale (no longer in force): the Editor proposed degrading a below-0.50 item to a link-only card so the loss stayed visible; the owner instead ruled the item ABSENT from the day and the signal an operator-only item-health metric surfaced in the console. | D2, D8 | Editor proposed; superseded by owner (0e H1) |
 | E5 | **State the ~11% steady-state withhold rate; add a length pre-filter.** The 0.50 line is the ~11th percentile, so Row 8 withholds (does not publish) ~11% of items every day, and 24% of that tail is sub-200-word stubs. A length pre-filter (never summarise a stub) and the stated baseline keep D8's alarm from reading 11% as an anomaly. | D8, Row 8 | Andre (B2), Editor |
-| E6 | **Coherence RAM (owner decision, plan 35 Row 8's premise too).** MiniLM would be a THIRD resident model on the digest worker (summariser server ~14.31 GiB = 96% of 16 GB, + HHEM in-process, + MiniLM); "encoder already loaded" is FALSE (it loads in the plan job, not the work shard). Measure the 3-model peak RSS before coherence ships same-day; if the margin is under MiniLM's footprint, coherence runs NEXT-DAY (it is summary-only) and only coverage stays same-day. | Row 8 (35), Row 8 (36) | Carmack (A1/A2); owner on the measurement |
+| E6 | **SUPERSEDED by 0e H5 (2026-09-19): no 3-model peak - coherence runs in `assemble`, not the `work` shard.** Verified: MiniLM is already loaded in the `plan`/`assemble` jobs (it builds the search index) and the summariser is NOT resident there, so coherence scores in `assemble` reusing the loaded MiniLM - summariser + HHEM + MiniLM never coexist in one process. Historical concern (no longer in force): that coherence would be a third resident model on the busy `work` shard. | Row 8 (35), Row 11 (36) | Carmack; corrected by owner (0e H5) |
 | E7 | **Where the block lands: BEFORE `collapse_same_story`.** Withdrawing a same-story group's representative after the fold silently deletes every duplicate folded into it and trips `DigestDay`/placement count invariants. Drop/relegate before the fold so the next-best duplicate is promoted, and recompute run/vertical/desk counts. `DigestDay`'s `planned = published + failed` gains a `link_only` term (`planned = published + failed + link_only`), counted on `RunManifest`, with a test that the arithmetic closes. **(The `link_only` DigestDay term is SUPERSEDED by 0e H3: it is dropped - a withheld item counts in `failed`, so `published + failed <= planned` already holds and `digest_day.py` is untouched. The `collapse_same_story` placement above still applies.)** | Row 8 | Fowler (A1, B5) |
 | E8 | **The daily judge workflow may be renamed `LLM-JUDGES` -> `LLM-COUNCIL`.** The plan declares ONE dependency line and uses name-agnostic prose ("the daily judge council workflow") everywhere; the runtime (cache key, server start, matrix) is name-independent, so a rename touches only `name:`, `concurrency.group`, and the `_harness.py` expectation in one commit. | 0a, Row 6 | Fowler (B2), Carmack (A6) |
 | E9 | **Row 6 (G-Eval leg) depends on Row 10 (measure the call)**, or the leg timeout is a labelled estimate x generous margin - do not repeat plan 34 row 17's sequencing gap. G-Eval is a STEP inside the existing judge legs (reuse the hot server), not a new job. It is monitor-only and feeds no gate (delete-first justification: an operator drift alarm). | Row 6, Row 10 | Carmack (A3, A5), Fowler (C1) |
@@ -135,13 +135,13 @@ first; the link-only references in this section are historical.)
 | G7 | E2 seed keys on the HHEM instrument sub-identity, not `scorer_version`. | Rows 4, 5 | Row 4 folds faithfulness by the HHEM sub-identity (`hhem_rev@rev + weights_digest + window=900/150/anchored`), not the whole `scorer_version` (plan 35 changes it -> 0 of 11,140 match). Row 5 seeds from that key. |
 | G8 | E3 symmetric damping floats. | Row 5 | Row 5 dec 2 + oracle: symmetric damping for every watch floor (the withhold is absolute+undamped; a watch floor is an operator signal, so asymmetric damping only ratchets the alarm down under noise). |
 | G9 | Row 5 seed is a growing read + a test that walks committed data. | Row 5 | The production seed declares Guardrail #12's escape-hatch (what it reads, why a bounded input cannot answer); the seed TEST uses a bounded fixture, never the committed archive (section 13); cite the PROPERTY ("rows at the current HHEM identity"), never the rotting cardinal 8,461. |
-| G10 | E6 coherence 3-model RAM. **Refined by 0e H5-H7: Row 11 now owns the measurement + the sequential-eviction fallback.** | Rows 4, 5, 11 | Row 11 measures the 3-model peak and, if it busts 16 GB, evicts the summariser server so coherence scores from the on-disk summaries (0e H6). Rows 4/5 fold/fit coherence on whichever cadence Row 11 settles; coherence's action stays `watch` (never gates). |
+| G10 | E6 coherence 3-model RAM. **SUPERSEDED by 0e H5 (2026-09-19): no peak - coherence runs in `assemble` where MiniLM is already loaded.** | Rows 4, 5, 11 | Row 11 confirms coherence is wired into `assemble` (not the `work` shard) and takes one cheap RSS reading; no eviction, no timeout bump. Coherence is same-day (in `assemble`, after `work`); its action stays `watch` (never gates). |
 | G11 | E8 rename touch-points; E9 Row 6/10 sequencing. | Rows 6, 10 | If the `LLM-COUNCIL` rename lands, Row 6 edits only `name:`, `concurrency.group`, `_harness.py`. Row 6's leg timeout is a LABELLED estimate x generous margin and does NOT hard-block on Row 10 (E9); Row 10 measures the merged call after. E10(b): Row 6 canary asserts containment (`geval` never reaches `publish_decision`) + thinking off. |
 | G12 | Row 3 dec 1 stale premise; the `downgraded` dead value. | Row 3 | Fix dec 1: a withheld item is ABSENT from the day but recorded in item-health telemetry (0e H1/H2); the `EvalRow` stamp still records every scored item including the withheld. Resolve `publish_decision`: values are `published` \| `withheld`; keep `downgraded` only if reserved for a named future promotion, else drop. |
 | G13 | Row 2 omits the contract fixtures + `export.py` tuple. | Row 2 | Name `tests/fixtures/contracts/<stem>/` fixtures for both new contracts and the `CONTRACTS` tuple + import in `export.py`. |
 | G14 | The design-of-record doc lags the corrections. | Row 5 + Row 8 commits | Widen the reconciliation: `docs/concepts/summary-quality-autotune.md` drops the faithfulness-downgrades-below-adaptive-floor language (E1), the `block p01` phrasing, and the asymmetric "damp the raise" (E3); the publish-gate section says withhold = absent + item-health telemetry, surfaced in the console (0e H1/H2/H4), NOT a link-only card. |
 
-**Table B - PR-wave grouping (10 PRs across 4 waves; each PR independently green)**
+**Table B - PR-wave grouping (11 PRs across 4 waves; each PR independently green)**
 
 | PR | Wave | Rows | Ships as / why grouped | Depends on |
 | --- | --- | --- | --- | --- |
@@ -151,10 +151,11 @@ first; the link-only references in this section are historical.)
 | geval-leg | 2 | 6 | disjoint island (`quality/geval.py` + the council workflow) | eval-columns |
 | publish-gate | 3 | 7 | backend veto chain, record-only, stamps `EvalRow` | metric-fold-fit |
 | geval-measure | 3 | 10 | MEASURES -> runs alone (`measure.yml` on a clean runner) | geval-leg |
-| coherence-ram | 1 | 11 | measure the 3-model peak RSS; the sequential server-eviction fallback + shard timeout 220; runs alone (0e H5-H7) | 35 coherence scorer |
+| coherence-place | 1 | 11 | confirm coherence runs in `assemble` (MiniLM already loaded there); one cheap RSS reading; no peak, no eviction, no timeout bump (0e H5-H7) | 35 coherence scorer |
 | console-panels | 3 | 9 | frontend island on `/console/judgement/`; + the not-published/withhold panel from item-health (0e H4) | metric-fold-fit, publish-gate |
 | apply-gate | 4 | 8 | ESCALATE, owner sign-off, first published-day change; withhold = absent + item-health (0e H1-H3, E7 placement) | publish-gate |
 | rejects-store | 3 | 12 | the `state/rejects/` store + its prune verb + the corpus fence; reads the stamped `publish_decision` (0e Table C) | publish-gate |
+| plan34-gaps | 4 | 13 | retro plan-34 latent gaps (space-trap re-arm, thinking-variant, injection live-test note); the space-trap guard is shared with Row 6's G-Eval | 34 landed, geval-leg |
 
 **Peak pool width 2** (Carmack): Rows 1 and 3 are TWO co-roots from t0, not one width-1 head. The serial
 spine is `1 -> 2 -> 4 -> 5 -> 7 -> 8` (6 deep); the width-1 point is the TAIL (Row 8), by owner mandate.
@@ -185,13 +186,13 @@ the Editor's link-only recommendation and every advisor (CLAUDE.md section 0).
 | H3 | **Row 8 simplifies.** The `DigestDay` `link_only` arithmetic term (old G2) is DROPPED - a withheld item counts in `failed`, so `published + failed <= planned` already holds and `digest_day.py` is not touched. The E7 "drop BEFORE `collapse_same_story`" placement STILL applies (promote the next-best duplicate). |
 | H4 | **The console surfaces the signal (Row 9).** A not-published/withhold panel on `/console/judgement/` reads item-health: the withhold count, the ~11% baseline (E5), and the reason breakdown by `FailureCode` - the operator's view of what the gate withheld and why. |
 
-**Table B - coherence RAM: sequential model execution (owner, refines E6/G10)**
+**Table B - coherence placement: no 3-model peak (owner + verified, 2026-09-19; supersedes the earlier eviction design)**
 
 | id | Ruling |
 | --- | --- |
-| H5 | **Measure first, then decide.** Row 11 (repurposed) measures the 3-model peak RSS (summariser server ~14.31 GiB + HHEM in-process + MiniLM). If it fits 16 GB, coherence runs inline same-day. If it busts, run models SEQUENTIALLY (H6). Runs alone (a measuring row). |
-| H6 | **Sequential eviction is feasible because the data is already on disk.** Verified: `extract` -> `{item_id}.article.json` and `summary` -> `{item_id}.summary.json` are persisted per-item BEFORE scoring ([stages/work.py](../backend/idhazh/stages/work.py)). So after the shard summarises all items, STOP the llama-server (free ~14.31 GiB), then score coherence from the on-disk summaries with MiniLM. **Two things must be built, both absent today:** (a) a server-STOP step - the server is started by `.github/scripts/start-llama-server.sh` (nohup, PID in `llama-server.pid`) and dies only at job end, so nothing stops it mid-job; (b) the work shard splits into two phases (summarise-all -> stop server -> score-coherence-from-disk). HHEM stays inline (server + HHEM is today's peak and fits); only coherence moves to the post-server phase, so the 3-model peak never occurs. |
-| H7 | **Shard timeout -> 220 minutes (APPROVED).** `run.shard_timeout_minutes` 200 -> 220 (6 h job cap = 360, ample headroom), covering the two-pass path. Carried in Row 11 and applied at EXECUTION, not in this docs PR. The HHEM anchored-window saving (~15 s/shard, arriving with plan 35's cap raise) gives further headroom. Next-day coherence (the E6 fallback) remains the no-restructure alternative if the measurement or the restructure cost rules against eviction. |
+| H5 | **No 3-model peak: coherence runs in `assemble`.** MiniLM is already loaded in the `plan`/`assemble` jobs to build the search index, and the summariser is NOT resident there (it lives only in the `work` shard, with HHEM). So coherence scores in `assemble`, reusing the loaded MiniLM - summariser + HHEM + MiniLM never coexist in one process. The sequential-eviction machinery the earlier design feared is unnecessary. |
+| H6 | **Row 11 collapses to a confirmation.** It confirms coherence is wired into `assemble` (not the `work` shard, plan 35 Row 8) and takes one cheap RSS reading in `assemble` (MiniLM + the ROUGE work) to show it fits with headroom. No server-stop step, no two-phase `work` shard, no eviction. |
+| H7 | **The 200 -> 220 shard-timeout bump is RETIRED** - it existed only for the two-pass `work` shard, which is gone. `assemble` absorbs coherence's ~0.16 s/item (a few tens of seconds over a day). Keep a timeout bump only if a separate measurement asks for it; it is not part of this plan. |
 
 **Table C - the rejects store (owner, 2026-09-19; adds Row 12)**
 
@@ -199,7 +200,7 @@ the Editor's link-only recommendation and every advisor (CLAUDE.md section 0).
 | --- | --- |
 | J1 | **Persist every withheld summary for troubleshooting.** Today a withheld summary's TEXT survives nowhere committed (only the discarded run intermediate); the `EvalRow` keeps the scores + a one-way hash, not the prose - so the gate deletes ~11% of items daily and erases its own evidence. Row 12 adds a committed, fully-sharded store: `state/rejects/<YYYY>/<MM>/<DD>/<item_id>.json`, one `RejectRow` per withheld item. |
 | J2 | **What the `RejectRow` carries** (for a person or a bigger model to judge later, never a reader): `title`, `summary` (the failing prose), `source_text` (the sanitised extract the model read), `prompt` (the rendered system + user turns), the failure (`hhem`, `withheld_reason`, `band`, `scorer_version`), the summariser fingerprint (model + decode), identity (`item_id`, `url_key`, `canonical_url`, `source_id`), provenance (`version`, `generated_at`, `run_id`). |
-| J3 | **Source text is committed here - a second carve-out beyond `corpus/` (CLAUDE.md 0a).** The owner authorised it (2026-09-19); the executing PR amends 0a in the same commit. It is sanitised extract (crossed the trust boundary once at extraction, Guardrail #11), stored as data a person or an offline judge reads - never re-fed to a model as instruction. Bounded by J4. |
+| J3 | **Source text is committed here - a second carve-out beyond `corpus/` (CLAUDE.md 0a).** The owner authorised it (2026-09-19); the executing PR amends 0a to write BOTH carve-outs - the `corpus/` one (today only cross-referenced from section 8) and `state/rejects/` - so 0a becomes the canonical list (S5 A1). It is sanitised extract (crossed the trust boundary once at extraction, Guardrail #11), stored as data a person or an offline judge reads - never re-fed to a model as instruction. Bounded by J4. |
 | J4 | **Prune prose and source together, tightly: 30 days, config-driven.** A new knob (`finetune.reject_window_days`, default 30 - tighter than the corpus's 60) + its own verb (`retention.prune_rejects`) wired into the retention prune, deleting whole day directories past the window; the history bytes ride `prune.yml`'s force-push on the same schedule. |
 | J5 | **Never served.** `state/rejects/` stays unwired from `payload.ts`, the telemetry projection, the embed/index input, and the `DigestViewItem`/`ITEM_FIELDS` allow-list. The console (Row 9) plots only the aggregate - the rate, the reasons, the withheld-tail score distribution - never the prose or the source. |
 | J6 | **Fence the corpus: never train on a withheld summary.** The harvest reads `items/` directly ([corpus.py:217](../backend/idhazh/corpus.py)), so a withheld summary IS harvested today. Row 12 skips any `Scored` whose `EvalRow.publish_decision == withheld`, placed BEFORE `keeps_its_counterweights` - reading the stamped DECISION, not the raw `hhem`, so `keeps_its_counterweights` stays faithfulness-free (Andre's anti-monitor-selector rule holds). |
@@ -211,9 +212,15 @@ the Pages site). If the repository is public it is browsable there for the 30-da
 `prune.yml` force-push bound it. The owner accepts this to have a committed, queryable store rather than
 an expiring CI artifact - revisit if the repository's visibility changes.
 
+TODO (a note, not a plan row; distils to `docs/` per distill-a-plan.md): the OFFLINE JUDGE that reads
+the rejects store - a bigger model or a person auditing the withheld tail (J7/J8) - is a deferred
+follow-up with no row in this plan. When this plan distils it moves to
+`docs/concepts/summary-quality-autotune.md` as the named future consumer that makes the corpus-fence
+auditable.
+
 ## Section 1 - Status Reckoner
 
-The round-2 review regroups the twelve rows into **10 PRs across 4 waves** (section 0d Table B). A row's
+The round-2 review regroups the thirteen rows into **11 PRs across 4 waves** (section 0d Table B). A row's
 `Parallel-group` names its wave + PR; readiness is computed from `Depends-on` + a `Files touched`
 disjointness check, never the letter (execute-a-plan.md).
 
@@ -227,10 +234,11 @@ disjointness check, never the letter (execute-a-plan.md).
 | 6 | G-Eval fluency judge in the council (estimate x margin timeout) | 3 | W2 / geval-leg | PENDING | - | - | - |
 | 7 | The veto-chain publish gate, record-only | 2, 3, 5 | W3 / publish-gate | PENDING | - | - | - |
 | 10 | Measure a real G-Eval call; replace the estimate | 6 | W3 / geval-measure (alone) | PENDING | - | - | - |
-| 11 | 3-model RAM: measure peak, sequential-eviction fallback, shard timeout 220 | 35 coherence | W1 / coherence-ram (alone) | PENDING | - | - | - |
+| 11 | Confirm coherence runs in `assemble` (MiniLM loaded there); no peak, no eviction | 35 coherence | W1 / coherence-place (alone) | PENDING | - | - | - |
 | 9 | Console: the quality bands + the not-published/withhold panel | 5, 7 | W3 / console-panels | PENDING | - | - | - |
 | 8 | Flip the flag: withhold = absent + item-health telemetry (E7 placement) | 7 | W4 / apply-gate (alone) | PENDING (ESCALATE) | - | - | - |
 | 12 | The rejects store + corpus fence (`state/rejects/`, 30-day prune) | 3, 7 | W3 / rejects-store | PENDING | - | - | - |
+| 13 | Retro: plan-34 latent gaps + the shared space-trap guard | 34 landed, 6 | W4 / plan34-gaps | PENDING | - | - | - |
 
 ## Section 2 - Row detail
 
@@ -331,7 +339,10 @@ disjointness check, never the letter (execute-a-plan.md).
   gates clear on day one.
 - **Files touched:** new `backend/idhazh/quality/fit.py` (the second `edge.py` adapter),
   `backend/idhazh/stages/quality_fit.py`, `backend/idhazh/ledger.py`, a seeding step that reads the
-  committed HHEM readings once.
+  committed HHEM readings once, and **`docs/concepts/summary-quality-autotune.md`** (G14) - strike the
+  four stale phrases: faithfulness-downgrades-below-an-adaptive-floor (E1), `block p01` (E1), the
+  asymmetric "damp the raise" (E3), and any "coherence runs same-day in the work shard" wording
+  (coherence runs in `assemble`, 0e H5).
 - **Acceptance gates:** unit tests over built distributions per metric; the seed test builds the
   faithfulness distribution from committed readings and asserts its floors are non-null on day one;
   each gate writes its own `held_reason` and moves nothing.
@@ -356,7 +367,9 @@ disjointness check, never the letter (execute-a-plan.md).
   prompt, `backend/idhazh/stages/quality_geval.py`, one leg/step added to `.github/workflows/llm-judges.yml`.
 - **Acceptance gates:** a recorded-completion test proves the digit distribution maps to the expected
   score; no network (Guardrail #7); an injection canary (a summary carrying "rate this 5" still scored
-  from log-probs under the grammar).
+  from log-probs under the grammar); **the shared space-trap guard (Row 13) - assert the rendered
+  fluency prompt does not end in a space and build the digit token ids by encode-in-position, so a
+  trailing-space token cannot silently shift which digit the model emits.**
 - **Oracle:** the score reproduces from a recorded completion's first-token log-probs; it never judges
   consistency (circularity - HHEM keeps that).
 - **Decisions:**
@@ -456,35 +469,26 @@ disjointness check, never the letter (execute-a-plan.md).
   | --- | --- | --- |
   | 1 | Measure prefill (summary + rubric) and decode (confirm it is one digit, not generated CoT) separately; worst x 30 sizes the leg, never the mean | Carmack |
 
-### Row #11 - 3-model RAM: measure the peak, the sequential-eviction fallback, shard timeout 220
+### Row #11 - confirm coherence runs in `assemble` (no 3-model peak)
 
-- **Scope:** decide how coherence (plan 35's MiniLM scorer) coexists with the summariser server and
-  HHEM without busting 16 GB (0e H5-H7). MEASURE the 3-model peak RSS first; runs alone. If it fits,
-  coherence runs inline same-day and only the timeout bump lands. If it busts, build the sequential
-  path: after the shard summarises all items, STOP the llama-server (free ~14.31 GiB), then score
-  coherence from the on-disk `{item_id}.summary.json` with MiniLM, so the 3-model peak never occurs.
-  Raise `run.shard_timeout_minutes` 200 -> 220 either way.
-- **Files touched:** a measuring utility under `backend/utilities/` + a `workflow_dispatch` measure job,
-  `docs/reference/benchmarks/what-three-models-peak.md`, `docs/reference/measurements.md`; IF the
-  sequential path is needed: a server-STOP step (kill the recorded `llama-server.pid`) invoked from
-  `.github/workflows/digest.yml`, the two-phase split in `backend/idhazh/stages/work.py` (summarise-all
-  -> stop server -> score-coherence-from-disk); `config/idhazh.json` (`shard_timeout_minutes` 200 -> 220,
-  applied at execution, not in the docs PR).
-- **Acceptance gates:** the measurement reports the 3-model peak RSS on a stock `ubuntu-latest` with all
-  three models resident, hardware + date + spread named (Guardrail #10); IF the sequential path lands,
-  integration that a summary's coherence score is byte-identical inline vs post-eviction on the canary
-  day (the restructure changes only WHEN the score is taken, reading the same on-disk summary), the
-  shard still finishes inside 220 min, and the server-stop step leaves no orphan process.
-- **Oracle:** the measurement reproduces from the committed readings; the sequential path's oracle is
-  that a summary's coherence score is identical whether scored inline or after eviction. It cannot
-  settle the editorial cost of a slower shard (that is the timeout budget, approved at 220).
+- **Scope:** confirm coherence (plan 35's MiniLM scorer) is wired into the `assemble` job, where MiniLM
+  is ALREADY loaded to build the search index and the summariser is NOT resident - so the feared
+  3-model peak (summariser + HHEM + MiniLM) never occurs (0e H5). Take one cheap RSS reading in
+  `assemble` to show MiniLM + the coherence/ROUGE work fits with headroom.
+- **Files touched:** confirm plan 35 Row 8 wired coherence into `assemble` (not `work`); a one-off RSS
+  reading recorded in `docs/reference/measurements.md`. NO server-stop step, NO two-phase `work` shard,
+  NO `shard_timeout_minutes` change - all retired with the eviction (0e H7).
+- **Acceptance gates:** the reading shows the `assemble` peak RSS (MiniLM + ROUGE, no summariser) fits
+  16 GB with headroom, hardware + date named (Guardrail #10); coherence scores land on the same day's
+  eval rows.
+- **Oracle:** coherence is computed in `assemble` and the `work` shard's peak is unchanged (summariser
+  + HHEM only). It cannot settle a future model swap's footprint (re-measure then).
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | Measure the 3-model peak before choosing inline vs sequential; a measuring row runs alone (E6) | Carmack, owner |
-  | 2 | Sequential eviction is feasible because extract + summary persist per-item to disk before scoring; it needs a server-stop step + a two-phase work shard, both absent today | Carmack |
-  | 3 | Shard timeout 200 -> 220 approved; applied at execution. Next-day coherence stays the no-restructure fallback | owner |
+  | 1 | Coherence runs in `assemble`, reusing the MiniLM already loaded for the search index; no 3-model peak (0e H5, corrected 2026-09-19) | owner, Carmack |
+  | 2 | The sequential server-eviction + two-phase `work` shard + the 200->220 timeout are RETIRED - they solved a peak that does not occur | owner |
 
 ### Row #12 - the rejects store + the corpus fence (`state/rejects/`, 30-day prune)
 
@@ -509,9 +513,11 @@ disjointness check, never the letter (execute-a-plan.md).
   - **The corpus fence:** in `backend/idhazh/corpus.py` `harvest_rows`, skip any `Scored` whose
     `row.publish_decision == withheld` BEFORE `keeps_its_counterweights` (which stays `hhem`-free). Do
     NOT add `hhem` to `keeps_its_counterweights` (0e J6).
-  - **The 0a amendment + docs:** amend `CLAUDE.md` section 0a to name `state/rejects/` as a second
-    committed-article-text carve-out bounded by the 30-day prune (0e J3); document the store + the fence
-    in `docs/how-to/fine-tune-a-model.md` and the design-of-record.
+  - **The 0a amendment + docs:** amend `CLAUDE.md` section 0a to write BOTH committed-article-text
+    carve-outs (S5 A1, owner 2026-09-19): the `corpus/` one FIRST (today it is only cross-referenced
+    from section 8, never stated in 0a) and `state/rejects/` SECOND, bounded by the 30-day prune (0e J3),
+    so section 0a becomes the canonical list. Document the store + the fence in
+    `docs/how-to/fine-tune-a-model.md` and the design-of-record.
 - **Acceptance gates:** contract drift gate (the new schema regenerates byte-identical); a unit test
   that a withheld item writes exactly one `RejectRow` carrying the prose + source + rendered prompt
   (driven from a bounded fixture, never the archive); a `harvest_rows` test that an item stamped
@@ -529,6 +535,34 @@ disjointness check, never the letter (execute-a-plan.md).
   | 2 | Source text committed here, a second 0a carve-out, bounded by a 30-day config-driven prune | owner (J3/J4) |
   | 3 | The corpus fence reads the stamped `publish_decision`, never `hhem`; `keeps_its_counterweights` stays faithfulness-free | Andre, owner (J6) |
   | 4 | The store is the auditable safety net that makes fencing the corpus sound despite the Goodhart risk; offline judging (bigger model or human) reads it, never a reader (J7/J8) | Andre, owner |
+
+### Row #13 - retro: plan-34 latent gaps + the shared space-trap guard
+
+- **Intent:** three defects flagged during the plan-34 review were never given a home (out of scope for
+  plan 34's merge). They land here as the last row because one - the first-token-probability space trap -
+  is re-introduced by Row 6's G-Eval fluency judge, so the guard is shared (owner, 2026-09-19).
+- **Scope + files touched:**
+  - **Space-trap re-arm:** a trailing-space token in a rendered prompt silently shifts which
+    digit/verdict the model emits from its first-token probabilities, and the output still parses.
+    Assert the rendered prompt does not end in a space; build the digit/verdict token ids by
+    encode-in-position (not by string); log all first-token probabilities. Covers
+    `backend/idhazh/similarity/judge.py` (plan 34) and `backend/idhazh/quality/geval.py` (Row 6).
+  - **Thinking-variant:** confirm `thinking` is OFF for every judge/council call and pin it with a canary
+    that a thinking-on recorded completion is REJECTED, not silently scored (plan 34 + Row 6).
+  - **Injection live-test note:** the injection canary runs against a RECORDED completion only (Guardrail
+    #7 forbids a live server in tests), so it proves the grammar + log-prob read resists a side-loaded
+    instruction in the fixture, not a live model. State this as accepted-by-contract in one line; a live
+    red-team is a separate, out-of-scope follow-up.
+- **Acceptance gates:** the space-trap + thinking-off canaries pass against recorded fixtures for BOTH
+  the plan-34 judge and Row 6's G-Eval; no network (Guardrail #7).
+- **Oracle:** a rendered prompt ending in a space fails the guard, and a thinking-on recorded completion
+  is rejected. It cannot settle live-model injection resistance (accepted-by-contract, Guardrail #7).
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | Retro plan-34 gaps re-homed here as the last row (owner, 2026-09-19); the space-trap guard is shared with Row 6 because both read first-token probabilities | owner, Andre |
+  | 2 | The injection test stays recorded-fixture only (Guardrail #7); a live red-team is a separate, out-of-scope follow-up | Andre |
 
 ## Section 3 - the loop, and where it is documented
 
