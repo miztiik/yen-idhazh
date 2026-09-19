@@ -240,22 +240,15 @@ O2 removed it. Three things carry its job instead.
 
 ## Status Reckoner
 
-**This table is what is left.** A row that landed is gone from it, because a
-worker picking this plan up needs the four things still to build, not the twelve
-already in the repository. Git is where a finished row's history lives, and the
-pull request numbers below are how a reader finds it.
+**Nothing is left to build. Every row of this plan has landed**, so this page is
+now the record of how the merge line learned to fit itself rather than a queue of
+work. Git is where a finished row's history lives, and the pull request numbers
+below are how a reader finds it.
 
-Every row here carries a body further down this page. A row's body is written for
-somebody who has never opened this repository, so it names the file, the class,
-the function, the test and the thing the row must not do. **Read the row body,
-not this table.** The table says what is blocked; the body says what to build.
-
-| # | Row | Depends on | Wave | Status |
-| --- | --- | --- | --- | --- |
-| 11 | The sample sheet utility | 7,8,10 | C | PENDING |
-| 12 | Console: the holdout panel. **The merge count landed in #874; this is the other half** | 2,8 | D | PENDING |
-| 15 | Console: the confusion matrix | 7,8,12 | D | PENDING |
-| 16 | The design document. **Mostly overtaken - see below** | 9 | D | PENDING |
+Every row still carries a body further down this page. A row's body names the
+file, the class, the function, the test and the thing the row must not do, which
+is what makes it worth reading after the fact: it says what was intended, and the
+code says what was built.
 
 **Landed, in the order they merged:** row 1 `09c680c4`, row 4 `c0cb75f7` and the
 prune vocabulary in [#885](https://github.com/miztiik/yen-idhazh/pull/885), rows
@@ -268,8 +261,20 @@ prune vocabulary in [#885](https://github.com/miztiik/yen-idhazh/pull/885), rows
 [#890](https://github.com/miztiik/yen-idhazh/pull/890), row 9 in
 [#889](https://github.com/miztiik/yen-idhazh/pull/889), row 12's merge-count
 panel in [#874](https://github.com/miztiik/yen-idhazh/pull/874), row 13 in
-[#899](https://github.com/miztiik/yen-idhazh/pull/899) and row 14 in
-[#904](https://github.com/miztiik/yen-idhazh/pull/904).
+[#899](https://github.com/miztiik/yen-idhazh/pull/899), row 14 in
+[#904](https://github.com/miztiik/yen-idhazh/pull/904), row 15 in
+[#916](https://github.com/miztiik/yen-idhazh/pull/916), row 11 in
+[#928](https://github.com/miztiik/yen-idhazh/pull/928), row 16 in
+[#941](https://github.com/miztiik/yen-idhazh/pull/941), the step redesign in
+[#951](https://github.com/miztiik/yen-idhazh/pull/951) and row 12's holdout panel
+in [#954](https://github.com/miztiik/yen-idhazh/pull/954).
+
+**The step redesign was not a row on this plan.** It came out of the owner's
+ruling that the digest publishes less rather than more, which inverts what a
+cautious step means: the line falls fast toward a floor that refuses merges and
+rises slowly away from it. It replaced the fixed margin this plan had specified.
+[`docs/architecture/publishing/same-story.md`](../docs/architecture/publishing/same-story.md)
+owns the rule; the rationale and the rejected alternatives are on that page.
 
 **Row 9 landed with the flag off.** `assemble.same_story.adaptive_dedup_threshold.enabled`
 is `false` in the committed config, so every published day is still grouped at
@@ -281,15 +286,13 @@ else's work.** [#896](https://github.com/miztiik/yen-idhazh/pull/896) split the
 same-story rules out of `docs/architecture/publishing/layout.md` into
 `docs/architecture/publishing/same-story.md`, which was the split this row was
 going to pay for. Row 9 then put the fitted line's own prose on that page. What
-is left of this row is the loop diagram and the two lists - the rationale and the
-rejected alternatives - distilled out of this plan as it is deleted.
-| 17 | Measure a judge call on a stock runner and replace the estimate | 5,6 | B | PENDING |
+landed under this row is the loop diagram and the two lists - the rationale and
+the rejected alternatives - distilled out of this plan.
 
-Row 1 dropped out of row 2's dependency list because it has landed. **Row 12's
-panel A1 depends on nothing in this plan** and reads the published day tree that
-exists today, so it can ship before row 2 and is the smallest thing here that a
-reader gets value from. Row 10 waits for rows 5 to 8 because a workflow with no
-steps to run is a file nobody can test.
+**The autotune loop still cannot close, and that is the one thing this plan did
+not buy.** Every part of it is built and tested, but the judging workflow has
+never run, so the record holds no judged day for a line to be fitted from. The
+first scheduled run is what turns the machinery on.
 
 ## Row #1 - three pages disagree on whether a model may select what publishes
 
