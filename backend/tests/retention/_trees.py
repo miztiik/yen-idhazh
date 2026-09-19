@@ -14,6 +14,7 @@ from conftest import seed_item_health
 
 from idhazh import day_partition, ledger
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import (
     TERMINAL_STAGES,
     FailureCode,
@@ -249,3 +250,37 @@ def feed_health_months(state_dir: Path) -> list[str]:
     days, so a test about what the prune kept asks in months.
     """
     return sorted(day_partition.days_by_month(state_dir / ledger.HEALTH_DIRNAME))
+
+
+def host_fingerprint_history(
+    state_dir: Path, months: list[str], *, day_of_month: int = 11
+) -> None:
+    """A real host-fingerprint day file per month, through the contract that writes it.
+
+    Written with the CSV writer rather than an appender, because this ledger has
+    none: ten jobs each write a segment and the compaction folds them into the
+    day file. What the prune needs is a day file with the committed header, and
+    that is what the contract's own columns give it.
+    """
+    for index, month in enumerate(months):
+        day = f"{month}-{day_of_month:02d}"
+        path = ledger.host_fingerprint_path(state_dir, day)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        row = HostFingerprintRow(
+            version=HostFingerprintRow.schema_version(),
+            date=day,
+            run_id=f"{day}-1",
+            shard=index,
+            cpu_model="AMD EPYC 7763 64-Core Processor",
+        )
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(
+                handle, fieldnames=list(HostFingerprintRow.csv_columns()), lineterminator="\n"
+            )
+            writer.writeheader()
+            writer.writerow(row.csv_row())
+
+
+def host_fingerprint_months(state_dir: Path) -> list[str]:
+    """Which months the host-fingerprint day tree still holds, oldest first."""
+    return sorted(day_partition.days_by_month(state_dir / ledger.HOST_FINGERPRINT_DIRNAME))

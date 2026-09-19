@@ -38,23 +38,25 @@ def stage_prune_state(
     dry_run: bool = False,
 ) -> int:
     """Retire what the ledgers no longer answer for: an item-health month and the
-    browser's copy of it, a feed-health month, every seen day file below the
-    window the planner reads, every committed span trace past its short window,
-    and every score month past its full-grain window. Then clean the rendered
-    visuals the archive policy has aged out, and record what that pass found.
+    browser's copy of it, a feed-health month, a host-fingerprint month, every
+    seen day file below the window the planner reads, every committed span trace
+    past its short window, and every score month past its full-grain window. Then
+    clean the rendered visuals the archive policy has aged out, and record what
+    that pass found.
 
     The item-health boundary is still a month, and only the files below it are
     days: `retention.prune_telemetry` folds a month whole from that month's day
     files and then unlinks them. Feed health files by day too and its boundary is
     a month for the same reason, so `retention.prune_feed_health` takes a month's
     day files whole - it just folds nothing first, because a total of what a feed
-    did fourteen months ago has no reader.
+    did fourteen months ago has no reader. The host fingerprints file and delete
+    the same way, and for the same reason.
 
-    Six stores, one step, because they share the one property that makes this
-    safe: all of it runs after the day is committed, and none of it can cost a
-    reader anything it has not already been given.
+    Every ledger above is in this one step because they share the one property
+    that makes it safe: all of it runs after the day is committed, and none of it
+    can cost a reader anything it has not already been given.
 
-    **The visuals are the seventh thing here and they do not share that property.**
+    **The visuals are the one thing here that does not share that property.**
     Deleting a picture costs a reader the picture. They are in this step because
     it is the step that runs after the commit and because the pass still removes
     nothing - `retention.dry_run` is true and the flag makes it report-only - so
@@ -105,6 +107,7 @@ def stage_prune_state(
     )
     removed += _prune_trace_shards(state, observability, today, dry_run=dry_run)
     removed += _prune_feed_health_shards(state, observability, today, dry_run=dry_run)
+    removed += _prune_host_fingerprint_shards(state, observability, today, dry_run=dry_run)
     removed += _prune_score_shards(state, observability, today, dry_run=dry_run)
     removed += _prune_trial_shards(state, run, retention_config, today, dry_run=dry_run)
     result = retention.prune_telemetry(
@@ -224,6 +227,43 @@ def _prune_feed_health_shards(
         ", ".join(feed.kept) or "no shard",
     )
     return list(feed.days_removed)
+
+
+def _prune_host_fingerprint_shards(
+    state: Path, observability: ObservabilityConfig, today: date_type, *, dry_run: bool
+) -> list[str]:
+    """Delete the host-fingerprint months no published machine shard reaches.
+
+    Deleted rather than folded, the same shape as the feed-health prune above
+    and for the same reason: a row is one job's silicon on one run, and a total
+    over a month fourteen months back names no machine.
+
+    `observability.host_fingerprint_keep_months` is null by default, and null
+    means never - so until the committed config names a window this walks the
+    tree, removes nothing, and says which age it measured against.
+
+    Returns the day files it removed, taken from the result rather than spelled
+    from the month stems: the ledger files by day, so a synthesised `<month>-01`
+    would name a file it may never have held.
+    """
+    hosts = retention.prune_host_fingerprint(state, observability, today, dry_run=dry_run)
+    if not hosts.changed:
+        months = observability.host_fingerprint_keep_months
+        LOG.info(
+            "host-fingerprint prune: %s, so none was deleted",
+            f"every shard is inside the {months}-month window"
+            if months is not None
+            else "the window is off and every shard is kept",
+        )
+        return []
+    LOG.info(
+        "host-fingerprint prune%s: deleted %s, freed %s bytes, kept %s",
+        " (dry run)" if hosts.dry_run else "",
+        ", ".join(hosts.deleted),
+        hosts.bytes_freed,
+        ", ".join(hosts.kept) or "no shard",
+    )
+    return list(hosts.days_removed)
 
 
 def _prune_seen_shards(

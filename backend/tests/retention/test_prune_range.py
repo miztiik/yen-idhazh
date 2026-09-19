@@ -21,6 +21,7 @@ emptied exactly, and a delete that fails on the third file of four.
 
 from __future__ import annotations
 
+import csv
 import hashlib
 from collections.abc import Callable, Iterable
 from datetime import date as date_type
@@ -32,6 +33,7 @@ import pytest
 from conftest import seed_item_health
 
 from idhazh import day_partition, ledger
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemStage
 from idhazh.evals import writer as score_writer
 from idhazh.telemetry import prune
@@ -53,6 +55,7 @@ pytestmark = pytest.mark.contract
 DAY_PATHS: Final[dict[str, Callable[[Path, str], Path]]] = {
     ledger.COUNTERFACTUAL_SCORES_DIRNAME: ledger.counterfactual_scores_path,
     ledger.HEALTH_DIRNAME: ledger.health_path,
+    ledger.HOST_FINGERPRINT_DIRNAME: ledger.host_fingerprint_path,
     ledger.ITEM_HEALTH_DIRNAME: ledger.item_health_path,
     ledger.VISUAL_PRUNES_DIRNAME: ledger.visual_prunes_path,
     score_writer.INDEX_DIRNAME: score_writer.index_path,
@@ -89,6 +92,23 @@ def a_census(state_root: Path, days: Iterable[str] = DAYS) -> Path:
             [health_row(day=day, run=1, number=number, stage=ItemStage.PUBLISH)],
         )
     return state_root
+
+
+def _write_host_day(path: Path, day: str) -> None:
+    """One day of machine rows, through the contract the compaction writes."""
+    row = HostFingerprintRow(
+        version=HostFingerprintRow.schema_version(),
+        date=day,
+        run_id=f"{day}-1",
+        shard=0,
+        cpu_model="AMD EPYC 7763 64-Core Processor",
+    )
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(
+            handle, fieldnames=list(HostFingerprintRow.csv_columns()), lineterminator="\n"
+        )
+        writer.writeheader()
+        writer.writerow(row.csv_row())
 
 
 def fingerprints(root: Path) -> dict[str, str]:
@@ -270,6 +290,46 @@ def test_every_target_names_a_store_that_files_by_day(tmp_path: Path) -> None:
             f"{ledger.STATE_DIRNAME}/{path.relative_to(state).as_posix()}",
         ), f"{target} did not select the day file its own module files at"
         assert not path.exists(), f"{target} reported a removal that did not happen"
+
+
+def test_a_day_taken_back_loses_the_machine_rows_that_produced_it(tmp_path: Path) -> None:
+    """The obligation `docs/architecture/publishing/retention.md` puts on an unpublish.
+
+    An operator takes one day off the site. Its census, its scores and its feeds
+    already came off through this command; until 2026-09-19 the machine rows
+    that produced them stayed, because `host-fingerprint` was not a target -
+    which left the published machine shard naming a machine for a day the site
+    no longer had.
+
+    Real rows through the contract that writes them, and the assertion is
+    two-sided: the named day is gone, and the day beside it is byte-identical.
+    """
+    state = tmp_path / "state"
+    a_census(state)
+    for day in DAYS:
+        path = ledger.host_fingerprint_path(state, day)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _write_host_day(path, day)
+    kept = ledger.host_fingerprint_path(state, DAYS[4]).read_bytes()
+
+    outcome = prune.prune_range(
+        state,
+        target=ledger.HOST_FINGERPRINT_DIRNAME,
+        since=DAYS[3],
+        until=DAYS[3],
+        dry_run=False,
+    )
+
+    assert outcome.removed == (ledger.host_fingerprint_relpath(DAYS[3]),)
+    assert not ledger.host_fingerprint_path(state, DAYS[3]).exists()
+    assert ledger.host_fingerprint_path(state, DAYS[4]).read_bytes() == kept
+    assert dates_on_disk(state, ledger.HOST_FINGERPRINT_DIRNAME) == [
+        day for day in DAYS if day != DAYS[3]
+    ]
+    # The census the machine rows join to is a separate target and is untouched
+    # by this pass, which is what makes the pairing an operator obligation rather
+    # than a side effect.
+    assert dates_on_disk(state, ledger.ITEM_HEALTH_DIRNAME) == list(DAYS)
 
 
 @pytest.mark.parametrize("target", sorted(prune.REFUSED))
