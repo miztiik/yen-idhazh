@@ -4,6 +4,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "A judge labels this file, not only a person. No field moved.",
+      "version": "2026-09-19",
+      "why": "Specified as hand-typed, it shipped empty, so the floor was on no screen."
+    },
+    {
       "change": "Initial shape: two addresses, two headlines, a mark and its reason.",
       "version": "2026-09-18",
       "why": "The hand labels that set today's floor lived in one person's reading."
@@ -18,7 +23,7 @@
       "type": "string"
     },
     "left_title": {
-      "description": "The headline, so a person reading the holdout panel can tell which pair a mark belongs to.",
+      "description": "The headline, so a reader of the holdout panel can tell which pair a mark belongs to.",
       "maxLength": 200,
       "minLength": 1,
       "pattern": "^[ -~]+$",
@@ -33,13 +38,13 @@
       "type": "string"
     },
     "marked_on": {
-      "description": "When a person marked it. A mark taken under an older reading of what counts as one story is still on record and still says when it was taken.",
+      "description": "When it was marked. A mark taken under an older reading of what counts as one story is still on record and still says when it was taken.",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
       "title": "Marked On",
       "type": "string"
     },
     "note": {
-      "description": "Why, in one line. A mark with no reason cannot be argued with when the line later disagrees with it.",
+      "description": "Who marked it and why, in one line. A mark is worth what its labeller is worth, and one with no reason cannot be argued with later.",
       "maxLength": 200,
       "minLength": 1,
       "pattern": "^[ -~]+$",
@@ -68,12 +73,12 @@
       "type": "string"
     },
     "same_story": {
-      "description": "True where a person judged the two to be one event. The false rows are the load-bearing ones: the line has to stay above every one of them.",
+      "description": "True where the labeller judged the two to be one event. The false rows are the load-bearing ones: the line has to stay above every one of them.",
       "title": "Same Story",
       "type": "boolean"
     },
     "version": {
-      "default": "2026-09-18",
+      "default": "2026-09-19",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -92,5 +97,5 @@
   ],
   "title": "SimilarityHoldoutPair",
   "type": "object",
-  "version": "2026-09-18"
+  "version": "2026-09-19"
 }
