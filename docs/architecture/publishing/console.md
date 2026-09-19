@@ -315,6 +315,30 @@ digest is short of sources until the retry ([../sources/health.md](../sources/he
 and the sort is stable, so listing the feeds first handed every tie to the state
 that clears itself after five skips. The run candidates are pushed first.
 
+**Free swap is a candidate on Hardware, and it is silent on a box with no swap.**
+It is a precursor rather than a diagnosis: once the machine pages, read rate
+collapses and a shard walks towards its time bound. The band names it and the
+Hardware route is where an operator sees which shard. `os_swap_free_bytes` at
+zero reads as "this box has no swap" and "swap is fully consumed" equally, so
+the candidate is built from the pair and says nothing where `os_swap_total_bytes`
+is zero or unrecorded. **Any swap used at all is the trigger, and the band
+reports it as a fact rather than a verdict** - how far in is too far is a
+threshold nobody here has measured, and a severity built on one would publish a
+number this project has not taken. Authority: Susan, 2026-09-17.
+
+**One line can appear under the three facts, and it is not a fourth.** A run that
+folded segments an earlier run left behind says so, in the past tense: `This run
+merged 303 rows that had been waiting 2 days. The Hardware page now reaches 17
+September.` A member of the band stands on every route every day; this line is
+absent on every run that found nothing waiting, which is every normal run - so it
+does not compete with the three for the first viewport. Present tense on a page
+that was just brought current would be a false sentence, and a false sentence is
+what the Hardware route's own day-with-no-rows fix exists to delete. **What the
+line cannot cover:** a run that never finishes writes no band at all, so nothing
+appears however far behind the record falls. The band's `generated_at` is what
+covers that. Where the three numbers come from, and why they are not a listing:
+[console-payloads.md](console-payloads.md).
+
 **The verdict fact draws one small square per run of the newest day**, on the
 same `--fill-*` ramp and the same shape as `Run health` 800px below, capped at
 twelve then `+N`. It says what the sentence cannot: whether one run ate all 34

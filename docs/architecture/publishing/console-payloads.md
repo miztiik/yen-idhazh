@@ -188,6 +188,26 @@ TypeScript one. Two things about where it reads from:
  `discover.streak` and `discover.resting`** - the reducers the pipeline itself
  rested a feed by. A page running its own copy is how a console starts
  contradicting the run that produced it.
+- **The compaction lag comes from the fold's own return value, handed in by the
+ caller, and never from a listing taken here.** `stage_compact` runs inside
+ `stage_assemble` before `dispatch.publish_all`, so it has already drained
+ `state/segments/` by the time the band is written - a listing at this point is
+ always empty, the three fields could never be anything but zero, and a warning
+ with no reachable state teaches an operator that no warning means nothing is
+ wrong. `CompactionReport` is a return value with no schema and no file, so
+ `assemble` is the one place the numbers exist, and it is where they are read.
+
+**The lag is the fold's, and the run date is the caller's.** `stage_compact`
+never reads a clock - the head a row lands in is named by the row's own date
+cell - so the report carries rows counted against each segment's run date, and
+`CompactionReport.lag_days` and `.rows_waiting_before` take the run date from the
+caller that has one. That is what keeps a recovering run's own segments out of
+its backlog count: every run writes segments, so a count of rows folded would be
+non-zero on every run and would report a working pipeline as a late one.
+
+**What this signal cannot cover, said here rather than implied.** A run that
+never finishes writes no band at all, so no sentence appears however far behind
+the record falls. The band's `generated_at` is what covers that case.
 
 The window is `max(console.window_presets)`, which is the furthest back any
 panel on any route can draw, and it is **anchored on the newest day found rather
