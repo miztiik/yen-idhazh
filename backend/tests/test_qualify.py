@@ -245,6 +245,17 @@ def test_every_gate_names_where_its_threshold_came_from() -> None:
         assert outcome.threshold.strip()
 
 
+@pytest.mark.parametrize(
+    ("gate", "source"),
+    [
+        (GateName.INJECTION_CANARIES, "CLAUDE.md Rule #11"),
+        (GateName.BUDGET, "workflow dispatch input job_budget_minutes, Rule #2"),
+    ],
+)
+def test_gate_provenance_keeps_its_recorded_citation(gate: GateName, source: str) -> None:
+    assert outcomes_of(a_passing_shard())[gate].source == source
+
+
 # --- One failure at a time --------------------------------------------------
 
 

@@ -186,6 +186,19 @@ One width for every row and one header per shard, or repair on the trunk. What t
 
 ## The `gh` CLI
 
+**An inherited token can override `gh`'s stored active account.** Verify the
+intended actor in the current shell without exporting a stored token:
+
+```powershell
+Remove-Item Env:GH_TOKEN -ErrorAction SilentlyContinue
+Remove-Item Env:GITHUB_TOKEN -ErrorAction SilentlyContinue
+Set-Alias -Name ghm -Value gh -Scope Local
+ghm api user --jq .login
+```
+
+This loads no profile and changes no saved account. Stop if the returned login
+is not the intended actor; do not print or export a token for an account check.
+
 **`gh pr merge`'s exit code says nothing useful.** It exits non-zero with `fatal: 'main' is already used by worktree` when any worktree holds `main`, and with `could not determine current branch: failed to run git: not on any branch` from a detached worktree - and in both the server-side merge and the branch delete have already succeeded. The merge can also be invisible for a few seconds afterwards. `gh pr view <n> --json state,mergeCommit` is the only reliable read, and a second merge attempt is the one action here that is not idempotent.
 
 **Do not detach a row's worktree in order to free its branch - remove the worktree instead.** Detaching throws the branch away, which is the only signal `sweep_worktrees.py` can judge a leftover on, so the tree is kept for ever.

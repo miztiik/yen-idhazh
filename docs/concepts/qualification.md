@@ -1,6 +1,6 @@
 # Qualification
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 
 How a candidate model is judged before it may be adopted, and what a run that
 judged it actually proves.
@@ -15,6 +15,13 @@ The gates judge writing, so they read the vocabulary
 [evaluation.md](evaluation.md) fixes and the column definitions on
 [summary-metrics.md](summary-metrics.md). Read those first if a threshold's unit
 is not obvious.
+
+`GateOutcome.source` records where a threshold came from. It is report data,
+not an instruction to an agent. The injection and budget gates retain
+`CLAUDE.md Rule #11` and `workflow dispatch input job_budget_minutes, Rule #2`
+as their source values. Report readers preserve the stored wording, including
+the later spelling, in JSON, the Markdown summary and the job log. A vocabulary
+sweep must not treat those emitted values as comments.
 
 ## The gate has to call what the digest calls
 

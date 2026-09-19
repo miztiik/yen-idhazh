@@ -57,7 +57,8 @@ COMPLETE: Final = "stop"
 _CONFIG: Final = "config/idhazh.json"
 _TARGET: Final = "docs/reference/pipeline-cost.md - adoption target"
 _DISPATCH: Final = "workflow dispatch input"
-_RULE_11: Final = "CLAUDE.md Guardrail #11"
+# Recorded report provenance, not the current instructional vocabulary.
+_RULE_11: Final = "CLAUDE.md Rule #11"
 _ANDRE: Final = "Andre, 2026-08-26"
 
 
@@ -477,7 +478,7 @@ def budget(budget_: Budget) -> GateOutcome:
             f"slowest item {budget_.slowest_item_seconds:.0f} s"
         ),
         threshold=f"{budget_.job_budget_minutes:.0f} min per job",
-        source=f"{_DISPATCH} job_budget_minutes, Guardrail #2",
+        source=f"{_DISPATCH} job_budget_minutes, Rule #2",
         detail=f"margin {margin:.1f} min",
     )
 
