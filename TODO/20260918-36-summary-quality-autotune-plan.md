@@ -107,7 +107,7 @@ decisions (E4, E6) and gate their rows.
 | E7 | **Where the block lands: BEFORE `collapse_same_story`.** Withdrawing a same-story group's representative after the fold silently deletes every duplicate folded into it and trips `DigestDay`/placement count invariants. Drop/relegate before the fold so the next-best duplicate is promoted, and recompute run/vertical/desk counts. `DigestDay`'s `planned = published + failed` gains a `link_only` term (`planned = published + failed + link_only`), counted on `RunManifest`, with a test that the arithmetic closes. | Row 8 | Fowler (A1, B5) |
 | E8 | **The daily judge workflow may be renamed `LLM-JUDGES` -> `LLM-COUNCIL`.** The plan declares ONE dependency line and uses name-agnostic prose ("the daily judge council workflow") everywhere; the runtime (cache key, server start, matrix) is name-independent, so a rename touches only `name:`, `concurrency.group`, and the `_harness.py` expectation in one commit. | 0a, Row 6 | Fowler (B2), Carmack (A6) |
 | E9 | **Row 6 (G-Eval leg) depends on Row 10 (measure the call)**, or the leg timeout is a labelled estimate x generous margin - do not repeat plan 34 row 17's sequencing gap. G-Eval is a STEP inside the existing judge legs (reuse the hot server), not a new job. It is monitor-only and feeds no gate (delete-first justification: an operator drift alarm). | Row 6, Row 10 | Carmack (A3, A5), Fowler (C1) |
-| E10 | **Two guards to add.** (a) An integration test that the corpus harvest output is byte-identical with the gate off and on (a link-only/withheld item is still harvested from `items/` upstream of assemble), pinning the anti-Goodhart invariant. (b) The G-Eval canary asserts CONTAINMENT (`geval` never reaches `publish_decision`) and that thinking is off, not just that the grammar parsed. | Row 8, Row 6/10 | Andre (B3, B4) |
+| E10 | **Two guards to add.** (a) REVISED by 0e J6/J7 (2026-09-19): the corpus is NO LONGER byte-identical gate-off vs gate-on - Row 12 fences withheld items out of the corpus on purpose. The anti-Goodhart guard is instead that the fence reads the stamped `publish_decision` (not `hhem`) and `keeps_its_counterweights` stays faithfulness-free; the rejects store makes the fence auditable. (b) The G-Eval canary asserts CONTAINMENT (`geval` never reaches `publish_decision`) and that thinking is off, not just that the grammar parsed. | Row 8, Row 12, Row 6/10 | Andre (B3, B4); owner (J6/J7) |
 
 Also corrected: the committed HHEM count is 11,140 (8,461 at the current instrument identity), not ~6,966
 (E2); the design-of-record doc's remaining "block p01" phrasing is reconciled to the absolute-0.50 block
@@ -130,7 +130,7 @@ first; the link-only references in this section are historical.)
 | G2 | E7 placement + DigestDay arithmetic (Row 8 named only `RunManifest`). | Row 8 | Drop/relegate a withheld item BEFORE `collapse_same_story` ([assemble.py:2038](../backend/idhazh/assemble.py)) so the next-best duplicate promotes; `DigestDay` gains a `link_only` term (`planned = published + failed + link_only`) + validator rewrite ([digest_day.py:615](../backend/idhazh/contracts/digest_day.py)) + schema/version/changelog; `RunManifest` counts it; a count-invariant test that the arithmetic closes. |
 | G3 | E4 makes Row 8's gate self-contradict ("a withheld item is absent"). | Row 8 | The integration gate asserts the withheld item is PRESENT as a link-only card WITHOUT a summary, not absent; Row 8 writes `link_only=true` + `withheld_reason` using Row 11's field. |
 | G4 | E5 length pre-filter + the ~11% baseline float. | Row 8 | Add a length pre-filter (never summarise a sub-200-word stub); state the ~11% steady-state link-only baseline so D8's alarm does not read 11% as an anomaly. |
-| G5 | E10(a) corpus-harvest byte-identity test floats. | Row 8 | Integration test: corpus-harvest output is byte-identical gate-off vs gate-on (a link-only item is still harvested from `items/` upstream of assemble) - pins the anti-Goodhart invariant. |
+| G5 | E10(a) corpus-harvest test. **REVISED by 0e J6/J7:** the fence (Row 12) excludes withheld items from the corpus, so byte-identity gate-off-vs-on no longer holds. | Row 12 | Integration test: an item stamped `publish_decision == withheld` is excluded by `harvest_rows`, and `keeps_its_counterweights` is unchanged (still reads no `hhem`) - the fence reads the decision, not the score. |
 | G6 | E1 all floors WATCH-only; the per-item downgrade band is empty by construction. | Rows 2, 5, 7 | Drop the per-item `downgrade` action; faithfulness's only per-item reader action is the absolute 0.50 block + the existing 0.80/0.50 display bands. Keep the `downgraded` enum value ONLY as a reserved future-promotion member said so on the field, or drop it (G12). |
 | G7 | E2 seed keys on the HHEM instrument sub-identity, not `scorer_version`. | Rows 4, 5 | Row 4 folds faithfulness by the HHEM sub-identity (`hhem_rev@rev + weights_digest + window=900/150/anchored`), not the whole `scorer_version` (plan 35 changes it -> 0 of 11,140 match). Row 5 seeds from that key. |
 | G8 | E3 symmetric damping floats. | Row 5 | Row 5 dec 2 + oracle: symmetric damping for every watch floor (the withhold is absolute+undamped; a watch floor is an operator signal, so asymmetric damping only ratchets the alarm down under noise). |
@@ -141,7 +141,7 @@ first; the link-only references in this section are historical.)
 | G13 | Row 2 omits the contract fixtures + `export.py` tuple. | Row 2 | Name `tests/fixtures/contracts/<stem>/` fixtures for both new contracts and the `CONTRACTS` tuple + import in `export.py`. |
 | G14 | The design-of-record doc lags the corrections. | Row 5 + Row 8 commits | Widen the reconciliation: `docs/concepts/summary-quality-autotune.md` drops the faithfulness-downgrades-below-adaptive-floor language (E1), the `block p01` phrasing, and the asymmetric "damp the raise" (E3); the publish-gate section says withhold = absent + item-health telemetry, surfaced in the console (0e H1/H2/H4), NOT a link-only card. |
 
-**Table B - PR-wave grouping (9 PRs across 4 waves; each PR independently green)**
+**Table B - PR-wave grouping (10 PRs across 4 waves; each PR independently green)**
 
 | PR | Wave | Rows | Ships as / why grouped | Depends on |
 | --- | --- | --- | --- | --- |
@@ -154,6 +154,7 @@ first; the link-only references in this section are historical.)
 | coherence-ram | 1 | 11 | measure the 3-model peak RSS; the sequential server-eviction fallback + shard timeout 220; runs alone (0e H5-H7) | 35 coherence scorer |
 | console-panels | 3 | 9 | frontend island on `/console/judgement/`; + the not-published/withhold panel from item-health (0e H4) | metric-fold-fit, publish-gate |
 | apply-gate | 4 | 8 | ESCALATE, owner sign-off, first published-day change; withhold = absent + item-health (0e H1-H3, E7 placement) | publish-gate |
+| rejects-store | 3 | 12 | the `state/rejects/` store + its prune verb + the corpus fence; reads the stamped `publish_decision` (0e Table C) | publish-gate |
 
 **Peak pool width 2** (Carmack): Rows 1 and 3 are TWO co-roots from t0, not one width-1 head. The serial
 spine is `1 -> 2 -> 4 -> 5 -> 7 -> 8` (6 deep); the width-1 point is the TAIL (Row 8), by owner mandate.
@@ -192,9 +193,27 @@ the Editor's link-only recommendation and every advisor (CLAUDE.md section 0).
 | H6 | **Sequential eviction is feasible because the data is already on disk.** Verified: `extract` -> `{item_id}.article.json` and `summary` -> `{item_id}.summary.json` are persisted per-item BEFORE scoring ([stages/work.py](../backend/idhazh/stages/work.py)). So after the shard summarises all items, STOP the llama-server (free ~14.31 GiB), then score coherence from the on-disk summaries with MiniLM. **Two things must be built, both absent today:** (a) a server-STOP step - the server is started by `.github/scripts/start-llama-server.sh` (nohup, PID in `llama-server.pid`) and dies only at job end, so nothing stops it mid-job; (b) the work shard splits into two phases (summarise-all -> stop server -> score-coherence-from-disk). HHEM stays inline (server + HHEM is today's peak and fits); only coherence moves to the post-server phase, so the 3-model peak never occurs. |
 | H7 | **Shard timeout -> 220 minutes (APPROVED).** `run.shard_timeout_minutes` 200 -> 220 (6 h job cap = 360, ample headroom), covering the two-pass path. Carried in Row 11 and applied at EXECUTION, not in this docs PR. The HHEM anchored-window saving (~15 s/shard, arriving with plan 35's cap raise) gives further headroom. Next-day coherence (the E6 fallback) remains the no-restructure alternative if the measurement or the restructure cost rules against eviction. |
 
+**Table C - the rejects store (owner, 2026-09-19; adds Row 12)**
+
+| id | Ruling |
+| --- | --- |
+| J1 | **Persist every withheld summary for troubleshooting.** Today a withheld summary's TEXT survives nowhere committed (only the discarded run intermediate); the `EvalRow` keeps the scores + a one-way hash, not the prose - so the gate deletes ~11% of items daily and erases its own evidence. Row 12 adds a committed, fully-sharded store: `state/rejects/<YYYY>/<MM>/<DD>/<item_id>.json`, one `RejectRow` per withheld item. |
+| J2 | **What the `RejectRow` carries** (for a person or a bigger model to judge later, never a reader): `title`, `summary` (the failing prose), `source_text` (the sanitised extract the model read), `prompt` (the rendered system + user turns), the failure (`hhem`, `withheld_reason`, `band`, `scorer_version`), the summariser fingerprint (model + decode), identity (`item_id`, `url_key`, `canonical_url`, `source_id`), provenance (`version`, `generated_at`, `run_id`). |
+| J3 | **Source text is committed here - a second carve-out beyond `corpus/` (CLAUDE.md 0a).** The owner authorised it (2026-09-19); the executing PR amends 0a in the same commit. It is sanitised extract (crossed the trust boundary once at extraction, Guardrail #11), stored as data a person or an offline judge reads - never re-fed to a model as instruction. Bounded by J4. |
+| J4 | **Prune prose and source together, tightly: 30 days, config-driven.** A new knob (`finetune.reject_window_days`, default 30 - tighter than the corpus's 60) + its own verb (`retention.prune_rejects`) wired into the retention prune, deleting whole day directories past the window; the history bytes ride `prune.yml`'s force-push on the same schedule. |
+| J5 | **Never served.** `state/rejects/` stays unwired from `payload.ts`, the telemetry projection, the embed/index input, and the `DigestViewItem`/`ITEM_FIELDS` allow-list. The console (Row 9) plots only the aggregate - the rate, the reasons, the withheld-tail score distribution - never the prose or the source. |
+| J6 | **Fence the corpus: never train on a withheld summary.** The harvest reads `items/` directly ([corpus.py:217](../backend/idhazh/corpus.py)), so a withheld summary IS harvested today. Row 12 skips any `Scored` whose `EvalRow.publish_decision == withheld`, placed BEFORE `keeps_its_counterweights` - reading the stamped DECISION, not the raw `hhem`, so `keeps_its_counterweights` stays faithfulness-free (Andre's anti-monitor-selector rule holds). |
+| J7 | **This inverts E10(a) on purpose, and the store is the safety net.** E10(a) pinned "corpus byte-identical gate-off vs gate-on"; the fence deliberately breaks that (do not train on what we blocked). The Goodhart risk - training only on high-HHEM prose teaches the model to game HHEM - is mitigated because the store makes the fence AUDITABLE: a bigger model or a human reads the withheld tail offline and confirms the floor catches real failures rather than deleting good summaries. E10(a) + G5 + Row 8's gate are revised to match. |
+| J8 | **Replaces the "extend the human label draw" idea.** That would feed withheld items back into the live label queue and muddy the distribution-based autotune (owner). Instead the store is the substrate for offline judging (bigger model or human), never reader-facing; the label queue is untouched. |
+
+Note: `state/rejects/` is committed, so the withheld prose lives in the repository (not the digest, not
+the Pages site). If the repository is public it is browsable there for the 30-day window; the prune +
+`prune.yml` force-push bound it. The owner accepts this to have a committed, queryable store rather than
+an expiring CI artifact - revisit if the repository's visibility changes.
+
 ## Section 1 - Status Reckoner
 
-The round-2 review regroups the eleven rows into **9 PRs across 4 waves** (section 0d Table B). A row's
+The round-2 review regroups the twelve rows into **10 PRs across 4 waves** (section 0d Table B). A row's
 `Parallel-group` names its wave + PR; readiness is computed from `Depends-on` + a `Files touched`
 disjointness check, never the letter (execute-a-plan.md).
 
@@ -211,6 +230,7 @@ disjointness check, never the letter (execute-a-plan.md).
 | 11 | 3-model RAM: measure peak, sequential-eviction fallback, shard timeout 220 | 35 coherence | W1 / coherence-ram (alone) | PENDING | - | - | - |
 | 9 | Console: the quality bands + the not-published/withhold panel | 5, 7 | W3 / console-panels | PENDING | - | - | - |
 | 8 | Flip the flag: withhold = absent + item-health telemetry (E7 placement) | 7 | W4 / apply-gate (alone) | PENDING (ESCALATE) | - | - | - |
+| 12 | The rejects store + corpus fence (`state/rejects/`, 30-day prune) | 3, 7 | W3 / rejects-store | PENDING | - | - | - |
 
 ## Section 2 - Row detail
 
@@ -256,7 +276,7 @@ disjointness check, never the letter (execute-a-plan.md).
   | --- | --- | --- |
   | 1 | One Distribution + one Band contract, data-parameterised by `metric`; adding a metric is an enum member + a config block, not a new contract | Fowler |
   | 2 | One file per metric under `state/summary-quality/<metric>/`, so the fold-once guard and the input-change archive fire per metric | Fowler |
-  | 3 | `MetricAction` is `block | downgrade | watch`; the knob's default is `block` for faithfulness, `watch` for the rest (D2) | Andre, Editor |
+  | 3 | `MetricAction` is `block`, `downgrade`, or `watch`; the knob's default is `block` for faithfulness, `watch` for the rest (D2) | Andre, Editor |
   | 4 | The band carries two floors - a block floor and a watch floor - not one line (D3) | Andre |
 
 - **Rejected alternatives:**
@@ -386,9 +406,9 @@ disjointness check, never the letter (execute-a-plan.md).
   already holds (0e H3).
 - **Acceptance gates:** integration over the canary day, built once gate-off and once gate-on, asserting
   a withheld item is ABSENT from the day and PRESENT in item-health with the new `FailureCode` + detail
-  (0e H2), the `published + failed <= planned` invariant still closes, and corpus-harvest output is
-  byte-identical gate-off vs gate-on (a withheld item is still harvested upstream of assemble, E10a);
-  browser smoke that the day renders with an item withheld and when the band tree is absent.
+  (0e H2), and the `published + failed <= planned` invariant still closes; browser smoke that the day
+  renders with an item withheld and when the band tree is absent. (The corpus fence + its test move to
+  Row 12; the old byte-identity assertion is retired, 0e J6/J7.)
 - **Oracle:** with the flag off, every published day is byte-identical to today; with it on, a
   below-absolute-floor item is absent from the day and carries an item-health row naming why, and the
   story's next-best duplicate is promoted; it cannot settle the editorial cost of a thin day (D8 - the
@@ -465,6 +485,50 @@ disjointness check, never the letter (execute-a-plan.md).
   | 1 | Measure the 3-model peak before choosing inline vs sequential; a measuring row runs alone (E6) | Carmack, owner |
   | 2 | Sequential eviction is feasible because extract + summary persist per-item to disk before scoring; it needs a server-stop step + a two-phase work shard, both absent today | Carmack |
   | 3 | Shard timeout 200 -> 220 approved; applied at execution. Next-day coherence stays the no-restructure fallback | owner |
+
+### Row #12 - the rejects store + the corpus fence (`state/rejects/`, 30-day prune)
+
+- **Intent:** capture every withheld summary with enough context to investigate WHY it failed - offline,
+  by a person or a bigger model, NEVER shown to a reader - and stop training the model on summaries we
+  blocked. Row 8 removes the item; Row 12 keeps the evidence and fences the corpus (owner, 2026-09-19;
+  section 0e Table C).
+- **Scope + files touched:**
+  - **The contract:** new `RejectRow` in `backend/idhazh/contracts/reject_row.py` + generated
+    `schemas/reject-row.schema.json` + the `CONTRACTS` tuple/import in `contracts/export.py` + a
+    `tests/fixtures/contracts/reject-row/` round-trip fixture. Fields per 0e J2; `version` + one
+    `changelog`.
+  - **The write:** at the record-only gate (`backend/idhazh/quality/gate.py`, Row 7), when an item is
+    stamped `withheld`, write `state/rejects/<YYYY>/<MM>/<DD>/<item_id>.json` (temp-file-plus-rename,
+    one item one file - no `merge=union`). The summary, article extract and scores are already in hand;
+    render the prompt with `summarize.system_prompt(...)` + `summarize.user_turn(...)` (the same
+    reconstruction the corpus harvest uses at [corpus.py:400](../backend/idhazh/corpus.py)) so the
+    stored prompt is the exact one the model saw. Reuse the `ledger` / day-partition helpers.
+  - **The prune:** a `finetune.reject_window_days` knob (default 30) + `retention.prune_rejects` wired
+    into `backend/idhazh/stages/prune_state.py` beside `prune_traces`, deleting whole day directories
+    past the window (the `keep-future-dated` guard applies unchanged).
+  - **The corpus fence:** in `backend/idhazh/corpus.py` `harvest_rows`, skip any `Scored` whose
+    `row.publish_decision == withheld` BEFORE `keeps_its_counterweights` (which stays `hhem`-free). Do
+    NOT add `hhem` to `keeps_its_counterweights` (0e J6).
+  - **The 0a amendment + docs:** amend `CLAUDE.md` section 0a to name `state/rejects/` as a second
+    committed-article-text carve-out bounded by the 30-day prune (0e J3); document the store + the fence
+    in `docs/how-to/fine-tune-a-model.md` and the design-of-record.
+- **Acceptance gates:** contract drift gate (the new schema regenerates byte-identical); a unit test
+  that a withheld item writes exactly one `RejectRow` carrying the prose + source + rendered prompt
+  (driven from a bounded fixture, never the archive); a `harvest_rows` test that an item stamped
+  `withheld` is excluded from the corpus while a published sibling stays, and `keeps_its_counterweights`
+  still reads no `hhem`; a prune test on a bounded fixture that a day past the window is deleted. No
+  test walks the committed store (section 13, Guardrail #12).
+- **Oracle:** for a built withheld item, a `RejectRow` round-trips with the failing prose, the source
+  extract and the exact rendered prompt, and the corpus harvest drops it. It cannot settle whether the
+  0.50 floor is well-calibrated - that is the offline judge the store exists to feed (J8), out of scope.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | A committed JSON payload store (not a CSV ledger - prose has newlines), one file per item, day-sharded, on the `state/traces/` pattern | Fowler |
+  | 2 | Source text committed here, a second 0a carve-out, bounded by a 30-day config-driven prune | owner (J3/J4) |
+  | 3 | The corpus fence reads the stamped `publish_decision`, never `hhem`; `keeps_its_counterweights` stays faithfulness-free | Andre, owner (J6) |
+  | 4 | The store is the auditable safety net that makes fencing the corpus sound despite the Goodhart risk; offline judging (bigger model or human) reads it, never a reader (J7/J8) | Andre, owner |
 
 ## Section 3 - the loop, and where it is documented
 
