@@ -40,7 +40,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 12 | 0 | 12 | 0 |
 
-## In flight - 6
+## In flight - 7
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
@@ -49,6 +49,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | #4 | 33 | B | `span-rollup` writes segments | p33b4 |
 | #17 | 33 | B | `runtime-counters` writes segments | p33b17 |
 | #10 | 33 | C | `model_load_ms` and `job_seconds` join `host-fingerprint` | p33c10 |
+| #12 | 33 | D | Delete the merge machinery | p33d12b |
 | #29 | 33 | J | `prune.yml` wakes outside the digest window | p33j29 |
 
 ## Ready now - 35
@@ -95,7 +96,7 @@ section 3 is where it is answered.
 | #7 | 35 | A / eval-core | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - |
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
 
-## Waiting on another row - 84
+## Waiting on another row - 83
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -147,8 +148,7 @@ section 3 is where it is answered.
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
-| #12 | 33 | D | Delete the merge machinery | 3 is IN-FLIGHT; 4 is IN-FLIGHT; 6 is IN-FLIGHT; 17 is IN-FLIGHT |
-| #13 | 33 | D | Compaction lag and free swap on the console band | 12 is PENDING |
+| #13 | 33 | D | Compaction lag and free swap on the console band | 12 is IN-FLIGHT |
 | #11 | 33 | E | Delete `runtime-counters` and everything that reads it | 10 is IN-FLIGHT; 17 is IN-FLIGHT |
 | #15 | 33 | F | Generated TypeScript contracts replace the hand-written ones | 10 is IN-FLIGHT; 11 is PENDING |
 | #16 | 33 | G | Docs, and the orphan sweep | all names no row |
