@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
 
@@ -820,4 +820,4 @@ each has its own page.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - what each pipeline stage owns.
 - [../how-to/run-the-pipeline.md](../how-to/run-the-pipeline.md) - how to run the same stages locally.
 - [../architecture/sources/freshness.md](../architecture/sources/freshness.md) - what five runs add to one day.
-- [../../CLAUDE.md](../../CLAUDE.md) - Rules #1, #2, #9, and #10.
+- [../../CLAUDE.md](../../CLAUDE.md) - Guardrails #1, #2, #9, and #10.
