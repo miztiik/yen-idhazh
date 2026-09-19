@@ -16,6 +16,94 @@ does the cleanup, the search, the chart, and the recorded-only scorers.
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
 ```
 
+## Execution handover (zero-context cold start)
+
+Paste-ready brief for an agent that picks this plan up with zero prior context. It restates the
+execution stamp above in operating detail; [`docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md)
+is the canonical contract, and the Onboarding subsection below lists the page that owns each surface a
+row touches.
+
+```text
+You are the OWNER of this plan-doc (TODO/20260918-35-search-eval-key-points-plan.md).
+You have zero prior context. Execute it end to end: keep four rows in flight, auto-merge on
+green, never idle on CI, and pause only at the ESCALATE points below. Execution is
+AUTHORIZED (owner, 2026-09-19); the plan is runnable now.
+
+STEP 0 - COLD START. Read, in order: CLAUDE.md; docs/how-to/execute-a-plan.md (you are
+"the owner" in it); docs/agents/bootstrap.md; docs/how-to/run-the-gates.md;
+docs/how-to/ship-a-pr.md; then this plan's Section 0, its Onboarding subsection, Section 0e
+(orchestration corrections C8-C10), and Section 1 (the Status Reckoner). Section 2 is the
+per-row detail. Read the owning page for each surface a row touches (the Onboarding
+subsection lists them).
+
+STEP 1 - ADOPT OR CLOSE FIRST. Before dispatching: git worktree list, list branches,
+gh pr list. Reconcile any half-done row against the Status Reckoner - adopt it or remove it
+- before starting new work. Do not switch or edit the shared checkout; sibling agents may be
+on other branches there. Work only in dedicated worktrees under the repo's sibling
+.worktrees/ directory.
+
+STEP 2 - RUN THE POOL. Parallel N = 4, running pool, not a wave. A slot is filled while a
+worker WRITES a row and frees the moment the worker RETURNS its report - never when the PR
+merges (Section 0e C10, optimistic dispatch). For each delegated or parallel row: an
+isolated worktree off origin/main and a named branch, never shared. Brief the worker with
+the row verbatim (Scope, Files touched, Acceptance gates, Oracle, Decisions, Rejected
+alternatives) plus: read the owning page, honor CLAUDE.md, stay in scope, consult personas
+only on genuine ambiguity, run the Oracle + the gate guide's selected local checks (leave
+the full suite to CI), update only its own Reckoner line, return a structured report. The
+worker does NOT merge and does NOT start another row. Before dispatch, run the two
+pre-dispatch checks: every symbol/path the row names exists in the tree, and the row's check
+can fail for the reason the row exists.
+
+STEP 3 - DISPATCH ORDER (Section 1). Eight rows, five PRs:
+  DISPATCH search (Row 5) FIRST - the longest row and the only file-independent island -
+  THEN cap (Row 1). Both start at once off origin/main.
+    search             Row 5       independent now         AUTO-merge on green
+    cap                Row 1       independent now         AUTO-merge on green
+    eval-core          Rows 6,7,8  Level-5 + F2 + #34       PAUSE (STEP 5)
+    chart              Rows 2,3    after eval-core Row 8    AUTO-merge on green
+    retire-key-points  Row 4       after search+eval-core   PAUSE (STEP 5)
+  Readiness is computed: a row is ready when every Depends-on is DONE and it shares no
+  Files-touched entry with a row in flight. chart and retire depend on eval-core's Row 8.
+  A MEASURING row (Row 1 prefill note, Row 8 runner-cost note) runs ALONE.
+
+STEP 4 - MERGE + REFILL. When a worker returns, dispatch the next ready row NOW; then verify
+that row's CI + test records against the Definition of Done (CLAUDE.md section 9) and
+ship-a-pr.md. On green: remove the row's worktree, THEN
+gh pr merge <N> --squash --delete-branch. Merging is serialized but never blocks the pool; a
+red or conflicting merge returns that row to you and the pool keeps running.
+
+STEP 5 - ESCALATE (PAUSE that row, not the pool; default is AUTO). Surface with the
+five-part decision shape (CLAUDE.md 0c) for:
+  - F1: Row 4 removes internal Summary.key_points (retires the facts-first decode, reshapes
+    the corpus) - Level 5.
+  - F2: Row 6 removes key_point_weight, a committed field on plan #34's
+    StorySimilarityDistribution - Level 5, cross-plan.
+  - Any EvalRow / published-payload field removal (eval-core is exactly this) - Level 5.
+  So search, cap and chart auto-merge; eval-core and retire-key-points pause for an owner ack.
+  CROSS-PLAN GATE for eval-core: plan #34 is not fully closed (its plan-doc still exists).
+  key_point_weight IS committed, but before dispatching Row 6 check #34's open rows + live
+  worktrees for a file collision on the eval-core surface (story_similarity_distribution.py,
+  story_similarity_pair.py, judge_draw.py, judge_fit.py, assemble.py, eval_row.py). And
+  state/**/*.csv is merge=union: two branches that change the EvalRow width stack silently
+  with NO conflict (C9) - never branch-stack an eval-row-width change; wait for main.
+
+STEP 6 - PERSONAS resolve ambiguity; they are NOT an approval gate. Consult a persona custom
+agent (exact CLAUDE.md section 14 name: Reader, Editor, Jony, Susan, Andre, Fowler, Carmack;
+plus Explore for read-only breadth) ONLY when two defensible answers lead to DIFFERENT code
+and the difference matters. A contested decision runs the relevant personas in DEBATE to one
+ruling, baked into the code. Not for coverage, never as a gate.
+
+STEP 7 - REPORT in plain English (CLAUDE.md 0b/0c): lead with what happened, lettered tables
+with row-ids, no subsystem vocabulary forwarded, decisions as five-part requests.
+
+CLOSURE. When every row is DONE/COLLAPSED: confirm the Reckoner is resolved, check nothing
+durable lives only in this plan-doc (distill-a-plan.md says where leftovers go), delete the
+plan-doc, then sweep the worktrees the plan created.
+
+FIRST ACTION: STEP 1 (adopt-or-close), then dispatch search (Row 5) and cap (Row 1) into two
+isolated worktrees off origin/main.
+```
+
 ## Section 0 - Operating contract
 
 | Field | Value |
