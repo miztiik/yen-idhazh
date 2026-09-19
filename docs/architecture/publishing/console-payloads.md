@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-19
 The operator console reads ten datasets. Nine of them come from `state/`,
 which is never served, so each one crosses a trust boundary and each crossing
 needs a contract (Guardrail #11). This page is the list. The machine-readable copy is
@@ -130,7 +130,7 @@ day the run is publishing, and every projection's body stays in its own module
 
 | Producer | Writes | Reads |
 | --- | --- | --- |
-| `console_band.py` | `console/band.json` | the run-day shards it wrote, `state/feed-health/`, one item-health shard, one day-metrics record, the counters file |
+| `console_band.py` | `console/band.json` | the run-day shards it wrote, `state/feed-health/`, one item-health shard, one day-metrics record, `state/host-fingerprint/` over the widest window, and the newest day's `run.json` |
 | `run_days.py` | `run-days/<YYYY-MM>.json` | one month of committed `run.json` and `digest.json` |
 | `day_metrics.py` `publish_public` | `day-metrics/<YYYY-MM>.json` | one month of `state/day-metrics/<YYYY>/<MM>/` |
 | `machine.py` | `machine/<YYYY-MM>.csv` | `state/runtime-counters.csv` |

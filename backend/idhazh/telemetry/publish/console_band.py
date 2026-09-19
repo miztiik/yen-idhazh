@@ -44,7 +44,7 @@ from datetime import date
 from pathlib import Path
 from typing import Final
 
-from idhazh import discover, ledger
+from idhazh import assemble, day_partition, discover, ledger
 from idhazh.contracts.console_band import (
     BandRun,
     BandSize,
@@ -57,11 +57,13 @@ from idhazh.contracts.console_band import (
 )
 from idhazh.contracts.day_metrics import DayMetrics
 from idhazh.contracts.feed_health import FeedHealthRow
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.public_run_day import PublicRunDay, PublicRunRecord
+from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.source_health_view import SourceHealthRow
 from idhazh.month_partition import month_files
 from idhazh.telemetry.publish import (
@@ -567,12 +569,19 @@ def model_candidates(day: BandModel | None) -> list[Candidate]:
 
 @dataclass(frozen=True)
 class MachineFacts:
-    """The band's slice of the machine counters, and only that slice.
+    """The band's slice of the host rows, and only that slice.
 
-    `frontend/src/lib/server/runtime-counters.ts` builds the whole picture for
-    the Hardware route and keeps doing so - it will read the published machine
-    shards once they are published. What the band needs is three numbers, so
-    three are derived here rather than the twenty the route draws.
+    The Hardware route draws the whole picture from the published machine series.
+    What the band needs is three numbers, so three are derived here rather than
+    the twenty the route draws.
+
+    `shards` is the count the plan derived, read off the run manifest, and
+    `reported` is how many work jobs filed a host row. **They come from two
+    different files on purpose.** Counted off the host rows themselves the
+    denominator would equal the numerator on every run, `N shards reported
+    nothing` could never be anything but zero, and the guard below would read
+    `len(kept) > len(kept)`. Zero means the manifest did not record a count,
+    which is unknown rather than a run that planned no shards.
     """
 
     refused: int
@@ -581,14 +590,20 @@ class MachineFacts:
     read_spread: float | None
 
 
-def machine_facts(rows: Sequence[Mapping[str, str]]) -> MachineFacts:
+def machine_facts(
+    rows: Sequence[Mapping[str, str]], planned: Mapping[str, int] | None = None
+) -> MachineFacts:
     """Refused runs, and the newest run's shard count, answers and read spread.
 
-    A run is refused whole when its rows cannot be made into one run: two
-    servers answered for one shard and neither can be added to the other, or a
-    row does not say which shard it came from. Refusing is never silent - a page
-    that prints half a reconcilable run is worse than one that says which run it
-    cannot read.
+    A run is refused whole when its rows cannot be made into one run: two hosts
+    answered for one shard and neither can be added to the other, a row does not
+    say which shard it came from, or more shards answered than the plan asked
+    for. Refusing is never silent - a page that prints half a reconcilable run is
+    worse than one that says which run it cannot read.
+
+    `planned` is run id to the shard count that run's manifest recorded. A run
+    it does not name has an unknown denominator, which costs that run the two
+    checks that need one and nothing else.
     """
     by_run: dict[str, list[Mapping[str, str]]] = defaultdict(list)
     for row in rows:
@@ -601,7 +616,7 @@ def machine_facts(rows: Sequence[Mapping[str, str]]) -> MachineFacts:
     # correctly and orders the days too.
     for run_id in sorted(by_run, reverse=True):
         run_rows = by_run[run_id]
-        facts = _one_run(run_rows)
+        facts = _one_run(run_rows, (planned or {}).get(run_id))
         if facts is None:
             refused += 1
             continue
@@ -617,30 +632,26 @@ def machine_facts(rows: Sequence[Mapping[str, str]]) -> MachineFacts:
     )
 
 
-#: Every counter cell. Two rows for one shard are the same scrape only if all of
-#: these match; a difference means two servers, and two servers cannot be added
-#: or picked between.
-_COUNTER_CELLS: Final[tuple[str, ...]] = (
-    "scraped_at",
-    "prompt_tokens_total",
-    "prompt_tokens_cached_total",
-    "prompt_seconds_total",
-    "tokens_predicted_total",
-    "tokens_predicted_seconds_total",
-    "n_decode_total",
-    "n_tokens_max",
-    "n_busy_slots_per_decode",
-    "job_seconds",
-    "cpu_model",
-    "cpu_busy_pct",
-    "peak_rss_bytes",
-    "model_load_ms",
+#: The cells that identify one host row. Two rows carrying these four are two
+#: halves of one row, which the compaction folds into one.
+_MACHINE_KEY: Final[tuple[str, ...]] = ("date", "run_id", "job", "shard")
+
+#: Every cell that is not key and not the schema stamp, derived off the contract
+#: rather than listed a second time - a column added later cannot be forgotten
+#: here. Two rows for one shard are the same host only if all of these match; a
+#: difference means two hosts, and two hosts cannot be added or picked between.
+#: `version` is excluded for the reason the compaction excludes it: two halves
+#: written by two builds are still two halves of one row.
+_MACHINE_CELLS: Final[tuple[str, ...]] = tuple(
+    name
+    for name in HostFingerprintRow.csv_columns()
+    if name not in _MACHINE_KEY and name != "version"
 )
 
 
-def _one_run(rows: Sequence[Mapping[str, str]]) -> MachineFacts | None:
+def _one_run(rows: Sequence[Mapping[str, str]], planned: int | None) -> MachineFacts | None:
     """One run's rows as one run, or None when they cannot be."""
-    if len({(row.get("date", ""), row.get("shards", "")) for row in rows}) > 1:
+    if len({row.get("date", "") for row in rows}) > 1:
         return None
     by_shard: dict[str, list[Mapping[str, str]]] = defaultdict(list)
     for row in rows:
@@ -650,19 +661,24 @@ def _one_run(rows: Sequence[Mapping[str, str]]) -> MachineFacts | None:
         by_shard[key].append(row)
     kept: list[Mapping[str, str]] = []
     for same_shard in by_shard.values():
-        scrapes = {tuple(row.get(cell, "") for cell in _COUNTER_CELLS) for row in same_shard}
-        if len(scrapes) > 1:
+        hosts = {tuple(row.get(cell, "") for cell in _MACHINE_CELLS) for row in same_shard}
+        if len(hosts) > 1:
             return None
         kept.append(same_shard[0])
-    shards = _number(rows[0].get("shards"))
-    if shards is None or shards < 1 or len(kept) > shards:
-        return None
-    if any((_number(row.get("shard")) or 0) >= shards for row in kept):
-        return None
+    # The denominator and the numerator come from different files, so these two
+    # can disagree - which is the whole reason the manifest records the count.
+    if planned is not None:
+        if planned < 1 or len(kept) > planned:
+            return None
+        if any((_number(row.get("shard")) or 0) >= planned for row in kept):
+            return None
     rates = [
         rate
         for rate in (
-            _rate(_number(row.get("prompt_tokens_total")), _number(row.get("prompt_seconds_total")))
+            _rate(
+                _number(row.get("server_prompt_tokens")),
+                _number(row.get("server_prompt_seconds")),
+            )
             for row in kept
         )
         if rate is not None
@@ -671,7 +687,7 @@ def _one_run(rows: Sequence[Mapping[str, str]]) -> MachineFacts | None:
     # rather than 1.00x, which would read as "the hosts agreed".
     spread = None if len(rates) < 2 else max(rates) / min(rates)
     return MachineFacts(
-        refused=0, shards=int(shards), reported=len(kept), read_spread=spread
+        refused=0, shards=planned or 0, reported=len(kept), read_spread=spread
     )
 
 
@@ -927,7 +943,8 @@ def build(
     feeds: Sequence[FeedHealthRow],
     health_rows: Sequence[Mapping[str, str]],
     record: DayMetrics | None,
-    counters: Sequence[Mapping[str, str]],
+    machine_rows: Sequence[Mapping[str, str]],
+    planned_shards: Mapping[str, int] | None = None,
     months: Sequence[str],
     run: RunConfig,
     collect: CollectConfig,
@@ -955,7 +972,7 @@ def build(
         )
     )
     worst_model = worst_of(model_candidates(newest_model))
-    worst_machine = worst_of(machine_candidates(machine_facts(counters)))
+    worst_machine = worst_of(machine_candidates(machine_facts(machine_rows, planned_shards)))
     # The cap and its one exception, side by side so neither can be read without
     # the other. A skewed day is capped; a gate that has stopped reading is not.
     worst_judgement = worst_of(dead_gate_candidates(decline_rates or {}))
@@ -1190,7 +1207,9 @@ def publish(
       which opens the day files that span names and no others;
     - the newest day's item-health shard and its day-metrics record, one file
       each;
-    - the counters for the months the widest span reaches.
+    - the host rows for the days the widest span reaches, one file a day;
+    - the newest day's run manifest, one file, for the shard count each of that
+      day's runs planned.
 
     `sources` is the run's own source-health view, handed over by the caller
     that already built it rather than read again here - it is one row per
@@ -1226,14 +1245,15 @@ def publish(
         record_path = day_metrics.day_metrics_path(state_root, newest_date)
         if record_path.is_file():
             record = DayMetrics.read(record_path)
-    counters = _counter_rows(state_root, months=months, anchor=anchor)
+    machine_rows = _machine_rows(state_root, within_days=widest, anchor=anchor)
     band = build(
         generated_at=generated_at,
         days=[row for row in days if _within(row.date, anchor, widest)],
         feeds=feeds,
         health_rows=health_rows,
         record=record,
-        counters=counters,
+        machine_rows=machine_rows,
+        planned_shards=_planned_shards(digest_root, newest_date),
         months=fetchable_months(digest_root, telemetry_root),
         run=run,
         collect=collect,
@@ -1300,32 +1320,61 @@ def fetchable_months(digest_root: Path, telemetry_root: Path | None = None) -> l
     return sorted(found)
 
 
-def _counter_rows(
-    state_root: Path, *, months: int, anchor: str
+def _machine_rows(
+    state_root: Path, *, within_days: int, anchor: str
 ) -> list[Mapping[str, str]]:
-    """The `work` counter rows the widest span reaches, as raw cells.
+    """The `work` host rows the widest span reaches, as raw cells.
 
-    Raw rather than through `RuntimeCountersRow`, because refusing a run is the
-    band's whole point here: a row that will not validate is one of the two
-    servers this has to notice, and validating it away would silently drop the
-    evidence. The growing read behind it is `machine`'s and is declared
-    there.
+    Raw rather than through `HostFingerprintRow`, because refusing a run is the
+    band's whole point here: a row that will not validate is one of the two hosts
+    this has to notice, and validating it away would silently drop the evidence.
 
     The job is read off the cell rather than through the contract, for that same
-    reason, and a row whose cell is missing or empty is kept - it is exactly the
-    malformed row this band exists to report, and dropping it would make the
-    band quiet about the thing it was built for. `machine.PUBLISHED_JOB`
-    says why the other job's rows are not this series.
+    reason, and a row whose cell is missing or empty is kept - `job` defaults to
+    the work job in the contract, so a blank cell is that job. Every other job
+    writes a host row too, and they are not this slice: the plan and assemble jobs
+    run one shard each, so pooling them into a shard count would answer about a
+    matrix nobody dispatched. `machine.PUBLISHED_JOB` carries the same reason for
+    the published series.
+
+    One file a day over `within_days`, which is `max(console.window_presets)`, so
+    the cost is set by a committed knob and not by how much the archive has
+    accumulated (Guardrail #12). A day nothing wrote opens nothing.
     """
-    source = ledger.runtime_counters_path(state_root)
+    found: list[Mapping[str, str]] = []
+    for day in day_partition.days_in_window(anchor, within_days):
+        source = ledger.host_fingerprint_path(state_root, day)
+        if not source.is_file():
+            continue
+        with source.open("r", encoding="utf-8", newline="") as handle:
+            found.extend(
+                row
+                for row in csv.DictReader(handle)
+                if (row.get("job") or machine.PUBLISHED_JOB) == machine.PUBLISHED_JOB
+            )
+    return found
+
+
+def _planned_shards(digest_root: Path, newest_date: str | None) -> dict[str, int]:
+    """Each of the newest day's runs, by id, to the shard count it planned.
+
+    One file, and it is the manifest rather than the host rows on purpose: the
+    plan decided this number before any work job existed, so it is the one
+    reading that can disagree with how many of them answered. A run whose
+    manifest predates the cell is absent here, which is unknown - not zero.
+
+    The newest day only. The band reports on the newest run and refuses the rest
+    or says nothing about them, so reading a manifest a day is 90 file opens to
+    answer a question about one (Guardrail #12).
+    """
+    if newest_date is None:
+        return {}
+    source = assemble.day_dir(digest_root, newest_date) / "run.json"
     if not source.is_file():
-        return []
-    oldest = series.oldest_month_kept(date.fromisoformat(anchor), months)
-    with source.open("r", encoding="utf-8", newline="") as handle:
-        return [
-            row
-            for row in csv.DictReader(handle)
-            if (row.get("date") or "")[:7] >= oldest
-            and (row.get("job") or machine.PUBLISHED_JOB)
-            == machine.PUBLISHED_JOB
-        ]
+        return {}
+    manifest = RunManifest.read(source)
+    return {
+        record.run_id: record.shards
+        for record in manifest.runs
+        if record.shards is not None
+    }
