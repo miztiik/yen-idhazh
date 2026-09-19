@@ -96,6 +96,10 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     # pattern here: "at least 2" is a statement about a spread, and a regex that
     # said it would be a second copy of the rule.
     ("measure.yml", "runtime_repeats"): DISPATCH_READ_BY_NAME,
+    # Read by name for the reason above, plus one: the ceiling is the job
+    # timeout and the timeout is spent per PASS, so what fits depends on how
+    # many cases the dispatch runs. The contract bounds it on the way in.
+    ("measure.yml", "runtime_corpus_items"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "runtime_threads"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "runtime_threads_batch"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "budget_samples"): "^[1-9][0-9]{0,4}$",
