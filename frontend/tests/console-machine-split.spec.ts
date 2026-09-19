@@ -28,54 +28,33 @@ import { splitByMachine } from '../src/lib/charts/machine-split';
 import {
 	machineCounters,
 	type MachineLimits,
-	type RunCounters
-} from '../src/lib/server/runtime-counters';
+	type MachineRun
+} from '../src/lib/server/machine-counters';
+import { ledgers, plan, type ShardReading } from './support/machine-rows';
 
 const LIMITS: MachineLimits = { contextWindow: 8192, jobTimeoutSeconds: 21_600 };
 
 /** Seven stops for a machine, which is `console.machine_colour_stops`. */
 const STOPS = 7;
 
-function counterRow(cells: Partial<Record<string, string | number>>): Record<string, string> {
-	const blank: Record<string, string> = {
-		version: '2026-08-31',
-		date: '2026-09-12',
-		run_id: '2026-09-12-1',
-		shard: '0',
-		shards: '4',
-		scraped_at: '2026-09-12T10:00:00Z',
-		prompt_tokens_total: '',
-		prompt_tokens_cached_total: '',
-		prompt_seconds_total: '',
-		tokens_predicted_total: '',
-		tokens_predicted_seconds_total: '',
-		n_decode_total: '',
-		n_tokens_max: '',
-		n_busy_slots_per_decode: '',
-		job_seconds: '',
-		cpu_model: '',
-		cpu_busy_pct: '',
-		peak_rss_bytes: '',
-		model_load_ms: ''
-	};
-	for (const [name, value] of Object.entries(cells)) blank[name] = String(value);
-	return blank;
-}
-
-/** A shard that reported all four counters, so it lands in a group. */
+/** A shard that reported all four figures, so it lands in a group. */
 function shard(
 	index: number,
 	cpu: string,
 	figures: { readTokens: number; readSeconds: number; writeTokens: number; writeSeconds: number }
-): Record<string, string> {
-	return counterRow({
+): ShardReading {
+	return {
+		date: '2026-09-12',
+		runId: '2026-09-12-1',
 		shard: index,
-		cpu_model: cpu,
-		prompt_tokens_total: figures.readTokens,
-		prompt_seconds_total: figures.readSeconds,
-		tokens_predicted_total: figures.writeTokens,
-		tokens_predicted_seconds_total: figures.writeSeconds
-	});
+		cpuModel: cpu,
+		serverPromptTokens: figures.readTokens,
+		serverPromptSeconds: figures.readSeconds,
+		writtenTokens: figures.writeTokens,
+		writeSeconds: figures.writeSeconds,
+		cachedTokens: 0,
+		longestSequence: figures.readTokens + figures.writeTokens
+	};
 }
 
 /** Four shards on three machines and one that recorded none.
@@ -106,8 +85,11 @@ const FOUR_SHARDS = [
 	shard(3, '', { readTokens: 600, readSeconds: 30, writeTokens: 300, writeSeconds: 30 })
 ];
 
-function onlyRun(rows: Record<string, string>[]): RunCounters {
-	const { runs, refused } = machineCounters(rows, [], LIMITS);
+function onlyRun(readings: ShardReading[]): MachineRun {
+	const { hosts, health } = ledgers(
+		readings.map((reading) => ({ date: '2026-09-12', runId: '2026-09-12-1', ...reading }))
+	);
+	const { runs, refused } = machineCounters(hosts, health, plan(['2026-09-12-1', 4]), LIMITS);
 	expect(refused, 'the fixture was refused').toEqual([]);
 	expect(runs).toHaveLength(1);
 	return runs[0];
@@ -115,7 +97,7 @@ function onlyRun(rows: Record<string, string>[]): RunCounters {
 
 test.describe('what a processor is called', () => {
 	test('the six strings the committed ledger holds normalise to six names', () => {
-		// Measured 2026-09-17 over `state/runtime-counters.csv`: six distinct
+		// Measured 2026-09-17 over the committed machine records: six distinct
 		// `cpu_model` values across 359 named rows.
 		expect(machineName('AMD EPYC 7763 64-Core Processor')).toBe('AMD EPYC 7763');
 		expect(machineName('AMD EPYC 9V74 80-Core Processor')).toBe('AMD EPYC 9V74');
@@ -285,7 +267,7 @@ test.describe('reading against writing, machine by machine', () => {
 	});
 
 	test('a run with no complete shard splits nothing rather than splitting zero', () => {
-		const bare = onlyRun([counterRow({ shard: 0 }), counterRow({ shard: 1 })]);
+		const bare = onlyRun([{ shard: 0 }, { shard: 1 }]);
 		const view = splitByMachine(bare, { colourStops: STOPS });
 		expect(view.empty).toBe(true);
 		expect(view.groups).toEqual([]);

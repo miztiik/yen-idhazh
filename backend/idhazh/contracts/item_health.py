@@ -23,6 +23,7 @@ from idhazh.contracts.base import (
     DateStamp,
     ItemId,
     RunId,
+    ServerJob,
     Slug,
     Timestamp,
     Url,
@@ -30,7 +31,6 @@ from idhazh.contracts.base import (
     fits_its_column,
 )
 from idhazh.contracts.call_cost import COST_FIELDS, CallKind
-from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier
 

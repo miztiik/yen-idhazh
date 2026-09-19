@@ -1,12 +1,13 @@
-/** What the machine did, drawn from what the model server itself counted.
+/** What the machine did, drawn from what the two surviving ledgers counted.
  *
- * `$lib/server/runtime-counters.ts` reads `state/runtime-counters.csv` and hands
- * back one figure per shard and per run. This module turns those figures into
- * the eight things an operator can act on: which shard was slow and why,
- * whether the seconds went on reading or on writing, whether the prompt cache
- * is earning its keep, how much of the context window a run actually used, how
- * near the runner's 16 GB a run got, whether the two clocks agree, whether the
- * tail is growing, and what a run's tokens would have cost somewhere else.
+ * `$lib/server/machine-counters.ts` reads `state/host-fingerprint/` and
+ * `state/item-health/` and hands back one figure per shard and per run. This
+ * module turns those figures into the eight things an operator can act on:
+ * which shard was slow and why, whether the seconds went on reading or on
+ * writing, whether the prompt cache is earning its keep, how much of the
+ * context window a run actually used, how near the runner's 16 GB a run got,
+ * whether the two clocks agree, whether the tail is growing, and what a run's
+ * tokens would have cost somewhere else.
  *
  * Every function here is pure and every one takes its ceiling as an argument,
  * so a test drives it from a fixture ledger and Guardrail #6 keeps the knobs in
@@ -18,7 +19,7 @@
  */
 
 import type { EChartsOption } from 'echarts';
-import type { RunCounters, ShardCounters } from '$lib/server/runtime-counters';
+import type { MachineRun, ShardCounters } from '$lib/server/machine-counters';
 import { dayMonth } from '../format';
 import { AXIS_LABEL_GAP_PX, LABEL_ADVANCE_EM, labelWidth, type DayReadout } from './frame';
 import { percentOf } from './rank';
@@ -140,9 +141,10 @@ export interface ShardBoardView {
 	/** Ranked by job clock, slowest first. A shard with no clock cannot be
 	 * ranked, so it follows in shard order rather than being dropped. */
 	rows: BoardRow[];
-	/** Shards the run split into. `rows.length` is short of it when a shard's
-	 * job died before it scraped. */
-	shards: number;
+	/** Shards the run planned. `rows.length` is short of it when a shard's job
+	 * died before it recorded anything. Null where the manifest recorded no
+	 * count, which is unknown rather than however many answered. */
+	shards: number | null;
 	/** The fastest reader over the slowest. Null with fewer than two readers -
 	 * one shard cannot spread against itself. */
 	readSpread: number | null;
@@ -168,7 +170,7 @@ function modelSeconds(shard: ShardCounters): number | null {
  * that would be killed first.
  */
 export function shardBoard(
-	run: RunCounters | null,
+	run: MachineRun | null,
 	timeoutSeconds: number | null
 ): ShardBoardView {
 	if (run === null || run.reported.length === 0) {
@@ -176,7 +178,7 @@ export function shardBoard(
 			runId: run?.runId ?? '',
 			date: run?.date ?? '',
 			rows: [],
-			shards: run?.shards ?? 0,
+			shards: run?.shards ?? null,
 			readSpread: null,
 			scaleSeconds: 0,
 			timeoutSeconds,
@@ -259,7 +261,7 @@ export interface CacheDay {
  * cached the same fraction draws an identical bar. The share is printed beside
  * the bar because it is worth knowing, and it is never the geometry.
  */
-export function cacheByDay(runs: readonly RunCounters[]): CacheDay[] {
+export function cacheByDay(runs: readonly MachineRun[]): CacheDay[] {
 	const byDate = new Map<string, { read: number; cached: number; runs: number }>();
 	for (const run of runs) {
 		if (run.promptTokens.value === null || run.cachedTokens.value === null) continue;
@@ -334,7 +336,7 @@ export interface ContextBar {
 	usedPct: number | null;
 	spare: number | null;
 	from: number;
-	outOf: number;
+	outOf: number | null;
 }
 
 /** The longest thing a run read, against the window it was given.
@@ -346,7 +348,7 @@ export interface ContextBar {
  * and the chart draws all of them.
  */
 export function contextHeadroom(
-	runs: readonly RunCounters[],
+	runs: readonly MachineRun[],
 	contextWindow: number | null
 ): ContextBar[] {
 	// The share is computed from the window handed in, never from the one the
@@ -430,7 +432,9 @@ export interface MemoryView {
 	marks: TargetMarks;
 	/** Shards that reported the cell, and shards the run split into. */
 	from: number;
-	outOf: number;
+	/** Null where the run's manifest recorded no shard count, which is unknown
+	 * and is drawn as unknown - never as the count of who answered. */
+	outOf: number | null;
 	empty: boolean;
 }
 
@@ -442,7 +446,7 @@ export interface MemoryView {
  * the run the figure covers rather than treating an unmeasured shard as a shard
  * that used no memory.
  */
-export function peakMemory(run: RunCounters | null): MemoryView {
+export function peakMemory(run: MachineRun | null): MemoryView {
 	const reported =
 		run === null
 			? []
@@ -466,7 +470,7 @@ export function peakMemory(run: RunCounters | null): MemoryView {
 		pctOfRunner: highWater === null ? null : Math.round((highWater / RUNNER_MEMORY_BYTES) * 100),
 		marks: targetMarks(highWater, RUNNER_MEMORY_BYTES, MEMORY_POLARITY),
 		from: reported.length,
-		outOf: run?.shards ?? 0,
+		outOf: run?.shards ?? null,
 		empty: highWater === null
 	};
 }
@@ -507,11 +511,10 @@ export interface ClockView {
  * `input_tokens - cached_tokens` is the definition, and it is defined HERE
  * rather than in the reader so there is exactly one of it: the runtime reused
  * the cached ones instead of reading them, so leaving them in reports a rate
- * the machine never ran at. `poolLedger` in `$lib/server/runtime-counters.ts`
+ * the machine never ran at. `poolLedger` in `$lib/server/machine-counters.ts`
  * calls this, which is why that module imports a chart module rather than the
  * other way round for this one function.
  *
- * A row missing either required cell predates token capture and is evidence in
  * neither direction, so it is skipped rather than counted as an item that read
  * nothing.
  */
@@ -552,7 +555,7 @@ export function pooledReadRate(rows: readonly Record<string, string>[]): number 
  * things.
  */
 export function clockAgreement(
-	run: RunCounters | null,
+	run: MachineRun | null,
 	health: readonly Record<string, string>[],
 	tolerancePct: number
 ): ClockView {
