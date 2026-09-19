@@ -99,7 +99,7 @@ $env:BUILD_VERSION = '1788285804815' # 13 characters, or it moves the bytes it w
 npm --prefix frontend run build
 ```
 
-Leave it unset for any measurement that has to match a CI build, which is every page ceiling. **The pin is a live grenade when the variable is unset**, and the fallback reads as a no-op because SvelteKit's own default is also `Date.now`. It is not the same thing: SvelteKit takes one timestamp when its options module loads, while `svelte.config.js` is evaluated once per Vite pass - so the document names `__sveltekit_184943e`, the client chunk names `__sveltekit_1kal9sg`, and every route throws `TypeError: Cannot read properties of undefined (reading 'data')` on hydration. Nothing else says so: the build is clean, the pages render from their prerendered markup, and the canary build does not split its chunks, so the browser suite stays green. More than one line out of this probe is the defect:
+**A successful build can still give its documents and client different startup identifiers.** A `Date.now()` fallback in `svelte.config.js` causes this because the file is evaluated per pass. It also reproduced with the framework default on a Windows canary build on 2026-09-19: the HTML named `__sveltekit_ikv0pr` and the client expected `__sveltekit_ya0qrc`. Dated pages threw `Cannot read properties of undefined (reading 'data')`; the offline test timed out waiting for a worker because the page never mounted. The prerendered home page still looked populated. Pin the supported `BUILD_VERSION` environment variable across the whole build and rerun the affected tests; do not insert another timestamp fallback. More than one line from this probe is the defect:
 
 ```powershell
 Get-ChildItem build -Recurse -Include *.html,*.js |

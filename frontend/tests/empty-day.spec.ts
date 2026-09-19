@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import type { DayForPage } from '../src/lib/payload/types';
 
 const ROOT = resolve(process.cwd(), '..');
 const CANARY = resolve(ROOT, 'backend', 'var', 'canary', 'digest');
@@ -107,10 +108,76 @@ test('reader source limits are sentences in the page text', () => {
 
 	expect(item).toContain('item.reader_note');
 	expect(item).not.toContain('Brief');
-	expect(notice).toContain(
-		'{day.items_failed} did not finish, because we could not read enough of the page to summarize'
-	);
+	expect(notice).toContain('day.items_failed');
+	expect(notice).toContain('did not finish.');
+	expect(notice).not.toContain('could not read enough of the page');
 });
+
+test('the day header separates its date from the count without a surrounding card', async ({
+	page
+}) => {
+	await page.setViewportSize({ width: 390, height: 844 });
+	await page.goto('/');
+	const notice = page.locator('section[aria-label="About today"]');
+	await expect(notice.locator('h1')).toHaveText(longDate(latestFixtureDay()));
+	const treatment = await notice.evaluate((node) => ({
+		date: parseFloat(getComputedStyle(node.querySelector('h1')!).fontSize),
+		count: parseFloat(getComputedStyle(node.querySelector('.notice-count')!).fontSize),
+		radius: getComputedStyle(node).borderRadius,
+		background: getComputedStyle(node).backgroundColor,
+		overflow: node.scrollWidth - node.clientWidth
+	}));
+	expect(treatment.date).toBeGreaterThan(treatment.count);
+	expect(treatment.radius).toBe('0px');
+	expect(treatment.background).toBe('rgba(0, 0, 0, 0)');
+	expect(treatment.overflow).toBeLessThanOrEqual(0);
+});
+
+for (const state of [
+	{ name: 'one unfinished article', failed: 1, partial: true, history: true, status: '1 article did not finish.' },
+	{ name: 'several unfinished articles', failed: 3, partial: true, history: true, status: '3 articles did not finish.' },
+	{ name: 'a complete day', failed: 0, partial: false, history: true, status: null },
+	{ name: 'an unknown failure count', failed: null, partial: true, history: true, status: null },
+	{ name: 'an unknown update history', failed: null, partial: false, history: false, status: null }
+]) {
+	test(`the day header reports ${state.name} without inventing facts`, async ({ page }) => {
+		const date = latestFixtureDay();
+		const day = JSON.parse(readFileSync(
+			join(process.cwd(), 'build', 'digest', ...date.split('-'), 'digest.json'), 'utf8'
+		)) as DayForPage;
+		expect(day.items.length, 'the header fixture needs a day with stories').toBeGreaterThan(1);
+		day.partial = state.partial;
+		day.items_failed = state.failed;
+		day.runs = state.history ? [
+			{ n: 1, at: `${date}T06:00:00Z`, items_added: day.items.length - 1 },
+			{ n: 2, at: `${date}T12:30:00Z`, items_added: 1 }
+		] : undefined;
+		let requests = 0;
+		await page.route(`**/digest/${date.replaceAll('-', '/')}/digest.json`, (route) => {
+			requests += 1;
+			return route.fulfill({ contentType: 'application/json', body: JSON.stringify(day) });
+		});
+		await page.setViewportSize({ width: 360, height: 800 });
+		await page.goto(`/${date}/`);
+		const notice = page.locator('section[aria-label="About today"]');
+		await expect(notice.locator('.notice-count')).toHaveText(`${day.items.length} stories.`);
+		expect(requests, 'the page must read the bounded fixture').toBeGreaterThan(0);
+		if (state.status === null) {
+			await expect(notice.locator('.notice-status')).toHaveCount(0);
+		} else {
+			await expect(notice.locator('.notice-status')).toHaveText(state.status);
+		}
+		if (state.history) {
+			await expect(notice.locator('.notice-run')).toHaveText(
+				'Updated 12:30 UTC (update 2). 1 added since the first update.'
+			);
+		} else {
+			await expect(notice.locator('.notice-run')).toHaveCount(0);
+		}
+		await expect(notice).not.toContainText('could not read enough');
+		expect(await notice.evaluate((node) => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(0);
+	});
+}
 
 /**
  * Two source limits on one item, in one paragraph, in order.

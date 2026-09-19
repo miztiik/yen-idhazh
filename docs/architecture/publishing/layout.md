@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 Where the pipeline writes what a reader reads and what a reader's URL looks like. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
 What happens to any of it afterwards is the other half, and it is [retention.md](retention.md): unpublishing a day, what bounds the committed state tree, and the score shards that turn into summaries once they age out.
@@ -521,9 +521,11 @@ reader chose that desk and the whole day is one pill away on the same row.
 so most stories are not elements on the page when the fragment is read.
 `DigestList` reads the fragment on mount and on `hashchange`, finds that story's
 position in the order it is drawing, pages far enough to draw it, then restores
-the anchor once the element exists. With no fragment the reach is zero, so an
-ordinary link draws what it always drew. The cost is one visit and only the
-visit that asked: the deep link draws the whole day rather than a page of it.
+scroll position and keyboard focus once the element exists. An already-drawn
+lead needs no extra paging, but still receives focus when its link changes the
+fragment, including a return to an earlier lead. With no fragment the reach is
+zero, so an ordinary link draws what it always drew. The cost is one visit and
+only the visit that asked: the deep link draws the whole day rather than a page of it.
 A fragment naming a story the day never held says so, in a live region, and it
 waits until the list in hand is the whole list - a story still on its way is not
 a story that was never here.

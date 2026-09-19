@@ -218,7 +218,7 @@
 	// per fragment: a reader who then hides what they have read must not be thrown
 	// back up the page.
 	$effect(() => {
-		if (reach === 0 || restored === wanted) return;
+		if (wanted === '' || list.wantedRow < 0 || restored === wanted) return;
 		const target = wanted;
 		void tick().then(() => {
 			if (restoreAnchor(`#${target}`)) restored = target;
