@@ -936,16 +936,16 @@ WORK_PAYLOAD_ARTIFACTS: Final = (
     "shard-visuals-${{ matrix.shard }}",
 )
 
-COMMIT_IDENTITY: Final = "yen-idhazh pipeline <pipeline@yen-idhazh.invalid>"
+COMMIT_IDENTITY: Final = "miztiik <miztiik@users.noreply.github.com>"
 
 
 #: Every file that configures git before a job commits. A runner carries no
-#: identity of its own, so each of these has to set one, and two copies of a
-#: name drift in silence unless something reads both.
-#: `.invalid` is reserved by RFC 2606, so the address can never route anywhere.
+#: identity of its own, so each of these has to set one, and three copies of a
+#: name drift in silence unless something reads all of them.
 GIT_IDENTITY_SOURCES: Final = (
     SCRIPTS_DIR / "commit-and-push.sh",
     WORKFLOWS_DIR / "prune.yml",
+    WORKFLOWS_DIR / "ci.yml",
 )
 
 # What a `${{ }}` expression stands in for when a test runs the real call site

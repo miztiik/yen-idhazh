@@ -302,8 +302,8 @@ jobs:
             echo "no Reckoner moved; the plan queue is already current."
             exit 0
           fi
-          git config user.name "yen-idhazh pipeline"
-          git config user.email "pipeline@yen-idhazh.invalid"
+          git config user.name "miztiik"
+          git config user.email "miztiik@users.noreply.github.com"
           git add TODO/STATUS.md
           git commit -m "Regenerate the plan queue from the Status Reckoners"
           # Straight at the tip, with no rebase and no lease. The concurrency
