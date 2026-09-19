@@ -177,7 +177,7 @@
 		<div class="prose">
 			<svelte:element
 				this={`h${level}`}
-				class="title mb-2 text-2xl"
+				class="title mb-3"
 				class:font-semibold={!read}
 				class:font-normal={read}
 				class:text-text={!read}
@@ -189,7 +189,7 @@
 			</svelte:element>
 
 			{#each summaryParagraphs as paragraph, index (index)}
-				<p class="text-lg text-text" class:mt-3={index > 0} data-item-summary>{paragraph}</p>
+				<p class="summary text-text" class:mt-3={index > 0} data-item-summary>{paragraph}</p>
 			{/each}
 			{#if item.reader_note}
 				<p class="mt-2 text-base text-text-secondary">
@@ -240,7 +240,15 @@
 	   rather than only rescue the last one. */
 	.title {
 		font-family: var(--font-display);
+		font-size: var(--text-2xl);
+		line-height: var(--leading-2xl);
+		letter-spacing: 0;
 		text-wrap: balance;
+	}
+
+	.summary {
+		font-size: inherit;
+		line-height: var(--leading-lg);
 	}
 
 	/* Below the side-rail breakpoint the item is one column and the rail simply
@@ -284,16 +292,14 @@
 	/* A tinted fill and never an outline: an outline means you can tap it, and
 	   the only thing a tap could do here is repeat the filter panel two inches
 	   above. It takes the same tint as the lens chips beside it - one tint for
-	   every member of a label family - and upper case is what separates the desk
-	   we filed the story under from the words the story itself earned. */
+	   every member of a label family. */
 	.topic-chip {
 		padding: var(--space-1) var(--space-2);
 		border-radius: var(--radius-full);
 		background: var(--tint-accent);
 		color: var(--color-text-secondary);
 		font-weight: 500;
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
+		letter-spacing: 0;
 		white-space: nowrap;
 	}
 
