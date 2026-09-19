@@ -53,7 +53,7 @@ from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.qualification import (
     CandidateIdentity,
 )
-from idhazh.contracts.runtime_counters import WORK_JOB
+from idhazh.contracts.runtime_counters import WORK_JOB, ServerJob
 from idhazh.embed import Embedder
 from idhazh.evals import sampling
 from idhazh.evals.hhem import (
@@ -345,12 +345,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     parser.add_argument(
         "--job",
+        type=ServerJob,
         default=WORK_JOB,
         help=(
             "The workflow job writing this row. Two jobs stand a model server up and "
             "they serve different weights, so a row that cannot say which one wrote it "
             "proves nothing. The default is the job that wrote every row committed "
-            "before the cell existed."
+            "before the cell existed. Converted here rather than downstream: the "
+            "readers are typed for the enum, and a bare string reached one of them as "
+            "soon as a segment name asked for `.value`."
         ),
     )
     parser.add_argument(
