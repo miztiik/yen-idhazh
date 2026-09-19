@@ -271,7 +271,7 @@ Inherited from the base model, per `CLAUDE.md` section 11:
 - `changelog` is newest-first, each entry `{ version, change, why }`. `change` says what moved: a field added, removed or retyped, or a meaning shifted. `why` says what the change was for. A `changelog` entry that only restates the field name tells a later reader nothing they could not read off the diff.
 - The base model **enforces** that `version` equals `changelog[0].version`, so the two cannot fall out of step.
 
-For the owner-approved citation sweep on 2026-09-12, `Field(description=...)`
+For the citation sweep approved by miztiik on 2026-09-12, `Field(description=...)`
 text could be regenerated without a version bump. `version`, `changelog` and
 emitted provenance were explicitly outside that approval. That bounded decision
 grants no general exemption for annotation edits. Retained changelog citations
