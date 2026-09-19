@@ -19,6 +19,13 @@
 	 * clamp firing, in the one place a reader is already looking. What the reader
 	 * would lose is the count, so the count is a sentence under the chart.
 	 *
+	 * **The pairs a person marked as two stories are a tinted strip across the
+	 * plot.** This is the one chart on the route with time on one axis and score
+	 * on the other, so the line walking down into that strip is the crossing, in
+	 * the picture that can show it happening. The holdout panel draws the same
+	 * marks as four dots on a score axis, where the distance is legible and the
+	 * date is not - the two answer different halves of one question.
+	 *
 	 * Hand-written SVG rather than the lazy engine chunk: two lines on a fixed
 	 * domain need none of it, and this way the plot is complete before any script
 	 * runs and both themes work with JavaScript off.
@@ -48,7 +55,8 @@
 		width,
 		tickDensity,
 		readoutMaxShare,
-		configuredLine
+		configuredLine,
+		markedApart
 	}: {
 		/** Every day the record fitted a row for, oldest first. */
 		days: LineDay[];
@@ -62,6 +70,10 @@
 		/** The committed floor. What the newest day was built with when no fit has
 		 * ever run, so state K1 draws a rule rather than an empty box. */
 		configuredLine: number;
+		/** The lowest and highest score among the pairs a person marked as two
+		 * different stories, and how many there are. Null where nobody has marked
+		 * one, which draws no strip rather than a zero-height one. */
+		markedApart: { low: number; high: number; count: number } | null;
 	} = $props();
 
 	/** How many decimals a fitted line is reported at. One bin is 0.001, so a
@@ -76,6 +88,18 @@
 		days.filter((day) => day.date >= viewport.start && day.date <= viewport.end)
 	);
 	const corridor = $derived(corridorOf(knobs));
+	/** Where the marked-apart pairs sit, cut to the corridor this chart draws.
+	 *
+	 * Null where none of them reaches it. The corridor is the range a fitted line
+	 * may take and a hand mark is not a line - two articles about nothing in
+	 * common score far under it - so a zone drawn from the raw scores would paint
+	 * a rectangle past the bottom of the plot. */
+	const holdoutZone = $derived.by(() => {
+		if (markedApart === null) return null;
+		const low = Math.max(corridor[0], markedApart.low);
+		const high = Math.min(corridor[1], markedApart.high);
+		return high <= low ? null : { low, high, count: markedApart.count };
+	});
 	const envelope = $derived(clampEnvelope(drawn));
 	const clamp = $derived(clampNote(drawn, windowDays));
 	const held = $derived(heldNote(drawn, windowDays));
@@ -167,7 +191,7 @@
 
 <Panel
 	title="Where the merge line sits"
-	note="The solid line is the score two stories had to reach that day to be read as one story. The dotted line is what the evidence asked for. The shaded band is as far as the line was allowed to fall in one day."
+	note={`The solid line is the score two stories had to reach that day to be read as one story. The dotted line is what the evidence asked for. The shaded band at each day is as far as the line was allowed to fall in one day.${holdoutZone === null ? '' : ' The tinted strip across the plot is where the pairs a person marked as two stories sit.'}`}
 >
 	<div
 		data-windowed="merge-line"
@@ -203,6 +227,37 @@
 					stroke="var(--color-rule)"
 				/>
 				<line x1={box.left} x2={box.left} y1={box.top} y2={box.bottom} stroke="var(--color-rule)" />
+
+				{#if holdoutZone !== null}
+					<!-- The line walking down into this strip is a pair a person read as
+					     two stories being folded into one. Drawn as a region rather than
+					     one rule a mark: four rules inside ten pixels is one grey smear. -->
+					<rect
+						x={box.left}
+						y={px(yAxis.scale(holdoutZone.high))}
+						width={box.right - box.left}
+						height={px(yAxis.scale(holdoutZone.low) - yAxis.scale(holdoutZone.high))}
+						fill="var(--tint-bad)"
+						data-line-holdout={`${holdoutZone.low.toFixed(4)},${holdoutZone.high.toFixed(4)}`}
+						data-line-holdout-count={holdoutZone.count}
+					>
+						<title
+							>{holdoutZone.count} pairs a person read as two stories, scoring {holdoutZone.low.toFixed(
+								4
+							)} to {holdoutZone.high.toFixed(4)}. A line inside this strip merges one of
+							them.</title
+						>
+					</rect>
+					<text
+						x={box.left + 4}
+						y={px(yAxis.scale(holdoutZone.high)) - 4}
+						fill="var(--color-text-tertiary)"
+						font-size="10"
+						data-line-holdout-label
+					>
+						the pairs marked two stories
+					</text>
+				{/if}
 
 				{#each yAxis.ticks as tick (tick)}
 					<line

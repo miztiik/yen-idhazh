@@ -62,6 +62,12 @@ export interface FittedLine {
 	aboveLineOnRecord: number;
 	/** How many dates the record has folded. */
 	daysOnRecord: number;
+	/** What the cosine was worth in the record this fit read. Null on a row
+	 * written before the column existed, so the caller falls back to the
+	 * committed config rather than scoring at a zero nothing chose. */
+	cosineWeight: number | null;
+	/** What the key-point term was worth. Same reason as the cosine weight. */
+	keyPointWeight: number | null;
 }
 
 function text(cell: string | undefined): string | null {
@@ -119,7 +125,9 @@ export function fittedLines(
 			pairsUsable: figure(row.pairs_usable),
 			negativesOnRecord: figure(row.negatives_on_record) ?? 0,
 			aboveLineOnRecord: figure(row.above_line_on_record) ?? 0,
-			daysOnRecord: figure(row.days_on_record) ?? 0
+			daysOnRecord: figure(row.days_on_record) ?? 0,
+			cosineWeight: figure(row.cosine_weight),
+			keyPointWeight: figure(row.key_point_weight)
 		});
 	}
 	return [...newest.values()].sort((left, right) => left.date.localeCompare(right.date));
