@@ -100,6 +100,22 @@ One difference between their setup and ours is on the record and is a candidate
 rather than a finding: the card's command passes `--spec-draft-n-max 4` and this
 entry pins `n_max: 2`. Nobody has run 4 to see whether the drift follows it.
 
+**The case that would settle it now exists and has not been dispatched.**
+`runtime_candidate=draft_depth` runs four configurations inside one job - the
+head off, then `n_max` at 1, 2 and 4 - and reads the three against the head-off
+case rather than against a baseline, so no runner time is spent re-measuring the
+shipped configuration. It pins `temperature: 0` on every case, which is the
+control the four dispatches above did not have: every committed entry runs at
+0.2, where the seed decides which token is drawn, so a changed summary there
+could have been the sampler. At 0 a changed summary can only be the head.
+[../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md#the-cheapest-check-is-the-pipeline-tests-and-it-uses-the-real-prompts)
+carries the dispatch and what each argument is for.
+
+**Until it runs, every reading on this page stands as written.** What that
+dispatch can answer is which `n_max`, if any, is output-identical to the head
+being off; whether the drift scales with the drafted depth; or whether the head
+itself is the cause and the depth is irrelevant.
+
 **The practical consequence: the head is not a speed setting, it is a different
 model.** It cannot be switched on after qualification and it cannot be switched
 off after it. Whichever configuration is qualified is the one that has to
@@ -122,6 +138,20 @@ side by side, and the question becomes an editorial one rather than a
 cryptographic one. No such dispatch has been read yet, so **the 6.3 percent may
 not be quoted as a free speedup**, and the head may not be adopted on the strength
 of it.
+
+**That fix was half of one, and the other half landed on 2026-09-19.** The
+summary text reached the artifact; the prompts did not, and neither did any way
+to tell one repeat's text from another's. `idhazh work` has always written both
+halves of every call, but it names a capture for the item and the call alone - so
+the second repeat overwrote the first, the next case overwrote that, and none of
+it was in the directory the workflow uploads. A reader of one of those artifacts
+could see what a case wrote and not what it was asked.
+
+Each repeat's captures are now moved under `captures/<case>-<repeat>/` before the
+next one starts, so a dispatch carries every prompt and every reply, per case,
+per repeat. **This is the difference between proving two configurations disagree
+and being able to say how**, which is the thing four dispatches on this page
+could not do.
 
 ## The records behind this page
 
