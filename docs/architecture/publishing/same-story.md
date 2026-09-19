@@ -245,11 +245,14 @@ shape exists to avoid ([../../concepts/growing-reads.md](../../concepts/growing-
 A date goes in once: a second fold of one date is refused, which is what makes
 re-running a day free rather than damaging.
 
-**Six reasons hold the line, and a held day is an ordinary day.** The row is
+**Five reasons hold the line, and a held day is an ordinary day.** The row is
 still written, it carries yesterday's line, and it names what stopped the fit.
+Three of them are the gates the fit asks of the record and of the judge; the
+other two are the fold's own refusal, handed up.
 `gates` in [../../../backend/idhazh/similarity/fit.py](../../../backend/idhazh/similarity/fit.py)
-asks them in one fixed order, so two runs over one held day name the same reason
-and an operator comparing two rows is comparing one answer.
+asks all five in one fixed order, so two runs over one held day name the same
+reason and an operator comparing two rows is comparing one answer. `none` is the
+sixth value the column can carry and it is not a hold: it says a fit ran.
 
 | Reason | What it says |
 | --- | --- |
@@ -292,7 +295,6 @@ console is where the loop is watched once it starts
 The fields, the types and the bounds are in
 [../contracts/schemas.md](../contracts/schemas.md). How each store is partitioned,
 and why, is in [../../concepts/partitions.md](../../concepts/partitions.md).
-
 
 ## One headline, two outlets, and why 0.94 was not what changed
 
@@ -443,7 +445,6 @@ prose is not on that scale - and mixing the two would put one model's opinion
 about writing inside the number that decides what a reader can see. How a
 published summary is judged is a different loop with a different ledger
 ([../../concepts/evaluation.md](../../concepts/evaluation.md)).
-
 
 ## See also
 
