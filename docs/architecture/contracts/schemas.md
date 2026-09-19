@@ -271,6 +271,12 @@ Inherited from the base model, per `CLAUDE.md` section 11:
 - `changelog` is newest-first, each entry `{ version, change, why }`. `change` says what moved: a field added, removed or retyped, or a meaning shifted. `why` says what the change was for. A `changelog` entry that only restates the field name tells a later reader nothing they could not read off the diff.
 - The base model **enforces** that `version` equals `changelog[0].version`, so the two cannot fall out of step.
 
+For the citation sweep approved by miztiik on 2026-09-12, `Field(description=...)`
+text could be regenerated without a version bump. `version`, `changelog` and
+emitted provenance were explicitly outside that approval. That bounded decision
+grants no general exemption for annotation edits. Retained changelog citations
+record earlier changes; they are not instructions to an agent.
+
 ### One line, five entries, and git holds the rest
 
 `CLAUDE.md` section 11 bounds the changelog, and `backend/tests/contracts/test_changelog_shape.py` is the gate.
@@ -378,6 +384,11 @@ Two conditions have to hold for the gate to be trustworthy:
 
 - **The generators are deterministic** - stable key ordering, stable formatting. A generator whose output shuffles produces a gate that fails at random and is switched off within a week.
 - **The stored bytes match the emitted bytes.** Generated files are pinned to LF in `.gitattributes`, so the gate does not fail purely because a contributor's checkout settings differ.
+
+A clean regeneration proves that schemas match models, not that an edit stayed
+in scope. Compare parsed schema trees before and after the change, including
+every value nested under `changelog`. Searching diff lines for the `version`
+and `changelog` keys misses a changed sentence whose key line did not move.
 
 The backend half is a contract-tier test: it regenerates every schema into a temporary directory and compares bytes against what is committed. It additionally asserts that `schemas/` holds **exactly** the generated set, so retiring a contract cannot leave a stale schema behind for something to keep validating against. The frontend half lands with the frontend.
 
