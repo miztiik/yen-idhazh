@@ -1084,6 +1084,10 @@ export interface RunRecord {
 	skipped: number;
 	startedAt: string;
 	sourceListStale: boolean;
+	/** Work shards the plan split the run into, or null where the manifest
+	 * predates the cell. Null is unknown: it is never the count of shards that
+	 * filed a row, which is the numerator this is the denominator of. */
+	shards: number | null;
 	/** Items the visual planner posted to the model. */
 	decided: number;
 	/** Items the planner decided without posting, because no enabled kind could survive its checks. */
@@ -1149,6 +1153,7 @@ export function loadManifests(
 				skipped: Number(run.items_skipped ?? 0) || 0,
 				startedAt: String(run.started_at ?? ''),
 				sourceListStale: run.source_list_stale === true,
+							shards: typeof run.shards === 'number' ? run.shards : null,
 							decided: Number(run.items_routed ?? 0) || 0,
 							prefiltered: Number(run.items_prefiltered ?? 0) || 0,
 							chartsDrafted: Number(run.charts_drafted ?? 0) || 0,

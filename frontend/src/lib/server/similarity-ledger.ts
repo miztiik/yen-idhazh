@@ -17,7 +17,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-// Relative, not `$lib`, for the reason in `runtime-counters.ts`: the browser
+// Relative, not `$lib`, for the reason in `machine-counters.ts`: the browser
 // suite loads this module in plain Node, where no Vite alias resolves.
 import type { ScoreRecord } from '../console/verdict-split';
 import { LEDGER_WINDOW_DAYS, readDayShards, STATE_ROOT } from './payload';

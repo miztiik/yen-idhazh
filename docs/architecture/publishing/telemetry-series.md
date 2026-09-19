@@ -572,10 +572,12 @@ above.
 
 ## What the machine did - read at build time, never published
 
-The same arrangement as the model section above, over a third private ledger:
-`state/runtime-counters.csv`, one row per model-server job per shard per run,
-holding what llama-server itself counted. The reader is
-[frontend/src/lib/server/runtime-counters.ts](../../../frontend/src/lib/server/runtime-counters.ts),
+The same arrangement as the model section above, over two private ledgers read
+together: `state/host-fingerprint/`, one machine row per job per shard per run,
+and `state/item-health/`, one row per item. The machine record holds what
+llama-server itself counted and what the job clock read; the item ledger holds
+what the summarize stage copied out of each reply. The reader is
+[frontend/src/lib/server/machine-counters.ts](../../../frontend/src/lib/server/machine-counters.ts),
 under `$lib/server/` for the same reason `model-work.ts` is. Nothing is served
 and no column is published: `state/` is not part of the site, and the figures
 below reach a page as numbers, never as rows.

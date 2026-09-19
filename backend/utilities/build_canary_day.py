@@ -784,6 +784,11 @@ def _record(
         decision_ms=decision_ms,
         site_bytes=_site_bytes(date),
         site_files=4,
+        # Two work shards, which is what the machine ledgers this fixture also
+        # writes report. It is the denominator every shard figure on the Hardware
+        # page divides by, so without it that page can only draw its "the run
+        # never said how many shards it planned" case.
+        shards=2,
     )
 
 

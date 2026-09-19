@@ -21,12 +21,12 @@
  *
  * Nothing here is published. It sits under `$lib/server/` so SvelteKit refuses
  * to bundle it for a browser, the same place and for the same reason as
- * `runtime-counters.ts`, and it adds no published telemetry column.
+ * `machine-counters.ts`, and it adds no published telemetry column.
  */
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-// Relative, not `$lib`, for the reason in `runtime-counters.ts`: the browser
+// Relative, not `$lib`, for the reason in `machine-counters.ts`: the browser
 // suite loads this module in plain Node, where no Vite alias resolves.
 import { dayShardFiles, LEDGER_WINDOW_DAYS, readDayShards, REPO_ROOT, STATE_ROOT } from './payload';
 

@@ -12,7 +12,7 @@
  *
  * **Nothing here is published.** It sits under `$lib/server/` so SvelteKit
  * refuses to bundle it for a browser, the same place and for the same reason as
- * `runtime-counters.ts`, and it adds no published telemetry column: `state/` is
+ * `machine-counters.ts`, and it adds no published telemetry column: `state/` is
  * not served and no cell of it crosses to a reader.
  *
  * **The record has a start, and a reader is told it.** The rollup committed its

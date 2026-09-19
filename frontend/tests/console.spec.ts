@@ -1110,13 +1110,13 @@ test('reading and writing are drawn as separate candles per day', async ({ page 
 	await expect(page.locator('[data-candle="read"]')).toHaveCount(2);
 	await expect(page.locator('[data-candle="write"]')).toHaveCount(2);
 
-	// The whole day over the whole day: 4253 prompt tokens less the 2183 the
-	// cache carried is 2070 read in 177.249 s, and 655 written in 113.008 s.
+	// The whole day over the whole day: 5953 prompt tokens less the 2283 the
+	// cache carried is 3670 read in 241.249 s, and 715 written in 123.308 s.
 	const verdict = page.locator('[data-throughput="verdict"]');
-	await expect(verdict).toContainText('read 11.68 tok/s');
+	await expect(verdict).toContainText('read 15.21 tok/s');
 	await expect(verdict).toContainText('write 5.80 tok/s');
-	await expect(verdict).toContainText('4 items across 2 runs');
-	await expect(verdict).toContainText('Read is up 5% and write is up 9%');
+	await expect(verdict).toContainText('5 items across 2 runs');
+	await expect(verdict).toContainText('Read is up 36% and write is up 9%');
 
 	// Milliseconds per token is 1000 / tokens per second, so drawing it too
 	// would be the same fact mirrored. It must not come back.
@@ -1193,19 +1193,19 @@ test('the throughput axis covers the rates drawn, not zero to the fastest', asyn
 		.evaluateAll((nodes) => nodes.map((node) => Number(node.getAttribute('data-throughput-tick'))));
 
 	// The fixture's slowest item writes at 5.30 tok/s and its fastest reads at
-	// 11.91. Both ends are printed, and the axis does not spend most of its
+	// 25.00. Both ends are printed, and the axis does not spend most of its
 	// height on rates nothing ran at - a candle says where a rate is, and only a
 	// mark whose length carries the number needs zero on the axis.
 	expect(ticks.length).toBeGreaterThanOrEqual(2);
 	expect(Math.min(...ticks)).toBeGreaterThan(0);
 	expect(Math.min(...ticks)).toBeLessThanOrEqual(5.3);
-	expect(Math.max(...ticks)).toBeGreaterThanOrEqual(11.91);
+	expect(Math.max(...ticks)).toBeGreaterThanOrEqual(25);
 
 	// The prompt-reuse line and its right-hand 0-100% axis are gone. Reuse is a
 	// cache statistic, so the number stays in the legend and nothing draws a
 	// second y scale a reader could correlate against tokens per second.
 	await expect(page.locator('[data-throughput="chart"] polyline')).toHaveCount(0);
-	await expect(page.locator('[data-series="reused"]')).toContainText('51%');
+	await expect(page.locator('[data-series="reused"]')).toContainText('38%');
 });
 
 test('the telemetry viewport renders the published projection', async ({ page }) => {
@@ -1445,15 +1445,13 @@ test('an empty section costs the page that section, never the page', async ({ pa
 
 	await page.goto('/console/');
 
-	// The canary telemetry records no failed item, so the failed-item list has
-	// nothing to list. It says so and the page carries on: the timing chart, the
-	// run grid and the score table all still draw. The rows are behind a
-	// disclosure now, so what has to survive is the control that reaches them
-	// and the sentence it carries - not the table itself.
+	// The canary records one failed item, so the list has a row to draw and the
+	// page carries on around it: the timing chart, the run grid and the score
+	// table all still draw. The rows are behind a disclosure now, so what has to
+	// survive is the control that reaches them and the scope sentence it carries -
+	// not the table itself.
 	await expect(page.locator('[data-failure-toggle]')).toBeVisible();
-	await expect(page.locator('[data-failure-list="empty"]')).toHaveText(
-		'No failed item is in this window.'
-	);
+	await expect(page.locator('[data-failure-scope]')).toContainText('in this window.');
 	await expect(page.getByText('Time per item, by stage')).toBeVisible();
 	await expect(page.locator('[data-grid="days"]')).toBeVisible();
 	// The daily rows are behind a disclosure now, so what has to survive is the

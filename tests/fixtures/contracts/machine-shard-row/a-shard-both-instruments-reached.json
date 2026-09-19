@@ -1,0 +1,23 @@
+{
+  "cached_tokens": 41208,
+  "cgroup_peak_bytes": 14155517952,
+  "cpu_busy_pct": 96.4,
+  "cpu_model": "AMD EPYC 7763 64-Core Processor",
+  "date": "2026-09-16",
+  "items": 38,
+  "job_seconds": 5550,
+  "llama_rss_peak_bytes": 13980000000,
+  "longest_sequence": 7104,
+  "model_load_ms": 3789.15,
+  "n_ctx_configured": 8192,
+  "python_rss_bytes": 412000000,
+  "read_ms": 2216408,
+  "read_tokens": 1184302,
+  "run_id": "2026-09-16-1",
+  "server_prompt_seconds": 2216.408,
+  "server_prompt_tokens": 1184302,
+  "shard": 0,
+  "version": "2026-09-19",
+  "write_ms": 1904220,
+  "written_tokens": 22160
+}

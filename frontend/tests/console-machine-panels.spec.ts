@@ -15,7 +15,7 @@
  */
 
 import { expect, test, type Page } from '@playwright/test';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const REPO = resolve(process.cwd(), '..');
@@ -30,20 +30,91 @@ const WATCHED = (
 	}
 ).$defs.WatchedFlag.enum;
 
-/** The canary's own counters ledger, read straight off disk.
+/** Every row of one canary ledger, read straight off its day tree.
  *
  * The page's arithmetic is checked against this rather than against itself: an
  * oracle that reads the module it is testing proves only that the module agrees
  * with itself.
  */
-function canaryCounters(): Record<string, string>[] {
-	const text = readFileSync(join(REPO, 'backend', 'var', 'canary', 'state', 'runtime-counters.csv'), 'utf8');
-	const [header, ...lines] = text.trim().split('\n');
-	const columns = header.split(',');
-	return lines.map((line) => {
-		const cells = line.split(',');
-		return Object.fromEntries(columns.map((name, index) => [name, cells[index] ?? '']));
-	});
+function canaryRows(ledger: string): Record<string, string>[] {
+	const root = join(REPO, 'backend', 'var', 'canary', 'state', ledger);
+	const rows: Record<string, string>[] = [];
+	for (const relative of readdirSync(root, { recursive: true }) as string[]) {
+		if (!relative.endsWith('.csv')) continue;
+		const text = readFileSync(join(root, relative), 'utf8').trim();
+		if (text === '') continue;
+		const [header, ...lines] = text.split('\n');
+		const columns = header.split(',');
+		for (const line of lines) {
+			const cells = line.split(',');
+			rows.push(Object.fromEntries(columns.map((name, index) => [name, cells[index] ?? ''])));
+		}
+	}
+	return rows;
+}
+
+/** One shard of one run, as the two ledgers together describe it.
+ *
+ * Reading comes from the machine record and writing from the item ledger,
+ * which is the whole point of the panel: neither file can answer both halves,
+ * so a page that folded one of them would print a rate nothing measured.
+ */
+interface CanaryShard {
+	runId: string;
+	shard: string;
+	cpuModel: string;
+	promptTokens: number | null;
+	promptSeconds: number | null;
+	writtenTokens: number | null;
+	writeSeconds: number | null;
+}
+
+function added(carry: number | null, cell: string, scale = 1): number | null {
+	if (cell === '') return carry;
+	const value = Number(cell);
+	return Number.isFinite(value) ? (carry ?? 0) + value * scale : carry;
+}
+
+function canaryShards(): CanaryShard[] {
+	const held = new Map<string, CanaryShard>();
+	for (const row of canaryRows('host-fingerprint')) {
+		if (row.job !== 'work' || row.shard === '') continue;
+		const key = `${row.run_id}/${row.shard}`;
+		const shard = held.get(key) ?? {
+			runId: row.run_id,
+			shard: row.shard,
+			cpuModel: '',
+			promptTokens: null,
+			promptSeconds: null,
+			writtenTokens: null,
+			writeSeconds: null
+		};
+		if (shard.cpuModel === '') shard.cpuModel = row.cpu_model;
+		shard.promptTokens = added(shard.promptTokens, row.server_prompt_tokens);
+		shard.promptSeconds = added(shard.promptSeconds, row.server_prompt_seconds);
+		held.set(key, shard);
+	}
+	for (const row of canaryRows('item-health')) {
+		const shard = held.get(`${row.run_id}/${row.shard}`);
+		if (shard === undefined) continue;
+		shard.writtenTokens = added(shard.writtenTokens, row.output_tokens);
+		shard.writeSeconds = added(shard.writeSeconds, row.decode_ms, 0.001);
+		if (shard.cpuModel === '') shard.cpuModel = row.cpu_model;
+	}
+	return [...held.values()];
+}
+
+/** The shards of the newest run both halves of the board can draw. */
+function newestDrawnRun(): CanaryShard[] {
+	const drawn = canaryShards().filter(
+		(shard) =>
+			shard.promptTokens !== null &&
+			shard.promptSeconds !== null &&
+			shard.writtenTokens !== null &&
+			shard.writeSeconds !== null
+	);
+	const newest = drawn.map((shard) => shard.runId).sort((a, b) => b.localeCompare(a))[0];
+	return drawn.filter((shard) => shard.runId === newest);
 }
 
 async function setWindow(page: Page, days: number) {
@@ -59,19 +130,8 @@ test.describe('reading against writing, machine by machine', () => {
 		const panel = page.locator('[data-console-panel="Reading against writing, machine by machine"]');
 		await expect(panel).toBeVisible();
 
-		const rows = canaryCounters();
-		const newest = rows
-			.filter((row) => row.prompt_seconds_total !== '' && row.tokens_predicted_seconds_total !== '')
-			.sort((a, b) => b.run_id.localeCompare(a.run_id))[0];
-		const ofRun = rows.filter(
-			(row) =>
-				row.run_id === newest.run_id &&
-				row.prompt_tokens_total !== '' &&
-				row.prompt_seconds_total !== '' &&
-				row.tokens_predicted_total !== '' &&
-				row.tokens_predicted_seconds_total !== ''
-		);
-		const kinds = new Set(ofRun.map((row) => row.cpu_model));
+		const rows = newestDrawnRun();
+		const kinds = new Set(rows.map((shard) => shard.cpuModel));
 		expect(kinds.size, 'the canary run must draw more than one kind').toBeGreaterThan(1);
 
 		const groups = panel.locator('[data-machine-group]');
@@ -94,21 +154,21 @@ test.describe('reading against writing, machine by machine', () => {
 	test('every rate in a group recomputes from that machine shards alone', async ({ page }) => {
 		await page.goto('/console/machine/');
 		const panel = page.locator('[data-console-panel="Reading against writing, machine by machine"]');
-		const rows = canaryCounters();
+		const shards = canaryShards();
 		const newestRun = await panel.evaluate(
 			(node) => node.closest('[data-machine-split]')?.getAttribute('data-machine-split') ?? ''
 		);
 		expect(newestRun).not.toBe('');
 
 		const byName = new Map<string, { tokens: number; seconds: number }>();
-		for (const row of rows) {
-			if (row.run_id !== newestRun) continue;
-			if (row.prompt_tokens_total === '' || row.prompt_seconds_total === '') continue;
-			if (row.tokens_predicted_total === '' || row.tokens_predicted_seconds_total === '') continue;
-			const held = byName.get(row.cpu_model) ?? { tokens: 0, seconds: 0 };
-			held.tokens += Number(row.prompt_tokens_total);
-			held.seconds += Number(row.prompt_seconds_total);
-			byName.set(row.cpu_model, held);
+		for (const shard of shards) {
+			if (shard.runId !== newestRun) continue;
+			if (shard.promptTokens === null || shard.promptSeconds === null) continue;
+			if (shard.writtenTokens === null || shard.writeSeconds === null) continue;
+			const held = byName.get(shard.cpuModel) ?? { tokens: 0, seconds: 0 };
+			held.tokens += shard.promptTokens;
+			held.seconds += shard.promptSeconds;
+			byName.set(shard.cpuModel, held);
 		}
 
 		const printed = await panel.locator('[data-machine-rates]').allInnerTexts();

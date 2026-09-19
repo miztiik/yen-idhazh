@@ -140,7 +140,7 @@ test.describe('the page as a whole', () => {
 			/of the run's \d+ shards/
 		);
 		await expect(page.locator('[data-context-run]').first()).toContainText(
-			/over \d+ of \d+ shards/
+			/over\s+\d+\s+of\s+\d+\s+shards/
 		);
 	});
 
