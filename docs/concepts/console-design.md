@@ -1,6 +1,6 @@
 # Console Design
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-19
 How a figure on the operator console is worded, coloured, ranked and drawn. It is
 the operator half of [design-system.md](design-system.md), which keeps the
 vocabulary the whole site resolves - the tokens, the colour ramps, the motion set
@@ -508,7 +508,9 @@ quotable number on the route.
  probability, no pie: what the next job will draw is precisely what the
  processor lottery refuses to quote. Under `console.fleet_min_rows` it is a
  list with a sentence and **no bar at all** - bars over a handful of placements
- read as a distribution, and a reader who has read one will act on it.
+ read as a distribution, and a reader who has read one will act on it. **It
+ ships at 160 as a declared estimate and not a measurement** - see the design
+ rationale below.
 - **None of the empty states is tinted and none gets the reserved box.** The
  route is prerendered and reads `state/` at build time, so there is no fetch,
  no waiting state and no unreachable state. Every nothing here is settled at
@@ -532,8 +534,7 @@ Two panels were refused, and what the reader loses is on the record.
  explanation left for a speed change with no other change. Closed by default,
  so the attention cost is zero.
 
-Authority: Susan, 2026-09-17, on
-[../../TODO/20260916-30-hardware-console-panels-plan.md](../../TODO/20260916-30-hardware-console-panels-plan.md).
+Authority: Susan, 2026-09-17.
 The sufficiency checks pass, conditional on the twelve flag chips shipping: a
 definition list of text rows with a semicolon-joined vendor string is a 2004
 page, and dropping the chips fails **made this year** and would need a
@@ -1055,6 +1056,17 @@ ruled out of that plan's scope (owner, 2026-09-08). What would settle it is
 in [../reference/pipeline-cost.md](../reference/pipeline-cost.md). Taking it inside the user-interface row was refused: a
 user-interface row is not a measurement harness, and a number measured on a
 laptop's loopback would be the wrong number twice over. Fowler, 2026-09-08.
+
+**`console.fleet_min_rows` ships at 160 and 160 is a declared estimate, not a
+measurement.** The share behind it is measured: the rarest of six machine kinds
+held 11 of 356 committed counter rows, 3.1 percent. The row count is not.
+`console.min_attempts_for_rate` already sets five placements as the floor under
+a rate, and five at 3.1 percent needs about 162 rows, so 160 is that arithmetic
+rounded. It justifies nothing about the shape of the page: above the gate the
+counts are bars, below it the same counts are a list, and both say the same
+thing. What would settle it is a seventh machine kind arriving - every share
+drops, the rarest gets rarer and the bar rises - so the number is re-derived
+from the committed rows rather than argued with. Susan, 2026-09-17.
 
 **Every skeleton is switched on by one attribute on an ancestor, and that is what
 makes them one timeline.** The rejected alternative was the obvious one: give
