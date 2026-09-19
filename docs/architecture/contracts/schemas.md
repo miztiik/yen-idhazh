@@ -61,7 +61,6 @@ The shapes, and where each one lives once written:
 | `TelemetryAggregateRow` | `telemetry-aggregate-row` | one row of `state/telemetry-aggregate/<YYYY-MM>.csv`, rewritten whole |
 | `ScoreArchive` | `score-archive` | `state/score-archive/<YYYY-MM>.json`, one whole document per archived score month |
 | `DayMetrics` | `day-metrics` | `state/day-metrics/<YYYY>/<MM>/<DD>.json`, one whole document per published day, rewritten when that day is corrected |
-| `RuntimeCountersRow` | `runtime-counters-row` | one appended row of `state/runtime-counters.csv` |
 | `StorySimilarityPair` | `story-similarity-pair` | one appended row of `state/story-similarity/scored-pairs/<YYYY>/<MM>/<DD>.csv` - one borderline pair, what it scored, and what a judge said in both orders. The same shape holds the day's draw under `backend/var/judge/<date>/draw.csv` before a judging leg reads it |
 | `StorySimilarityDistribution` | `story-similarity-distribution` | the whole of `state/story-similarity/score-distribution.json`, rewritten - a fixed row of slots and three counts each, so the fit reads one file of a size that never changes (Guardrail #12) |
 | `FittedSimilarityThreshold` | `fitted-similarity-threshold` | one appended row of `state/story-similarity/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` - what the merge line was, what the evidence proposed, and what the run applied |
@@ -83,7 +82,7 @@ Everything under `state/` is a row contract rather than a file contract, because
 
 ### A new row ledger ships with its header, not with its first run
 
-`.github/scripts/commit-and-push.sh` runs under `set -euo pipefail` and stages every path a job owns in one `git add "$@"`. A path that is not in the checkout makes that call fail, and `set -e` then abandons the whole commit step - so a ledger that only appears once its producer has succeeded lets a broken producer cost the job the *other* ledgers it was staging beside it. `state/runtime-counters.csv` therefore ships as a header-only file, and a test asserts the committed header equals `RuntimeCountersRow.csv_columns`. The work shard stopped staging that path on 2026-09-18 - it writes a segment and `assemble` folds it in - so what keeps the file shipped is now the audit that opens it by name rather than the commit step, and the rule above still binds every other ledger a job stages one path at a time.
+`.github/scripts/commit-and-push.sh` runs under `set -euo pipefail` and stages every path a job owns in one `git add "$@"`. A path that is not in the checkout makes that call fail, and `set -e` then abandons the whole commit step - so a ledger that only appears once its producer has succeeded lets a broken producer cost the job the *other* ledgers it was staging beside it. `state/feed-retirements.csv` and `state/story-similarity/holdout-pairs.csv` therefore ship as header-only files, and `backend/utilities/check_seeded_stores.py` asserts each committed header equals its contract's own `csv_columns`.
 
 That is not "pre-creating an empty module for later" (`CLAUDE.md` section 10). The file is the ledger, and its header is the contract's own column list; what is being avoided is a failure mode in the step that commits it.
 
@@ -128,13 +127,13 @@ edit does not start (Guardrail #11).
 
 ### A shard-grain fact is its own contract, not a field on the run manifest
 
-`RuntimeCountersRow` could have been a list on `RunRecord`, and four things say it should not be. **Grain**: a manifest run record is one run and a counter snapshot is one shard, so the manifest would grow a variable-length list keyed by something it does not otherwise carry. **Producer**: the manifest is written by `assemble`, in another job hours later, so the numbers would have to travel inside the `items-*` artifact - which expires and is never committed, and a cancelled shard's counters are the ones most worth having. **Audience**: `run.json` is a published payload a reader's browser fetches, and this is measurement evidence, which belongs under `state/` where nothing is served. **Timing**: a concurrent branch was also opening `RunManifest`, and two branches stamping one contract's changelog on the same date raise `TypeError` at import.
+`HostFingerprintRow` could have been a list on `RunRecord`, and four things say it should not be. **Grain**: a manifest run record is one run and a host record is one job, so the manifest would grow a variable-length list keyed by something it does not otherwise carry. **Producer**: the manifest is written by `assemble`, in another job hours later, so the numbers would have to travel inside the `items-*` artifact - which expires and is never committed, and a cancelled shard's readings are the ones most worth having. **Audience**: `run.json` is a published payload a reader's browser fetches, and this is measurement evidence, which belongs under `state/` where nothing is served. **Timing**: a concurrent branch was also opening `RunManifest`, and two branches stamping one contract's changelog on the same date raise `TypeError` at import.
 
-**The grain argument earned two more cells on 2026-08-29.** `job_seconds` and `cpu_model` are facts about the `work` job rather than about its model server, and they landed here rather than on the manifest for the first reason above: one run draws up to eight hosts and takes eight different clocks, so a manifest field would have to become a per-shard list - which is what this ledger already is. `docs/reference/pipeline-cost.md` owns what they measure and how to read them; the rollback rule for the truncation cap is the caller.
+**The grain argument earned four more cells on 2026-09-19.** `job_seconds`, `model_load_ms` and the two `server_prompt_*` counters are facts about the `work` job rather than about the run, and they landed here rather than on the manifest for the first reason above: one run draws up to eight hosts and takes eight different clocks, so a manifest field would have to become a per-shard list - which is what this ledger already is. `docs/reference/pipeline-cost.md` owns what they measure and how to read them; the rollback rule for the truncation cap is the caller.
 
-**And three more on 2026-08-30, for the same reason.** `cpu_busy_pct`, `peak_rss_bytes` and `model_load_ms` are facts about the machine one shard drew, not about the model it served. They arrive as raw text the job printed - the `cpu` line of `/proc/stat` at each end of the job, the memory sampler's file, llama-server's own log - and every derivation happens inside the contract. A shell that computes a percentage is a second place the arithmetic lives and no place it can be tested; a contract that parses the raw text is one place, and its oracle is the real captures under `tests/fixtures/runtime/`.
+**The readings arrive as raw text the job printed** - llama-server's own log, its `GET /metrics` body - and every derivation happens in `telemetry.silicon`, beside the stage that writes the row. A shell that computes a percentage is a second place the arithmetic lives and no place it can be tested; a Python function over text the caller opened is one place, and its oracle is the real captures under `tests/fixtures/runtime/`.
 
-What would overturn it: a published surface that needs the counters, which would make them a published payload; or a run that stops being sharded, which would make shard grain and run grain the same thing and the manifest the cheaper home.
+What would overturn it: a published surface that needs the raw readings, which would make them a published payload; or a run that stops being sharded, which would make job grain and run grain the same thing and the manifest the cheaper home.
 
 ### A ledger partitions only when its read carries a window
 
@@ -154,7 +153,6 @@ mirrors the digest tree its rows are derived from.
 | `state/scores/` | day files | how did every scored item do? | no - sharded by month from 2026-08-31 and filed by **day** since 2026-09-13, and a month past `scores_full_grain_months` becomes [one `ScoreArchive` document](../publishing/retention.md#what-bounds-the-committed-state-tree) |
 | `state/score-index/` | day files | which measurements does the day file beside this one already hold? | no, and deliberately - `OBSERVATION_KEY` carries no date, so the same address, output and scorer is one measurement whenever it is re-taken. It files by the ledger's day rather than a grain of its own, because `refresh_index` fills a partition with no index from the partition beside it |
 | `state/score-archive/` | monthly documents | what did a month past `scores_full_grain_months` do, in totals and distributions - and which measurements did it hold? | it inherits the shard boundary of the file it replaces |
-| `state/runtime-counters.csv` | one file | what did the model server itself count? | no - the audit reads one run |
 | `state/feed-retirements.csv` | one file | is this address gone for good? | no - a retirement is permanent for one endpoint |
 | `state/day-validations.csv` | one file | which frozen days have passed, and against what? | no - a receipt file, read once a run |
 | `state/day-metrics/` | day files | what did one published day do, in totals? | it is addressed by day: the site opens the dates a page names and walks nothing |
@@ -202,19 +200,21 @@ Two consequences worth stating so nobody re-derives them:
  the period is a layout change and not a contract change; see
  [../sources/item-health.md](../sources/item-health.md).
 
-**The three single files above are deliberately unsharded, and the burden is on a
-change that shards one.** `state/runtime-counters.csv`,
-`state/feed-retirements.csv` and `state/day-validations.csv` are not work left
-undone. None of their reads carries a window, so by the rule above a partition
-would open every file anyway and cost a directory walk a single `open` does not
-need. Two of the three - `runtime-counters.csv` and `day-validations.csv` - grow
-for ever with no prune, and **that is a retention question rather than a grain
-question**: sharding them would make their reads worse and leave the growth
-exactly where it is.
+**The two single files above are deliberately unsharded, and the burden is on a
+change that shards one.** `state/feed-retirements.csv` and
+`state/day-validations.csv` are not work left undone. Neither of their reads
+carries a window, so by the rule above a partition would open every file anyway
+and cost a directory walk a single `open` does not need. One of the two -
+`day-validations.csv` - grows for ever with no prune, and **that is a retention
+question rather than a grain question**: sharding it would make its read worse
+and leave the growth exactly where it is.
 
-There were four until 2026-09-13. `state/fingerprints.csv` was the fourth, and it
-was deleted rather than sharded: its read had no window because it had no reader
-left at all.
+There were four until 2026-09-13 and three until 2026-09-19.
+`state/fingerprints.csv` was the fourth, and it was deleted rather than sharded:
+its read had no window because it had no reader left at all.
+`state/runtime-counters.csv` was the third and went the same way - every cell a
+reader still wanted moved onto `state/host-fingerprint/`, which is already a day
+tree.
 
 **A collection can file by day for a reason that is not the read**, and
 `state/visual-prunes/` is the worked case: its question is the whole series, so

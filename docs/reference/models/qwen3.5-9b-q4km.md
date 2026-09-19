@@ -278,7 +278,7 @@ question, are on the instrument log
 ([Summed RSS reaches 14.31 GiB](../pipeline-cost.md#summed-rss-reaches-1431-gib-and-that-does-not-say-how-near-the-edge-the-job-came)).
 
 **The committed ledger's own peak column is not a reading of this model.**
-`state/runtime-counters.csv` carries no column naming the weights and its rows
+`state/item-health/` carries no column naming the weights and its rows
 span both this model and the retired one, so its range is a reading of the job
 ([The ledger's own worst row](../pipeline-cost.md#the-ledgers-own-worst-row-moved-to-1382-gib)).
 
@@ -297,7 +297,7 @@ this page whose only record is archived
 ([../../archive/measurements-2026-08.md](../../archive/measurements-2026-08.md)),
 and it is repeated here because a dossier a reader has to leave to learn how long
 its model takes to open is not doing its job. A current reading comes from
-`model_load_ms` in `state/runtime-counters.csv`, which every `work` shard has
+`model_load_ms` in `state/host-fingerprint/`, which every `work` shard has
 filed since 2026-08-30 - reading it needs no new instrument, only a query.
 
 ## Seconds an item

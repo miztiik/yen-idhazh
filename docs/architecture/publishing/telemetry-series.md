@@ -630,47 +630,37 @@ and the shards the run split into. A page can then tell **never measured** (`fro
 is zero) from **measured on some** from **measured on all**, without guessing.
 
 `value: 0` with `from` above zero is a measurement of zero and stays one. A blank
-cell is `value: null` with `from` of zero. `RuntimeCountersRow.csv_row` states
-the rule on the writer's side: "A server that never answered and a server that
-read no tokens are different facts, and one of them is a broken scrape."
+cell is `value: null` with `from` of zero. `silicon.server_prompt_totals` states
+the rule on the writer's side: a server that never answered and a server that
+read no tokens are different facts, and one of them is a broken scrape.
 
-### A shard is a set, and a run that cannot be reconciled is refused
+### One shard, one row - settled by the writer rather than by the reader
 
-`state/runtime-counters.csv` is merged line by line with the union driver, while
-the deduplication that writes it reads a tree frozen at checkout. So two workflow
-runs that computed the same `run_id` both appended, and the file ended up holding
-one shard index twice. Summed as rows rather than as a set, run `2026-08-29-3`
-reported **-394 seconds** against the item ledger, which is not a number any
-machine produced.
+A run's figures are a sum over its shards, so one shard counted twice is a run
+overstated. That used to be a reader's problem. `state/runtime-counters.csv` was
+merged line by line with the union driver while the deduplication that wrote it
+read a tree frozen at checkout, so two workflow runs that computed the same
+`run_id` both appended and the file held one shard index twice. Summed as rows
+rather than as a set, run `2026-08-29-3` reported **-394 seconds** against the
+item ledger, which is not a number any machine produced. The reader answered it
+by grouping on shard index and refusing any run whose two rows for one shard
+disagreed.
 
-Both halves of that are now closed on the writer's side, and this reader is kept
-anyway. A run id carries the identity of the execution that made it, so two
-workflow runs can no longer compute one; and from 2026-09-18 each model-server
-job writes its counters into its own segment under `state/segments/`, so no two
-writers open this file at all and the frozen scan-before-append that could not
-see a sibling's push is gone. The union driver that made the repeat possible came
-off every head under `state/` on 2026-09-19. See
-[../sources/item-health.md](../sources/item-health.md#the-structure). What
-remains is that a reader of a committed file cannot assume the run that wrote it
-was made by today's pipeline, so refusing an inconsistent run stays correct and
-costs nothing.
+**Every one of those defects is closed on the writer's side now, and the reader
+that worked around them is gone with the store.** A run id carries the identity
+of the execution that made it, so two workflow runs can no longer compute one.
+From 2026-09-18 each model-server job writes its readings into its own segment
+under `state/segments/`, so no two writers open one file. `stage_compact` folds
+those segments by key and the later attempt wins, so a re-run corrects its first
+try instead of adding a second row. The union driver that made the repeat
+possible came off every head under `state/` on 2026-09-19, and
+`state/runtime-counters.csv` itself was deleted the same day - the four cells a
+reader still wanted moved onto `state/host-fingerprint/`, whose key is
+`(date, run_id, job, shard)`. See
+[../sources/item-health.md](../sources/item-health.md#the-structure).
 
-The reader groups by shard index. Two rows for one shard whose every counter cell
-matches are one scrape written twice, and collapse to one. Two rows that differ
-anywhere are two llama-server processes, and the counters are cumulative per
-process - so they can neither be added nor chosen between, and the whole run is
-refused. A refused run is returned with its id and the reason, never dropped
-silently: a page that prints half a run prints a figure that reads as the run.
-
-Measured 2026-08-31 over the committed ledger before the repair: **54 rows, 12
-runs, 11 read and 1 refused** - `2026-08-29-3`, whose shard 1 and shard 3 each
-held two different scrapes (21:06 against 23:15, and 21:10 against 23:39).
-Summing its rows rather than its shards overstated the run's reading clock by
-7,495.5 seconds - 19,305.8 against 11,810.3, **63 percent high**. The file was
-settled in the same commit that fixed the writer: 54 rows to 52, 7,871 bytes to
-7,577. All 12 runs now read. The refusal is still printed on `/console/machine/`
-with the run id and the reason, so the run count on that page can be checked
-against the ledger.
+What is worth keeping from it: **the fix for a ledger two machines can write is
+to stop them sharing a path, not to teach every reader to spot the collision.**
 
 ### The latency ladder is one derivation, drawn twice
 

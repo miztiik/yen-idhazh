@@ -36,7 +36,6 @@ from typing import Final
 
 from idhazh import ledger
 from idhazh.contracts.feed_retirement import FeedRetirementRow
-from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
@@ -66,11 +65,6 @@ class Finding:
 def seeded_stores() -> tuple[Store, ...]:
     """The stores whose header ships with the contract, read off the contract."""
     return (
-        Store(
-            name="runtime counters",
-            relpath=ledger.runtime_counters_relpath(),
-            columns=RuntimeCountersRow.csv_columns(),
-        ),
         Store(
             name="feed retirements",
             relpath=ledger.feed_retirements_relpath(),

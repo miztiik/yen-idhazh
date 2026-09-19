@@ -7,13 +7,12 @@ that only works as part of the whole is a stage nobody can debug.
     idhazh plan       read feeds, rank, record      -> run/<date>/plan.json
     idhazh work       fetch, extract, summarize, score -> run/<date>/items/*
     idhazh record     commit what one shard settled -> state/
-    idhazh counters   commit what one job's model server counted -> state/
     idhazh assemble   collect what finished        -> frontend/public/... + state/
 
 `idhazh run` is the three in order, which is what a developer wants and what
-the daily workflow calls. `record` and `counters` are not among the three: the
-daily workflow runs both inside the worker job so a run that dies before it
-publishes still keeps what it measured.
+the daily workflow calls. `record` is not among the three: the daily workflow
+runs it inside the worker job so a run that dies before it publishes still
+keeps what it measured.
 
     idhazh backfill-vectors   re-encode closed days whose vectors are short
 
@@ -48,12 +47,12 @@ from idhazh import (
     assemble,
     config,
 )
+from idhazh.contracts.base import WORK_JOB, ServerJob
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.qualification import (
     CandidateIdentity,
 )
-from idhazh.contracts.runtime_counters import WORK_JOB, ServerJob
 from idhazh.embed import Embedder
 from idhazh.evals import sampling
 from idhazh.evals.hhem import (
@@ -96,7 +95,6 @@ from idhazh.telemetry import (
     cli as telemetry_cli,
 )
 from idhazh.telemetry import (
-    host,
     silicon,
 )
 
@@ -115,7 +113,6 @@ STAGES: Final[tuple[str, ...]] = (
     "shards",
     "work",
     "record",
-    "counters",
     "fingerprint",
     "job-clock",
     "assemble",
@@ -360,54 +357,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--job-started-at",
         default="",
         help=(
-            "Epoch seconds stamped by the first step of the shard job. The counters "
-            "row records the difference against its own scrape time. Empty means no "
+            "Epoch seconds stamped by the first step of the shard job. The host row "
+            "records the difference against its own scrape time. Empty means no "
             "stamp, and the cell then stays empty rather than reading zero."
-        ),
-    )
-    parser.add_argument(
-        "--cpu-model",
-        default="",
-        help=(
-            "The host's /proc/cpuinfo `model name` line, read before the checkout exists. "
-            "`ubuntu-latest` names the runner image, not the processor, and this project "
-            "has measured a 3.1x throughput swing between hosts. Empty and the stage reads "
-            "the same file itself."
-        ),
-    )
-    parser.add_argument(
-        "--cpu-stat-at-start",
-        default="",
-        help=(
-            "The aggregate `cpu` line of /proc/stat, read by the first step of the shard "
-            "job. Differenced against the reading at the scrape, it says what share of "
-            "the host's processor seconds the job actually used."
-        ),
-    )
-    parser.add_argument(
-        "--cpu-stat-at-end",
-        default="",
-        help="The same /proc/stat line, read at the scrape. The other end of the window.",
-    )
-    parser.add_argument(
-        "--rss-samples-file",
-        type=Path,
-        default=Path("rss-samples.tsv"),
-        help=(
-            "The memory sampler's own file. Its `llama_vmhwm_kb` column is the high-water "
-            "mark that says whether a candidate model fits the runner's 16 GB, and its "
-            "`python_vmhwm_kb` column is what the rest of the job held beside it."
-        ),
-    )
-    parser.add_argument(
-        "--memory-peak-file",
-        type=Path,
-        default=Path("memory-peak.txt"),
-        help=(
-            "The one line the shard job wrote out of /sys/fs/cgroup/memory.peak - the only "
-            "reading that covers every process at once. It carries the word `unavailable` "
-            "where the kernel file is absent, which is what a GitHub-hosted runner has "
-            "measured every time, and the cell is then left empty."
         ),
     )
     parser.add_argument(
@@ -769,24 +721,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.stage == "record":
         record.stage_record(
             common._load_plan(date), settings=settings, shard=args.shard, shards=args.shards
-        )
-        return 0
-
-    if args.stage == "counters":
-        host.stage_counters(
-            common._load_plan(date),
-            state_root=common.STATE_ROOT,
-            metrics_path=args.counters_file,
-            shard=args.shard,
-            shards=args.shards,
-            job=args.job,
-            job_started_at=int(args.job_started_at) if args.job_started_at else None,
-            cpu_model_reported=args.cpu_model,
-            cpu_stat_at_start=args.cpu_stat_at_start,
-            cpu_stat_at_end=args.cpu_stat_at_end,
-            rss_samples_path=args.rss_samples_file,
-            server_log_path=args.server_log,
-            memory_peak_path=args.memory_peak_file,
         )
         return 0
 

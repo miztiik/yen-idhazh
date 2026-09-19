@@ -85,6 +85,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-19T02:00",
+            change="observability.runtime_counters_scrape, removed with the store it governed.",
+            why="The four cells a reader wants are on the host row, from the same scrape.",
+        ),
+        ChangelogEntry(
             version="2026-09-19T01:00",
             change="adaptive_dedup_threshold: caps in slots, a rise cap, two damping weights.",
             why="The line falls fast and rises slow, and a slot count is checkable.",
@@ -98,11 +103,6 @@ class AppConfig(Contract):
             version="2026-09-18T11:00",
             change="The three extract.chrome_* knobs, removed with the store they governed.",
             why="Over a full run the store moved the boilerplate signal zero times.",
-        ),
-        ChangelogEntry(
-            version="2026-09-18T10:00",
-            change="adaptive_dedup_threshold.judge_temperature, additive, default 0.0.",
-            why="The swap reads position bias only while the sampler adds no noise of its own.",
         ),
         ChangelogEntry(
             version="2026-08-21",

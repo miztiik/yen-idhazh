@@ -71,7 +71,7 @@ Nothing on this row identifies a page. No address, no `url_key`, no title, no
 fetched text - only an item id the pipeline minted, a clock and a set of
 durations of our own work. So there is nothing to redact and no second
 `public-run-timeline` shape to declare, the way `span-rollup-row`, `day-metrics`
-and `runtime-counters-row` are published whole
+and `machine-shard-row` are published whole
 (`docs/architecture/publishing/console-payloads.md`). Where the rows land - a
 published mirror alone, or a committed ledger projected into one - is decided by
 the row that writes them, and it is the same columns either way.

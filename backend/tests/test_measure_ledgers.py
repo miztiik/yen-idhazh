@@ -22,8 +22,8 @@ from typing import Final
 from conftest import FIXTURES_DIR
 
 from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
-from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.extract import TOKENS_PER_WORD
 from utilities.measure_ledgers import (
     UPPER_PERCENTILE,
@@ -80,7 +80,7 @@ def naive_percentile(values: Sequence[int], share: float) -> int:
 def test_the_fixture_only_names_columns_the_real_ledgers_have() -> None:
     pairs = (
         ("item-health/2026/01/01.csv", ItemHealthRow.csv_columns()),
-        ("runtime-counters.csv", RuntimeCountersRow.csv_columns()),
+        ("host-fingerprint/2026/01/01.csv", HostFingerprintRow.csv_columns()),
         ("scores/2026-01.csv", EvalRow.csv_columns()),
     )
     for relpath, columns in pairs:
@@ -119,10 +119,10 @@ def test_a_run_whose_rows_name_no_shard_reads_as_one_whole_run() -> None:
     assert clock_for("2026-01-01-1").shard is None
 
 
-def test_a_shard_scraped_twice_leaves_the_two_ledgers_unjoinable() -> None:
+def test_a_shard_clocked_twice_leaves_the_two_ledgers_unjoinable() -> None:
     clock = clock_for("2026-01-01-3")
 
-    assert clock.counter_rows == 3
+    assert clock.clock_rows == 3
     assert clock.distinct_shards == 2
     assert not clock.joinable
     assert "a shard was re-run" in clock.verdict
@@ -252,6 +252,6 @@ def test_the_report_says_which_grain_each_line_is() -> None:
 
 
 def test_both_ledgers_now_name_the_shard_that_did_the_work() -> None:
-    """`shard` landed on the item ledger on 2026-08-30; before that only counters had it."""
-    assert "shard" in RuntimeCountersRow.csv_columns()
+    """`shard` landed on the item ledger on 2026-08-30; the clock always had it."""
+    assert "shard" in HostFingerprintRow.csv_columns()
     assert "shard" in ItemHealthRow.csv_columns()

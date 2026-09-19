@@ -13,8 +13,8 @@ from conftest import REPO_ROOT, read_text
 
 from idhazh import cli, config, ledger
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.run_plan import RunPlan
-from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.stages import compact as compact_stage
 from idhazh.stages.common import CAPTURES_DIRNAME
 from idhazh.telemetry import silicon

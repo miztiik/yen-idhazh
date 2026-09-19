@@ -410,28 +410,12 @@ jobs:
       # 110 minutes, and until this stamp existed the only place a job's clock
       # lived was the GitHub jobs API - which drops a job record when the run
       # ages out, so the rollback rule was a person making an API call by hand
-      # (docs/reference/pipeline-cost.md). The counters step subtracts this and
-      # files the difference beside the tokens the same shard read.
-      #
-      # The processor rides along for the same reason. `ubuntu-latest` names the
-      # image and not the part, this project has measured a 3.1x read-throughput
-      # swing between hosts, and a clock that cannot be read against the next
-      # run's clock is not a measurement (Guardrail #10). `|| true` because a host
-      # with no `model name` line must cost an empty cell, never the shard.
-      #
-      # And the processor counters, so the counters step can difference them and
-      # say what share of the host's processor seconds this job actually used. It
-      # has to be read here rather than only at the end: `/proc/stat` counts
-      # since boot, and a runner boots minutes of idle before a job starts.
-      # `/proc/stat` rather than a cgroup file because two cgroup files this
-      # repository once read - `memory.peak` and `cpu.max` - are both absent on
-      # a GitHub-hosted runner.
-      - name: Stamp the shard clock and the host
+      # (docs/reference/pipeline-cost.md). The job-clock step subtracts this and
+      # files the difference onto the host row this shard opened.
+      - name: Stamp the shard clock
         run: |
           set -euo pipefail
           echo "JOB_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"
-          echo "CPU_MODEL=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//' || true)" >> "$GITHUB_ENV"
-          echo "CPU_STAT_AT_START=$(awk '/^cpu / { print }' /proc/stat || true)" >> "$GITHUB_ENV"
 
       - uses: actions/checkout@v6
 
@@ -693,12 +677,12 @@ jobs:
       # requests to the thing it measures and still report only the last one.
       # One server serves one shard for a whole job, so one read covers it all.
       #
-      # Between the two ledger steps, and not after them, because the row it
-      # writes is committed by the step below. Until it was committed these
-      # numbers reached only this job log, which keeps them for two days - and
-      # that is what made the prefill rate the throughput doc and the console
-      # publish impossible to check against anything (Guardrail #10). See
-      # docs/architecture/summarize/throughput.md.
+      # Before `What this job cost`, because that step reads the file this one
+      # writes and puts two of its counters onto the host row. Until they were
+      # committed these numbers reached only this job log, which keeps them for
+      # two days - and that is what made the prefill rate the throughput doc and
+      # the console publish impossible to check against anything (Guardrail #10).
+      # See docs/architecture/summarize/throughput.md.
       #
       # `always()`, because the shard that died is the shard whose context high
       # water mark matters most. `continue-on-error` for the reason written above
@@ -712,54 +696,28 @@ jobs:
           curl -sf --max-time 30 "http://127.0.0.1:${LLAMA_PORT}/metrics" -o llama-metrics.prom || true
           if [ -s llama-metrics.prom ]; then
             # The whole counter set, so a llama.cpp rename is visible rather than
-            # silently absent, and then the two that decide a run.
+            # silently absent, and then the four a reader names: the two a run is
+            # read by, and the two the job-clock step below parses onto the host
+            # row. Either pair renamed says so here, where a person reading a
+            # failed shard will find it, rather than arriving as an empty cell.
             grep -E '^llamacpp:' llama-metrics.prom || true
-            for series in llamacpp:n_busy_slots_per_decode llamacpp:n_tokens_max; do
+            for series in llamacpp:n_busy_slots_per_decode llamacpp:n_tokens_max \
+                          llamacpp:prompt_tokens_total llamacpp:prompt_seconds_total; do
               grep -m1 "^${series} " llama-metrics.prom \
                 || echo "${series}: this build does not publish it"
             done
           else
             echo "no metrics: llama-server was already gone, or the role's inference.metrics is off"
           fi
-          # A row lands either way. A shard whose server was already gone and a
-          # shard that never ran are different facts, and pooling a run has to be
-          # able to see the shard that contributed nothing.
-          #
-          # The arguments after the body are the job's own facts rather than the
-          # server's, so the row that says what this shard read also says how
-          # long it took, which processor read it, how much of that processor it
-          # used, how much memory it and the rest of the job held, and what the
-          # weights cost to open. `:-` because a reading that never ran must
-          # leave an empty cell, not send the word "unbound" to a contract that
-          # would refuse it.
-          #
-          # The kernel's own peak is read HERE rather than in the summary step
-          # below, because the row reads the file and a file written after the
-          # row is a file the row never saw. It is written rather than passed as
-          # a string so that the runtime artifact and the operator still get it,
-          # and it is written before the row so the two cannot disagree. The
-          # stage never opens `/sys` itself: that tree is on the runner and on no
-          # developer machine this project is written on, so a stage that read it
-          # could not be run or tested anywhere else.
+          # The kernel's own peak, for the runtime artifact and the operator
+          # step below. The stage never opens `/sys` itself: that tree is on the
+          # runner and on no developer machine this project is written on, so a
+          # stage that read it could not be run or tested anywhere else.
           if [ -f /sys/fs/cgroup/memory.peak ]; then
             echo "cgroup_memory_peak_bytes=$(cat /sys/fs/cgroup/memory.peak)" > memory-peak.txt
           else
             echo "cgroup_memory_peak_bytes=unavailable" > memory-peak.txt
           fi
-          CPU_STAT_AT_END=$(awk '/^cpu / { print }' /proc/stat || true)
-          python -m idhazh counters \
-            --date "${{ needs.plan.outputs.date }}" \
-            --job work \
-            --shard ${{ matrix.shard }} \
-            --shards ${{ needs.plan.outputs.shards }} \
-            --counters-file llama-metrics.prom \
-            --job-started-at "${JOB_STARTED_AT:-}" \
-            --cpu-model "${CPU_MODEL:-}" \
-            --cpu-stat-at-start "${CPU_STAT_AT_START:-}" \
-            --cpu-stat-at-end "${CPU_STAT_AT_END:-}" \
-            --rss-samples-file rss-samples.tsv \
-            --server-log llama-server.log \
-            --memory-peak-file memory-peak.txt
 
       # The other end of `What machine this job drew`. That step probes the host
       # before the model server starts, because the bandwidth reading wants a
@@ -802,9 +760,9 @@ jobs:
       # Appending the same row twice is the one thing that would make this worse
       # than the loss it fixes, because `public_telemetry` copies every row into
       # the file the console reads. No ledger head is staged here any more: the
-      # item census, the eval rows, the span fold and the model server's own
-      # counters each go to their writer's own segment, and the compaction
-      # settles them by key - which is what `state/segments` below is.
+      # item census, the eval rows and the span fold each go to their writer's
+      # own segment, and the compaction settles them by key - which is what
+      # `state/segments` below is.
       #
       # Nothing here shares a file with another writer any more, which is why no
       # settling pass runs after the rebase. Until 2026-09-19 one did:
@@ -833,8 +791,8 @@ jobs:
       # `state/segments` is where everything this shard measured now goes, and
       # it is the only ledger path left in the list below. The machine row moved
       # there on 2026-09-17; the item census, the eval rows, the record of what
-      # those rows are, the span fold and the model server's own counters
-      # followed on 2026-09-18. Each of those used to be appended to a file that
+      # those rows are and the span fold followed on 2026-09-18. Each of those
+      # used to be appended to a file that
       # up to eight work shards and assemble all opened, and each writer now
       # takes `state/segments/<ledger>/<run>-<attempt>-<job>-<shard>.csv`
       # instead, so two writers never share a path. `assemble` folds them into
@@ -896,10 +854,10 @@ jobs:
               }'
           done
 
-      # The operator's read of the same two files the counters row read, in the
+      # The operator's read of the same two files the host row read, in the
       # job log where a person looking at a failed shard will find it. It writes
-      # nothing: `memory-peak.txt` is written by the counters step above, so the
-      # number printed here and the number on the row are one reading.
+      # nothing: `memory-peak.txt` is written by the scrape step above, so the
+      # number printed here and the number the sampler took are one reading.
       - name: What memory this shard used
         if: always()
         run: |
@@ -1244,7 +1202,6 @@ jobs:
             state/scores
             state/score-index
             state/item-health
-            state/runtime-counters.csv
             state/span-rollup
             state/traces
             state/host-fingerprint

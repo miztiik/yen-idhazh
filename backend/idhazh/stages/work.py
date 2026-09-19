@@ -23,12 +23,11 @@ from idhazh import (
 )
 from idhazh.classify import calls
 from idhazh.contracts.article import Article, ArticleStatus
-from idhazh.contracts.base import canonical_json
+from idhazh.contracts.base import ServerJob, canonical_json
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
-from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX
 from idhazh.evals import evidence, metrics, score

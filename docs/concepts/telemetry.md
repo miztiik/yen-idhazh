@@ -62,7 +62,7 @@ flowchart TD
     head_sr
     tr
     fh
-    other["day-metrics/ and scores/ and published/ and seen/<br/>runtime-counters.csv and day-validations.csv"]
+    other["day-metrics/ and scores/ and published/ and seen/<br/>day-validations.csv"]
   end
 
   state --> inventory
@@ -299,28 +299,16 @@ the one-minute load, three memory readings and what the kernel counted against
 the job's memory limit.
 
 `backend/idhazh/telemetry/host.py` is the only thing that reads them, and it
-reads them for two consumers at two grains.
-
-| Consumer | Grain | The question it answers |
-| --- | --- | --- |
-| the item row | one item | did this item meet a noisy neighbour? |
-| `state/runtime-counters.csv` | one shard | what did the whole job cost, and does the census's own clock agree with the server's? |
-
-**They stay two stores on purpose.** The counters row is the independent check on
-the census's own timings, and a check folded into the thing it checks stops
-being a check.
+reads them for one consumer at one grain: **the item row**, around one item. The
+question it answers is whether this item met a noisy neighbour.
 
 **The item row records the sample taken while that item ran, never the shard's
 average.** An average says nothing about the item that was slow, which is the
 whole question these cells exist to answer.
 
-Three column names appear on both rows, and **two of the three are supposed to
-differ**. `cpu_busy_pct` is one item's window on the item row and the whole
-job's - cache restore and weight load included - on the shard row.
-`cgroup_peak_bytes` is a high-water mark read at two different instants.
-`cpu_model` is the third and it is not like the others: a processor does not
-change inside a job, so two different answers would mean the host had been read
-twice. Both rows take it from one `host_facts` call.
+`cpu_model` is the one cell on it that cannot change inside a job, so two
+different answers on two items of one shard would mean the host had been read
+twice. Every row a shard writes takes it from one `host_facts` call.
 
 Every source is one local file read, and a reading that cannot be taken records
 empty rather than failing the item. `/sys/fs/cgroup/memory.peak` has measured
@@ -331,7 +319,7 @@ instrument, not about the job. What one sample costs is in
 
 ## What the machine WAS, which is a different question
 
-`cpu_model` on the two rows above says which processor, in one string. It does
+`cpu_model` on the item row says which processor, in one string. It does
 not say what that processor can do, and **the thing that moves throughput most is
 what it can do**: the same weights read 3.6 times faster on a machine with
 AVX-512 than on one without, which is a far larger gap than anything separating
@@ -359,15 +347,15 @@ thing to say: `ITEM_HEALTH_KEY` carries no `job` cell, so two writers describing
 one item are one record to the fold, and `ledger.ITEM_HEALTH_RULE` keeps the row
 that names a job over the row that does not.
 
-`state/runtime-counters.csv` joined them the same day, and it is the odd one:
-its head stays a single flat file rather than moving to a day tree. Every
-model-server job scrapes its own server and files the numbers, so the path had
-as many writers as the day file above it, and a segment closes that. A flat head
-is not a collider once the compaction is the only thing that writes it, and this
-ledger is on its way out anyway - the columns it carries are moving onto the two
-rows above - so a day tree here would be work thrown away.
+`state/runtime-counters.csv` was the last store to join them, on the same day,
+and it was deleted on 2026-09-19 rather than moved. It held what each
+model-server job's llama-server counted for a whole shard, in one flat file every
+work shard appended to. Four of its cells had a reader and all four now sit on
+the host row, which is already filed by day and already keyed
+`(date, run_id, job, shard)`. Moving the file to a day tree would have been work
+thrown away.
 
-**Why a third grain rather than more columns on the two rows above.** These cells
+**Why a third grain rather than more columns on the item row.** These cells
 are fixed for the whole job. Repeating twenty of them on every item row would
 store the same answer a hundred times a day and say nothing new; the job grain
 stores it once. The two tables share the key `date`, `run_id`, `job`, `shard`, so
@@ -461,7 +449,7 @@ Thirteen stores under `state/` is not thirteen designs. It is six grains, and th
 | observation | address, output digest, scorer version | `scores`, `score-index` |
 | address | url key | `seen`, `published`, `counterfactual-scores` |
 | feed | run, feed | `feed-health`, `feed-retirements.csv` |
-| shard and run | date, run, shard | `runtime-counters.csv`, `span-rollup`, `visual-prunes` |
+| shard and run | date, run, shard | `host-fingerprint`, `span-rollup`, `visual-prunes` |
 | day | date | `day-metrics`, `day-validations.csv` |
 
 **An item-grain ledger cannot hold a fact about a thing that was never an item.** A feed that returned nothing has no items, so its failure has no item row to sit on - and a feed returning nothing is the case `feed-health` exists for. `seen` holds 76,834 addresses against 12,217 planned items, six times the population, because most addresses were never planned. A candidate the ranker refused is the whole point of `counterfactual-scores` and is never planned either. Those are not sprawl; they are the questions an item row cannot answer.
@@ -483,7 +471,7 @@ Read this table before proposing a merge. A store folds only when it fails **eve
 | Store | Keys on | Window | Verdict |
 | --- | --- | --- | --- |
 | `item-health` | an item | 14 months | **the census.** Whatever folds, folds here |
-| `visual-prunes` | a run | with the pictures | **FOLD** into a run-grain ledger beside `runtime-counters`. 41 rows, and a run is not an item |
+| `visual-prunes` | a run | with the pictures | **FOLD** into a run-grain ledger. 41 rows, and a run is not an item |
 | `validation-<date>.csv` | a model | never | **RETIRE.** Four rows with a date in the filename. The numbers belong in the measurement record |
 | `day-validations.csv` | a day | with the day | **KEEP**, move to day files. A receipt is not an item |
 | `scores` | an observation | 14 months | **KEEP.** One item holds several rows - re-measurement is the point, and an item key allows only one |
@@ -492,7 +480,7 @@ Read this table before proposing a merge. A store folds only when it fails **eve
 | `counterfactual-scores` | a candidate | with the scores | **KEEP.** The refused candidates are the point, and a refused candidate is never planned |
 | `feed-health` | a feed | with the feeds | **KEEP.** A feed that returned nothing has no items, and that is the case it exists for |
 | `feed-retirements.csv` | a feed | never | **KEEP flat.** A fact with no day does not belong in a day tree |
-| `runtime-counters.csv` | a shard | 14 months | **KEEP**, move to day files. It is the independent check on the census's own timings, and a check folded into the thing it checks stops being one (Guardrail #10) |
+| `runtime-counters.csv` | a shard | 14 months | **RETIRED 2026-09-19.** It was the independent check on the census's own timings; the four cells that carried that check moved onto `host-fingerprint`, which keys the same four cells and already files by day |
 | `span-rollup` | a shard and a span | 14 months | **KEEP.** Its columns are held disjoint from every ledger's by a contract test, which is what lets a fold of spans be committed at all |
 | `traces` | a shard | 7 days | **KEEP.** Evidence, not a record. Deleted rather than folded |
 | `published` | an address | never | **KEEP - see below.** The one that looks foldable and is not |
@@ -508,7 +496,7 @@ There is a second reason, and it bites in production rather than in year two. A 
 | Option | What it would buy | What is not known yet |
 | --- | --- | --- |
 | Fill the census columns the run already computes | 58 of the 70 empty columns, from values the process holds and discards | Nothing blocking. The cost is one commit, not a measurement |
-| Fold `visual-prunes` and `runtime-counters` into one run-grain ledger | one store and one writer instead of three | whether the month fold can carry two row shapes without a second fold path |
+| Fold `visual-prunes` into a run-grain ledger | one store and one writer instead of two | whether the month fold can carry two row shapes without a second fold path |
 | Move the three flat files to day trees | a store `idhazh telemetry prune` can reach, since that command takes a day file out and has no way to rewrite a row out of a flat one ([../architecture/publishing/retention.md](../architecture/publishing/retention.md#a-named-prune-one-store-one-range-of-days-2026-09-16)) | the one-time migration's cost, and whether any reader assumes a single file |
 | Compress the published projections | **measured 2026-09-15: 6,720,442 bytes of 8,726,606, 77.0 percent**, with no new dependency ([../reference/pipeline-cost.md](../reference/pipeline-cost.md#what-compressing-the-telemetry-takes-against-re-encoding-it-2026-09-15)) | whether every console fetch path handles the encoding. One build settles it. `span-rollup/` is 67 bytes and gzips to 77, so a switch has to leave a file alone where compressing it does not pay |
 | Re-encode every closed-vocabulary column as an ordinal integer | **measured 2026-09-15: 369,855 bytes of `state/item-health/`, 7.1 percent** - a ninth of what compressing the same files takes, and it costs a legend shipped beside the data and `grep failed` over a committed day | nothing. It is priced and deferred: compression is taken first, and an ordinal taken first would be re-encoded when compression lands |

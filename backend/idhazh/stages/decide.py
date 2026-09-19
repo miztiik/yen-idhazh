@@ -11,7 +11,7 @@ from idhazh import (
     ledger,
     run_context,
 )
-from idhazh.contracts.runtime_counters import ServerJob
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.validation_row import (
     ValidationVerdict,
 )

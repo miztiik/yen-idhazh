@@ -26,8 +26,9 @@ owns it, never re-derived from a wider one:
   day-metrics record, each keyed to the newest day the manifests hold;
 - the free-swap pair comes from that same item-health shard, which is the only
   place either cell is recorded;
-- the machine facts come from `state/runtime-counters.csv`, whose growing read
-  `machine` declares;
+- the machine facts come from `frontend/public/machine/`, the published fold of
+  `state/item-health/` and `state/host-fingerprint/`, whose read `machine`
+  declares;
 - the compaction lag comes from the fold this run already ran, handed in by the
   caller. It is never a listing taken here, because the fold runs first and the
   directory is empty by the time this file is written.

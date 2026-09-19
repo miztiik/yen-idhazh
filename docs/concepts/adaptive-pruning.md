@@ -178,7 +178,6 @@ is the count of month shards a console read opens, and no read opens a visual
 | `state/day-metrics/` | Keep | none of its own | about 13 KB a day, measured 2026-09-12 over 23 committed days, and the only place a band count or an extraction census survives the fold above |
 | `state/span-rollup/` | Keep | none of its own | the committed record a trace is not. No committed instance yet |
 | `state/visual-prunes/` | Keep | none | it is property 5 - the record of what the prune did, including the runs it did nothing |
-| `state/runtime-counters.csv` | Keep | none of its own | one appended file. The month boundary is first drawn in the published copy |
 | `state/feed-retirements.csv` | Keep | never | it carries no time window at all. A run that forgot a retired address would start asking a dead one again |
 | `state/fingerprints.csv` | Keep | none | one stamp a run |
 | `state/day-validations.csv` | Keep | none | one receipt a day, from `idhazh validate-days` |

@@ -291,7 +291,7 @@ the five). Against a published day's `state/` - 480 item-health rows at the
 median, 18.7 percent of the 28.2 MB tree measured on 2026-09-16 - that is
 8.1 percent more `state/` a day, and the fixture cannot reach 18 of the columns
 a real run fills, so the production figure is an estimate of 15 to 17 percent.
-The estimate is what a per-cell width from `state/runtime-counters.csv` and the
+The estimate is what a per-cell width from `state/host-fingerprint/` and the
 published `rank_score` widths give; a measurement on the first real day replaces
 it. Plan 32's decision 3 priced this at 3.2 percent before the columns were
 counted, which was about three times low.
@@ -300,12 +300,12 @@ counted, which was about three times low.
 
 A run splits into as many as eight `work` jobs, each on its own disposable
 machine. `shard` is the number `stages.common.shard_of` gave the job that produced this
-row. `state/runtime-counters.csv` carries `shard` and `shards` for the same run,
+row. `state/host-fingerprint/` carries `job` and `shard` for the same run,
 so `(run_id, shard)` joins the two files: the cells here say what the work cost,
 and the row there says which host paid it.
 
 The column exists because the hosts are not alike. Measured over the seven runs
-in `state/runtime-counters.csv` on 2026-08-30, the fastest shard of a run read
+committed on 2026-08-30, the fastest shard of a run read
 the prompt between **1.10x and 4.19x** faster than the slowest shard of the same
 run. The worst was run `2026-08-27-2`, where eight shards ranged from 9.75 to
 40.89 prompt tokens a second on one day. Pooled over the run that difference
@@ -659,8 +659,8 @@ this row is our arithmetic, which is the point - see
 [../summarize/throughput.md](../summarize/throughput.md).
 
 **A copied field is one instrument, and there is now a second.** Each `work`
-shard also commits what its server counted for the whole shard, as one row of
-`state/runtime-counters.csv`. `backend/utilities/reconcile_prefill.py` pools both
+shard also commits what its server counted for the whole shard, onto its own row
+of `state/host-fingerprint/`. `backend/utilities/reconcile_prefill.py` pools both
 sides of a run and prints the gap, which is how a rate quoted off this file stops
 being an assertion. Measured on run `2026-08-26-5`: 11.1755 tok/s from this
 ledger against 11.1796 from the server, 0.037 percent apart

@@ -108,7 +108,7 @@ a chart and a ledger start reporting different overheads for one item.
 No address, no `url_key`, no title, no fetched text - only an item id the
 pipeline minted, a clock, and durations of our own work. So there is nothing to
 redact, and no second `public-run-timeline` shape to declare: this is published
-whole, the way `span-rollup-row`, `day-metrics` and `runtime-counters-row`
+whole, the way `span-rollup-row`, `day-metrics` and `machine-shard-row`
 already are. Where the rows land was left to the writer, and the writer chose a
 published mirror alone: every cell is either a census column or arithmetic over
 one, so a committed `state/run-timeline/` would be a third copy of numbers git
