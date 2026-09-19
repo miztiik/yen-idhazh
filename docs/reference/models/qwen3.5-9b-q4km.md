@@ -135,10 +135,11 @@ one set of weights rather than one entry with a flag.
 disagreement with the card - but it is the number to look at first if a
 thinking-on run returns nothing, because the span and the answer share it.
 
-**The same question is open on the other two entries and is not answered here.**
-Ornith and Gemma also pin 0.2, and nobody has read their publishers' recipes.
-What would settle it is the same five minutes spent on each model card, written
-onto each dossier.
+**All three candidates were checked on 2026-09-19, and all three are off-recipe
+at 0.2.** [ornith-1.5-9b-q5km.md](ornith-1.5-9b-q5km.md) publishes two recipes
+bottoming at 0.6, the same shape as this page. [gemma-4-e4b-qat.md](gemma-4-e4b-qat.md)
+is the widest gap: one recipe, `temperature=1.0`, and the card says to use it
+across all use cases. No model in the field publishes anything as low as 0.2.
 
 ## On disk, and what it costs the cache
 

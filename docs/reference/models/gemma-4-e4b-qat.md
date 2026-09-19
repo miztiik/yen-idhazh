@@ -1,6 +1,6 @@
 # Gemma-4-E4B-it-qat-UD-Q4_K_XL
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-19
 **Status: evaluated.** It has been benched and it has never served a published
 item. `evaluated` is one of three words a dossier's status line may hold -
 `evaluated`, `incumbent`, `superseded` - and this line is the only place this
@@ -67,6 +67,47 @@ test holds the contract against.
 **It declares both halves or neither.** A draft entry naming a file with no
 digest is refused before the download, by the daily run as well as by the two
 bench workflows.
+
+## Sampling: what we set, against what the publisher asks for
+
+Read from the model card on 2026-09-19
+([google/gemma-4-E4B-it](https://huggingface.co/google/gemma-4-E4B-it), Best
+Practices). **Gemma publishes one recipe and says to use it everywhere** -
+verbatim, *"Use the following standardized sampling configuration across all use
+cases"*. There is no task-specific variant to argue we fall under.
+
+| | temperature | top_p | top_k |
+| --- | ---: | ---: | ---: |
+| The card, all use cases | 1.0 | 0.95 | 64 |
+| **both `gemma-4-e4b-qat*.json` entries** | **0.2** | **1.00** | unset |
+
+**This is the widest gap of the three candidates.** Qwen and Ornith each publish
+a low-temperature variant at 0.6; Gemma publishes 1.0 and nothing else. The
+owner pinned 0.2 across every committed entry on 2026-09-17
+([../../architecture/contracts/determinism.md](../../architecture/contracts/determinism.md)),
+which is a decision on the record - but nobody has read this model at 1.0
+against 0.2 on one corpus, so what the gap buys or costs is unmeasured.
+
+**Thinking is a system-prompt token here, not a sampler setting.** The card:
+thinking is enabled by including `<|think|>` at the start of the system prompt,
+and the reply is then `<|channel>thought\n` ... `<channel|>` before the answer.
+Both entries pin `thinking_close: "<channel|>"`, which is that closing token, so
+this repository is configured to expect a thinking span from these weights.
+
+**E4B behaves differently from its siblings when thinking is off**, and the card
+is explicit: every Gemma 4 model *except* E2B and E4B still emits the tags with
+an empty thought block. On E4B the tags simply do not appear. A test written
+against another size's behaviour would be wrong here.
+
+**One recorded number is consistent with the span being where the tokens go.**
+On 2026-09-17 this model spent a median 4,692 output tokens to publish a
+110-word summary - 43 tokens a word, against Ornith's 6 - while the
+`reasoning_leakage` gate passed with zero non-empty think blocks
+([../benchmarks/four-candidates-on-one-news-day.md](../benchmarks/four-candidates-on-one-news-day.md)).
+A correctly split thinking span would produce exactly that pair. **It is a
+reading consistent with a hypothesis and not a measurement of one**: nothing has
+counted the span's tokens directly, and a `captures-*` artifact from a run after
+2026-09-18 would.
 
 ## Prefill and decode
 
