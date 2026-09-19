@@ -40,7 +40,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 
-## In flight - 8
+## In flight - 9
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
@@ -51,6 +51,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | #10 | 33 | C | `model_load_ms` and `job_seconds` join `host-fingerprint` | p33c10 |
 | #12 | 33 | D | Delete the merge machinery | p33d12b |
 | #13 | 33 | D | Compaction lag and free swap on the console band | p33d13 |
+| #11 | 33 | E | Delete `runtime-counters` and everything that reads it | p33e11p1 |
 | #29 | 33 | J | `prune.yml` wakes outside the digest window | p33j29 |
 
 ## Ready now - 28
@@ -90,7 +91,7 @@ section 3 is where it is answered.
 | #7 | 35 | A / eval-core | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - |
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
 
-## Waiting on another row - 90
+## Waiting on another row - 89
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -149,17 +150,16 @@ section 3 is where it is answered.
 | #8 | 27 | C | What the model saw, kept for 90 days | 4 is PENDING |
 | #9 | 27 | D | A cut reply keeps its summary | 1 is PENDING |
 | #11 | 27 | E | Two articles, three arms, one runner | 4 is PENDING |
-| #11 | 33 | E | Delete `runtime-counters` and everything that reads it | 10 is IN-FLIGHT; 17 is IN-FLIGHT |
-| #15 | 33 | F | Generated TypeScript contracts replace the hand-written ones | 10 is IN-FLIGHT; 11 is PENDING |
+| #15 | 33 | F | Generated TypeScript contracts replace the hand-written ones | 10 is IN-FLIGHT; 11 is IN-FLIGHT |
 | #16 | 33 | G | Docs, and the orphan sweep | all names no row |
-| #19 | 33 | I | The shard board | 11 is PENDING |
+| #19 | 33 | I | The shard board | 11 is IN-FLIGHT |
 | #21 | 33 | I | Memory and load, three grains - ABSORBS Row #14 | 15 is PENDING; 19 is PENDING |
 | #23 | 33 | I | What a run reads against what it writes, in tokens and in seconds | 21 is PENDING |
 | #25 | 33 | I | Outside the model call, as range marks | 23 is PENDING |
 | #22 | 33 | I | Platform mix as grouped bars | 25 is PENDING |
 | #24 | 33 | I | Counterfactual cost gets a shape | 22 is PENDING |
 | #20 | 33 | I | Timing panels merge and move to Pipeline | 24 is PENDING |
-| #26 | 33 | I | Machine cards: L3 and bandwidth as bars - AMENDS Row #5 | 11 is PENDING |
+| #26 | 33 | I | Machine cards: L3 and bandwidth as bars - AMENDS Row #5 | 11 is IN-FLIGHT |
 | #27 | 33 | K | Route grouping and panel order | 20 is PENDING; 26 is PENDING |
 | #14 | 33 | - | The per-item machine load panel | - |
 | #8 | 33 | - | Memory split by prefill and decode | - |
