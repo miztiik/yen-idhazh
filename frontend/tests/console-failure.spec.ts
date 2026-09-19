@@ -221,7 +221,7 @@ test('the printed denominators are the ones the ledger holds', async ({ page }) 
 
 	for (const stage of STAGES) {
 		const failures = inWindow.filter((r) => r.outcome === 'failed' && r.stage === stage).length;
-		const cell = page.locator(`[data-failure-stage="${stage}"]`);
+		const cell = page.locator(`[data-failure-readout] [data-failure-stage="${stage}"]`);
 		await expect(cell).toHaveAttribute('data-stage-reached', String(reached));
 		await expect(cell).toHaveAttribute('data-stage-failed', String(failures));
 		await expect(cell).toHaveAttribute(
@@ -284,10 +284,9 @@ test('a window too thin to divide states that, and never a rate', async ({ page 
 	expect(reached).toBeLessThan(MIN_ATTEMPTS_FOR_RATE);
 
 	for (const stage of STAGES) {
-		await expect(page.locator(`[data-failure-stage="${stage}"]`)).toHaveAttribute(
-			'data-stage-low-sample',
-			'true'
-		);
+		await expect(
+			page.locator(`[data-failure-readout] [data-failure-stage="${stage}"]`)
+		).toHaveAttribute('data-stage-low-sample', 'true');
 		const says = flat(await page.locator(`[data-panel-rate="${stage}"]`).innerText());
 		expect(says, `${stage} gave a rate on ${reached} items`).not.toContain('%');
 		expect(says).toContain('that reached it');

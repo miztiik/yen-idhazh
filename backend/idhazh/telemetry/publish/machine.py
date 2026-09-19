@@ -29,8 +29,8 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import day_partition, ledger
+from idhazh.contracts.base import WORK_JOB
 from idhazh.contracts.machine_shard import MachineShardRow
-from idhazh.contracts.runtime_counters import WORK_JOB
 from idhazh.telemetry.publish import series
 
 PUBLIC_COLUMNS: Final[tuple[str, ...]] = MachineShardRow.csv_columns()

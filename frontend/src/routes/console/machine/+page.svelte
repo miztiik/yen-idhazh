@@ -1,14 +1,14 @@
 <script lang="ts">
 	/** The hardware the model ran on, and how much it varied.
 	 *
-	 * The pipeline has written one row per shard per run to
-	 * `state/runtime-counters.csv` since 2026-08-26 and, until this page, nothing
-	 * had ever drawn a cell of it. That is not a cosmetic gap. Measured on the
-	 * committed ledger, the fastest shard of a single run read its prompts 4.31x
-	 * faster than the slowest shard of the SAME run, and every throughput figure
-	 * this project has quoted was an average taken across that spread. So the
-	 * shard is the unit on this page and every run figure carries how many shards
-	 * it was made from.
+	 * The pipeline has written one machine row per shard per run to
+	 * `state/host-fingerprint/` and one row per item to `state/item-health/`, and
+	 * until this page nothing had ever put the two together. That is not a
+	 * cosmetic gap. Measured on the committed ledger, the fastest shard of a
+	 * single run read its prompts 4.31x faster than the slowest shard of the SAME
+	 * run, and every throughput figure this project has quoted was an average
+	 * taken across that spread. So the shard is the unit on this page and every
+	 * run figure carries how many shards it was made from.
 	 *
 	 * **Every figure over a span reads the control above it**, the same 7/14/30/90
 	 * the other two routes carry and the same `idhazh:console-window` key, so a
@@ -926,9 +926,19 @@
 				<ul class="sr-only" data-context-runs>
 					{#each contextRuns as run (run.runId)}
 						<li data-context-run={run.runId} data-context-longest={run.longest ?? ''}>
-							{run.runId}: {grouped(run.longest ?? 0)} of {grouped(data.contextWindow)} tokens,
-							{run.usedPct}% used, {grouped(run.spare ?? 0)} spare, over {run.from}
-							{run.outOf === null ? 'shards' : `of ${run.outOf} shards`}.
+							{#if run.longest === null}
+								{run.runId}: no sequence length recorded, over {run.from}
+								{run.outOf === null
+									? 'shards, and this run manifest recorded no shard count'
+									: `of ${run.outOf} shards`}.
+							{:else}
+								{run.runId}: {grouped(run.longest)} of {grouped(data.contextWindow)} tokens,
+								{run.usedPct === null ? 'an unrecorded share' : `${run.usedPct}%`} used,
+								{run.spare === null ? 'unrecorded' : grouped(run.spare)} spare, over {run.from}
+								{run.outOf === null
+									? 'shards, and this run manifest recorded no shard count'
+									: `of ${run.outOf} shards`}.
+							{/if}
 						</li>
 					{/each}
 				</ul>
@@ -959,9 +969,13 @@
 				restingNote=", the last one"
 				hint="Point at a {data.clocks.grain} to read both instruments. Left and Right step through them, Escape returns to the last."
 			/>
-			<ul class="shares" data-clock-pairs={data.clocks.grain}>
+			<ul class="shares" data-clock-pairs={data.clocks.grain} data-clock-disagreeing={data.clocks.disagreeing}>
 				{#each data.clocks.pairs as pair (pair.label)}
-					<li data-clock-pair={pair.label} data-clock-gap={pair.gapPct?.toFixed(2) ?? ''}>
+					<li
+						data-clock-pair={pair.label}
+						data-clock-gap={pair.gapPct?.toFixed(2) ?? ''}
+						data-clock-agrees={pair.agrees === null ? 'unknown' : String(pair.agrees)}
+					>
 						<strong>{pair.label}</strong>:
 						{#if pair.gapPct === null}
 							one of the two instruments recorded nothing here.

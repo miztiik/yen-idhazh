@@ -435,7 +435,9 @@ test.describe('the committed ledger, read as the page reads it', () => {
 		);
 		const { refused } = machineCounters(hosts, health, plan(['2026-09-04-1', 2]), limits);
 		expect(refused).toHaveLength(1);
-		expect(refused[0].rows).toBe(3);
+		// Six, because each of the three readings states one machine row and one item
+		// row, and the count a refusal reports is what it could not read.
+		expect(refused[0].rows).toBe(6);
 		expect(refused[0].why.length).toBeGreaterThan(20);
 		expect(refused[0].why).toContain('shard 1');
 	});

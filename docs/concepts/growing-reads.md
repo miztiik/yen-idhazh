@@ -446,7 +446,7 @@ the last day there was.
 | `payload.evalRows` | through `readDayShards`, over `state/scores/` | the same 91 |
 | `payload.feedResults` | through `readDayShards`, over `state/feed-health/` | the same 91 |
 | `span-rollup.loadSpanRollup` | through `readShards`, over `state/span-rollup/` | the same 5, and the caller wants the newest entry |
-| `runtime-counters.loadMachineCounters` | one file, plus item-health through `readDayShards` | the day cover, and `state/runtime-counters.csv` is one file |
+| `machine-counters.loadMachineCounters` | `state/host-fingerprint/` and `state/item-health/`, both through `readDayShards` | the day cover, for both |
 | `payload.itemHealthForDay` | one item-health day file | one date |
 | `payload.dayMetrics` | one record a date | the dates handed in |
 | `payload.telemetryMonths`, `payload.indexMonths` | one directory listing, sliced to the newest months | `LEDGER_WINDOW_MONTHS`, where the caller takes it |

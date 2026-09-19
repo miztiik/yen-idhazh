@@ -2,7 +2,7 @@
  *
  * Six repeated reductions are now single passes over the same input: the config
  * accessors, the date and run buckets in `model-work`, the run-to-health join in
- * `runtime-counters`, the per-article band ladder, the per-bin scans in
+ * `machine-counters`, the per-article band ladder, the per-bin scans in
  * `distribution`, and the daily buckets in `failureSeries`.
  *
  * **Byte-identical output is the hard requirement** - the change moves no

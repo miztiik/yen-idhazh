@@ -14,6 +14,7 @@ import json
 import re
 import unicodedata
 from collections.abc import Sequence
+from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any, ClassVar, Final, Self, get_args
 
@@ -99,6 +100,62 @@ LOWER_TOKEN_PATTERN: Final = r"^[a-z0-9][a-z0-9_.+-]*$"
 #: sits with the other identities: a job this repository does not run is not a
 #: job a fold should invent a name for.
 JOB_NAME_PATTERN: Final = r"^[a-z][a-z0-9_-]*$"
+
+
+class ServerJob(StrEnum):
+    """Which workflow job produced a row.
+
+    Ours to name, so it is a closed set. Every other identifier on a host row is
+    a string the machine chose and cannot be one - see
+    `docs/reference/host-metrics.md`. Refusing anything else is what stops a typo
+    becoming a job nobody can group by.
+
+    Every value is a job's own id in its workflow file, lowercase, so a reader
+    goes from a row to the steps that wrote it with no lookup table in between.
+    A display name would drift from the thing it identifies.
+
+    It sits here, at the bottom of the contract graph, because three ledgers and
+    a filename grammar all name a job and none of them owns the vocabulary.
+
+    **`visuals` is here for the rows and not for a job.** `digest.yml` ran one
+    until 2026-09-13, when the small model, its job and its flag were retired
+    together. Six committed counters rows still carry the value, and a member
+    with no producer left is the only thing that can read them back.
+
+    **`decide` is here for a filename and not for a column.** `validate.yml`'s
+    gate job writes the validation ledger's segment, and the segment grammar
+    names its writer from this set - so the job belongs here. No row of the three
+    ledgers that carry a `job` column can hold it: that job stands no server up,
+    records no machine and reads no item. Their generated schemas list it because
+    one enum answers "which workflow job" for the whole repository, which is why
+    none of the three is version-stamped for it - a stamp says a shape moved, and
+    theirs did not.
+    """
+
+    # digest.yml, in the order a run reaches them.
+    PLAN = "plan"
+    WORK = "work"
+    ASSEMBLE = "assemble"
+    # Retired from digest.yml on 2026-09-13. Kept for the six rows above.
+    VISUALS = "visuals"
+    # measure.yml. The bench job that runs the real work stage over the fixed
+    # corpus `bench.corpus_items` sizes, and the one measurement job that writes
+    # a run plan.
+    RUNTIME = "runtime"
+    # validate.yml. The job that runs the gates and files the candidate's
+    # verdict. It stands no server up and records no machine, so it names a
+    # writer of the validation ledger and of nothing else here.
+    DECIDE = "decide"
+
+
+#: The default, and it is a reading rather than a guess: until 2026-09-12 exactly
+#: one step in the repository ran `idhazh counters`, and it is in the `work` job,
+#: so every row committed before that date came from `work` - 293 of them when
+#: this was written. That is what lets the column be additive and defaulted
+#: (`CLAUDE.md` section 11) instead of inventing a value for rows nobody can go
+#: back and ask. The property is what the default rests on; the count moves every
+#: run.
+WORK_JOB: Final = ServerJob.WORK
 
 SchemaVersion = Annotated[str, StringConstraints(pattern=SCHEMA_VERSION_PATTERN)]
 DateStamp = Annotated[str, StringConstraints(pattern=DATE_PATTERN)]

@@ -18,6 +18,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+	clockAgreement,
 	contextColumns,
 	contextHeadroom,
 	curveOf,
@@ -148,6 +149,9 @@ function read(
 /** Four items whose summed timings put the ledger's rate on the server's. */
 function healthRows(runId: string, items: number, tokens: number, prefillMs: number) {
 	return Array.from({ length: items }, (_, index) => ({
+		// The day, because the reader refuses a run whose rows disagree about which
+		// day it belongs to and a blank cell is a second answer.
+		date: runId.slice(0, 10),
 		run_id: runId,
 		item_id: `item-${index}`,
 		input_tokens: String(tokens + 100),
@@ -272,6 +276,86 @@ test.describe('the two clocks, checked against each other', () => {
 	});
 });
 
+/** THE ORACLE: the red state only a second instrument can enter.
+ *
+ * Every check above states one shard reading and splits it across both ledgers,
+ * so the two sides are the same expression over the same numbers and the
+ * comparison can only pass. This one reads the two canary files as they were
+ * written - the item ledger's own rows against the machine record's server
+ * counters, built 1.0 to 1.1 percent apart on purpose - and then takes one
+ * item's cost away.
+ *
+ * Blanking the five cost cells of one row is the defect this panel exists for:
+ * a prompt the server read and was paid for, and the item ledger never
+ * recorded. One clock cannot see it, because one clock has nothing to differ
+ * from. Two must, and the panel must turn.
+ */
+test.describe('THE ORACLE: one item cost, taken away', () => {
+	/** The refused row `build-canary.mjs` writes for this, and the five cells
+	 * `summarize.py` failed to carry before 2026-09-13. */
+	const REFUSED = 'ai-09';
+	const COST = ['prefill_ms', 'decode_ms', 'input_tokens', 'output_tokens', 'cached_tokens'];
+
+	function verdict(health: Record<string, string>[]) {
+		const counters = machineCounters(canaryHosts(), health, canaryPlan(), LIMITS);
+		expect(counters.runs.length, 'the canary records no machine run at all').toBeGreaterThan(0);
+		const run = counters.runs[0];
+		return { run, view: clockAgreement(run, health, CLOCKS_AGREE_WITHIN_PCT) };
+	}
+
+	test('the canary agrees, and disagrees once one row cost goes missing', () => {
+		const whole = canaryHealth();
+		expect(
+			whole.filter((row) => row.item_id === REFUSED).length,
+			`the canary writes no ${REFUSED} row, so this oracle has nothing to blank`
+		).toBe(1);
+
+		const before = verdict(whole);
+		expect(before.run.clocks.agrees).toBe(true);
+		expect(before.run.clocks.gapPct as number).toBeLessThan(CLOCKS_AGREE_WITHIN_PCT);
+		expect(before.run.clocks.gapPct, 'equal figures would pass a check that never ran').not.toBe(0);
+		expect(before.view.grain).toBe('shard');
+		expect(before.view.disagreeing).toBe(0);
+		expect(before.view.pairs.every((pair) => pair.agrees === true)).toBe(true);
+
+		const blanked = whole.map((row) =>
+			row.item_id === REFUSED
+				? { ...row, ...Object.fromEntries(COST.map((cell) => [cell, ''])) }
+				: row
+		);
+		const after = verdict(blanked);
+		expect(after.run.runId, 'the blanked row moved which run is newest').toBe(before.run.runId);
+		expect(after.run.clocks.agrees).toBe(false);
+		expect(after.run.clocks.gapPct as number).toBeGreaterThan(CLOCKS_AGREE_WITHIN_PCT);
+		expect(after.view.disagreeing).toBeGreaterThan(0);
+		expect(after.view.pairs.some((pair) => pair.agrees === false)).toBe(true);
+
+		// And back. The red state is the missing cost and nothing about the order
+		// the two readings were taken in.
+		expect(verdict(whole).run.clocks.agrees).toBe(true);
+	});
+
+	test('the server counters are what turn it, and not the item rows alone', () => {
+		// The same blanked ledger, read against a machine record that recorded no
+		// server counters at all. Nothing is left to disagree with, so the panel
+		// must say it compared nothing rather than report a gap it cannot know.
+		const blind = canaryHosts().map((row) => ({
+			...row,
+			server_prompt_tokens: '',
+			server_prompt_seconds: ''
+		}));
+		const health = canaryHealth().map((row) =>
+			row.item_id === REFUSED
+				? { ...row, ...Object.fromEntries(COST.map((cell) => [cell, ''])) }
+				: row
+		);
+		const run = machineCounters(blind, health, canaryPlan(), LIMITS).runs[0];
+		expect(run.clocks.server.rate).toBeNull();
+		expect(run.clocks.agrees).toBeNull();
+		expect(run.clocks.agrees).not.toBe(false);
+	});
+});
+
 test.describe('an empty cell is unknown and never zero', () => {
 	/** The same run with the machine cells blank - which is 86 percent of the
 	 * committed ledger, because three columns landed on 2026-08-29 and three
@@ -320,7 +404,7 @@ test.describe('an empty cell is unknown and never zero', () => {
 	});
 
 	test('a figure from one shard of four carries the four out of the module', () => {
-		const run = only(read(partial).runs, '2026-09-02-2');
+		const run = only(read(partial, { planned: PLANNED }).runs, '2026-09-02-2');
 		expect(run.reported).toHaveLength(1);
 		expect(run.readSeconds).toEqual({ value: 100, from: 1, outOf: 4 });
 		expect(run.readTokensPerSecond).toEqual({ value: 10, from: 1, outOf: 4 });
@@ -372,7 +456,9 @@ test.describe('a shard is a set and never a count', () => {
 		expect(runs.map((run) => run.runId)).not.toContain('2026-09-02-3');
 		expect(refused).toHaveLength(1);
 		expect(refused[0].runId).toBe('2026-09-02-3');
-		expect(refused[0].rows).toBe(3);
+		// Six, because each of the three readings states one machine row and one item
+		// row, and the count a refusal reports is what it could not read.
+		expect(refused[0].rows).toBe(6);
 		expect(refused[0].why).toContain('shard 0');
 	});
 
@@ -402,7 +488,7 @@ test.describe('a shard is a set and never a count', () => {
 		];
 		const { runs, refused } = read(split);
 		expect(runs).toEqual([]);
-		expect(refused[0].why).toContain('not one run');
+		expect(refused[0].why).toContain('which day');
 	});
 
 	test('a row that does not say which shard it is refuses the run', () => {
@@ -776,13 +862,16 @@ test.describe('Row #19 - context headroom is one chart with a limit rule', () =>
 		runs = machineCounters(canaryHosts(), canaryHealth(), canaryPlan(), limits).runs;
 	});
 
-	/** The longest sequence per run, read straight off the CSV rather than off
-	 * the module - a maximum over the run's shards, blanks skipped. */
+	/** The longest sequence per run, read straight off the item ledger rather
+	 * than off the module - a maximum over the run's rows, blanks skipped. The
+	 * ledger records what each item sent and what came back, so the sequence is
+	 * the two added, exactly as the reader folds them. */
 	function longestByRun(): Map<string, number> {
 		const found = new Map<string, number>();
-		for (const row of canaryHosts()) {
-			const value = Number(row.n_tokens_max);
-			if (row.n_tokens_max === '' || !Number.isFinite(value)) continue;
+		for (const row of canaryHealth()) {
+			if (row.input_tokens === '' || row.cached_tokens === '' || row.output_tokens === '') continue;
+			const value = Number(row.input_tokens) + Number(row.output_tokens);
+			if (!Number.isFinite(value)) continue;
 			const runId = row.run_id ?? '';
 			found.set(runId, Math.max(found.get(runId) ?? 0, value));
 		}
@@ -795,10 +884,18 @@ test.describe('Row #19 - context headroom is one chart with a limit rule', () =>
 
 		const bars = contextHeadroom(runs, limits.contextWindow);
 		const window = INFERENCE.n_ctx;
-		expect(bars.map((bar) => bar.runId).sort()).toEqual([...expected.keys()].sort());
+		// One column a run the reader handed over, including a run that recorded no
+		// sequence at all - which is every run before token capture. Dropping it
+		// would be a run nobody could ask about.
+		expect(bars.map((bar) => bar.runId).sort()).toEqual(runs.map((run) => run.runId).sort());
 		for (const bar of bars) {
-			const longest = expected.get(bar.runId) as number;
+			const longest = expected.get(bar.runId) ?? null;
 			expect(bar.longest, `${bar.runId} drew a sequence the ledger does not hold`).toBe(longest);
+			if (longest === null) {
+				expect(bar.spare, `${bar.runId} spared room off a sequence nobody recorded`).toBeNull();
+				expect(bar.usedPct).toBeNull();
+				continue;
+			}
 			// The second series is derived, and this is what it is derived from.
 			expect(bar.spare, `${bar.runId}: spare is not the window less the longest`).toBe(
 				window - longest
@@ -810,11 +907,13 @@ test.describe('Row #19 - context headroom is one chart with a limit rule', () =>
 	test('no ceiling means no spare series and no share, and the sequence survives', () => {
 		// The bite for the clause above: a spare computed from a window nobody
 		// configured would be a number invented by the chart.
-		for (const bar of contextHeadroom(runs, null)) {
+		const bars = contextHeadroom(runs, null);
+		for (const bar of bars) {
 			expect(bar.spare).toBeNull();
 			expect(bar.usedPct).toBeNull();
-			expect(bar.longest).not.toBeNull();
 		}
+		const measured = bars.filter((bar) => bar.longest !== null);
+		expect(measured.length, 'no canary run records a sequence at all').toBeGreaterThan(0);
 	});
 
 	test('the strip prints the same three numbers the chart drew', () => {
@@ -823,11 +922,17 @@ test.describe('Row #19 - context headroom is one chart with a limit rule', () =>
 		expect(columns).toHaveLength(bars.length);
 		columns.forEach((column, at) => {
 			const bar = bars[at];
-			expect(column.date).toBe(bar.runId);
 			const said = Object.fromEntries(column.rows.map((row) => [row.label, row.value]));
-			expect(said['Longest sequence'].replace(/,/g, '')).toContain(String(bar.longest));
-			expect(said['Spare'].replace(/,/g, '')).toContain(String(bar.spare));
-			expect(said['Of the window']).toContain(`${bar.usedPct}%`);
+			expect(column.date).toBe(bar.runId);
+			// A run that recorded nothing prints a dash, which is the one reading that
+			// is not a number the chart could have drawn.
+			expect(said['Longest sequence'].replace(/,/g, '')).toContain(
+				bar.longest === null ? '-' : String(bar.longest)
+			);
+			expect(said['Spare'].replace(/,/g, '')).toContain(
+				bar.spare === null ? '-' : String(bar.spare)
+			);
+			expect(said['Of the window']).toContain(bar.usedPct === null ? '-' : `${bar.usedPct}%`);
 		});
 	});
 
@@ -846,7 +951,7 @@ test.describe('Row #19 - context headroom is one chart with a limit rule', () =>
 			return {
 				runs: [...panel.querySelectorAll('[data-context-run]')].map((li) => ({
 					runId: li.getAttribute('data-context-run') ?? '',
-					longest: Number(li.getAttribute('data-context-longest')),
+					longest: li.getAttribute('data-context-longest') ?? '',
 					said: (li.textContent ?? '').replace(/\s+/g, ' ').trim()
 				})),
 				marks: svg === null ? 0 : svg.querySelectorAll('[data-context-series="longest"] circle').length,
@@ -859,16 +964,22 @@ test.describe('Row #19 - context headroom is one chart with a limit rule', () =>
 
 		expect(drawn, 'no context panel on the page').not.toBeNull();
 		const expected = longestByRun();
-		// One mark a run, and the runs are the ones the ledger holds.
-		expect(drawn!.runs.length, 'the panel names a different set of runs').toBe(expected.size);
-		expect(drawn!.marks, 'the chart drew a different number of marks from the runs it names').toBe(
-			drawn!.runs.length
+		// One column a run the reader holds, and one mark for each run that recorded
+		// a sequence. A run that recorded none is named with a dash rather than
+		// dropped, so the two counts are not the same number.
+		expect(drawn!.runs.map((run) => run.runId).sort(), 'the panel names a different set of runs')
+			.toEqual(runs.map((run) => run.runId).sort());
+		expect(drawn!.marks, 'the chart drew a mark for a run that recorded no sequence').toBe(
+			drawn!.runs.filter((run) => run.longest !== '').length
 		);
 		for (const run of drawn!.runs) {
+			const longest = expected.get(run.runId);
 			expect(run.longest, `${run.runId} drew a sequence the ledger does not hold`).toBe(
-				expected.get(run.runId)
+				longest === undefined ? '' : String(longest)
 			);
-			expect(run.said, `${run.runId} prints no denominator`).toMatch(/over \d+ of \d+ shards/);
+			expect(run.said, `${run.runId} prints no denominator`).toMatch(
+				/over \d+ of \d+ shards|manifest recorded no shard count/
+			);
 		}
 		// Date order, oldest first: a run id is `<date>-<n>`, so a plain sort is
 		// the order the chart must be in.
@@ -983,7 +1094,9 @@ test.describe('Row #20 - peak memory is a maximum and never a sum', () => {
 			row({ runId: '2026-09-02-9', shard: 0, peakRssBytes: 5_000_000_000 }),
 			row({ runId: '2026-09-02-9', shard: 1 })
 		];
-		const view = peakMemory(only(read(partial).runs, '2026-09-02-9'));
+		const view = peakMemory(
+			only(read(partial, { planned: [['2026-09-02-9', 4]] }).runs, '2026-09-02-9')
+		);
 		expect(view.shards.map((shard) => shard.shard)).toEqual([0]);
 		expect(view.from).toBe(1);
 		expect(view.outOf).toBe(4);
@@ -1016,11 +1129,17 @@ test.describe('Row #20 - peak memory is a maximum and never a sum', () => {
 		});
 		expect(drawn, 'no peak-memory panel on the page').not.toBeNull();
 
-		// Recomputed from the canary ledger, not from the module.
-		const mine = canaryHosts().filter((row) => row.run_id === drawn!.runId);
-		const bytes = mine
-			.map((row) => Number(row.peak_rss_bytes))
-			.filter((value, at) => mine[at].peak_rss_bytes !== '' && Number.isFinite(value));
+		// Recomputed from the canary item ledger, not from the module. One figure a
+		// shard: the highest any of that shard's items reached.
+		const byShard = new Map<number, number>();
+		for (const row of canaryHealth()) {
+			if (row.run_id !== drawn!.runId || row.llama_rss_peak_bytes === '') continue;
+			const value = Number(row.llama_rss_peak_bytes);
+			if (!Number.isFinite(value)) continue;
+			const shard = Number(row.shard);
+			byShard.set(shard, Math.max(byShard.get(shard) ?? 0, value));
+		}
+		const bytes = [...byShard.values()];
 		expect(bytes.length, 'the newest canary run records no memory').toBeGreaterThan(0);
 		expect(drawn!.shards.map((shard) => shard.bytes).sort()).toEqual([...bytes].sort());
 		expect(drawn!.highWater, 'the page drew something other than the maximum').toBe(
