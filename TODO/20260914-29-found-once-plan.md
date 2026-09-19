@@ -628,11 +628,12 @@ but `rank_score` set to zero reproduces today's order exactly.
 
 ## Row #12 - label the sheet, then set the floor
 
-**SUPERSEDED, 2026-09-17, by [`20260917-34-similarity-autotune-plan.md`](20260917-34-similarity-autotune-plan.md).**
+**SUPERSEDED, 2026-09-17, by the adaptive merge line, which has since shipped.**
 The owner ruled that the labelling is done by a model rather than a person, that
 the line fits itself daily, and that there is no hard floor. That is a subsystem
-rather than a row, so it has its own plan. Row #15 goes with it: the floor is no
-longer a number somebody picks once.
+rather than a row, so it had its own plan; the rule and its rationale now live in
+[`../docs/architecture/publishing/same-story.md`](../docs/architecture/publishing/same-story.md).
+Row #15 goes with it: the floor is no longer a number somebody picks once.
 
 **What this row got right and the new plan keeps.** No floor is chosen by taste.
 The sheet is blind. Precision and recall are different questions and a sample
