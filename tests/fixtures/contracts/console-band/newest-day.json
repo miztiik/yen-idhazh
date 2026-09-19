@@ -1,4 +1,6 @@
 {
+  "compaction_lag_days": 2,
+  "covers_through": "2026-09-09",
   "generated_at": "2026-09-09T06:12:41Z",
   "months": [
     "2026-08",
@@ -51,6 +53,7 @@
       "worst": null
     }
   ],
+  "rows_uncompacted": 303,
   "size": {
     "articles_to_cap": 124000,
     "bytes": 214958080,
@@ -75,7 +78,7 @@
     ],
     "sentence": "Five runs on 2026-09-09 and all five ran clean."
   },
-  "version": "2026-09-09",
+  "version": "2026-09-19",
   "worst": {
     "href": "/console/machine/",
     "id": "machine",
