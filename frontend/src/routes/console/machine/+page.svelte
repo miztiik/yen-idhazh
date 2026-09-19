@@ -601,11 +601,18 @@
 			</div>
 			<!-- No tint and no band. Nobody has agreed how near 16 GB is too near,
 			     and a colour would publish a threshold that does not exist. -->
-			<p class="reads" data-memory-basis>
-				Over {data.memory.from} of the run's {data.memory.outOf} shards.
-				{#if data.memory.from < data.memory.outOf}
-					The other {data.memory.outOf - data.memory.from} recorded nothing, and are left out rather
-					than drawn as shards that used no memory.
+			<p class="reads" data-memory-basis data-memory-planned={data.memory.outOf ?? ''}>
+				{#if data.memory.outOf === null}
+					Over {data.memory.from}
+					{data.memory.from === 1 ? 'shard' : 'shards'}. This run's manifest recorded no shard
+					count, so how many the plan asked for is unknown - and counting the shards that
+					answered would only ever equal the shards that answered.
+				{:else}
+					Over {data.memory.from} of the run's {data.memory.outOf} shards.
+					{#if data.memory.from < data.memory.outOf}
+						The other {data.memory.outOf - data.memory.from} recorded nothing, and are left out rather
+						than drawn as shards that used no memory.
+					{/if}
 				{/if}
 				A run the reader refuses is in none of this: its rows cannot be made into one run, so it has
 				no shards to take a maximum over.
@@ -660,8 +667,13 @@
 					</p>
 				{/if}
 
-				<p class="reads" data-machine-split-basis>
-					Over {data.split.from} of the run's {data.split.outOf} shards.
+				<p class="reads" data-machine-split-basis data-machine-split-planned={data.split.outOf ?? ''}>
+					{#if data.split.outOf === null}
+						Over {data.split.from}
+						{data.split.from === 1 ? 'shard' : 'shards'}. This run's manifest recorded no shard count.
+					{:else}
+						Over {data.split.from} of the run's {data.split.outOf} shards.
+					{/if}
 				</p>
 			{/if}
 		</Panel>
@@ -915,7 +927,8 @@
 					{#each contextRuns as run (run.runId)}
 						<li data-context-run={run.runId} data-context-longest={run.longest ?? ''}>
 							{run.runId}: {grouped(run.longest ?? 0)} of {grouped(data.contextWindow)} tokens,
-							{run.usedPct}% used, {grouped(run.spare ?? 0)} spare, over {run.from} of {run.outOf} shards.
+							{run.usedPct}% used, {grouped(run.spare ?? 0)} spare, over {run.from}
+							{run.outOf === null ? 'shards' : `of ${run.outOf} shards`}.
 						</li>
 					{/each}
 				</ul>
@@ -1149,23 +1162,28 @@
 					</dd>
 				</div>
 
-				<!-- One line of text, not a chart. It reads 1.0 on every row the ledger
-				     holds because `models.summarize.inference.n_parallel` is 1, and it earns a
-				     chart the day that knob moves. -->
-				<div data-host="batching" data-batching={view.batching.highest ?? ''}>
-					<dt>Batching</dt>
+				<!-- One line of text, not a chart. The server serves one request at a
+				     time because `models.summarize.inference.n_parallel` is 1, and this
+				     earns a chart the day that knob moves. It is the slot count each item
+				     recorded its server started with; the slots-per-decode gauge that used
+				     to sit here read 1.0 on 382 of 383 rows, so what the reader loses is a
+				     number that never moved. -->
+				<div data-host="batching" data-batching={view.parallelSlots.highest ?? ''}>
+					<dt>Parallel slots</dt>
 					<dd>
-						{#if view.batching.highest === null}
-							<span class="absent">No run in this span reported slots per decode.</span>
-						{:else if view.batching.highest <= 1}
-							Off; every decode served one request.
+						{#if view.parallelSlots.highest === null}
+							<span class="absent">No item in this span recorded how many slots its server had.</span>
+						{:else if view.parallelSlots.highest <= 1}
+							One; every decode served one request.
 							<span class="unit">
-								1.0 slot a decode on all {view.batching.from} of {view.batching.outOf} runs that
-								reported it.
+								One slot on all {view.parallelSlots.from} of {view.parallelSlots.outOf} items that
+								recorded it.
 							</span>
 						{:else}
-							Up to {view.batching.highest.toFixed(2)} slots a decode.
-							<span class="unit">Over {view.batching.from} of {view.batching.outOf} runs.</span>
+							Up to {view.parallelSlots.highest} slots a server.
+							<span class="unit"
+								>Over {view.parallelSlots.from} of {view.parallelSlots.outOf} items.</span
+							>
 						{/if}
 					</dd>
 				</div>

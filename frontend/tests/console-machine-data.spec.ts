@@ -1,10 +1,10 @@
-/** The build-time reader for `state/runtime-counters.csv`.
+/** The build-time reader for the machine record and the item ledger.
  *
- * The ledger has been committed since 2026-08-27 and nothing read a cell of it
- * until this module, so every figure it produces is new and none of it has ever
- * been checked on a screen. Each oracle below recomputes its figure from the
- * fixture rows here in the test, never off the module's own output - otherwise
- * the assertion only proves the module agrees with itself.
+ * Two files meet in that reader and neither is derived from the other, so every
+ * figure below is stated once as a shard reading and split across both by
+ * `support/machine-rows.ts`. Each oracle recomputes its figure from the fixture
+ * readings here in the test, never off the module's own output - otherwise the
+ * assertion only proves the module agrees with itself.
  *
  * Pure functions and committed ledgers only, in every section but the last. No
  * browser, no SvelteKit alias, no `$app` import: a spec that reaches one fails
@@ -30,12 +30,15 @@ import {
 import { readDayShards } from '../src/lib/server/payload';
 import {
 	CLOCKS_AGREE_WITHIN_PCT,
+	hostRows,
+	loadMachineCounters,
 	machineCounters,
 	machineLimits,
-	runtimeCounterRows,
+	plannedShards,
 	type MachineLimits,
-	type RunCounters
-} from '../src/lib/server/runtime-counters';
+	type MachineRun
+} from '../src/lib/server/machine-counters';
+import { ledgers, plan, type ShardReading } from './support/machine-rows';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
@@ -45,14 +48,9 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  * drawing of one ledger against the arithmetic of another. */
 const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'state');
 
-/** The canary's counter rows, read the way the page's server reads them. */
-function canaryCounters(): Record<string, string>[] {
-	const text = readFileSync(join(CANARY, 'runtime-counters.csv'), 'utf8');
-	const lines = text.split('\n').filter(Boolean);
-	const header = lines[0].split(',');
-	return lines
-		.slice(1)
-		.map((line) => Object.fromEntries(header.map((key, at) => [key, line.split(',')[at] ?? ''])));
+/** The canary's machine records, read the way the page's server reads them. */
+function canaryHosts(): Record<string, string>[] {
+	return readDayShards(join(CANARY, 'host-fingerprint'), -1).rows;
 }
 
 /** The canary's item rows, over every day file.
@@ -64,74 +62,88 @@ function canaryHealth(): Record<string, string>[] {
 	return readDayShards(join(CANARY, 'item-health'), -1).rows;
 }
 
+/** What the canary's own run manifests planned, read where the page reads it. */
+function canaryPlan(): Map<string, number> {
+	return plannedShards(-1, resolve(CANARY, '..', 'digest'));
+}
+
 /** A fixed 150-minute job timeout as seconds, not read from config, so these
  * fixtures' expectations do not move when `run.shard_timeout_minutes` does. The
  * committed value is asserted against config further down. */
 const LIMITS: MachineLimits = { contextWindow: 8192, jobTimeoutSeconds: 9000 };
 
-/** Every cell the ledger carries, so a fixture row is a whole row. */
-function row(cells: Partial<Record<string, string | number>>): Record<string, string> {
-	const blank: Record<string, string> = {
-		version: '2026-08-30',
-		date: '2026-09-02',
-		run_id: '2026-09-02-1',
-		shard: '0',
-		shards: '2',
-		scraped_at: '2026-09-02T10:00:00Z',
-		prompt_tokens_total: '',
-		prompt_tokens_cached_total: '',
-		prompt_seconds_total: '',
-		tokens_predicted_total: '',
-		tokens_predicted_seconds_total: '',
-		n_decode_total: '',
-		n_tokens_max: '',
-		n_busy_slots_per_decode: '',
-		job_seconds: '',
-		cpu_model: '',
-		cpu_busy_pct: '',
-		peak_rss_bytes: '',
-		model_load_ms: ''
-	};
-	for (const [name, value] of Object.entries(cells)) blank[name] = String(value);
-	return blank;
+/** One shard's figures, under the fixture's day and run. */
+function row(reading: ShardReading): ShardReading {
+	return { date: '2026-09-02', runId: '2026-09-02-1', shard: 0, ...reading };
 }
 
-/** A run of two shards, every cell populated, with values chosen so that every
+/** A run of two shards, every figure stated, with values chosen so that every
  * derived figure lands on a number a person can check by hand. */
-const FULL = [
+const FULL: ShardReading[] = [
 	row({
 		shard: 0,
-		prompt_tokens_total: 1000,
-		prompt_tokens_cached_total: 250,
-		prompt_seconds_total: 100,
-		tokens_predicted_total: 400,
-		tokens_predicted_seconds_total: 50,
-		n_decode_total: 404,
-		n_tokens_max: 4096,
-		n_busy_slots_per_decode: 1.0,
-		job_seconds: 600,
-		cpu_model: 'AMD EPYC 7763 64-Core Processor',
-		cpu_busy_pct: 99.5,
-		peak_rss_bytes: 6_000_000_000,
-		model_load_ms: 12000
+		serverPromptTokens: 1000,
+		serverPromptSeconds: 100,
+		cachedTokens: 250,
+		writtenTokens: 400,
+		writeSeconds: 50,
+		longestSequence: 4096,
+		jobSeconds: 600,
+		cpuModel: 'AMD EPYC 7763 64-Core Processor',
+		cpuBusyPct: 99.5,
+		peakRssBytes: 6_000_000_000,
+		modelLoadMs: 12000
 	}),
 	row({
 		shard: 1,
-		prompt_tokens_total: 3000,
-		prompt_tokens_cached_total: 1000,
-		prompt_seconds_total: 100,
-		tokens_predicted_total: 600,
-		tokens_predicted_seconds_total: 150,
-		n_decode_total: 606,
-		n_tokens_max: 2048,
-		n_busy_slots_per_decode: 1.0,
-		job_seconds: 900,
-		cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C',
-		cpu_busy_pct: 88,
-		peak_rss_bytes: 7_000_000_000,
-		model_load_ms: 9000
+		serverPromptTokens: 3000,
+		serverPromptSeconds: 100,
+		cachedTokens: 1000,
+		writtenTokens: 600,
+		writeSeconds: 150,
+		longestSequence: 2048,
+		jobSeconds: 900,
+		cpuModel: 'INTEL(R) XEON(R) PLATINUM 8573C',
+		cpuBusyPct: 88,
+		peakRssBytes: 7_000_000_000,
+		modelLoadMs: 9000
 	})
 ];
+
+/** The two ledgers and the plan for a set of shard readings. */
+function readerInput(readings: ShardReading[], planned?: [string, number][]) {
+	const { hosts, health } = ledgers(readings.map(row));
+	const byRun = new Map<string, number>();
+	for (const reading of readings) {
+		const runId = reading.runId ?? '2026-09-02-1';
+		byRun.set(runId, (byRun.get(runId) ?? 0) + 1);
+	}
+	return { hosts, health, planned: planned === undefined ? byRun : plan(...planned) };
+}
+
+/** The reader driven over shard readings.
+ *
+ * `planned` defaults to one shard a reading, which is what a fixture that
+ * states every shard of its run means. A case about a plan the shards did not
+ * fill states it.
+ */
+function read(
+	readings: ShardReading[],
+	options: {
+		planned?: [string, number][];
+		/** Item rows beyond the one a reading builds, for the clock cases. */
+		health?: Record<string, string>[];
+		limits?: MachineLimits;
+	} = {}
+) {
+	const input = readerInput(readings, options.planned);
+	return machineCounters(
+		input.hosts,
+		[...input.health, ...(options.health ?? [])],
+		input.planned,
+		options.limits ?? LIMITS
+	);
+}
 
 /** Four items whose summed timings put the ledger's rate on the server's. */
 function healthRows(runId: string, items: number, tokens: number, prefillMs: number) {
@@ -145,14 +157,14 @@ function healthRows(runId: string, items: number, tokens: number, prefillMs: num
 	}));
 }
 
-function only(runs: RunCounters[], runId: string): RunCounters {
+function only(runs: MachineRun[], runId: string): MachineRun {
 	const found = runs.find((run) => run.runId === runId);
 	expect(found, `no run ${runId}`).toBeTruthy();
-	return found as RunCounters;
+	return found as MachineRun;
 }
 
 test.describe('every figure, recomputed by hand', () => {
-	const { runs, refused } = machineCounters(FULL, [], LIMITS);
+	const { runs, refused } = read(FULL);
 	const run = only(runs, '2026-09-02-1');
 
 	test('nothing was refused and both shards were read', () => {
@@ -214,7 +226,6 @@ test.describe('every figure, recomputed by hand', () => {
 		expect(run.lowestCpuBusyPct).toEqual({ value: 88, from: 2, outOf: 2 });
 		expect(run.peakRssBytes).toEqual({ value: 7_000_000_000, from: 2, outOf: 2 });
 		expect(run.slowestModelLoadMs).toEqual({ value: 12000, from: 2, outOf: 2 });
-		expect(run.slotsPerDecode).toEqual({ value: 1, from: 2, outOf: 2 });
 	});
 });
 
@@ -223,7 +234,7 @@ test.describe('the two clocks, checked against each other', () => {
 		// Four items, 1,000 read tokens each after cache, 50,000 ms each. That is
 		// 4,000 tokens over 200 seconds - exactly what the two shards counted.
 		const health = healthRows('2026-09-02-1', 4, 1000, 50_000);
-		const run = only(machineCounters(FULL, health, LIMITS).runs, '2026-09-02-1');
+		const run = only(read(FULL, { health }).runs, '2026-09-02-1');
 		expect(run.clocks.ledger).toEqual({ tokens: 4000, seconds: 200, parts: 4, rate: 20 });
 		expect(run.clocks.server).toEqual({ tokens: 4000, seconds: 200, parts: 2, rate: 20 });
 		expect(run.clocks.gapPct).toBe(0);
@@ -234,7 +245,7 @@ test.describe('the two clocks, checked against each other', () => {
 		// The same tokens over 300 seconds instead of 200: 13.33 a second against
 		// the server's 20, which is 33 percent apart.
 		const health = healthRows('2026-09-02-1', 4, 1000, 75_000);
-		const run = only(machineCounters(FULL, health, LIMITS).runs, '2026-09-02-1');
+		const run = only(read(FULL, { health }).runs, '2026-09-02-1');
 		const expected = ((20 - 4000 / 300) / 20) * 100;
 		expect(run.clocks.gapPct).toBeCloseTo(expected, 6);
 		expect(run.clocks.gapPct as number).toBeGreaterThan(CLOCKS_AGREE_WITHIN_PCT);
@@ -242,7 +253,7 @@ test.describe('the two clocks, checked against each other', () => {
 	});
 
 	test('nothing to compare is null, never a disagreement', () => {
-		const run = only(machineCounters(FULL, [], LIMITS).runs, '2026-09-02-1');
+		const run = only(read(FULL).runs, '2026-09-02-1');
 		expect(run.clocks.ledger.parts).toBe(0);
 		expect(run.clocks.gapPct).toBeNull();
 		expect(run.clocks.agrees).toBeNull();
@@ -253,9 +264,9 @@ test.describe('the two clocks, checked against each other', () => {
 		// counting it as an item that read nothing would drag the rate down.
 		const health = [
 			...healthRows('2026-09-02-1', 4, 1000, 50_000),
-			{ run_id: '2026-09-02-1', item_id: 'older', input_tokens: '', cached_tokens: '', prefill_ms: '' }
+			{ runId: '2026-09-02-1', item_id: 'older', input_tokens: '', cached_tokens: '', prefill_ms: '' }
 		];
-		const run = only(machineCounters(FULL, health, LIMITS).runs, '2026-09-02-1');
+		const run = only(read(FULL, { health }).runs, '2026-09-02-1');
 		expect(run.clocks.ledger.parts).toBe(4);
 		expect(run.clocks.gapPct).toBe(0);
 	});
@@ -267,27 +278,28 @@ test.describe('an empty cell is unknown and never zero', () => {
 	 * more on 2026-08-30. */
 	const partial = [
 		row({
-			run_id: '2026-09-02-2',
-			shards: 4,
+			runId: '2026-09-02-2',
 			shard: 0,
-			prompt_tokens_total: 1000,
-			prompt_tokens_cached_total: 250,
-			prompt_seconds_total: 100,
-			tokens_predicted_total: 400,
-			tokens_predicted_seconds_total: 50,
-			n_tokens_max: 4096
+			serverPromptTokens: 1000,
+			cachedTokens: 250,
+			serverPromptSeconds: 100,
+			writtenTokens: 400,
+			writeSeconds: 50,
+			longestSequence: 4096
 		})
 	];
 
+	/** The run planned four shards and one of them reported. */
+	const PLANNED: [string, number][] = [['2026-09-02-2', 4]];
+
 	test('a cell no shard reported reads as absent, with a denominator of zero', () => {
-		const run = only(machineCounters(partial, [], LIMITS).runs, '2026-09-02-2');
+		const run = only(read(partial, { planned: PLANNED }).runs, '2026-09-02-2');
 		for (const [name, reading] of [
 			['slowestJobSeconds', run.slowestJobSeconds],
 			['jobUsedPct', run.jobUsedPct],
 			['lowestCpuBusyPct', run.lowestCpuBusyPct],
 			['peakRssBytes', run.peakRssBytes],
-			['slowestModelLoadMs', run.slowestModelLoadMs],
-			['slotsPerDecode', run.slotsPerDecode]
+			['slowestModelLoadMs', run.slowestModelLoadMs]
 		] as const) {
 			expect(reading.value, `${name} invented a value`).toBeNull();
 			expect(reading.value, `${name} read a blank cell as zero`).not.toBe(0);
@@ -301,14 +313,14 @@ test.describe('an empty cell is unknown and never zero', () => {
 	test('the same run with the cell filled proves the absence was the cell', () => {
 		// The bite. If a blank read as zero, the run above would already carry
 		// `value: 0, from: 1` and this pair would be indistinguishable from it.
-		const filled = [{ ...partial[0], job_seconds: '600', cpu_busy_pct: '99.5' }];
-		const run = only(machineCounters(filled, [], LIMITS).runs, '2026-09-02-2');
+		const filled = [{ ...partial[0], jobSeconds: 600, cpuBusyPct: 99.5 }];
+		const run = only(read(filled, { planned: PLANNED }).runs, '2026-09-02-2');
 		expect(run.slowestJobSeconds).toEqual({ value: 600, from: 1, outOf: 4 });
 		expect(run.lowestCpuBusyPct).toEqual({ value: 99.5, from: 1, outOf: 4 });
 	});
 
 	test('a figure from one shard of four carries the four out of the module', () => {
-		const run = only(machineCounters(partial, [], LIMITS).runs, '2026-09-02-2');
+		const run = only(read(partial).runs, '2026-09-02-2');
 		expect(run.reported).toHaveLength(1);
 		expect(run.readSeconds).toEqual({ value: 100, from: 1, outOf: 4 });
 		expect(run.readTokensPerSecond).toEqual({ value: 10, from: 1, outOf: 4 });
@@ -318,14 +330,14 @@ test.describe('an empty cell is unknown and never zero', () => {
 	});
 
 	test('a measurement of zero is a measurement and survives as one', () => {
-		const zeroed = [{ ...partial[0], cpu_busy_pct: '0' }];
-		const run = only(machineCounters(zeroed, [], LIMITS).runs, '2026-09-02-2');
+		const zeroed = [{ ...partial[0], cpuBusyPct: 0 }];
+		const run = only(read(zeroed, { planned: PLANNED }).runs, '2026-09-02-2');
 		expect(run.lowestCpuBusyPct).toEqual({ value: 0, from: 1, outOf: 4 });
 	});
 
 	test('no ceiling means no share, and the counter still prints', () => {
 		const run = only(
-			machineCounters(partial, [], { contextWindow: null, jobTimeoutSeconds: null }).runs,
+			read(partial, { limits: { contextWindow: null, jobTimeoutSeconds: null } }).runs,
 			'2026-09-02-2'
 		);
 		expect(run.longestSequence.value).toBe(4096);
@@ -337,13 +349,13 @@ test.describe('a shard is a set and never a count', () => {
 	/** Two workflow runs computed the same `run_id`, `actions/checkout` pinned
 	 * each to a frozen SHA, and `merge=union` concatenated both. */
 	const twice = [
-		row({ run_id: '2026-09-02-3', shard: 0, prompt_seconds_total: 100, prompt_tokens_total: 1000 }),
-		row({ run_id: '2026-09-02-3', shard: 0, prompt_seconds_total: 100, prompt_tokens_total: 1000 }),
-		row({ run_id: '2026-09-02-3', shard: 1, prompt_seconds_total: 300, prompt_tokens_total: 3000 })
+		row({ runId: '2026-09-02-3', shard: 0, serverPromptSeconds: 100, serverPromptTokens: 1000 }),
+		row({ runId: '2026-09-02-3', shard: 0, serverPromptSeconds: 100, serverPromptTokens: 1000 }),
+		row({ runId: '2026-09-02-3', shard: 1, serverPromptSeconds: 300, serverPromptTokens: 3000 })
 	];
 
-	test('one scrape written twice is counted once', () => {
-		const run = only(machineCounters(twice, [], LIMITS).runs, '2026-09-02-3');
+	test('one record written twice is counted once', () => {
+		const run = only(read(twice, { planned: [['2026-09-02-3', 2]] }).runs, '2026-09-02-3');
 		expect(run.reported.map((shard) => shard.shard)).toEqual([0, 1]);
 		// 400, not the 500 a naive sum of three rows gives.
 		expect(run.readSeconds).toEqual({ value: 400, from: 2, outOf: 2 });
@@ -355,12 +367,8 @@ test.describe('a shard is a set and never a count', () => {
 		// This is the case that produced -394 seconds against the item ledger. The
 		// counters are cumulative for one server process, so two processes cannot
 		// be added and neither can be picked over the other.
-		const disagree = [
-			twice[0],
-			{ ...twice[1], prompt_seconds_total: '250', scraped_at: '2026-09-02T11:00:00Z' },
-			twice[2]
-		];
-		const { runs, refused } = machineCounters(disagree, [], LIMITS);
+		const disagree = [twice[0], { ...twice[1], serverPromptSeconds: 250 }, twice[2]];
+		const { runs, refused } = read(disagree, { planned: [['2026-09-02-3', 2]] });
 		expect(runs.map((run) => run.runId)).not.toContain('2026-09-02-3');
 		expect(refused).toHaveLength(1);
 		expect(refused[0].runId).toBe('2026-09-02-3');
@@ -371,46 +379,50 @@ test.describe('a shard is a set and never a count', () => {
 	test('a run is refused rather than reported half', () => {
 		// Shard 1 is clean in the fixture above. Reporting it on its own would put
 		// a figure on the page that reads as the run.
-		const { runs } = machineCounters(
-			[twice[0], { ...twice[1], prompt_seconds_total: '250' }, twice[2]],
-			[],
-			LIMITS
-		);
+		const { runs } = read([twice[0], { ...twice[1], serverPromptSeconds: 250 }, twice[2]], {
+			planned: [['2026-09-02-3', 2]]
+		});
 		expect(runs).toEqual([]);
 	});
 
 	test('more shards than the run says it had is refused', () => {
 		const impossible = [
-			row({ run_id: '2026-09-02-5', shards: 1, shard: 0 }),
-			row({ run_id: '2026-09-02-5', shards: 1, shard: 1 })
+			row({ runId: '2026-09-02-5', shard: 0 }),
+			row({ runId: '2026-09-02-5', shard: 1 })
 		];
-		const { runs, refused } = machineCounters(impossible, [], LIMITS);
+		const { runs, refused } = read(impossible, { planned: [['2026-09-02-5', 1]] });
 		expect(runs).toEqual([]);
 		expect(refused[0].why).toContain('shards');
 	});
 
 	test('rows that disagree about the day are not one run', () => {
 		const split = [
-			row({ run_id: '2026-09-02-6', shard: 0, date: '2026-09-02' }),
-			row({ run_id: '2026-09-02-6', shard: 1, date: '2026-09-03' })
+			row({ runId: '2026-09-02-6', shard: 0, date: '2026-09-02' }),
+			row({ runId: '2026-09-02-6', shard: 1, date: '2026-09-03' })
 		];
-		const { runs, refused } = machineCounters(split, [], LIMITS);
+		const { runs, refused } = read(split);
 		expect(runs).toEqual([]);
 		expect(refused[0].why).toContain('not one run');
 	});
 
 	test('a row that does not say which shard it is refuses the run', () => {
-		const nameless = [row({ run_id: '2026-09-02-7', shard: '' })];
-		const { runs, refused } = machineCounters(nameless, [], LIMITS);
+		const nameless = [{ ...row({ runId: '2026-09-02-7' }), shard: undefined }];
+		const { hosts, health } = ledgers(nameless);
+		const { runs, refused } = machineCounters(
+			hosts.map((host) => ({ ...host, shard: '' })),
+			health,
+			plan(['2026-09-02-7', 1]),
+			LIMITS
+		);
 		expect(runs).toEqual([]);
 		expect(refused[0].why).toContain('which shard');
 	});
 });
 
-test.describe('the ledger this reads is the committed one', () => {
+test.describe('the ledgers this reads are the committed ones', () => {
 	const limits = machineLimits();
-	const { rows } = runtimeCounterRows();
-	const { runs, refused } = machineCounters(rows, [], limits);
+	const rows = hostRows();
+	const { runs, refused } = loadMachineCounters();
 
 	test('the ceilings come from config and not from a literal', () => {
 		const config = JSON.parse(
@@ -426,25 +438,28 @@ test.describe('the ledger this reads is the committed one', () => {
 		expect(limits.jobTimeoutSeconds).toBe(config.run.shard_timeout_minutes * 60);
 	});
 
-	test('the committed ledger still has rows to read', () => {
+	test('the committed ledgers still have rows to read', () => {
 		// Guards the rest of this block: every assertion below passes over an
 		// empty ledger and would say nothing.
 		expect(rows.length).toBeGreaterThan(0);
 		expect(runs.length + refused.length).toBeGreaterThan(0);
 	});
 
-	test('nothing derived off it is impossible', () => {
+	test('nothing derived off them is impossible', () => {
 		for (const run of runs) {
-			expect(run.reported.length, `${run.runId} reported more shards than it had`).toBeLessThanOrEqual(
-				run.shards
-			);
+			if (run.shards !== null) {
+				expect(
+					run.reported.length,
+					`${run.runId} reported more shards than it had`
+				).toBeLessThanOrEqual(run.shards);
+			}
 			expect(new Set(run.reported.map((shard) => shard.shard)).size).toBe(run.reported.length);
 			for (const reading of [run.readSeconds, run.writeSeconds, run.promptTokens, run.cachedTokens]) {
 				if (reading.value !== null) expect(reading.value).toBeGreaterThanOrEqual(0);
 			}
 			// The fastest shard cannot be slower than the slowest one.
 			if (run.readSpread.value !== null) expect(run.readSpread.value).toBeGreaterThanOrEqual(1);
-			// A sequence longer than the window is a scrape that read the wrong
+			// A sequence longer than the window is a record that read the wrong
 			// series, not a server that exceeded its own context.
 			if (run.contextUsedPct.value !== null) expect(run.contextUsedPct.value).toBeLessThanOrEqual(100);
 		}
@@ -458,12 +473,15 @@ test.describe('the ledger this reads is the committed one', () => {
 	});
 
 	test('an absent ledger is an empty read, never a throw', () => {
-		expect(machineCounters([], [], limits)).toEqual({ runs: [], refused: [] });
+		expect(machineCounters([], [], new Map(), limits)).toEqual({ runs: [], refused: [] });
 	});
 });
 
 test.describe('the module cannot reach a browser', () => {
-	const source = readFileSync(join(HERE, '..', 'src', 'lib', 'server', 'runtime-counters.ts'), 'utf8');
+	const source = readFileSync(
+		join(HERE, '..', 'src', 'lib', 'server', 'machine-counters.ts'),
+		'utf8'
+	);
 
 	test('it imports no SvelteKit alias, so no client graph can pull it in', () => {
 		// `$lib/server/` is what stops the bundler; this is what stops the module
@@ -475,11 +493,13 @@ test.describe('the module cannot reach a browser', () => {
 		}
 	});
 
-	test('it reads the ledger through STATE_ROOT, so a fixture tree can replace it', () => {
+	test('it reads the ledgers through STATE_ROOT, so a fixture tree can replace them', () => {
 		// The canary suite builds a site out of fixture runs by pointing
 		// `STATE_ROOT` at a copy. A path built any other way reads the real ledger
 		// anyway, and the canary silently measures the wrong tree.
-		expect(source).toContain("join(STATE_ROOT, 'runtime-counters.csv')");
+		expect(source).toContain("join(STATE_ROOT, 'host-fingerprint')");
+		// And the item side through the shared reader, which is rooted the same way.
+		expect(source).toContain('itemHealthRows(days)');
 	});
 });
 
@@ -751,16 +771,16 @@ async function widen(page: import('@playwright/test').Page, days: number) {
 
 test.describe('Row #19 - context headroom is one chart with a limit rule', () => {
 	const limits: MachineLimits = { contextWindow: INFERENCE.n_ctx, jobTimeoutSeconds: 9000 };
-	let runs: RunCounters[] = [];
+	let runs: MachineRun[] = [];
 	test.beforeAll(() => {
-		runs = machineCounters(canaryCounters(), [], limits).runs;
+		runs = machineCounters(canaryHosts(), canaryHealth(), canaryPlan(), limits).runs;
 	});
 
 	/** The longest sequence per run, read straight off the CSV rather than off
 	 * the module - a maximum over the run's shards, blanks skipped. */
 	function longestByRun(): Map<string, number> {
 		const found = new Map<string, number>();
-		for (const row of canaryCounters()) {
+		for (const row of canaryHosts()) {
 			const value = Number(row.n_tokens_max);
 			if (row.n_tokens_max === '' || !Number.isFinite(value)) continue;
 			const runId = row.run_id ?? '';
@@ -905,7 +925,7 @@ test.describe('Row #20 - peak memory is a maximum and never a sum', () => {
 	const highest = 7_000_000_000;
 
 	test('THE ORACLE: the run figure is the largest shard, not their total', () => {
-		const run = only(machineCounters(FULL, [], LIMITS).runs, '2026-09-02-1');
+		const run = only(read(FULL).runs, '2026-09-02-1');
 		const view = peakMemory(run);
 		// 6 GB and 7 GB. A sum would report 13 GB on a machine that has 16.
 		expect(view.shards.map((shard) => [shard.shard, shard.bytes])).toEqual([
@@ -928,18 +948,23 @@ test.describe('Row #20 - peak memory is a maximum and never a sum', () => {
 		// made into one run. It is in the ledger below and must be in neither the
 		// per-shard bars nor the aggregate - not as a shard, and not as a zero.
 		const refusedRun = [
-			row({ run_id: '2026-08-29-3', date: '2026-08-29', shard: 0, peak_rss_bytes: 15_000_000_000 }),
 			row({
-				run_id: '2026-08-29-3',
+				runId: '2026-08-29-3',
 				date: '2026-08-29',
 				shard: 0,
-				peak_rss_bytes: 15_000_000_000,
-				prompt_seconds_total: 250,
-				scraped_at: '2026-08-29T11:00:00Z'
+				peakRssBytes: 15_000_000_000,
+				serverPromptSeconds: 100
 			}),
-			row({ run_id: '2026-08-29-3', date: '2026-08-29', shard: 1, peak_rss_bytes: 9_000_000_000 })
+			row({
+				runId: '2026-08-29-3',
+				date: '2026-08-29',
+				shard: 0,
+				peakRssBytes: 15_000_000_000,
+				serverPromptSeconds: 250
+			}),
+			row({ runId: '2026-08-29-3', date: '2026-08-29', shard: 1, peakRssBytes: 9_000_000_000 })
 		];
-		const { runs, refused } = machineCounters([...FULL, ...refusedRun], [], LIMITS);
+		const { runs, refused } = read([...FULL, ...refusedRun]);
 		expect(refused.map((one) => one.runId)).toEqual(['2026-08-29-3']);
 		expect(runs.map((run) => run.runId)).not.toContain('2026-08-29-3');
 
@@ -955,10 +980,10 @@ test.describe('Row #20 - peak memory is a maximum and never a sum', () => {
 
 	test('a shard that recorded nothing is left out, never drawn as no memory', () => {
 		const partial = [
-			row({ run_id: '2026-09-02-9', shards: 4, shard: 0, peak_rss_bytes: 5_000_000_000 }),
-			row({ run_id: '2026-09-02-9', shards: 4, shard: 1 })
+			row({ runId: '2026-09-02-9', shard: 0, peakRssBytes: 5_000_000_000 }),
+			row({ runId: '2026-09-02-9', shard: 1 })
 		];
-		const view = peakMemory(only(machineCounters(partial, [], LIMITS).runs, '2026-09-02-9'));
+		const view = peakMemory(only(read(partial).runs, '2026-09-02-9'));
 		expect(view.shards.map((shard) => shard.shard)).toEqual([0]);
 		expect(view.from).toBe(1);
 		expect(view.outOf).toBe(4);
@@ -966,7 +991,7 @@ test.describe('Row #20 - peak memory is a maximum and never a sum', () => {
 	});
 
 	test('no shard recorded it at all is an empty panel, never a zero', () => {
-		const view = peakMemory(only(machineCounters([row({ shards: 2 })], [], LIMITS).runs, '2026-09-02-1'));
+		const view = peakMemory(only(read([row({ shard: 0 })], { planned: [['2026-09-02-1', 2]] }).runs, '2026-09-02-1'));
 		expect(view.empty).toBe(true);
 		expect(view.highWater).toBeNull();
 		expect(view.highWater).not.toBe(0);
@@ -992,7 +1017,7 @@ test.describe('Row #20 - peak memory is a maximum and never a sum', () => {
 		expect(drawn, 'no peak-memory panel on the page').not.toBeNull();
 
 		// Recomputed from the canary ledger, not from the module.
-		const mine = canaryCounters().filter((row) => row.run_id === drawn!.runId);
+		const mine = canaryHosts().filter((row) => row.run_id === drawn!.runId);
 		const bytes = mine
 			.map((row) => Number(row.peak_rss_bytes))
 			.filter((value, at) => mine[at].peak_rss_bytes !== '' && Number.isFinite(value));

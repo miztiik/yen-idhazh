@@ -38,9 +38,9 @@ import {
 	CLOCKS_AGREE_WITHIN_PCT,
 	loadMachineCounters,
 	machineLimits,
-	type RefusedRun,
-	type RunCounters
-} from '$lib/server/runtime-counters';
+	type MachineRun,
+	type RefusedRun
+} from '$lib/server/machine-counters';
 import { loadSpanRollup, spanBreakdown } from '$lib/server/span-rollup';
 import { loadRunTimeline, runTimelineView } from '$lib/server/run-timeline';
 
@@ -87,7 +87,9 @@ export interface MachineWindow {
 	 * the counters above and can be in a different state on the same day. */
 	machineRecord: RecordingNotes;
 	cacheDays: CacheDay[];
-	batching: { highest: number | null; from: number; outOf: number };
+	/** The most parallel slots any item's server was started with, over the
+	 * items that recorded the cell. */
+	parallelSlots: { highest: number | null; from: number; outOf: number };
 	cpuBusySpan: FigureSpan;
 	peakRssSpan: FigureSpan;
 	modelLoadSpan: FigureSpan;
@@ -114,9 +116,9 @@ export interface RunSeries {
 	latency: LatencyRun[];
 }
 
-/** What the model server counted, read once at build time.
+/** What the two surviving ledgers counted, read once at build time.
  *
- * The whole route reads `state/runtime-counters.csv` and `state/item-health/`,
+ * The whole route reads `state/host-fingerprint/` and `state/item-health/`,
  * both of which sit under `state/` and are never published, through
  * `$lib/server/` - the same place and for the same reason `model-work.ts` reads
  * `state/scores.csv`. No cell of either crosses to a reader and this route adds
@@ -203,10 +205,12 @@ export async function load() {
 			(row) => (row.date ?? '') >= span.start && (row.date ?? '') <= span.end
 		);
 		const tokens = tokensByRun(healthRows);
-		// Batching is one line of text and not a chart. It reads 1.0 on every row
-		// the ledger holds, because `models.summarize.inference.n_parallel` is 1, and it
-		// earns a chart the day that knob moves.
-		const slots = runs.map((run) => run.slotsPerDecode).filter((reading) => reading.value !== null);
+		// One line of text and not a chart. It reads 1 on every row the ledger
+		// holds, because `models.summarize.inference.n_parallel` is 1, and it earns
+		// a chart the day that knob moves.
+		const slots = healthRows
+			.map((row) => Number(row.n_parallel))
+			.filter((value) => Number.isFinite(value));
 
 		return {
 			days,
@@ -224,7 +228,7 @@ export async function load() {
 			// item ledger is the other instrument: a day it covers and the counters
 			// do not is the state most committed days are in.
 			recording: recordingNotes({
-				enabled: observability.runtime_counters_scrape,
+				enabled: observability.host_fingerprint,
 				rate: observability.sample_rate,
 				recorded: [...new Set(runs.map((run) => run.date))].sort(),
 				window: spanDays,
@@ -243,10 +247,10 @@ export async function load() {
 				figures: 'machine record'
 			}),
 			cacheDays: cacheByDay(runs),
-			batching: {
-				highest: slots.length === 0 ? null : Math.max(...slots.map((reading) => reading.value ?? 0)),
+			parallelSlots: {
+				highest: slots.length === 0 ? null : Math.max(...slots),
 				from: slots.length,
-				outOf: runs.length
+				outOf: healthRows.length
 			},
 			// The newest run's own reading is a snapshot and sits below; these three
 			// say whether that reading was unusual over the span.
@@ -312,7 +316,7 @@ export async function load() {
 	// run or one day, so they read the newest the ledger holds whatever the
 	// control says - a window is a span, and narrowing a span cannot narrow a
 	// single run into something smaller.
-	const newest: RunCounters | null = counters.runs[0] ?? null;
+	const newest: MachineRun | null = counters.runs[0] ?? null;
 	const board = shardBoard(newest, limits.jobTimeoutSeconds);
 	const memory = peakMemory(newest);
 	// One group a machine, never one figure over all of them. Measured 2026-09-17

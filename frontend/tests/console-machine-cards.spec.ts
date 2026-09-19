@@ -28,8 +28,9 @@ import type { HostFingerprint } from '../src/lib/server/host-fingerprint';
 import {
 	machineCounters,
 	type MachineLimits,
-	type RunCounters
-} from '../src/lib/server/runtime-counters';
+	type MachineRun
+} from '../src/lib/server/machine-counters';
+import { ledgers, plan, type ShardReading } from './support/machine-rows';
 
 const LIMITS: MachineLimits = { contextWindow: 8192, jobTimeoutSeconds: 21_600 };
 const STOPS = 7;
@@ -39,30 +40,9 @@ const FLAGS = watchedFlags();
 
 const MIB = 1024 * 1024;
 
-function counterRow(cells: Partial<Record<string, string | number>>): Record<string, string> {
-	const blank: Record<string, string> = {
-		version: '2026-08-31',
-		date: '2026-09-12',
-		run_id: '2026-09-12-1',
-		shard: '0',
-		shards: '2',
-		scraped_at: '2026-09-12T10:00:00Z',
-		prompt_tokens_total: '',
-		prompt_tokens_cached_total: '',
-		prompt_seconds_total: '',
-		tokens_predicted_total: '',
-		tokens_predicted_seconds_total: '',
-		n_decode_total: '',
-		n_tokens_max: '',
-		n_busy_slots_per_decode: '',
-		job_seconds: '',
-		cpu_model: '',
-		cpu_busy_pct: '',
-		peak_rss_bytes: '',
-		model_load_ms: ''
-	};
-	for (const [name, value] of Object.entries(cells)) blank[name] = String(value);
-	return blank;
+/** One shard of the run these cards are drawn for. */
+function shardOf(reading: ShardReading): ShardReading {
+	return { date: '2026-09-12', runId: '2026-09-12-1', ...reading };
 }
 
 function fingerprint(over: Partial<HostFingerprint>): HostFingerprint {
@@ -89,16 +69,22 @@ function fingerprint(over: Partial<HostFingerprint>): HostFingerprint {
 	};
 }
 
-function onlyRun(rows: Record<string, string>[]): RunCounters {
-	const { runs, refused } = machineCounters(rows, [], LIMITS);
+function onlyRun(readings: ShardReading[]): MachineRun {
+	const { hosts, health } = ledgers(readings.map(shardOf));
+	const { runs, refused } = machineCounters(
+		hosts,
+		health,
+		plan(['2026-09-12-1', readings.length]),
+		LIMITS
+	);
 	expect(refused, 'the fixture was refused').toEqual([]);
 	expect(runs).toHaveLength(1);
 	return runs[0];
 }
 
 const RUN = onlyRun([
-	counterRow({ shard: 0, cpu_model: 'AMD EPYC 7763 64-Core Processor' }),
-	counterRow({ shard: 1, cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C' })
+	{ shard: 0, cpuModel: 'AMD EPYC 7763 64-Core Processor' },
+	{ shard: 1, cpuModel: 'INTEL(R) XEON(R) PLATINUM 8573C' }
 ]);
 
 function cardsFor(rows: HostFingerprint[], recording = true) {
@@ -148,7 +134,7 @@ test.describe('what a card says a machine can do', () => {
 	test('a run the machine record never reached draws no chips and says which ledger it read', () => {
 		const view = cardsFor([]);
 		expect(view.nameOnly).toBe(true);
-		expect(view.cards.every((card) => card.source === 'counters')).toBe(true);
+		expect(view.cards.every((card) => card.source === 'name-only')).toBe(true);
 		expect(view.cards.every((card) => card.flags.length === 0)).toBe(true);
 		expect(view.cards.every((card) => card.flagsRecorded === false)).toBe(true);
 	});
@@ -242,7 +228,7 @@ test.describe('how many jobs drew a machine', () => {
 		const view = cardsFor([fingerprint({ job: 'work', shard: 0 })]);
 		expect(view.cards).toHaveLength(2);
 		const xeon = view.cards.find((card) => card.identity.name === 'Intel Xeon Platinum 8573C');
-		expect(xeon?.source).toBe('counters');
+		expect(xeon?.source).toBe('name-only');
 		expect(xeon?.flags).toEqual([]);
 		expect(view.nameOnly).toBe(false);
 	});
@@ -285,7 +271,7 @@ test.describe('when there is nothing to draw', () => {
 	});
 
 	test('a run whose every shard is unnamed still draws one card, in the reserved grey', () => {
-		const blank = onlyRun([counterRow({ shard: 0 }), counterRow({ shard: 1 })]);
+		const blank = onlyRun([{ shard: 0 }, { shard: 1 }]);
 		const view = machineCards(blank, [], {
 			watchedFlags: FLAGS,
 			colourStops: STOPS,
@@ -332,7 +318,7 @@ test.describe('a day that published and kept no machine row', () => {
 	});
 
 	test('a run with no placement at all names the loss before the quiet day', () => {
-		const blank = onlyRun([counterRow({ shard: 0 }), counterRow({ shard: 1 })]);
+		const blank = onlyRun([{ shard: 0 }, { shard: 1 }]);
 		expect(
 			machineCards(blank, [], { watchedFlags: FLAGS, colourStops: STOPS, recording: true }).nothing
 		).toBe('no-machine');

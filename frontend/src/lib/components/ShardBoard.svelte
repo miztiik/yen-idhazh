@@ -34,27 +34,33 @@
 		timeoutMinutes: number;
 	} = $props();
 
-	const missing = $derived(board.shards - board.rows.length);
+	/** Shards the plan dispatched that filed nothing. Null where the run's
+	 * manifest recorded no plan, because an unknown total subtracts to nothing. */
+	const missing = $derived(board.shards === null ? null : board.shards - board.rows.length);
 </script>
 
 <div
 	class="board"
 	data-shard-board={board.empty ? 'empty' : board.runId}
-	data-shard-board-shards={board.shards}
+	data-shard-board-shards={board.shards ?? ''}
 	data-shard-board-reported={board.rows.length}
 	data-shard-board-timeout-seconds={board.timeoutSeconds ?? ''}
 	data-readout-none="one row per shard, and every figure on a row is printed beside its bar"
 >
 	{#if board.empty}
 		<p class="board-note" data-shard-board-empty>
-			No run in this span committed a counters row, so there are no shards to rank. That is a
-			scrape that did not happen, not a run that did no work.
+			No run in this span committed a machine row, so there are no shards to rank. That is a
+			record that did not happen, not a run that did no work.
 		</p>
 	{:else}
 		<p class="board-note">
-			Run <strong>{board.runId}</strong> on {board.date}, {board.rows.length} of
-			{board.shards} shards reporting.
-			{#if missing > 0}
+			Run <strong>{board.runId}</strong> on {board.date}, {board.rows.length}
+			{board.shards === null ? 'shards reporting' : `of ${board.shards} shards reporting`}. 
+			{#if board.shards === null}
+				The run's plan recorded no shard count, so how many filed nothing is unknown rather
+				than none.
+			{/if}
+			{#if missing !== null && missing > 0}
 				{missing === 1 ? 'One shard' : `${missing} shards`} committed no row, so
 				{missing === 1 ? 'its' : 'their'} time is missing rather than zero.
 			{/if}
