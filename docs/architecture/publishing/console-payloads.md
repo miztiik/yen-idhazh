@@ -1,6 +1,6 @@
 # Console Payloads
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-20
 The operator console reads ten datasets. Nine of them come from `state/`,
 which is never served, so each one crosses a trust boundary and each crossing
 needs a contract (Guardrail #11). This page is the list. The machine-readable copy is

@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-20
 
 Every column of the host fingerprint, what it means, and what it is for. One row
 a job, by every job that draws its own runner - written in two halves, one at job

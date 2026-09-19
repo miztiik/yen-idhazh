@@ -1,6 +1,6 @@
 # Model throughput and why it drifts inside a run
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-20
 What the two model rates mean, why the slow half of a run is slow, and what a
 change in either number is allowed to prove.
 

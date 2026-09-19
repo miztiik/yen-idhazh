@@ -1,6 +1,6 @@
 # Console Design
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-20
 How a figure on the operator console is worded, coloured, ranked and drawn. It is
 the operator half of [design-system.md](design-system.md), which keeps the
 vocabulary the whole site resolves - the tokens, the colour ramps, the motion set

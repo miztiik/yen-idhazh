@@ -1,6 +1,6 @@
 # Retention
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-20
 
 What may be deleted, when, and what bounds every collection a run appends to.
 Unpublishing a day, the state tree's own ceilings, and the score shards that

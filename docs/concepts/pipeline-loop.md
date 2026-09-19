@@ -1,6 +1,6 @@
 # Pipeline Loop
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-20
 
 The stages one article passes through, what each stage owns, and the rule that they talk in payloads rather than calls. This is the build-time equivalent of a product's core loop: it is the thing that happens over and over, and every other concept doc hangs off it.
 

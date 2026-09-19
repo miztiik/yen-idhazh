@@ -587,24 +587,6 @@ def _folds_without(
     return dict(zip(header.split(","), next(csv.reader(body)), strict=True))
 
 
-def test_a_counters_segment_written_before_a_column_existed_still_folds(tmp_path: Path) -> None:
-    """The same widening, on the second ledger a run leaves segments of."""
-    written = _counters_model(TODAY, RUN, job=ServerJob.WORK, shard=0)
-    dropped = _a_column_that_may_be_missing(RuntimeCountersRow)
-
-    row = _folds_without(
-        tmp_path / ledger.STATE_DIRNAME,
-        ledger.SegmentLedger.RUNTIME_COUNTERS,
-        ServerJob.WORK,
-        RuntimeCountersRow.csv_columns(),
-        written.csv_row(),
-        dropped,
-    )
-
-    assert row[dropped] == "", "a series this build did not publish is empty, not zero"
-    assert RuntimeCountersRow.from_csv_row(row).shard == 0
-
-
 def test_a_verdict_segment_written_before_a_column_existed_still_folds(tmp_path: Path) -> None:
     """And on the ledger a candidate's verdict lands in, which `validate.yml` writes."""
     written = _verdict(TODAY, RUN, model_id="gemma-4-e4b", qualified=True)

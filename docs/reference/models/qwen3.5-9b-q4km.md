@@ -1,6 +1,6 @@
 # Qwen3.5-9B-Q4_K_M
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-20
 **Status: incumbent.** It has summarized every published item since 2026-08-27.
 `incumbent` is one of three words a dossier's status line may hold - `evaluated`,
 `incumbent`, `superseded` - and this line is the only place this model's

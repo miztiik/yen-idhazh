@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-20
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**

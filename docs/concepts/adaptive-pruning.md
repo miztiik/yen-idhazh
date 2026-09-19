@@ -1,6 +1,6 @@
 # Adaptive Pruning
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-20
 
 One question, asked of every file this project writes:
 

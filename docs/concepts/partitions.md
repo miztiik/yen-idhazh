@@ -1,6 +1,6 @@
 # Partitions
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-20
 A **partition** is one file holding one period of a collection that grows. The
 directory is the collection and the name says the period - `<YYYY-MM>` for a month,
 `<YYYY>/<MM>/<DD>` for a day. A reader opens the periods its window names and skips

@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-20
 
 The console's interactive charts read a published projection of item health. They
 never read `state/item-health/` directly.

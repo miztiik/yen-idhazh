@@ -1,6 +1,6 @@
 # The Run Timeline
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-20
 
 **What shape does the run timeline have, and why that shape?** This page answers
 that one question. The shape landed before any producer so the writers produce

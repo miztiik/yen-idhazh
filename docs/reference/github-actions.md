@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-20
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
 
