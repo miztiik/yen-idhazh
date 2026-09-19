@@ -51,7 +51,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | #10 | 33 | C | `model_load_ms` and `job_seconds` join `host-fingerprint` | p33c10 |
 | #12 | 33 | D | Delete the merge machinery | p33d12b |
 | #13 | 33 | D | Compaction lag and free swap on the console band | p33d13 |
-| #11 | 33 | E | Delete `runtime-counters` and everything that reads it | p33e11p1 |
+| #11 | 33 | E | Delete `runtime-counters` and everything that reads it | p33e11p2 |
 | #29 | 33 | J | `prune.yml` wakes outside the digest window | p33j29 |
 
 ## Ready now - 28
