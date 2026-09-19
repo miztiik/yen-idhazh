@@ -100,7 +100,7 @@ export interface RetentionConfig {
 /** The rate the Machine route prices a run's tokens at, and what was recorded.
  *
  * Part of the pipeline's `observability` block, not the whole of it. The price
- * is here because Guardrail #6 forbids a literal in a component and CLAUDE.md Rule
+ * is here because Guardrail #6 forbids a literal in a component and CLAUDE.md Guardrail
  * #10's one carve-out requires the figure to say where its rate came from.
  *
  * The two switches and the rate are here for the opposite reason: a page whose

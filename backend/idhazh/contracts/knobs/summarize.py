@@ -131,7 +131,7 @@ def _default_bands() -> list[SummaryBand]:
     """Five sizes: note, post, report, feature, long read.
 
     Starting points chosen from editorial practice outside this project, not
-    from our own numbers - nothing here may be quoted as a measurement (Rule
+    from our own numbers - nothing here may be quoted as a measurement (Guardrail
     #10), and our length figures describe a pipeline mid-repair. The first band
     begins at zero so every article lands in one.
 

@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-09-10
+**Last Updated**: 2026-09-19
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once: the false
@@ -42,7 +42,7 @@ twelve lines including the command block:
 
 Longer than twelve lines means it is two entries, or it is not a tool quirk.
 
-**A number carries its date, its hardware and its spread** (`CLAUDE.md` Rule
+**A number carries its date, its hardware and its spread** (`CLAUDE.md` Guardrail
 #10) - without them a measurement is an assertion, and an entry whose evidence
 was cut reads exactly like one somebody guessed. Date an entry with no number
 in it only where it can go stale: a tool version, upstream behaviour, a

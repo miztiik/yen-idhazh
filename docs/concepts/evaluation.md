@@ -1017,7 +1017,7 @@ rows in 4,266,655 bytes over two monthly shards - and nothing bounded it. Shardi
 by month bounds one file, not the tree.
 
 Deleting an old shard outright would answer the bytes and break two things. Every
-published quality claim about that month would lose the rows behind it, and Rule
+published quality claim about that month would lose the rows behind it, and Guardrail
 #10 then forbids citing the number at all. And the dedupe above works by reading
 the rows, so the day a shard is deleted every measurement in it becomes new
 again - which turns a count over the ledger from a count of items into a count of

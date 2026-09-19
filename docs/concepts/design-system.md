@@ -734,7 +734,7 @@ and `ticks` are exactly the part hand-rolling gets wrong. Jony and Carmack,
 
 Three lessons from that reversal are recorded because they are more transferable
 than the ruling. **A byte count is a measurement and goes stale like any other** -
-a design argument leaning on a number someone took months ago has not met Rule
+a design argument leaning on a number someone took months ago has not met Guardrail
 #10. **An argument that generalises from the worst implementation of a thing is
 not an argument about the thing** - "a canvas cannot inherit a custom property"
 is true of canvas and false of the SVG renderers those libraries also ship. And

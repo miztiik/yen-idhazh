@@ -75,7 +75,7 @@ export function ciAnswer(paths: readonly string[], isPr: boolean): CiAnswer {
 		// A published day is frozen, so the only thing that can invalidate one is a
 		// change to the shape it is read through - or an edit to the day itself.
 		// Everything else leaves an answer that was settled when the day was
-		// written, and re-deriving it costs about 0.27 s a day (`CLAUDE.md` Rule
+		// written, and re-deriving it costs about 0.27 s a day (`CLAUDE.md` Guardrail
 		// #12). Outside a pull request a code change always re-reads: that is the
 		// merge to `main`. Documentation carries no shape, so it never does.
 		validateAll:

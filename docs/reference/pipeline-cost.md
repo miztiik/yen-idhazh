@@ -1,6 +1,6 @@
 # What the pipeline costs to run
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 How fast, how heavy and how hot the thing that makes the digest is - the model,
 the runner, prefill and decode, memory, shard cost and the corpus. Every figure
 carries the date it was taken and its spread. Guardrail #10 in one page: **an
@@ -381,7 +381,7 @@ reply, one request at a time. llama-server counted the whole shard for itself
 and published the totals on `/metrics`. Until this row landed those counters
 reached only a job log that keeps them for two days, so the read rate that
 [../architecture/summarize/throughput.md](../architecture/summarize/throughput.md)
-and the console publish could be reported and never checked - which is what Rule
+and the console publish could be reported and never checked - which is what Guardrail
 #10 forbids. The counters are now a committed row, and this is the first
 reconciliation.
 

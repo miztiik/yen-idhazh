@@ -1,6 +1,6 @@
 # Data Growth Audit
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-19
 Status: review and redesign proposal, not an implemented architecture. No application
 code, contracts, configuration, tests or stored publication data changed in this
 audit. The proposals have not received performance or migration qualification.
@@ -395,7 +395,7 @@ assets already skip unchanged writes; search vectors already use byte offsets.
 
 ## See Also
 
-- [Engineering contract](../../CLAUDE.md) - Rules 1, 2, 3, 5, 7, 9, 10 and 11, and correction levels.
+- [Engineering contract](../../CLAUDE.md) - Guardrails 1, 2, 3, 5, 7, 9, 10 and 11, and correction levels.
 - [Publishing layout](../architecture/publishing/layout.md) - existing persisted and served outputs.
 - [Frontend architecture](../architecture/publishing/frontend.md) - reading and console behavior.
 - [Telemetry series](../architecture/publishing/telemetry-series.md) - current public columns and unknown-value rules.

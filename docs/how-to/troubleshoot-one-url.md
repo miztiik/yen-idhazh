@@ -1,6 +1,6 @@
 # Troubleshoot One URL Locally
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-09-19
 
 Use the real network, extraction boundary and local model to inspect one article
 without publishing a digest.
@@ -354,4 +354,4 @@ workaround. A URL with no configured source identity cannot be run faithfully.
 - [set-up-local-inference.md](set-up-local-inference.md) - install llama.cpp and GGUF weights.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - which stage owns each transformation.
 - [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md) - address checks, robots, sanitization and output controls.
-- [../../CLAUDE.md](../../CLAUDE.md) - Rules #3, #7, #10 and #11.
+- [../../CLAUDE.md](../../CLAUDE.md) - Guardrails #3, #7, #10 and #11.
