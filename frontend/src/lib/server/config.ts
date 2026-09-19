@@ -188,6 +188,11 @@ export interface SimilarityConfig {
 	band_low: number;
 	/** The top of the band. 1.00, because a cosine goes no higher. */
 	band_high: number;
+	/** The furthest the line may fall in one day, as a count of slots, and the
+	 * width of a slot. The fall cap is the product: the contract derives it the
+	 * same way rather than storing it, so the slot count is the only number set. */
+	max_down_bins: number;
+	bin_width: number;
 	/** What share of judged two-story pairs the fit leaves above the line. The
 	 * target the precision line is drawn against. */
 	discard_share: number;
@@ -398,6 +403,8 @@ const VISUALS_DEFAULTS: VisualsConfig = { min_chart_points: 3 };
 const SIMILARITY_DEFAULTS: SimilarityConfig = {
 	band_low: 0.88,
 	band_high: 1.0,
+	max_down_bins: 10,
+	bin_width: 0.001,
 	discard_share: 0.03,
 	step_change_multiple: 5,
 	disagreement_max: 0.15,
@@ -408,6 +415,9 @@ const SIMILARITY_DEFAULTS: SimilarityConfig = {
 };
 // `SameStoryConfig.floor_min`'s own default, for a checkout with no config file.
 const SAME_STORY_FLOOR = 0.94;
+// `SameStoryConfig`'s own defaults for the two terms of the score. The whole of
+// it on the cosine, which is how the floor above was measured.
+const SAME_STORY_WEIGHTS = { cosine_weight: 1.0, key_point_weight: 0.0 };
 // The CONTRACT default, not the committed window. `config/idhazh.json` pins
 // `models.summarize.inference.n_ctx` at 49152 since 2026-09-13 and every real
 // page reads that; this only fires for a checkout with no config file, and such
@@ -533,6 +543,8 @@ interface RawConfig {
 	assemble?: {
 		same_story?: {
 			floor_min?: number;
+			cosine_weight?: number;
+			key_point_weight?: number;
 			adaptive_dedup_threshold?: Partial<SimilarityConfig>;
 		};
 	};
@@ -789,6 +801,21 @@ export function similarityConfig(): SimilarityConfig {
  */
 export function committedFloor(): number {
 	return raw().assemble?.same_story?.floor_min ?? SAME_STORY_FLOOR;
+}
+
+/** What the two terms of the score are worth, before any fit has moved them.
+ *
+ * The fallback the holdout panel scores under on a day no fit has run. A fitted
+ * row carries its own pair of weights and they win, because the margin has to
+ * be read under the ruler the line was set with rather than under the one the
+ * config happens to hold today.
+ */
+export function committedWeights(): { cosine_weight: number; key_point_weight: number } {
+	const block = raw().assemble?.same_story;
+	return {
+		cosine_weight: block?.cosine_weight ?? SAME_STORY_WEIGHTS.cosine_weight,
+		key_point_weight: block?.key_point_weight ?? SAME_STORY_WEIGHTS.key_point_weight
+	};
 }
 
 /** The visual planner's floor, and only that.

@@ -109,7 +109,13 @@ Three things the diagram is deliberate about. **The veto is first and nothing be
 
 The one false merge at 0.93 is on 2026-08-30: Ontario's pushback against the lake renaming, folded into Google carrying the renaming out, at a cosine of **0.9317**. Those are two stories, and merging them means the pushback never ran.
 
-**The rule was the first round hundredth above the highest-scoring pair a person marked as two stories, and a fresh reading has overtaken it.** On 2026-09-01 that pair sat at 0.9317 and the rule gave 0.94, leaving 0.0083 of margin. On 2026-09-19 a judge read 200 pairs and marked four of them as two stories; the highest sits at **0.9407**, above this line. The margin is **-0.0007** and the line now admits one known two-story pair. See the design rationale below.
+**The rule is the first round hundredth above the highest-scoring pair a person marked as two stories.** That is how 0.94 was chosen, over the 11 committed days this table covers and the one marked-apart pair they held.
+
+**The margin is negative as of 2026-09-19, and the console now draws it.** `state/story-similarity/holdout-pairs.csv` holds 200 marked pairs, 4 of them marked as two different stories. Recomputed from the committed day payloads at the shipped weights - the whole score on the cosine - those four score **0.9407, 0.9374, 0.9352 and 0.9343**. The highest sits **0.0007 above** the 0.94 floor, so the line as committed would merge two stories somebody read as two. One pair of the four is on the wrong side; the other three clear it. The 0.0083 that was measured on 2026-09-01 was the margin over the evidence that existed then, and this replaces it.
+
+**The way to widen it is more labels, not a higher number**, and that has not changed: 0.95 would clear all four marks and lose ten groups a person read as one story each.
+
+**The line already costs the reader on the other side, and the console draws that too.** The same file holds 196 pairs marked as ONE story. Recomputed the same way, **117 of them score below 0.94**, so the vector rule alone leaves those stories on the page twice; the identical-headline joiner catches whichever of them share a headline, and nothing catches the rest. That is not an argument for a lower line - it is the second cost of any line, and a panel reporting only the false merges reports half of what the number does. Measured 2026-09-19 on a developer machine / Node 24.12.0, over the committed day payloads at the shipped weights; deterministic, so no spread.
 
 **The two errors are not equal, which is why the number leans high.** A missed group costs a reader the same story twice, on a page they can see. A false merge costs them a story that never ran, and they cannot see what is not there ([../../../.github/agents/editor.agent.md](../../../.github/agents/editor.agent.md)).
 
@@ -341,7 +347,21 @@ flowchart TD
 
 **The draw is sampled against the config band and never against the applied line.** `similarity.draw.in_band` is handed `band_low` and `band_high` off the config file, and no fitted value reaches it. A band that opened at the applied line would narrow every time the line rose, and the next fit would then be reading a record it had shaped itself. A test holds that open.
 
+## Design rationale: the console scores the hand marks, and what it leaves out
+
+`/console/judgement/` draws the margin above, and to draw it the route's build-time `load` scores every hand-marked pair itself. Nothing else in the console scores anything, and the reason is narrow: **no run has ever scored these pairs**. They are a person's marks rather than judged pairs, and nothing writes a score for them anywhere, so this is the first derivation and not a second opinion about one. A judged pair is the opposite case - its score is already on its row, and recomputing that in a page would be two verdicts about one number.
+
+**Two terms are reproduced and two overrides are not.** The panel computes `cosine_weight * cosine + key_point_weight * key_point_overlap`, which is exactly what the floor is applied to. It does not reproduce the two overrides in `_pair_terms`: a matching reduced headline joining at 1.0, and a clash of figures refusing outright. Neither is a function of the line - they fire or they do not whatever the floor is set to - so neither can move the margin the panel measures.
+
+**What that costs the reader, stated.** A pair somebody marked apart whose headlines reduce identically would be merged at 1.0 whatever the line is, and the panel would show it sitting harmlessly below the rule. None of the four marked-apart pairs is such a pair today: all four score below 1.0 on their words, and none of them clashes on a figure either. That is a reading of today's file and not a property of the design, so it is the thing to re-check when a mark is added.
+
+**The word reduction is a second spelling of one rule, and it was measured rather than asserted.** `key_point_overlap` needs the key points reduced to words, and `assemble._reduce` is a Python string function that no contract can be generated from - so `$lib/console/holdout.ts` carries a TypeScript copy. Measured 2026-09-19 on a developer machine / Node 24.12.0 / Python 3.14.2, over every key-point block in the 29 committed days: **10,328 of 10,328 reduce to the same word set**. The first attempt kept combining marks and disagreed on 3 of them, all Devanagari - Python's `\w` is alphanumeric plus the underscore and a matra is neither, so a matra is a separator there and now here too. The reading is cheap to retake and is the check to run when either side moves.
+
+**The key-point term is weighted zero today, which bounds what the copy can cost.** A drift in the reduction changes a printed score by `key_point_weight` times the difference, and `key_point_weight` is 0.0 in `config/idhazh.json`. That is why a second spelling was acceptable at all; raise the weight and the measurement above becomes load-bearing rather than reassuring.
+
 ## One headline, two outlets, and why 0.94 was not what changed
+
+
 
 The vector pass alone left the same story on the page several times. `dolly parton, country music icon, dies at 80` published five times on 2026-08-25 from five different feeds. On 2026-09-03 one acquisition ran five times under two spellings of its price.
 
