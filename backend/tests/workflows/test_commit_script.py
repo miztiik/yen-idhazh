@@ -48,12 +48,12 @@ pytestmark = [pytest.mark.workflow, pytest.mark.slow]
 
 
 def test_every_committing_job_configures_the_same_identity() -> None:
-    """The pipeline commits as itself, and it says so in one voice.
+    """The repository commits under one name, and it says so in one voice.
 
     A hosted runner carries no git identity, so a job that commits has to set
-    one or `git commit` refuses. Two files set it and only one of them is
-    executed by a test, so the other could drift to a different name and nothing
-    would notice until a reader wondered who two different authors were.
+    one or `git commit` refuses. Three files set it and only one of them is
+    executed by a test, so the others could drift to a different name and
+    nothing would notice until a reader wondered who the other authors were.
     """
     found = {
         path.name: (
