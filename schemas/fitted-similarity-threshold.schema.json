@@ -1,11 +1,13 @@
 {
   "$defs": {
     "ClampKind": {
-      "description": "What shaped the applied value, in one word.",
+      "description": "What shaped the applied value, in one word.\n\n`CEILING` and `FLOOR` are where the line came to rest on a band wall, whether\nor not the wall moved it that day. A line at `band_high` folds nothing at all\nand a line at `band_low` folds everything in the band; both look from the\noutside like the feature is switched off, so both get a word of their own\nrather than reading as `NONE`.",
       "enum": [
         "none",
         "step",
-        "guard"
+        "guard",
+        "ceiling",
+        "floor"
       ],
       "title": "ClampKind",
       "type": "string"
@@ -29,6 +31,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "smoothing_weight splits into fall_weight and rise_weight; max_up_step added.",
+      "version": "2026-09-19",
+      "why": "The line now damps and caps both directions, so one number cannot carry it."
+    },
+    {
       "change": "pairs_in_band counts the pairs the draw dealt, not the pairs in the band.",
       "version": "2026-09-18T12:00",
       "why": "The count before the budget is persisted nowhere, so nothing could write it."
@@ -39,7 +46,7 @@
       "why": "A line that moves itself has to leave a row on the days it did not move."
     }
   ],
-  "description": "One run's fit: the four steps, the gates, and what the record held when they ran.",
+  "description": "One run's fit: the five steps, the gates, and what the record held when they ran.",
   "properties": {
     "above_line_on_record": {
       "description": "Judged pairs at or above the applied line. These are the entire precision measurement, so they are never sampled away.",
@@ -59,7 +66,7 @@
         }
       ],
       "default": null,
-      "description": "The proposal after step 2. Equal to the proposal on a rise, because damping is downward only. Empty whenever the proposal is, since there is nothing to damp.",
+      "description": "The proposal after damping. Both directions are damped, so this differs from the proposal on a rise as well as on a fall - and equals the previous line when the proposal sat inside the dead zone and the day counted as no move. Empty whenever the proposal is, since there is nothing to damp.",
       "title": "After Damping"
     },
     "applied": {
@@ -72,11 +79,11 @@
     "clamp_kind": {
       "$ref": "#/$defs/ClampKind",
       "default": "none",
-      "description": "What shaped the applied value. none is the damped proposal as it stood, step is the daily downward clamp, guard is the step-change hold."
+      "description": "What shaped the applied value. none is the damped proposal as it stood, step is a daily cap, guard is the step-change hold, and ceiling or floor is the line resting on a band wall. Which way a step went is read off previous against applied."
     },
     "clamp_movement": {
       "default": 0.0,
-      "description": "How far the clamp held the line back, always at or above zero because there is no upward clamp. Zero when nothing clamped.",
+      "description": "How far the clamp held the line back. A distance, so it is at or above zero whichever direction was held. Zero when nothing clamped, and zero on a ceiling or floor row where the line was already resting on the wall.",
       "maximum": 1.0,
       "minimum": 0.0,
       "title": "Clamp Movement",
@@ -130,6 +137,13 @@
       "title": "Discard Share",
       "type": "number"
     },
+    "fall_weight": {
+      "description": "How much of a downward move the damping let through against yesterday's line. On the row for the same reason the discard share is: a later reader comparing two fits has to know both were asked the same question.",
+      "exclusiveMinimum": 0.0,
+      "maximum": 1.0,
+      "title": "Fall Weight",
+      "type": "number"
+    },
     "grammar_digest": {
       "anyOf": [
         {
@@ -176,9 +190,15 @@
       "type": "number"
     },
     "max_down_step": {
-      "description": "The furthest step 3 would let the line fall in one day. On the row because clamp_kind says the clamp fired and this says what it fired against.",
+      "description": "The furthest the line could fall in one day, in score units. On the row because clamp_kind says a cap fired and this says what it fired against.",
       "exclusiveMinimum": 0.0,
       "title": "Max Down Step",
+      "type": "number"
+    },
+    "max_up_step": {
+      "description": "The furthest the line could rise in one day, in score units. On the row for the same reason the fall cap is.",
+      "exclusiveMinimum": 0.0,
+      "title": "Max Up Step",
       "type": "number"
     },
     "merge_count": {
@@ -253,6 +273,13 @@
       "title": "Record Stamp",
       "type": "string"
     },
+    "rise_weight": {
+      "description": "How much of an upward move the damping let through. Smaller than the fall weight on every legal config, because the line falls fast and rises slow.",
+      "exclusiveMinimum": 0.0,
+      "maximum": 1.0,
+      "title": "Rise Weight",
+      "type": "number"
+    },
     "run_id": {
       "description": "The run that fitted the line.",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
@@ -270,13 +297,6 @@
       "description": "Whether a whole week of fresh judgements stopped moving the answer. Judging drops to weekly while this is true and returns to daily on its own.",
       "title": "Settled",
       "type": "boolean"
-    },
-    "smoothing_weight": {
-      "description": "How much of the proposal step 2 let through against yesterday's line. On the row for the same reason the discard share is.",
-      "exclusiveMinimum": 0.0,
-      "maximum": 1.0,
-      "title": "Smoothing Weight",
-      "type": "number"
     },
     "step_change_multiple": {
       "description": "How many times the typical daily shift today's shift had to beat before the guard held the line. On the row for the same reason the daily step is.",
@@ -307,7 +327,7 @@
       "type": "number"
     },
     "version": {
-      "default": "2026-09-18T12:00",
+      "default": "2026-09-19",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -320,8 +340,10 @@
     "previous",
     "applied",
     "discard_share",
-    "smoothing_weight",
+    "fall_weight",
+    "rise_weight",
     "max_down_step",
+    "max_up_step",
     "step_change_multiple",
     "pairs_in_band",
     "pairs_judged",
@@ -338,5 +360,5 @@
   ],
   "title": "FittedSimilarityThreshold",
   "type": "object",
-  "version": "2026-09-18T12:00"
+  "version": "2026-09-19"
 }

@@ -1,6 +1,6 @@
 # When two items are the same story
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 
 A day runs the same story from more than one of our feeds. This page owns the
 rule that decides when two items are one story, what the page does about it, and
@@ -115,11 +115,57 @@ The one false merge at 0.93 is on 2026-08-30: Ontario's pushback against the lak
 
 **`assemble.same_story.floor_min` is not comparable to `assist.similarity_floor`.** That one scores a reader's query against an item and this one scores two items against each other; the two distributions are different shapes, and reading one number against the other is how a threshold gets set from the wrong evidence.
 
-**The missing margin is why `assemble.same_story.adaptive_dedup_threshold` exists, and the block ships off.** The floor above was read once, over eleven days, and nothing re-reads it as the corpus changes - which is exactly how it went stale. That block holds the knobs for a line that fits itself: the band worth judging, how the record slices it, the four steps that move the line and the three gates it has to clear first. `enabled` is false, so the pass still compares against `floor_min` and publishes exactly the groups it published before the block existed. `max_down_step` carried an upper bound of 0.0083 until 2026-09-19, sized so no single step could cross the margin; with the margin gone that bound guarded nothing and was removed, and what bounds the step now is the band it is fitted inside. The shapes the fit reads and writes - the scored pair, the score record, the fitted row and the hand-marked holdout - are in [../contracts/schemas.md](../contracts/schemas.md).
+**The missing margin is why `assemble.same_story.adaptive_dedup_threshold` exists, and the block ships off.** The floor above was read once, over eleven days, and nothing re-reads it as the corpus changes - which is exactly how it went stale. That block holds the knobs for a line that fits itself: the band worth judging, how the record slices it, the steps that move the line and the three gates it has to clear first. `enabled` is false, so the pass still compares against `floor_min` and publishes exactly the groups it published before the block existed. How the line moves once the flag is on is the next section. The shapes the fit reads and writes - the scored pair, the score record, the fitted row and the hand-marked holdout - are in [../contracts/schemas.md](../contracts/schemas.md).
 
 **The floor on the diagram is a number the run chooses, since 2026-09-18.** With the flag off - which is how it ships - it is `assemble.same_story.floor_min` and the diagram reads exactly as it always has. With it on, `similarity.applied.effective_same_story` replaces that one field with the newest line a fit applied inside `applied_lookback_days`, and the rest of the block is untouched: same weights, same figure veto, same all-pairs rule. Four things each mean the committed floor rather than a fitted one, and each is an ordinary day: the flag is off, the tree is absent, every row inside the lookback was held, or the newest row carries no line.
 
 **The run writes down which number grouped it.** `same_story_floor_applied` on the run record, because without it a reader of a committed `run.json` cannot tell a day grouped at 0.94 from a day grouped at 0.937 - and the grouping is the thing this whole block moves. A run that published before the column existed carries no value, which is every run before that date.
+
+## How the line moves: down fast, up slow
+
+The line is allowed to move a little each day, and it is allowed to move further down than up. **Lowering the line publishes less.** Two feeds giving near-identical coverage is the feed's fault, and folding them is the answer, so the move that folds more arrives quickly and the move that folds fewer arrives over a month.
+
+Every number below is a knob in `config/idhazh.json` under `assemble.same_story.adaptive_dedup_threshold`. **The two daily caps and the dead zone are counted in slots of `bin_width`, not written as decimals**, because `10 slots down` is a count somebody can check against the record the line was fitted from and `one percent of the scale` is not.
+
+| What it is | Knob | Ships at | What that means |
+| --- | --- | ---: | --- |
+| Hard floor | `band_low` | 0.88 | The line can never go below this. The record holds no slot under it, so a line there is one no later fit could read back. |
+| Hard ceiling | `band_high` | 1.00 | The line can never go above this. A cosine goes no higher. |
+| Start | `same_story.floor_min` | 0.94 | Where the line sits before any fit has moved it, and where it returns to if the fit is switched off. |
+| Slot width | `bin_width` | 0.001 | How finely the record slices the band, and so the finest move the line can make. |
+| Fall cap | `max_down_bins` | 10 slots | 0.010 a day. From 0.94 that is six days of falling to reach the floor, if the record kept asking for it. |
+| Rise cap | `max_up_bins` | 3 slots | 0.003 a day, under a third of the fall cap. That one ratio is the whole asymmetry. |
+| Dead zone | `dead_zone_bins` | 1 slot | A proposal within 0.001 of today's line is not a move at all. |
+| Fall damping | `fall_weight` | 0.50 | Half the remaining gap lands today, before the cap is applied. |
+| Rise damping | `rise_weight` | 0.15 | Fifteen percent of the remaining gap lands today, before the cap. |
+
+**End to end that is about ten days down and about thirty-three days up.** Driven from a record that keeps proposing the far end: 0.94 falls to within one slot of 0.88 on the tenth day, and 0.88 climbs back to within one slot of 0.94 on the thirty-third. Computed from the arithmetic below at the committed knobs, not measured on a run - no run has fitted a line yet, because the block ships off.
+
+```mermaid
+flowchart TD
+    P["Proposal off the record:<br/>the upper edge of the slot the walk stopped in"] --> Z{"Is it a move?<br/>at least one slot from today's line"}
+    Z -- "no, under 0.001 away" --> A["The applied line"]
+    Z -- "yes" --> D{"Which way?"}
+    D -- "down: publishes less" --> DF["Damp: half the gap lands today"]
+    D -- "up: publishes more" --> DR["Damp: 15 percent of the gap lands today"]
+    DF --> CF["Cap the fall at 10 slots, 0.010"]
+    DR --> CR["Cap the rise at 3 slots, 0.003"]
+    CF --> W{"Still inside the band?"}
+    CR --> W
+    W -- "under 0.88" --> WF["Hold at the floor<br/>clamp_kind floor"]
+    W -- "over 1.00" --> WC["Hold at the ceiling<br/>clamp_kind ceiling"]
+    W -- "inside" --> A
+    WF --> A
+    WC --> A
+```
+
+**Both directions are damped and both are capped.** The damping filters a one-day spike and the cap bounds a run of them, and they are not the same control: a cap alone lets a spike persist at cap speed for as many days as the spike lasts. `step_change_guard_enforced` ships false, so these two are the whole brake.
+
+**The dead zone is a defect fix rather than a preference.** The line is a slot's upper edge, so a step of less than one slot lands on no edge a later walk can produce. Without the dead zone the damping leaves a geometric tail whose steps shrink below one slot for ever, and the applied line never formally arrives at its proposal. The zone deletes that tail and says so on the row: `after_damping` equals `previous` on a day the proposal was inside it.
+
+**A line resting on a band wall is a reported state, not silence.** A line at `band_high` folds nothing at all, which from the outside looks like the feature is switched off rather than pinned; a line at `band_low` folds everything in the band. Both get their own `clamp_kind` - `ceiling` and `floor` - and they are reported whether or not the wall moved the line that day, because resting there is the state worth knowing. `none` means the damped proposal stood as it was.
+
+**The draw is sampled against the config band and never against the applied line.** `similarity.draw.in_band` is handed `band_low` and `band_high` off the config file, and no fitted value reaches it. A band that opened at the applied line would narrow every time the line rose, and the next fit would then be reading a record it had shaped itself. A test holds that open.
 
 ## One headline, two outlets, and why 0.94 was not what changed
 
@@ -196,9 +242,15 @@ Two passes read the finished day inside `assemble.build_day`, and both were writ
 
 ## Design rationale
 
-**The margin the clamp guarded was withdrawn on 2026-09-19, and no line replaces it.** `state/story-similarity/holdout-pairs.csv` now holds 200 pairs labelled by `claude-opus-4.6` reading each pair's title and summary: 196 one story, 4 two stories. The four score 0.9407, 0.9374, 0.9352 and 0.9343, recomputed from the committed day vectors as 0.940676, 0.937400, 0.935201 and 0.934337. The highest sits **above** the 0.94 line, so the gap `max_down_step` was sized against is -0.0007 rather than +0.0083.
+**The line falls fast and rises slow, and the next reader must not reverse it.** The house rule is to err on the side of publishing less: if two feeds give near-identical coverage that is the feed's fault, and one of them is dropped without apology. Lowering the line folds more stories together and publishes fewer of them separately, so lowering is the safe move and arrives in about ten days; raising it publishes more and arrives in about thirty-three. Until 2026-09-19 the code encoded the opposite - a rise landed whole and immediately, a fall was damped to 15 percent of the gap and capped at 0.005, so a fall of 0.06 took about a month and the rise back took one day. The shape reads backwards to anyone who has not been told the rule, so `SimilarityThresholdConfig` refuses a config where the rise weight or the rise cap reaches the fall's.
 
-**The clamp's bound went with the gap.** `max_down_step` was refused at or above 0.0083; a bound sized against a gap that no longer exists refuses nothing a reader benefits from, and a negative bound cannot be satisfied at all by a downward step. What bounds the step now is the band it is fitted inside. The step is a damping knob and is no longer described as a safety one.
+**Damping stays on the fast direction, and a straight inversion was refused.** The failure mode is a correlated bad night. In the 200 labelled pairs of 2026-09-19 all four two-story marks came from ONE news cluster, which produced 29 of the 200 pairs: a judge that misreads a cluster produces a block of adjacent wrong verdicts on one night, not independent ones. Undamped, the line takes that whole block at once. Three things make the damping load-bearing rather than decorative. `step_change_guard_enforced` ships false, so the damping and the caps are the only brake. `typical_shift` takes a median over 14 rows and `settled` compares a week apart, and both assume a smoothed series - on a series that jumps they measure nothing. And a damped series filters a one-day spike where a bare cap only slows it, letting the spike persist at cap speed until the evidence turns. So both mechanisms stay and both are directional.
+
+**The set-aside is a share of agreed-NO verdicts, and 0.01 did not survive one bad night.** `fit.fit_line` takes the share over `negatives_on(record)`, not over judged pairs. At `minimum_negatives` of 200, 0.01 sets two verdicts aside and 0.03 sets six. The question the share answers is how many wrong NO verdicts one news cluster can produce before it sets the line, and the benchmark cluster produced four. Two does not survive that; six does. Moved to 0.03 on 2026-09-19.
+
+**The caps are slot counts because a decimal cannot be checked.** `10 slots down, 3 up` is a count against the same grid the record is folded on, so a reader can hold the cap and the line in the same unit. `0.010` reads as a precision the fit does not have, and `four percent of the range` reads as an answer nobody can verify.
+
+**The margin the old cap guarded was withdrawn on 2026-09-19, and no line replaces it.** `state/story-similarity/holdout-pairs.csv` now holds 200 pairs labelled by `claude-opus-4.6` reading each pair's title and summary: 196 one story, 4 two stories. The four score 0.9407, 0.9374, 0.9352 and 0.9343, recomputed from the committed day vectors as 0.940676, 0.937400, 0.935201 and 0.934337. The highest sits **above** the 0.94 line, so the gap the fall cap was once sized against is -0.0007 rather than +0.0083. What bounds a step now is the band it is fitted inside, and the cap is a damping knob rather than a safety one.
 
 **Raising the line does not restore the margin, and that is measured.** On the same 200 pairs the line would have to reach 0.941 to clear every two-story mark, and that costs 9 more refused one-story pairs on this sample (96 refused at 0.94, 105 at 0.941). 0.95 refuses 146. The reason no line works is that the labels interleave: a pair at 0.9406 is marked one story, the pair at 0.9407 is marked two, and a pair at 0.9409 is marked one again. Three adjacent slots hold both marks.
 
