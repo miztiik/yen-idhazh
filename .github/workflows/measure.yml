@@ -782,10 +782,10 @@ jobs:
       # because the whole state root moved, but nothing reads them back and
       # committing them would grow the repository for no reader (Guardrail #12).
       #
-      # No `DROP_REPEATED_ROWS_COMMAND`, and that is a property rather than an
-      # omission: the row is keyed on the run id, the run id is `github.run_id`,
-      # and no second dispatch can reproduce one. There is no repeat for a
-      # post-merge pass to settle.
+      # The row is keyed on the run id, the run id is `github.run_id`, and no
+      # second dispatch can reproduce one - so two dispatches never write one
+      # row, and this path needs no merge driver. Nothing under `state/` carries
+      # a union driver any more except the published and cleanup day trees.
       #
       # `if: always()` because a bench that failed its verdict still drew a
       # machine, and that is the dispatch worth having the record of.

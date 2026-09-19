@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 
 Every column of the host fingerprint, what it means, and what it is for. One row
 a job, by every job that draws its own runner - written in two halves, one at job
@@ -308,7 +308,8 @@ records a machine and stages nothing fails without an edit
 ([../architecture/publishing/committing.md](../architecture/publishing/committing.md#the-commit-steps-push-through-a-rebase-and-the-one-that-can-rebuild-rebuilds)).
 
 **A repeated row now settles, and it could not have before.** `ledger.keyed_paths`
-is the registry the post-merge pass walks, and this ledger was not in it - which
+is the registry that pairs a ledger with what makes two of its rows one record,
+and this ledger was not in it - which
 cost nothing while nothing was committed and would have cost a double-counted
 machine the moment something was. A job runs on one machine, so two rows under
 one `(date, run_id, job, shard)` are one machine written down twice, and the

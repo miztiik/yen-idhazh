@@ -20,8 +20,6 @@ from ._harness import (
     DROP_ENTRY_POINT,
     FINGERPRINT_STEP,
     SCRIPTS_DIR,
-    SETTLE_COMMAND,
-    SETTLE_COVER_FLAG,
     SUBSTITUTED_DATE,
     SUBSTITUTED_DAY_DIR,
     _commit_call,
@@ -168,33 +166,6 @@ def test_both_daily_commit_steps_run_the_one_shared_script() -> None:
     assert _commit_call("fold")[1]["COMMIT_MESSAGE"] != assemble["COMMIT_MESSAGE"]
 
 
-def test_both_settling_commit_steps_name_the_run_they_settle() -> None:
-    """The bound, mirrored where a workflow that drops it reds (Guardrail #12).
-
-    A run appends only to the partition its own date routes to, so a repeat the
-    union merge left can only be in a file that run wrote, and the date names it.
-    Drop the flag and `stages.dedupe_ledgers.stage_dedupe_ledgers` walks every
-    feed-health day, every item-health day and every score day the archive holds
-    - a bill that rises every day for an answer already given, because a finished
-    partition was settled when it was written and cannot change again.
-
-    The command refuses to run with no cover at all, so a workflow that lost the
-    flag fails its commit step rather than quietly reading the archive. This
-    names the step instead of waiting for the run.
-    """
-    settling = [
-        label for label, names in COMMIT_SCRIPT_ENV.items() if "DROP_REPEATED_ROWS_COMMAND" in names
-    ]
-    assert settling == ["plan", "work"]
-
-    for label in settling:
-        settle = _commit_call(label)[1]["DROP_REPEATED_ROWS_COMMAND"].split()
-        assert tuple(settle[: len(SETTLE_COMMAND)]) == SETTLE_COMMAND
-        assert settle[len(SETTLE_COMMAND) :] == [SETTLE_COVER_FLAG, SUBSTITUTED_DATE], (
-            f"{label} must name the run it settles, or the pass reads the whole archive"
-        )
-
-
 def test_the_catch_up_compaction_runs_before_the_plan_job_commits() -> None:
     """A segment folded after the commit is a segment the runner throws away.
 
@@ -278,25 +249,23 @@ def test_only_assemble_rebuilds_and_it_rebuilds_with_its_own_publish_command() -
     assert "DROP_RACED_ASSETS_COMMAND" not in _commit_call("plan")[1]
 
 
-def test_the_append_only_ledgers_union_and_the_public_projection_does_not() -> None:
-    """A text merge of two appends is a merge nobody asked for.
+def test_only_the_two_single_writer_day_trees_union() -> None:
+    """A union merge keeps both sides, which is right for two of these and wrong for the rest.
 
-    Every file under `state/` is an append-only ledger of independent rows, so
-    the union of both sides is the answer. `frontend/public/telemetry/` is a
-    full rewrite of `state/item-health/`, so a union of two rewrites is a file
-    with every row twice; assemble regenerates it instead.
+    Every file under `state/` carried this driver until 2026-09-19. It kept two
+    attempts at one row as readily as two independent rows, and a lost push race
+    is exactly how a second attempt arrives. Each writer owns its own segment
+    now, so there is nothing for a merge to settle.
 
-    The set is closed rather than a membership check, because what this guards
-    is the pattern nobody chose. The published day tree is named on a line of
-    its own even though the catch-all above it already matched: a collection
-    that inherits a merge rule in silence has had that rule decided for it, and
-    a new pattern arriving here without its own reason should fail.
+    Two day trees keep it, each with one writing job and each saying why in its
+    own line. `frontend/public/telemetry/` never had it: that file is a full
+    rewrite of `state/item-health/`, so a union of two rewrites is a file with
+    every row twice, and assemble regenerates it instead.
 
-    `state/visual-prunes/**/*.csv` joined on 2026-09-08 when the cleanup record
-    became a day tree, and it is here because this test refused it first. Its
-    reason is its own rather than the neighbour's: a row is one pass by one run,
-    so two runs of a day that both append are not in disagreement, and a repeat
-    the union brings is dropped by `VISUAL_PRUNE_KEY`.
+    The set is closed rather than a membership check, because what this guards is
+    the pattern nobody chose. A collection that picks up a merge rule in silence
+    has had that rule decided for it, and a new pattern arriving here without its
+    own reason should fail.
     """
     attributes = read_text(REPO_ROOT / ".gitattributes")
     unioned = {
@@ -306,11 +275,6 @@ def test_the_append_only_ledgers_union_and_the_public_projection_does_not() -> N
     }
 
     assert unioned == {
-        "state/*.csv",
-        "state/**/*.csv",
         "state/published/**/*.csv",
         "state/visual-prunes/**/*.csv",
     }
-    assert not any(
-        "telemetry" in pattern or pattern.startswith("frontend") for pattern in unioned
-    )

@@ -1250,10 +1250,10 @@ def _measurement(number: int) -> EvalRow:
 def _seeded(state: Path, rows: list[EvalRow], *, copies: int = 1) -> None:
     """A ledger holding `rows`, with each row written `copies` times.
 
-    More than one copy is a real state, not a contrivance: `merge=union`
-    concatenates two runs that both appended, and `idhazh dedupe-ledgers`
-    settles it afterwards. It is also the case that separates "the read grows
-    with the rows" from "the read grows with the measurements".
+    More than one copy is a real state, not a contrivance: two segments of one
+    day can each carry the same observation, and the compaction settles them when
+    it folds. It is also the case that separates "the read grows with the rows"
+    from "the read grows with the measurements".
     """
     shard = writer.ledger_path(state, rows[0].date)
     shard.parent.mkdir(parents=True, exist_ok=True)

@@ -42,7 +42,7 @@ def stage_rebuild_score_index(
     on a schedule would hide the drift this exists to reveal. So a person types
     it, and the cover is stated: `--month` names the months to rebuild and
     `--every-shard` is the full pass over the archive. Neither is the default,
-    which is the shape `dedupe-ledgers` already uses for the same question.
+    so a caller that named neither gets an error rather than the archive.
 
     A month with no committed rows exits non-zero rather than reporting a clean
     pass over nothing, and so does a tree with no rows at all - the rule
