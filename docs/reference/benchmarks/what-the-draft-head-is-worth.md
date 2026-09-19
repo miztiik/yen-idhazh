@@ -1,6 +1,6 @@
 # What Gemma's draft head is worth
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-19
 
 `gemma-4-e4b-qat.json` declares a second file beside the weights: a 56.9 MiB
 speculation head, `mtp-gemma-4-E4B-it.gguf`, run with `--spec-type draft-mtp` and
@@ -80,9 +80,25 @@ A speculative decoder that accepts a draft token only when it matches what the
 main model would have produced is output-identical by construction. That is the
 usual claim for speculative decoding and it is why it is normally free.
 
+**The repository these bytes come from makes exactly that claim, and this run
+refuses it.** Verbatim, from
+[unsloth/gemma-4-E4B-it-qat-GGUF](https://huggingface.co/unsloth/gemma-4-E4B-it-qat-GGUF)
+read on 2026-09-19, the repository `config/models/gemma-4-e4b-qat.json` pulls at
+revision `8c5a9e4fd548`: *"The drafter shares the target's KV cache and does not
+change the output (the target verifies every drafted token)."* The same page
+names the drafter this entry declares, `mtp-gemma-4-E4B-it.gguf`, and the flag it
+runs under, `--spec-type draft-mtp`. So this is not a general claim about
+speculative decoding that our configuration happens to sit outside - it is the
+claim the publisher makes about this head, these weights and this flag.
+
 **This configuration is not output-identical, so it is not doing that.** Whether
 the cause is the head, the acceptance rule, or this pinned llama.cpp build is
-unmeasured.
+unmeasured. **What is measured is that the vendor's claim does not hold here**,
+across two runs, on nine of nine articles.
+
+One difference between their setup and ours is on the record and is a candidate
+rather than a finding: the card's command passes `--spec-draft-n-max 4` and this
+entry pins `n_max: 2`. Nobody has run 4 to see whether the drift follows it.
 
 **The practical consequence: the head is not a speed setting, it is a different
 model.** It cannot be switched on after qualification and it cannot be switched

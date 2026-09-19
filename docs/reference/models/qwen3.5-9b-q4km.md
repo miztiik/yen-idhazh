@@ -100,9 +100,13 @@ these weights.** That is a fact about the gap, not a defect finding - nobody has
 measured what the gap costs on a summarizing task - but it is the kind of gap
 that should be on the record before it is quoted as a tuning.
 
-Read from the model card on 2026-09-19
-([Qwen/Qwen3.5-9B](https://huggingface.co/Qwen/Qwen3.5-9B), Best Practices). The
-publisher names **four** recipes, one a mode and task type:
+Read on 2026-09-19 from the publisher's card,
+[Qwen/Qwen3.5-9B](https://huggingface.co/Qwen/Qwen3.5-9B#best-practices), and
+checked against the repository this entry actually pulls,
+[unsloth/Qwen3.5-9B-GGUF](https://huggingface.co/unsloth/Qwen3.5-9B-GGUF#best-practices)
+at revision `3885219b6810`. **The requant reproduces the recipe verbatim**, so a
+reader following either link gets the same numbers. The card names **four**
+recipes, one a mode and task type:
 
 | Mode and task | temperature | top_p | top_k | min_p | presence_penalty |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -367,6 +371,7 @@ Four benchmark records touch these weights. Each is one question with one answer
 and a re-run replaces its page rather than adding a second one.
 | Record | What it settles |
 | --- | --- |
+| [Qwen/Qwen3.5-9B](https://huggingface.co/Qwen/Qwen3.5-9B#best-practices) | the publisher's four sampling recipes, read 2026-09-19 and reproduced verbatim by the requant this entry pulls |
 | [What processor a run draws, and what it does to a reading](../benchmarks/the-processor-lottery.md) | every prefill and decode draw across the fleet, and why two models may not be compared across two runs |
 | [Moving the instructions in front of the article](../benchmarks/instructions-in-front.md) | what a prefix cache can reach once the summarize-and-plan call's question sits ahead of the article |
 | [Where the summarize-and-plan call's re-read tokens go](../benchmarks/two-call-re-read.md) | how much of the summarize-and-plan call's prompt the server answers from cache |
