@@ -385,7 +385,7 @@ def stage_assemble(
     # Before the publishers and never after them. Every projection below reads a
     # head off disk, so a compaction that ran afterwards would publish a page
     # built from a record this run had not finished writing.
-    compact_stage.stage_compact(common.STATE_ROOT)
+    compacted = compact_stage.stage_compact(common.STATE_ROOT)
     # Every projection of the instrument, in the one order `dispatch` names. It
     # runs after the ledgers this stage appended and reads those files rather
     # than anything in memory here, so a run that failed to append publishes the
@@ -412,6 +412,13 @@ def stage_assemble(
         manifest=manifest,
         settings=settings,
         taxonomy_vectors=assemble.read_taxonomy_vectors(config.REPO_ROOT, settings.taxonomy),
+        # What the fold above found WAITING, which is the only moment it can be
+        # seen: it drained the directory, so anything reading `state/segments/`
+        # from here on finds it empty. The run date is this run's, never the
+        # clock, for the same reason `today` above is.
+        compaction_lag_days=compacted.lag_days(plan.date),
+        rows_uncompacted=compacted.rows_waiting_before(plan.date),
+        covers_through=compacted.newest_row_date,
     )
     yield_alarm = source_health_publish.yield_alarm(
         instrument.sources,
