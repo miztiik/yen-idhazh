@@ -43,6 +43,7 @@ from idhazh.contracts.item_health import (
     TimeSource,
 )
 from idhazh.contracts.knobs.run import RunConfig
+from idhazh.contracts.run_manifest import RunRecord, RunStatus
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.seen import PublishedRow
 from idhazh.contracts.sources import FeedDef, SalienceFeedDef, Sources
@@ -1782,6 +1783,47 @@ def test_the_worst_case_day_still_fits_the_configured_fan_out() -> None:
     assert shards == run.max_parallel
     worst_shard = -(-run.safety_ceiling_per_run // shards)
     assert worst_shard == 20, "a worker's worst shard at the 80-item ceiling across four workers"
+
+
+def test_the_manifest_records_the_count_it_was_handed_and_never_a_derived_one() -> None:
+    """The denominator is carried, not recomputed. That is the whole point of it.
+
+    The router derives the count once, off the plan, and the same arithmetic
+    prints the number the workflow fans out on. A manifest that worked it out
+    again from anything the run produced could not disagree with the run, and the
+    check it feeds would have no red state (`CLAUDE.md` Guardrail #10).
+
+    Null is the other designed state: a manifest written before the cell existed
+    says nothing rather than claiming a run of one shard.
+    """
+    run = run_config(shard_size=5, max_parallel=4)
+    built = built_plan()
+
+    handed = cli.shard_count(len(built.items), run=run)
+    recorded = RunRecord(
+        run_id=f"{built.date}-1",
+        n=1,
+        started_at=f"{built.date}T06:00:00Z",
+        completed_at=f"{built.date}T06:30:00Z",
+        status=RunStatus.COMPLETED,
+        commit_sha="0" * 40,
+        runner="test-cpu",
+        shards=handed,
+        items_planned=len(built.items),
+        items_succeeded=len(built.items),
+        items_failed=0,
+        site_bytes=1,
+        site_files=1,
+    )
+
+    assert recorded.shards == handed
+    assert recorded.model_copy(update={"shards": None}).shards is None
+
+    older = recorded.model_dump(mode="json")
+    del older["shards"]
+    assert RunRecord.model_validate(older).shards is None, (
+        "a manifest written before the cell has to read, not fail the build"
+    )
 
 
 # --- the fixtures themselves -------------------------------------------------

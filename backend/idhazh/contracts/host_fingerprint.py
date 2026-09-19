@@ -6,9 +6,10 @@ every item row beside the readings that do move.
 
 **The row is written in two halves and neither half is ever edited.** The probe
 runs before the job's heaviest step, because the bandwidth reading wants an idle
-machine; the clock and the weight-load cost are only known when the job is over.
-So each half is a row of this shape carrying the cells it has, and the compaction
-is what unites them - one key, no cell filled twice, one row in the day file.
+machine; the clock, the weight-load cost and what the model server itself counted
+are only known when the job is over. So each half is a row of this shape carrying
+the cells it has, and the compaction is what unites them - one key, no cell filled
+twice, one row in the day file.
 
 **Only `job` is an enum, and that is deliberate.** It is the one column this
 project names; every other identifier here is a string the machine chose. A
@@ -60,6 +61,11 @@ class HostFingerprintRow(Contract):
 
     __schema_stem__: ClassVar[str] = "host-fingerprint-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-19",
+            change="Added `server_prompt_tokens`, `server_prompt_seconds`.",
+            why="Arithmetic over the item ledger cannot check the item ledger.",
+        ),
         ChangelogEntry(
             version="2026-09-18",
             change="Added `model_load_ms`, `job_seconds`; `fingerprint`, `measured_at` optional.",
@@ -225,6 +231,25 @@ class HostFingerprintRow(Contract):
             "The job's own wall clock. The truncation cap reverts on the slowest work "
             "job's, and before this cell the only place that number lived was the "
             "GitHub jobs API, which drops a job record when the run ages out."
+        ),
+    )
+    server_prompt_tokens: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Prompt tokens llama-server itself counted reading, cached tokens "
+            "excluded. The second instrument. The item ledger's own answer is "
+            "`sum(input_tokens) - sum(cached_tokens)`; a gap over 5 percent means one "
+            "of the two is wrong, and arithmetic over that ledger could never say so."
+        ),
+    )
+    server_prompt_seconds: float | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Seconds llama-server itself counted reading prompts. Pairs with the cell "
+            "above - a rate is a ratio, and the 80 percent defect this check caught in "
+            "August 2026 was in the numerator, so one cell alone could not see it."
         ),
     )
 

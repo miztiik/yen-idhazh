@@ -368,30 +368,40 @@ def stage_job_clock(
     job: ServerJob = WORK_JOB,
     job_started_at: int | None = None,
     server_log_path: Path | None = None,
+    metrics_path: Path | None = None,
 ) -> HostFingerprintRow | None:
     """What the job cost, recorded onto the host row the probe opened.
 
-    The other end of `stage_fingerprint`. Two cells of that row are only knowable
-    once the job is over - the wall clock it spent, and what opening the weights
-    cost before the first item - and moving the probe to job end to collect them
-    would destroy `mhz_at_probe` and `boot_seconds`, which want an idle machine.
-    So this writes them as a second row of the same key, into the same segment,
-    filling nothing the probe already filled.
+    The other end of `stage_fingerprint`. Four cells of that row are only knowable
+    once the job is over - the wall clock it spent, what opening the weights cost
+    before the first item, and the two prompt counters the model server itself
+    kept - and moving the probe to job end to collect them would destroy
+    `mhz_at_probe` and `boot_seconds`, which want an idle machine. So this writes
+    them as a second row of the same key, into the same segment, filling nothing
+    the probe already filled.
 
     `stages.compact` is what unites the two. Neither row is ever edited: the
-    probe's cells and these two are disjoint, so the fold takes the union and the
+    probe's cells and these four are disjoint, so the fold takes the union and the
     day file holds one row a job.
 
+    The two prompt cells are the second instrument. The item ledger answers the
+    same question by arithmetic over its own rows, which cannot check those rows;
+    the server's own counters can disagree with them, and twice they have.
+
     A job that dies between the probe and this step leaves a usable half-row with
-    two empty cells, which is the degrade path rather than a failure. So is a
-    stamp that never arrived: an empty cell says the reading was not taken, where
-    a zero would claim a job that took no time.
+    four empty cells, which is the degrade path rather than a failure. So is a
+    stamp that never arrived, or a scrape the server was already gone for: an
+    empty cell says the reading was not taken, where a zero would claim a job that
+    took no time and read no tokens.
     """
     knobs = settings.app.observability
     if not knobs.host_fingerprint:
         LOG.info("job clock off job=%s shard=%s run=%s", job, shard, plan.run_id)
         return None
     scraped_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    prompt_tokens, prompt_seconds = runtime_counters.server_prompt_totals(
+        _text_if_readable(metrics_path)
+    )
     row = HostFingerprintRow(
         version=HostFingerprintRow.schema_version(),
         date=plan.date,
@@ -400,6 +410,8 @@ def stage_job_clock(
         shard=shard,
         model_load_ms=runtime_counters.model_load_ms(_text_if_readable(server_log_path)),
         job_seconds=runtime_counters.job_seconds(scraped_at, job_started_at),
+        server_prompt_tokens=prompt_tokens,
+        server_prompt_seconds=prompt_seconds,
     )
     attempt = run_context.run_attempt()
     landed = ledger.extend_segment(
@@ -412,12 +424,15 @@ def stage_job_clock(
         shard=shard,
     )
     LOG.info(
-        "job clock job=%s shard=%s run=%s job_seconds=%s model_load_ms=%s rows=%s segment=%s",
+        "job clock job=%s shard=%s run=%s job_seconds=%s model_load_ms=%s "
+        "server_prompt_tokens=%s server_prompt_seconds=%s rows=%s segment=%s",
         job,
         shard,
         plan.run_id,
         row.job_seconds,
         row.model_load_ms,
+        row.server_prompt_tokens,
+        row.server_prompt_seconds,
         landed,
         ledger.segment_relpath(
             ledger.SegmentLedger.HOST_FINGERPRINT,

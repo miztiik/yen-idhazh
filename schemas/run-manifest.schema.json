@@ -818,6 +818,20 @@
           "description": "The instrument that wrote this run's eval rows, as state/scores.csv spells it. Null when no row was written, which is what separates a run that measured nothing from one whose measurements are simply elsewhere. Null too on a manifest written before this was recorded.",
           "title": "Scorer Version"
         },
+        "shards": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Work shards this run planned, as the plan derived them before the matrix fanned out. It is the denominator for `N shards reported nothing`, and it has to come from the plan: a denominator counted off the same rows as the numerator can never disagree with them, so the check would have no red state at all. Null on a manifest written before it was recorded.",
+          "title": "Shards"
+        },
         "site_bytes": {
           "description": "Bytes under frontend/public/digest/ after this run - the committed payload tree, not the published site and not what the Pages cap is measured against.",
           "minimum": 0,
@@ -956,6 +970,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "A run records `shards`, the shard count the plan derived.",
+      "version": "2026-09-19",
+      "why": "A denominator taken off the numerator's own rows can never disagree."
+    },
+    {
       "change": "A run records the merge line it grouped the day at.",
       "version": "2026-09-18",
       "why": "The line moves now, so a published day has to say which one shaped it."
@@ -969,11 +988,6 @@
       "change": "The embedded ModelRef's inference.max_think_tokens accepts null.",
       "version": "2026-09-17",
       "why": "It follows models-config, which is where the budget is declared."
-    },
-    {
-      "change": "The embedded draft block's spec_type accepts a third value, draft-mtp.",
-      "version": "2026-09-15T12:30",
-      "why": "It follows models-config, which is where the choice is declared."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -997,7 +1011,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-18",
+      "default": "2026-09-19",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1009,5 +1023,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-09-18"
+  "version": "2026-09-19"
 }

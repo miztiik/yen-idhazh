@@ -2159,6 +2159,7 @@ def build_manifest(
     config_digests: Sequence[ConfigDigest],
     site_bytes: int,
     site_files: int,
+    shards: int | None = None,
     inputs: PipelineInputs | None = None,
     determinism_violations: int = 0,
     note: str | None = None,
@@ -2182,6 +2183,11 @@ def build_manifest(
 
     The day is the surface that needs this most, because its items land on disk
     one write before this one does.
+
+    `shards` is handed in rather than counted here, and it is the whole point of
+    the cell: it is what the plan decided, so it can disagree with how many work
+    jobs actually filed a row. Counted off those rows it would only ever equal
+    them.
     """
     run_n = run_n_for(previous, plan.run_id)
     if item_health_rows is not None:
@@ -2211,6 +2217,7 @@ def build_manifest(
         runner=runner,
         source_list_stale=plan.stale,
         models=list(models),
+        shards=shards,
         items_planned=planned,
         items_succeeded=succeeded,
         items_failed=failed,

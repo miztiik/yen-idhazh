@@ -130,7 +130,7 @@ day the run is publishing, and every projection's body stays in its own module
 
 | Producer | Writes | Reads |
 | --- | --- | --- |
-| `console_band.py` | `console/band.json` | the run-day shards it wrote, `state/feed-health/`, one item-health shard, one day-metrics record, the counters file |
+| `console_band.py` | `console/band.json` | the run-day shards it wrote, `state/feed-health/`, one item-health shard, one day-metrics record, `state/host-fingerprint/` over the widest window, and the newest day's `run.json` |
 | `run_days.py` | `run-days/<YYYY-MM>.json` | one month of committed `run.json` and `digest.json` |
 | `day_metrics.py` `publish_public` | `day-metrics/<YYYY-MM>.json` | one month of `state/day-metrics/<YYYY>/<MM>/` |
 | `machine.py` | `machine/<YYYY-MM>.csv` | `state/runtime-counters.csv` |

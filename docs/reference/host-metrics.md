@@ -207,25 +207,37 @@ the probe's half is where they come from.
 
 ## What the job cost
 
-The half written at job end. Both readings come from the workflow - one from a
+The half written at job end. Every reading comes from the workflow - one from a
 step that ran before the checkout existed, one from the log of the server this
-job started - so a run of the stage anywhere else records neither.
+job started, one from that server's own `GET /metrics` body - so a run of the
+stage anywhere else records none of them.
 
 | Column | Type | What it is | What it is for |
 | --- | --- | --- | --- |
 | `model_load_ms` | float? | Milliseconds the server spent opening the weights before the first item | The fixed cost `run.shard_size` exists to amortise. Measured 1.1 to 1.5 percent of a work shard's fixed cost |
 | `job_seconds` | int? | The job's own wall clock, first step to the clock write | **The cell the truncation-cap rollback reads.** Before it, that number lived only in the GitHub jobs API, which drops a job record when the run ages out |
+| `server_prompt_tokens` | int? | Prompt tokens llama-server itself counted reading, cached tokens excluded | **The second instrument.** The item ledger's own answer is `sum(input_tokens) - sum(cached_tokens)`, and arithmetic over that ledger cannot check that ledger |
+| `server_prompt_seconds` | float? | Seconds llama-server itself counted reading prompts | The other half. A rate is a ratio, and the 80 percent defect this check caught in August 2026 was in the numerator, so one cell alone could not see it |
 
 **`job_seconds` is a floor on the job's wall clock and never a ceiling.** The
 steps after it - the ledger push, two log summaries and the artifact uploads -
 are outside the window. Only the `work` job stamps the clock its first step
-reads, so only `work` rows carry these two cells today.
+reads, so only `work` rows carry these cells today.
 
-**The same two cells sit on `state/runtime-counters.csv`, and that is on
-purpose.** The arithmetic behind both lives once, in
+**`server_prompt_tokens` and `server_prompt_seconds` are the only two cells on
+the site that can disagree with the item ledger.** Everything else that answers
+"how fast did this run read?" is arithmetic over `state/item-health/`, and a sum
+over a ledger cannot tell you the ledger is wrong. These two come from a counter
+the model server kept on its own, so the two answers are independent - which is
+what let a 0.746 percent drift on one article be seen at all. The bound is 5
+percent and it is not a `config/` knob: tuning it is how a failing check is made
+to pass.
+
+**The same cells sit on `state/runtime-counters.csv`, and that is on purpose.**
+The arithmetic and the wire-name table behind them live once, in
 [`backend/idhazh/contracts/runtime_counters.py`](../../backend/idhazh/contracts/runtime_counters.py),
-and both writers call it - two subtractions of one pair of instants are two
-things that can disagree.
+and both writers call it - two subtractions of one pair of instants, or two
+readings of one counter, are two things that can disagree.
 
 ## Why almost nothing here is an enum
 

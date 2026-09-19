@@ -88,7 +88,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 10 | `model_load_ms` and `job_seconds` join `host-fingerprint` | 2 | C | IN-FLIGHT | p33c10 | #887 | - |
 | 12 | Delete the merge machinery | 2, 3, 4, 6, 17 | D | IN-FLIGHT | p33d12b | - | - |
 | 13 | Compaction lag and free swap on the console band | 1, 5, 7, 12 | D | IN-FLIGHT | p33d13 | - | - |
-| 11 | Delete `runtime-counters` and everything that reads it | 7, 10, 17 | E | PENDING | - | - | - |
+| 11 | Delete `runtime-counters` and everything that reads it | 7, 10, 17 | E | IN-FLIGHT | p33e11p1 | - | - |
 | 15 | Generated TypeScript contracts replace the hand-written ones | 10, 11 | F | PENDING | - | - | - |
 | 16 | Docs, and the orphan sweep | all | G | PENDING | - | - | - |
 | 18 | Chart-craft doctrine - the thirteen rules, written once | - | H | DONE | p33r18 | #863 | - |
@@ -815,6 +815,8 @@ Collapsing it also retires the changelog overflow and the five-file hand-conflic
 
 - **Scope:** D1 through D10 and D19 through D22 of section 2.11 are gone, `ServerJob` and `WORK_JOB` move to `contracts/base.py`, **the console band's Hardware slice is rebuilt**, and the Hardware page is rebuilt on `item-health` and `host-fingerprint`.
 
+**This row ships in three parts, in this order** (the user, 2026-09-19 - see decisions 7 to 9). **11a**: the manifest gains `shards`, `host-fingerprint` gains the two server columns, and the band's Hardware slice moves. **11b**: the published machine series and the Hardware page are rebuilt. **11c**: `runtime-counters` is deleted. Nothing is deleted before its last reader has moved, so the tree builds and the site works at every step.
+
 **`backend/idhazh/telemetry/publish/console_band.py` is the file this row nearly broke.** It reads `ledger.runtime_counters_path(state_root)` and feeds it to `machine_facts` and `machine_candidates`, which produce the band's three Hardware worst-thing candidates including "N shards of the newest run reported nothing". This row deletes that file, and the first draft named `console_band.py` in no row at all. **The band is the "is it working" screen**, so deleting its Hardware slice silently is the worst version of this plan's own failure mode. Susan found it on 2026-09-17.
 - **Files touched:** every path named in D1-D10 and D19-D22, plus `backend/idhazh/contracts/base.py`, **`backend/idhazh/telemetry/publish/console_band.py`**, `frontend/src/routes/console/machine/+page.server.ts`, `frontend/src/lib/charts/machine-cards.ts`, `frontend/src/lib/charts/fleet.ts`, `frontend/src/lib/charts/machine.ts`, `frontend/src/lib/charts/machine-split.ts`, `frontend/scripts/build-canary.mjs`, `frontend/scripts/tests/build-state.test.mjs`, `backend/tests/workflows/_harness.py`, `backend/idhazh/telemetry/publish/machine.py`, `docs/concepts/growing-reads.md`
 - **Acceptance gates:** local - ruff, mypy, `pytest backend/tests -n auto`, export then drift empty, `npm --prefix frontend run test:changed -- --list` then selected checks, `npx playwright test --project=console`. CI - full suite. Browser smoke per section 12 including the data-absent arm.
@@ -829,6 +831,9 @@ Collapsing it also retires the changelog overflow and the five-file hand-conflic
 | 4 | The `state/runtime-counters.csv` file is removed from the working tree in this commit | 383 rows, 72 KB; git holds it |
 | 5 | `ServerJob` and `WORK_JOB` MOVE to `backend/idhazh/contracts/base.py` in the same commit | Fowler - nine production modules and six test modules import them from the file D2 deletes. `base.py` already owns `JOB_NAME_PATTERN` and is the bottom of the contracts dependency graph, so both `host_fingerprint.py` and `item_health.py` may import it. Putting them in `host_fingerprint.py` instead creates a contracts-to-contracts edge that bites the day a third contract needs them |
 | 6 | Measure the rebuilt Machine page read and record it | Carmack measured 2.6 s for 24 committed days and 12,837 rows (best of 3, this workspace, 2026-09-17), which projects to about 46 s and 228,000 rows over the 426-day cover. That takes `assemble` from about 126 s to about 172 s - 14 percent of its 1200 s bound, which is fine. ESCALATE 0b5 fires above 120 s |
+| 7 | **The row ships in three parts, adding before deleting** | the user, 2026-09-19. One atomic commit came to about 8,000 lines over backend, frontend and a published contract, and a worker stopped rather than report a tree it had not finished. Decision 3's requirement is that no commit leaves the site reading a file nothing writes; ordering the additions first satisfies that requirement rather than bending it |
+| 8 | **This is not the strangler fig decision 3 refused, and the difference is what ships** | the user, 2026-09-19. What was refused was a dual READ path shipped to readers - a fallback somebody has to delete later without remembering why. Here no reader ever holds two sources: each reader moves once, in one commit, and the old file is deleted once the last one has left |
+| 9 | **The run's planned shard count moves to `RunManifest.shards`, and is never re-derived from the machine rows** | the user, 2026-09-19. `RuntimeCountersRow.shards` is the denominator for the band's "N shards reported nothing" and for its `len(kept) > shards` refusal. Counting the rows that reported makes the denominator equal the numerator, so the sentence can never be non-zero and the refusal can never fire - which is the non-check this plan already refused `n_decode_calls` for. `RunManifest` is the per-run record and already carries `items_planned` and its siblings |
 
 - **Rejected alternatives:**
 
@@ -836,7 +841,7 @@ Collapsing it also retires the changelog overflow and the five-file hand-conflic
 | --- | --- | --- | --- | --- |
 | 1 | Move it to a day tree and keep it as its own ledger | 9 of its 23 columns are already on `item-health` and 12 more are derivable from it; a day tree would preserve a duplicate | A ledger nobody needs, kept because moving it was easier than reading its columns | the user, overruling Fowler's earlier E2 ruling on 2026-09-17 after the column-by-column comparison |
 | 2 | Keep the file for the cross-check | **The cross-check is kept WITHOUT the file** - `server_prompt_tokens` and `server_prompt_seconds` move to `host-fingerprint` at the same key (2.7b), so the two-clocks panel keeps working on two independent instruments. The first draft said Row #9 moved the check to item grain; that was **false**, and Andre caught it on 2026-09-17: Row #9's survivor is arithmetic over the very ledger it would be checking | 411 MB of git a year to carry 250 KB of rows, for a check two columns already give | Andre |
-| 3 | Keep a read-side fallback for one release | The user ruled no strangler fig | A second code path that has to be deleted later, by someone who no longer remembers why it exists | the user |
+| 3 | Keep a read-side fallback for one release | The user ruled no strangler fig | A second code path that has to be deleted later, by someone who no longer remembers why it exists | the user. **Still refused. Decision 7's three parts are an ordering of commits, not a fallback** - no reader ever reads two sources |
 
 ## Row #12 - Delete the merge machinery
 

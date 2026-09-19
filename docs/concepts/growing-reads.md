@@ -316,7 +316,7 @@ than about this read ([run-the-pipeline.md](../how-to/run-the-pipeline.md#turnin
 | `public_telemetry.publish` | the `state/item-health/` days of the months the caller names, or every day when it names none | **the month the run appended to**, which is what `stages.assemble.stage_assemble` passes; `months=None` is unbounded on purpose |
 | `day_metrics.publish_public` | one month of `state/day-metrics/<YYYY>/<MM>/` | one month, which is at most 31 records for ever |
 | `run_days.publish` | one month of committed `run.json` and `digest.json` | one month, which is at most 31 days for ever |
-| `console_band.publish` | the newest `months_a_window_can_touch(widest)` run-day shards | `max(console.window_presets)`, committed at 90 |
+| `console_band.publish` | the newest `months_a_window_can_touch(widest)` run-day shards, the `state/host-fingerprint/` day files inside the window, and the newest day's `run.json` | `max(console.window_presets)`, committed at 90, for the first two; one file for the third |
 
 **Two of them list a tree to learn which months exist**, and that residue is
 named rather than hidden: `run_days.months_published` and
