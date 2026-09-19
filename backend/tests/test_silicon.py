@@ -20,6 +20,11 @@ from idhazh.telemetry import silicon
 #: load time is decoded from is a real one rather than a shape somebody typed.
 SERVER_LOG = FIXTURES_DIR / "runtime" / "2026-08-29-3-shard-0.server-head.txt"
 
+#: One committed capture of the same server's `GET /metrics` body. The two
+#: prompt counters on the host row are read from a real scrape for the same
+#: reason: the wire names are llama.cpp's, not ours.
+SERVER_METRICS = FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-0.prom"
+
 
 def a_plan() -> RunPlan:
     """The smallest plan this stage needs: a date and a run id."""
@@ -314,6 +319,65 @@ def test_a_row_survives_the_round_trip_through_the_ledger_shape(tmp_path: Path) 
     assert len(read.fingerprint or "") == 16
 
 
+def test_a_day_file_written_before_the_two_prompt_cells_still_folds(tmp_path: Path) -> None:
+    """The read-side migration, proved on a file that is missing the columns.
+
+    Yesterday's run wrote a head two columns narrower than today's contract, and
+    a build that could not read it would be a contract break rather than a
+    widening. The settlement re-files the head on the next fold and the two cells
+    come back empty - which says the reading was not taken, not that the server
+    read nothing.
+
+    Built here rather than read off `state/`: a committed head is re-filed by the
+    first fold that touches it, so a test that read one would pass today by
+    accident and answer nothing later (`CLAUDE.md` section 13).
+    """
+    narrow = tuple(
+        name
+        for name in HostFingerprintRow.csv_columns()
+        if name not in ("server_prompt_tokens", "server_prompt_seconds")
+    )
+    yesterday = HostFingerprintRow(
+        version="2026-09-18",
+        date="2026-09-16",
+        run_id="2026-09-16-1",
+        shard=0,
+        cpu_model="AMD EPYC 7763 64-Core Processor",
+        job_seconds=5550,
+    )
+    path = ledger.host_fingerprint_path(tmp_path, "2026-09-16")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    cells = yesterday.csv_row()
+    path.write_text(
+        ",".join(narrow) + "\n" + ",".join(cells[name] for name in narrow) + "\n",
+        encoding="utf-8",
+        newline="",
+    )
+    silicon.stage_job_clock(
+        a_plan(),
+        settings=a_probe(),
+        state_root=tmp_path,
+        shard=1,
+        metrics_path=SERVER_METRICS,
+    )
+
+    compact_stage.stage_compact(tmp_path)
+
+    header, *body = path.read_text(encoding="utf-8").splitlines()
+    columns = header.split(",")
+    assert columns == list(HostFingerprintRow.csv_columns())
+    rows = {
+        cells["shard"]: cells
+        for cells in (
+            dict(zip(columns, line.split(","), strict=True)) for line in body
+        )
+    }
+    assert rows["0"]["server_prompt_tokens"] == "", "a reading nobody took is empty, not zero"
+    assert rows["0"]["job_seconds"] == "5550", "the widening may not cost the cells already there"
+    assert rows["1"]["server_prompt_tokens"] == "30538"
+    assert HostFingerprintRow.from_csv_row(rows["0"]).server_prompt_seconds is None
+
+
 def _head_row(state_dir: Path, date: str = "2026-09-16") -> dict[str, str]:
     """The one row of the compacted day file, by column name."""
     path = ledger.host_fingerprint_path(state_dir, date)
@@ -348,6 +412,7 @@ def test_the_probe_and_the_job_clock_fold_into_one_row(tmp_path: Path) -> None:
         job=ServerJob.WORK,
         job_started_at=int(time.time()) - 5550,
         server_log_path=SERVER_LOG,
+        metrics_path=SERVER_METRICS,
     )
 
     assert probe is not None and clock is not None
@@ -367,6 +432,8 @@ def test_the_probe_and_the_job_clock_fold_into_one_row(tmp_path: Path) -> None:
     assert row["measured_at"] == probe.measured_at
     assert row["job_seconds"] == "5550"
     assert float(row["model_load_ms"]) == clock.model_load_ms
+    assert row["server_prompt_tokens"] == "30538"
+    assert row["server_prompt_seconds"] == "2795.15"
     assert HostFingerprintRow.from_csv_row(row).shard == 2
 
 
@@ -403,6 +470,8 @@ def test_a_clock_with_no_stamp_and_no_log_reports_absence_rather_than_zero(
     assert clock is not None
     assert clock.job_seconds is None
     assert clock.model_load_ms is None
+    assert clock.server_prompt_tokens is None
+    assert clock.server_prompt_seconds is None
     assert clock.csv_row()["job_seconds"] == ""
     assert clock.fingerprint is None, "the clock half measured no machine and may not claim one"
 
@@ -466,3 +535,53 @@ def test_both_writers_of_the_two_job_cells_reach_the_same_arithmetic() -> None:
     assert runtime_counters.model_load_ms(text) == counters.model_load_ms
     assert runtime_counters.job_seconds("2026-09-16T04:11:02Z", 1789531312) == counters.job_seconds
     assert counters.model_load_ms is not None and counters.model_load_ms > 0
+
+
+def test_the_two_prompt_counters_are_read_off_one_table_and_never_a_second_copy() -> None:
+    """The host row's second instrument, held against the row that has held it since August.
+
+    Both readings come off `SERIES`, so a llama.cpp rename is one edit and shows
+    up as two empty cells rather than as two numbers that disagree with the row
+    beside them. Driven over a real scrape: the wire names are llama.cpp's.
+    """
+    text = SERVER_METRICS.read_text(encoding="utf-8")
+    counters = RuntimeCountersRow.from_metrics_text(
+        text,
+        date="2026-09-16",
+        run_id="2026-09-16-1",
+        shard=0,
+        shards=1,
+        scraped_at="2026-09-16T04:11:02Z",
+    )
+
+    tokens, seconds = runtime_counters.server_prompt_totals(text)
+
+    assert (tokens, seconds) == (30538, 2795.15)
+    assert tokens == counters.prompt_tokens_total
+    assert seconds == counters.prompt_seconds_total
+
+
+def test_a_scrape_the_server_was_already_gone_for_reports_absence_rather_than_zero() -> None:
+    """Empty is not zero. A job whose server died read some tokens; nobody knows how many.
+
+    A zero here would be averaged into a rate by the next reader, and a rate over
+    a denominator nobody measured is the defect this instrument exists to catch.
+    """
+    assert runtime_counters.server_prompt_totals(None) == (None, None)
+    assert runtime_counters.server_prompt_totals("") == (None, None)
+    assert runtime_counters.server_prompt_totals("# HELP nothing\n") == (None, None)
+
+
+def test_a_renamed_series_leaves_the_cells_empty_and_a_broken_one_is_loud() -> None:
+    """Two failures, two answers, and the difference is whether we can see it.
+
+    A series llama.cpp renamed is simply absent, which reads as unknown. A series
+    that is there and unreadable is a format change, and a count that arrives
+    fractional is not truncated into a number a later reader would average.
+    """
+    renamed = "llamacpp:prompt_tokens_read_total 5\nllamacpp:prompt_seconds_total 2.5\n"
+
+    assert runtime_counters.server_prompt_totals(renamed) == (None, 2.5)
+
+    with pytest.raises(ValueError, match="prompt_tokens_total"):
+        runtime_counters.server_prompt_totals("llamacpp:prompt_tokens_total 5.5\n")

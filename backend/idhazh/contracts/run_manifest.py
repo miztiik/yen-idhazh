@@ -126,6 +126,18 @@ class RunRecord(Model):
     )
     models: list[ModelUse] = Field(default_factory=list)
 
+    shards: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Work shards this run planned, as the plan derived them before the matrix "
+            "fanned out. It is the denominator for `N shards reported nothing`, and it "
+            "has to come from the plan: a denominator counted off the same rows as the "
+            "numerator can never disagree with them, so the check would have no red "
+            "state at all. Null on a manifest written before it was recorded."
+        ),
+    )
+
     items_planned: int = Field(ge=0)
     items_succeeded: int = Field(ge=0)
     items_failed: int = Field(ge=0)
@@ -300,6 +312,11 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-19",
+            change="A run records `shards`, the shard count the plan derived.",
+            why="A denominator taken off the numerator's own rows can never disagree.",
+        ),
+        ChangelogEntry(
             version="2026-09-18",
             change="A run records the merge line it grouped the day at.",
             why="The line moves now, so a published day has to say which one shaped it.",
@@ -313,11 +330,6 @@ class RunManifest(Contract):
             version="2026-09-17",
             change="The embedded ModelRef's inference.max_think_tokens accepts null.",
             why="It follows models-config, which is where the budget is declared.",
-        ),
-        ChangelogEntry(
-            version="2026-09-15T12:30",
-            change="The embedded draft block's spec_type accepts a third value, draft-mtp.",
-            why="It follows models-config, which is where the choice is declared.",
         ),
         ChangelogEntry(
             version="2026-08-21",
