@@ -23,7 +23,11 @@ from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.observability import LoggingConfig, LogLevel, ObservabilityConfig
-from idhazh.contracts.knobs.placement import SameStoryConfig, SimilarityThresholdConfig
+from idhazh.contracts.knobs.placement import (
+    HOLDOUT_TWO_STORY_MAX,
+    SameStoryConfig,
+    SimilarityThresholdConfig,
+)
 from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB, RetentionConfig
 from idhazh.contracts.knobs.ui import UiConfig, VisualSide
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
@@ -1117,18 +1121,39 @@ def test_a_band_that_opens_above_todays_floor_is_refused() -> None:
     assert committed.adaptive_dedup_threshold.band_low < committed.floor_min
 
 
-def test_a_daily_step_larger_than_the_measured_margin_is_refused() -> None:
-    """One step may not carry the line past the closest pair a person marked apart.
+def test_a_daily_step_that_outruns_the_band_is_refused() -> None:
+    """A step wider than the band can put the line where the record holds no slot.
 
-    The margin is 0.0083 - a floor of 0.94 against a marked pair at 0.9317,
-    measured 2026-09-01. The owner proposed 0.010, which is larger than that, so
-    its first step would have crossed.
+    This replaced the margin check on 2026-09-19. That one refused a step at or
+    above the gap between the line and the nearest pair marked as two stories;
+    the 200 labels marked that day put the nearest such pair at 0.9407, above
+    the 0.94 line, so there is no gap left for a step to eat.
     """
-    for crossing in (0.0083, 0.010):
-        with pytest.raises(ValidationError):
-            SimilarityThresholdConfig(max_down_step=crossing)
+    band = SimilarityThresholdConfig()
+    span = band.band_high - band.band_low
+    with pytest.raises(ValidationError, match="outside the record"):
+        SimilarityThresholdConfig(max_down_step=span)
 
     assert SimilarityThresholdConfig(max_down_step=0.005).max_down_step == 0.005
+
+
+def test_a_band_that_cannot_draw_the_hardest_labelled_pair_is_refused() -> None:
+    """The pair a wrong line publishes first has to be inside the band the fit judges.
+
+    A band opening above the highest two-story mark draws only pairs nobody has
+    marked apart, so the record fills with easy agreements and the line is never
+    tested against the case that would prove it wrong. This bites where the
+    floor_min check does not: a floor raised above that mark lets a band clear
+    the first ceiling and miss the second.
+    """
+    with pytest.raises(ValidationError, match="the line most has to get right"):
+        SameStoryConfig(
+            floor_min=0.98,
+            adaptive_dedup_threshold=SimilarityThresholdConfig(band_low=0.95),
+        )
+
+    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).assemble.same_story
+    assert committed.adaptive_dedup_threshold.band_low < HOLDOUT_TWO_STORY_MAX
 
 
 def test_a_pair_budget_that_cannot_finish_inside_a_leg_is_refused() -> None:
