@@ -2,8 +2,7 @@
 
 **Last Updated**: 2026-09-19
 
-**Three defects are open.** Defect 24 needs corrections to citation wording.
-The other two need evidence or a ruling. Defect 2
+**Two defects are open.** Both need evidence or a ruling. Defect 2
 needed three repairs before a person could label anything, and all three
 shipped. The owner settled the counting rule on 2026-08-27, which took the
 draw from 32 of 60 to 60 of 60. What is left is **60 human labels** and eight
@@ -39,18 +38,6 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 20 | The `publishing` group dirties a file the build fingerprint hashes, so it can never certify its own build | 2 | CLOSED 2026-09-13 (PR #660) |
 | 21 | A test walked every published telemetry shard, and it was the only thing reading them back | 2 | CLOSED 2026-09-13 |
 | 22 | The same story publishes several times in one day, and each copy says only one source carried it | 3 | CLOSED 2026-09-14 |
-| 24 | Current instructions still contain plural and wrapped old citations | 0 | **OPEN - audit A2; separate follow-up** |
-
-## 24 - Current instructions still contain old citations (OPEN)
-
-Audit A2 remains open. Plural and line-wrapped citations survived the vocabulary
-sweep. Examples remain in `.github/agents/andre.agent.md`,
-`.github/agents/carmack.agent.md`, `docs/how-to/troubleshoot-one-url.md` and
-`docs/reference/github-actions.md`. Follow-up: correct current instructional
-citations without sweeping historical changelog text or recorded report values.
-Those are separate from instructions, as
-[the schema owner](../docs/architecture/contracts/schemas.md#every-contract-carries-version-and-changelog)
-and [qualification](../docs/concepts/qualification.md) describe.
 
 ## 22 - The same story publishes several times in one day (CLOSED 2026-09-14)
 
