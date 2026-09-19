@@ -24,13 +24,17 @@ under `backend/var/canary/`, reachable only because the build reads
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
+import math
 import re
 import shutil
+from array import array
 from collections.abc import Sequence
 from datetime import date as calendar_date
 from datetime import timedelta
+from itertools import combinations
 from pathlib import Path
 from typing import Final, NamedTuple
 
@@ -38,6 +42,7 @@ from idhazh import config
 from idhazh.assemble import (
     build_embeddings,
     collapse_same_story,
+    cosine_int8,
     day_dir,
     month_of,
     read_taxonomy_vectors,
@@ -64,6 +69,7 @@ from idhazh.contracts.knobs.models import ModelRef
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest, RunRecord, RunStatus
+from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import SourceKind, SourceTier
@@ -77,7 +83,7 @@ from idhazh.contracts.visual_data import (
 from idhazh.contracts.visual_decision import VisualDecision, VisualKind, VisualState
 from idhazh.embed import Embedder
 from idhazh.evals import metrics, score, writer
-from idhazh.ledger import append_health
+from idhazh.ledger import append_health, similarity_holdout_path
 from idhazh.render import asset_relpath, render_planned_visual
 from idhazh.render.write import write_bytes_atomic
 from idhazh.telemetry.publish import (
@@ -994,6 +1000,111 @@ def health(state: Path) -> int:
     return len(rows)
 
 
+def holdout(state: Path, day: DigestDay) -> int:
+    """The hand-marked holdout pairs, as a fixture that is a violation by build.
+
+    The console's holdout panel has four states and the one worth defending is
+    the worst: a line that has fallen below a pair somebody read as two
+    different stories. It cannot be reached from the committed archive on demand
+    - it depends on what the newest fit did - so the fixture reaches it instead,
+    by taking the day's own highest-scoring pair and marking it apart. That pair
+    scores above the committed floor by construction, whatever this day holds.
+
+    Fixture, not measurement. Nobody read these articles and the marks are
+    false; what is true about them is the shape, which is what the panel draws.
+
+    Four rows, for the four things the panel has to do: draw a dot above the
+    line, draw the marks below it, count a mark that sets no floor, and count a
+    mark whose day is not in the tree.
+    """
+    vectors = {
+        item_id: array("b", base64.b64decode(raw))
+        for item_id, raw in (day.embeddings.vectors if day.embeddings else {}).items()
+    }
+    by_id = {item.item_id: item for item in day.items}
+    scored: list[tuple[float, DigestItem, DigestItem]] = []
+    for left, right in combinations(sorted(vectors), 2):
+        one, other = by_id.get(left), by_id.get(right)
+        # Every canary item carries one masthead, so there is no cross-source
+        # rule to apply here. Two distinct addresses is the whole of what the
+        # contract asks of a pair.
+        if one is None or other is None or one.source_url == other.source_url:
+            continue
+        scored.append(
+            (
+                cosine_int8(
+                    vectors[left],
+                    vectors[right],
+                    left_norm=_vector_norm(vectors[left]),
+                    right_norm=_vector_norm(vectors[right]),
+                ),
+                one,
+                other,
+            )
+        )
+    scored.sort(key=lambda entry: entry[0], reverse=True)
+    if not scored:
+        return 0
+
+    def pair(one: DigestItem, other: DigestItem, *, same: bool, why: str) -> SimilarityHoldoutPair:
+        return SimilarityHoldoutPair(
+            version=SimilarityHoldoutPair.schema_version(),
+            left_url=one.source_url,
+            right_url=other.source_url,
+            left_date=DATE,
+            right_date=DATE,
+            left_title=one.title,
+            right_title=other.title,
+            same_story=same,
+            marked_on=DATE,
+            note=why,
+        )
+
+    rows = [pair(scored[0][1], scored[0][2], same=False, why="fixture: the closest call")]
+    if len(scored) > 1:
+        weakest = scored[-1]
+        rows.append(pair(weakest[1], weakest[2], same=False, why="fixture: clear of the line"))
+    if len(scored) > 2:
+        rows.append(pair(scored[1][1], scored[1][2], same=True, why="fixture: one story"))
+    # A mark whose day the tree cannot answer for. The panel counts the skip and
+    # its reason rather than drawing a dot that would say the margin is fine.
+    rows.append(
+        SimilarityHoldoutPair(
+            version=SimilarityHoldoutPair.schema_version(),
+            left_url=scored[0][1].source_url,
+            right_url=scored[0][2].source_url,
+            left_date="2020-01-01",
+            right_date="2020-01-01",
+            left_title=scored[0][1].title,
+            right_title=scored[0][2].title,
+            same_story=False,
+            marked_on=DATE,
+            note="fixture: a day the tree does not hold",
+        )
+    )
+
+    path = similarity_holdout_path(state)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    columns = SimilarityHoldoutPair.csv_columns()
+    lines = [",".join(columns)]
+    for row in rows:
+        cells = row.csv_row()
+        lines.append(",".join(_csv_cell(cells[name]) for name in columns))
+    write_atomic(path, "\n".join(lines) + "\n")
+    return len(rows)
+
+
+def _vector_norm(vector: array[int]) -> float:
+    return math.sqrt(sum(value * value for value in vector)) or 1.0
+
+
+def _csv_cell(value: str) -> str:
+    """One cell, quoted where a headline carries a comma or a quotation mark."""
+    if any(mark in value for mark in ',"\n'):
+        return '"' + value.replace('"', '""') + '"'
+    return value
+
+
 def _fixture_digest(*parts: str) -> str:
     """A stable stand-in for a field a real run fills with a real digest."""
     return hashlib.sha256("|".join(("canary", *parts)).encode("utf-8")).hexdigest()
@@ -1346,6 +1457,7 @@ def main() -> int:
     day = build(args.out, evaluation, visuals)
     runs = manifest(args.out, len(day.items))
     checks = health(args.state)
+    marks = holdout(args.state, day)
     census = write_source_health(args.out.parent)
     scored = append_scores(args.state, day.items, evaluation)
     # The day record the console now reads its per-day counts back from, written
@@ -1386,6 +1498,7 @@ def main() -> int:
     print(f"wrote {(day_dir(args.out, DATE) / 'run.json').as_posix()}: {len(runs.runs)} runs")
     print(f"wrote {len(quiet)} quiet days, {quiet[0]} to {quiet[-1]}")
     print(f"wrote {args.state.as_posix()}/feed-health: {checks} feed results")
+    print(f"wrote {similarity_holdout_path(args.state).as_posix()}: {marks} hand-marked pairs")
     print(
         f"wrote {(args.out.parent / source_health.PUBLIC_FILENAME).as_posix()}: "
         f"{census} sources"
