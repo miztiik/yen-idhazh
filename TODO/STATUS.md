@@ -19,7 +19,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 
 | Plan | Rows | Landed | Live | Ready |
 | --- | --- | --- | --- | --- |
-| [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 10 | 7 | 3 | 3 |
+| [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 9 | 7 | 2 | 2 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
 | [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 7 | 3 | 4 | 1 |
 | [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 2 | 1 | 1 |
@@ -53,7 +53,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | #13 | 33 | D | Compaction lag and free swap on the console band | p33d13 |
 | #29 | 33 | J | `prune.yml` wakes outside the digest window | p33j29 |
 
-## Ready now - 29
+## Ready now - 28
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -63,7 +63,6 @@ section 3 is where it is answered.
 | --- | --- | --- | --- | --- |
 | #2 | 20260823-known-defects-plan | - | The faithfulness thresholds have no labelled error rate | - |
 | #18 | 20260823-known-defects-plan | - | The truncation flag still cannot fire, now for a different reason | - |
-| #24 | 20260823-known-defects-plan | - | Current instructions still contain plural and wrapped old citations | - |
 | #5 | 20260827-summarizer-fine-tuning-plan | A | Reference set | 3 |
 | #3 | 12 | C | Numbers a reader can say out loud | 1b |
 | #3 | 13 | C | The fuse comes out, and one run is watched | 2, plan 12 row #1b |
