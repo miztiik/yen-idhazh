@@ -46,7 +46,7 @@ on:
         description: 'How many real links to measure for the length distribution'
         default: '200'
       runtime_candidate:
-        description: 'llama-server runtime candidate'
+        description: 'llama-server runtime candidate, or a case set like draft_depth'
         type: choice
         default: baseline
         options:
@@ -62,9 +62,19 @@ on:
           - threads_batch
           - np2_inflight
           - no_draft
+          - draft_depth
       runtime_repeats:
         description: 'Repeats per case. A named candidate runs two cases, so 3 does not fit the job timeout - use 2'
         default: '3'
+      # The corpus is what the job timeout is actually spent in, and a case set
+      # multiplies it: `draft_depth` runs FOUR cases, so two repeats is eight
+      # passes rather than the four a named candidate costs. At the 13.1 minutes
+      # an article the slowest pass has recorded, eight passes over the
+      # committed three articles is 314 minutes against a 330 minute timeout,
+      # and two articles is 210. Empty follows `bench.corpus_items`.
+      runtime_corpus_items:
+        description: 'Articles per repeat, overruling bench.corpus_items for this run. Use 2 for draft_depth'
+        default: ''
       runtime_threads:
         description: 'Value for --threads when runtime_candidate is threads'
         default: '8'
@@ -646,13 +656,16 @@ jobs:
       # loads the committed config - which names no trial directory, so a bench
       # marked real URLs seen and the next production day skipped those stories.
       - name: Build the fixed bench corpus
+        env:
+          RUNTIME_CORPUS_ITEMS: ${{ inputs.runtime_corpus_items }}
         run: |
           set -euo pipefail
           DATE=$(date -u +%F)
           export RUNTIME_DATE="$DATE"
           echo "RUNTIME_DATE=$DATE" >> "$GITHUB_ENV"
           CORPUS_ITEMS=$(python3 backend/utilities/runtime_sweep.py corpus-items \
-            --config backend/var/candidate-config)
+            --config backend/var/candidate-config \
+            --dispatch "$RUNTIME_CORPUS_ITEMS")
           echo "CORPUS_ITEMS=$CORPUS_ITEMS" >> "$GITHUB_ENV"
           python -m idhazh plan \
             --config backend/var/candidate-config \

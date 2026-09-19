@@ -422,7 +422,7 @@ Each Measurements dispatch selects exactly one target:
 
 | Target | Jobs it runs | What they measure | Inputs that target reads |
 | --- | --- | --- | --- |
-| `bench` | `llama-bench`, then `runtime` | `llama-bench` times how fast the weights read a prompt and write an answer; `runtime` then runs a real llama-server over `bench.corpus_items` articles and emits the dossier body from both halves | `candidate_models_file`; `threads` and `model_speed_case` for the first; `runtime_candidate`, `runtime_repeats`, `runtime_threads`, `runtime_threads_batch` for the second |
+| `bench` | `llama-bench`, then `runtime` | `llama-bench` times how fast the weights read a prompt and write an answer; `runtime` then runs a real llama-server over `bench.corpus_items` articles and emits the dossier body from both halves | `candidate_models_file`; `threads` and `model_speed_case` for the first; `runtime_candidate`, `runtime_repeats`, `runtime_threads`, `runtime_threads_batch`, `runtime_corpus_items` for the second |
 | `image` | `image` | CPU image-model candidates | none |
 | `corpus` | `corpus` | Live article-length sampling | `corpus_links` |
 | `batched` | `batched` | `llama-batched-bench` aggregate decode at parallel levels 1, 2 and 4, three repeats on one host | none; the bench parameters are pinned in the workflow and the context and threading knobs come from `config/idhazh.json` |

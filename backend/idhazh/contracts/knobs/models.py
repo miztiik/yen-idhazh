@@ -43,14 +43,23 @@ class SpeculationType(StrEnum):
 class DraftConfig(Model):
     """A second, much smaller set of weights that guesses ahead of the first.
 
-    **Speculative decoding is output-identical by construction.** The target
-    model verifies every drafted token and rejects any it would not have
-    produced, so the text is the text the target would have written alone. That
-    is why this block is priced on cost and on how hard it is to revert rather
-    than waiting on a quality measurement: there is no quality to measure
-    (Guardrail #10).
+    **Speculative decoding is output-identical by construction, and this
+    configuration is not doing that.** The target is supposed to verify every
+    drafted token and reject any it would not have produced, so the text is the
+    text the target would have written alone. The publisher of these weights
+    makes exactly that claim for this head and this flag. Two paired dispatches
+    refused it on nine of nine articles: every summary changed when the head was
+    on. Whether the cause is the head, the acceptance rule or the pinned
+    llama.cpp build is unmeasured -
+    `docs/reference/benchmarks/what-the-draft-head-is-worth.md` holds the
+    readings and what is still open.
 
-    What it can do is waste time. A draft the target keeps rejecting costs a
+    **So this block is not a decoding knob priced on cost alone.** Until a
+    configuration is shown to be output-identical, turning the head on or off is
+    a model change and the configuration that was qualified is the one that has
+    to publish.
+
+    What it can also do is waste time. A draft the target keeps rejecting costs a
     forward pass per rejected token and returns nothing, so the acceptance rate
     is the number that says whether it paid. `llama-server` publishes it:
     `llamacpp:spec_decode_num_accepted_tokens_total` over

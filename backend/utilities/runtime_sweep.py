@@ -21,10 +21,14 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from pydantic import ValidationError
+
 from idhazh import config
+from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.llm.server import server_argv
+from idhazh.stages.common import CAPTURES_DIRNAME
 from idhazh.telemetry import silicon
 from utilities import sweep_verdict
 
@@ -34,6 +38,11 @@ CANDIDATE_CONFIG = Path("backend/var/candidate-config")
 RUN_ROOT = Path("backend/var/run")
 SERVER_BINARY = Path("backend/bin/llama-server")
 WEIGHTS_DIR = Path("backend/models")
+
+#: Where a repeat's prompts and replies are kept. Under `ROOT` because `ROOT` is
+#: the one directory the workflow uploads, and the name is imported rather than
+#: spelled again so this looks where the stage actually writes (Guardrail #6).
+CAPTURES_ROOT = ROOT / CAPTURES_DIRNAME
 
 #: What each named candidate changes about the server it starts. Every value is
 #: an `inference` knob except `draft`, which is a sibling of `inference` and is
@@ -57,6 +66,70 @@ CANDIDATE_UPDATES: dict[str, tuple[dict[str, Any], int]] = {
 #: Two knobs whose value an operator types, so each is bounded where it is read.
 SIZED_BY_DISPATCH = ("threads", "threads_batch")
 
+
+class CaseSet(NamedTuple):
+    """Several configurations measured against one of their own, inside one job.
+
+    A named candidate above answers "what does this setting cost", so it runs
+    the unchanged server and one variant. A case set answers "does this setting
+    change the words", which needs every value of the setting worth trying and
+    a reference that has it off - and no baseline case, because the unchanged
+    server is already one of the values.
+    """
+
+    cases: tuple[tuple[str, dict[str, Any]], ...]
+    reference: str
+    shared: dict[str, Any]
+    between_cases: str
+
+
+#: The case that answers whether the head changes the words, and whether `n_max`
+#: is what controls it. The publisher of these exact weights says it cannot:
+#: "The drafter shares the target's KV cache and does not change the output (the
+#: target verifies every drafted token)." Two paired dispatches refused that on
+#: nine of nine articles. The one difference on record between their setup and
+#: ours is the drafted depth - their command passes 4 and the entry pins 2 - and
+#: nobody had run it.
+DRAFT_DEPTH = "draft_depth"
+
+#: The reference the other three are read against. Not the baseline: the
+#: question is what the head does to the text, so the case with no head is the
+#: only honest zero.
+HEAD_OFF = "head_off"
+
+CASE_SETS: dict[str, CaseSet] = {
+    DRAFT_DEPTH: CaseSet(
+        cases=(
+            (HEAD_OFF, {"draft": None}),
+            ("n_max_1", {"draft": {"n_max": 1}}),
+            ("n_max_2", {"draft": {"n_max": 2}}),
+            ("n_max_4", {"draft": {"n_max": 4}}),
+        ),
+        reference=HEAD_OFF,
+        # **Temperature 0, pinned once and unoverridable.** Every committed entry
+        # runs at 0.2, where the seed decides which token is drawn and the
+        # sampler alone reworded six of seven articles between two readings of
+        # ONE configuration on 2026-09-17. At 0.2 the head's effect and the
+        # sampler's noise arrive as a single number nobody can split. At 0 a
+        # changed summary can only be the head. It is declared here rather than
+        # repeated into each case because three cases pinned and one forgotten
+        # is a run that looks valid and measures nothing.
+        shared={"temperature": 0.0},
+        # The whole question is whether the cases disagree, so a disagreement is
+        # the reading rather than a defect. Two repeats of ONE case that
+        # disagree is still the model being unstable, and still fatal.
+        between_cases=sweep_verdict.BETWEEN_CASES_IS_THE_READING,
+    ),
+}
+
+
+class CasePlan(NamedTuple):
+    """The cases one dispatch runs, and which of them the rest are read against."""
+
+    cases: tuple[tuple[str, dict[str, Any], int], ...]
+    reference: str
+    between_cases: str
+
 #: The port every workflow that stands a llama-server up declares once at
 #: workflow level. Read back rather than passed as an argument, because an
 #: argument named `--port` is a second spelling of a llama-server flag and the
@@ -64,16 +137,45 @@ SIZED_BY_DISPATCH = ("threads", "threads_batch")
 PORT_ENV = "LLAMA_PORT"
 
 
-def corpus_items(config_root: Path | None) -> int:
+def corpus_items(config_root: Path | None, *, dispatch: str = "") -> int:
     """How many articles one repeat reads, from `bench.corpus_items`.
 
     One number, read from config by everything that needs it. Until 2026-09-17 it
     was two source literals - a `--cap` in the workflow and a constant here - and
     when they disagreed `freeze_corpus` killed the dispatch after the plan step
     (Guardrail #6). `None` is the committed tree, which is what a fresh clone has.
+
+    **`dispatch` overrules the knob for one run, and does it by WRITING the
+    value into the scratch config** rather than by printing a number the config
+    does not carry. `freeze-corpus`, `work` and `collect` each read the config
+    for themselves, so a printed-only override would be exactly the second
+    spelling that killed that dispatch. It is bounded by the contract: the value
+    is re-read through `config.load`, so anything outside 1..20 fails here
+    rather than eight hours later.
     """
     settings = config.load(config_root) if config_root is not None else config.load()
-    return settings.app.bench.corpus_items
+    if not dispatch:
+        return settings.app.bench.corpus_items
+    if config_root is None:
+        raise SystemExit("--dispatch needs --config: there is no scratch config to write")
+    try:
+        wanted = int(dispatch)
+    except ValueError:
+        raise SystemExit(f"runtime_corpus_items must be a whole number, not {dispatch!r}") from None
+    path = config_root / "idhazh.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["bench"]["corpus_items"] = wanted
+    text = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+    # Refused by the contract BEFORE anything is written, so a value outside the
+    # declared range leaves the scratch config as it was rather than corrupting
+    # it and dying at the freeze step with the plan already paid for. The bound
+    # is the contract's own and is not spelled again here (Guardrail #6).
+    try:
+        AppConfig.from_json(text)
+    except ValidationError as error:
+        raise SystemExit(f"runtime_corpus_items {wanted} is refused: {error}") from error
+    path.write_text(text, encoding="utf-8")
+    return wanted
 
 
 def candidate_update(name: str, *, threads: int, threads_batch: int) -> tuple[dict[str, Any], int]:
@@ -86,6 +188,35 @@ def candidate_update(name: str, *, threads: int, threads_batch: int) -> tuple[di
         raise SystemExit(f"unknown runtime candidate: {name}")
     update, workers = CANDIDATE_UPDATES[name]
     return dict(update), workers
+
+
+def case_plan(name: str, *, threads: int, threads_batch: int) -> CasePlan:
+    """What this dispatch runs: a whole case set, or the baseline and one candidate.
+
+    One worker a case in a set. `np2_inflight` is the only candidate that needs
+    two and it is not a member of one, so a set that asked for a worker count
+    would be carrying a knob nothing turns.
+    """
+    if name in CASE_SETS:
+        chosen = CASE_SETS[name]
+        return CasePlan(
+            # The shared pin is applied LAST, so a case cannot quietly drop the
+            # control the whole set depends on.
+            cases=tuple(
+                (label, {**update, **chosen.shared}, 1) for label, update in chosen.cases
+            ),
+            reference=chosen.reference,
+            between_cases=chosen.between_cases,
+        )
+    update, workers = candidate_update(name, threads=threads, threads_batch=threads_batch)
+    cases: list[tuple[str, dict[str, Any], int]] = [(sweep_verdict.BASELINE, {}, 1)]
+    if name != sweep_verdict.BASELINE:
+        cases.append((name, update, workers))
+    return CasePlan(
+        cases=tuple(cases),
+        reference=sweep_verdict.BASELINE,
+        between_cases=sweep_verdict.BETWEEN_CASES_REJECTS,
+    )
 
 
 def write_config(label: str, update: dict[str, Any]) -> Path:
@@ -105,7 +236,17 @@ def write_config(label: str, update: dict[str, Any]) -> Path:
     # Written through `update` rather than indexed, because an entry declaring
     # no draft head has no such key and this is the one line allowed to make one.
     if "draft" in inference:
-        payload["summarize"].update({"draft": inference.pop("draft")})
+        draft = inference.pop("draft")
+        if draft is None:
+            payload["summarize"]["draft"] = None
+        else:
+            # A mapping PATCHES the declared head rather than replacing it, so a
+            # case can move one field and leave the repository, the revision and
+            # the two digests that identify the weights where they are. A
+            # wholesale replacement would drop them and the entry would not
+            # validate - which is the correct failure, but a case set exists to
+            # move `n_max` and nothing else.
+            payload["summarize"]["draft"] = {**(payload["summarize"].get("draft") or {}), **draft}
     payload["summarize"]["inference"].update(inference)
     path.write_text(ModelsConfig.model_validate(payload).to_json(), encoding="utf-8")
     return dst
@@ -237,6 +378,34 @@ def collect(date: str, label: str, repeat: int, *, items: int) -> Collected:
     return Collected(sources, digests, per_item)
 
 
+def keep_the_captures(date: str, label: str, repeat: int) -> str | None:
+    """Move this repeat's prompts and replies where the artifact will carry them.
+
+    `idhazh work` already writes one capture per call per item, under
+    `capture_prompts` and `capture_replies`. It names each file for the item and
+    the call and nothing else, so the second repeat overwrites the first and the
+    next case overwrites that - and only `ROOT` is uploaded, so until this ran
+    every prompt and every reply died with the runner. Four dispatches proved
+    two configurations wrote different summaries and left nobody able to read
+    how they differed.
+
+    Moved rather than copied. That keeps this repeat's text AND leaves the
+    directory empty, so a repeat that writes nothing cannot inherit the previous
+    one's files and report them as its own.
+    """
+    written = RUN_ROOT / date / CAPTURES_DIRNAME
+    if not written.exists():
+        return None
+    kept = CAPTURES_ROOT / f"{label}-{repeat}"
+    if kept.exists():
+        shutil.rmtree(kept)
+    kept.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(written), str(kept))
+    # POSIX and relative: it is about to leave the process inside a JSON
+    # artifact (CLAUDE.md section 2).
+    return kept.as_posix()
+
+
 def run_once(
     label: str,
     update: dict[str, Any],
@@ -254,8 +423,11 @@ def run_once(
     settings = config.load(cfg)
     log_path = ROOT / f"{label}-{repeat}.llama-server.log"
     items_dir = RUN_ROOT / date / "items"
-    if items_dir.exists():
-        shutil.rmtree(items_dir)
+    # Both, and for the same reason: a repeat starts from an empty run directory
+    # or it can report the previous one's files as its own.
+    for stale in (items_dir, RUN_ROOT / date / CAPTURES_DIRNAME):
+        if stale.exists():
+            shutil.rmtree(stale)
     items_dir.mkdir(parents=True, exist_ok=True)
     argv = server_argv(
         binary=SERVER_BINARY,
@@ -336,6 +508,7 @@ def run_once(
         "sources": found.sources,
         "digests": found.digests,
         "per_item": found.per_item,
+        "captures": keep_the_captures(date, label, repeat),
     }
 
 
@@ -390,16 +563,12 @@ def sweep(args: argparse.Namespace) -> int:
     threads_batch = _bounded("threads_batch", args.threads_batch)
 
     ROOT.mkdir(parents=True, exist_ok=True)
-    update, workers = candidate_update(candidate, threads=threads, threads_batch=threads_batch)
-    labels = [sweep_verdict.BASELINE]
-    if candidate != sweep_verdict.BASELINE:
-        labels.append(candidate)
-    updates = {sweep_verdict.BASELINE: ({}, 1), candidate: (update, workers)}
+    plan = case_plan(candidate, threads=threads, threads_batch=threads_batch)
+    labels = [label for label, _, _ in plan.cases]
 
     results = []
     for repeat in range(1, args.repeats + 1):
-        for label in labels:
-            current, worker_count = updates[label]
+        for label, current, worker_count in plan.cases:
             result = run_once(
                 label,
                 current,
@@ -417,10 +586,20 @@ def sweep(args: argparse.Namespace) -> int:
                 f"work_ms={result['work_ms']} total_ms={result['total_ms']}"
             )
 
-    found = sweep_verdict.judge(results, labels=labels, candidate=candidate)
+    found = sweep_verdict.judge(
+        results,
+        labels=labels,
+        reference=plan.reference,
+        between_cases=plan.between_cases,
+    )
     summary = {
         "measured_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "candidate": candidate,
+        # Which cases ran and which one the rest are read against. A reader of
+        # this artifact cannot work either out from `candidate` alone once a
+        # dispatch can run more than two.
+        "cases": labels,
+        "reference": plan.reference,
         # The machine THIS job drew. `llama-bench` runs in a different job and the
         # platform places each separately, so the processor beside a prefill rate
         # is not the processor beside these wall-clock figures.
@@ -434,7 +613,7 @@ def sweep(args: argparse.Namespace) -> int:
         "gguf_cache_hit": args.gguf_cache_hit,
         "verdict": found.verdict,
         "problems": found.problems,
-        "timing": sweep_verdict.timings(found, labels=labels, candidate=candidate),
+        "timing": sweep_verdict.timings(found, labels=labels, reference=plan.reference),
         "results": results,
     }
     (ROOT / "runtime-summary.json").write_text(
@@ -451,6 +630,14 @@ def main(argv: list[str] | None = None) -> int:
 
     size = sub.add_parser("corpus-items", help="Print how many articles one repeat reads.")
     size.add_argument("--config", type=Path, default=None)
+    size.add_argument(
+        "--dispatch",
+        default="",
+        help=(
+            "Overrule bench.corpus_items for this run and write it into the scratch "
+            "config. Empty follows the knob."
+        ),
+    )
 
     freeze = sub.add_parser("freeze-corpus", help="Cut the day's plan to the configured size.")
     freeze.add_argument("--date", required=True)
@@ -468,7 +655,7 @@ def main(argv: list[str] | None = None) -> int:
 
     args = parser.parse_args(argv)
     if args.command == "corpus-items":
-        print(corpus_items(args.config))
+        print(corpus_items(args.config, dispatch=args.dispatch))
         return 0
     if args.command == "freeze-corpus":
         freeze_corpus(args.date, items=corpus_items(args.config))
