@@ -19,7 +19,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 
 | Plan | Rows | Landed | Live | Ready |
 | --- | --- | --- | --- | --- |
-| [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 9 | 7 | 2 | 2 |
+| [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 10 | 7 | 3 | 3 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
 | [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 7 | 3 | 4 | 1 |
 | [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 2 | 1 | 1 |
@@ -34,7 +34,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260905-22-distil-and-close-plan.md](20260905-22-distil-and-close-plan.md) | 3 | 0 | 3 | 1 |
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 16 | 12 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
-| [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 11 |
+| [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 4 |
 | [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 29 | 6 | 22 | 0 |
 | [20260917-34-similarity-autotune-plan.md](20260917-34-similarity-autotune-plan.md) | 4 | 0 | 4 | 0 |
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
@@ -52,7 +52,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | #12 | 33 | D | Delete the merge machinery | p33d12b |
 | #29 | 33 | J | `prune.yml` wakes outside the digest window | p33j29 |
 
-## Ready now - 35
+## Ready now - 29
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -62,6 +62,7 @@ section 3 is where it is answered.
 | --- | --- | --- | --- | --- |
 | #2 | 20260823-known-defects-plan | - | The faithfulness thresholds have no labelled error rate | - |
 | #18 | 20260823-known-defects-plan | - | The truncation flag still cannot fire, now for a different reason | - |
+| #24 | 20260823-known-defects-plan | - | Current instructions still contain plural and wrapped old citations | - |
 | #5 | 20260827-summarizer-fine-tuning-plan | A | Reference set | 3 |
 | #3 | 12 | C | Numbers a reader can say out loud | 1b |
 | #3 | 13 | C | The fuse comes out, and one run is watched | 2, plan 12 row #1b |
@@ -81,22 +82,15 @@ section 3 is where it is answered.
 | #10 | 25 | F | The `assemble` consolidation | 2, 5, 7, 8 |
 | #14 | 25 | G | A target distribution, and the day's distance from it | 7 |
 | #1 | 27 | A | The two calls get names that say what they do | - |
-| #2 | 27 | B | `state/item-health/` becomes the per-item spine | 1 |
 | #3 | 27 | B | The selection score carries its own terms | - |
 | #4 | 27 | B | Logging is a set of flags, not a level | - |
-| #5 | 27 | C | `work.py` says what it is doing, per item and per stage | 2, 3, 4 |
-| #6 | 27 | C | Every item records the machine that ran it | 2, 4 |
-| #7 | 27 | C | The summary and the picture are timed apart | 2 |
-| #8 | 27 | C | What the model saw, kept for 90 days | 4 |
-| #9 | 27 | D | A cut reply keeps its summary | 1 |
 | #10 | 27 | D | A killed shard keeps the work it finished | - |
-| #11 | 27 | E | Two articles, three arms, one runner | 4 |
 | #1 | 35 | A / cap | Raise `truncation_cap_tokens` to 30000, pin to `n_ctx` (+ fingerprint move, C5) | - |
 | #5 | 35 | A / search | Live-day search - instant + semantic (+ frontend `key_points` owner, C2) | - |
 | #7 | 35 | A / eval-core | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - |
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
 
-## Waiting on another row - 83
+## Waiting on another row - 90
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -148,6 +142,13 @@ section 3 is where it is answered.
 | #19 | 23 | N | The keyword lenses retire, or they do not | 14 is PENDING; 8 is PENDING |
 | #17 | 23 | O | The lens weight learns every run, and a run never writes `config/` | 14 is PENDING |
 | #12 | 25 | H | `Judgement` - what the model made of each article | plan 23 row #14 is PENDING |
+| #2 | 27 | B | `state/item-health/` becomes the per-item spine | 1 is PENDING |
+| #5 | 27 | C | `work.py` says what it is doing, per item and per stage | 2 is PENDING; 3 is PENDING; 4 is PENDING |
+| #6 | 27 | C | Every item records the machine that ran it | 2 is PENDING; 4 is PENDING |
+| #7 | 27 | C | The summary and the picture are timed apart | 2 is PENDING |
+| #8 | 27 | C | What the model saw, kept for 90 days | 4 is PENDING |
+| #9 | 27 | D | A cut reply keeps its summary | 1 is PENDING |
+| #11 | 27 | E | Two articles, three arms, one runner | 4 is PENDING |
 | #13 | 33 | D | Compaction lag and free swap on the console band | 12 is IN-FLIGHT |
 | #11 | 33 | E | Delete `runtime-counters` and everything that reads it | 10 is IN-FLIGHT; 17 is IN-FLIGHT |
 | #15 | 33 | F | Generated TypeScript contracts replace the hand-written ones | 10 is IN-FLIGHT; 11 is PENDING |
@@ -184,9 +185,9 @@ section 3 is where it is answered.
 | #8 | 36 | W4 / apply-gate (alone) | Flip the flag: withhold = absent + item-health telemetry (E7 placement) | 7 is PENDING |
 | #12 | 36 | W3 / rejects-store | The rejects store + corpus fence (`state/rejects/`, 30-day prune) | 3 is PENDING; 7 is PENDING |
 
-## Finished - 19 plans with no live row
+## Finished - 18 plans with no live row
 
-20260815-digest-pipeline-plan.md, 20260905-01-visible-chart-plan.md, 20260905-02-retire-the-route-name-plan.md, 20260905-03-console-backfill-plan.md, 20260905-04-site-cap-defence-plan.md, 20260905-05-span-tree-plan.md, 20260905-06-fewer-better-articles-plan.md, 20260905-07-better-summaries-plan.md, 20260905-08-element-table-plan.md, 20260905-09-pin-the-runtime-plan.md, 20260905-10-visual-plan-contract-plan.md, 20260905-11-two-call-planner-plan.md, 20260906-constant-cost-reads-plan.md, 20260907-growing-reads-window-plan.md, 20260910-24-day-sharded-ledgers-plan.md, 20260911-26-retire-prerender-plan.md, 20260912-27-adaptive-guardrails-plan.md, 20260913-reference-dataset-2-plan.md, 20260914-29-found-once-plan.md
+20260815-digest-pipeline-plan.md, 20260905-01-visible-chart-plan.md, 20260905-02-retire-the-route-name-plan.md, 20260905-03-console-backfill-plan.md, 20260905-04-site-cap-defence-plan.md, 20260905-05-span-tree-plan.md, 20260905-06-fewer-better-articles-plan.md, 20260905-07-better-summaries-plan.md, 20260905-08-element-table-plan.md, 20260905-09-pin-the-runtime-plan.md, 20260905-10-visual-plan-contract-plan.md, 20260905-11-two-call-planner-plan.md, 20260906-constant-cost-reads-plan.md, 20260907-growing-reads-window-plan.md, 20260910-24-day-sharded-ledgers-plan.md, 20260911-26-retire-prerender-plan.md, 20260913-reference-dataset-2-plan.md, 20260914-29-found-once-plan.md
 
 ## See also
 
