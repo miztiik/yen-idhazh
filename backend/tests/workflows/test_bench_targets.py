@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 from conftest import REPO_ROOT, read_text
 
-from idhazh import config, ledger
+from idhazh import cli, config, ledger
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.runtime_counters import ServerJob
@@ -984,3 +984,23 @@ def test_the_plan_is_capped_to_hold_the_slice_and_what_it_skips() -> None:
         runtime_sweep.corpus_offset("-1")
     with pytest.raises(SystemExit, match="whole number"):
         runtime_sweep.corpus_offset("two")
+
+
+def test_the_fingerprint_job_reaches_the_stage_as_the_enum_it_is_declared_for() -> None:
+    """The break that killed three dispatches after the segment landed.
+
+    `stage_fingerprint` is declared `job: ServerJob`, and the bench passes
+    `--job runtime` on the command line. Nothing converted it, so the stage got
+    a bare string - harmless until a segment name asked it for `.value`, which
+    is what `write_segment` began doing. Every test of this stage called it with
+    the enum directly, so all of them passed while the one caller that matters
+    was broken.
+
+    Driven through the parser rather than the function: a bad value fails at
+    parse time, which is proof the conversion is wired in front of the stage.
+    """
+    with pytest.raises(SystemExit) as refused:
+        cli.main(["fingerprint", "--job", "not-a-job", "--date", "2026-09-19"])
+    assert refused.value.code == 2, "argparse refuses the value before any stage runs"
+
+    assert ServerJob("runtime") is ServerJob.RUNTIME, "the bench's own value is in the set"
