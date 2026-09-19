@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -184,16 +184,17 @@ row for the key. Where the two rows disagree the one that names a job wins, for
 the reason the next section gives - `assemble` runs once for the whole day and
 cannot say which machine an item was for.
 
-**That filter reads a frozen file, so it is only half the guarantee.**
-`actions/checkout` pins a job to the commit its run was triggered at, so a second
-attempt at the same work cannot see the rows the first attempt pushed afterwards
-and appends them again; `merge=union` then keeps the lines from both sides rather
-than collapsing them. The other half runs after that merge, on the merged file:
-`ledger.drop_repeated_rows`, called by the work job's commit step through
-`DROP_REPEATED_ROWS_COMMAND`, keeps the first row for each key and drops the rest.
-Before-the-write and after-the-merge are two different moments and the file needs
-both - measured 2026-08-31, `2026-08-29-3` held 44 repeated keys here because
-only the first existed.
+**That filter reads a frozen file, and until 2026-09-18 that was only half the
+guarantee.** `actions/checkout` pins a job to the commit its run was triggered
+at, so a second attempt at the same work could not see the rows the first attempt
+pushed afterwards and appended them again; `merge=union` then kept the lines from
+both sides rather than collapsing them. The other half ran after that merge, on
+the merged file, and kept the first row for each key. Measured 2026-08-31,
+`2026-08-29-3` held 44 repeated keys here because only the first half existed.
+
+Both halves are gone with the shape that needed them. A worker writes its census
+into its own segment, `idhazh compact` folds the segments by key, and no two
+writers open this file - so there is no merge to settle after.
 
 **A worker records only settled items.** It writes an article payload for every
 item it reaches and a summary payload for every item that got as far as the

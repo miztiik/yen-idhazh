@@ -893,9 +893,10 @@ def migrate_header(
     contract's**, whatever the file's size. That is the ordinary case on every
     append, and it is complete rather than optimistic: `_append` writes rows into
     a file that exists and a header only into one that does not, so an append
-    cannot put a second header in a file. The only thing that can is a
-    `merge=union` resolve, which happens after this run's appends rather than
-    before them, and `stages.dedupe_ledgers` settles it there.
+    cannot put a second header in a file. A union merge resolve could, and every
+    head under `state/` carried that driver until 2026-09-19; the files it already
+    made are committed, and `stages.compact` calls this on a head before it folds
+    a segment into one.
 
     This is the half of a widening `require_matching_header` cannot give. A
     schema change ships a read-side migration, so a file an earlier run wrote
@@ -958,15 +959,17 @@ def settle_header(
     """Fold a file carrying more than one header back onto one. Never raises.
 
     The scan `migrate_header` stopped doing, moved to the one place that can see
-    what it is looking for. `state/**/*.csv` is `merge=union`, which resolves one
-    physical line at a time: two runs appending different rows merge correctly,
-    and two runs appending under different headings leave both header blocks in
-    the file while git calls the merge clean. Measured on this repository
+    what it is looking for. Every head under `state/` was `merge=union` until
+    2026-09-19, which resolves one physical line at a time: two runs appending
+    different rows merge correctly, and two runs appending under different
+    headings leave both header blocks in the file while git calls the merge
+    clean. Measured on this repository
     2026-09-15, `state/item-health/2026/09/14.csv` held 394 rows under the
     current header and 71 under the one before it.
 
-    A merge is the only thing that can make that shape, so this runs after the
-    merge, over the files this run wrote. A row whose width does not match its
+    Nothing can make that shape now, and the files that already hold it are
+    committed - so this runs on a head before the compaction folds a segment
+    into it. A row whose width does not match its
     own header block is repaired here too: the contract's reader fills what a
     short row left out, and an empty cell is what an absent optional already
     means.
