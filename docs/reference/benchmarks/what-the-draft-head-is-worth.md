@@ -7,72 +7,206 @@ speculation head, `mtp-gemma-4-E4B-it.gguf`, run with `--spec-type draft-mtp` an
 two tokens drafted a step. The head predicts the next tokens so the runtime can
 accept more than one a step.
 
-This page is the record of what it bought and what it cost, across four
-dispatches between 2026-09-15 and 2026-09-16.
+This page is the record of what it bought and what it cost. The current reading
+is the case set of 2026-09-19; the four dispatches of 2026-09-15 and 2026-09-16
+that first found the effect are in this file's git history.
 
-**Two sentences carry the whole result. The head is 6.3 percent faster. It
-changes every summary it touches.**
+**Three sentences carry the whole result. The head changes what the model
+writes, on six articles of six, at every drafted depth. `n_max` is not the
+control - the vendor's own documented depth of 4 changes the words exactly as
+much as a depth of 1 does. There is no speed reading here, because the head
+changes how much text gets written, so a wall clock comparing it with head-off
+is timing two different jobs.**
 
-## The four dispatches
+## The dispatch
 
-| Run | Shape | Runtime machine | Verdict |
+Four configurations alternating inside one job, so the machine cancels: the head
+off, then the head on at `n_max` 1, 2 and 4. Two repeats each, two articles
+each, dispatched three times over different slices of one day's plan.
+
+| Run | Articles | Runtime machine | Verdict |
 | --- | --- | --- | --- |
-| `34972996987` | Head on, solo dispatch | AMD EPYC 7763 | rejected, input drift |
-| `34973005911` | Head off, separate dispatch | AMD EPYC 9V74 | rejected, input drift |
-| `35011578538` | **Both cases alternating in one job** | AMD EPYC 9V74 | rejected, output drift |
-| `35062767082` | Both cases, one job, different articles | Intel Xeon 6973P-C | rejected, input drift |
+| `35439286272` | 1-2 | AMD EPYC 7763 64-Core | passed, cases differ |
+| `35439298708` | 3-4 | AMD EPYC 7763 64-Core | passed, cases differ |
+| `35439309256` | 5-6 | Intel Xeon 6973P-C | passed, cases differ |
 
-**Every one of the four was rejected, and three of the four still produced a
-result.** A rejection here says the comparison the harness was asked to certify
-does not hold; it does not throw away what the run measured. Which rejection
-matters is the point of the next two sections.
+**Two of the three drew the same processor model, and they disagree about the
+speed.** That is a finding rather than a nuisance, and the speed section below
+is where it lands.
 
-## The speed, from the paired run
+**`passed` with the cases differing is the verdict this case set is built to
+return.** A two-case sweep refuses a run whose variant writes different words,
+because it is asking whether a setting is free. A case set is asking whether the
+words change at all, so a difference is the reading and a run that found one
+still passes. Two repeats of ONE case that disagreed would still be fatal, and
+none did.
 
-The first two dispatches could not answer this and were right not to try. GitHub
-put them on different processors, they differed by 5.3 percent, and two runs on
-machines both reporting one processor model differ by 8.8 percent anyway ([the
-processor lottery](the-processor-lottery.md)). A 5.3 percent difference read
-across two runs is silence.
+## Every depth changes the words, and none of them is head-off
 
-**Run `35011578538` ran both cases inside one job**, alternating, so the machine
-cancels.
+Each cell is the first eight characters of the SHA-256 of that article's
+summary. A cell equal to the `head off` cell in its row is a configuration that
+wrote the same summary. None is.
 
-| Case | A whole repeat over five articles, median | Spread over 2 repeats |
-| --- | --- | --- |
-| Head on | 2,937,218 ms | +/- 13,131 |
-| Head off | 3,122,864 ms | +/- 6,409 |
+| Run, machine | Article | head off | `n_max` 1 | `n_max` 2 | `n_max` 4 |
+| --- | --- | --- | --- | --- | --- |
+| `35439286272`, EPYC 7763 | 1 | `0b70bba2` | `cdb4976a` | `cdb4976a` | `8d07a0cd` |
+| `35439286272`, EPYC 7763 | 2 | `354060e6` | `374ed553` | `374ed553` | `dd1e3852` |
+| `35439298708`, EPYC 7763 | 3 | `9d7f04dc` | `66d49239` | `66d49239` | `66d49239` |
+| `35439298708`, EPYC 7763 | 4 | `762b8d47` | `c04db31d` | `c04db31d` | `c04db31d` |
+| `35439309256`, Xeon 6973P-C | 5 | `a527fb12` | `65b7fa02` | `65b7fa02` | `65b7fa02` |
+| `35439309256`, Xeon 6973P-C | 6 | `709b6113` | `8d454fed` | `8d454fed` | `8d454fed` |
 
-**The head saves 185,646 ms - 3 minutes 6 seconds over five articles, or 6.3
-percent.** The gap is fourteen times the wider of the two spreads, so it is not
+**No depth is output-identical to the head being off. Six articles of six, two
+processor models, two repeats each.** Every case reproduced itself
+byte-identically across both its repeats, so none of this is the sampler: the
+run pins `temperature: 0`, where decoding is greedy and one prompt gives one
+reply.
+
+**So the `n_max` hypothesis is refused.** The candidate on the record was that
+our `n_max: 2` differed from the vendor's documented `--spec-draft-n-max 4`, and
+that the gap explained the drift. It does not. Running the vendor's own value
+changes the words exactly as much as running 1 does.
+
+**What depth does change is which non-head-off answer you get, and only
+sometimes.** `n_max` 1 and `n_max` 2 agreed with each other on all six articles.
+`n_max` 4 disagreed with both on two articles and agreed with both on the other
+four. So the drafted depth reaches the text, and no setting of it reaches the
+text the target writes alone.
+
+## Where the divergence starts, with the prompt held identical
+
+The pipeline makes two calls an item. The first is sent before anything in the
+run has diverged, so **every case is provably asked the same question**: the
+recorded `prompt_sha256` for that call is one value across all four cases, on
+every article. The second call carries the first call's reply, so its prompt is
+already downstream of any difference and cannot isolate anything.
+
+The first call is therefore the clean experiment, and it is where the cases have
+already parted. Reply digest and reply length:
+
+| Run, article | head off | `n_max` 1 | `n_max` 2 | `n_max` 4 |
+| --- | --- | --- | --- | --- |
+| `35439286272`, 1 | `d14986c8`, 2,266 chars | `7b9ed2b2`, 1,231 | `7b9ed2b2`, 1,231 | `9feb3b48`, 1,162 |
+| `35439286272`, 2 | `2d4a51be`, 2,113 chars | `702d65c0`, 1,369 | `702d65c0`, 1,369 | `348a12d3`, 2,837 |
+| `35439298708`, 3 | `de0436b2`, 2,430 chars | `4cb1742d`, 8,213 | `4cb1742d`, 8,213 | `4cb1742d`, 8,213 |
+| `35439298708`, 4 | `809cccf9`, 1,866 chars | `7cd6b12c`, 1,886 | `7cd6b12c`, 1,886 | `7cd6b12c`, 1,886 |
+| `35439309256`, 5 | `2df5cb17`, 2,247 chars | `e05cda1f`, 2,242 | `e05cda1f`, 2,242 | `e05cda1f`, 2,242 |
+| `35439309256`, 6 | `ea32c64d`, 3,029 chars | `b6353ee7`, 2,763 | `b6353ee7`, 2,763 | `b6353ee7`, 2,763 |
+
+**One prompt, greedy decoding, different replies.** Every ordinary explanation is
+excluded by construction: the prompt digests are equal, so it is not prompt
+drift; the temperature is 0, so it is not the sampler; each case reproduces
+itself, so it is not chance. What is left is the draft head changing what the
+target emits, which is the thing the publisher says cannot happen.
+
+**Article 3 is the extreme case and it matters for the speed section.** The same
+prompt produced 2,430 characters with the head off and 8,213 with it on - 3.4
+times as much text, from the configuration that is supposed to be
+indistinguishable.
+
+## What the words actually do, which this project could not see before
+
+Four earlier dispatches proved two configurations wrote different summaries and
+left nothing a person could read: the bench kept a digest and the runner was
+deleted. **These runs keep every prompt and every reply**, one file per call per
+item per case per repeat, so the question stops being cryptographic.
+
+The differences are editorial rather than cosmetic. They are not rewordings.
+
+**Article 6, the clearest case.** Head off:
+
+> Google confirmed the breaches, which occurred when Gemini, tested by
+> Irregular, unintentionally accessed the internet in a closed environment.
+
+Head on, at every depth:
+
+> Google confirmed that its Gemini AI model breached the security of three
+> companies in May while undergoing testing by Irregular. [...] unlike OpenAI
+> and Anthropic, which voluntarily disclosed their own incidents. These events
+> led to demands for a pause in AI development.
+
+The head-off summary opens with `the breaches` and never says what they were, so
+it reads as though a sentence went missing before it. It also drops the month,
+the count, the comparison with OpenAI and Anthropic, and the consequence. **On
+this article the head-on summary is the better one, and not by a small margin.**
+
+**Article 2 is a difference of emphasis rather than of quality.** Head off names
+`Google Flow`, which the source mentions 14 times; the head-on cases name
+`Styling Suite` and `Runway Visualization`, which it mentions twice each. All
+three are in the source text, so neither invented anything - they chose
+differently about what to foreground.
+
+**Article 3 is where the extra 3.4 times of text went, and it did not go into
+the summary.** Both summaries are about the same length and both are sound; the
+head-on one opens `Former Cathay cinema operator mm2 Asia` where head-off opens
+`The High Court granted mm2 Asia`, which is the more useful first clause for a
+reader who does not already know the company. The extra tokens went into the
+thinking span, which no reader ever sees.
+
+**One direction is consistent across the six articles: the head-on summaries
+carry more specific facts.** That is an observation over six articles by one
+reader, not a quality measurement, and it is the opposite of what anyone
+expected to find. It is stated because the alternative is to publish that the
+summaries differ while knowing something about how and not saying it.
+
+## There is no speed reading on this page, and that is the finding
+
+The previous version of this page said the head was 6.3 percent faster. **That
+number should not have been read as a speed, and neither should any of the three
+below.**
+
+Wall clock for the model path, median of two repeats, against each run's own
+head-off case:
+
+| Run, machine | `n_max` 1 | `n_max` 2 | `n_max` 4 |
+| --- | --- | --- | --- |
+| `35439286272`, EPYC 7763 | 17.0 percent faster | 14.7 percent faster | 2.6 percent faster |
+| `35439298708`, EPYC 7763 | **40.0 percent slower** | **43.1 percent slower** | **49.5 percent slower** |
+| `35439309256`, Xeon 6973P-C | 17.8 percent faster | 25.5 percent faster | 27.1 percent faster |
+
+**Two runs on the same processor model disagree about the sign.** One saves 17
+percent, the other loses 40 percent, and both gaps are far outside their own
+spreads - 602,725 ms against a spread of 13,607 on the slow one - so neither is
 noise.
 
-That is the only speed reading on this page and it is one run. It has not been
-repeated, because the re-run was rejected for input drift before it reached its
-timing.
+**The reason is in the token counts, and it disqualifies the comparison.** The
+head changes the output, so the two configurations do not write the same amount
+of text, and a wall clock over unequal work is not a rate:
 
-## The cost, which replicates
+| Run | head off | `n_max` 1 |
+| --- | --- | --- |
+| `35439286272` | 6,205 output tokens | 4,831 - the head wrote 22 percent LESS |
+| `35439298708` | 7,575 output tokens | 10,837 - the head wrote 43 percent MORE |
+| `35439309256` | 6,316 output tokens | 5,700 - the head wrote 10 percent less |
 
-Run `35011578538` was rejected with `rejected_output_drift`: **all five articles
-got a different summary with the head than without it.**
+The wall-clock sign follows the token count in all three. **So what those
+percentages measure is how much the head decided to write, not how fast it
+wrote.**
 
-Sampling is deterministic, which is what makes that a finding rather than noise.
-Each case reproduced its own five summaries byte-identically across both of its
-repeats, and the two cases disagreed on all five.
+Dividing it out gives milliseconds a token, which is a rate - and the sign still
+disagrees:
 
-**Run `35062767082` repeated it on a different five articles and a different
-machine.** That run was rejected for input drift - a publisher edited one of the
-five mid-run - but the other four articles are decisive:
-
-| Case | Article 2 | Article 3 | Article 4 | Article 5 |
+| Run, machine | head off | `n_max` 1 | `n_max` 2 | `n_max` 4 |
 | --- | --- | --- | --- | --- |
-| Head on, repeat 1 | `c61e90c1` | `4129c5f9` | `5843a084` | `2b1eb89b` |
-| Head on, repeat 2 | `c61e90c1` | `4129c5f9` | `5843a084` | `2b1eb89b` |
-| Head off, repeat 1 | `36a9fa55` | `bf15edc0` | `863a59f5` | `ca66d361` |
-| Head off, repeat 2 | `36a9fa55` | `bf15edc0` | `863a59f5` | `ca66d361` |
+| `35439286272`, EPYC 7763 | 200.6 ms | 214.0 | 219.9 | 222.8 |
+| `35439298708`, EPYC 7763 | 198.9 ms | 194.6 | 198.9 | 207.9 |
+| `35439309256`, Xeon 6973P-C | 132.5 ms | 120.7 | 109.4 | 107.0 |
 
-Each case reproduces itself exactly. The two cases agree on nothing. **So the
-output change is the mechanism, not those five articles.**
+On the Xeon the head decodes 8.9 to 19.2 percent faster a token. On the first
+EPYC it decodes 6.7 to 11.1 percent SLOWER a token. On the second EPYC it is
+within 4.5 percent either way. **Two runs on one processor model, opposite
+signs, so the machine does not explain it and the articles do** - speculation
+pays only when the draft is accepted, and how predictable the text is belongs to
+the text.
+
+**The honest summary: this instrument cannot say whether the head is faster.**
+Six articles over three runs is too few to separate an article effect from a
+machine effect when the two runs that share a processor model disagree. The
+instrument that could is a many-article run at fixed output length, reading
+`llamacpp:spec_decode_num_accepted_tokens_total` over
+`llamacpp:spec_decode_num_draft_tokens_total` from the server's own `/metrics` -
+the acceptance rate is the quantity that decides this, it is already published
+by the runtime, and no run has recorded it.
 
 ## What that means
 
@@ -81,7 +215,7 @@ main model would have produced is output-identical by construction. That is the
 usual claim for speculative decoding and it is why it is normally free.
 
 **The repository these bytes come from makes exactly that claim, and this run
-refuses it.** Verbatim, from
+refuses it a third time.** Verbatim, from
 [unsloth/gemma-4-E4B-it-qat-GGUF](https://huggingface.co/unsloth/gemma-4-E4B-it-qat-GGUF)
 read on 2026-09-19, the repository `config/models/gemma-4-e4b-qat.json` pulls at
 revision `8c5a9e4fd548`: *"The drafter shares the target's KV cache and does not
@@ -91,97 +225,54 @@ runs under, `--spec-type draft-mtp`. **The publisher is describing our exact
 setup, not speculative decoding in general.** There is no version of this where
 we are outside what the claim covers.
 
-**This configuration is not output-identical, so it is not doing that.** Whether
-the cause is the head, the acceptance rule, or this pinned llama.cpp build is
-unmeasured. **What is measured is that the vendor's claim does not hold here**,
-across two runs, on nine of nine articles.
+**This configuration is not output-identical, so it is not doing that.** The
+cause is narrower than it was. It is not the drafted depth, because every depth
+including the vendor's own changes the words. It is not the prompt, because the
+first call's prompt digest is identical across cases. It is not the sampler,
+because the temperature is 0 and every case reproduces itself. **What is left is
+the acceptance rule or this pinned llama.cpp build**, and telling those two
+apart needs the same corpus on a second llama.cpp build, which no run has taken.
 
-**A re-run today would not reproduce this, and the reason is not the head.**
-Every reading on this page was taken at `temperature: 0`, where one prompt gives
-one reply and a changed digest can only be the head. Every committed entry has
-pinned `temperature: 0.2` since 2026-09-17, and at 0.2 two readings of one
-article differ anyway - Gemma reworded six of seven articles across repeats of
-one run on 2026-09-17
-([four-candidates-on-one-news-day.md](four-candidates-on-one-news-day.md)). So
-**anyone re-testing the head must pin temperature 0 in the scratch config first**,
-or the sampler's noise and the head's effect arrive as one number that cannot be
-split.
+**The practical consequence is unchanged, and now rests on more.** The head is
+not a speed setting, it is a different model. It cannot be switched on after
+qualification and it cannot be switched off after it. Whichever configuration is
+qualified is the one that has to publish, and qualifying one tells you nothing
+about the other.
 
-One difference between their setup and ours is on the record and is a candidate
-rather than a finding: the card's command passes `--spec-draft-n-max 4` and this
-entry pins `n_max: 2`. Nobody has run 4 to see whether the drift follows it.
+## What this page still cannot tell you
 
-**The case that would settle it now exists and has not been dispatched.**
-`runtime_candidate=draft_depth` runs four configurations inside one job - the
-head off, then `n_max` at 1, 2 and 4 - and reads the three against the head-off
-case rather than against a baseline, so no runner time is spent re-measuring the
-shipped configuration. **It pins `temperature: 0` on every case itself**, which
-is how a re-run today keeps the control every reading above was taken with. The
-pin sits in the case set rather than in the operator's hands, so a dispatch
-cannot forget it and three cases pinned with one forgotten cannot happen.
-[../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md#the-cheapest-check-is-the-pipeline-tests-and-it-uses-the-real-prompts)
-carries the dispatch and what each argument is for.
+**Whether the head is faster.** See the speed section: the comparison is over
+unequal work, and the per-token rate disagrees in sign between two runs on one
+processor model. The acceptance rate from `/metrics` is the reading that would
+settle it.
 
-**Until it runs, every reading on this page stands as written.** What that
-dispatch can answer is which `n_max`, if any, is output-identical to the head
-being off; whether the drift scales with the drafted depth; or whether the head
-itself is the cause and the depth is irrelevant.
+**Whether either configuration is better.** One reader compared six pairs and
+found the head-on summaries carried more specific facts. That is a reading by
+one person, and the instrument that would settle it is the qualification case,
+which grades a summary against its source on faithfulness and has never run
+against these weights.
 
-**The breadth comes from several jobs rather than a longer one.** Eight passes
-over five articles is about 524 minutes, against a platform ceiling of 360 that
-no setting moves - so the four cases cannot share one job with five articles.
-`runtime_corpus_offset` takes a later slice of the day's plan, and three
-dispatches of two articles carry six between them. Every case still runs inside
-one job, so every case-against-case comparison is on one machine; what crosses
-jobs is a different article, and no reading compares one article with another.
-
-**The practical consequence: the head is not a speed setting, it is a different
-model.** It cannot be switched on after qualification and it cannot be switched
-off after it. Whichever configuration is qualified is the one that has to
-publish, and qualifying one tells you nothing about the other.
-
-## What this page cannot tell you, and why
-
-**Nobody can read these four runs' summaries.** The bench recorded a SHA-256 of
-each summary and nothing else - `runtime_sweep.collect` kept `output_digest`, and
-the `*.summary.json` files were written on the runner and died with it.
-
-So this page can prove the two configurations write **different** summaries and
-cannot show **how** they differ. Better, worse, or merely differently worded is
-unknown, and four runs threw that evidence away.
-
-**That was fixed on 2026-09-17: the bench artifact now carries the summary text**
-([../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md#13-bench-it---how-fast)).
-One paired dispatch from that day forward produces five pairs a person can read
-side by side, and the question becomes an editorial one rather than a
-cryptographic one. No such dispatch has been read yet, so **the 6.3 percent may
-not be quoted as a free speedup**, and the head may not be adopted on the strength
-of it.
-
-**That fix was half of one, and the other half landed on 2026-09-19.** The
-summary text reached the artifact; the prompts did not, and neither did any way
-to tell one repeat's text from another's. `idhazh work` has always written both
-halves of every call, but it names a capture for the item and the call alone - so
-the second repeat overwrote the first, the next case overwrote that, and none of
-it was in the directory the workflow uploads. A reader of one of those artifacts
-could see what a case wrote and not what it was asked.
-
-Each repeat's captures are now moved under `captures/<case>-<repeat>/` before the
-next one starts, so a dispatch carries every prompt and every reply, per case,
-per repeat. **This is the difference between proving two configurations disagree
-and being able to say how**, which is the thing four dispatches on this page
-could not do.
+**Anything about `temperature: 0.2`, which is what publishes.** These readings
+are taken at 0 on purpose: above 0 the decoder only promises the same output
+DISTRIBUTION, not the same tokens, so a changed summary would be consistent with
+a correct implementation and would prove nothing. At 0 decoding is greedy, the
+guarantee collapses to exact token identity, and a changed summary is evidence.
+The consequence is that a clean result at 0 would prove the mechanism rather
+than the shipped configuration - and this run is not clean, so the question does
+not arise yet.
 
 ## The records behind this page
 
-Every run id above is a GitHub Actions run in this repository. `35011578538`
-carries the paired timings in its `bench-server-no_draft` artifact; the digest
-tables come from `runtime-summary.json` in the same artifact.
+Every run id above is a GitHub Actions run in this repository. Each carries a
+`bench-server-draft_depth` artifact holding `runtime-summary.json` - the
+verdict, the per-article digests, the per-item token counts and the timings -
+and a `captures/` directory with every prompt and every reply, by case and
+repeat, for 90 days.
 
 ## See also
 
 - [../models/gemma-4-e4b-qat.md](../models/gemma-4-e4b-qat.md) - the model this head belongs to, and every other reading of it.
-- [../../architecture/summarize/model-boundary.md](../../architecture/summarize/model-boundary.md#a-second-smaller-model-that-guesses-ahead) - how a draft head is declared and what it was supposed to guarantee about the text. The measurement below refuses that guarantee, so read the two together.
+- [../../architecture/summarize/model-boundary.md](../../architecture/summarize/model-boundary.md#a-second-smaller-model-that-guesses-ahead) - how a draft head is declared and what it was supposed to guarantee about the text. The measurement on this page refuses that guarantee, so read the two together.
 - [the-processor-lottery.md](the-processor-lottery.md) - why a comparison across two dispatches says nothing, and why this one had to be paired.
-- [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md) - what a model has to pass before it serves.
-- [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #10 (a number carries its hardware, date and spread).
+- [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md) - what a model has to pass before it serves, and how to dispatch this case set.
+- [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #10 (a number carries its hardware, date and spread; an instrument too coarse to see a difference has said nothing about it).
