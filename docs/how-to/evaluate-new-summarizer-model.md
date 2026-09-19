@@ -443,6 +443,42 @@ Three of those arguments are load-bearing.
  sampler alone, and the setting's effect and the sampler's noise arrive as one
  number nobody can split.
 
+#### Breadth comes from several jobs, not a longer one
+
+**Five articles cannot share one job with four cases.** Eight passes over five
+articles is about 524 minutes, against a platform ceiling of 360 that no setting
+moves (Guardrail #2). So a question that wants more articles than one job holds
+is answered by dispatching the same case set several times, each with a
+different slice:
+
+```bash
+for offset in 0 2 4; do
+  gh workflow run measure.yml --ref main \
+    -f target=bench \
+    -f candidate_models_file='models/gemma-4-e4b-qat.json' \
+    -f runtime_candidate=draft_depth \
+    -f runtime_repeats=2 \
+    -f runtime_corpus_items=2 \
+    -f runtime_corpus_offset="$offset" \
+    -f model_speed_case=skip
+done
+```
+
+Six articles, three jobs, each about 230 minutes, and they run at once - the
+concurrency ceiling is 20 jobs, so three is a queue nobody waits in.
+
+**`runtime_corpus_offset` is what makes them different articles.** The plan is
+ranked, so without it all three dispatches take the same top two and report two
+articles as six. The plan step caps itself at the slice plus what the slice
+skips, so an offset dispatch builds a longer plan and freezes a later window of
+it.
+
+**This does not weaken the pairing.** Every case still runs inside one job, so
+every case-against-case comparison is on one machine, which is the whole reason
+the cases alternate. What crosses jobs is a different article, and no reading
+compares one article with another - the text comparison is per article, against
+the same article's head-off case.
+
 **A difference between the cases is the reading, not a rejection.** A named
 candidate refuses the run when its variant writes different words, because the
 question was whether the setting is free. A case set records the difference and

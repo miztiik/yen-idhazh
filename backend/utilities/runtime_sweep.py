@@ -512,17 +512,50 @@ def run_once(
     }
 
 
-def freeze_corpus(date: str, *, items: int) -> None:
+def corpus_offset(dispatch: str) -> int:
+    """Which slice of the day's plan this dispatch reads. 0 is the top of it.
+
+    **Five articles cannot share one job with four cases.** Eight passes over
+    five articles is about 524 minutes at the 13.1 minutes an article the
+    slowest pass has recorded, against a 360-minute platform ceiling - so the
+    breadth has to come from several jobs rather than a longer one. Each
+    dispatch still runs every case, so every case-against-case comparison stays
+    inside one machine, which is the whole reason the cases are paired
+    (Guardrail #2, the ceiling is GitHub's and the design is what gives).
+
+    The offset is what stops three dispatches on one day all reading the same
+    top two articles and reporting two articles as six.
+    """
+    if not dispatch:
+        return 0
+    try:
+        offset = int(dispatch)
+    except ValueError:
+        raise SystemExit(
+            f"runtime_corpus_offset must be a whole number, not {dispatch!r}"
+        ) from None
+    if offset < 0:
+        raise SystemExit(f"runtime_corpus_offset must be 0 or more, not {offset}")
+    return offset
+
+
+def freeze_corpus(date: str, *, items: int, offset: int = 0) -> None:
     """Cut the day's plan to `items` articles and keep a copy beside the readings.
 
     The plan is frozen so every repeat reads the same ADDRESSES. Their text is
     refetched each time, which is what `sweep_verdict` exists to notice.
+
+    `offset` takes a later slice, so two dispatches of one day measure different
+    articles. The refusal below is what makes a short plan a failure before the
+    server starts rather than an hour in.
     """
     plan_path = RUN_ROOT / date / "plan.json"
     payload = json.loads(plan_path.read_text(encoding="utf-8"))
-    payload["items"] = payload["items"][:items]
+    payload["items"] = payload["items"][offset : offset + items]
     if len(payload["items"]) != items:
-        raise SystemExit(f"the runtime sweep needs exactly {items} planned articles")
+        raise SystemExit(
+            f"the runtime sweep needs {items} planned articles from offset {offset}"
+        )
     counts = Counter(item["vertical"] for item in payload["items"])
     for vertical in payload["verticals"]:
         vertical["planned"] = counts.get(vertical["id"], 0)
@@ -642,6 +675,14 @@ def main(argv: list[str] | None = None) -> int:
     freeze = sub.add_parser("freeze-corpus", help="Cut the day's plan to the configured size.")
     freeze.add_argument("--date", required=True)
     freeze.add_argument("--config", type=Path, default=None)
+    freeze.add_argument("--offset", default="", help="Skip this many planned articles first.")
+
+    cap = sub.add_parser(
+        "corpus-cap",
+        help="How many articles the plan step must produce: the slice plus what it skips.",
+    )
+    cap.add_argument("--config", type=Path, default=None)
+    cap.add_argument("--offset", default="")
 
     run = sub.add_parser("sweep", help="Time the candidate against the baseline.")
     run.add_argument("--date", required=True)
@@ -657,8 +698,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "corpus-items":
         print(corpus_items(args.config, dispatch=args.dispatch))
         return 0
+    if args.command == "corpus-cap":
+        # The plan has to hold the slice AND everything the slice skips, or
+        # `freeze_corpus` refuses a plan that was never long enough.
+        print(corpus_items(args.config) + corpus_offset(args.offset))
+        return 0
     if args.command == "freeze-corpus":
-        freeze_corpus(args.date, items=corpus_items(args.config))
+        freeze_corpus(
+            args.date,
+            items=corpus_items(args.config),
+            offset=corpus_offset(args.offset),
+        )
         return 0
     return sweep(args)
 
