@@ -24,6 +24,82 @@ a false claim, and the floor that withholds is an absolute line that does not dr
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. Execution is AUTHORIZED (owner, 2026-09-19); it begins once plan 34's fit core and plan 35's EvalRow churn are on main.
 ```
 
+## Execution handover (zero-context cold start)
+
+Paste-ready brief for an agent that picks this plan up with zero prior context. It restates the
+execution stamp above in operating detail; [`docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md)
+is the canonical contract, and the Onboarding subsection below lists the page that owns each surface.
+
+```text
+You are the OWNER of this plan-doc (TODO/20260918-36-summary-quality-autotune-plan.md).
+You have zero prior context. Execute it end to end. Execution is AUTHORIZED (owner,
+2026-09-19), but this plan is BLOCKED until plan 34's fit core (its rows 5-8) AND plan 35's
+EvalRow churn (its rows 6, 7, 8) are on main. Confirm both are merged before dispatching.
+
+STEP 0 - COLD START. Read, in order: CLAUDE.md; docs/how-to/execute-a-plan.md (you are
+"the owner"); docs/agents/bootstrap.md; docs/how-to/run-the-gates.md;
+docs/how-to/ship-a-pr.md; the design of record docs/concepts/summary-quality-autotune.md;
+then this plan's Section 0, its Onboarding subsection, Sections 0a-0e (0e holds the current
+owner rulings that SUPERSEDE earlier E-/G-items - read it before trusting any link-only or
+eviction language above it), Section 0d Tables B and C (PR grouping + optimistic dispatch),
+and Section 1 (the Status Reckoner). Section 2 is the per-row detail.
+
+STEP 1 - ADOPT OR CLOSE FIRST. git worktree list, list branches, gh pr list. Reconcile any
+half-done row against the Reckoner. Do not switch or edit the shared checkout. Work only in
+dedicated worktrees under the repo's sibling .worktrees/ directory.
+
+STEP 2 - RUN THE POOL. Parallel N = 4, running pool, not a wave - but this plan's real peak
+width is 2 (Section 0d): the serial spine is Rows 1 -> 2 -> 4 -> 5 -> 7 -> 8 (six deep), and
+Row 8 is the width-1 tail. A slot frees when a worker RETURNS its report, never on merge
+(Section 0d Table C, optimistic dispatch). Isolated worktree per row off origin/main, named
+branch, never shared. Worker brief + the two pre-dispatch checks: as in execute-a-plan.md.
+
+STEP 3 - DISPATCH ORDER (Section 0d Table B; 11 PRs / 4 waves). Three co-roots from t0, each
+gated on an external merge:
+    fit-core         Row 1     needs plan 34 fit core on main    AUTO-merge on green
+    eval-columns     Row 3     needs plan 35 EvalRow on main     AUTO-merge on green
+    coherence-place  Row 11    needs plan 35 coherence on main   AUTO-merge on green
+  Then, as each predecessor lands: metric-fold-fit (Rows 2,4,5) after fit-core + eval-columns;
+  geval-leg (Row 6) after eval-columns; publish-gate (Row 7) after metric-fold-fit;
+  geval-measure (Row 10 - MEASURES, runs ALONE) after geval-leg; console-panels (Row 9) after
+  metric-fold-fit + publish-gate; rejects-store (Row 12) after publish-gate; plan34-gaps
+  (Row 13) after plan 34 landed + geval-leg; apply-gate (Row 8) after publish-gate - PAUSE
+  (STEP 5). Readiness is computed, not read off the wave letter.
+
+STEP 4 - MERGE + REFILL. Dispatch the next ready row when a worker returns; verify CI + test
+records against the Definition of Done (CLAUDE.md section 9) and ship-a-pr.md; on green remove
+the worktree then gh pr merge <N> --squash --delete-branch. Merging is serialized, never
+blocks the pool.
+
+STEP 5 - ESCALATE (PAUSE that row, not the pool). Surface with the five-part shape
+(CLAUDE.md 0c) for:
+  - Row 8 (apply-gate) flips the flag and WITHHOLDS items - the FIRST change to a published
+    day. Lands ALONE, owner sign-off. This is the plan's width-1 tail.
+  - Promoting any metric's action from watch/downgrade to block - owner, on a track record.
+  - Any new Design rationale that changes a persisted contract, an unresolved persona
+    conflict, a scope change, or a 3x cost overrun.
+  HARD WAIT: eval-columns (Row 3) widens the EvalRow, and state/scores is merge=union - two
+  open widenings (this plan's and any plan-35 one) stack silently with NO conflict. Row 3
+  waits on main, never branch-stacked; after any EvalRow merge, census committed shards for a
+  stacked header (Section 0d Table C).
+
+STEP 6 - PERSONAS resolve ambiguity, not an approval gate (exact CLAUDE.md section 14 names;
+Explore for read-only breadth). Consult only when two answers lead to DIFFERENT code; DEBATE
+to one ruling on a contested decision.
+
+STEP 7 - REPORT in plain English (CLAUDE.md 0b/0c): lead with what happened, lettered tables
+with row-ids, decisions as five-part requests.
+
+CLOSURE. When every row is DONE/COLLAPSED: resolve the Reckoner, distil anything durable
+(distill-a-plan.md) - the offline-judge TODO note in Section 0e moves to
+docs/concepts/summary-quality-autotune.md as the named future consumer - delete the plan-doc,
+then sweep the worktrees.
+
+FIRST ACTION: confirm plan 34's fit core and plan 35's EvalRow churn are on main; then STEP 1
+(adopt-or-close); then dispatch fit-core (Row 1), eval-columns (Row 3) and coherence-place
+(Row 11) as their external gates clear.
+```
+
 ## Section 0 - Operating contract
 
 | Field | Value |
