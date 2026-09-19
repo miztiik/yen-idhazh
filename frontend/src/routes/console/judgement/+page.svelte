@@ -19,6 +19,7 @@
 	import WindowControl from '$lib/components/WindowControl.svelte';
 	import MergeLinePlot from './MergeLinePlot.svelte';
 	import MergedStoriesPanel from './MergedStoriesPanel.svelte';
+	import HoldoutMargin from './HoldoutMargin.svelte';
 	import JudgeAgreement from './JudgeAgreement.svelte';
 	import RecordGates from './RecordGates.svelte';
 	import VerdictSplit from './VerdictSplit.svelte';
@@ -129,6 +130,19 @@
 		axisMultiple={data.console.precision_axis_multiple}
 		width={data.console.chart_width}
 		figures={data.figures}
+	/>
+
+	<HoldoutMargin
+		marks={data.holdout.marks}
+		agreed={data.holdout.agreed}
+		skipped={data.holdout.skipped}
+		marked={data.holdout.marked}
+		applied={data.lines.at(-1)?.applied ?? data.configuredLine}
+		fitted={data.lines.length > 0}
+		weights={data.holdout.weights}
+		band={[data.similarity.band_low, data.similarity.band_high]}
+		height={data.console.chart_height}
+		width={data.console.chart_width}
 	/>
 
 	<h2 class="console-h2">What the model made of each article</h2>
