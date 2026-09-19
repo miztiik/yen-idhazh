@@ -623,33 +623,37 @@ figure the page draws can then never disagree about what a token is.
 
 ### Every figure carries the shards it was made from
 
-Three columns landed on 2026-08-29 and three more on 2026-08-30, so most
-committed rows are blank in most of them. Each derived figure therefore leaves
+A cell arrives on the half of the job's row that can know it, and a column is
+blank on every row written before it existed, so most committed rows are blank in
+some of them. Each derived figure therefore leaves
 the module as a `Reading` - a value, the shards that reported the cells it needs,
 and the shards the run split into. A page can then tell **never measured** (`from`
 is zero) from **measured on some** from **measured on all**, without guessing.
 
 `value: 0` with `from` above zero is a measurement of zero and stays one. A blank
-cell is `value: null` with `from` of zero. `RuntimeCountersRow.csv_row` states
-the rule on the writer's side: "A server that never answered and a server that
-read no tokens are different facts, and one of them is a broken scrape."
+cell is `value: null` with `from` of zero. `HostFingerprintRow.csv_row` states
+the rule on the writer's side: "Empty is not zero. A machine that publishes no L3
+size and a machine with no L3 are different facts, and only one of them is
+interesting."
 
 ### A shard is a set, and a run that cannot be reconciled is refused
 
-`state/runtime-counters.csv` is merged line by line with the union driver, while
-the deduplication that writes it reads a tree frozen at checkout. So two workflow
+These rows sat on `state/runtime-counters.csv` until 2026-09-19, and that file
+was merged line by line with the union driver while
+the deduplication that wrote it read a tree frozen at checkout. So two workflow
 runs that computed the same `run_id` both appended, and the file ended up holding
 one shard index twice. Summed as rows rather than as a set, run `2026-08-29-3`
 reported **-394 seconds** against the item ledger, which is not a number any
 machine produced.
 
-Both halves of that are now closed on the writer's side, and this reader is kept
+Every half of that is closed on the writer's side, and this reader is kept
 anyway. A run id carries the identity of the execution that made it, so two
-workflow runs can no longer compute one; and from 2026-09-18 each model-server
-job writes its counters into its own segment under `state/segments/`, so no two
-writers open this file at all and the frozen scan-before-append that could not
-see a sibling's push is gone. The union driver that made the repeat possible came
-off every head under `state/` on 2026-09-19. See
+workflow runs can no longer compute one; from 2026-09-18 each model-server
+job writes its readings into its own segment under `state/segments/`, so no two
+writers open one head and the frozen scan-before-append that could not
+see a sibling's push is gone; and the rows land on `state/host-fingerprint/`, a
+day tree, with the union driver off every head under `state/` since 2026-09-19.
+See
 [../sources/item-health.md](../sources/item-health.md#the-structure). What
 remains is that a reader of a committed file cannot assume the run that wrote it
 was made by today's pipeline, so refusing an inconsistent run stays correct and

@@ -1,6 +1,6 @@
 # Adaptive Pruning
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 
 One question, asked of every file this project writes:
 
@@ -178,12 +178,26 @@ is the count of month shards a console read opens, and no read opens a visual
 | `state/day-metrics/` | Keep | none of its own | about 13 KB a day, measured 2026-09-12 over 23 committed days, and the only place a band count or an extraction census survives the fold above |
 | `state/span-rollup/` | Keep | none of its own | the committed record a trace is not. No committed instance yet |
 | `state/visual-prunes/` | Keep | none | it is property 5 - the record of what the prune did, including the runs it did nothing |
-| `state/runtime-counters.csv` | Keep | none of its own | one appended file. The month boundary is first drawn in the published copy |
 | `state/feed-retirements.csv` | Keep | never | it carries no time window at all. A run that forgot a retired address would start asking a dead one again |
 | `state/fingerprints.csv` | Keep | none | one stamp a run |
 | `state/day-validations.csv` | Keep | none | one receipt a day, from `idhazh validate-days` |
 | `state/labels.csv` | **Keep, always** | never | the only ground truth here, and the one file in `state/` a person wrote rather than a machine. No committed instance yet |
 | `state/<run.trial_state_dirname>/validation/` | Keep | none of its own | one verdict a dispatch, filed on the day tree. It lands under the trial root because only a qualification writes it, and `prune-state` already bounds that root |
+
+### What deleting the flat counters file cost
+
+`state/runtime-counters.csv` was one row a shard, appended for the life of the
+project and never pruned. It was deleted on 2026-09-19 and the nine columns worth
+keeping moved onto `state/item-health/`, which is in the table above, and
+`state/host-fingerprint/`, which files by day beside it.
+
+**One question lost its answer, and it is named here rather than left to be
+found.** Because the flat file was never pruned, a shard from any month could
+still be read out of it. `state/item-health/` folds to month totals at
+`observability.item_health_full_grain_months`, fourteen months on the committed
+config, so past that window the per-item cells are gone and the fold is what is
+left. That knob is what sets how far back the question reaches, and raising it is
+what buys the reach back.
 
 ### `corpus/` - the rolling training window
 
@@ -207,7 +221,7 @@ project and what it costs is stated there.
 | `frontend/public/telemetry/` | Delete (projection) | `observability.public_telemetry_keep_months` | the browser's copy of `state/item-health/`, refused at any value but its source's |
 | `frontend/public/run-days/` | Delete | `observability.public_run_days_keep_months` | a reduction of the day payloads to counts. It has no state ledger to be paired with |
 | `frontend/public/day-metrics/` | Delete | `observability.public_day_metrics_keep_months` | bounds the published copy without claiming to bound the ledger, which has no age of its own |
-| `frontend/public/machine/` | Delete | `observability.public_machine_keep_months` | the source is one appended CSV, so the copy is where a month boundary first exists |
+| `frontend/public/machine/` | Delete | `observability.public_machine_keep_months` | the source is two committed day trees with no month boundary of their own, so the published copy is where one first exists |
 | `frontend/public/span-rollup/` | Delete | `observability.public_span_rollup_keep_months` | the record starts 2026-09-06, so for its first year this deletes nothing |
 | `frontend/public/console/band.json` | Keep | none needed | one file, rewritten whole each run. Question 1 stops here |
 | `frontend/public/source-health.json` | Keep | none needed | one file, rewritten whole each run |

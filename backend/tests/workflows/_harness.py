@@ -639,18 +639,6 @@ PYTHON_PROCS_FIELDS: Final = {
 }
 
 
-#: The one reading that has to be taken at both ends of the job. `/proc/stat`
-#: counts since boot, so a single read is mostly the minutes the runner spent
-#: booting. `/proc/stat` rather than a cgroup file because two cgroup files this
-#: repository has read - `memory.peak` and `cpu.max` - are absent on a
-#: GitHub-hosted runner, and `/proc/stat` is on every Linux there is.
-CPU_STAT_READING: Final = "awk '/^cpu / { print }' /proc/stat"
-
-
-#: The step that takes the first of the two readings. The second is taken in
-#: `COUNTERS_STEP`, which is also where both are handed to the row.
-CPU_STAT_STEP: Final = "Stamp the shard clock and the host"
-
 # llama-server's own loopback counters, read once at job end. The two series are
 # named because they are the two a run is read by: the busy-slot average says
 # whether batching ever happened, and the high watermark says how close the day
@@ -758,12 +746,11 @@ COMMIT_STAGED_PATHS: Final = {
     # taken from and was missed the same way.
     #
     # `state/segments` replaced `state/host-fingerprint` on 2026-09-17, and
-    # `state/item-health`, `state/scores`, `state/score-index`,
-    # `state/span-rollup` and `state/runtime-counters.csv` followed it on
-    # 2026-09-18. Each of those heads used to be appended to by up to eight work
-    # shards and by assemble; every writer now writes its own segment and
-    # `assemble` folds them in, so this job stages the segment store and no
-    # longer stages a head it does not write.
+    # `state/item-health`, `state/scores`, `state/score-index` and
+    # `state/span-rollup` followed it on 2026-09-18. Each of those heads used to
+    # be appended to by up to eight work shards and by assemble; every writer now
+    # writes its own segment and `assemble` folds them in, so this job stages the
+    # segment store and no longer stages a head it does not write.
     "work": [
         "state/traces",
         "state/segments",
@@ -852,20 +839,10 @@ CONSOLE_SEED: Final = tuple(
     if path.is_file()
 )
 
-# The third ledger the same commit step stages: what llama-server itself counted
-# for this shard. It has to sit between the other two, because the row it writes
-# is committed by the step after it.
+# The step that scrapes what llama-server itself counted for this shard, and
+# writes the kernel's memory peak beside it. The job clock step below reads both
+# files, so this one has to run first.
 COUNTERS_STEP: Final = "What the server counted"
-
-COUNTERS_COMMAND: Final = "python -m idhazh counters"
-
-# The flag that says which job a row came from. Only `work` stands a server up
-# now, and the flag stays because the committed ledger holds rows from the
-# retired visuals job: a row that cannot say which job wrote it proves nothing,
-# and the two jobs both spelled shard 0 of the same run.
-COUNTERS_JOB_FLAG: Final = "--job"
-
-COUNTERS_JOBS: Final = {"work": "work"}
 
 # Every job that records the machine it drew, and the `--job` value it files
 # under. All three of them since 2026-09-17: a run is only as fast as its
@@ -886,25 +863,12 @@ FINGERPRINT_JOBS: Final = {"plan": "plan", "work": "work", "assemble": "assemble
 # branches, so its rows live under the trial root.
 FINGERPRINT_BENCH_JOB: Final = "runtime"
 
-# The two-row fixture the reader is driven over: one `work` row and one
-# `visuals` row, sharing a date, a run and a shard index. Fixed in size, and it
-# carries a case the committed ledger has never held (Guardrail #12). The
-# `visuals` row is history - plan 11 row #6 retired that job - and the reader
-# still has to read it back.
-COUNTERS_FIXTURE: Final = FIXTURES_DIR / "runtime-counters" / "visuals-job-row.csv"
+# The step that stamps the shard job's own clock. First in the job, so the clock
+# covers the cache restore and the weight load as well as the model time, and
+# read at the job clock step - which is the only step that files it.
+CLOCK_STEP: Final = "Stamp the shard clock"
 
-# Deliberately not `--metrics`: that is llama-server's own flag, and
-# `test_every_job_that_starts_a_server_reaches_the_one_argv_builder` forbids any
-# workflow step from spelling one.
-COUNTERS_FLAG: Final = "--counters-file"
-
-# The step that stamps the shard job's own clock and names the host it drew.
-# First in the job, so the clock covers the cache restore and the weight load as
-# well as the model time, and read at the counters step - which is the only step
-# that writes a committed row at shard grain.
-CLOCK_STEP: Final = "Stamp the shard clock and the host"
-
-CLOCK_VARIABLES: Final = ("JOB_STARTED_AT", "CPU_MODEL", "CPU_STAT_AT_START")
+CLOCK_VARIABLES: Final = ("JOB_STARTED_AT",)
 
 # The other end of `FINGERPRINT_STEP`. The probe runs before the model server so
 # the bandwidth reading gets an idle machine; the job's own clock and what the
@@ -996,7 +960,6 @@ COMMIT_REFRESH_PATHS: Final = {
         "state/scores",
         "state/score-index",
         "state/item-health",
-        "state/runtime-counters.csv",
         "state/span-rollup",
         "state/traces",
         "state/host-fingerprint",
@@ -1106,6 +1069,7 @@ def _run_bodies(workflow: dict[str, object]) -> list[str]:
         if isinstance(script := step.get("run"), str)
     ]
 
+
 CONFIG_FILE_NAME: Final = "idhazh.json"
 
 
@@ -1125,9 +1089,7 @@ def _inline_programs(script: str) -> list[str]:
     Both spellings index the config, so both are in scope. A step that carries
     neither contributes nothing and is not an error.
     """
-    programs: list[str] = re.findall(
-        r"<<'PY'[^\n]*\n(.*?)\nPY(?:\n|$)", script, flags=re.DOTALL
-    )
+    programs: list[str] = re.findall(r"<<'PY'[^\n]*\n(.*?)\nPY(?:\n|$)", script, flags=re.DOTALL)
     programs.extend(re.findall(r"python3?\s+-c\s+'([^']*)'", script))
     return programs
 
@@ -1167,9 +1129,7 @@ def _reads_the_environment(node: ast.AST) -> bool:
 
 def _names(node: ast.AST, name: str) -> bool:
     """Whether an expression reads a given name anywhere inside itself."""
-    return any(
-        isinstance(inner, ast.Name) and inner.id == name for inner in ast.walk(node)
-    )
+    return any(isinstance(inner, ast.Name) and inner.id == name for inner in ast.walk(node))
 
 
 def _own_nodes(scope: ast.AST) -> list[ast.AST]:
@@ -1274,9 +1234,7 @@ def _config_key_paths(program: str) -> list[tuple[str, tuple[str, ...]]]:
     tree = ast.parse(program)
     scopes: list[ast.AST] = [tree]
     scopes.extend(
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+        node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
     )
     found: list[tuple[str, tuple[str, ...]]] = []
     for scope in scopes:
@@ -1320,13 +1278,13 @@ def _job(workflow: dict[str, object], name: str) -> dict[str, object]:
 def _steps(workflow: dict[str, object], job_name: str) -> list[dict[str, object]]:
     raw_steps = _job(workflow, job_name).get("steps")
     assert isinstance(raw_steps, list), f"job {job_name} steps must contain a YAML list"
-    assert all(isinstance(step, dict) for step in raw_steps), f"job {job_name} steps must be mappings"
+    assert all(isinstance(step, dict) for step in raw_steps), (
+        f"job {job_name} steps must be mappings"
+    )
     return cast(list[dict[str, object]], raw_steps)
 
 
-def _step(
-    workflow: dict[str, object], job_name: str, key: str, value: str
-) -> dict[str, object]:
+def _step(workflow: dict[str, object], job_name: str, key: str, value: str) -> dict[str, object]:
     matches = [step for step in _steps(workflow, job_name) if step.get(key) == value]
     assert len(matches) == 1, f"job {job_name} must have one step with {key}={value}"
     return matches[0]
@@ -1470,10 +1428,7 @@ def _evaluate_shard_matrix(script: str, requested_shards: str, derived: int) -> 
         "exit 1",
         "fi",
     ]
-    matrix_line = (
-        'echo "matrix=$(seq 0 $((SHARDS - 1)) | jq -R . | jq -sc .)" '
-        '>> "$GITHUB_OUTPUT"'
-    )
+    matrix_line = 'echo "matrix=$(seq 0 $((SHARDS - 1)) | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"'
 
     assert [line for line in lines if line.startswith("SHARD_PATTERN=")] == [pattern_line]
     assert lines.count(input_line) == 1
@@ -1751,9 +1706,7 @@ def _decide_script(step: dict[str, object]) -> str:
     the date has to arrive as a variable, or the pattern below it is reading a
     script somebody else already edited.
     """
-    script = _script(step, "digest.yml/plan/decide").replace(
-        _expression("inputs.faithfulness"), ""
-    )
+    script = _script(step, "digest.yml/plan/decide").replace(_expression("inputs.faithfulness"), "")
     assert "${{" not in script, "the decide step reads the dispatch date by name, not by paste"
     return script
 
@@ -1849,6 +1802,7 @@ def _bash() -> str | None:
             candidates.append(Path(root) / "Git" / "bin" / "bash.exe")
     return next((str(path) for path in candidates if path.is_file()), None)
 
+
 requires_bash: Final = pytest.mark.skipif(
     _bash() is None,
     reason="no bash on this host to execute .github/scripts/commit-and-push.sh",
@@ -1858,11 +1812,10 @@ requires_bash: Final = pytest.mark.skipif(
 # own value expects, so a harness that has to name an interpreter needs a path
 # without one.
 requires_space_free_paths: Final = pytest.mark.skipif(
-    " " in sys.executable
-    or " " in str(REBUILD_STAND_IN)
-    or " " in str(DROP_ENTRY_POINT),
+    " " in sys.executable or " " in str(REBUILD_STAND_IN) or " " in str(DROP_ENTRY_POINT),
     reason="REGENERATE_COMMAND is word-split on spaces",
 )
+
 
 def _isolated_env(tmp_path: Path) -> dict[str, str]:
     """Git with no machine identity and no machine config to fall back on.
@@ -1931,7 +1884,7 @@ def _transient(_directory: str, names: list[str]) -> set[str]:
     reading it, which fails the copy with a file that was never part of the
     template anyway.
     """
-    return {name for name in names if name.endswith('.lock')}
+    return {name for name in names if name.endswith(".lock")}
 
 
 def _write(path: Path, text: str) -> None:

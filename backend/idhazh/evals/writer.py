@@ -49,9 +49,9 @@ from pathlib import Path
 from typing import Final, NamedTuple
 
 from idhazh import day_partition, ledger
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.observation_index import ObservationIndexRow
-from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.evals import archive
 from idhazh.ledger import read_header as _read_header
 from idhazh.ledger import require_matching_header

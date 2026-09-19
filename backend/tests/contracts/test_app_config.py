@@ -126,8 +126,7 @@ def test_a_fresh_clone_runs_on_the_defaults() -> None:
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     minimal = AppConfig.model_validate({})
     assert minimal.models_file == committed.models_file, (
-        "the default names the committed file, or a fresh clone reads a model "
-        "nobody put there"
+        "the default names the committed file, or a fresh clone reads a model nobody put there"
     )
     assert (CONFIG_DIR / minimal.models_file).is_file()
     assert minimal.run.safety_ceiling_per_run == committed.run.safety_ceiling_per_run
@@ -194,7 +193,7 @@ def test_the_alarm_point_and_the_pages_cap_stay_two_knobs() -> None:
     assert (tuned.site_budget_mb, tuned.pages_hard_cap_mb) == (600, 900)
 
 
-def test_the_runtime_counters_are_on_without_being_asked_for() -> None:
+def test_the_model_metrics_are_on_without_being_asked_for() -> None:
     """A run that did not count is a run that cannot say how close it came.
 
     llama-server publishes the context high watermark only under `--metrics`.
@@ -741,9 +740,7 @@ def test_the_side_a_figure_sits_on_is_a_knob_the_frontend_agrees_with() -> None:
     assert mirrored is not None, "the frontend dropped its visual_side default"
     assert mirrored.group(1) == UiConfig().visual_side.value
 
-    card = read_text(
-        REPO_ROOT / "frontend" / "src" / "lib" / "components" / "DigestItem.svelte"
-    )
+    card = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "components" / "DigestItem.svelte")
     assert card.index("<ItemVisual") > card.index("data-item-summary"), (
         "the card draws its figure before the summary, so `trailing` is the wrong default"
     )
@@ -852,7 +849,6 @@ def test_a_fresh_clone_measures_itself_and_the_committed_config_agrees() -> None
     assert fresh.observability == committed.observability
     assert fresh.observability.evaluation_enabled
     assert fresh.observability.telemetry_publish
-    assert fresh.observability.runtime_counters_scrape
     assert fresh.observability.tracing_enabled
 
 
@@ -880,14 +876,11 @@ def test_the_item_health_census_is_not_switchable() -> None:
     which one produced the number.
     """
     switches = {
-        name
-        for name, field in ObservabilityConfig.model_fields.items()
-        if field.annotation is bool
+        name for name, field in ObservabilityConfig.model_fields.items() if field.annotation is bool
     }
     assert switches == {
         "evaluation_enabled",
         "telemetry_publish",
-        "runtime_counters_scrape",
         "tracing_enabled",
         "host_fingerprint",
     }
@@ -1059,11 +1052,7 @@ def test_every_flag_but_the_permanent_one_names_the_reading_that_retires_it() ->
     every one of them is measured over. `item_lines` is the declared exception
     and has to say so; `level` is not a flag and carries no condition either.
     """
-    flags = {
-        name
-        for name, field in LoggingConfig.model_fields.items()
-        if name != "level"
-    }
+    flags = {name for name, field in LoggingConfig.model_fields.items() if name != "level"}
     assert flags == {
         "item_lines",
         "stage_lines",
@@ -1183,8 +1172,7 @@ def test_the_committed_defaults_build_a_record_the_contract_accepts() -> None:
         band_high=knobs.band_high,
         bin_width=knobs.bin_width,
         slots=tuple(
-            ScoreSlot(bin_low=round(knobs.band_low + i * knobs.bin_width, 3))
-            for i in range(slots)
+            ScoreSlot(bin_low=round(knobs.band_low + i * knobs.bin_width, 3)) for i in range(slots)
         ),
     )
 

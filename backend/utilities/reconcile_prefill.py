@@ -2,10 +2,11 @@
 
 Two instruments measure the same thing and neither knows about the other. The
 item-health ledger sums a field the summarize stage copied out of each model
-reply; `state/runtime-counters.csv` carries what llama-server counted for the
-whole shard. `docs/architecture/summarize/throughput.md` and the console both
-publish rates derived from the first one, so the second one is what makes those
-rates checkable rather than merely reported (Guardrail #10).
+reply; `state/host-fingerprint/` carries what llama-server counted for the whole
+job, in `server_prompt_tokens` and `server_prompt_seconds`.
+`docs/architecture/summarize/throughput.md` and the console both publish rates
+derived from the first one, so the second one is what makes those rates
+checkable rather than merely reported (Guardrail #10).
 
 This is an audit and not a stage. It runs when somebody doubts a published
 number, never on the daily pipeline's critical path, because a check that can
@@ -30,8 +31,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from idhazh.contracts.runtime_counters import WORK_JOB, RuntimeCountersRow
-from idhazh.ledger import item_health_path, load_runtime_counters
+from idhazh.contracts.base import WORK_JOB
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.ledger import host_fingerprint_path, item_health_path
 
 #: How far apart the two instruments may be before one of them is wrong.
 #:
@@ -72,12 +74,12 @@ class Pooled:
         return self.tokens / self.seconds if self.seconds > 0 else 0.0
 
 
-def pool_counters(rows: list[RuntimeCountersRow]) -> Pooled:
-    """One run's shards, summed. A shard whose scrape came back empty is counted
+def pool_counters(rows: list[HostFingerprintRow]) -> Pooled:
+    """One run's jobs, summed. A job whose scrape came back empty is counted
     as a part and contributes nothing, so a caller can see it was there."""
     return Pooled(
-        tokens=sum(row.prompt_tokens_total or 0 for row in rows),
-        seconds=sum(row.prompt_seconds_total or 0.0 for row in rows),
+        tokens=sum(row.server_prompt_tokens or 0 for row in rows),
+        seconds=sum(row.server_prompt_seconds or 0.0 for row in rows),
         parts=len(rows),
     )
 
@@ -129,7 +131,7 @@ class Reconciliation:
     def verdict(self) -> str:
         """Plain words, and when they disagree, which side to doubt first."""
         if self.server.parts == 0:
-            return "no shard committed a counter snapshot for this run - nothing to check against"
+            return "no job committed a counter snapshot for this run - nothing to check against"
         if self.ledger.parts == 0:
             return "no item-health row for this run carries timings - nothing to check"
         if self.agrees:
@@ -153,10 +155,35 @@ class Reconciliation:
                 f"{self.ledger.parts} items)",
                 f"  server  {self.server.rate:8.4f} tok/s  "
                 f"({self.server.tokens} tokens read over {self.server.seconds:.2f} s, "
-                f"{self.server.parts} shards)",
+                f"{self.server.parts} jobs)",
                 f"  {self.verdict}",
             )
         )
+
+
+def load_server_counters(state_dir: Path, *, run_id: str) -> list[HostFingerprintRow]:
+    """Every `work` job's two server-prompt cells for one run, in shard order.
+
+    Cover: the one day file the run id names. Bounded by construction - a run id
+    already carries its date - so the read costs a day however long the ledger
+    gets (Guardrail #12). A row that no longer parses is skipped: this is an
+    audit, and one stale row is worth less than the answer.
+    """
+    rows: list[HostFingerprintRow] = []
+    source = host_fingerprint_path(state_dir, run_id[:10])
+    if not source.is_file():
+        return rows
+    with source.open("r", encoding="utf-8", newline="") as handle:
+        for raw in csv.DictReader(handle):
+            if raw.get("run_id") != run_id:
+                continue
+            try:
+                row = HostFingerprintRow.from_csv_row(raw)
+            except (KeyError, ValueError):
+                continue
+            if row.job == WORK_JOB:
+                rows.append(row)
+    return sorted(rows, key=lambda row: row.shard)
 
 
 def reconcile(state_dir: Path, *, run_id: str) -> Reconciliation:
@@ -170,13 +197,7 @@ def reconcile(state_dir: Path, *, run_id: str) -> Reconciliation:
     return Reconciliation(
         run_id=run_id,
         ledger=pool_ledger(item_health_path(state_dir, run_id[:10]), run_id=run_id),
-        server=pool_counters(
-            [
-                row
-                for row in load_runtime_counters(state_dir, run_id=run_id)
-                if row.job == WORK_JOB
-            ]
-        ),
+        server=pool_counters(load_server_counters(state_dir, run_id=run_id)),
     )
 
 

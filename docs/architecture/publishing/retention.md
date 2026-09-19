@@ -64,10 +64,9 @@ set is what an unpublish has to answer for:
 | `state/scores/<Y>/<M>/<D>.csv` | day | remove |
 | `state/score-index/<Y>/<M>/<D>.csv` | day | remove |
 | `state/item-health/<Y>/<M>/<D>.csv` | day | remove |
-| `state/runtime-counters.csv` | append-only | rewrite without the day |
 | `corpus/corpus.jsonl` | rolling window | rewrite without the day |
 
-The month-grain rows are the trap. Three of them are shards a later run appends
+The month-grain rows are the trap. Two of them are shards a later run appends
 to, so a command that deletes the shard takes the neighbouring days with it, and
 a command that leaves it alone publishes telemetry for a day that no longer
 exists. The index is worse: it is derived, and `assemble.rebuild_search_index`

@@ -250,7 +250,6 @@ def test_the_constraints_are_declared_before_the_fold_and_the_fold_runs_first() 
 #: two tests below is that the row is built by hand with no helper in the way.
 FOREIGN_CENSUS_CELLS: tuple[str, ...] = (
     "detail",
-
     "label_finish_reason",
     "summary_finish_reason",
     "cpu_model",
@@ -314,7 +313,6 @@ def test_a_row_built_by_hand_still_refuses_a_crooked_identity() -> None:
 
     with pytest.raises(ValidationError, match="url_key"):
         _failed_census_row(url_key="NOT a digest \u2014 at all")
-
 
 
 @pytest.mark.parametrize("case", sorted(HOSTILE))
@@ -493,72 +491,35 @@ def test_the_processor_name_fits_its_column() -> None:
     any byte that is not valid UTF-8 - a character the column refuses. The
     fallback is `platform.processor()`, which is whatever the OS says and is
     bounded by nothing.
+
+    The cell crosses to the browser as `PublicTelemetryRow.cpu_model`, so a name
+    that could not be printed still has to leave the column readable.
     """
-    from idhazh.contracts.runtime_counters import UNPRINTABLE_CPU, RuntimeCountersRow
+    from idhazh.contracts.item_health import UNPRINTABLE, ItemHealthRow
+
+    def fitted(raw: str) -> str:
+        return base.fit_field(raw, model=ItemHealthRow, field="cpu_model", absent=UNPRINTABLE)
 
     for case, raw in HOSTILE.items():
-        row = RuntimeCountersRow.from_metrics_text(
-            "",
-            date="2026-09-15",
-            run_id="2026-09-15-1",
-            job="work",
-            scraped_at="2026-09-15T00:00:00Z",
-            shard=0,
-            shards=1,
-            cpu_model=raw,
-        )
-        assert row.cpu_model, f"{case} emptied cpu_model"
-        assert len(row.cpu_model.splitlines()) == 1
+        cell = fitted(raw)
+        assert cell, f"{case} emptied cpu_model"
+        assert len(cell.splitlines()) == 1
 
-    silent = RuntimeCountersRow.from_metrics_text(
-        "",
-        date="2026-09-15",
-        run_id="2026-09-15-1",
-        job="work",
-        scraped_at="2026-09-15T00:00:00Z",
-        shard=0,
-        shards=1,
-        cpu_model=None,
-    )
-    assert silent.cpu_model is None, (
-        "a probe that reported nothing is not a probe that was unreadable"
-    )
+    assert fitted("\ufffd\ufffd") == "??", "two unreadable bytes are two characters, not a verdict"
+    assert fitted("\u0301\u0301") == UNPRINTABLE
 
-    unreadable = RuntimeCountersRow.from_metrics_text(
-        "",
-        date="2026-09-15",
-        run_id="2026-09-15-1",
-        job="work",
-        scraped_at="2026-09-15T00:00:00Z",
-        shard=0,
-        shards=1,
-        cpu_model="\ufffd\ufffd",
+    row = ItemHealthRow.model_validate(
+        {
+            "version": ItemHealthRow.schema_version(),
+            "date": "2026-09-15",
+            "run_id": "2026-09-15-1",
+            "item_id": "ai-01",
+            "stage": "summarize",
+            "outcome": "ok",
+            "cpu_model": None,
+        }
     )
-    assert unreadable.cpu_model == "??", "two unreadable bytes are two characters, not a verdict"
-
-    blank = RuntimeCountersRow.from_metrics_text(
-        "",
-        date="2026-09-15",
-        run_id="2026-09-15-1",
-        job="work",
-        scraped_at="2026-09-15T00:00:00Z",
-        shard=0,
-        shards=1,
-        cpu_model="\t\t",
-    )
-    assert blank.cpu_model is None, "whitespace is a probe that said nothing, not an unreadable one"
-
-    nothing_printable = RuntimeCountersRow.from_metrics_text(
-        "",
-        date="2026-09-15",
-        run_id="2026-09-15-1",
-        job="work",
-        scraped_at="2026-09-15T00:00:00Z",
-        shard=0,
-        shards=1,
-        cpu_model="\u0301\u0301",
-    )
-    assert nothing_printable.cpu_model == UNPRINTABLE_CPU
+    assert row.cpu_model is None, "a probe that reported nothing is not a probe that was unreadable"
 
 
 def test_the_headline_writer_fits_its_column() -> None:
