@@ -52,8 +52,8 @@ export function runIdOf(index: number): string {
 	return `${dayOf(Math.floor(index / 2))}-${(index % 2) + 1}`;
 }
 
-/** One row per shard per run, the shape `state/runtime-counters.csv` holds. */
-export function counterRows(sizes: Sizes): Record<string, string>[] {
+/** One row per shard per run, the shape `state/host-fingerprint/` holds. */
+export function machineRows(sizes: Sizes): Record<string, string>[] {
 	const next = sequence(11);
 	const rows: Record<string, string>[] = [];
 	for (let run = 0; run < sizes.runs; run += 1) {
@@ -63,26 +63,24 @@ export function counterRows(sizes: Sizes): Record<string, string>[] {
 			rows.push({
 				date: dayOf(Math.floor(run / 2)),
 				run_id: runIdOf(run),
+				job: 'work',
 				shard: String(shard),
-				shards: String(sizes.shards),
-				scraped_at: `${dayOf(Math.floor(run / 2))}T0${shard % 8}:00:00Z`,
-				prompt_tokens_total: String(promptTokens),
-				prompt_tokens_cached_total: String(Math.round(promptTokens / 8)),
-				prompt_seconds_total: String(readSeconds),
-				tokens_predicted_total: String(6_000 + Math.round(next() * 2_000)),
-				tokens_predicted_seconds_total: String(700 + Math.round(next() * 300)),
-				n_decode_total: String(5_000 + Math.round(next() * 1_000)),
-				n_tokens_max: String(4_000 + Math.round(next() * 2_000)),
-				n_busy_slots_per_decode: '1.0',
+				server_prompt_tokens: String(promptTokens),
+				server_prompt_seconds: String(readSeconds),
 				job_seconds: String(2_400 + Math.round(next() * 1_200)),
 				cpu_model: shard % 2 === 0 ? 'AMD EPYC 9V45' : 'AMD EPYC 9V74',
-				cpu_busy_pct: String(85 + Math.round(next() * 10)),
-				peak_rss_bytes: String(12_000_000_000 + Math.round(next() * 1_000_000_000)),
 				model_load_ms: String(3_500 + Math.round(next() * 800))
 			});
 		}
 	}
 	return rows;
+}
+
+/** What each run's manifest recorded as its planned shard count. */
+export function plannedOf(sizes: Sizes): Map<string, number> {
+	const found = new Map<string, number>();
+	for (let run = 0; run < sizes.runs; run += 1) found.set(runIdOf(run), sizes.shards);
+	return found;
 }
 
 /** One row per item, the shape `state/item-health/<YYYY-MM>.csv` holds.
@@ -115,7 +113,10 @@ export function healthRows(sizes: Sizes): Record<string, string>[] {
 			decode_ms: String(20_000 + Math.round(next() * 40_000)),
 			input_tokens: String(2_000 + Math.round(next() * 3_000)),
 			cached_tokens: String(Math.round(next() * 400)),
-			output_tokens: String(150 + Math.round(next() * 120))
+			output_tokens: String(150 + Math.round(next() * 120)),
+			cpu_busy_pct: String(85 + Math.round(next() * 10)),
+			llama_rss_peak_bytes: String(12_000_000_000 + Math.round(next() * 1_000_000_000)),
+			cpu_model: index % 2 === 0 ? 'AMD EPYC 9V45' : 'AMD EPYC 9V74'
 		});
 	}
 	return rows;

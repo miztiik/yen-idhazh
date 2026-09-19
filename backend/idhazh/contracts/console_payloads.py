@@ -28,8 +28,8 @@ from idhazh.contracts import (
 )
 from idhazh.contracts.base import Contract
 from idhazh.contracts.day_metrics import DayMetrics
+from idhazh.contracts.machine_shard import MachineShardRow
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
-from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.span_rollup import SpanRollupRow
 
@@ -127,14 +127,14 @@ CONSOLE_PAYLOADS: Final[tuple[ConsolePayload, ...]] = (
         ),
     ),
     ConsolePayload(
-        reader="runtime-counters.ts loadMachineCounters()",
+        reader="machine.read_shard()",
         published_to="frontend/public/machine/<YYYY-MM>.csv",
-        contract=RuntimeCountersRow,
+        contract=MachineShardRow,
         forbidden=frozenset(),
         why=(
-            "What the hardware did while the model ran. Nothing on the row came from "
-            "the open web: every cell is our own server's counter, our own job clock "
-            "or the runner's CPU name, so the whole row crosses."
+            "What the hardware did while the model ran, one row a work shard. Nothing "
+            "on the row came from the open web: every cell is a fold of our own item "
+            "ledger or a counter our own server kept, so the whole row crosses."
         ),
     ),
     ConsolePayload(
