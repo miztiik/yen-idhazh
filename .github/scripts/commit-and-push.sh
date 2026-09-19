@@ -214,8 +214,8 @@ report_rebased() {
   echo "rebased=$REBASED" >> "$GITHUB_OUTPUT"
 }
 
-git config user.name "yen-idhazh pipeline"
-git config user.email "pipeline@yen-idhazh.invalid"
+git config user.name "miztiik"
+git config user.email "miztiik@users.noreply.github.com"
 git add "$@"
 if git diff --cached --quiet; then
   echo "$NOTHING_STAGED_MESSAGE"

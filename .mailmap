@@ -1,0 +1,14 @@
+# Every commit here is the repository owner's. A build agent, a workflow and a
+# local orchestrator each used to stamp their own identity, which told a reader
+# nothing the commit message did not already say. This file keeps the one name
+# true for `git log`, `git shortlog` and `git blame` if a stray identity lands.
+miztiik <miztiik@users.noreply.github.com> <pipeline@yen-idhazh.invalid>
+miztiik <miztiik@users.noreply.github.com> <yen-idhazh@users.noreply.github.com>
+miztiik <miztiik@users.noreply.github.com> <noreply@users.noreply.github.com>
+miztiik <miztiik@users.noreply.github.com> <noreply@github.com>
+miztiik <miztiik@users.noreply.github.com> <copilot@github.com>
+miztiik <miztiik@users.noreply.github.com> <41898282+github-actions[bot]@users.noreply.github.com>
+miztiik <miztiik@users.noreply.github.com> <o@example.invalid>
+miztiik <miztiik@users.noreply.github.com> <orch@local>
+miztiik <miztiik@users.noreply.github.com> <orchestrator@local>
+miztiik <miztiik@users.noreply.github.com> <agent@local>
