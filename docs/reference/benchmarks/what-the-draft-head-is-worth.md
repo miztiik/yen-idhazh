@@ -127,6 +127,14 @@ dispatch can answer is which `n_max`, if any, is output-identical to the head
 being off; whether the drift scales with the drafted depth; or whether the head
 itself is the cause and the depth is irrelevant.
 
+**The breadth comes from several jobs rather than a longer one.** Eight passes
+over five articles is about 524 minutes, against a platform ceiling of 360 that
+no setting moves - so the four cases cannot share one job with five articles.
+`runtime_corpus_offset` takes a later slice of the day's plan, and three
+dispatches of two articles carry six between them. Every case still runs inside
+one job, so every case-against-case comparison is on one machine; what crosses
+jobs is a different article, and no reading compares one article with another.
+
 **The practical consequence: the head is not a speed setting, it is a different
 model.** It cannot be switched on after qualification and it cannot be switched
 off after it. Whichever configuration is qualified is the one that has to
