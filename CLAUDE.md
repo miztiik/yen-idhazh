@@ -206,7 +206,7 @@ Safe workflow: `git status --porcelain`, leave unrelated dirty files alone, stag
 
 Commit messages describe the change. **No AI co-author / attribution tags** - a `Co-authored-by` trailer is one, whoever generated it.
 
-**One identity commits here: `miztiik <miztiik@users.noreply.github.com>`.** A machine account in the author field tells a reader nothing the commit message does not already say. Every place that commits sets it, and [`.mailmap`](.mailmap) folds the retired ones.
+**One identity commits here: `miztiik <miztiik@users.noreply.github.com>`.** A machine account in the author field tells a reader nothing the commit message does not already say. Every place that commits sets it, and [`.mailmap`](.mailmap) folds the one identity a commit cannot choose - GitHub signs the squash commit it makes on a merge.
 
 **A branch name reaches the permanent record, so it is written like a commit message** (section 0b). Merge commits are off at the repository, leaving squash only, so a branch name no longer reaches a commit message at all.
 
