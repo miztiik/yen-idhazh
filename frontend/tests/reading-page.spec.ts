@@ -22,9 +22,9 @@
  * - **The aside and the sticky filter panel keep out of each other's way.** Two
  *   changes put two things in the same 1400px screen: an 18rem aside and a
  *   panel that sticks from 1024px. Neither knows about the other.
- * - **A day that half arrives is still a designed page.** The dated routes seed
- *   and fetch; a separate design says what a reader meets when
- *   the fetch fails. The three cases below break the fetch at the network and
+ * - **A day that never arrives still offers recovery.** Dated routes fetch the
+ *   whole day. A missing file shows the missing-day page; an unreadable response
+ *   offers a retry. The three cases below break the fetch at the network and
  *   count what they broke - a case that intercepted nothing has proved that a
  *   page loads, which it would have done anyway.
  * - **The offline reader changes nothing a reader can see.** A worker sits in
@@ -554,12 +554,6 @@ test.describe('the count and the address', () => {
 });
 
 test.describe('a day whose stories never arrive', () => {
-	test.skip(
-		!PAST_SEED,
-		`${DAY} publishes ${SERVED_ITEMS} stories against a seed of ${SEED}, so its ` +
-			'document already carries the whole day and nothing fetches'
-	);
-
 	/** Break the day payload and count what was broken.
 	 *
 	 * Decision 3: a case that reports zero interceptions is a null result rather
@@ -569,7 +563,8 @@ test.describe('a day whose stories never arrive', () => {
 	async function broken(
 		page: Page,
 		name: string,
-		answer: (route: import('@playwright/test').Route) => Promise<void>
+		answer: (route: import('@playwright/test').Route) => Promise<void>,
+		state: 'missing' | 'unreachable' = 'unreachable'
 	): Promise<number> {
 		const taken: string[] = [];
 		await page.route(`**${DAY_PATH}`, async (route) => {
@@ -579,10 +574,14 @@ test.describe('a day whose stories never arrive', () => {
 		await page.addInitScript(`localStorage.setItem('idhazh:theme', 'dark')`);
 		await page.setViewportSize({ width: 1536, height: 900 });
 		await page.goto(`/${DAY}/`);
-		await expect(
-			page.locator('[data-payload-state]'),
-			`the ${name} case never reached a settled state`
-		).toHaveAttribute('data-payload-state', 'unreachable');
+		if (state === 'missing') {
+			await expect(page.getByRole('heading', { name: 'Not here', exact: true })).toBeVisible();
+		} else {
+			await expect(
+				page.locator('[data-payload-state]'),
+				`the ${name} case never reached a settled state`
+			).toHaveAttribute('data-payload-state', state);
+		}
 		console.log(`[reading-page] ${name}: intercepted ${taken.length} - ${taken.join(', ')}`);
 		expect(taken.length, `the ${name} case intercepted nothing, so it measured nothing`).toBeGreaterThan(
 			0
@@ -590,8 +589,7 @@ test.describe('a day whose stories never arrive', () => {
 		return taken.length;
 	}
 
-	/** What the reader is left with, whichever way the day failed: the designed
-	 * panel, the retry, and every story the document already carried. */
+	/** An unreadable dated payload offers a retry and draws no invented stories. */
 	async function designed(page: Page, name: string): Promise<void> {
 		await expect(
 			page.locator('[data-payload-state] .failed-headline'),
@@ -601,11 +599,9 @@ test.describe('a day whose stories never arrive', () => {
 			page.getByRole('button', { name: 'Try again' }),
 			`the ${name} case offers no way to try again`
 		).toHaveCount(1);
-		const held = await page.locator('article.item').count();
-		expect(
-			held,
-			`the ${name} case took the document's own stories away as well`
-		).toBeGreaterThan(0);
+		await expect(page.locator('article.item')).toHaveCount(0);
+		await expect(page.locator('main')).not.toContainText('The stories above are all here.');
+		await expect(page.getByRole('heading', { name: 'Not here', exact: true })).toHaveCount(0);
 		const measured = await page.evaluate(() => ({
 			scrollWidth: document.documentElement.scrollWidth,
 			clientWidth: document.documentElement.clientWidth
@@ -618,8 +614,13 @@ test.describe('a day whose stories never arrive', () => {
 
 	test('absent: the host does not have the file', async ({ page }) => {
 		const faults = watch(page);
-		await broken(page, 'absent', (route) => route.fulfill({ status: 404, body: '' }));
-		await designed(page, 'absent');
+		await broken(page, 'absent', (route) => route.fulfill({ status: 404, body: '' }), 'missing');
+		await expect(page.locator('main')).toContainText('No digest was published for');
+		await expect(page.getByRole('link', { name: 'Today', exact: true })).toHaveAttribute('href', '/');
+		await expect(page.getByRole('link', { name: 'All days', exact: true })).toHaveAttribute('href', '/archive/');
+		await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0);
+		await expect(page.locator('article.item')).toHaveCount(0);
+		expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
 		// The 404 is the case. What must not be there is anything thrown.
 		expect(
 			faults.errors,
@@ -633,6 +634,11 @@ test.describe('a day whose stories never arrive', () => {
 			route.fulfill({ status: 200, contentType: 'application/json', body: '' })
 		);
 		await designed(page, 'empty');
+		await page.unroute(`**${DAY_PATH}`);
+		await page.getByRole('button', { name: 'Try again' }).click();
+		await dayReady(page);
+		await expect(page.locator('article.item').first()).toBeVisible();
+		await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(0);
 		expect(faults.errors, `the empty case threw:\n${faults.errors.join('\n')}`).toEqual([]);
 	});
 
@@ -864,11 +870,11 @@ test.describe('one card, and every publisher on it is a way in', () => {
 	 * A case that intercepted nothing has proved that a page loads, which it would
 	 * have done anyway - the same rule the broken-day cases above follow.
 	 */
-	async function openFolded(page: Page, hash = ''): Promise<void> {
+	async function openFolded(page: Page, hash = '', payload = SERVED): Promise<void> {
 		const taken: string[] = [];
 		await page.route(`**${FOLD_PATH}`, async (route) => {
 			taken.push(new URL(route.request().url()).pathname);
-			await route.fulfill({ status: 200, contentType: 'application/json', body: SERVED });
+			await route.fulfill({ status: 200, contentType: 'application/json', body: payload });
 		});
 		await page.addInitScript(`localStorage.setItem('idhazh:theme', 'dark')`);
 		await page.setViewportSize({ width: 1536, height: 900 });
@@ -879,6 +885,26 @@ test.describe('one card, and every publisher on it is a way in', () => {
 
 	const drawn = (page: Page): Promise<string[]> =>
 		page.locator('article.item[id]').evaluateAll((nodes) => nodes.map((node) => node.id));
+
+	test('successive lead links scroll to and focus each story', async ({ page }) => {
+		const payload = projectDay(JSON.stringify({
+			...COMMITTED,
+			leads: [
+				{ item_id: ANCHOR, reason: 'Three newsrooms ran it.' },
+				{ item_id: ALONE, reason: 'A separate story from the day.' }
+			]
+		}));
+		await openFolded(page, '', payload);
+		await expect(page.locator('[data-leading] a')).toHaveCount(2);
+		const before = await drawn(page);
+		for (const target of [ANCHOR, ALONE, ANCHOR]) {
+			await page.locator(`[data-leading] a[href="#${target}"]`).click();
+			const story = page.locator(`article.item[id="${target}"]`);
+			await expect(story).toBeInViewport();
+			await expect(story).toBeFocused();
+		}
+		expect(await drawn(page)).toEqual(before);
+	});
 
 	test('the projector kept every story, so nothing built from the payload lost one', () => {
 		// The archive list and the month search index are both built from this
