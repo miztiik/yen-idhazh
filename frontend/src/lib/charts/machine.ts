@@ -511,7 +511,7 @@ export interface ClockView {
  * `input_tokens - cached_tokens` is the definition, and it is defined HERE
  * rather than in the reader so there is exactly one of it: the runtime reused
  * the cached ones instead of reading them, so leaving them in reports a rate
- * the machine never ran at. `poolLedger` in `$lib/server/runtime-counters.ts`
+ * the machine never ran at. `poolLedger` in `$lib/server/machine-counters.ts`
  * calls this, which is why that module imports a chart module rather than the
  * other way round for this one function.
  *
