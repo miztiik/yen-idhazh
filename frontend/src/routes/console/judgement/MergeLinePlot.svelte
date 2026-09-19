@@ -53,7 +53,7 @@
 		/** Every day the record fitted a row for, oldest first. */
 		days: LineDay[];
 		/** The band and the daily step, off `config/idhazh.json`. */
-		knobs: { band_low: number; band_high: number; max_down_step: number };
+		knobs: { band_low: number; band_high: number };
 		viewport: TimeWindow;
 		height: number;
 		width: number;

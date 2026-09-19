@@ -114,8 +114,10 @@ def a_written_row(
         held_reason=HeldReason.NONE if proposed is not None else HeldReason.SHEET_TOO_SMALL,
         daily_shift=daily_shift,
         discard_share=KNOBS.discard_share,
-        smoothing_weight=KNOBS.smoothing_weight,
+        fall_weight=KNOBS.fall_weight,
+        rise_weight=KNOBS.rise_weight,
         max_down_step=KNOBS.max_down_step,
+        max_up_step=KNOBS.max_up_step,
         step_change_multiple=KNOBS.step_change_multiple,
         pairs_in_band=0,
         pairs_judged=0,
@@ -138,9 +140,9 @@ def a_written_row(
 def test_the_line_is_the_upper_edge_of_the_slot_the_walk_stopped_in() -> None:
     """The walk stops past the discarded share, and reports the slot's TOP edge.
 
-    100 negatives sets one pair aside. The single NO at 0.970 is that one, so the
-    walk carries on into 0.950 where the other 99 sit, and the line comes back at
-    0.951 rather than at 0.950.
+    100 negatives sets three pairs aside. The single NO at 0.970 is inside that
+    set-aside, so the walk carries on into 0.950 where the other 99 sit, and the
+    line comes back at 0.951 rather than at 0.950.
     """
     record = a_record(negatives={0.970: 1, 0.950: 99})
 
@@ -172,79 +174,202 @@ def test_a_pair_scoring_the_line_merges_so_the_line_is_the_slots_upper_edge() ->
     assert line > 0.950 + KNOBS.bin_width - 1e-9, "the line is above every NO in that slot"
 
 
-def test_one_stray_verdict_at_the_top_cannot_set_the_line() -> None:
-    """A single NO at 0.99 would pin the line at 0.991 for ever if nothing discarded.
+def test_one_bad_night_at_the_top_cannot_set_the_line() -> None:
+    """The share has to absorb a CLUSTER of wrong NO verdicts, not one stray.
 
-    200 negatives sets two aside, and the stray is one of them, so the line lands
-    on the body of the evidence instead of on the outlier.
+    A judge that misreads one news cluster produces a block of wrong verdicts on
+    one night, not independent ones: in the 200 labelled pairs of 2026-09-19 all
+    four two-story marks came from a single cluster. Four NO verdicts at 0.99
+    would pin the line at 0.991 for ever if the share did not reach past them.
+    At 204 negatives, 0.03 sets six aside and the block is inside it; 0.01 sets
+    two aside and the block sets the line.
     """
-    record = a_record(negatives={0.990: 1, 0.930: 200})
+    record = a_record(negatives={0.990: 4, 0.930: 200})
 
     assert fit.fit_line(record, discard_share=KNOBS.discard_share) == pytest.approx(0.931)
+    assert fit.fit_line(record, discard_share=0.01) == pytest.approx(0.991), (
+        "one percent sets two aside, which one bad night walks straight past"
+    )
 
 
-def test_the_discard_needs_enough_negatives_to_discard_anything() -> None:
-    """One percent of 50 is nothing, so the walk stops at the highest NO on record.
+def test_the_discard_needs_enough_negatives_to_absorb_a_bad_night() -> None:
+    """Three percent of 100 sets three aside, and a four-verdict cluster beats it.
 
-    This is what `minimum_negatives` waits for: below 200 the discard sets aside
-    fewer than two pairs, which is the same as setting aside none, and the line
-    would be whatever the single highest verdict said.
+    This is what `minimum_negatives` waits for. The same record at 200 negatives
+    sets six aside and the cluster is absorbed, so the gate is not a round number
+    somebody liked - it is where the share first covers one bad night.
     """
-    record = a_record(negatives={0.990: 1, 0.930: 49})
+    too_few = a_record(negatives={0.990: 4, 0.930: 96})
+    enough = a_record(negatives={0.990: 4, 0.930: 196})
 
-    assert fit.fit_line(record, discard_share=KNOBS.discard_share) == pytest.approx(0.991)
+    assert fit.fit_line(too_few, discard_share=KNOBS.discard_share) == pytest.approx(0.991)
+    assert fit.fit_line(enough, discard_share=KNOBS.discard_share) == pytest.approx(0.931)
 
 
 def test_a_record_with_nothing_to_walk_reports_no_line() -> None:
     """An empty walk has no answer, and a number would read as one somebody took."""
-    assert fit.fit_line(a_record(positives={0.950: 40}), discard_share=0.01) is None
+    assert (
+        fit.fit_line(a_record(positives={0.950: 40}), discard_share=KNOBS.discard_share)
+        is None
+    )
 
 
-# --- step 2: the damping ------------------------------------------------------
+# --- step 2: the dead zone ----------------------------------------------------
 
 
-def test_a_rise_is_taken_whole() -> None:
-    """Raising the line removes wrong merges, so the safe move arrives today."""
-    assert fit.damp(0.95, 0.94, smoothing_weight=0.15) == pytest.approx(0.95)
+def test_a_proposal_inside_one_slot_of_the_line_is_not_a_move() -> None:
+    """The line is a slot's upper edge, so half a slot lands on no edge at all.
+
+    Without this the damping leaves a geometric tail whose steps shrink below one
+    slot for ever, and the applied line never formally arrives at its proposal.
+    """
+    assert not fit.is_a_move(0.9395, 0.94, dead_zone=KNOBS.dead_zone)
+    assert not fit.is_a_move(0.9405, 0.94, dead_zone=KNOBS.dead_zone)
+    assert fit.is_a_move(0.939, 0.94, dead_zone=KNOBS.dead_zone)
+    assert fit.is_a_move(0.941, 0.94, dead_zone=KNOBS.dead_zone)
 
 
-def test_a_fall_is_damped() -> None:
-    """Lowering the line admits merges, so it arrives over a week."""
-    assert fit.damp(0.90, 0.94, smoothing_weight=0.15) == pytest.approx(0.934)
+# --- step 3: the damping ------------------------------------------------------
 
 
-# --- step 3: the clamps -------------------------------------------------------
+def test_a_fall_is_the_fast_direction() -> None:
+    """Lowering the line publishes less, which is the house rule, so half lands today."""
+    landed = fit.damp(0.90, 0.94, fall_weight=0.5, rise_weight=0.15)
+
+    assert landed == pytest.approx(0.92)
+
+
+def test_a_rise_is_the_slow_direction() -> None:
+    """Raising the line folds more stories together, so it arrives over weeks."""
+    landed = fit.damp(0.95, 0.94, fall_weight=0.5, rise_weight=0.15)
+
+    assert landed == pytest.approx(0.9415)
+
+
+def test_the_fast_direction_is_still_damped() -> None:
+    """A fall does not land whole, and this is the assertion that says so.
+
+    One judge misreading one news cluster produces a block of adjacent wrong
+    verdicts on a single night. Undamped, the line takes that whole block at
+    once; the step-change guard ships off, so the damping is the only filter
+    between a one-day spike and the published line.
+    """
+    landed = fit.damp(0.90, 0.94, fall_weight=KNOBS.fall_weight, rise_weight=KNOBS.rise_weight)
+
+    assert landed > 0.90, "an undamped fall would land the whole proposal"
+
+
+# --- step 4: the clamps -------------------------------------------------------
+
+
+def a_clamp(after_damping: float, previous: float, **over: float) -> fit.Clamped:
+    """`fit.clamp` under the committed knobs, with any of them overridden by name."""
+    caps: dict[str, float] = {
+        "max_down_step": KNOBS.max_down_step,
+        "max_up_step": KNOBS.max_up_step,
+        "band_low": KNOBS.band_low,
+        "band_high": KNOBS.band_high,
+    }
+    caps.update(over)
+    return fit.clamp(after_damping, previous, **caps)
 
 
 def test_the_downward_step_is_capped_at_the_knob() -> None:
-    """A fall of 0.04 lands as a fall of 0.005, and the row says how much was held."""
-    shaped = fit.clamp(0.90, 0.94, max_down_step=0.005)
+    """A fall of 0.04 lands as a fall of 0.010, and the row says how much was held."""
+    shaped = a_clamp(0.90, 0.94)
+
+    assert shaped.applied == pytest.approx(0.93)
+    assert shaped.movement == pytest.approx(0.03)
+
+
+def test_the_upward_step_is_capped_tighter_than_the_downward_one() -> None:
+    """Both directions are capped, and the rise cap is the smaller of the two.
+
+    Ten slots down against three up is the whole asymmetry in one comparison. A
+    reader who makes these equal has reversed the house rule.
+    """
+    fell = a_clamp(0.80, 0.94)
+    rose = a_clamp(0.99, 0.94)
+
+    assert 0.94 - fell.applied == pytest.approx(KNOBS.max_down_step)
+    assert rose.applied - 0.94 == pytest.approx(KNOBS.max_up_step)
+    assert 0.94 - fell.applied > rose.applied - 0.94
+
+
+def test_a_move_inside_the_daily_cap_is_not_clamped_at_all() -> None:
+    """Nothing was held back, so `movement` is zero rather than a small number."""
+    shaped = a_clamp(0.935, 0.94)
 
     assert shaped.applied == pytest.approx(0.935)
-    assert shaped.movement == pytest.approx(0.035)
-
-
-def test_a_fall_inside_the_daily_step_is_not_clamped_at_all() -> None:
-    """Nothing was held back, so `movement` is zero rather than a small number."""
-    shaped = fit.clamp(0.9375, 0.94, max_down_step=0.005)
-
-    assert shaped.applied == pytest.approx(0.9375)
     assert shaped.kind is ClampKind.NONE
     assert shaped.movement == 0.0
 
 
 def test_the_row_says_which_clamp_fired() -> None:
-    """A word, never a bool: the daily step and the guard are two different answers.
+    """A word, never a bool: the daily cap and the guard are two different answers.
 
-    The step lets a shaped fall through and the guard refuses the move outright,
-    so a reader of a row that fell 0.005 has to be able to tell the two apart.
+    The cap lets a shaped move through and the guard refuses the move outright,
+    so a reader of a row that fell 0.010 has to be able to tell the two apart.
     """
-    stepped = fit.clamp(0.90, 0.94, max_down_step=0.005)
+    stepped = a_clamp(0.90, 0.94)
     guarded = fit.held_at(0.94, 0.90)
 
     assert stepped.kind is ClampKind.STEP
     assert guarded.kind is ClampKind.GUARD
     assert guarded.applied == pytest.approx(0.94), "the guard holds the line where it was"
+
+
+def test_a_line_resting_on_a_band_wall_is_its_own_word() -> None:
+    """A line at the top of the band folds nothing, which is not the same as silence.
+
+    From the outside a line at `band_high` looks like the feature is switched off
+    rather than pinned, so it gets a word of its own - and it gets it whether or
+    not the wall moved it that day, because resting there is the state worth
+    reporting. The floor is the same answer at the other end.
+    """
+    pushed = a_clamp(1.05, 0.999)
+    resting = a_clamp(1.0, 1.0)
+    bottomed = a_clamp(0.80, 0.885)
+
+    assert pushed.kind is ClampKind.CEILING
+    assert pushed.applied == pytest.approx(KNOBS.band_high)
+    assert resting.kind is ClampKind.CEILING, "resting on the wall is the reported state"
+    assert resting.movement == 0.0, "nothing moved it, so nothing was held back"
+    assert bottomed.kind is ClampKind.FLOOR
+    assert bottomed.applied == pytest.approx(KNOBS.band_low)
+
+
+def test_the_applied_line_can_never_leave_the_band() -> None:
+    """Whatever the record says, the line stays where a later walk can propose it again.
+
+    The record holds slots only between `band_low` and `band_high`. A line
+    outside them is a line no fit can read back, so the walls bind after the
+    daily caps rather than before them. Driven from both ends: a record that
+    agrees about everything and one that disagrees about everything.
+    """
+    all_agree = a_record(negatives={0.999: 300})
+    all_disagree = a_record(negatives={0.881: 300})
+    top = fit.fit_line(all_agree, discard_share=KNOBS.discard_share)
+    bottom = fit.fit_line(all_disagree, discard_share=KNOBS.discard_share)
+    assert top is not None and bottom is not None
+
+    for proposal in (top, bottom, 1.5, -0.5):
+        previous = KNOBS.band_low
+        for _ in range(400):
+            after = (
+                fit.damp(
+                    proposal,
+                    previous,
+                    fall_weight=KNOBS.fall_weight,
+                    rise_weight=KNOBS.rise_weight,
+                )
+                if fit.is_a_move(proposal, previous, dead_zone=KNOBS.dead_zone)
+                else previous
+            )
+            previous = a_clamp(after, previous).applied
+            assert KNOBS.band_low <= previous <= KNOBS.band_high, (
+                f"a proposal of {proposal} walked the line to {previous}"
+            )
 
 
 # --- the gates ----------------------------------------------------------------
@@ -362,13 +487,13 @@ def test_a_record_with_no_negatives_gives_no_daily_shift() -> None:
 def test_todays_own_evidence_is_what_the_daily_shift_measures() -> None:
     """The fit with today against the fit without it, and nothing else.
 
-    With today the record holds 100 negatives, one is set aside, and the two at
-    0.960 carry the walk past it - so the line is 0.961. Take today back out and
-    98 are left, the discard sets aside none, and the walk runs all the way down
-    to 0.930. Today moved the answer three hundredths on its own.
+    With today the record holds 105 negatives, three are set aside, and the five
+    at 0.960 carry the walk past them - so the line is 0.961. Take today back out
+    and 100 are left, all at 0.930, and the walk runs all the way down to 0.931.
+    Today moved the answer three hundredths on its own.
     """
-    record = a_record(negatives={0.960: 2, 0.930: 98})
-    today = {fold.slot_index(0.960, record=record) or 0: fold.SlotCounts(different=2)}
+    record = a_record(negatives={0.960: 5, 0.930: 100})
+    today = {fold.slot_index(0.960, record=record) or 0: fold.SlotCounts(different=5)}
 
     shift = fit.daily_shift(record, today, discard_share=KNOBS.discard_share)
 
@@ -512,19 +637,20 @@ def test_a_story_naming_itself_is_not_a_group(tmp_path: Path) -> None:
     assert merge_count(day) == 0, "nothing in this day was grouped behind anything"
 
 
-# --- the four steps in sequence -----------------------------------------------
+# --- the five steps in sequence -----------------------------------------------
 
 
 def test_a_fortnight_of_built_days_converges() -> None:
     """Fourteen identical days folded in sequence, and the answer stops moving.
 
     The evidence is the same shape every day on purpose: this asks whether the
-    four steps settle on a stationary input, which is the only case where a
+    five steps settle on a stationary input, which is the only case where a
     failure to settle is the steps' own fault rather than the news moving.
 
     The gates hold the first nine days - `minimum_days` is 10 - so the line sits
     at the committed floor until the record is old enough, then rises once and
-    stays. Every one of the last three moves is below `settled_delta`.
+    stays: the next day's proposal is inside the dead zone and is not a move.
+    Every one of the last three moves is below `settled_delta`.
     """
     record = fold.empty_record(KNOBS, scorer=a_scorer(), judge=a_judge())
     a_day = {0.900: 20, 0.910: 20, 0.920: 20, 0.930: 20, 0.940: 20}
@@ -559,8 +685,24 @@ def test_a_fortnight_of_built_days_converges() -> None:
         )
         proposal = fit.fit_line(record, discard_share=KNOBS.discard_share)
         if held is None and proposal is not None:
-            after = fit.damp(proposal, previous, smoothing_weight=KNOBS.smoothing_weight)
-            previous = fit.clamp(after, previous, max_down_step=KNOBS.max_down_step).applied
+            after = (
+                fit.damp(
+                    proposal,
+                    previous,
+                    fall_weight=KNOBS.fall_weight,
+                    rise_weight=KNOBS.rise_weight,
+                )
+                if fit.is_a_move(proposal, previous, dead_zone=KNOBS.dead_zone)
+                else previous
+            )
+            previous = fit.clamp(
+                after,
+                previous,
+                max_down_step=KNOBS.max_down_step,
+                max_up_step=KNOBS.max_up_step,
+                band_low=KNOBS.band_low,
+                band_high=KNOBS.band_high,
+            ).applied
         applied.append(previous)
 
     moves = [abs(applied[index] - applied[index - 1]) for index in range(1, len(applied))]
