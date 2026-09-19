@@ -36,7 +36,6 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 4 |
 | [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 29 | 6 | 22 | 0 |
-| [20260917-34-similarity-autotune-plan.md](20260917-34-similarity-autotune-plan.md) | 4 | 0 | 4 | 0 |
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 
@@ -91,7 +90,7 @@ section 3 is where it is answered.
 | #7 | 35 | A / eval-core | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - |
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
 
-## Waiting on another row - 89
+## Waiting on another row - 85
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -163,10 +162,6 @@ section 3 is where it is answered.
 | #27 | 33 | K | Route grouping and panel order | 20 is PENDING; 26 is PENDING |
 | #14 | 33 | - | The per-item machine load panel | - |
 | #8 | 33 | - | Memory split by prefill and decode | - |
-| #11 | 34 | - | The sample sheet utility | 7 names no row; 8 names no row; 10 names no row |
-| #12 | 34 | - | Console: the holdout panel. **The merge count landed in #874; this is the other half** | 2 names no row; 8 names no row |
-| #15 | 34 | - | Console: the confusion matrix | 7 names no row; 8 names no row; 12 is PENDING |
-| #16 | 34 | - | The design document. **Mostly overtaken - see below** | 9 names no row |
 | #6 | 35 | A / eval-core | Remove `new_fact_rate` + `key_point_weight` (+#34 field, judge stages, C3) | #34 names no row |
 | #2 | 35 | B / chart | Redesign + re-label the faithfulness chart; docs glyph-link | 8 is PENDING |
 | #3 | 35 | B / chart | Reword recorded-only copy; relabel `compression` | 8 is PENDING |
