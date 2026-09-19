@@ -25,6 +25,26 @@ REJECTED_OUTPUT_DRIFT = "rejected_output_drift"
 #: A repeat whose articles moved under it. Recorded, never fatal on its own.
 INPUT_DRIFT_DROPPED = "input_drift_dropped"
 
+#: Two repeats of ONE case read the same text and wrote different summaries.
+REPEAT_OUTPUT_DRIFT = "repeat_output_drift"
+
+#: A case wrote different words from the case it is measured against.
+BETWEEN_CASE_DIFFERENCE = "between_case_difference"
+
+#: What a difference BETWEEN two cases means for the verdict.
+#:
+#: A two-case sweep asks whether a runtime setting is free, so a difference
+#: between them is a defect and refuses the run. A case set asks whether the
+#: words change at all, and then a difference is the reading the job was
+#: dispatched to take - recorded, with the run still passing. Rejecting a run
+#: for observing the effect it was built to observe inverts the instrument.
+#:
+#: Within one case the rule does not move either way: two repeats of one
+#: configuration that disagree is the model being unstable, and that is always
+#: fatal.
+BETWEEN_CASES_REJECTS = "between_cases_rejects"
+BETWEEN_CASES_IS_THE_READING = "between_cases_is_the_reading"
+
 #: What is left cannot carry a spread, so there is nothing to report.
 TOO_FEW_AGREEING = "too_few_agreeing_repeats"
 
@@ -52,7 +72,13 @@ def input_key(result: Mapping[str, Any]) -> str:
     return json.dumps(result["sources"], sort_keys=True)
 
 
-def judge(results: Sequence[dict[str, Any]], *, labels: Sequence[str], candidate: str) -> Verdict:
+def judge(
+    results: Sequence[dict[str, Any]],
+    *,
+    labels: Sequence[str],
+    reference: str = BASELINE,
+    between_cases: str = BETWEEN_CASES_REJECTS,
+) -> Verdict:
     """Keep the repeats that agree on what they read, and say what the rest were.
 
     **Every repeat refetches**, and a publisher editing a page inside a
@@ -66,6 +92,12 @@ def judge(results: Sequence[dict[str, Any]], *, labels: Sequence[str], candidate
     that two of them could still have made - and did, byte for byte. So the
     largest agreeing set is what gets timed, the rest are named, and the run is
     refused only when what is left cannot carry a spread.
+
+    **`reference` is the case every other case is read against**, and it is not
+    always the baseline. A sweep that asks what one setting costs reads against
+    the unchanged server; a sweep that asks whether a setting changes the words
+    reads against whichever case has the setting off. Naming it here is what
+    lets the second kind run without a fifth case nobody needed.
     """
     counted = Counter(input_key(result) for result in results)
     agreed, _ = counted.most_common(1)[0]
@@ -115,17 +147,32 @@ def judge(results: Sequence[dict[str, Any]], *, labels: Sequence[str], candidate
                 if verdict == PASSED:
                     verdict = REJECTED_OUTPUT_DRIFT
                 problems.append(
-                    {"label": label, "repeat": index, "expected": first, "actual": current}
+                    {
+                        "why": REPEAT_OUTPUT_DRIFT,
+                        "label": label,
+                        "repeat": index,
+                        "expected": first,
+                        "actual": current,
+                    }
                 )
-    if candidate != BASELINE and not thin:
-        if digest_sets[candidate][0] != digest_sets[BASELINE][0]:
-            if verdict == PASSED:
+    # Every case against the reference, rather than one candidate against the
+    # baseline. A two-case sweep has exactly one of these and reads as it always
+    # did; a case set has one per case and needs no extra case to compare with.
+    if not thin:
+        for label in labels:
+            if label == reference or label not in digest_sets:
+                continue
+            if digest_sets[label][0] == digest_sets[reference][0]:
+                continue
+            if between_cases == BETWEEN_CASES_REJECTS and verdict == PASSED:
                 verdict = REJECTED_OUTPUT_DRIFT
             problems.append(
                 {
-                    "label": candidate,
-                    "expected": digest_sets[BASELINE][0],
-                    "actual": digest_sets[candidate][0],
+                    "why": BETWEEN_CASE_DIFFERENCE,
+                    "label": label,
+                    "against": reference,
+                    "expected": digest_sets[reference][0],
+                    "actual": digest_sets[label][0],
                 }
             )
 
@@ -141,12 +188,25 @@ def _stats(comparable: Sequence[Mapping[str, Any]], label: str, key: str) -> dic
     }
 
 
-def timings(found: Verdict, *, labels: Sequence[str], candidate: str) -> dict[str, Any]:
+def comparison_key(label: str) -> str:
+    """Which reading this case is judged on.
+
+    It belongs to the case rather than to the sweep: `np2_inflight` runs two
+    workers at once, so its gain shows in the wall-clock and not in one item's
+    model path.
+    """
+    return "total_ms" if label in WALL_CLOCK_CANDIDATES else "model_path_ms"
+
+
+def timings(found: Verdict, *, labels: Sequence[str], reference: str = BASELINE) -> dict[str, Any]:
     """The medians, over the repeats that agreed and no others.
 
     Empty when a label kept fewer than two: the summary is still written,
     because the problems are what a person needs to see, but a median over one
     reading would read like a measurement (CLAUDE.md Guardrail #10).
+
+    `comparisons` carries one entry per case that is not the reference, so a
+    four-case set reads the same way a two-case sweep does.
     """
     if found.thin:
         return {}
@@ -157,16 +217,21 @@ def timings(found: Verdict, *, labels: Sequence[str], candidate: str) -> dict[st
         }
         for label in labels
     }
-    if candidate != BASELINE:
-        key = "total_ms" if candidate in WALL_CLOCK_CANDIDATES else "model_path_ms"
-        baseline = timing[BASELINE][key]
-        against = timing[candidate][key]
-        faster_by_ms = baseline["median"] - against["median"]
-        timing["candidate_vs_baseline"] = {
+    comparisons: dict[str, Any] = {}
+    for label in labels:
+        if label == reference:
+            continue
+        key = comparison_key(label)
+        against = timing[reference][key]
+        current = timing[label][key]
+        faster_by_ms = against["median"] - current["median"]
+        comparisons[label] = {
+            "against": reference,
             "comparison_key": key,
             "faster_by_ms": faster_by_ms,
             # A gain inside the spread is a gain this instrument cannot see.
-            "beats_baseline_outside_spread": faster_by_ms
-            > max(baseline["spread"], against["spread"]),
+            "beats_reference_outside_spread": faster_by_ms
+            > max(against["spread"], current["spread"]),
         }
+    timing["comparisons"] = comparisons
     return timing

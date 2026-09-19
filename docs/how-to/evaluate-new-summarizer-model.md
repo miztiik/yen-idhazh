@@ -409,6 +409,50 @@ gh workflow run measure.yml --ref <branch> \
 the repeats multiply the corpus, and the job timeout is what the product is spent
 against (Guardrail #2 - the limit is GitHub's, so the design is what gives).
 
+**When the question is not what a setting costs but whether it changes the
+words, dispatch a case set.** A named candidate runs the unchanged server and
+one variant, and reads the variant against the baseline. A case set runs every
+value of one setting and reads them against whichever case has the setting off -
+so it runs no baseline at all, because the unchanged server is already one of the
+values. `draft_depth` is the one that exists: the head off, then `n_max` at 1, 2
+and 4.
+
+```bash
+gh workflow run measure.yml --ref <branch> \
+ -f target=bench \
+ -f candidate_models_file='models/gemma-4-e4b-qat.json' \
+ -f runtime_candidate=draft_depth \
+ -f runtime_repeats=2 \
+ -f runtime_corpus_items=2 \
+ -f model_speed_case=skip
+```
+
+Three of those arguments are load-bearing.
+
+- **`runtime_corpus_items=2`.** Four cases at two repeats is eight passes, where
+ a named candidate costs four. At the 13.1 minutes an article the slowest pass
+ has recorded, eight passes over the committed three articles is 314 minutes
+ against a 330-minute timeout, and two articles is 210. Empty follows
+ `bench.corpus_items`, which is sized for a named candidate.
+- **`model_speed_case=skip`.** The dossier emitter reads the `baseline` label,
+ and a case set writes none. Skipping the speed case skips the emit step with
+ it; the sweep, the machine record and the artifact are unaffected.
+- **A case set pins `temperature` to 0 for every case, and the dispatch cannot
+ overrule it.** Every committed entry runs at 0.2, where the seed decides which
+ token is drawn - so two readings of one configuration can differ on the
+ sampler alone, and the setting's effect and the sampler's noise arrive as one
+ number nobody can split.
+
+**A difference between the cases is the reading, not a rejection.** A named
+candidate refuses the run when its variant writes different words, because the
+question was whether the setting is free. A case set records the difference and
+still passes, because the question was whether the words change. Two repeats of
+ONE case that disagree is still the model being unstable, and still fatal.
+
+**Every case's prompts and replies land in the artifact**, under
+`captures/<case>-<repeat>/`, one file per call per item. That is what to open
+when two cases disagree and the digests alone cannot say how.
+
 #### Why the bench corpus is three articles
 
 **Three is a fit, not thrift.** Measured 2026-09-17 over the four dispatches of
