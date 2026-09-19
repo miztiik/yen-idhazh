@@ -70,10 +70,13 @@ bench workflows.
 
 ## Sampling: what we set, against what the publisher asks for
 
-Read from the model card on 2026-09-19
-([google/gemma-4-E4B-it](https://huggingface.co/google/gemma-4-E4B-it), Best
-Practices). **Gemma publishes one recipe and says to use it everywhere** -
-verbatim, *"Use the following standardized sampling configuration across all use
+Read on 2026-09-19 from the repository this entry pulls,
+[unsloth/gemma-4-E4B-it-qat-GGUF](https://huggingface.co/unsloth/gemma-4-E4B-it-qat-GGUF#best-practices)
+at revision `8c5a9e4fd548`, which reproduces Google's card in full. The
+publisher's own is
+[google/gemma-4-E4B-it](https://huggingface.co/google/gemma-4-E4B-it#best-practices).
+**Gemma publishes one recipe and says to use it everywhere** - verbatim,
+*"Use the following standardized sampling configuration across all use
 cases"*. There is no task-specific variant to argue we fall under.
 
 | | temperature | top_p | top_k |
@@ -223,6 +226,7 @@ worth](../benchmarks/what-the-draft-head-is-worth.md).
 
 | What | Where |
 | --- | --- |
+| The publisher's sampling recipe and the MTP claim, read 2026-09-19 | [unsloth/gemma-4-E4B-it-qat-GGUF](https://huggingface.co/unsloth/gemma-4-E4B-it-qat-GGUF#best-practices), the repository this entry pulls |
 | What the draft head is worth, every dispatch behind it | [../benchmarks/what-the-draft-head-is-worth.md](../benchmarks/what-the-draft-head-is-worth.md) |
 | Every prefill and decode draw, with its processor | [../benchmarks/the-processor-lottery.md](../benchmarks/the-processor-lottery.md) |
 | The wall-clock and memory readings above | GitHub Actions run `34972996987`, 2026-09-15 |
