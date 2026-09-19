@@ -901,3 +901,40 @@ def test_each_repeats_prompts_and_replies_are_kept_under_their_own_case(
         assert body["prompt"] == f"{label} asked"
         assert body["reply"] == f"{label} answered"
     assert not written.exists(), "moved, so the next repeat cannot inherit these files"
+
+
+def test_a_job_that_runs_a_script_importing_idhazh_installs_it_first() -> None:
+    """The break that killed the first bench dispatched after 2026-09-17.
+
+    `models` is deliberately cheap - it reads one file and publishes the refs
+    every other job needs - and for that reason it had no Python setup and no
+    install. Then the speed case became bypassable and put
+    `model_speed_case.py` in it, which reads its knob through the contract and
+    so imports `idhazh`. Nothing caught it, because no bench was dispatched
+    between that change and the one that died on
+    `ModuleNotFoundError: No module named 'idhazh'`.
+
+    Discovery is closed-world over the workflow rather than over a named job, so
+    the same mistake in any other job of this file fails here too.
+    """
+    workflow = _load_workflows()["measure.yml"]
+    importers = {
+        path.name
+        for path in (REPO_ROOT / "backend" / "utilities").glob("*.py")
+        if re.search(r"^from idhazh|^import idhazh", read_text(path), re.MULTILINE)
+    }
+
+    for job_name in _mapping(workflow["jobs"], "measure.yml jobs"):
+        bodies: list[str] = [
+            body
+            for step in _steps(workflow, job_name)
+            if isinstance(body := step.get("run"), str)
+        ]
+        needs_the_package = any(script in body for body in bodies for script in importers)
+        if not needs_the_package:
+            continue
+        installs = any(re.search(r"pip install (-e )?[\".]", body) for body in bodies)
+        assert installs, (
+            f"measure.yml/{job_name} runs a utility that imports idhazh and never "
+            "installs it, so the job dies on ModuleNotFoundError"
+        )
