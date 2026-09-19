@@ -204,13 +204,11 @@ What it costs, stated rather than implied: a squash boundary is per-commit, not 
 
 Safe workflow: `git status --porcelain`, leave unrelated dirty files alone, stage only explicit paths, verify with `git diff --cached --name-only`, small reversible commits on a named branch, push, merge after gates pass.
 
-Commit messages describe the change. **No AI co-author / attribution tags.**
+Commit messages describe the change. **No AI co-author / attribution tags** - a `Co-authored-by` trailer is one, whoever generated it.
 
-**One identity commits here: `miztiik <miztiik@users.noreply.github.com>`.** A workflow, a build agent and a local orchestrator each used to stamp a name of its own, which told a reader nothing the commit message did not already say, and put a machine account where the owner belongs. Every place that commits sets that identity - [`.github/scripts/commit-and-push.sh`](.github/scripts/commit-and-push.sh), [`.github/workflows/ci.yml`](.github/workflows/ci.yml) and [`.github/workflows/prune.yml`](.github/workflows/prune.yml) - and [`.mailmap`](.mailmap) folds the retired ones so a stray identity cannot change what `git log` reports.
+**One identity commits here: `miztiik <miztiik@users.noreply.github.com>`.** A machine account in the author field tells a reader nothing the commit message does not already say. Every place that commits sets it, and [`.mailmap`](.mailmap) folds the retired ones.
 
-**A branch name reaches the permanent record, so it is written like a commit message** (section 0b). A merge commit quotes the branch it came from, which is how a tool-generated name carrying a personal account leaked into `main`. Merge commits are now off at the repository, leaving squash only, so a branch name no longer reaches a commit message at all. The name still lands on the pull request, and GitHub keeps that forever.
-
-**A one-off history rewrite ran on 2026-09-19, authorised by the owner (`miztiik`).** It removed a contributor's local home path from three plan-docs and from one merge commit message, replaced a personal given name used as a test fixture value, and folded ten commit identities into one. It rewrote every commit on every branch and force-pushed them. It grants no continuing force-push permission; the only standing exception remains `prune.yml` above. What it could not reach: GitHub keeps `refs/pull/*` and a merged pull request's head-branch name, and neither accepts a push, so the pre-rewrite commits stay fetchable by SHA until GitHub is asked to expire them.
+**A branch name reaches the permanent record, so it is written like a commit message** (section 0b). Merge commits are off at the repository, leaving squash only, so a branch name no longer reaches a commit message at all.
 
 ## 9. Definition of Done
 
