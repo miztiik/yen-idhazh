@@ -194,20 +194,32 @@ correctly forbids is reading them against another run's.
 
 ## What the draft head is worth
 
-**6.3 percent faster, and it changes every summary it touches.** Both halves come
-from paired dispatches where the two configurations alternated inside one job, so
-the machine cancels - which it has to, because the platform places each job
-separately and a comparison across two dispatches says nothing.
+**It changes what the model writes, at every drafted depth, and whether it is
+faster is unmeasured.** The output finding comes from dispatches where every
+configuration alternated inside one job, so the machine cancels - which it has
+to, because the platform places each job separately and a comparison across two
+dispatches says nothing.
 
-The speed reading is one run and has not been repeated. The output change has
-replicated on a second set of articles and a second machine, so it is the
-mechanism rather than those articles.
+**`n_max` is not the control.** The vendor's own documented `--spec-draft-n-max
+4` changes the words exactly as much as a depth of 1 does, so the difference
+between their setting and ours never explained the drift. No depth is
+output-identical to the head being off, on six articles of six across two
+processor models, with every case reproducing itself byte-identically at
+`temperature: 0`.
+
+**The 6.3 percent speedup this page used to quote is withdrawn.** The head
+changes how much text gets written - on one article it wrote 3.4 times as much -
+so a wall clock against head-off is timing two different jobs rather than
+measuring a rate. Two runs on one processor model then disagree about the sign:
+one is 17 percent faster, the other 40 percent slower. The acceptance rate the
+server already publishes at `/metrics` is the reading that would settle it, and
+no run has recorded it.
 
 **What follows from it: the head is not a speed setting, it is a different
 model.** Whichever configuration is qualified is the one that has to publish.
 
-Every dispatch, the timings, the digest tables and the evidence this project
-threw away are in [what the draft head is
+Every dispatch, the timings, the digest tables and the summaries a person can
+now read are in [what the draft head is
 worth](../benchmarks/what-the-draft-head-is-worth.md).
 
 ## What this page still owes
@@ -218,9 +230,16 @@ worth](../benchmarks/what-the-draft-head-is-worth.md).
   identifier, and nobody has read them against this project's use yet.
 - **The tokenizer cost.** Tokens a word decides how much article fits the window,
   and it belongs to this tokenizer rather than to the incumbent's.
-- **Why the draft head changes the output.** The section above establishes that it
-  does. Whether the cause is the head, the acceptance rule or the pinned build is
-  unmeasured, and it decides whether a lossless configuration exists at all.
+- **Why the draft head changes the output.** Narrowed on 2026-09-19 and still
+  open. It is not the drafted depth, not the prompt and not the sampler - each
+  is excluded by a control in the run. What is left is the acceptance rule or
+  this pinned llama.cpp build, and the same corpus on a second build is the
+  instrument that would tell those two apart. It decides whether a lossless
+  configuration exists at all.
+- **What the head costs or saves.** Withdrawn rather than answered: the two
+  configurations write different amounts of text, so the wall clock is not a
+  rate. A run at fixed output length recording the draft acceptance rate is the
+  instrument.
 
 ## The records behind this page
 
@@ -230,7 +249,7 @@ worth](../benchmarks/what-the-draft-head-is-worth.md).
 | What the draft head is worth, every dispatch behind it | [../benchmarks/what-the-draft-head-is-worth.md](../benchmarks/what-the-draft-head-is-worth.md) |
 | Every prefill and decode draw, with its processor | [../benchmarks/the-processor-lottery.md](../benchmarks/the-processor-lottery.md) |
 | The wall-clock and memory readings above | GitHub Actions run `34972996987`, 2026-09-15 |
-| The paired draft-head case | GitHub Actions run `35011578538`, 2026-09-15 |
+| The paired draft-head case | GitHub Actions runs `35439286272`, `35439298708` and `35439309256`, 2026-09-19 |
 | The recorded `--spec-type` list the pinned build accepts | `tests/fixtures/runtime/b10598-llama-server-help.txt`, from run `34971210901` |
 | The declared identity | `config/models/gemma-4-e4b-qat.json` |
 
