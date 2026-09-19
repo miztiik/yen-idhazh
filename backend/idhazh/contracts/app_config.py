@@ -85,6 +85,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-19",
+            change="adaptive_dedup_threshold.max_down_step loses its upper bound of 0.0083.",
+            why="Fresh labels put the nearest two-story pair above the line, so the gap is gone.",
+        ),
+        ChangelogEntry(
             version="2026-09-18T11:00",
             change="The three extract.chrome_* knobs, removed with the store they governed.",
             why="Over a full run the store moved the boilerplate signal zero times.",
@@ -98,11 +103,6 @@ class AppConfig(Contract):
             version="2026-09-18T09:00",
             change="adaptive_dedup_threshold and run.judge_shard_timeout_minutes, additive.",
             why="The merge line was set by one reading and nothing re-read it.",
-        ),
-        ChangelogEntry(
-            version="2026-09-17T17:00",
-            change="extract.reject_too_short, additive, default false. Never rejects an abstract.",
-            why="Two of the three shape signals had a switch and the third did not.",
         ),
         ChangelogEntry(
             version="2026-08-21",

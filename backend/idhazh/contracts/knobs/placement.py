@@ -35,15 +35,18 @@ SUPERSEDED_ASSEMBLE_NAMES: Final[Mapping[str, str]] = MappingProxyType(
 #: is wrong with. A billionth is far below any weight worth setting.
 _WEIGHTS_TOLERANCE: Final = 1e-9
 
-#: The gap between TODAY's floor and the highest-scoring pair a person marked as
-#: TWO stories - Ontario's pushback against the lake renaming, at 0.9317, against
-#: a floor of 0.94. Measured 2026-09-01 on Intel Core i7-1265U / Windows 11 /
-#: Python 3.14.2 over 3,978 items across eleven committed days. It is a reading
-#: of one moment rather than a property of the system: the live margin is
-#: applied - 0.9317, and it shrinks every time the line falls. A single downward
-#: step larger than this reading can cross the margin in one day, which is why it
-#: bounds max_down_step rather than sitting in a comment.
-HOLDOUT_MARGIN: Final = 0.0083
+#: The highest score the labelled set marks as TWO stories. Measured 2026-09-19
+#: over the 200 pairs in `state/story-similarity/holdout-pairs.csv`, labelled by
+#: claude-opus-4.6 reading each pair's title and summary; 196 one story, 4 two
+#: stories, and the four are all the same lake-renaming cluster. Counts are
+#: deterministic and have no spread.
+#:
+#: **It is the pair's own score and never a gap.** The gap to the line is
+#: `floor_min` minus this, computed where it is needed, because `floor_min` is a
+#: config value and a frozen subtraction goes stale the moment either side moves.
+#: Today that gap is -0.0007: the line sits BELOW the highest two-story mark, so
+#: there is no headroom for a downward step to protect.
+HOLDOUT_TWO_STORY_MAX: Final = 0.9407
 
 #: Wall clock for one judge call at 764 read tokens, in seconds. Derived from the
 #: repository's own reading of 9.85 tokens a second - median over 4,117 timed
@@ -60,8 +63,8 @@ class SimilarityThresholdConfig(Model):
     Nested inside `SameStoryConfig` rather than flat under `assemble`, for the
     reason that model's own docstring gives: a knob whose legal value depends on
     another knob's value belongs where a validator can see both. `max_down_step`
-    is bounded by a margin measured against `floor_min`, and `band_low` has to
-    sit below the line `floor_min` currently holds.
+    has to stay inside the band the record slices, and `band_low` has to sit
+    below the line `floor_min` currently holds.
 
     **Nothing reads this block yet.** It ships with `enabled` off, so a fresh
     clone publishes exactly what it published before the block existed.
@@ -83,8 +86,8 @@ class SimilarityThresholdConfig(Model):
         description=(
             "The lowest score worth judging. Below it two items are nowhere near one "
             "story, so a verdict costs a model call and moves nothing. 0.88 is where the "
-            "measured pairs start: the highest pair a person marked as two stories sits at "
-            "0.9317, so the band opens well below every decision the line has to get right."
+            "measured pairs start: the lowest of the 200 labelled pairs sits at 0.8807, so "
+            "the band opens below every decision the line has to get right."
         ),
     )
     band_high: float = Field(
@@ -102,10 +105,10 @@ class SimilarityThresholdConfig(Model):
         le=0.01,
         description=(
             "How finely the record slices the band, and therefore the resolution of the "
-            "fitted line. 0.001 is eight times finer than the 0.0083 margin the line has to "
-            "stay above, so the slot edge is never what puts the line on the wrong side of a "
-            "hand-marked pair. Finer costs slots and coarser costs precision on the one "
-            "number this feature exists to set."
+            "fitted line. 0.001 is already finer than the labels can be read apart: the "
+            "200 pairs marked on 2026-09-19 put a one-story pair at 0.9406, a two-story "
+            "pair at 0.9407 and another one-story pair at 0.9409, so three slots hold both "
+            "marks. Finer costs slots and buys no separation the labels can support."
         ),
     )
     discard_share: float = Field(
@@ -134,14 +137,16 @@ class SimilarityThresholdConfig(Model):
     max_down_step: float = Field(
         default=0.005,
         gt=0.0,
-        lt=HOLDOUT_MARGIN,
         description=(
-            "The furthest the line may fall in one day. 0.005 leaves TODAY's 0.0083 gap "
-            "uncrossable in one day. The gap is not a constant: it is applied minus 0.9317, "
-            "so it shrinks as the line falls, and once the line reaches 0.9367 one legal "
-            "step lands on the marked pair. That is why the holdout report is read on every "
-            "day rather than once. The owner proposed 0.010, which is larger than today's "
-            "gap, so it would have crossed on its first step."
+            "The furthest the line may fall in one day. 0.005 is five slots at the "
+            "committed bin_width, so a day's move is counted at the record's own "
+            "resolution rather than at a precision the fit cannot produce. It is a "
+            "damping knob and no longer a safety one: it used to be refused at or above "
+            "the gap between the line and the nearest two-story mark, and the 2026-09-19 "
+            "labels put the nearest mark ABOVE the line, so there is no gap left for a "
+            "step to eat. What bounds it now is the band, because a step wider than the "
+            "band leaves the record that produced it. An ESTIMATE; what replaces it is "
+            "the first fortnight of written rows."
         ),
     )
     step_change_multiple: float = Field(
@@ -330,19 +335,26 @@ class SimilarityThresholdConfig(Model):
         return self
 
     @model_validator(mode="after")
-    def _a_move_may_not_cross_the_margin_in_one_day(self) -> Self:
-        """One step may not carry the line past the closest pair a person marked apart.
+    def _a_step_may_not_outrun_the_band(self) -> Self:
+        """A day's move may not carry the line outside the record that proposed it.
 
-        Spelled as a validator as well as a field bound so that the refusal
-        names the margin and the measurement instead of printing a bare `lt`
-        failure (Guardrail #10).
+        The record holds slots only between `band_low` and `band_high`, so a step
+        wider than that span can put the line where no slot exists and the next
+        fit has nothing to read. Spelled as a validator rather than a field bound
+        because the span is two other fields and a literal would drift from them.
+
+        This replaced the margin check on 2026-09-19. That one refused a step at
+        or above the gap between the line and the nearest pair marked as two
+        stories; the 200 labels marked that day put the nearest such pair at
+        0.9407, above the 0.94 line, so the gap it guarded is gone and a step
+        sized against it guards nothing (Guardrail #10).
         """
-        if self.max_down_step >= HOLDOUT_MARGIN:
+        span = self.band_high - self.band_low
+        if self.max_down_step >= span:
             raise ValueError(
-                f"max_down_step is {self.max_down_step}, and the gap between today's floor "
-                f"and the highest pair a person marked as two stories is {HOLDOUT_MARGIN} "
-                "(0.94 against 0.9317, measured 2026-09-01). A step that size crosses the "
-                "margin in one day"
+                f"max_down_step is {self.max_down_step} and the band runs {self.band_low} "
+                f"to {self.band_high}, a span of {span}. A step that size can put the line "
+                "outside the record it was fitted from"
             )
         return self
 
@@ -408,20 +420,18 @@ class SameStoryConfig(Model):
             "What the weighted score has to reach before two items are one story, and "
             "EVERY pair inside a group has to reach it - not only each item against "
             "the one it joined. On the same 0-to-1 scale as every term, because the "
-            "weights sum to 1.0. Set by hand labels rather than by taste. Every group "
-            "the pass forms over the eleven committed days was read and marked "
-            "same-story or not, measured 2026-09-01 on Intel Core i7-1265U / Windows "
-            "11 / Python 3.14.2 over 3,978 items: at 0.93 one group of thirty is two "
-            "different stories - Ontario's pushback against the lake renaming, merged "
-            "into Google doing the renaming, at 0.9317 - and at 0.94 all twenty-two "
-            "groups are one story each. The rule is the first round hundredth above "
-            "the highest-scoring pair a person marked as two stories, which leaves a "
-            "margin of 0.0083. That margin is thin, and the way to widen it is more "
-            "labels rather than a higher number. Raising this costs missed duplicates, "
-            "which a reader sees as the same story twice; lowering it costs a false "
-            "merge, which is a story that never ran, so the two errors are not equal "
-            "and this number leans high. It was measured against the cosine alone, "
-            "which is what the shipped weights still score."
+            "weights sum to 1.0. Set by labels rather than by taste: 0.94 is the first "
+            "round hundredth above the highest pair marked as two stories in the eleven "
+            "committed days read on 2026-09-01, which put that pair at 0.9317. The 200 "
+            "pairs labelled on 2026-09-19 put it at 0.9407 instead - ABOVE this line - so "
+            "the margin this number used to carry is gone and the line now admits one "
+            "known two-story pair. No line fixes that: the same labels mark a pair at "
+            "0.9406 as one story and another at 0.9409 as one story, so the two "
+            "populations interleave inside three slots. Raising this costs missed "
+            "duplicates, which a reader sees as the same story twice; lowering it costs a "
+            "false merge, which is a story that never ran, so the two errors are not equal "
+            "and this number leans high. It was measured against the cosine alone, which "
+            "is what the shipped weights still score."
         ),
     )
     adaptive_dedup_threshold: SimilarityThresholdConfig = Field(
@@ -459,6 +469,12 @@ class SameStoryConfig(Model):
         fills with agreements and the line can never come down - while every
         number in the file still looks legal. Checked on this model because
         `floor_min` is this model's field and a nested model cannot see it.
+
+        The band also has to reach the hardest pair we hold a label for, which
+        is a second ceiling and not the same one: a floor raised above
+        `HOLDOUT_TWO_STORY_MAX` would let the band open above the pair a wrong
+        line publishes first, so the record would fill with easy agreements and
+        never judge the case that could prove the line wrong.
         """
         band_low = self.adaptive_dedup_threshold.band_low
         if band_low >= self.floor_min:
@@ -466,6 +482,12 @@ class SameStoryConfig(Model):
                 f"adaptive_dedup_threshold.band_low is {band_low} and floor_min is "
                 f"{self.floor_min}, so every pair in the band already merges and the "
                 "fitted line could only ever rise"
+            )
+        if band_low >= HOLDOUT_TWO_STORY_MAX:
+            raise ValueError(
+                f"adaptive_dedup_threshold.band_low is {band_low} and the highest pair the "
+                f"labelled set marks as two stories is {HOLDOUT_TWO_STORY_MAX}, so the "
+                "band cannot draw the pair the line most has to get right"
             )
         return self
 
@@ -519,8 +541,9 @@ class AssembleConfig(Model):
             "2026-09-14 on a developer machine / Python 3.14.2 over the "
             "twenty-five committed days and 9,353 items: fifty-three cross-source "
             "pairs share a headline, their cosine has a median of 0.9177 against a "
-            "floor of 0.94, and the highest-scoring pair a person marked as TWO stories "
-            "sits at 0.9317 - above that median, so no threshold separates the two "
+            "floor of 0.94, and the highest-scoring pair marked as TWO stories "
+            "sits at 0.9407 (2026-09-19 labels) - above both that median and the floor, "
+            "so no threshold separates the two "
             "populations and lowering same_story.floor_min cannot fix this. Turning "
             "this off restores the vector-only rule, which is the revert path an "
             "operator has if a shared headline ever turns out to be two stories. Ruled "
