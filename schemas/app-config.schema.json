@@ -6,7 +6,7 @@
       "properties": {
         "group_identical_titles": {
           "default": true,
-          "description": "Whether two of a day's items are one story when their published headlines say the same thing - compatibility-normalised, casefolded, and with everything that is not a letter or a digit turned into a space. The words must match exactly; the numbers only have to agree to the coarser of the two precisions they were written with, so `$12.9 billion` and `$12.93 billion` are one acquisition while `25 percent` and `50 percent` are two different figures. This is a second way into a group beside same_story.floor_min, never a replacement: every pair inside a group still has to clear one of the two, and an item with no vector is still never grouped. It exists because the cosine is taken over `title. summary`, and the summary is our own prose about ONE article and is most of that string, so two honest tellings of one story are pulled apart by the part that is guaranteed to differ. Measured 2026-09-14 on a developer machine / Python 3.14.2 over the twenty-five committed days and 9,353 items: fifty-three cross-source pairs share a headline, their cosine has a median of 0.9177 against a floor of 0.94, and the highest-scoring pair a person marked as TWO stories sits at 0.9317 - above that median, so no threshold separates the two populations and lowering same_story.floor_min cannot fix this. Turning this off restores the vector-only rule, which is the revert path an operator has if a shared headline ever turns out to be two stories. Ruled by Andre and the Editor, 2026-09-14, and the rounding tolerance by the owner the same day; the reasoning is in docs/architecture/publishing/layout.md.",
+          "description": "Whether two of a day's items are one story when their published headlines say the same thing - compatibility-normalised, casefolded, and with everything that is not a letter or a digit turned into a space. The words must match exactly; the numbers only have to agree to the coarser of the two precisions they were written with, so `$12.9 billion` and `$12.93 billion` are one acquisition while `25 percent` and `50 percent` are two different figures. This is a second way into a group beside same_story.floor_min, never a replacement: every pair inside a group still has to clear one of the two, and an item with no vector is still never grouped. It exists because the cosine is taken over `title. summary`, and the summary is our own prose about ONE article and is most of that string, so two honest tellings of one story are pulled apart by the part that is guaranteed to differ. Measured 2026-09-14 on a developer machine / Python 3.14.2 over the twenty-five committed days and 9,353 items: fifty-three cross-source pairs share a headline, their cosine has a median of 0.9177 against a floor of 0.94, and the highest-scoring pair marked as TWO stories sits at 0.9407 (2026-09-19 labels) - above both that median and the floor, so no threshold separates the two populations and lowering same_story.floor_min cannot fix this. Turning this off restores the vector-only rule, which is the revert path an operator has if a shared headline ever turns out to be two stories. Ruled by Andre and the Editor, 2026-09-14, and the rounding tolerance by the owner the same day; the reasoning is in docs/architecture/publishing/layout.md.",
           "title": "Group Identical Titles",
           "type": "boolean"
         },
@@ -1701,7 +1701,7 @@
         },
         "floor_min": {
           "default": 0.94,
-          "description": "What the weighted score has to reach before two items are one story, and EVERY pair inside a group has to reach it - not only each item against the one it joined. On the same 0-to-1 scale as every term, because the weights sum to 1.0. Set by hand labels rather than by taste. Every group the pass forms over the eleven committed days was read and marked same-story or not, measured 2026-09-01 on Intel Core i7-1265U / Windows 11 / Python 3.14.2 over 3,978 items: at 0.93 one group of thirty is two different stories - Ontario's pushback against the lake renaming, merged into Google doing the renaming, at 0.9317 - and at 0.94 all twenty-two groups are one story each. The rule is the first round hundredth above the highest-scoring pair a person marked as two stories, which leaves a margin of 0.0083. That margin is thin, and the way to widen it is more labels rather than a higher number. Raising this costs missed duplicates, which a reader sees as the same story twice; lowering it costs a false merge, which is a story that never ran, so the two errors are not equal and this number leans high. It was measured against the cosine alone, which is what the shipped weights still score.",
+          "description": "What the weighted score has to reach before two items are one story, and EVERY pair inside a group has to reach it - not only each item against the one it joined. On the same 0-to-1 scale as every term, because the weights sum to 1.0. Set by labels rather than by taste: 0.94 is the first round hundredth above the highest pair marked as two stories in the eleven committed days read on 2026-09-01, which put that pair at 0.9317. The 200 pairs labelled on 2026-09-19 put it at 0.9407 instead - ABOVE this line - so the margin this number used to carry is gone and the line now admits one known two-story pair. No line fixes that: the same labels mark a pair at 0.9406 as one story and another at 0.9409 as one story, so the two populations interleave inside three slots. Raising this costs missed duplicates, which a reader sees as the same story twice; lowering it costs a false merge, which is a story that never ran, so the two errors are not equal and this number leans high. It was measured against the cosine alone, which is what the shipped weights still score.",
           "maximum": 1.0,
           "minimum": 0.0,
           "title": "Floor Min",
@@ -1721,7 +1721,7 @@
     },
     "SimilarityThresholdConfig": {
       "additionalProperties": false,
-      "description": "How the merge line fits itself, and the gates it has to clear before it may.\n\nNested inside `SameStoryConfig` rather than flat under `assemble`, for the\nreason that model's own docstring gives: a knob whose legal value depends on\nanother knob's value belongs where a validator can see both. `max_down_step`\nis bounded by a margin measured against `floor_min`, and `band_low` has to\nsit below the line `floor_min` currently holds.\n\n**Nothing reads this block yet.** It ships with `enabled` off, so a fresh\nclone publishes exactly what it published before the block existed.",
+      "description": "How the merge line fits itself, and the gates it has to clear before it may.\n\nNested inside `SameStoryConfig` rather than flat under `assemble`, for the\nreason that model's own docstring gives: a knob whose legal value depends on\nanother knob's value belongs where a validator can see both. The daily caps\nare counted in slots of `bin_width` and have to stay inside the band the\nrecord slices, and `band_low` has to sit below the line `floor_min` currently\nholds.\n\nThe line falls fast and rises slow. Lowering it publishes less, which is the\nhouse rule, so both the damping weight and the daily cap are larger going\ndown than going up - and a validator here refuses a config that reverses it.\n\n**Nothing reads this block yet.** It ships with `enabled` off, so a fresh\nclone publishes exactly what it published before the block existed.",
       "properties": {
         "applied_lookback_days": {
           "default": 7,
@@ -1741,7 +1741,7 @@
         },
         "band_low": {
           "default": 0.88,
-          "description": "The lowest score worth judging. Below it two items are nowhere near one story, so a verdict costs a model call and moves nothing. 0.88 is where the measured pairs start: the highest pair a person marked as two stories sits at 0.9317, so the band opens well below every decision the line has to get right.",
+          "description": "The lowest score worth judging. Below it two items are nowhere near one story, so a verdict costs a model call and moves nothing. 0.88 is where the measured pairs start: the lowest of the 200 labelled pairs sits at 0.8807, so the band opens below every decision the line has to get right.",
           "exclusiveMaximum": 1.0,
           "exclusiveMinimum": 0.0,
           "title": "Band Low",
@@ -1749,11 +1749,18 @@
         },
         "bin_width": {
           "default": 0.001,
-          "description": "How finely the record slices the band, and therefore the resolution of the fitted line. 0.001 is eight times finer than the 0.0083 margin the line has to stay above, so the slot edge is never what puts the line on the wrong side of a hand-marked pair. Finer costs slots and coarser costs precision on the one number this feature exists to set.",
+          "description": "How finely the record slices the band, and therefore the resolution of the fitted line. 0.001 is already finer than the labels can be read apart: the 200 pairs marked on 2026-09-19 put a one-story pair at 0.9406, a two-story pair at 0.9407 and another one-story pair at 0.9409, so three slots hold both marks. Finer costs slots and buys no separation the labels can support.",
           "exclusiveMinimum": 0.0,
           "maximum": 0.01,
           "title": "Bin Width",
           "type": "number"
+        },
+        "dead_zone_bins": {
+          "default": 1,
+          "description": "How close a proposal has to come to the applied line before the day counts as no move at all, counted in slots of bin_width. 1 slot, because a smaller move is one the fit cannot represent: the line is a slot's upper edge, so a step of half a slot lands on no edge the next walk can produce. Without it the damping leaves a geometric tail whose steps shrink below one slot for ever and the applied line never formally arrives at its proposal.",
+          "minimum": 1,
+          "title": "Dead Zone Bins",
+          "type": "integer"
         },
         "disagreement_max": {
           "default": 0.15,
@@ -1764,8 +1771,8 @@
           "type": "number"
         },
         "discard_share": {
-          "default": 0.01,
-          "description": "What share of judged NO pairs the fit sets aside at the top before placing the line. 0.01 is what stops one bad verdict setting the number: a single NO at 0.97 would otherwise pin the line at 0.971 for ever, because the line is the stopped slot's upper edge. floor(total * 0.01) sets one pair aside at 100 negatives and two at 200, which is what minimum_negatives waits for.",
+          "default": 0.03,
+          "description": "What share of the record's agreed-NO verdicts the fit sets aside at the top before placing the line - a share of NO readings, never of judged pairs. It is what stops a handful of wrong NO verdicts setting the number: a single NO at 0.97 would otherwise pin the line at 0.971 for ever, because the line is the stopped slot's upper edge. The question it answers is how many wrong NO verdicts ONE news cluster can produce before it sets the line, and the answer is not one. In the 200 labelled pairs of 2026-09-19 all four two-story marks came from a single cluster that produced 29 pairs. At minimum_negatives of 200, floor(total * 0.03) sets six verdicts aside, which survives that night; 0.01 sets two aside, which does not.",
           "exclusiveMaximum": 0.5,
           "exclusiveMinimum": 0.0,
           "title": "Discard Share",
@@ -1777,6 +1784,14 @@
           "title": "Enabled",
           "type": "boolean"
         },
+        "fall_weight": {
+          "default": 0.5,
+          "description": "How much of a DOWNWARD move lands today. Down is the fast direction: lowering the line publishes less, and the house rule is to err on the side of publishing less. 0.50 is half the remaining gap a day rather than the whole gap, because one judge misreading one news cluster produces a block of adjacent wrong verdicts on one night, and an undamped fall would take that whole block at once. An ESTIMATE; what replaces it is the first fortnight of written rows.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Fall Weight",
+          "type": "number"
+        },
         "judge_temperature": {
           "default": 0.0,
           "description": "How far the judge's sampler may stray from the likeliest word. 0.0, because every pair is read twice with the two summaries swapped and the two readings are then compared: at 0.0 a disagreement is position bias, which is the thing disagreement_max gates on. Above 0.0 the same pair can answer differently with nothing swapped at all, so the comparison measures sampling noise instead and the gate stops meaning what its own name says. It sits here rather than on models.summarize.inference because that entry pins its temperature for writing summaries, which is a different job on the same weights.",
@@ -1785,13 +1800,19 @@
           "title": "Judge Temperature",
           "type": "number"
         },
-        "max_down_step": {
-          "default": 0.005,
-          "description": "The furthest the line may fall in one day. 0.005 leaves TODAY's 0.0083 gap uncrossable in one day. The gap is not a constant: it is applied minus 0.9317, so it shrinks as the line falls, and once the line reaches 0.9367 one legal step lands on the marked pair. That is why the holdout report is read on every day rather than once. The owner proposed 0.010, which is larger than today's gap, so it would have crossed on its first step.",
-          "exclusiveMaximum": 0.0083,
-          "exclusiveMinimum": 0.0,
-          "title": "Max Down Step",
-          "type": "number"
+        "max_down_bins": {
+          "default": 10,
+          "description": "The furthest the line may fall in one day, counted in slots of bin_width. 10 slots is 0.010 at the committed width. Counted in slots rather than written as a decimal because 10 slots down is checkable against the record the line was fitted from, and 'one percent of the scale' is not. Bounded by the band: a step wider than the band leaves the record that proposed it.",
+          "minimum": 1,
+          "title": "Max Down Bins",
+          "type": "integer"
+        },
+        "max_up_bins": {
+          "default": 3,
+          "description": "The furthest the line may rise in one day, counted in slots of bin_width. 3 slots is 0.003 at the committed width - under a third of the fall cap, which is the whole asymmetry in one number. Both directions are capped rather than one, because damping alone is not a brake a reader can bound and the step-change guard ships off.",
+          "minimum": 1,
+          "title": "Max Up Bins",
+          "type": "integer"
         },
         "minimum_above_line": {
           "default": 30,
@@ -1809,7 +1830,7 @@
         },
         "minimum_negatives": {
           "default": 200,
-          "description": "Agreed NO verdicts the record needs before the fit may set the line at all. 200, because discard_share is 0.01 and one percent of anything smaller sets aside less than two pairs, which is the same as setting aside none.",
+          "description": "Agreed NO verdicts the record needs before the fit may set the line at all. 200, because discard_share is 0.03 and three percent of 200 sets six verdicts aside - enough to absorb the four wrong NO verdicts one news cluster produced in the 200 labelled pairs of 2026-09-19. Three percent of 100 sets three aside, which does not.",
           "minimum": 1,
           "title": "Minimum Negatives",
           "type": "integer"
@@ -1820,6 +1841,14 @@
           "minimum": 1,
           "title": "Pair Budget",
           "type": "integer"
+        },
+        "rise_weight": {
+          "default": 0.15,
+          "description": "How much of an UPWARD move lands today. Up is the slow direction: raising the line merges more stories together and publishes fewer of them separately, so it arrives over a month. 0.15 with the up cap takes the line from 0.88 back to 0.94 in about thirty-three days, against about ten days for the same distance downwards. An ESTIMATE, replaced by the first fortnight of rows.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Rise Weight",
+          "type": "number"
         },
         "settled_delta": {
           "default": 0.001,
@@ -1844,14 +1873,6 @@
           "minimum": 1,
           "title": "Shards",
           "type": "integer"
-        },
-        "smoothing_weight": {
-          "default": 0.15,
-          "description": "How much of a DOWNWARD move lands today. 0.15 means a relaxation arrives over five to seven days while a tightening arrives whole, because raising the line reduces wrong merges and lowering it increases them. Symmetric damping would make the safe move a week late.",
-          "exclusiveMinimum": 0.0,
-          "maximum": 1.0,
-          "title": "Smoothing Weight",
-          "type": "number"
         },
         "step_change_guard_enforced": {
           "default": false,
@@ -2412,19 +2433,19 @@
       "why": "state/host-fingerprint/ was the one committed ledger with no age at all."
     },
     {
+      "change": "adaptive_dedup_threshold: caps in slots, a rise cap, two damping weights.",
+      "version": "2026-09-19T01:00",
+      "why": "The line falls fast and rises slow, and a slot count is checkable."
+    },
+    {
+      "change": "adaptive_dedup_threshold.max_down_step loses its upper bound of 0.0083.",
+      "version": "2026-09-19",
+      "why": "Fresh labels put the nearest two-story pair above the line, so the gap is gone."
+    },
+    {
       "change": "The three extract.chrome_* knobs, removed with the store they governed.",
       "version": "2026-09-18T11:00",
       "why": "Over a full run the store moved the boilerplate signal zero times."
-    },
-    {
-      "change": "adaptive_dedup_threshold.judge_temperature, additive, default 0.0.",
-      "version": "2026-09-18T10:00",
-      "why": "The swap reads position bias only while the sampler adds no noise of its own."
-    },
-    {
-      "change": "adaptive_dedup_threshold and run.judge_shard_timeout_minutes, additive.",
-      "version": "2026-09-18T09:00",
-      "why": "The merge line was set by one reading and nothing re-read it."
     },
     {
       "change": "Earlier changes are in this file's git history.",

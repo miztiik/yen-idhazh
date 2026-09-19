@@ -35,15 +35,18 @@ SUPERSEDED_ASSEMBLE_NAMES: Final[Mapping[str, str]] = MappingProxyType(
 #: is wrong with. A billionth is far below any weight worth setting.
 _WEIGHTS_TOLERANCE: Final = 1e-9
 
-#: The gap between TODAY's floor and the highest-scoring pair a person marked as
-#: TWO stories - Ontario's pushback against the lake renaming, at 0.9317, against
-#: a floor of 0.94. Measured 2026-09-01 on Intel Core i7-1265U / Windows 11 /
-#: Python 3.14.2 over 3,978 items across eleven committed days. It is a reading
-#: of one moment rather than a property of the system: the live margin is
-#: applied - 0.9317, and it shrinks every time the line falls. A single downward
-#: step larger than this reading can cross the margin in one day, which is why it
-#: bounds max_down_step rather than sitting in a comment.
-HOLDOUT_MARGIN: Final = 0.0083
+#: The highest score the labelled set marks as TWO stories. Measured 2026-09-19
+#: over the 200 pairs in `state/story-similarity/holdout-pairs.csv`, labelled by
+#: claude-opus-4.6 reading each pair's title and summary; 196 one story, 4 two
+#: stories, and the four are all the same lake-renaming cluster. Counts are
+#: deterministic and have no spread.
+#:
+#: **It is the pair's own score and never a gap.** The gap to the line is
+#: `floor_min` minus this, computed where it is needed, because `floor_min` is a
+#: config value and a frozen subtraction goes stale the moment either side moves.
+#: Today that gap is -0.0007: the line sits BELOW the highest two-story mark, so
+#: there is no headroom for a downward step to protect.
+HOLDOUT_TWO_STORY_MAX: Final = 0.9407
 
 #: Wall clock for one judge call at 764 read tokens, in seconds. Derived from the
 #: repository's own reading of 9.85 tokens a second - median over 4,117 timed
@@ -53,15 +56,28 @@ HOLDOUT_MARGIN: Final = 0.0083
 #: a source. Row 17 replaces it with a reading taken on the judge prompt itself.
 SECONDS_A_CALL: Final = 77.6
 
+#: The knobs `adaptive_dedup_threshold` used to carry, and where each one went.
+#: Both changed unit as well as name: the fall cap is counted in slots of
+#: `bin_width` now rather than written as a score, and the one damping weight
+#: became two because the line damps both directions.
+SUPERSEDED_THRESHOLD_NAMES: Final[Mapping[str, str]] = MappingProxyType(
+    {"max_down_step": "max_down_bins", "smoothing_weight": "fall_weight"}
+)
+
 
 class SimilarityThresholdConfig(Model):
     """How the merge line fits itself, and the gates it has to clear before it may.
 
     Nested inside `SameStoryConfig` rather than flat under `assemble`, for the
     reason that model's own docstring gives: a knob whose legal value depends on
-    another knob's value belongs where a validator can see both. `max_down_step`
-    is bounded by a margin measured against `floor_min`, and `band_low` has to
-    sit below the line `floor_min` currently holds.
+    another knob's value belongs where a validator can see both. The daily caps
+    are counted in slots of `bin_width` and have to stay inside the band the
+    record slices, and `band_low` has to sit below the line `floor_min` currently
+    holds.
+
+    The line falls fast and rises slow. Lowering it publishes less, which is the
+    house rule, so both the damping weight and the daily cap are larger going
+    down than going up - and a validator here refuses a config that reverses it.
 
     **Nothing reads this block yet.** It ships with `enabled` off, so a fresh
     clone publishes exactly what it published before the block existed.
@@ -83,8 +99,8 @@ class SimilarityThresholdConfig(Model):
         description=(
             "The lowest score worth judging. Below it two items are nowhere near one "
             "story, so a verdict costs a model call and moves nothing. 0.88 is where the "
-            "measured pairs start: the highest pair a person marked as two stories sits at "
-            "0.9317, so the band opens well below every decision the line has to get right."
+            "measured pairs start: the lowest of the 200 labelled pairs sits at 0.8807, so "
+            "the band opens below every decision the line has to get right."
         ),
     )
     band_high: float = Field(
@@ -102,46 +118,87 @@ class SimilarityThresholdConfig(Model):
         le=0.01,
         description=(
             "How finely the record slices the band, and therefore the resolution of the "
-            "fitted line. 0.001 is eight times finer than the 0.0083 margin the line has to "
-            "stay above, so the slot edge is never what puts the line on the wrong side of a "
-            "hand-marked pair. Finer costs slots and coarser costs precision on the one "
-            "number this feature exists to set."
+            "fitted line. 0.001 is already finer than the labels can be read apart: the "
+            "200 pairs marked on 2026-09-19 put a one-story pair at 0.9406, a two-story "
+            "pair at 0.9407 and another one-story pair at 0.9409, so three slots hold both "
+            "marks. Finer costs slots and buys no separation the labels can support."
         ),
     )
     discard_share: float = Field(
-        default=0.01,
+        default=0.03,
         gt=0.0,
         lt=0.5,
         description=(
-            "What share of judged NO pairs the fit sets aside at the top before placing the "
-            "line. 0.01 is what stops one bad verdict setting the number: a single NO at "
-            "0.97 would otherwise pin the line at 0.971 for ever, because the line is the "
-            "stopped slot's upper edge. floor(total * 0.01) sets one pair aside at 100 "
-            "negatives and two at 200, which is what minimum_negatives waits for."
+            "What share of the record's agreed-NO verdicts the fit sets aside at the top "
+            "before placing the line - a share of NO readings, never of judged pairs. It "
+            "is what stops a handful of wrong NO verdicts setting the number: a single NO "
+            "at 0.97 would otherwise pin the line at 0.971 for ever, because the line is "
+            "the stopped slot's upper edge. The question it answers is how many wrong NO "
+            "verdicts ONE news cluster can produce before it sets the line, and the "
+            "answer is not one. In the 200 labelled pairs of 2026-09-19 all four "
+            "two-story marks came from a single cluster that produced 29 pairs. At "
+            "minimum_negatives of 200, floor(total * 0.03) sets six verdicts aside, which "
+            "survives that night; 0.01 sets two aside, which does not."
         ),
     )
-    smoothing_weight: float = Field(
+    dead_zone_bins: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "How close a proposal has to come to the applied line before the day counts as "
+            "no move at all, counted in slots of bin_width. 1 slot, because a smaller move "
+            "is one the fit cannot represent: the line is a slot's upper edge, so a step of "
+            "half a slot lands on no edge the next walk can produce. Without it the damping "
+            "leaves a geometric tail whose steps shrink below one slot for ever and the "
+            "applied line never formally arrives at its proposal."
+        ),
+    )
+    fall_weight: float = Field(
+        default=0.50,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "How much of a DOWNWARD move lands today. Down is the fast direction: lowering "
+            "the line publishes less, and the house rule is to err on the side of "
+            "publishing less. 0.50 is half the remaining gap a day rather than the whole "
+            "gap, because one judge misreading one news cluster produces a block of "
+            "adjacent wrong verdicts on one night, and an undamped fall would take that "
+            "whole block at once. An ESTIMATE; what replaces it is the first fortnight of "
+            "written rows."
+        ),
+    )
+    rise_weight: float = Field(
         default=0.15,
         gt=0.0,
         le=1.0,
         description=(
-            "How much of a DOWNWARD move lands today. 0.15 means a relaxation arrives over "
-            "five to seven days while a tightening arrives whole, because raising the line "
-            "reduces wrong merges and lowering it increases them. Symmetric damping would "
-            "make the safe move a week late."
+            "How much of an UPWARD move lands today. Up is the slow direction: raising the "
+            "line merges more stories together and publishes fewer of them separately, so "
+            "it arrives over a month. 0.15 with the up cap takes the line from 0.88 back "
+            "to 0.94 in about thirty-three days, against about ten days for the same "
+            "distance downwards. An ESTIMATE, replaced by the first fortnight of rows."
         ),
     )
-    max_down_step: float = Field(
-        default=0.005,
-        gt=0.0,
-        lt=HOLDOUT_MARGIN,
+    max_down_bins: int = Field(
+        default=10,
+        ge=1,
         description=(
-            "The furthest the line may fall in one day. 0.005 leaves TODAY's 0.0083 gap "
-            "uncrossable in one day. The gap is not a constant: it is applied minus 0.9317, "
-            "so it shrinks as the line falls, and once the line reaches 0.9367 one legal "
-            "step lands on the marked pair. That is why the holdout report is read on every "
-            "day rather than once. The owner proposed 0.010, which is larger than today's "
-            "gap, so it would have crossed on its first step."
+            "The furthest the line may fall in one day, counted in slots of bin_width. 10 "
+            "slots is 0.010 at the committed width. Counted in slots rather than written "
+            "as a decimal because 10 slots down is checkable against the record the line "
+            "was fitted from, and 'one percent of the scale' is not. Bounded by the band: "
+            "a step wider than the band leaves the record that proposed it."
+        ),
+    )
+    max_up_bins: int = Field(
+        default=3,
+        ge=1,
+        description=(
+            "The furthest the line may rise in one day, counted in slots of bin_width. 3 "
+            "slots is 0.003 at the committed width - under a third of the fall cap, which "
+            "is the whole asymmetry in one number. Both directions are capped rather than "
+            "one, because damping alone is not a brake a reader can bound and the "
+            "step-change guard ships off."
         ),
     )
     step_change_multiple: float = Field(
@@ -210,8 +267,10 @@ class SimilarityThresholdConfig(Model):
         ge=1,
         description=(
             "Agreed NO verdicts the record needs before the fit may set the line at all. "
-            "200, because discard_share is 0.01 and one percent of anything smaller sets "
-            "aside less than two pairs, which is the same as setting aside none."
+            "200, because discard_share is 0.03 and three percent of 200 sets six verdicts "
+            "aside - enough to absorb the four wrong NO verdicts one news cluster produced "
+            "in the 200 labelled pairs of 2026-09-19. Three percent of 100 sets three "
+            "aside, which does not."
         ),
     )
     minimum_above_line: int = Field(
@@ -299,6 +358,28 @@ class SimilarityThresholdConfig(Model):
         ),
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def _refuse_a_removed_knob(cls, data: Any) -> Any:
+        return refuse_a_removed_knob(
+            "assemble.same_story.adaptive_dedup_threshold", data, SUPERSEDED_THRESHOLD_NAMES
+        )
+
+    @property
+    def dead_zone(self) -> float:
+        """How near a proposal counts as no move, in score units. Slots times slot width."""
+        return self.dead_zone_bins * self.bin_width
+
+    @property
+    def max_down_step(self) -> float:
+        """The fall cap in score units. Derived, so the slot count is the only number set."""
+        return self.max_down_bins * self.bin_width
+
+    @property
+    def max_up_step(self) -> float:
+        """The rise cap in score units. Derived for the same reason the fall cap is."""
+        return self.max_up_bins * self.bin_width
+
     @model_validator(mode="after")
     def _the_band_divides_into_whole_slots(self) -> Self:
         """A band that ends mid-slot leaves a part-slot whose counts mean something else.
@@ -330,19 +411,63 @@ class SimilarityThresholdConfig(Model):
         return self
 
     @model_validator(mode="after")
-    def _a_move_may_not_cross_the_margin_in_one_day(self) -> Self:
-        """One step may not carry the line past the closest pair a person marked apart.
+    def _a_step_may_not_outrun_the_band(self) -> Self:
+        """A day's move may not carry the line outside the record that proposed it.
 
-        Spelled as a validator as well as a field bound so that the refusal
-        names the margin and the measurement instead of printing a bare `lt`
-        failure (Guardrail #10).
+        The record holds slots only between `band_low` and `band_high`, so a step
+        wider than that span can put the line where no slot exists and the next
+        fit has nothing to read. The dead zone is checked against the same span:
+        a zone as wide as the band would make every proposal no move at all.
+        Spelled as a validator rather than a field bound because the span is two
+        other fields and a literal would drift from them.
+
+        This replaced the margin check on 2026-09-19. That one refused a step at
+        or above the gap between the line and the nearest pair marked as two
+        stories; the 200 labels marked that day put the nearest such pair at
+        0.9407, above the 0.94 line, so the gap it guarded is gone and a step
+        sized against it guards nothing (Guardrail #10).
         """
-        if self.max_down_step >= HOLDOUT_MARGIN:
+        span = self.band_high - self.band_low
+        slots = round(span / self.bin_width)
+        for name, bins in (
+            ("max_down_bins", self.max_down_bins),
+            ("max_up_bins", self.max_up_bins),
+            ("dead_zone_bins", self.dead_zone_bins),
+        ):
+            if bins >= slots:
+                raise ValueError(
+                    f"{name} is {bins} slots and the band runs {self.band_low} to "
+                    f"{self.band_high}, which is {slots} slots of {self.bin_width}. A move "
+                    "that size can put the line outside the record it was fitted from"
+                )
+        return self
+
+    @model_validator(mode="after")
+    def _a_fall_lands_faster_than_a_rise(self) -> Self:
+        """The line falls fast and rises slow, and this refuses a config that reverses it.
+
+        The house rule is to publish less rather than more: when two feeds give
+        near-identical coverage that is the feed's fault, so the move that folds
+        fewer stories together arrives quickly and the move that folds more
+        arrives over weeks. Lowering the line publishes less, so down is the fast
+        direction in both mechanisms - the damping weight and the daily cap.
+
+        Written as a refusal rather than as a comment because the shape reads
+        backwards to anyone who has not been told the rule, and the obvious
+        tidy-up is to point it the other way.
+        """
+        if self.fall_weight <= self.rise_weight:
             raise ValueError(
-                f"max_down_step is {self.max_down_step}, and the gap between today's floor "
-                f"and the highest pair a person marked as two stories is {HOLDOUT_MARGIN} "
-                "(0.94 against 0.9317, measured 2026-09-01). A step that size crosses the "
-                "margin in one day"
+                f"fall_weight is {self.fall_weight} and rise_weight is {self.rise_weight}, "
+                "so the line would rise at least as fast as it falls. Lowering the line "
+                "publishes less, and that is the direction that is meant to be quick"
+            )
+        if self.max_down_bins <= self.max_up_bins:
+            raise ValueError(
+                f"max_down_bins is {self.max_down_bins} slots and max_up_bins is "
+                f"{self.max_up_bins}, so a day could rise at least as far as it falls. "
+                "Lowering the line publishes less, and that is the direction that is "
+                "meant to be quick"
             )
         return self
 
@@ -408,20 +533,18 @@ class SameStoryConfig(Model):
             "What the weighted score has to reach before two items are one story, and "
             "EVERY pair inside a group has to reach it - not only each item against "
             "the one it joined. On the same 0-to-1 scale as every term, because the "
-            "weights sum to 1.0. Set by hand labels rather than by taste. Every group "
-            "the pass forms over the eleven committed days was read and marked "
-            "same-story or not, measured 2026-09-01 on Intel Core i7-1265U / Windows "
-            "11 / Python 3.14.2 over 3,978 items: at 0.93 one group of thirty is two "
-            "different stories - Ontario's pushback against the lake renaming, merged "
-            "into Google doing the renaming, at 0.9317 - and at 0.94 all twenty-two "
-            "groups are one story each. The rule is the first round hundredth above "
-            "the highest-scoring pair a person marked as two stories, which leaves a "
-            "margin of 0.0083. That margin is thin, and the way to widen it is more "
-            "labels rather than a higher number. Raising this costs missed duplicates, "
-            "which a reader sees as the same story twice; lowering it costs a false "
-            "merge, which is a story that never ran, so the two errors are not equal "
-            "and this number leans high. It was measured against the cosine alone, "
-            "which is what the shipped weights still score."
+            "weights sum to 1.0. Set by labels rather than by taste: 0.94 is the first "
+            "round hundredth above the highest pair marked as two stories in the eleven "
+            "committed days read on 2026-09-01, which put that pair at 0.9317. The 200 "
+            "pairs labelled on 2026-09-19 put it at 0.9407 instead - ABOVE this line - so "
+            "the margin this number used to carry is gone and the line now admits one "
+            "known two-story pair. No line fixes that: the same labels mark a pair at "
+            "0.9406 as one story and another at 0.9409 as one story, so the two "
+            "populations interleave inside three slots. Raising this costs missed "
+            "duplicates, which a reader sees as the same story twice; lowering it costs a "
+            "false merge, which is a story that never ran, so the two errors are not equal "
+            "and this number leans high. It was measured against the cosine alone, which "
+            "is what the shipped weights still score."
         ),
     )
     adaptive_dedup_threshold: SimilarityThresholdConfig = Field(
@@ -459,6 +582,12 @@ class SameStoryConfig(Model):
         fills with agreements and the line can never come down - while every
         number in the file still looks legal. Checked on this model because
         `floor_min` is this model's field and a nested model cannot see it.
+
+        The band also has to reach the hardest pair we hold a label for, which
+        is a second ceiling and not the same one: a floor raised above
+        `HOLDOUT_TWO_STORY_MAX` would let the band open above the pair a wrong
+        line publishes first, so the record would fill with easy agreements and
+        never judge the case that could prove the line wrong.
         """
         band_low = self.adaptive_dedup_threshold.band_low
         if band_low >= self.floor_min:
@@ -466,6 +595,12 @@ class SameStoryConfig(Model):
                 f"adaptive_dedup_threshold.band_low is {band_low} and floor_min is "
                 f"{self.floor_min}, so every pair in the band already merges and the "
                 "fitted line could only ever rise"
+            )
+        if band_low >= HOLDOUT_TWO_STORY_MAX:
+            raise ValueError(
+                f"adaptive_dedup_threshold.band_low is {band_low} and the highest pair the "
+                f"labelled set marks as two stories is {HOLDOUT_TWO_STORY_MAX}, so the "
+                "band cannot draw the pair the line most has to get right"
             )
         return self
 
@@ -519,8 +654,9 @@ class AssembleConfig(Model):
             "2026-09-14 on a developer machine / Python 3.14.2 over the "
             "twenty-five committed days and 9,353 items: fifty-three cross-source "
             "pairs share a headline, their cosine has a median of 0.9177 against a "
-            "floor of 0.94, and the highest-scoring pair a person marked as TWO stories "
-            "sits at 0.9317 - above that median, so no threshold separates the two "
+            "floor of 0.94, and the highest-scoring pair marked as TWO stories "
+            "sits at 0.9407 (2026-09-19 labels) - above both that median and the floor, "
+            "so no threshold separates the two "
             "populations and lowering same_story.floor_min cannot fix this. Turning "
             "this off restores the vector-only rule, which is the revert path an "
             "operator has if a shared headline ever turns out to be two stories. Ruled "
