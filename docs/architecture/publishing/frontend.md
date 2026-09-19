@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-19
 The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
 Concept-level *why* lives in [../../concepts/digest.md](../../concepts/digest.md), [../../concepts/design-system.md](../../concepts/design-system.md) and [../../concepts/ui-shell.md](../../concepts/ui-shell.md). This page is the *shape*, and it records where the owner, Jony and Reader disagreed and how it was settled.
@@ -301,10 +301,9 @@ nothing at all: the majority have none, the absence is a gap in our keyword list
 rather than a fact about the story, and printing it on nine items in ten would
 be printing our own homework.
 
-**The desk name beside them became a chip of the same family on 2026-09-01.** It
-was a hairline bullet and a word; it is now a tinted fill on `--tint-accent`,
-the same tint the lens chips take, set in upper case so the desk we filed the
-story under still reads differently from the words the story itself earned. One
+**The desk name beside them is a chip of the same family.** It uses
+`--tint-accent` and keeps the configured display name, without forced capitals
+or added letter spacing. Its first position identifies the desk. One
 tint for every member of a label family is the rule in
 [../../concepts/design-system.md](../../concepts/design-system.md), and it is
 what let the second of the two ship without inventing a look.
@@ -812,25 +811,21 @@ reads each zone's used width with the root font size at 16px and again at 22px
 and fails unless every one of them scaled by 22/16, printing both numbers so a
 pass cannot be vacuous.
 
-## The day notice is one line, and one divider marks the later runs
+## The day header states each publication fact once
 
-The notice states the day as facts and never as a judgement: the count, the
-failures when the run was partial and why they failed, how many arrived after
-the first run, and last, which run made this page and at what time. It used to
-print one near-identical paragraph per later run, which said one fact three
-times.
+`DayNotice` starts with the edition date and the published count supplied by
+the caller. It never counts the seed or the currently visible items. The header
+is unboxed and wraps the count beside or below the date as space permits.
 
-**The last two of those sentences arrived from the footer on 2026-08-31**, and
-the reason is where they belong rather than what they say. A stamp about today's
-run printed eight screens under today is filed in the wrong place, and the same
-footer printed it under `/archive/`, `/console/` and `/evals/`, which render no
-day at all. The skipped-story count came with it because the notice was already
-stating it - the same fact twice on one page reads as two facts - and the
-footer's reason clause, that we could not read enough of the page to summarize
-those stories fairly, merged into the notice's sentence so nothing was lost.
+An incomplete day carries the recorded failure count, with no invented cause.
+The old sentence attributed every failure to inadequate source text, although
+the payload carries no such shared reason. Unknown counts remain absent.
 
-The run stamp goes **last** in the paragraph and the count goes first. A reader
-came for the stories, not for us.
+The last line uses `runs.at(-1)` for `Updated HH:MM UTC (update N).` Its time is
+the digest's recorded generation time, not the site's deployment time. The
+sum of `items_added` where `n > 1` states how many were added since the first
+update. Missing run history prints neither a time nor an assumed first run.
+These facts belong to the day header, never the shared site footer.
 
 `introduced_by_run` is on every item and is drawn nowhere. It briefly was: from
 2026-08-31 a flat list carried one hairline divider - `Added later today` -
@@ -870,7 +865,7 @@ six stated today's run - which run produced the day and at what time, and how
 many stories did not finish. The footer is on every page that has one, so both
 were printed under `/archive/`, `/console/` and `/evals/`, which render no day at
 all, and printed a second time under `/`, where
-[the day notice](#the-day-notice-is-one-line-and-one-divider-marks-the-later-runs)
+[the day notice](#the-day-header-states-each-publication-fact-once)
 was already saying them. Both live beside the day now.
 
 **Three more went on 2026-09-09, and those did not move anywhere.** They are the

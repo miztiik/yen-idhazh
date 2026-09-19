@@ -729,23 +729,15 @@ COMMIT_BASE_ENV: Final = frozenset(
 
 # Only assemble can rebuild what it commits, so only assemble carries the three
 # settings that make the loop rebuild instead of merge - and only assemble
-# commits rendered assets, so only assemble drops a raced one.
+# commits rendered assets, so only assemble drops a raced one. Every other job
+# takes the base three and nothing else: no path under `state/` has two writers
+# now, so no commit step settles anything after its rebase.
 COMMIT_SCRIPT_ENV: Final = {
-    # The plan job records one verdict per feed per run. A second attempt at one
-    # plan writes its own verdict for every feed, against a checkout that cannot
-    # see the first attempt's push, so the union keeps both and one bad run reads
-    # as two failures.
-    "plan": COMMIT_BASE_ENV | {"DROP_REPEATED_ROWS_COMMAND"},
-    # Its filters read a checkout frozen at the commit this run was triggered at,
-    # so a second attempt cannot see the first attempt's pushed rows and the
-    # union keeps both - which is what the post-merge pass is for.
-    "work": COMMIT_BASE_ENV | {"DROP_REPEATED_ROWS_COMMAND"},
+    "plan": COMMIT_BASE_ENV,
+    "work": COMMIT_BASE_ENV,
     "assemble": COMMIT_BASE_ENV
     | {"REFRESH_PATHS", "REGENERATE_COMMAND", "DROP_RACED_ASSETS_COMMAND"},
     "fold": COMMIT_BASE_ENV,
-    # No settling command, and that is a property rather than an omission. The
-    # bench row is keyed on the GitHub run id, which no second dispatch can
-    # reproduce, so there is no repeat for a post-merge pass to drop.
     "bench": COMMIT_BASE_ENV,
 }
 
@@ -825,14 +817,6 @@ FOLD_DRY_RUN_FLAG: Final = "--dry-run"
 RECORD_STEP: Final = "Record what this shard measured"
 
 RECORD_COMMAND: Final = "python -m idhazh record"
-
-# The pass that runs after the merge, and the flag that says what it covers. A
-# run appends only to the shard its own date routes to, so the date is the whole
-# cover - without it the pass reads every feed-health, item-health and score
-# shard the archive holds and costs more every month (Guardrail #12).
-SETTLE_COMMAND: Final = ("python", "-m", "idhazh", "dedupe-ledgers")
-
-SETTLE_COVER_FLAG: Final = "--date"
 
 # The step that adds this run's accepted pairs to the training window. It runs
 # in assemble because that is where the article text still exists: `items/` is
@@ -1022,12 +1006,6 @@ COMMIT_REFRESH_PATHS: Final = {
 # The producer the harness drives through the loop. See its own docstring for
 # why the pipeline's `assemble` cannot be the one under a temporary clone.
 REBUILD_STAND_IN: Final = Path(__file__).with_name("rebuild_day.py")
-
-# The post-merge pass, for the same reason: the shipped stage resolves `state/`
-# off the installed package, so under a test it would settle the developer's own
-# repository rather than the temporary clone. The stand-in calls the shipped
-# function with a path relative to the runner's working directory.
-SETTLE_STAND_IN: Final = Path(__file__).with_name("settle_ledger.py")
 
 # The drop, by contrast, IS the shipped one: it anchors on the working
 # directory, so it runs inside a temporary clone unchanged.
@@ -1881,7 +1859,6 @@ requires_bash: Final = pytest.mark.skipif(
 requires_space_free_paths: Final = pytest.mark.skipif(
     " " in sys.executable
     or " " in str(REBUILD_STAND_IN)
-    or " " in str(SETTLE_STAND_IN)
     or " " in str(DROP_ENTRY_POINT),
     reason="REGENERATE_COMMAND is word-split on spaces",
 )
@@ -2051,26 +2028,6 @@ def _drop_command(date: str) -> str:
     return f"{Path(sys.executable).as_posix()} {DROP_ENTRY_POINT.as_posix()} --date {date}"
 
 
-def _settle_command(relative: str, key: str) -> str:
-    """The post-merge pass the harness puts through the loop, as it word-splits it."""
-    return (
-        f"{Path(sys.executable).as_posix()} {SETTLE_STAND_IN.as_posix()} "
-        f"--path {relative} --key {key}"
-    )
-
-
-def _settled_in_the_clone(settings: dict[str, str], relative: str, key: str) -> dict[str, str]:
-    """The step's own settings, with the one command that would reach this repository.
-
-    `python -m idhazh dedupe-ledgers` resolves `state/` off the installed
-    package, so running it unchanged from a temporary clone would settle the
-    working repository's committed ledgers.
-    """
-    if "DROP_REPEATED_ROWS_COMMAND" not in settings:
-        return settings
-    return {**settings, "DROP_REPEATED_ROWS_COMMAND": _settle_command(relative, key)}
-
-
 def _chart(repo: Path, date: str, item_id: str, relpath: str, body: str | None = None) -> None:
     """One published visual, exactly as the work job's artifact leaves it.
 
@@ -2206,15 +2163,6 @@ def _run_commit_script(
 ) -> subprocess.CompletedProcess[str]:
     bash = _bash()
     assert bash is not None
-    # The shipped command resolves `state/` off the installed package, which
-    # under a test is this repository rather than the temporary clone. Running it
-    # unchanged would settle the developer's own committed ledgers and report
-    # nothing, so a test that forgets `_settled_in_the_clone` fails here by name.
-    settle = settings.get("DROP_REPEATED_ROWS_COMMAND", "")
-    assert SETTLE_STAND_IN.as_posix() in settle or not settle, (
-        "pass DROP_REPEATED_ROWS_COMMAND through _settled_in_the_clone: "
-        "the shipped one would settle this repository's own state/"
-    )
     return subprocess.run(
         [bash, COMMIT_SCRIPT.as_posix(), *staged_paths],
         cwd=runner,

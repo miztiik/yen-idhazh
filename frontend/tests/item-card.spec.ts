@@ -273,71 +273,50 @@ test.describe('the item is a low-chrome card', () => {
 		});
 	}
 
-	test('the title is the step the eye lands on, and the summary is not', async ({ page }) => {
-		// Decision 4. The contrast is what matters, so both are read off one
-		// card rather than checked against a number written here twice.
-		await open(page, 'dark');
-		const sizes = await page.evaluate(() => {
-			const card = document.querySelector('article.item');
-			if (!card) throw new Error('no item');
-			const heading = card.querySelector('h2, h3');
-			// By the hook rather than by a utility class, and the same reason the
-			// eyebrow below uses one: the measure moved off the summary onto the
-			// prose block that holds it, and `p.measure` would then have matched
-			// nothing and reported a font size of 0 as a pass.
-			const summary = card.querySelector('[data-item-summary]');
-			// The eyebrow's own upper case moved onto the desk chip when that chip
-			// landed, and a selector reading `p.uppercase` would have done the same.
-			const eyebrow = card.querySelector('[data-item-eyebrow]');
-			const when = card.querySelector('[data-item-time]');
-			// Throws rather than returning 0, because 0 is what a renamed selector
-			// looks like and `toBeCloseTo` has no opinion about which zero it got.
-			const px = (el: Element | null, name: string) => {
-				if (!el) throw new Error(`no ${name} on the card to measure`);
-				return parseFloat(getComputedStyle(el).fontSize);
-			};
-			const root = getComputedStyle(document.documentElement);
-			return {
-				title: px(heading, 'title'),
-				summary: px(summary, 'summary'),
-				eyebrow: px(eyebrow, 'eyebrow'),
-				// The time is the eyebrow's own type, colour and
-				// weight - not smaller, not lighter, not a new step on any scale. A
-				// fifth typographic weight on this line is the wallpaper this
-				// avoids, and it is the one thing about it a
-				// screenshot cannot settle.
-				when: px(when, 'time'),
-				whenColour: when ? getComputedStyle(when).color : '',
-				whenWeight: when ? getComputedStyle(when).fontWeight : '',
-				eyebrowColour: eyebrow ? getComputedStyle(eyebrow).color : '',
-				eyebrowWeight: eyebrow ? getComputedStyle(eyebrow).fontWeight : '',
-				text2xl: root.getPropertyValue('--text-2xl').trim(),
-				textLg: root.getPropertyValue('--text-lg').trim(),
-				textXs: root.getPropertyValue('--text-xs').trim(),
-				rem: parseFloat(getComputedStyle(document.documentElement).fontSize)
-			};
-		});
-		const step = (token: string, rem: number) => parseFloat(token) * rem;
-
-		expect(sizes.title, 'the title is not --text-2xl').toBeCloseTo(
-			step(sizes.text2xl, sizes.rem),
-			1
-		);
-		expect(sizes.summary, 'the summary left the reading step').toBeCloseTo(
-			step(sizes.textLg, sizes.rem),
-			1
-		);
-		expect(sizes.eyebrow, 'the item meta is not --text-xs').toBeCloseTo(
-			step(sizes.textXs, sizes.rem),
-			1
-		);
-		expect(sizes.title, 'the title does not lead the summary').toBeGreaterThan(sizes.summary);
-
-		expect(sizes.when, 'the first story on the page prints no time').toBeGreaterThan(0);
-		expect(sizes.when, 'the time is a type step of its own').toBeCloseTo(sizes.eyebrow, 1);
-		expect(sizes.whenColour, 'the time is a colour of its own').toBe(sizes.eyebrowColour);
-		expect(sizes.whenWeight, 'the time is a weight of its own').toBe(sizes.eyebrowWeight);
-	});
+	for (const theme of THEMES) {
+		for (const width of [360, 390, 1280, 1536]) {
+			test(`${theme} at ${width}: article type keeps its readable hierarchy`, async ({ page }) => {
+				await open(page, theme, '/', width);
+				const sizes = await page.locator('article.item').first().evaluate((card) => {
+					const read = (selector: string) => {
+						const element = card.querySelector(selector);
+						if (!element) throw new Error(`no ${selector} on the card to measure`);
+						const style = getComputedStyle(element);
+						return {
+							size: parseFloat(style.fontSize),
+							leading: parseFloat(style.lineHeight),
+							colour: style.color,
+							weight: style.fontWeight
+						};
+					};
+					const root = getComputedStyle(document.documentElement);
+					const rem = parseFloat(root.fontSize);
+					const step = (token: string) => parseFloat(root.getPropertyValue(token)) * rem;
+					return {
+						title: read('h2, h3'),
+						summary: read('[data-item-summary]'),
+						eyebrow: read('[data-item-eyebrow]'),
+						when: read('[data-item-time]'),
+						titleSize: step('--text-2xl'),
+						titleLeading: step('--leading-2xl'),
+						summarySize: step('--text-lg'),
+						summaryLeading: step('--leading-lg'),
+						metaSize: step('--text-xs')
+					};
+				});
+				expect(sizes.title.size, 'the title keeps its display step').toBeCloseTo(sizes.titleSize, 1);
+				expect(sizes.title.leading).toBeCloseTo(sizes.titleLeading, 1);
+				expect(sizes.summary.size, 'narrow screens do not shrink the prose').toBeCloseTo(sizes.summarySize, 1);
+				expect(sizes.summary.leading).toBeCloseTo(sizes.summaryLeading, 1);
+				expect(sizes.eyebrow.size).toBeCloseTo(sizes.metaSize, 1);
+				expect(sizes.title.size).toBeGreaterThan(sizes.summary.size);
+				expect(sizes.summary.size).toBeGreaterThan(sizes.eyebrow.size);
+				expect(sizes.when.size).toBeCloseTo(sizes.eyebrow.size, 1);
+				expect(sizes.when.colour).toBe(sizes.eyebrow.colour);
+				expect(sizes.when.weight).toBe(sizes.eyebrow.weight);
+			});
+		}
+	}
 
 	test('a summary with a paragraph break is drawn as two paragraphs', async ({ page }) => {
 		// The canary gives exactly one story a break (`build_canary_day.py`), the

@@ -87,14 +87,25 @@ read on 2026-09-19, the repository `config/models/gemma-4-e4b-qat.json` pulls at
 revision `8c5a9e4fd548`: *"The drafter shares the target's KV cache and does not
 change the output (the target verifies every drafted token)."* The same page
 names the drafter this entry declares, `mtp-gemma-4-E4B-it.gguf`, and the flag it
-runs under, `--spec-type draft-mtp`. So this is not a general claim about
-speculative decoding that our configuration happens to sit outside - it is the
-claim the publisher makes about this head, these weights and this flag.
+runs under, `--spec-type draft-mtp`. **The publisher is describing our exact
+setup, not speculative decoding in general.** There is no version of this where
+we are outside what the claim covers.
 
 **This configuration is not output-identical, so it is not doing that.** Whether
 the cause is the head, the acceptance rule, or this pinned llama.cpp build is
 unmeasured. **What is measured is that the vendor's claim does not hold here**,
 across two runs, on nine of nine articles.
+
+**A re-run today would not reproduce this, and the reason is not the head.**
+Every reading on this page was taken at `temperature: 0`, where one prompt gives
+one reply and a changed digest can only be the head. Every committed entry has
+pinned `temperature: 0.2` since 2026-09-17, and at 0.2 two readings of one
+article differ anyway - Gemma reworded six of seven articles across repeats of
+one run on 2026-09-17
+([four-candidates-on-one-news-day.md](four-candidates-on-one-news-day.md)). So
+**anyone re-testing the head must pin temperature 0 in the scratch config first**,
+or the sampler's noise and the head's effect arrive as one number that cannot be
+split.
 
 One difference between their setup and ours is on the record and is a candidate
 rather than a finding: the card's command passes `--spec-draft-n-max 4` and this

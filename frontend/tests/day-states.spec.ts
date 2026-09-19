@@ -183,16 +183,16 @@ test.describe('a day with nothing on it', () => {
 				const edge = await resolved(page, 'border-top-color', 'var(--item-edge)');
 				const radius = await resolved(page, 'border-top-left-radius', 'var(--radius-lg)');
 
-				for (const selector of ['[data-empty-day]', 'section[aria-label="About today"]']) {
-					const painted = await card(page, selector);
-					// The neutral tint stays neutral, and it is the same neutral the
-					// item sits on. A wash here would be one panel a different colour
-					// from every other panel on the site.
-					expect(painted.background, `${selector} is not on the item's surface`).toBe(surface);
-					expect(painted.border, `${selector} does not carry the item's hairline`).toBe(edge);
-					expect(painted.borderWidth, `${selector} hairline is not 1px`).toBe('1px');
-					expect(painted.radius, `${selector} does not carry the item's corner`).toBe(radius);
-				}
+				const painted = await card(page, '[data-empty-day]');
+				expect(painted.background, 'the empty panel keeps the item surface').toBe(surface);
+				expect(painted.border, 'the empty panel keeps the item hairline').toBe(edge);
+				expect(painted.borderWidth).toBe('1px');
+				expect(painted.radius, 'the empty panel keeps the item corner').toBe(radius);
+
+				const notice = await card(page, 'section[aria-label="About today"]');
+				expect(notice.background, 'the edition header is not a second card').toBe('rgba(0, 0, 0, 0)');
+				expect(notice.borderWidth).toBe('0px');
+				expect(notice.radius).toBe('0px');
 
 				expect(errors, `console errors on a quiet day:\n${errors.join('\n')}`).toEqual([]);
 			});
@@ -228,7 +228,7 @@ test.describe('a day with nothing on it', () => {
 		const paragraphs = await notice.locator('p').allInnerTexts();
 		expect(paragraphs[0], 'the notice does not lead with the count').toContain('No stories today.');
 		expect(paragraphs.at(-1), 'the run stamp is not last').toMatch(
-			/This page came from run \d+, at \d\d:\d\d UTC\./
+			/Updated \d\d:\d\d UTC \(update \d+\)\./
 		);
 	});
 });

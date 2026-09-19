@@ -253,22 +253,6 @@ body {
 		max-block-size: calc(100dvh - var(--space-8));
 		overflow-y: auto;
 	}
-
-	/* Five story titles at the stream's own size do not belong in an 18rem
-	   column: at `--text-xl` each one wraps to three lines and the block runs
-	   past the window. One step down the type scale each, which is what makes
-	   this a designed sidebar rather than the same block squeezed. */
-	.day-aside .lead-title {
-		font-size: var(--text-base);
-		line-height: var(--leading-base);
-	}
-
-	/* A descendant selector, not a child one: the lead's title and reason sit in
-	   a block that carries their shared measure, so `.lead > p` matches nothing. */
-	.day-aside .lead p {
-		font-size: var(--text-sm);
-		line-height: var(--leading-sm);
-	}
 }
 
 /* A grid splits on the width it HAS, never on the width of the window. Asking
