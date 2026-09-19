@@ -109,13 +109,13 @@ Three things the diagram is deliberate about. **The veto is first and nothing be
 
 The one false merge at 0.93 is on 2026-08-30: Ontario's pushback against the lake renaming, folded into Google carrying the renaming out, at a cosine of **0.9317**. Those are two stories, and merging them means the pushback never ran.
 
-**The rule is the first round hundredth above the highest-scoring pair a person marked as two stories.** That leaves a margin of 0.0083, which is thin and is stated rather than dressed up. The way to widen it is more labels, not a higher number: 0.95 buys 0.017 of margin and loses ten groups a person read as one story each.
+**The rule was the first round hundredth above the highest-scoring pair a person marked as two stories, and a fresh reading has overtaken it.** On 2026-09-01 that pair sat at 0.9317 and the rule gave 0.94, leaving 0.0083 of margin. On 2026-09-19 a judge read 200 pairs and marked four of them as two stories; the highest sits at **0.9407**, above this line. The margin is **-0.0007** and the line now admits one known two-story pair. See the design rationale below.
 
 **The two errors are not equal, which is why the number leans high.** A missed group costs a reader the same story twice, on a page they can see. A false merge costs them a story that never ran, and they cannot see what is not there ([../../../.github/agents/editor.agent.md](../../../.github/agents/editor.agent.md)).
 
 **`assemble.same_story.floor_min` is not comparable to `assist.similarity_floor`.** That one scores a reader's query against an item and this one scores two items against each other; the two distributions are different shapes, and reading one number against the other is how a threshold gets set from the wrong evidence.
 
-**The 0.0083 margin is why `assemble.same_story.adaptive_dedup_threshold` exists, and the block ships off.** The floor above was read once, by one person, over eleven days, and nothing re-reads it as the corpus changes. That block holds the knobs for a line that fits itself: the band worth judging, how the record slices it, the four steps that move the line and the three gates it has to clear first. `enabled` is false, so the pass still compares against `floor_min` and publishes exactly the groups it published before the block existed, and `max_down_step` is refused at or above 0.0083 so no single step this design can take could cross the margin the table above measured. The shapes the fit reads and writes - the scored pair, the score record, the fitted row and the hand-marked holdout - are in [../contracts/schemas.md](../contracts/schemas.md).
+**The missing margin is why `assemble.same_story.adaptive_dedup_threshold` exists, and the block ships off.** The floor above was read once, over eleven days, and nothing re-reads it as the corpus changes - which is exactly how it went stale. That block holds the knobs for a line that fits itself: the band worth judging, how the record slices it, the steps that move the line and the three gates it has to clear first. `enabled` is false, so the pass still compares against `floor_min` and publishes exactly the groups it published before the block existed. How the line moves once the flag is on is below. The shapes the fit reads and writes - the scored pair, the score record, the fitted row and the hand-marked holdout - are in [../contracts/schemas.md](../contracts/schemas.md).
 
 **The floor on the diagram is a number the run chooses, since 2026-09-18.** With the flag off - which is how it ships - it is `assemble.same_story.floor_min` and the diagram reads exactly as it always has. With it on, `similarity.applied.effective_same_story` replaces that one field with the newest line a fit applied inside `applied_lookback_days`, and the rest of the block is untouched: same weights, same figure veto, same all-pairs rule. Four things each mean the committed floor rather than a fitted one, and each is an ordinary day: the flag is off, the tree is absent, every row inside the lookback was held, or the newest row carries no line.
 
@@ -165,9 +165,9 @@ flowchart TD
     steady{"Do the two readings agree often<br/>enough, and is the UNCLEAR<br/>share low enough?"}
     hold["Hold. The line stays where it was<br/>and the row names the reason"]
     walk["Set aside the top share of NO readings.<br/>Take the upper edge of the slot<br/>the walk stopped in"]
-    damp["A rise lands whole.<br/>A fall lands part of the way"]
-    shape{"Is the fall past the daily limit, or is<br/>today far out of line with<br/>the last fortnight?"}
-    clamped["Clamp it. guard holds an out-of-line day,<br/>step bounds an ordinary fall"]
+    damp["A fall lands half the gap.<br/>A rise lands 15 percent of it"]
+    shape{"Is the step past its own daily cap, or is<br/>today far out of line with<br/>the last fortnight?"}
+    clamped["Clamp it. guard holds an out-of-line day,<br/>step bounds an ordinary move,<br/>ceiling and floor are the band walls"]
     fitrow[("One fitted row a day, written<br/>even when nothing moved")]
   end
   day --> draw
@@ -263,19 +263,18 @@ sixth value the column can carry and it is not a hold: it says a fit ran.
 | `judge_uncertain` | Too large a share of the usable verdicts read UNCLEAR. `unclear_max` is the bar. |
 | `none` | A fit ran. |
 
-**Two clamps shape a fall, and a clamp is not a gate.** A gate refuses the move
-and writes a reason; a clamp lets the move through and shapes it, so the row
-carries `held_reason = none` and says which clamp bit. `step` is the daily limit:
-the line may not fall further than `max_down_step` in a day, and a validator
-refuses a value at or above the measured holdout margin, so no single step this
-design can take could cross the margin the table above measured. `guard` is the
-step-change hold: a day whose own evidence moved the answer far further than the
-last fortnight of days did keeps the line exactly where it was, because a day
-that looks nothing like the fortnight before it is a signal that something
-upstream changed rather than evidence about the line. The guard is asked first
-and it ships recorded rather than enforced - `step_change_guard_enforced` is off,
-so the row carries `daily_shift` and `typical_shift` for a person to read while
-nobody has yet measured what a normal day looks like.
+**A clamp is not a gate.** A gate refuses the move and writes a reason; a clamp
+lets the move through and shapes it, so the row carries `held_reason = none` and
+says which clamp bit. `step` is the daily cap and each direction has its own; how
+far the line may move, and why down is the fast way, is the next section.
+`ceiling` and `floor` are the two band walls. `guard` is the step-change hold: a
+day whose own evidence moved the answer far further than the last fortnight of
+days did keeps the line exactly where it was, because a day that looks nothing
+like the fortnight before it is a signal that something upstream changed rather
+than evidence about the line. The guard is asked first and it ships recorded
+rather than enforced - `step_change_guard_enforced` is off, so the row carries
+`daily_shift` and `typical_shift` for a person to read while nobody has yet
+measured what a normal day looks like.
 
 **Nothing has been judged yet.** The committed record carries no folded dates and
 `enabled` is false, so every published day is still grouped at `floor_min` and
@@ -296,13 +295,59 @@ The fields, the types and the bounds are in
 [../contracts/schemas.md](../contracts/schemas.md). How each store is partitioned,
 and why, is in [../../concepts/partitions.md](../../concepts/partitions.md).
 
+## How the line moves: down fast, up slow
+
+The line is allowed to move a little each day, and it is allowed to move further down than up. **Lowering the line publishes less.** Two feeds giving near-identical coverage is the feed's fault, and folding them is the answer, so the move that folds more arrives quickly and the move that folds fewer arrives over a month.
+
+Every number below is a knob in `config/idhazh.json` under `assemble.same_story.adaptive_dedup_threshold`. **The two daily caps and the dead zone are counted in slots of `bin_width`, not written as decimals**, because `10 slots down` is a count somebody can check against the record the line was fitted from and `one percent of the scale` is not.
+
+| What it is | Knob | Ships at | What that means |
+| --- | --- | ---: | --- |
+| Hard floor | `band_low` | 0.88 | The line can never go below this. The record holds no slot under it, so a line there is one no later fit could read back. |
+| Hard ceiling | `band_high` | 1.00 | The line can never go above this. A cosine goes no higher. |
+| Start | `same_story.floor_min` | 0.94 | Where the line sits before any fit has moved it, and where it returns to if the fit is switched off. |
+| Slot width | `bin_width` | 0.001 | How finely the record slices the band, and so the finest move the line can make. |
+| Fall cap | `max_down_bins` | 10 slots | 0.010 a day. From 0.94 that is six days of falling to reach the floor, if the record kept asking for it. |
+| Rise cap | `max_up_bins` | 3 slots | 0.003 a day, under a third of the fall cap. That one ratio is the whole asymmetry. |
+| Dead zone | `dead_zone_bins` | 1 slot | A proposal within 0.001 of today's line is not a move at all. |
+| Fall damping | `fall_weight` | 0.50 | Half the remaining gap lands today, before the cap is applied. |
+| Rise damping | `rise_weight` | 0.15 | Fifteen percent of the remaining gap lands today, before the cap. |
+
+**End to end that is about ten days down and about thirty-three days up.** Driven from a record that keeps proposing the far end: 0.94 falls to within one slot of 0.88 on the tenth day, and 0.88 climbs back to within one slot of 0.94 on the thirty-third. Computed from the arithmetic below at the committed knobs, not measured on a run - no run has fitted a line yet, because the block ships off.
+
+```mermaid
+flowchart TD
+    P["Proposal off the record:<br/>the upper edge of the slot the walk stopped in"] --> Z{"Is it a move?<br/>at least one slot from today's line"}
+    Z -- "no, under 0.001 away" --> A["The applied line"]
+    Z -- "yes" --> D{"Which way?"}
+    D -- "down: publishes less" --> DF["Damp: half the gap lands today"]
+    D -- "up: publishes more" --> DR["Damp: 15 percent of the gap lands today"]
+    DF --> CF["Cap the fall at 10 slots, 0.010"]
+    DR --> CR["Cap the rise at 3 slots, 0.003"]
+    CF --> W{"Still inside the band?"}
+    CR --> W
+    W -- "under 0.88" --> WF["Hold at the floor<br/>clamp_kind floor"]
+    W -- "over 1.00" --> WC["Hold at the ceiling<br/>clamp_kind ceiling"]
+    W -- "inside" --> A
+    WF --> A
+    WC --> A
+```
+
+**Both directions are damped and both are capped.** The damping filters a one-day spike and the cap bounds a run of them, and they are not the same control: a cap alone lets a spike persist at cap speed for as many days as the spike lasts. `step_change_guard_enforced` ships false, so these two are the whole brake.
+
+**The dead zone is a defect fix rather than a preference.** The line is a slot's upper edge, so a step of less than one slot lands on no edge a later walk can produce. Without the dead zone the damping leaves a geometric tail whose steps shrink below one slot for ever, and the applied line never formally arrives at its proposal. The zone deletes that tail and says so on the row: `after_damping` equals `previous` on a day the proposal was inside it.
+
+**A line resting on a band wall is a reported state, not silence.** A line at `band_high` folds nothing at all, which from the outside looks like the feature is switched off rather than pinned; a line at `band_low` folds everything in the band. Both get their own `clamp_kind` - `ceiling` and `floor` - and they are reported whether or not the wall moved the line that day, because resting there is the state worth knowing. `none` means the damped proposal stood as it was.
+
+**The draw is sampled against the config band and never against the applied line.** `similarity.draw.in_band` is handed `band_low` and `band_high` off the config file, and no fitted value reaches it. A band that opened at the applied line would narrow every time the line rose, and the next fit would then be reading a record it had shaped itself. A test holds that open.
+
 ## One headline, two outlets, and why 0.94 was not what changed
 
 The vector pass alone left the same story on the page several times. `dolly parton, country music icon, dies at 80` published five times on 2026-08-25 from five different feeds. On 2026-09-03 one acquisition ran five times under two spellings of its price.
 
 **The cause is what the vector is built over, not the number it is compared against.** `embed.text_for` encodes `f"{title}. {summary}"`, and the summary is our own model's prose about one article. Measured 2026-09-14 with the committed tokenizer over 75 items of the 2026-09-13 day: the headline is a median **16 tokens** and the whole string a median **121**, so the summary is **87 percent of what the encoder reads** and the headline is about one part in eight. The encoder mean-pools over every token, so the event contributes roughly an eighth of the vector. Two outlets writing the same story produce two different articles, so our summariser produces two different summaries, so the comparison is dominated by the one part guaranteed to differ. Coverage is not the problem either: 9,351 of the 9,353 committed items carry a vector.
 
-**No threshold fixes it, and that is measured rather than argued.** Over the 53 cross-source pairs on the committed days whose headlines match once case and spacing are set aside, the stored vectors score: min **0.7298**, median **0.9177**, max **1.0000**. The floor of 0.94 catches 19 of the 53. Dropping the floor to 0.88 would catch 39 of them and admit 730 other-story pairs, and the one pair a person has marked as two stories already sits at **0.9317** - above the median of the pairs we want to catch. The two populations overlap, so the number is not the lever. Measured 2026-09-14 on a developer machine / Python 3.14.2, 25 committed days, 9,353 items, 2,300,847 cross-source pairs scored; the counts are deterministic and have no spread.
+**No threshold fixes it, and that is measured rather than argued.** Over the 53 cross-source pairs on the committed days whose headlines match once case and spacing are set aside, the stored vectors score: min **0.7298**, median **0.9177**, max **1.0000**. The floor of 0.94 catches 19 of the 53. Dropping the floor to 0.88 would catch 39 of them and admit 730 other-story pairs, and the highest pair marked as two stories sits at **0.9407** - above both that median and the floor itself. The two populations overlap, so the number is not the lever. Measured 2026-09-14 on a developer machine / Python 3.14.2, 25 committed days, 9,353 items, 2,300,847 cross-source pairs scored; the counts are deterministic and have no spread.
 
 **So a second joiner runs beside the vector one: two items are the same story when their reduced headlines are identical.** It has no threshold, because a string is equal or it is not. It sits under `assemble.group_identical_titles`, default on, and turning it off restores the vector-only rule exactly.
 
@@ -371,11 +416,36 @@ Two passes read the finished day inside `assemble.build_day`, and both were writ
 
 ## Design rationale
 
-**Damping runs in one direction only.** A rise lands whole and a fall lands at
-`smoothing_weight` of the way. Raising the line removes wrong merges and lowering
-it admits them, so the safe move arrives today and the risky one arrives over a
-week. A filter that treats the two directions alike delays the one action this
-loop exists to take.
+**The line falls fast and rises slow, and the next reader must not reverse it.**
+The house rule is to err on the side of publishing less: if two feeds give
+near-identical coverage that is the feed's fault, and one of them is dropped
+without apology. Lowering the line folds more stories together and publishes
+fewer of them separately, so lowering is the safe move and arrives in about ten
+days; raising it publishes more and arrives in about thirty-three. Until
+2026-09-19 the code encoded the opposite - a rise landed whole and immediately, a
+fall was damped to 15 percent of the gap and capped at 0.005, so a fall of 0.06
+took about a month and the rise back took one day. The shape reads backwards to
+anyone who has not been told the rule, so `SimilarityThresholdConfig` refuses a
+config where the rise weight or the rise cap reaches the fall's.
+
+**Damping stays on the fast direction, and a straight inversion was refused.**
+The failure mode is a correlated bad night. In the 200 labelled pairs of
+2026-09-19 all four two-story marks came from ONE news cluster, which produced 29
+of the 200 pairs: a judge that misreads a cluster produces a block of adjacent
+wrong verdicts on one night, not independent ones. Undamped, the line takes that
+whole block at once. Three things make the damping load-bearing rather than
+decorative. `step_change_guard_enforced` ships false, so the damping and the caps
+are the only brake. `typical_shift` takes a median over 14 rows and `settled`
+compares a week apart, and both assume a smoothed series - on a series that jumps
+they measure nothing. And a damped series filters a one-day spike where a bare
+cap only slows it, letting the spike persist at cap speed until the evidence
+turns. So both mechanisms stay and both are directional.
+
+**The caps are slot counts because a decimal cannot be checked.** `10 slots down,
+3 up` is a count against the same grid the record is folded on, so a reader can
+hold the cap and the line in the same unit. `0.010` reads as a precision the fit
+does not have, and `four percent of the range` reads as an answer nobody can
+verify.
 
 **The walk sets a share aside rather than stopping at the single highest NO
 reading.** Stopping at the maximum lets one wrong verdict on a genuine pair set
@@ -384,13 +454,47 @@ is `bin_width` wide. `discard_share` is what makes a single bad verdict unable t
 decide the number, and `minimum_negatives` is sized so the record holds enough
 NO readings for that share to set even one aside.
 
-**The daily clamp is sized under the measured holdout margin, not over it.** The
-gap between today's floor and the one pair a person marked as two stories is
-thin, and a clamp bigger than the margin it protects is not a clamp. A validator
-refuses `max_down_step` at or above that reading, so the bound moves when the
-measurement does rather than when somebody edits a comment. What it buys is
-exact: one day cannot cross the margin, two consecutive days can. What bounds the
-walk is the record itself, because each new day is a smaller share of it.
+**The set-aside is a share of agreed-NO verdicts, and 0.01 did not survive one
+bad night.** `fit.fit_line` takes the share over `negatives_on(record)`, not over
+judged pairs. At `minimum_negatives` of 200, 0.01 sets two verdicts aside and
+0.03 sets six. The question the share answers is how many wrong NO verdicts one
+news cluster can produce before it sets the line, and the benchmark cluster
+produced four. Two does not survive that; six does. Moved to 0.03 on 2026-09-19.
+
+**The margin the old cap guarded was withdrawn on 2026-09-19, and no line
+replaces it.** `state/story-similarity/holdout-pairs.csv` now holds 200 pairs
+labelled by `claude-opus-4.6` reading each pair's title and summary: 196 one
+story, 4 two stories. The four score 0.9407, 0.9374, 0.9352 and 0.9343,
+recomputed from the committed day vectors as 0.940676, 0.937400, 0.935201 and
+0.934337. The highest sits **above** the 0.94 line, so the gap the fall cap was
+once sized against is -0.0007 rather than +0.0083. What bounds a step now is the
+band it is fitted inside, and the cap is a damping knob rather than a safety one.
+
+**Raising the line does not restore the margin, and that is measured.** On the
+same 200 pairs the line would have to reach 0.941 to clear every two-story mark,
+and that costs 9 more refused one-story pairs on this sample (96 refused at 0.94,
+105 at 0.941). 0.95 refuses 146. The reason no line works is that the labels
+interleave: a pair at 0.9406 is marked one story, the pair at 0.9407 is marked
+two, and a pair at 0.9409 is marked one again. Three adjacent slots hold both
+marks.
+
+**Two cautions on the reading itself.** All four two-story marks come from one
+news cluster - a lake being renamed, reported by two different companies - so the
+floor rests on one story rather than on a spread of news. And the sheet is
+band-stratified by construction (50 well-below, 49 just-below, 51 just-above, 50
+well-above), so `1 of the 101 pairs at or above the line is two stories` is a rate
+over the sample and not over a day's pairs.
+
+**What still protects the reader today.** `adaptive_dedup_threshold.enabled` is
+false, so nothing reads any of these knobs and the pass compares against
+`floor_min` exactly as it always did. The 36-hour window is the other gate: three
+of the four two-story pairs sit two published days apart and could not fold at
+any line. The fourth, at 0.9343, is same-day and sits below the floor.
+
+**What is not decided.** Whether the holdout file should become a live floor the
+fit reads on every day - refusing to apply a line at or below the highest
+two-story mark - rather than a number copied into source. That is the structural
+fix for the class of defect this page just recorded, and it is an owner decision.
 
 **The record is fixed-size and the fit never reads the judged pairs back.** The
 alternative - sort every pair ever judged - answers the same question and costs
@@ -424,10 +528,11 @@ asks whether the line stopped moving. The shipped test compares what the record
 proposed a week ago against what it proposes today - the evidence rather than the
 output.
 
-**A symmetric smoothing filter.** It is the same machinery in both directions and
-it costs a week of delay on the only move that removes a wrong merge. Damping
-downward alone gives up nothing: a rise cannot cause the expensive error, so
-slowing one down buys no safety.
+**One damping weight for both directions.** The two moves are not equally risky -
+a fall folds more stories together and a rise publishes more of them separately -
+so a single weight either delays the safe move or rushes the risky one. Both
+directions are damped, at `fall_weight` and `rise_weight`, and a validator
+refuses a config where the rise reaches the fall.
 
 **A hard floor the line may never go below.** Most of the world's coverage is
 regurgitated, so more merging is the goal rather than less, and a floor set by
