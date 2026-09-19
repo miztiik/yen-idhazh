@@ -130,17 +130,28 @@ export function load() {
 		},
 		// What the newest day was built with when no fit has ever run.
 		configuredLine: committedFloor(),
-		// Only the pairs marked as two different stories reach the document. They
-		// are the load-bearing ones - the line has to stay above every one of them -
-		// and inlining the rest would put two addresses and two headlines a row in a
-		// prerendered page for marks that set no floor.
+		// Only the pairs marked as two different stories reach the document whole.
+		// They are the load-bearing ones - the line has to stay above every one of
+		// them - and inlining the rest would put two addresses and two headlines a
+		// row in a prerendered page for marks that set no floor.
 		holdout: {
 			marks: holdout.marks.filter((mark) => !mark.sameStory),
 			skipped: holdout.skipped,
 			marked: holdout.marked,
-			// How many were read as one story, so the panel can count them in a
-			// sentence rather than list them.
-			agreed: holdout.marks.filter((mark) => mark.sameStory).length,
+			// The pairs read as one story, as scores and nothing else. The panel
+			// draws them as a range strip and counts how many sit below the line,
+			// which is the other cost the line has and the one the panel used to
+			// report as a bare total. 196 numbers is 1.7 KB, against 88 KB for the
+			// same rows with their addresses and headlines.
+			//
+			// **Six places, not four.** The count is a comparison against the line,
+			// so the rounding decides it: two of the 196 sit between 0.93995 and
+			// 0.94, and at four places they round onto the line and the panel
+			// printed 115 where the answer is 117. The extra 401 bytes buy a
+			// printed number that is the number.
+			agreedScores: holdout.marks
+				.filter((mark) => mark.sameStory)
+				.map((mark) => Number(mark.score.toFixed(6))),
 			weights
 		},
 		console,

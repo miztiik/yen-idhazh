@@ -10,6 +10,11 @@
  * every mark; negative means the line would merge a pair somebody read as two
  * different events, and that is the one thing this file exists to say out loud.
  *
+ * **A margin with no scale under it says nothing.** So this file also owns the
+ * axis the margin is drawn on, the zone one day's legal fall opens below the
+ * line, and how many marks that fall reaches. A distance is only a number until
+ * something says how fast it can be spent.
+ *
  * Pure and browser safe: no config read, no disk, no `$lib` alias. The `logic`
  * group drives every function here with written-down values, so the arithmetic
  * is checked without a day off the archive (Guardrail #12).
@@ -148,6 +153,85 @@ export function holdoutMargin(applied: number, marks: readonly HoldoutMark[]): H
 	};
 }
 
+/** The marked-apart pairs, highest first.
+ *
+ * The first is the closest call and the last has the most room, which is what
+ * the panel labels. The rest carry a title and no label: four labels inside one
+ * row of dots is four strings nobody can read.
+ */
+export function markedApart(marks: readonly HoldoutMark[]): HoldoutMark[] {
+	return marks.filter((mark) => !mark.sameStory).sort((left, right) => right.score - left.score);
+}
+
+/** How far below the line the score axis reaches, in days of legal fall.
+ *
+ * Two, because the sentence under the figure counts two: a mark inside one
+ * day's fall is inside tomorrow's reach, and one inside two days is inside the
+ * day after. An axis stopping at one day would print a count of marks it had
+ * not drawn.
+ */
+export const DAYS_BELOW = 2;
+
+/** And above the line, one day's fall.
+ *
+ * A mark above the line is the state this panel exists for, so it needs room to
+ * be read in. One day's fall is the unit everything else here is measured in,
+ * so the room above the line is that unit rather than a number picked to look
+ * right.
+ */
+export const DAYS_ABOVE = 1;
+
+/** The score axis: the line, two days' legal fall below it and one above.
+ *
+ * **Not the band.** On the 0.88 to 1.00 band the margin this panel exists to
+ * draw is 0.0007 of a 0.12 span, so 95 percent of the box carries no ink and
+ * the dot lands on top of the rule it is measured against. The band is already
+ * the axis of `MergeLinePlot` further up the route, where it is the right
+ * answer - that chart draws where the line has been, and this one draws how
+ * much room it has left.
+ *
+ * Both ends are the line and a config knob, so the axis is the same width every
+ * day and two days of this panel compare. A mark outside it is off the scale
+ * and said to be, rather than widening the axis and shrinking the one part that
+ * has to stay readable.
+ */
+export function holdoutDomain(applied: number, maxDownStep: number): [number, number] {
+	return [applied - DAYS_BELOW * maxDownStep, applied + DAYS_ABOVE * maxDownStep];
+}
+
+/** The zone a mark inside is a pair tomorrow could fold: one day's fall, down.
+ *
+ * **Down only.** `fit.clamp` is one-sided - `lowest_today = previous -
+ * max_down_step`, with no upward clamp - so a corridor drawn either side of the
+ * line would draw a constraint that does not exist.
+ */
+export function reachZone(applied: number, maxDownStep: number): [number, number] {
+	return [applied - maxDownStep, applied];
+}
+
+/** How many marked-apart pairs sit on the wrong side of the line: as it stands,
+ * after one day of legal fall, and after two. */
+export interface HoldoutReach {
+	today: number;
+	tomorrow: number;
+	dayAfter: number;
+}
+
+export function holdoutReach(
+	applied: number,
+	maxDownStep: number,
+	marks: readonly HoldoutMark[]
+): HoldoutReach {
+	const apart = markedApart(marks);
+	const wrongSide = (line: number): number =>
+		apart.filter((mark) => mark.score >= line).length;
+	return {
+		today: wrongSide(applied),
+		tomorrow: wrongSide(applied - maxDownStep),
+		dayAfter: wrongSide(applied - DAYS_BELOW * maxDownStep)
+	};
+}
+
 export type HoldoutState = 'no-marks' | 'no-fit' | 'clear' | 'violation';
 
 /** Which of the four states the panel is in.
@@ -166,6 +250,22 @@ export function holdoutState(margin: HoldoutMargin, fitted: boolean): HoldoutSta
 	if (margin.closest === null) return 'no-marks';
 	if (margin.violations > 0) return 'violation';
 	return fitted ? 'clear' : 'no-fit';
+}
+
+/** The hue the panel takes: what it means, never how important it looks.
+ *
+ * `bad` where a mark is already on the wrong side. `warn` where none is yet and
+ * one day's legal fall would put one there. A panel that looks the same
+ * reporting a fault as reporting a clear day is the one thing this one may not
+ * be, and the rule is the line the panel draws rather than the panel itself -
+ * that rule stays neutral, because a setting is not a fault.
+ */
+export function holdoutTone(
+	state: HoldoutState,
+	reach: HoldoutReach
+): 'neutral' | 'warn' | 'bad' {
+	if (state === 'violation') return 'bad';
+	return reach.tomorrow > reach.today ? 'warn' : 'neutral';
 }
 
 /** A margin as a distance, never as a signed number.
@@ -225,6 +325,73 @@ export function weightsNote(weights: ScoreWeights): string {
 	return weights.fittedOn === null
 		? `${under}, the weights in the committed config. No day has fitted a line yet.`
 		: `${under}, the weights on the newest fitted day, ${weights.fittedOn}.`;
+}
+
+/** What one more day of legal fall would do, in one sentence.
+ *
+ * The figure on its own says how much room there is. It does not say how fast
+ * that room can go, and it can go in one night - which is the whole reason the
+ * margin is worth printing rather than the margin itself.
+ */
+export function reachNote(reach: HoldoutReach, maxDownStep: number, apart: number): string {
+	const fall = `One day's legal fall is up to ${maxDownStep.toFixed(3)}`;
+	const more = reach.tomorrow - reach.today;
+	if (more === 0 && reach.dayAfter === reach.today) {
+		return `${fall}, and no further mark is inside the next two days' reach.`;
+	}
+	return (
+		`${fall}, so ${more} more ${more === 1 ? 'mark is' : 'marks are'} inside tomorrow's ` +
+		`reach and ${reach.dayAfter} of ${apart} would be on the wrong side the day after.`
+	);
+}
+
+/** The lowest, middle and highest of a set of scores. */
+export interface MarkRange {
+	min: number;
+	median: number;
+	max: number;
+}
+
+/** The range a population of scores covers, or null where it holds nothing.
+ *
+ * The lower median on an even count, which is the convention `populationRange`
+ * takes on the verdict record - two strips on one route may not report a middle
+ * two different ways.
+ */
+export function scoreRange(scores: readonly number[]): MarkRange | null {
+	if (scores.length === 0) return null;
+	const sorted = [...scores].sort((left, right) => left - right);
+	return {
+		min: sorted[0]!,
+		median: sorted[Math.floor((sorted.length - 1) / 2)]!,
+		max: sorted[sorted.length - 1]!
+	};
+}
+
+/** How many of a population sit below the line.
+ *
+ * A pair read as ONE story scoring below the line is a pair the run will not
+ * fold, so the reader sees that story twice. It is the mirror of a violation,
+ * and it is the reason the one-story marks are worth drawing at all: without
+ * them the panel reports one of the two costs the line has.
+ */
+export function belowLine(scores: readonly number[], applied: number): number {
+	return scores.filter((score) => score < applied).length;
+}
+
+/** The pairs read as one story, in one sentence. */
+export function agreedNote(scores: readonly number[], applied: number): string {
+	const at = scoreRange(scores);
+	if (at === null) {
+		return 'No pair has been read as one story yet, so there is no second population to draw.';
+	}
+	const below = belowLine(scores, applied);
+	return (
+		`${scores.length} ${scores.length === 1 ? 'pair was' : 'pairs were'} read as one story, ` +
+		`running ${at.min.toFixed(4)} to ${at.max.toFixed(4)}. ${below} of them ` +
+		`${below === 1 ? 'scores' : 'score'} below the line, so the reader would see those ` +
+		'stories twice.'
+	);
 }
 
 /** What the day tree could not answer, in one sentence, or null where it
