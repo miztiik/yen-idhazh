@@ -38,7 +38,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 29 | 6 | 22 | 0 |
 | [20260917-34-similarity-autotune-plan.md](20260917-34-similarity-autotune-plan.md) | 4 | 0 | 4 | 0 |
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
-| [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 12 | 0 | 12 | 0 |
+| [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 
 ## In flight - 7
 
@@ -90,7 +90,7 @@ section 3 is where it is answered.
 | #7 | 35 | A / eval-core | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - |
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
 
-## Waiting on another row - 90
+## Waiting on another row - 91
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -180,10 +180,11 @@ section 3 is where it is answered.
 | #6 | 36 | W2 / geval-leg | G-Eval fluency judge in the council (estimate x margin timeout) | 3 is PENDING |
 | #7 | 36 | W3 / publish-gate | The veto-chain publish gate, record-only | 2 is PENDING; 3 is PENDING; 5 is PENDING |
 | #10 | 36 | W3 / geval-measure (alone) | Measure a real G-Eval call; replace the estimate | 6 is PENDING |
-| #11 | 36 | W1 / coherence-ram (alone) | 3-model RAM: measure peak, sequential-eviction fallback, shard timeout 220 | 35 coherence names no row |
+| #11 | 36 | W1 / coherence-place (alone) | Confirm coherence runs in `assemble` (MiniLM loaded there); no peak, no eviction | 35 coherence names no row |
 | #9 | 36 | W3 / console-panels | Console: the quality bands + the not-published/withhold panel | 5 is PENDING; 7 is PENDING |
 | #8 | 36 | W4 / apply-gate (alone) | Flip the flag: withhold = absent + item-health telemetry (E7 placement) | 7 is PENDING |
 | #12 | 36 | W3 / rejects-store | The rejects store + corpus fence (`state/rejects/`, 30-day prune) | 3 is PENDING; 7 is PENDING |
+| #13 | 36 | W4 / plan34-gaps | Retro: plan-34 latent gaps + the shared space-trap guard | 34 landed names no row; 6 is PENDING |
 
 ## Finished - 18 plans with no live row
 
