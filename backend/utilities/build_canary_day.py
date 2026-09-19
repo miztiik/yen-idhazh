@@ -1006,21 +1006,23 @@ def health(state: Path) -> int:
 
 
 def holdout(state: Path, day: DigestDay) -> int:
-    """The hand-marked holdout pairs, as a fixture that is a violation by build.
+    """The hand-marked holdout pairs, as a fixture for the panel's shapes.
 
-    The console's holdout panel has four states and the one worth defending is
-    the worst: a line that has fallen below a pair somebody read as two
-    different stories. It cannot be reached from the committed archive on demand
-    - it depends on what the newest fit did - so the fixture reaches it instead,
-    by taking the day's own highest-scoring pair and marking it apart. That pair
-    scores above the committed floor by construction, whatever this day holds.
+    Four rows, for four of the things the panel has to do: draw the closest
+    marked-apart pair, draw one that is nowhere near the line, draw a pair marked
+    as one story, and count a mark whose day the tree cannot answer for.
 
-    Fixture, not measurement. Nobody read these articles and the marks are
-    false; what is true about them is the shape, which is what the panel draws.
+    **It does not reach the panel's worst state, and it cannot.** That state is a
+    line that has fallen below a pair somebody read as two different stories.
+    This function picks its pairs out of `day`, which `collapse_same_story` has
+    already grouped at the floor, so every surviving pair scores below the floor
+    by construction - the opposite of what a violation needs. Measured on the
+    committed canary: the top surviving pair scores 0.555091 against a floor of
+    0.94, a margin of +0.3849, and the panel draws `no-fit`. Reaching `violation`
+    needs a score written independently of the collapsed day.
 
-    Four rows, for the four things the panel has to do: draw a dot above the
-    line, draw the marks below it, count a mark that sets no floor, and count a
-    mark whose day is not in the tree.
+    Fixture, not measurement. Nobody read these articles and the marks are false;
+    what is true about them is the shape, which is what the panel draws.
     """
     vectors = {
         item_id: array("b", base64.b64decode(raw))
