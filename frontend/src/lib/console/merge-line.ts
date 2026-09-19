@@ -168,6 +168,7 @@ export interface LineDay {
 	clampKind: string;
 	heldReason: string;
 	maxDownStep: number;
+	maxUpStep: number;
 }
 
 /** The score axis: the whole range a fitted line may take, and never the data.
@@ -183,16 +184,19 @@ export function corridorOf(knobs: { band_low: number; band_high: number }): [num
 	return [knobs.band_low, knobs.band_high];
 }
 
-/** The envelope a day's line was allowed to fall into, per day.
+/** The envelope a day's move was allowed to land in, per day.
  *
  * Drawn behind the applied line, because without it the dotted proposal leaving
  * the band is a dotted line going somewhere and a reader cannot see which side
  * of the limit it is on. `low` is `previous - max_down_step` and `high` is
- * `previous`: there is no upward clamp, so the band has no top above where the
- * line already was.
+ * `previous + max_up_step`: both directions are capped, and the fall cap is the
+ * wider of the two, so the envelope is taller below the line than above it.
  */
 export function clampEnvelope(days: readonly LineDay[]): { low: number; high: number }[] {
-	return days.map((day) => ({ low: day.previous - day.maxDownStep, high: day.previous }));
+	return days.map((day) => ({
+		low: day.previous - day.maxDownStep,
+		high: day.previous + day.maxUpStep
+	}));
 }
 
 /** How the clamp behaved over the window, in one sentence.

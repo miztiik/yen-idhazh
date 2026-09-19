@@ -160,8 +160,8 @@ test.describe('the three states', () => {
 });
 
 test.describe('where the merge line sits', () => {
-	/** Four days, and every case the chart has to draw: a rise taken whole, a fall
-	 * the daily step clamped, a day the guard held, and a day nothing was fitted. */
+	/** Four days, and every case the chart has to draw: a rise the daily cap held,
+	 * a fall the daily cap held, a day the guard held, and a day nothing was fitted. */
 	const LINE: LineDay[] = [
 		{
 			date: '2026-09-15',
@@ -170,34 +170,38 @@ test.describe('where the merge line sits', () => {
 			applied: 0.941,
 			clampKind: 'none',
 			heldReason: 'none',
-			maxDownStep: 0.005
+			maxDownStep: 0.01,
+			maxUpStep: 0.003
 		},
 		{
 			date: '2026-09-16',
 			previous: 0.941,
 			proposed: 0.9,
-			applied: 0.936,
+			applied: 0.931,
 			clampKind: 'step',
 			heldReason: 'none',
-			maxDownStep: 0.005
+			maxDownStep: 0.01,
+			maxUpStep: 0.003
 		},
 		{
 			date: '2026-09-17',
-			previous: 0.936,
+			previous: 0.931,
 			proposed: 0.99,
-			applied: 0.936,
+			applied: 0.931,
 			clampKind: 'guard',
 			heldReason: 'none',
-			maxDownStep: 0.005
+			maxDownStep: 0.01,
+			maxUpStep: 0.003
 		},
 		{
 			date: '2026-09-18',
-			previous: 0.936,
+			previous: 0.931,
 			proposed: null,
-			applied: 0.936,
+			applied: 0.931,
 			clampKind: 'none',
 			heldReason: 'sheet_too_small',
-			maxDownStep: 0.005
+			maxDownStep: 0.01,
+			maxUpStep: 0.003
 		}
 	];
 
@@ -208,14 +212,15 @@ test.describe('where the merge line sits', () => {
 		expect(corridorOf({ band_low: 0.88, band_high: 1 })).toEqual([0.88, 1]);
 	});
 
-	test('the clamp band has no top above where the line already was', () => {
-		// There is no upward clamp, so the envelope runs from `previous` down by the
-		// daily step and never above it. A band drawn either side would say a rise
-		// had been limited, and a rise never is.
+	test('the clamp band is taller below the line than above it', () => {
+		// Both directions are capped and the fall cap is the wider of the two, so
+		// the envelope is lopsided on purpose. A band drawn evenly either side would
+		// say a rise and a fall were limited by the same amount, and they are not.
 		const [band] = clampEnvelope(LINE.slice(0, 1));
 
-		expect(band.high).toBe(0.94);
-		expect(band.low).toBeCloseTo(0.935, 6);
+		expect(band.high).toBeCloseTo(0.943, 6);
+		expect(band.low).toBeCloseTo(0.93, 6);
+		expect(0.94 - band.low).toBeGreaterThan(band.high - 0.94);
 	});
 
 	test('the clamp sentence counts the days a clamp fired and no others', () => {

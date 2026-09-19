@@ -21,6 +21,7 @@ from __future__ import annotations
 import csv
 import math
 from collections import Counter
+from dataclasses import replace
 from pathlib import Path
 from typing import Final
 
@@ -394,6 +395,47 @@ def test_the_draw_round_trips_through_the_contract(
     headline = [row for row in rows if row.headline]
     assert len(headline) == 1, "one pair of mastheads ran the same headline"
     assert headline[0].composite_score == 1.0
+
+
+def test_the_draw_samples_the_config_band_and_never_the_line_a_fit_applied(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The population the record is folded from is the config band, whatever the line.
+
+    Verified in the stage as it stands: `in_band` is handed `tuning.band_low` and
+    `tuning.band_high` off the config file, and no fitted value reaches it. This
+    is the regression guard against the tidy-up that creates the feedback loop -
+    wiring `applied.effective_same_story` into the draw the way `assemble` reads
+    it. A band that opened at the applied line would narrow every time the line
+    rose, and the next fit would then be reading a record it had shaped itself.
+
+    Driven by moving the committed floor the whole width of the band, which is
+    the furthest a fit could ever carry it.
+    """
+    digest_root = tmp_path / "digest"
+    a_published_day(digest_root)
+    monkeypatch.setattr(common, "PUBLIC_ROOT", digest_root)
+    settings = config.load(CONFIG_DIR)
+    same_story = settings.app.assemble.same_story
+    tuning = same_story.adaptive_dedup_threshold
+
+    def drawn_with(floor: float, out: str) -> Draw:
+        assemble_block = settings.app.assemble.model_copy(
+            update={"same_story": same_story.model_copy(update={"floor_min": floor})}
+        )
+        driven = replace(settings, app=settings.app.model_copy(update={"assemble": assemble_block}))
+        return stage_judge_draw(
+            DATE, settings=driven, digest_root=digest_root, out_dir=tmp_path / out
+        )
+
+    at_the_bottom = drawn_with(tuning.band_low, "bottom")
+    at_the_top = drawn_with(tuning.band_high, "top")
+
+    assert at_the_bottom.pairs_in_band > 0, "the day holds pairs inside the band"
+    assert at_the_top.pairs_in_band == at_the_bottom.pairs_in_band, (
+        "the band is the config's and the line does not narrow it"
+    )
+    assert sorted(named(at_the_top)) == sorted(named(at_the_bottom))
 
 
 def test_a_day_that_is_not_on_disk_writes_an_empty_draw(tmp_path: Path) -> None:

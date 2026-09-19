@@ -43,6 +43,7 @@ export interface FittedLine {
 	heldReason: string;
 	/** The furthest the line could fall that day, so the band can be drawn. */
 	maxDownStep: number;
+	maxUpStep: number;
 	/** What share of the judged pairs the two readings disagreed about. */
 	disagreementRate: number;
 	/** What share of the agreed readings were UNCLEAR. */
@@ -110,6 +111,7 @@ export function fittedLines(
 			clampMovement: figure(row.clamp_movement) ?? 0,
 			heldReason: text(row.held_reason) ?? 'none',
 			maxDownStep: figure(row.max_down_step) ?? 0,
+			maxUpStep: figure(row.max_up_step) ?? 0,
 			disagreementRate: figure(row.disagreement_rate) ?? 0,
 			unclearRate: figure(row.unclear_rate) ?? 0,
 			pairsInBand: figure(row.pairs_in_band),

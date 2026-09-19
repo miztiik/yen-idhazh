@@ -65,7 +65,7 @@ export function load() {
 	return {
 		// Oldest first, the order every chart on this console draws a day axis in.
 		merges,
-		// Seven numbers and two words a day at the widest preset, so the window
+		// Eight numbers and two words a day at the widest preset, so the window
 		// control filters an array that is already here and no preset costs a fetch.
 		lines: rows.map(
 			(row): LineDay => ({
@@ -75,7 +75,8 @@ export function load() {
 				applied: row.applied,
 				clampKind: row.clampKind,
 				heldReason: row.heldReason,
-				maxDownStep: row.maxDownStep
+				maxDownStep: row.maxDownStep,
+				maxUpStep: row.maxUpStep
 			})
 		),
 		// The judge's own health and the record's fill, off the same rows.
