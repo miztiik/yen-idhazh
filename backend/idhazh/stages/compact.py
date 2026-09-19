@@ -24,8 +24,10 @@ from __future__ import annotations
 
 import csv
 import logging
+from collections import Counter
 from collections.abc import Iterator
 from dataclasses import dataclass
+from datetime import date as date_type
 from pathlib import Path
 from typing import Final
 
@@ -60,6 +62,27 @@ class CompactionReport:
     rows_superseded: int
     heads_written: tuple[str, ...]
     oldest_segment_date: str | None
+    #: Rows folded, counted against the run date of the segment that carried
+    #: them, oldest first. This pass never reads a clock, so a caller asking how
+    #: many of these had been waiting brings its own run date to the two methods
+    #: below rather than getting an answer measured against today.
+    rows_by_run_date: tuple[tuple[str, int], ...] = ()
+    #: The newest date a folded row landed under, which is how far the heads
+    #: reach now. None when nothing waited.
+    newest_row_date: str | None = None
+
+    def lag_days(self, run_date: str) -> int:
+        """Whole days between the oldest segment found waiting and this run."""
+        if self.oldest_segment_date is None:
+            return 0
+        waited = date_type.fromisoformat(run_date) - date_type.fromisoformat(
+            self.oldest_segment_date
+        )
+        return max(0, waited.days)
+
+    def rows_waiting_before(self, run_date: str) -> int:
+        """Rows folded in from segments an earlier run left behind."""
+        return sum(rows for written_on, rows in self.rows_by_run_date if written_on < run_date)
 
 
 @dataclass(slots=True)
@@ -71,6 +94,17 @@ class _Held:
 
 
 @dataclass(frozen=True, slots=True)
+class _Folded:
+    """What one ledger's fold did, before the pass adds its ledgers together."""
+
+    heads: tuple[str, ...]
+    merged: int
+    superseded: int
+    rows_by_run_date: tuple[tuple[str, int], ...]
+    newest_row_date: str | None
+
+
+@dataclass(frozen=True, slots=True)
 class _Waiting:
     """One segment row, read, with enough provenance to name it in a refusal."""
 
@@ -79,6 +113,10 @@ class _Waiting:
     lineno: int
     cells: dict[str, str]
     date: str
+    #: The date the run that wrote this segment opened on, off the filename. The
+    #: head a row lands in comes from `date` above; this says how long the row
+    #: sat before anything folded it.
+    run_date: str
 
 
 def _rows_of(path: Path) -> Iterator[tuple[int, dict[str, str]]]:
@@ -194,6 +232,7 @@ def _waiting_rows(
             lineno,
             cells,
             name.run_id[:10] if dates_from_run else cells[DATE_CELL],
+            name.run_id[:10],
         )
         for path, name in ((path, ledger.parse_segment_name(path)) for path in paths)
         for lineno, cells in (
@@ -206,7 +245,7 @@ def _waiting_rows(
 
 def _compact_ledger(
     state_dir: Path, which: SegmentLedger, paths: list[Path]
-) -> tuple[list[str], int, int]:
+) -> _Folded:
     """Fold one ledger's segments into every head their own rows name.
 
     Grouped by the head each row's date names rather than by the date itself,
@@ -222,9 +261,11 @@ def _compact_ledger(
         ledger.segment_contract(which),
         dates_from_run=ledger.segment_dates_from_run(which),
     )
+    by_run_date: Counter[str] = Counter()
     for row in rows_waiting:
         head = ledger.segment_head(state_dir, which, row.date)
         grouped.setdefault(head.relpath, (head, []))[1].append(row)
+        by_run_date[row.run_date] += 1
     written: list[str] = []
     merged = 0
     superseded = 0
@@ -254,7 +295,13 @@ def _compact_ledger(
             head.path, ledger.render_file(columns, [entry.cells for entry in held.values()])
         )
         written.append(head.relpath)
-    return written, merged, superseded
+    return _Folded(
+        heads=tuple(written),
+        merged=merged,
+        superseded=superseded,
+        rows_by_run_date=tuple(sorted(by_run_date.items())),
+        newest_row_date=max((row.date for row in rows_waiting), default=None),
+    )
 
 
 def stage_compact(state_dir: Path) -> CompactionReport:
@@ -269,11 +316,16 @@ def stage_compact(state_dir: Path) -> CompactionReport:
     written: list[str] = []
     merged = 0
     superseded = 0
+    by_run_date: Counter[str] = Counter()
+    newest_row_date: str | None = None
     for which, paths in sorted(by_ledger.items()):
-        heads, ledger_merged, ledger_superseded = _compact_ledger(state_dir, which, paths)
-        written.extend(heads)
-        merged += ledger_merged
-        superseded += ledger_superseded
+        folded = _compact_ledger(state_dir, which, paths)
+        written.extend(folded.heads)
+        merged += folded.merged
+        superseded += folded.superseded
+        by_run_date.update(dict(folded.rows_by_run_date))
+        if folded.newest_row_date is not None:
+            newest_row_date = max(newest_row_date or "", folded.newest_row_date)
     # Last, and never per head: one segment's rows can land in two heads, and a
     # pass that died between them leaves the file in place to be folded again.
     for path in waiting:
@@ -284,6 +336,8 @@ def stage_compact(state_dir: Path) -> CompactionReport:
         rows_superseded=superseded,
         heads_written=tuple(sorted(written)),
         oldest_segment_date=min(ledger.parse_segment_name(path).run_id[:10] for path in waiting),
+        rows_by_run_date=tuple(sorted(by_run_date.items())),
+        newest_row_date=newest_row_date,
     )
     LOG.info(
         "compact: %d segment(s), %d row(s) merged, %d superseded, %d head(s) written, "
