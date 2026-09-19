@@ -533,7 +533,7 @@ def test_the_two_job_cells_are_decoded_from_a_real_capture() -> None:
     loaded = silicon.model_load_ms(text)
 
     assert loaded is not None and 1000 < loaded < 60_000
-    assert silicon.job_seconds("2026-09-16T04:11:02Z", 1789531312) == 5550
+    assert silicon.job_seconds("2026-09-16T04:11:02Z", 1789531312) == 550
     assert silicon.job_seconds("2026-09-16T04:11:02Z", None) is None
     assert silicon.model_load_ms("load_model: loading model\n") is None, (
         "one end of the bracket is not a load that took no time"

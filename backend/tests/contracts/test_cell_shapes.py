@@ -508,17 +508,11 @@ def test_the_processor_name_fits_its_column() -> None:
     assert fitted("\ufffd\ufffd") == "??", "two unreadable bytes are two characters, not a verdict"
     assert fitted("\u0301\u0301") == UNPRINTABLE
 
-    row = ItemHealthRow.model_validate(
-        {
-            "version": ItemHealthRow.schema_version(),
-            "date": "2026-09-15",
-            "run_id": "2026-09-15-1",
-            "item_id": "ai-01",
-            "stage": "summarize",
-            "outcome": "ok",
-            "cpu_model": None,
-        }
+    raw = json.loads(
+        (REPO_ROOT / "tests" / "fixtures" / "contracts" / "item-health-row" / "published.json")
+        .read_text(encoding="utf-8")
     )
+    row = ItemHealthRow.model_validate(raw | {"cpu_model": None})
     assert row.cpu_model is None, "a probe that reported nothing is not a probe that was unreadable"
 
 
