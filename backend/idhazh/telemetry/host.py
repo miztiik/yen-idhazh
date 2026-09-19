@@ -279,18 +279,18 @@ def llama_server_pid(comm: str = "llama-server") -> int | None:
 
 @dataclass(frozen=True, slots=True)
 class HostFacts:
-    """Every host cell that both consumers name, taken in one call.
+    """Every host cell that does not change inside a job, taken in one call.
 
-    The item row and `state/runtime-counters.csv` each carry a `cpu_model` and a
-    `cgroup_peak_bytes` column, so a second reader on either side is two answers
-    to one question and nothing to say which is right (Guardrail #10).
+    The item row carries a `cpu_model` and a `cgroup_peak_bytes` column, and the
+    host record carries `cpu_model` as well, so a second reader on either side is
+    two answers to one question and nothing to say which is right (Guardrail
+    #10).
 
     `runner_name` is the one field no consumer of this class takes any more -
-    the item row retired the column on 2026-09-17 and the counters row never had
-    it. It stays because this is the one call that reads the environment, and the
-    host record's own producer takes the same reading through `runner_name()`
-    below: dropping it here would leave the label read in one place and nowhere
-    to compare it against.
+    the item row retired the column on 2026-09-17. It stays because this is the
+    one call that reads the environment, and the host record's own producer takes
+    the same reading through `runner_name()` below: dropping it here would leave
+    the label read in one place and nowhere to compare it against.
     """
 
     cpu_model: str | None
