@@ -382,7 +382,7 @@ row) in the opening window, sustained **2**, collapsing to **1** on the serial s
   `backend/idhazh/similarity/fold.py` (the `inputs_changed`/`empty_record` term comparing
   `record.key_point_weight`),
   `frontend/src/lib/console/eval-instruments.ts` + the model page, the affected tests; one-line
-  comments in `TODO/20260914-29-found-once-plan.md` and `TODO/20260917-34-similarity-autotune-plan.md`
+    comments in `TODO/20260914-29-found-once-plan.md`
   (no other edits, F2).
 - **Acceptance gates:** contract drift gate; backend + frontend `test:changed`. **Three committed
   plan #34 payloads carry the field under `extra="forbid"`** - `state/story-similarity/score-distribution.json`

@@ -1,6 +1,6 @@
 # Repository Layout
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-20
 
 Every top-level directory, what it holds, who writes it, and whether a reader
 ever sees it. Read this before adding a directory, or when deciding where a new
@@ -84,11 +84,13 @@ file is that no machine wrote it (`CLAUDE.md` section 0a). See
 [../concepts/evaluation.md](../concepts/evaluation.md).
 
 `state/story-similarity/holdout-pairs.csv` is the second, and it is the same
-exception for the same reason: a person reads two articles and marks them one
+exception for the same reason: a labeller reads two articles and marks them one
 story or two, and that mark is the fixed floor the fitted merge line has to stay
-above. It is the one `state/` CSV that is `merge=text` rather than `merge=union`,
-because two people editing it are disagreeing about the same rows rather than
-appending independent ones.
+above. No run writes it - an operator harvests the marks into it by hand, and
+`note` says who made each one. It is the one `state/` CSV that is `merge=text`
+rather than `merge=union`, because two people editing it are disagreeing about
+the same rows rather than appending independent ones. See
+[../how-to/label-the-similarity-holdout.md](../how-to/label-the-similarity-holdout.md).
 
 **The text those labels judge lives under `backend/var/evidence/`, not under
 `state/`.** A label is our own words about an item and is ours to commit. The

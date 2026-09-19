@@ -1,6 +1,6 @@
 # Summary quality: metrics and the auto-tuning loop
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-20
 
 How yen-idhazh measures whether a summary is good, and how the thresholds tune themselves with no human
 in the loop. Faithfulness (HHEM) ships today; coverage, coherence, fluency and the auto-tuning loop
@@ -167,6 +167,6 @@ sample.
 ## See also
 
 - `docs/concepts/evaluation.md` - the eval ledger, HHEM, and the metrics that ship today.
-- `TODO/20260917-34-similarity-autotune-plan.md` - the `LLM-JUDGES` workflow and the `Fit` pattern
-  this loop reuses.
+- `docs/architecture/publishing/same-story.md` - the merge line that already fits itself: the
+  `LLM-COUNCIL` workflow and the fold-fit pattern this loop reuses.
 - `TODO/20260918-35-search-eval-key-points-plan.md` - the cleanup that precedes this loop.
