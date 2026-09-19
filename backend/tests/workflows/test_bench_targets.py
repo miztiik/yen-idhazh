@@ -763,7 +763,7 @@ def test_the_bench_corpus_size_is_a_knob_and_the_cut_follows_it(
 
     short = dict(fixture, items=fixture["items"][:1])
     (day / "plan.json").write_text(json.dumps(short), encoding="utf-8")
-    with pytest.raises(SystemExit, match="exactly 2 planned articles"):
+    with pytest.raises(SystemExit, match="needs 2 planned articles"):
         runtime_sweep.freeze_corpus("2026-09-17", items=2)
 
 
@@ -938,3 +938,49 @@ def test_a_job_that_runs_a_script_importing_idhazh_installs_it_first() -> None:
             f"measure.yml/{job_name} runs a utility that imports idhazh and never "
             "installs it, so the job dies on ModuleNotFoundError"
         )
+
+
+def test_an_offset_dispatch_measures_different_articles_than_the_one_before_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Breadth comes from several jobs, so the slices must not be the same slice.
+
+    Eight passes over five articles is about 524 minutes against a 360-minute
+    platform ceiling, so five articles cannot share one job with four cases.
+    Three dispatches of two carry the breadth instead - but only if they read
+    different articles, and the plan is ranked, so without an offset all three
+    take the same top two and report two articles as six.
+    """
+    fixture = json.loads(
+        read_text(REPO_ROOT / "tests" / "fixtures" / "contracts" / "run-plan" / "one-day.json")
+    )
+    day = tmp_path / "run" / "2026-09-19"
+    day.mkdir(parents=True)
+    monkeypatch.setattr(runtime_sweep, "RUN_ROOT", tmp_path / "run")
+    monkeypatch.setattr(runtime_sweep, "ROOT", tmp_path / "runtime-sweep")
+
+    taken = []
+    for offset in (0, 1):
+        (day / "plan.json").write_text(json.dumps(fixture), encoding="utf-8")
+        runtime_sweep.freeze_corpus("2026-09-19", items=1, offset=offset)
+        cut = json.loads((day / "plan.json").read_text(encoding="utf-8"))
+        taken.append([item["item_id"] for item in cut["items"]])
+
+    assert taken[0] != taken[1], "two dispatches took the same slice, so the breadth is fiction"
+    assert len(taken[0]) == 1 and len(taken[1]) == 1
+
+    # A plan that cannot fill the slice dies here, not an hour into the run.
+    (day / "plan.json").write_text(json.dumps(fixture), encoding="utf-8")
+    with pytest.raises(SystemExit, match="from offset"):
+        runtime_sweep.freeze_corpus("2026-09-19", items=2, offset=len(fixture["items"]))
+
+
+def test_the_plan_is_capped_to_hold_the_slice_and_what_it_skips() -> None:
+    """An offset dispatch needs a longer plan than it measures, or freeze-corpus
+    refuses a plan that was never built long enough."""
+    assert runtime_sweep.corpus_offset("") == 0
+    assert runtime_sweep.corpus_offset("4") == 4
+    with pytest.raises(SystemExit, match="0 or more"):
+        runtime_sweep.corpus_offset("-1")
+    with pytest.raises(SystemExit, match="whole number"):
+        runtime_sweep.corpus_offset("two")

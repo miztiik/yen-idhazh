@@ -49,7 +49,7 @@ evidence in the file.
 | Shape | What it means | Count |
 | --- | --- | --- |
 | Enumerated | `type: choice` with an option list, or `type: boolean`. GitHub renders a menu or a checkbox and no other value can be submitted. | 7 |
-| Read by name | The value never lands in a script. It reaches a step as an environment variable, and the program that reads it decides what it means. | 7 |
+| Read by name | The value never lands in a script. It reaches a step as an environment variable, and the program that reads it decides what it means. | 8 |
 | Matched | The workflow matches the value against an anchored pattern before anything acts on it. | 10 |
 
 The named inputs:
@@ -58,7 +58,8 @@ The named inputs:
  `measure.target`, `measure.runtime_candidate`, `measure.model_speed_case`,
  `prune.force`.
 - **Read by name** - `measure.runtime_repeats`, `measure.runtime_threads`,
- `measure.runtime_threads_batch`, `measure.runtime_corpus_items`, and
+ `measure.runtime_threads_batch`, `measure.runtime_corpus_items`,
+ `measure.runtime_corpus_offset`, and
  `candidate_models_file` on
  `measure.yml`, `validate.yml` and `idhazh-pipeline-tests.yaml`. That one
  becomes a file path, so the step resolves it and proves it sits inside

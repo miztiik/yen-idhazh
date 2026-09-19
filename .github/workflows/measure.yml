@@ -75,6 +75,16 @@ on:
       runtime_corpus_items:
         description: 'Articles per repeat, overruling bench.corpus_items for this run. Use 2 for draft_depth'
         default: ''
+      # Breadth comes from several jobs rather than a longer one. Eight passes
+      # over five articles is about 524 minutes against a 360-minute platform
+      # ceiling, so five articles cannot share a job with four cases. Each
+      # dispatch still runs every case, so every case-against-case comparison
+      # stays inside one machine - which is the whole reason the cases are
+      # paired. This is what stops three dispatches of one day all reading the
+      # same top two articles and reporting two articles as six.
+      runtime_corpus_offset:
+        description: 'Skip this many planned articles first, so a second dispatch measures different ones'
+        default: ''
       runtime_threads:
         description: 'Value for --threads when runtime_candidate is threads'
         default: '8'
@@ -673,6 +683,7 @@ jobs:
       - name: Build the fixed bench corpus
         env:
           RUNTIME_CORPUS_ITEMS: ${{ inputs.runtime_corpus_items }}
+          RUNTIME_CORPUS_OFFSET: ${{ inputs.runtime_corpus_offset }}
         run: |
           set -euo pipefail
           DATE=$(date -u +%F)
@@ -682,13 +693,17 @@ jobs:
             --config backend/var/candidate-config \
             --dispatch "$RUNTIME_CORPUS_ITEMS")
           echo "CORPUS_ITEMS=$CORPUS_ITEMS" >> "$GITHUB_ENV"
+          CORPUS_CAP=$(python3 backend/utilities/runtime_sweep.py corpus-cap \
+            --config backend/var/candidate-config \
+            --offset "$RUNTIME_CORPUS_OFFSET")
           python -m idhazh plan \
             --config backend/var/candidate-config \
             --date "$DATE" \
-            --cap "$CORPUS_ITEMS" \
+            --cap "$CORPUS_CAP" \
             --execution "${{ github.run_id }}"
           python3 backend/utilities/runtime_sweep.py freeze-corpus \
             --config backend/var/candidate-config \
+            --offset "$RUNTIME_CORPUS_OFFSET" \
             --date "$DATE"
 
       # A bench reading is about a machine, and until now the bench recorded

@@ -34,6 +34,7 @@ CORPUS_STEP = "Build the fixed bench corpus"
 SWEEP_CALL = "python3 backend/utilities/runtime_sweep.py sweep"
 FREEZE_CALL = "python3 backend/utilities/runtime_sweep.py freeze-corpus"
 SIZE_CALL = "python3 backend/utilities/runtime_sweep.py corpus-items"
+CAP_CALL = "python3 backend/utilities/runtime_sweep.py corpus-cap"
 
 
 def _body(step_name: str) -> str:
@@ -101,8 +102,12 @@ def test_how_many_articles_the_bench_reads_is_config_and_not_two_literals() -> N
     script = _body(CORPUS_STEP)
 
     assert SIZE_CALL in script, "the workflow asks the module rather than spelling a number"
-    assert '--cap "$CORPUS_ITEMS"' in script, "the plan cap is the value it just read"
+    assert CAP_CALL in script, "the plan cap is asked for rather than computed in the shell"
+    assert '--cap "$CORPUS_CAP"' in script, "the plan cap is the value it just read"
     assert "--cap 5" not in script and "--cap 3" not in script, "a literal is back"
+    # The cap holds the slice AND what an offset dispatch skips, so it is a
+    # second QUESTION rather than a second spelling: the module answers both.
+    assert "$((" not in script, "shell arithmetic here is a second place the size is decided"
 
     committed = runtime_sweep.corpus_items(None)
     assert committed == 3, (
