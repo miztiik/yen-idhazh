@@ -24,8 +24,13 @@ owns it, never re-derived from a wider one:
   the run that produced it;
 - the model facts come from one day's item-health shard and that day's own
   day-metrics record, each keyed to the newest day the manifests hold;
+- the free-swap pair comes from that same item-health shard, which is the only
+  place either cell is recorded;
 - the machine facts come from `state/runtime-counters.csv`, whose growing read
-  `machine` declares.
+  `machine` declares;
+- the compaction lag comes from the fold this run already ran, handed in by the
+  caller. It is never a listing taken here, because the fold runs first and the
+  directory is empty by the time this file is written.
 
 Every read is covered by the widest span `console.window_presets` offers, which
 is the furthest back any panel on any route can draw. The span comes from
@@ -723,6 +728,67 @@ def machine_candidates(facts: MachineFacts) -> list[Candidate]:
     return found
 
 
+@dataclass(frozen=True)
+class SwapFacts:
+    """The tightest free swap of the newest day, and what the box has of it.
+
+    The total travels with the reading rather than being looked up elsewhere,
+    because `SwapFree` at zero says "this box has no swap" and "swap is fully
+    consumed" equally, and only the second is worth an operator's morning.
+    """
+
+    free_bytes: int | None
+    total_bytes: int | None
+
+
+def swap_facts(rows: Sequence[Mapping[str, str]]) -> SwapFacts:
+    """The lowest free swap any item of the day recorded, with that row's total.
+
+    Paired off one row rather than a minimum and a maximum taken separately: the
+    two cells are one reading of one machine, and a figure built from two rows
+    could describe a box nobody ran on.
+    """
+    tightest: tuple[float, float] | None = None
+    for row in rows:
+        free = _number(row.get("os_swap_free_bytes"))
+        whole = _number(row.get("os_swap_total_bytes"))
+        if free is None or whole is None:
+            continue
+        if tightest is None or free < tightest[0]:
+            tightest = (free, whole)
+    if tightest is None:
+        return SwapFacts(free_bytes=None, total_bytes=None)
+    return SwapFacts(free_bytes=int(tightest[0]), total_bytes=int(tightest[1]))
+
+
+def swap_candidates(facts: SwapFacts) -> list[Candidate]:
+    """The machine paging, which is a precursor rather than a break.
+
+    Silent where the box carries no swap at all. Zero free of zero total is a
+    machine that cannot swap, and announcing that as an emergency would teach an
+    operator to scroll past the one day it is real.
+
+    Any swap used at all is the trigger, and the band reports it as a FACT. How
+    far in is too far is a threshold nobody here has measured, and a severity
+    built on one would publish a number this project has not taken.
+    """
+    free = facts.free_bytes
+    total = facts.total_bytes
+    if free is None or total is None or total <= 0 or free >= total:
+        return []
+    return [
+        Candidate(
+            text=f"free swap fell to {_mb(free)}",
+            sentence=(
+                f"Free swap fell to {_mb(free)} of the machine's {_mb(total)} while the model "
+                "was working, so every rate on this day is a machine short of memory rather "
+                "than a machine at speed."
+            ),
+            severity=WORTH_A_LOOK,
+        )
+    ]
+
+
 def editorial(candidates: Sequence[Candidate]) -> list[Candidate]:
     """An editorial fault, held to `EDITORIAL_CAP`.
 
@@ -933,6 +999,9 @@ def build(
     collect: CollectConfig,
     sources: Sequence[SourceHealthRow] = (),
     decline_rates: Mapping[str, float | None] | None = None,
+    compaction_lag_days: int = 0,
+    rows_uncompacted: int = 0,
+    covers_through: str | None = None,
 ) -> ConsoleBand:
     """The whole band, from rows a caller read. Pure, so a fixture drives it.
 
@@ -940,6 +1009,11 @@ def build(
     band says about "the newest day" is keyed to the newest of these, so the
     verdict, the size, the worst fact and the carries cannot name two different
     days.
+
+    The three compaction figures come from the fold this run already ran, never
+    from a listing taken here: the fold runs before this step, so a directory
+    read at this point is always empty and the fields could never be anything
+    but zero.
     """
     ordered = sorted(days, key=lambda row: row.date)
     newest = ordered[-1] if ordered else None
@@ -955,7 +1029,15 @@ def build(
         )
     )
     worst_model = worst_of(model_candidates(newest_model))
-    worst_machine = worst_of(machine_candidates(machine_facts(counters)))
+    # The counters answer whether the run can be read at all; the swap pair
+    # answers whether the box it ran on was still keeping up. A run nobody can
+    # read is listed first, so it takes the tie.
+    worst_machine = worst_of(
+        [
+            *machine_candidates(machine_facts(counters)),
+            *swap_candidates(swap_facts(health_rows)),
+        ]
+    )
     # The cap and its one exception, side by side so neither can be read without
     # the other. A skewed day is capped; a gate that has stopped reading is not.
     worst_judgement = worst_of(dead_gate_candidates(decline_rates or {}))
@@ -1013,6 +1095,9 @@ def build(
         size=_size(ordered, newest),
         routes=routes,
         months=list(months),
+        compaction_lag_days=compaction_lag_days,
+        rows_uncompacted=rows_uncompacted,
+        covers_through=covers_through,
     )
 
 
@@ -1178,6 +1263,9 @@ def publish(
     collect: CollectConfig,
     sources: Sequence[SourceHealthRow] = (),
     telemetry_root: Path | None = None,
+    compaction_lag_days: int = 0,
+    rows_uncompacted: int = 0,
+    covers_through: str | None = None,
 ) -> Path | None:
     """Read the covered span, derive the band and write it if its bytes moved.
 
@@ -1199,6 +1287,12 @@ def publish(
 
     `widest` is the largest of `console.window_presets`, which is the furthest
     back any panel on any route can draw. Nothing here opens a day payload.
+
+    The three compaction figures are handed in by the caller that ran the fold.
+    Nothing here lists `state/segments/`, because the fold runs before this step
+    and a listing taken now is always empty - the fields could then never be
+    anything but zero, and a warning with no reachable state teaches an operator
+    that no warning means nothing is wrong.
     """
     widest = max(console.window_presets)
     months = months_a_window_can_touch(widest)
@@ -1242,6 +1336,9 @@ def publish(
         # two-sided rule in `dead_gate_candidates` costs nothing and fires on
         # nothing.
         decline_rates={},
+        compaction_lag_days=compaction_lag_days,
+        rows_uncompacted=rows_uncompacted,
+        covers_through=covers_through,
     )
     target = band_path(digest_root)
     payload = band.to_json().encode("utf-8")

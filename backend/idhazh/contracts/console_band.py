@@ -180,6 +180,11 @@ class ConsoleBand(Contract):
     __schema_stem__: ClassVar[str] = "console-band"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-19",
+            change="The band carries compaction_lag_days, rows_uncompacted and covers_through.",
+            why="A page brought current by this run looked the same as one two days behind.",
+        ),
+        ChangelogEntry(
             version="2026-09-12",
             change="RouteId gains the route ids judgement and voices.",
             why="Additive: an older payload names three of the five and validates unchanged.",
@@ -209,6 +214,29 @@ class ConsoleBand(Contract):
             "for a month by name, so this is the list it picks from - and it is here "
             "rather than in a file of its own so the first month is the second hop "
             "and not the third."
+        ),
+    )
+    compaction_lag_days: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Whole days between the oldest segment the compaction found waiting and "
+            "the date it ran. 0 when it found none, which is every normal run."
+        ),
+    )
+    rows_uncompacted: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Rows this run folded in from segments an earlier run left behind. It is "
+            "what the record was short by until this run, not what it is short by now."
+        ),
+    )
+    covers_through: DateStamp | None = Field(
+        default=None,
+        description=(
+            "The newest date every head is compacted through after this run. Null "
+            "when nothing waited, because then this run moved no head."
         ),
     )
 

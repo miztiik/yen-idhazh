@@ -279,6 +279,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "The band carries compaction_lag_days, rows_uncompacted and covers_through.",
+      "version": "2026-09-19",
+      "why": "A page brought current by this run looked the same as one two days behind."
+    },
+    {
       "change": "RouteId gains the route ids judgement and voices.",
       "version": "2026-09-12",
       "why": "Additive: an older payload names three of the five and validates unchanged."
@@ -291,6 +296,27 @@
   ],
   "description": "What every console route carries above its own panels.",
   "properties": {
+    "compaction_lag_days": {
+      "default": 0,
+      "description": "Whole days between the oldest segment the compaction found waiting and the date it ran. 0 when it found none, which is every normal run.",
+      "minimum": 0,
+      "title": "Compaction Lag Days",
+      "type": "integer"
+    },
+    "covers_through": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The newest date every head is compacted through after this run. Null when nothing waited, because then this run moved no head.",
+      "title": "Covers Through"
+    },
     "generated_at": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
       "title": "Generated At",
@@ -313,6 +339,13 @@
       "title": "Routes",
       "type": "array"
     },
+    "rows_uncompacted": {
+      "default": 0,
+      "description": "Rows this run folded in from segments an earlier run left behind. It is what the record was short by until this run, not what it is short by now.",
+      "minimum": 0,
+      "title": "Rows Uncompacted",
+      "type": "integer"
+    },
     "size": {
       "$ref": "#/$defs/BandSize"
     },
@@ -320,7 +353,7 @@
       "$ref": "#/$defs/BandVerdict"
     },
     "version": {
-      "default": "2026-09-12",
+      "default": "2026-09-19",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -345,5 +378,5 @@
   ],
   "title": "ConsoleBand",
   "type": "object",
-  "version": "2026-09-12"
+  "version": "2026-09-19"
 }

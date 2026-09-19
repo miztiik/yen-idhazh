@@ -84,6 +84,9 @@ def publish_all(
     manifest: RunManifest,
     settings: Settings,
     taxonomy_vectors: TaxonomyVectors | None,
+    compaction_lag_days: int = 0,
+    rows_uncompacted: int = 0,
+    covers_through: str | None = None,
 ) -> Published:
     """Dispatch every projection `PROJECTIONS` names, once each, in that order.
 
@@ -92,6 +95,10 @@ def publish_all(
     file is missing. `today` is the day being published rather than the wall
     clock: a run that crosses midnight UTC would otherwise prune against one
     month and write into another.
+
+    The three compaction figures describe the fold the caller ran before this
+    call. They default to a run that found nothing waiting, which is what a
+    caller republishing a day already on disk did.
 
     No projection is passed a root it did not get from this call. The module
     defaults exist for an operator running one projection by hand, and a test
@@ -181,6 +188,9 @@ def publish_all(
             run=settings.app.run,
             collect=settings.app.collect,
             sources=folded[0].sources,
+            compaction_lag_days=compaction_lag_days,
+            rows_uncompacted=rows_uncompacted,
+            covers_through=covers_through,
         ),
     }
 
