@@ -190,6 +190,59 @@ test.describe('the sentences count what the chart drew', () => {
 	});
 });
 
+test.describe('the pairs marked two stories are a zone on this chart', () => {
+	test('the zone spans the marked-apart pairs, on the one chart with a date axis', async ({
+		page
+	}) => {
+		// The owner asked for time on one axis and score on the other, and this is
+		// the chart that already is that: a line walking down into this zone is a
+		// pair somebody read as two stories being folded into one, drawn while it
+		// happens. The holdout panel draws the same marks at a scale where the
+		// distance is legible and the date is not.
+		await open(page);
+
+		const zone = page.locator(`${PANEL} [data-line-holdout]`);
+		const marked = await zone.count();
+		// Read inside the test: a fixture opened while the module loads fails
+		// before any test exists to own the failure.
+		const band = JSON.parse(readFileSync(join(REPO, 'config', 'idhazh.json'), 'utf8')).assemble
+			.same_story.adaptive_dedup_threshold;
+
+		if (marked === 0) {
+			// Either nobody has marked a pair apart, or every mark is outside the
+			// corridor this chart draws - which the canary is, at 0.13 and 0.56
+			// against a corridor that starts at 0.88. No zone rather than a
+			// rectangle painted past the bottom of the plot.
+			expect(await page.locator(`${PANEL} [data-line-holdout-label]`).count()).toBe(0);
+			const note = await page.locator('[data-console-panel="Where the merge line sits"]').innerText();
+			expect(note, 'the note promises a strip the chart did not draw').not.toContain(
+				'tinted strip'
+			);
+			return;
+		}
+
+		const span = ((await zone.getAttribute('data-line-holdout')) ?? '').split(',').map(Number);
+		expect(span[0]).toBeLessThanOrEqual(span[1]);
+		expect(Number(await zone.getAttribute('data-line-holdout-count'))).toBeGreaterThan(0);
+
+		// Inside the corridor the chart draws, so it is a region of this axis
+		// rather than a rectangle clipped by it.
+		expect(span[0]).toBeGreaterThanOrEqual(band.band_low);
+		expect(span[1]).toBeLessThanOrEqual(band.band_high);
+
+		// And inside the plot, not hanging out of an overflow-visible svg.
+		const zoneBox = await zone.boundingBox();
+		const plot = await page.locator(`${PANEL} svg`).boundingBox();
+		if (zoneBox === null || plot === null) throw new Error('the zone or the plot has no box');
+		expect(zoneBox.y).toBeGreaterThanOrEqual(plot.y - 1);
+		expect(zoneBox.y + zoneBox.height).toBeLessThanOrEqual(plot.y + plot.height + 1);
+
+		await expect(page.locator(`${PANEL} [data-line-holdout-label]`)).toContainText(
+			'marked two stories'
+		);
+	});
+});
+
 test('no config key reaches the screen', async ({ page }) => {
 	await open(page);
 

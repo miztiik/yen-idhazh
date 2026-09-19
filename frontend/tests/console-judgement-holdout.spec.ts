@@ -1,17 +1,20 @@
 /** The pairs a person marked apart, on a rendered page.
  *
- * The arithmetic is checked without a browser in `holdout.spec.ts`, and that is
- * where the violation state lives: the canary's own articles are eight
- * unrelated fixtures, so no pair of them scores anywhere near the merge line
- * and the worst state cannot be reached from this tree. What is left needs the
- * page: an axis that is the band whatever the data does, a rule at the line the
- * day was built with, a dot drawn where the arithmetic puts it rather than
- * where it would look tidy, a mark the day tree cannot answer for counted with
- * its reason, and a panel that keeps its box at every width.
+ * The arithmetic is checked without a browser in `holdout.spec.ts` and the
+ * scale under it in `holdout-domain.spec.ts`. That is where the violation state
+ * lives: the canary's own articles are eight unrelated fixtures, so no pair of
+ * them scores anywhere near the merge line and the worst state cannot be
+ * reached from this tree. What is left needs the page: an axis that is the line
+ * and one day's legal fall whatever the data does, a tinted zone one day deep
+ * below the rule, marks drawn where the arithmetic puts them rather than where
+ * they would look tidy, a mark the day tree cannot answer for counted with its
+ * reason, and a panel that keeps its box at every width.
  *
  * **`build_canary_day.py` writes four hand marks.** The day's own
  * highest-scoring pair marked apart, its lowest marked apart, a third marked as
- * one story, and one naming a date the tree holds no day for.
+ * one story, and one naming a date the tree holds no day for. All three scored
+ * marks land far under the merge line, so this tree is also the off-scale case
+ * and every drawing here has to survive having nothing on the axis.
  */
 
 import { expect, test, type Page } from '@playwright/test';
@@ -24,11 +27,17 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const ROUTE = '/console/judgement/';
 const PANEL = '[data-holdout]';
 
-function band(): { band_low: number; band_high: number } {
+function knobs(): { applied: number; maxDownStep: number; bandLow: number; bandHigh: number } {
 	// Read inside the test, never at module scope: a fixture opened while the
 	// module loads fails before any test exists to own the failure.
-	return JSON.parse(readFileSync(join(REPO, 'config', 'idhazh.json'), 'utf8')).assemble.same_story
-		.adaptive_dedup_threshold;
+	const block = JSON.parse(readFileSync(join(REPO, 'config', 'idhazh.json'), 'utf8')).assemble
+		.same_story;
+	return {
+		applied: block.floor_min,
+		maxDownStep: block.adaptive_dedup_threshold.max_down_step,
+		bandLow: block.adaptive_dedup_threshold.band_low,
+		bandHigh: block.adaptive_dedup_threshold.band_high
+	};
 }
 
 async function open(page: Page, width = 1440): Promise<void> {
@@ -44,93 +53,199 @@ async function boxOf(page: Page): Promise<{ width: number; height: number }> {
 }
 
 test.describe('the pairs a person marked apart', () => {
-	test('the panel draws its axis, its rule and its margin', async ({ page }) => {
+	test('the panel draws its axis, its rule, its zone and its margin', async ({ page }) => {
 		await open(page);
 
 		await expect(page.locator(PANEL)).toBeVisible();
 		await expect(page.locator(`${PANEL} [data-holdout-figure]`)).toBeVisible();
 		await expect(page.locator(`${PANEL} [data-holdout-rule]`)).toHaveCount(1);
+		await expect(page.locator(`${PANEL} [data-holdout-zone-mark]`)).toHaveCount(1);
 		await expect(page.locator(`${PANEL} [data-holdout-note]`)).toBeVisible();
 		await expect(page.locator(`${PANEL} [data-holdout-weights]`)).toBeVisible();
 	});
 
-	test('the score axis holds the band whatever the data does', async ({ page }) => {
-		// The domain is two knobs and never the marks. An axis fitted to four
-		// fixture scores would redraw itself every time somebody marked a pair,
-		// and two days of this panel would not be comparable.
-		const knobs = band();
+	test('the score axis is the line and one day of legal fall, never the band', async ({ page }) => {
+		// The domain is the line and one knob, never the marks: an axis fitted to
+		// four fixture scores would redraw itself every time somebody marked a
+		// pair, and two days of this panel would not be comparable. The band is
+		// already the axis of `Where the merge line sits` further up the route,
+		// and on it this panel's margin drew at half a percent of the plot.
+		const { applied, maxDownStep, bandLow, bandHigh } = knobs();
 		for (const width of [1440, 390]) {
 			await open(page, width);
-			await expect(page.locator(`${PANEL}`)).toHaveAttribute(
-				'data-holdout-domain',
-				`${knobs.band_low},${knobs.band_high}`
-			);
+			const domain = ((await page.locator(PANEL).getAttribute('data-holdout-domain')) ?? '')
+				.split(',')
+				.map(Number);
+
+			expect(domain[0]).toBeCloseTo(applied - 2 * maxDownStep, 6);
+			expect(domain[1]).toBeCloseTo(applied + maxDownStep, 6);
+			expect(domain[0]).toBeGreaterThan(bandLow);
+			expect(domain[1]).toBeLessThan(bandHigh);
+
 			const ticks = await page
 				.locator(`${PANEL} [data-tick="x"]`)
 				.evaluateAll((nodes) => nodes.map((node) => Number(node.textContent)));
 			expect(ticks.length).toBeGreaterThan(1);
-			expect(Math.min(...ticks)).toBeGreaterThanOrEqual(knobs.band_low);
-			expect(Math.max(...ticks)).toBeLessThanOrEqual(knobs.band_high);
+			expect(Math.min(...ticks)).toBeGreaterThanOrEqual(domain[0]);
+			expect(Math.max(...ticks)).toBeLessThanOrEqual(domain[1]);
 		}
 	});
 
-	test('the dot is drawn where the arithmetic puts it, not where it would look tidy', async ({
+	test('the zone runs one day of legal fall DOWN from the rule and no further', async ({
 		page
 	}) => {
-		// THE BITE. The margin goes negative when the closest marked-apart pair
-		// scores above the line, and the panel exists to say so. The dot has to sit
-		// on the side of the rule its own score puts it, and the figure beside it
-		// has to be the score rather than whatever the axis could fit.
+		// THE BITE. `fit.clamp` is one-sided, so a zone drawn either side of the
+		// line would draw a constraint that does not exist. Its right edge is the
+		// rule and its width is the step, measured in pixels off the rendered plot
+		// rather than trusted from the attribute.
 		await open(page);
 
-		const dot = page.locator(`${PANEL} [data-holdout-dot]`);
-		await expect(dot).toHaveCount(1);
-		const score = Number(await dot.getAttribute('data-holdout-dot'));
+		const { applied, maxDownStep } = knobs();
+		const zone = ((await page.locator(PANEL).getAttribute('data-holdout-zone')) ?? '')
+			.split(',')
+			.map(Number);
+		expect(zone[1]).toBeCloseTo(applied, 6);
+		expect(zone[0]).toBeCloseTo(applied - maxDownStep, 6);
+
+		const zoneBox = await page.locator(`${PANEL} [data-holdout-zone-mark]`).boundingBox();
+		const ruleBox = await page.locator(`${PANEL} [data-holdout-rule]`).boundingBox();
+		const plot = await page.locator(`${PANEL} svg`).boundingBox();
+		if (zoneBox === null || ruleBox === null || plot === null) {
+			throw new Error('the zone, the rule or the plot has no box');
+		}
+
+		// The zone ends at the rule, within a pixel, and starts to the left of it.
+		expect(Math.abs(zoneBox.x + zoneBox.width - (ruleBox.x + ruleBox.width / 2))).toBeLessThan(2);
+		expect(zoneBox.x).toBeLessThan(ruleBox.x);
+		// And it is a third of the axis, because the axis is three of these steps.
+		expect(zoneBox.width / plot.width).toBeGreaterThan(0.25);
+	});
+
+	test('the margin is drawn wide enough for the dot to clear the rule', async ({ page }) => {
+		// THE BITE, and the finding that failed review. With the band as the axis
+		// the committed margin drew at 5.8 px, a dot is 13 px across, and the dot
+		// sat on top of the rule - so a reader could not tell which side of the
+		// line the closest call was on. Every drawn dot has to clear the rule by
+		// its own radius, or the panel cannot answer the one question it is for.
+		await open(page);
+
 		const rule = page.locator(`${PANEL} [data-holdout-rule]`);
+		const ruleBox = await rule.boundingBox();
+		if (ruleBox === null) throw new Error('the rule has no box');
+		const ruleAt = ruleBox.x + ruleBox.width / 2;
 		const line = Number(await rule.getAttribute('data-holdout-rule'));
 
-		const dotBox = await dot.boundingBox();
-		const ruleBox = await rule.boundingBox();
-		if (dotBox === null || ruleBox === null) throw new Error('the dot or the rule has no box');
+		const dots = page.locator(`${PANEL} [data-holdout-dot]`);
+		for (let index = 0; index < (await dots.count()); index += 1) {
+			const dot = dots.nth(index);
+			const score = Number(await dot.getAttribute('data-holdout-dot'));
+			const dotBox = await dot.boundingBox();
+			if (dotBox === null) throw new Error(`the dot at ${score} has no box`);
 
-		const dotAt = dotBox.x + dotBox.width / 2;
-		const ruleAt = ruleBox.x + ruleBox.width / 2;
-		expect(score > line).toBe(dotAt > ruleAt);
-
-		// The label under the dot is the score, to four places, whether or not the
-		// axis could reach it.
-		const label = (await page.locator(`${PANEL} [data-holdout-dot-label]`).textContent()) ?? '';
-		expect(Number(label)).toBeCloseTo(score, 4);
-
-		// And it is inside the plot rather than half off the edge of it.
-		const plot = await page.locator(`${PANEL} svg`).boundingBox();
-		if (plot === null) throw new Error('the plot has no box');
-		expect(dotAt).toBeGreaterThanOrEqual(plot.x);
-		expect(dotAt).toBeLessThanOrEqual(plot.x + plot.width);
+			// Drawn on the side of the rule its own score puts it.
+			expect(score > line).toBe(dotBox.x + dotBox.width / 2 > ruleAt);
+			// And not overlapping it. A dot covering the rule is the defect.
+			const clear = score > line ? dotBox.x - ruleAt : ruleAt - (dotBox.x + dotBox.width);
+			expect(clear, `the dot at ${score} overlaps the rule`).toBeGreaterThan(0);
+		}
 	});
 
-	test('a mark that scores off the scale says it is pinned rather than pretending', async ({
-		page
-	}) => {
-		// The axis is the span a fitted LINE may take, and a hand mark is not a
-		// line: two articles about nothing in common score well under it. Pinning
-		// the dot silently would draw a mark sitting at 0.88 that is nowhere near
-		// it. The canary's closest call is exactly this case.
+	test('every mark is on the plot, labelled or titled, and none is invented', async ({ page }) => {
+		// Four marks in the committed file and three scored ones in the canary. A
+		// mark off the scale is counted at the edge it left, never pinned to a
+		// place it is not - a dot sitting at the axis floor would say a pair scores
+		// there when it does not.
 		await open(page);
 
-		const knobs = band();
-		const score = Number(
-			await page.locator(`${PANEL} [data-holdout-dot]`).getAttribute('data-holdout-dot')
-		);
-		const pinned = page.locator(`${PANEL} [data-holdout-pinned]`);
-		const outside = score < knobs.band_low || score > knobs.band_high;
-		expect(await pinned.count()).toBe(outside ? 1 : 0);
-
-		if (outside) {
-			const said = (await page.locator(`${PANEL} [data-holdout-pinned-note]`).textContent()) ?? '';
-			expect(said).toContain('off this scale');
-			expect(said).toContain(score.toFixed(4));
+		const domain = ((await page.locator(PANEL).getAttribute('data-holdout-domain')) ?? '')
+			.split(',')
+			.map(Number);
+		const drawn = await page
+			.locator(`${PANEL} [data-holdout-dot]`)
+			.evaluateAll((nodes) => nodes.map((node) => Number(node.getAttribute('data-holdout-dot'))));
+		for (const score of drawn) {
+			expect(score).toBeGreaterThanOrEqual(domain[0]);
+			expect(score).toBeLessThanOrEqual(domain[1]);
 		}
+
+		// The rows of the shut table are every marked-apart pair, drawn or not, so
+		// the two counts together account for all of them.
+		const rows = await page
+			.locator(`${PANEL} [data-holdout-row]`)
+			.evaluateAll((nodes) => nodes.map((node) => Number(node.getAttribute('data-holdout-row'))));
+		const offScale = await page
+			.locator(`${PANEL} [data-holdout-offscale-count]`)
+			.evaluateAll((nodes) =>
+				nodes.reduce((total, node) => total + Number(node.getAttribute('data-holdout-offscale-count')), 0)
+			);
+		expect(drawn.length + offScale).toBe(rows.length);
+
+		// Whatever is off the scale is named with its score rather than left blank.
+		if (offScale > 0) {
+			const said = (await page.locator(`${PANEL} [data-holdout-offscale-note]`).first().textContent()) ?? '';
+			expect(said).toContain('this scale');
+			expect(said).toMatch(/0\.\d{4}/);
+		}
+	});
+
+	test('the headline says what one more day costs, not just the distance', async ({ page }) => {
+		// A distance says how much room there is and never how fast it can be
+		// spent, and it can be spent in one night. The count is the whole reason
+		// the margin is worth printing.
+		await open(page);
+
+		const { maxDownStep } = knobs();
+		const said = (await page.locator(`${PANEL} [data-holdout-reach-note]`).textContent()) ?? '';
+		expect(said).toContain(maxDownStep.toFixed(3));
+
+		const reach = ((await page.locator(PANEL).getAttribute('data-holdout-reach')) ?? '')
+			.split(',')
+			.map(Number);
+		// Today, tomorrow, the day after. The count can only rise as the line falls.
+		expect(reach[1]).toBeGreaterThanOrEqual(reach[0]);
+		expect(reach[2]).toBeGreaterThanOrEqual(reach[1]);
+		expect(reach[0]).toBe(Number(await page.locator(PANEL).getAttribute('data-holdout-violations')));
+	});
+
+	test('the pairs read as one story are drawn too, with the ones below the line counted', async ({
+		page
+	}) => {
+		// The line has two costs and the panel used to report one. A pair read as
+		// ONE story scoring under the line is a story the reader sees twice, and
+		// the strip is where that population is.
+		await open(page);
+
+		const agreed = page.locator(`${PANEL} [data-holdout-agreed]`);
+		await expect(agreed).toHaveCount(1);
+		const count = Number(await agreed.getAttribute('data-holdout-agreed'));
+		const said = (await agreed.textContent()) ?? '';
+
+		if (count === 0) {
+			expect(said).toContain('No pair has been read as one story yet');
+			return;
+		}
+		expect(said).toContain('below the line');
+		// Either the strip reaches this scale or a chip says which way it went.
+		// One of the two is always drawn, and never both.
+		const strip = await page.locator(`${PANEL} [data-holdout-strip]`).count();
+		const off = await page.locator(`${PANEL} [data-holdout-strip-offscale]`).count();
+		expect(strip + off).toBe(1);
+		await expect(page.locator(`${PANEL} [data-holdout-strip-label]`)).toBeVisible();
+	});
+
+	test('the panel takes the hue of what it means', async ({ page }) => {
+		// A panel that looks the same reporting a fault as reporting a clear day
+		// is the one thing this one may not be. The rule stays neutral either way:
+		// a setting is not a fault.
+		await open(page);
+
+		const tone = await page.locator(PANEL).getAttribute('data-holdout-tone');
+		const violations = Number(await page.locator(PANEL).getAttribute('data-holdout-violations'));
+		expect(['neutral', 'warn', 'bad']).toContain(tone);
+		expect(tone === 'bad').toBe(violations > 0);
+		await expect(
+			page.locator('[data-console-panel="The pairs a person marked apart"]')
+		).toHaveAttribute('data-tone', tone ?? 'neutral');
 	});
 
 	test('the state, the margin and the violation count agree with each other', async ({ page }) => {
@@ -162,10 +277,6 @@ test.describe('the pairs a person marked apart', () => {
 		await expect(skips).toHaveCount(1);
 		expect(Number(await skips.getAttribute('data-holdout-skips'))).toBeGreaterThan(0);
 		expect(await skips.textContent()).toContain('could not be checked');
-
-		// One dot, whatever the file holds. The panel draws the closest call and
-		// lists the rest.
-		await expect(page.locator(`${PANEL} [data-holdout-dot]`)).toHaveCount(1);
 	});
 
 	test('the weights the score was taken under are printed beside it', async ({ page }) => {

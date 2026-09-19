@@ -115,6 +115,8 @@ The one false merge at 0.93 is on 2026-08-30: Ontario's pushback against the lak
 
 **The way to widen it is more labels, not a higher number**, and that has not changed: 0.95 would clear all four marks and lose ten groups a person read as one story each.
 
+**The line already costs the reader on the other side, and the console draws that too.** The same file holds 196 pairs marked as ONE story. Recomputed the same way, **117 of them score below 0.94**, so the vector rule alone leaves those stories on the page twice; the identical-headline joiner catches whichever of them share a headline, and nothing catches the rest. That is not an argument for a lower line - it is the second cost of any line, and a panel reporting only the false merges reports half of what the number does. Measured 2026-09-19 on a developer machine / Node 24.12.0, over the committed day payloads at the shipped weights; deterministic, so no spread.
+
 **The two errors are not equal, which is why the number leans high.** A missed group costs a reader the same story twice, on a page they can see. A false merge costs them a story that never ran, and they cannot see what is not there ([../../../.github/agents/editor.agent.md](../../../.github/agents/editor.agent.md)).
 
 **`assemble.same_story.floor_min` is not comparable to `assist.similarity_floor`.** That one scores a reader's query against an item and this one scores two items against each other; the two distributions are different shapes, and reading one number against the other is how a threshold gets set from the wrong evidence.
