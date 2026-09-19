@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 import test_qualify as built
+from conftest import FIXTURES_DIR
 from pydantic import ValidationError
 
 from idhazh.contracts.qualification import (
@@ -153,6 +154,36 @@ def test_a_clean_verdict_says_so_and_prints_no_failure_section() -> None:
     assert "ESCALATE" not in page
     assert "What failed" not in page
     assert f"{len(GateName)} of {len(GateName)} gates passed" in page
+
+
+@pytest.mark.parametrize("citation", ["Rule", "Guardrail"])
+@pytest.mark.parametrize(
+    ("gate", "source"),
+    [
+        (GateName.INJECTION_CANARIES, "CLAUDE.md {citation} #11"),
+        (GateName.BUDGET, "workflow dispatch input job_budget_minutes, {citation} #2"),
+    ],
+)
+def test_report_readers_preserve_recorded_provenance(
+    gate: GateName, source: str, citation: str
+) -> None:
+    source = source.format(citation=citation)
+    report = QualificationReport.read(
+        FIXTURES_DIR / "contracts" / "qualification-report" / "qualified.json"
+    )
+    gates = [
+        outcome.model_copy(update={"source": source}) if outcome.gate is gate else outcome
+        for outcome in report.gates
+    ]
+    recorded = report.model_copy(update={"gates": gates}).to_json()
+    restored = QualificationReport.from_json(recorded)
+    outcome = next(outcome for outcome in restored.gates if outcome.gate is gate)
+    page = qualification_summary.render_report(restored)
+    row = next(line for line in page.splitlines() if f"| `{gate.value}` |" in line)
+
+    assert outcome.source == source
+    assert restored.to_json() == recorded
+    assert row.endswith(f"| {source} |")
 
 
 def test_a_report_may_not_omit_any_gate() -> None:
