@@ -100,6 +100,7 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     # timeout and the timeout is spent per PASS, so what fits depends on how
     # many cases the dispatch runs. The contract bounds it on the way in.
     ("measure.yml", "runtime_corpus_items"): DISPATCH_READ_BY_NAME,
+    ("measure.yml", "runtime_corpus_offset"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "runtime_threads"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "runtime_threads_batch"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "budget_samples"): "^[1-9][0-9]{0,4}$",
