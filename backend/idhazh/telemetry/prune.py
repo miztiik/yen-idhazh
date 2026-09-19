@@ -85,7 +85,16 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: absent - they file `.json` and `<DD>-<run>-<shard>.jsonl`, which
 #: `day_partition.day_files` refuses, and a second walker here would be a second
 #: answer to what a day file is. Bringing either in means teaching that one
-#: walker its suffix, which is where the question belongs.
+#: walker its suffix, which is where the question belongs. `state/span-rollup/`
+#: files by month and `state/segments/` is scratch the compaction drains, so
+#: neither is a day store at all.
+#:
+#: **`host-fingerprint` is what a day taken off the site owes its machine rows.**
+#: It filed by day from 2026-09-16 and was missing from this list until
+#: 2026-09-19, so an operator could take a day's census, scores and feeds back
+#: and leave the machines that produced them standing. The published machine
+#: shard is folded from this tree, so a day removed here is also a month to
+#: republish - `docs/architecture/publishing/retention.md` carries that pairing.
 #:
 #: **`scores` and `score-index` are one pair.** `evals.writer` refuses a repeat
 #: measurement by reading the index rather than the rows, so a range taken out of
@@ -106,6 +115,7 @@ TARGETS: Final[Mapping[str, str]] = MappingProxyType(
             {
                 ledger.COUNTERFACTUAL_SCORES_DIRNAME: ledger.COUNTERFACTUAL_SCORES_DIRNAME,
                 ledger.HEALTH_DIRNAME: ledger.HEALTH_DIRNAME,
+                ledger.HOST_FINGERPRINT_DIRNAME: ledger.HOST_FINGERPRINT_DIRNAME,
                 ledger.ITEM_HEALTH_DIRNAME: ledger.ITEM_HEALTH_DIRNAME,
                 ledger.VISUAL_PRUNES_DIRNAME: ledger.VISUAL_PRUNES_DIRNAME,
                 score_writer.INDEX_DIRNAME: score_writer.INDEX_DIRNAME,

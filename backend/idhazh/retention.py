@@ -1025,16 +1025,21 @@ def fold_visual_month(rows: Sequence[VisualAttemptRow]) -> list[VisualAggregateR
 
 @dataclass(frozen=True, slots=True)
 class FeedHealthPruneResult:
-    """Which feed-health months went, and what they weighed."""
+    """Which months of a day-filed ledger went, and what they weighed.
+
+    Named for the first store that needed it, and shared by every prune whose
+    knob is months and whose files are days - `prune_host_fingerprint` is the
+    other one today.
+    """
 
     deleted: tuple[str, ...]
     bytes_freed: int
     kept: tuple[str, ...]
-    #: Every `state/feed-health/<YYYY>/<MM>/<DD>.csv` this took, POSIX and
-    #: relative to the repository, oldest first. Carried rather than derived from
-    #: `deleted`, because a month is a directory of day files now: a caller that
-    #: spelled `<month>-01` would name a file the ledger may never have held, and
-    #: the list a dry run prints has to be the list a live run removes, file for
+    #: Every `<YYYY>/<MM>/<DD>.csv` this took, POSIX and relative to the
+    #: repository, oldest first. Carried rather than derived from `deleted`,
+    #: because a month is a directory of day files now: a caller that spelled
+    #: `<month>-01` would name a file the ledger may never have held, and the
+    #: list a dry run prints has to be the list a live run removes, file for
     #: file.
     days_removed: tuple[str, ...]
     dry_run: bool
@@ -1090,6 +1095,80 @@ def prune_feed_health(
             # Named and weighed before anything is unlinked, so the dry run
             # prints the same list the live run removes.
             days_removed.append(ledger.health_relpath(f"{month}-{day.stem}"))
+            freed += day.stat().st_size
+            if not dry_run:
+                day.unlink()
+                day_partition.drop_empty_day_dirs(day)
+
+    return FeedHealthPruneResult(
+        deleted=tuple(deleted),
+        bytes_freed=freed,
+        kept=tuple(kept),
+        days_removed=tuple(days_removed),
+        dry_run=dry_run,
+    )
+
+
+# --- The host-fingerprint shards ---------------------------------------------
+
+
+def prune_host_fingerprint(
+    state_dir: Path,
+    config: ObservabilityConfig,
+    today: date,
+    *,
+    dry_run: bool = False,
+) -> FeedHealthPruneResult:
+    """Delete every host-fingerprint month past its own age, and fold nothing.
+
+    A row here is one job's silicon on one run - the machine the platform handed
+    us and what its model server counted. Ten jobs a run each write one, so the
+    tree grows every run and nothing else bounds it (Guardrail #12).
+
+    Deleted rather than folded, for the reason `prune_feed_health` gives: a total
+    over a month fourteen months back names no machine, so the fold would be a
+    shape nothing consumes, persisted for ever. The month that matters is already
+    published under `frontend/public/machine/`.
+
+    Reuses `FeedHealthPruneResult` rather than minting a shape with the same five
+    fields and a different name, the way `prune_trial_state` reuses
+    `TracePruneResult`. The month knob over a day tree is the same problem, so it
+    is the same answer.
+
+    `observability.host_fingerprint_keep_months` is null by default, and null
+    means never: this then names no boundary and removes nothing. Set, it may not
+    sit below `public_machine_keep_months`, which the contract refuses - the
+    published shard is folded from this ledger.
+
+    **Older than the oldest month kept, never merely outside a window.** The
+    boundary is a floor, so a run handed a date in the past deletes less rather
+    than deleting the live day. That is the rule `prune_seen` states at length
+    and it is the same rule here.
+
+    It walks the tree to find what to delete, so the walk is what bounds the
+    collection and its cost falls as it works - a day it removes is a day no
+    later pass opens. That is the argument `prune_counterfactual_scores` already
+    makes for the same shape (`docs/concepts/growing-reads.md`, Guardrail #12).
+    """
+    if config.host_fingerprint_keep_months is None:
+        return FeedHealthPruneResult((), 0, (), (), dry_run)
+
+    boundary = oldest_month_kept(today, config.host_fingerprint_keep_months)
+    deleted: list[str] = []
+    days_removed: list[str] = []
+    kept: list[str] = []
+    freed = 0
+
+    by_month = day_partition.days_by_month(state_dir / ledger.HOST_FINGERPRINT_DIRNAME)
+    for month in sorted(by_month):
+        if month >= boundary:
+            kept.append(month)
+            continue
+        deleted.append(month)
+        for day in by_month[month]:
+            # Named and weighed before anything is unlinked, so the dry run
+            # prints the same list the live run removes.
+            days_removed.append(ledger.host_fingerprint_relpath(f"{month}-{day.stem}"))
             freed += day.stat().st_size
             if not dry_run:
                 day.unlink()
