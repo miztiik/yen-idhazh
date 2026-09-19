@@ -1,12 +1,15 @@
 import {
 	chartConfig,
 	committedFloor,
+	committedWeights,
 	consoleConfig,
 	similarityConfig
 } from '$lib/server/config';
 import { mergeCountsOf, type JudgeDay, type LineDay, type MergeDay } from '$lib/console/merge-line';
+import type { ScoreWeights } from '$lib/console/holdout';
 import { loadDay, publishedDates } from '$lib/server/payload';
 import { fittedLines, scoreRecord } from '$lib/server/similarity-ledger';
+import { holdoutReading } from '$lib/server/similarity-holdout';
 
 export const prerender = true;
 
@@ -62,6 +65,21 @@ export function load() {
 	// The record is cumulative and the counts are per day, so the newest row is
 	// what both the split and the figures strip are about.
 	const newest = rows.length === 0 ? null : rows[rows.length - 1];
+	// The ruler the holdout marks are scored under. The newest fitted row wins,
+	// because the margin has to be read under the weights the line was set with;
+	// the committed config answers on a day no fit has ever run, and on a row
+	// written before the two columns existed.
+	const committed = committedWeights();
+	const weights: ScoreWeights = {
+		cosineWeight: newest?.cosineWeight ?? committed.cosine_weight,
+		keyPointWeight: newest?.keyPointWeight ?? committed.key_point_weight,
+		fittedOn: newest === null ? null : newest.date
+	};
+	// One hand-typed file, plus one published day per distinct date it names. The
+	// bound is that file's length and not the archive's, and the days it opens
+	// sit outside the window preset - so it has an entry of its own in
+	// `docs/concepts/growing-reads.md`.
+	const holdout = holdoutReading(weights);
 	return {
 		// Oldest first, the order every chart on this console draws a day axis in.
 		merges,
@@ -113,6 +131,30 @@ export function load() {
 		},
 		// What the newest day was built with when no fit has ever run.
 		configuredLine: committedFloor(),
+		// Only the pairs marked as two different stories reach the document whole.
+		// They are the load-bearing ones - the line has to stay above every one of
+		// them - and inlining the rest would put two addresses and two headlines a
+		// row in a prerendered page for marks that set no floor.
+		holdout: {
+			marks: holdout.marks.filter((mark) => !mark.sameStory),
+			skipped: holdout.skipped,
+			marked: holdout.marked,
+			// The pairs read as one story, as scores and nothing else. The panel
+			// draws them as a range strip and counts how many sit below the line,
+			// which is the other cost the line has and the one the panel used to
+			// report as a bare total. 196 numbers is 1.7 KB, against 88 KB for the
+			// same rows with their addresses and headlines.
+			//
+			// **Six places, not four.** The count is a comparison against the line,
+			// so the rounding decides it: two of the 196 sit between 0.93995 and
+			// 0.94, and at four places they round onto the line and the panel
+			// printed 115 where the answer is 117. The extra 401 bytes buy a
+			// printed number that is the number.
+			agreedScores: holdout.marks
+				.filter((mark) => mark.sameStory)
+				.map((mark) => Number(mark.score.toFixed(6))),
+			weights
+		},
 		console,
 		// How many date labels the day axis may carry - `chart.tick_density`.
 		chart: chartConfig(),
