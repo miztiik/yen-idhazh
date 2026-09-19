@@ -4,11 +4,13 @@ One row a run. A row is written on the days the line moved AND on the days it di
 not - a line that moves itself has to leave a record on the days it stayed put, or
 a reader cannot tell a held day from a day nothing ran.
 
-The four steps are readable straight off the row: `proposed` is what the record
-said, `after_damping` is that proposal smoothed towards yesterday, `applied` is
-what the clamps let through, and `clamp_kind` says which clamp shaped it. The
-three gates are on the row too, as counts rather than as a verdict, so a held day
-says why it was held in numbers a person can check.
+The steps are readable straight off the row: `proposed` is what the record said,
+`after_damping` is that proposal damped towards yesterday - or yesterday's line
+unchanged, on a day the proposal sat inside the dead zone and counted as no move
+at all - `applied` is what the caps and the band walls let through, and
+`clamp_kind` says which of them shaped it. The three gates are on the row too, as
+counts rather than as a verdict, so a held day says why it was held in numbers a
+person can check.
 
 Nothing here is a model verdict. The fit is arithmetic over counts, and the row
 records the arithmetic (CLAUDE.md section 0a).
@@ -38,11 +40,20 @@ LINE_TOLERANCE: Final = 1e-9
 
 
 class ClampKind(StrEnum):
-    """What shaped the applied value, in one word."""
+    """What shaped the applied value, in one word.
+
+    `CEILING` and `FLOOR` are where the line came to rest on a band wall, whether
+    or not the wall moved it that day. A line at `band_high` folds nothing at all
+    and a line at `band_low` folds everything in the band; both look from the
+    outside like the feature is switched off, so both get a word of their own
+    rather than reading as `NONE`.
+    """
 
     NONE = "none"
     STEP = "step"
     GUARD = "guard"
+    CEILING = "ceiling"
+    FLOOR = "floor"
 
 
 class HeldReason(StrEnum):
@@ -57,10 +68,15 @@ class HeldReason(StrEnum):
 
 
 class FittedSimilarityThreshold(Contract):
-    """One run's fit: the four steps, the gates, and what the record held when they ran."""
+    """One run's fit: the five steps, the gates, and what the record held when they ran."""
 
     __schema_stem__: ClassVar[str] = "fitted-similarity-threshold"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-19",
+            change="smoothing_weight splits into fall_weight and rise_weight; max_up_step added.",
+            why="The line now damps and caps both directions, so one number cannot carry it.",
+        ),
         ChangelogEntry(
             version="2026-09-18T12:00",
             change="pairs_in_band counts the pairs the draw dealt, not the pairs in the band.",
@@ -102,9 +118,10 @@ class FittedSimilarityThreshold(Contract):
         ge=0.0,
         le=1.0,
         description=(
-            "The proposal after step 2. Equal to the proposal on a rise, because damping "
-            "is downward only. Empty whenever the proposal is, since there is nothing to "
-            "damp."
+            "The proposal after damping. Both directions are damped, so this differs from "
+            "the proposal on a rise as well as on a fall - and equals the previous line "
+            "when the proposal sat inside the dead zone and the day counted as no move. "
+            "Empty whenever the proposal is, since there is nothing to damp."
         ),
     )
     applied: float = Field(
@@ -116,7 +133,9 @@ class FittedSimilarityThreshold(Contract):
         default=ClampKind.NONE,
         description=(
             "What shaped the applied value. none is the damped proposal as it stood, step "
-            "is the daily downward clamp, guard is the step-change hold."
+            "is a daily cap, guard is the step-change hold, and ceiling or floor is the "
+            "line resting on a band wall. Which way a step went is read off previous "
+            "against applied."
         ),
     )
     clamp_movement: float = Field(
@@ -124,8 +143,9 @@ class FittedSimilarityThreshold(Contract):
         ge=0.0,
         le=1.0,
         description=(
-            "How far the clamp held the line back, always at or above zero because there "
-            "is no upward clamp. Zero when nothing clamped."
+            "How far the clamp held the line back. A distance, so it is at or above zero "
+            "whichever direction was held. Zero when nothing clamped, and zero on a "
+            "ceiling or floor row where the line was already resting on the wall."
         ),
     )
     held_reason: HeldReason = Field(
@@ -151,19 +171,35 @@ class FittedSimilarityThreshold(Contract):
             "asked the same question."
         ),
     )
-    smoothing_weight: float = Field(
+    fall_weight: float = Field(
         gt=0.0,
         le=1.0,
         description=(
-            "How much of the proposal step 2 let through against yesterday's line. On the "
-            "row for the same reason the discard share is."
+            "How much of a downward move the damping let through against yesterday's line. "
+            "On the row for the same reason the discard share is: a later reader comparing "
+            "two fits has to know both were asked the same question."
+        ),
+    )
+    rise_weight: float = Field(
+        gt=0.0,
+        le=1.0,
+        description=(
+            "How much of an upward move the damping let through. Smaller than the fall "
+            "weight on every legal config, because the line falls fast and rises slow."
         ),
     )
     max_down_step: float = Field(
         gt=0.0,
         description=(
-            "The furthest step 3 would let the line fall in one day. On the row because "
-            "clamp_kind says the clamp fired and this says what it fired against."
+            "The furthest the line could fall in one day, in score units. On the row "
+            "because clamp_kind says a cap fired and this says what it fired against."
+        ),
+    )
+    max_up_step: float = Field(
+        gt=0.0,
+        description=(
+            "The furthest the line could rise in one day, in score units. On the row for "
+            "the same reason the fall cap is."
         ),
     )
     step_change_multiple: float = Field(
@@ -305,7 +341,7 @@ class FittedSimilarityThreshold(Contract):
         This is the one validator that earns its place: the words are what a
         reader scans and the numbers are what a later fit reads, and a row where
         a `held_reason` sits beside a moved line is a row that lies to one of
-        them. Every clause here is a shape the four steps cannot produce.
+        them. Every clause here is a shape the five steps cannot produce.
         """
         if self.held_reason is not HeldReason.NONE:
             if self.clamp_kind is not ClampKind.NONE:
@@ -341,7 +377,7 @@ class FittedSimilarityThreshold(Contract):
                     "clamp_kind is none, so nothing was held back and clamp_movement is 0.0"
                 )
             return self
-        held_back = self.applied - self.after_damping
+        held_back = abs(self.applied - self.after_damping)
         if abs(self.clamp_movement - held_back) > LINE_TOLERANCE:
             raise ValueError(
                 f"clamp_movement is {self.clamp_movement}, and the clamp moved the line "

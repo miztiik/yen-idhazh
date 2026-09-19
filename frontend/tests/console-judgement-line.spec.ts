@@ -34,8 +34,10 @@ const PANEL = '[data-windowed="merge-line"]';
  * a word a reader knows, and a panel that printed one would be asking the reader
  * to learn the pipeline's vocabulary to read a chart. */
 const CONFIG_WORDS = [
-	'max_down_step',
-	'smoothing_weight',
+	'max_down_bins',
+	'max_up_bins',
+	'fall_weight',
+	'rise_weight',
 	'band_low',
 	'band_high',
 	'clamp_kind',

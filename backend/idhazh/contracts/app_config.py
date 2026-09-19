@@ -85,6 +85,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-19T01:00",
+            change="adaptive_dedup_threshold: caps in slots, a rise cap, two damping weights.",
+            why="The line falls fast and rises slow, and a slot count is checkable.",
+        ),
+        ChangelogEntry(
             version="2026-09-19",
             change="adaptive_dedup_threshold.max_down_step loses its upper bound of 0.0083.",
             why="Fresh labels put the nearest two-story pair above the line, so the gap is gone.",
@@ -98,11 +103,6 @@ class AppConfig(Contract):
             version="2026-09-18T10:00",
             change="adaptive_dedup_threshold.judge_temperature, additive, default 0.0.",
             why="The swap reads position bias only while the sampler adds no noise of its own.",
-        ),
-        ChangelogEntry(
-            version="2026-09-18T09:00",
-            change="adaptive_dedup_threshold and run.judge_shard_timeout_minutes, additive.",
-            why="The merge line was set by one reading and nothing re-read it.",
         ),
         ChangelogEntry(
             version="2026-08-21",

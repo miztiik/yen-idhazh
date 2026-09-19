@@ -1128,13 +1128,55 @@ def test_a_daily_step_that_outruns_the_band_is_refused() -> None:
     above the gap between the line and the nearest pair marked as two stories;
     the 200 labels marked that day put the nearest such pair at 0.9407, above
     the 0.94 line, so there is no gap left for a step to eat.
+
+    The caps are slot counts, so the comparison is a count against the band's own
+    slot count rather than one decimal against another.
     """
     band = SimilarityThresholdConfig()
-    span = band.band_high - band.band_low
+    slots = round((band.band_high - band.band_low) / band.bin_width)
     with pytest.raises(ValidationError, match="outside the record"):
-        SimilarityThresholdConfig(max_down_step=span)
+        SimilarityThresholdConfig(max_down_bins=slots)
+    with pytest.raises(ValidationError, match="outside the record"):
+        SimilarityThresholdConfig(max_up_bins=slots)
+    with pytest.raises(ValidationError, match="outside the record"):
+        SimilarityThresholdConfig(dead_zone_bins=slots)
 
-    assert SimilarityThresholdConfig(max_down_step=0.005).max_down_step == 0.005
+    assert band.max_down_step == pytest.approx(band.max_down_bins * band.bin_width)
+    assert band.max_up_step == pytest.approx(band.max_up_bins * band.bin_width)
+    assert band.dead_zone == pytest.approx(band.dead_zone_bins * band.bin_width)
+
+
+def test_a_config_that_makes_the_line_rise_faster_than_it_falls_is_refused() -> None:
+    """The line falls fast and rises slow, and the config is where that is held.
+
+    Lowering the line publishes less, which is the house rule, so both mechanisms
+    - the damping weight and the daily cap - are larger going down than going up.
+    The shape reads backwards to anyone who has not been told the rule, and the
+    obvious tidy-up is to point it the other way, so the refusal is here rather
+    than a comment somebody deletes.
+    """
+    with pytest.raises(ValidationError, match="meant to be quick"):
+        SimilarityThresholdConfig(fall_weight=0.15, rise_weight=0.5)
+    with pytest.raises(ValidationError, match="meant to be quick"):
+        SimilarityThresholdConfig(max_down_bins=3, max_up_bins=10)
+
+    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
+    knobs = committed.assemble.same_story.adaptive_dedup_threshold
+    assert knobs.fall_weight > knobs.rise_weight
+    assert knobs.max_down_bins > knobs.max_up_bins
+
+
+def test_a_config_still_spelling_a_retired_threshold_knob_is_refused() -> None:
+    """Both knobs changed unit as well as name, so a rename in place would read wrong.
+
+    `max_down_step` was a score and `max_down_bins` is a count of slots, so an
+    operator who moves 0.005 across untouched has written a step two hundred
+    times too small. "extra inputs are not permitted" would not have told them.
+    """
+    with pytest.raises(ValidationError, match="max_down_bins"):
+        SimilarityThresholdConfig.model_validate({"max_down_step": 0.005})
+    with pytest.raises(ValidationError, match="fall_weight"):
+        SimilarityThresholdConfig.model_validate({"smoothing_weight": 0.15})
 
 
 def test_a_band_that_cannot_draw_the_hardest_labelled_pair_is_refused() -> None:
