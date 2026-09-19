@@ -143,6 +143,21 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # `model_speed_case.py` reads `bench.run_model_speed_case` through the
+      # contract, so this job needs the package installed even though it writes
+      # nothing and finishes in under a minute. It had neither a Python setup
+      # nor an install from 2026-09-17, when the speed case became bypassable,
+      # until the first bench dispatched after that died here on
+      # `ModuleNotFoundError: No module named 'idhazh'`. The `models` step below
+      # is dependency-free on purpose and stays that way.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - run: pip install -e .
+
       # Each value is asserted to be one bare word at the one point that writes
       # them, so an expression that substitutes one into a shell command below
       # cannot carry a space, a quote or a newline into it. The input arrives
