@@ -1,0 +1,182 @@
+/** The margin between the merge line and the pairs a person marked apart.
+ *
+ * No build and no browser: this file is in the `logic` group. Every value here
+ * is written down, so the two states that matter most - a mark sitting exactly
+ * on the line, and a line that has fallen below one - are checked without
+ * waiting for the archive to produce them.
+ */
+
+import { expect, test } from '@playwright/test';
+
+import {
+	cosineInt8,
+	holdoutMargin,
+	holdoutNote,
+	holdoutState,
+	keyPointOverlap,
+	marginDistance,
+	pairScore,
+	reduceWords,
+	skipNote,
+	weightsNote,
+	type HoldoutMark,
+	type ScoreWeights
+} from '../src/lib/console/holdout';
+
+const WEIGHTS: ScoreWeights = { cosineWeight: 1, keyPointWeight: 0, fittedOn: '2026-09-18' };
+
+function mark(score: number, sameStory = false, leftTitle = 'one'): HoldoutMark {
+	return {
+		leftTitle,
+		rightTitle: 'the other',
+		sameStory,
+		markedOn: '2026-09-19',
+		note: 'read as two events',
+		score
+	};
+}
+
+test('the margin is the line minus the highest pair marked as two stories', () => {
+	const outcome = holdoutMargin(0.94, [mark(0.9317), mark(0.9), mark(0.99, true)]);
+
+	expect(outcome.closest?.score).toBeCloseTo(0.9317, 6);
+	expect(outcome.margin).toBeCloseTo(0.0083, 6);
+	expect(outcome.violations).toBe(0);
+});
+
+test('a pair sitting exactly on the line is on the wrong side of it', () => {
+	// THE BITE. `assemble` refuses on `score < floor_min`, so a pair scoring the
+	// line merges. Compare the other way and the one mark sitting on the
+	// boundary is filed as safe, which is the only mark that can ever be there.
+	const outcome = holdoutMargin(0.94, [mark(0.94)]);
+
+	expect(outcome.violations).toBe(1);
+	expect(outcome.margin).toBeCloseTo(0, 9);
+	expect(holdoutState(outcome, true)).toBe('violation');
+});
+
+test('a pair marked as one story sets no floor at all', () => {
+	// Every same-story mark scores high by construction. Counting one as a floor
+	// would make the margin negative on every healthy day.
+	const outcome = holdoutMargin(0.94, [mark(0.99, true), mark(0.98, true)]);
+
+	expect(outcome.closest).toBeNull();
+	expect(outcome.margin).toBeNull();
+	expect(holdoutState(outcome, true)).toBe('no-marks');
+});
+
+test('a negative margin prints as a distance and never as a minus sign', () => {
+	// The raw value renders `-0.0007 BELOW`, which reads as a double negative
+	// and a typo. The word carries the direction and the figure carries the size.
+	const outcome = holdoutMargin(0.94, [mark(0.9407)]);
+	const figure = marginDistance(outcome.margin ?? 0);
+	const note = holdoutNote(outcome, holdoutState(outcome, true), 200, 0.94);
+
+	expect(outcome.margin).toBeLessThan(0);
+	expect(figure).toBe('0.0007');
+	expect(figure).not.toContain('-');
+	expect(note).toContain('BELOW');
+	// The sentence carries no signed figure either. `hand-marked` is a hyphen in
+	// a word, so the check is on what sits next to a digit.
+	expect(note).not.toMatch(/-\d/);
+});
+
+test('the four states say four different things', () => {
+	const none = holdoutMargin(0.94, []);
+	const clear = holdoutMargin(0.94, [mark(0.9317)]);
+	const over = holdoutMargin(0.94, [mark(0.9407)]);
+
+	const said = [
+		holdoutNote(none, holdoutState(none, true), 0, 0.94),
+		holdoutNote(clear, holdoutState(clear, false), 1, 0.94),
+		holdoutNote(clear, holdoutState(clear, true), 1, 0.94),
+		holdoutNote(over, holdoutState(over, true), 1, 0.94)
+	];
+
+	expect(new Set(said).size).toBe(4);
+	expect(said[0]).toContain('nothing to hold the line against');
+	expect(said[1]).toContain('No day has fitted a line yet');
+	expect(said[2]).toContain('No hand-marked pair is on the wrong side');
+	expect(said[3]).toContain('would merge them');
+});
+
+test('a violation is reported before the day has ever fitted a line', () => {
+	// THE BITE. A marked-apart pair above the line would be merged whether or
+	// not a fit has run, so the provenance note may not swallow it. Return
+	// `no-fit` here and the panel's worst state is invisible on every day before
+	// the first fit - which is every day the flag has been off.
+	const over = holdoutMargin(0.94, [mark(0.9407)]);
+
+	expect(holdoutState(over, false)).toBe('violation');
+	expect(holdoutNote(over, holdoutState(over, false), 1, 0.94)).toContain('would merge them');
+});
+
+test('the violation count is the marks at or above the line, not all of them', () => {
+	const outcome = holdoutMargin(0.94, [mark(0.9407), mark(0.9374), mark(0.9352), mark(0.9343)]);
+
+	// The committed file's four marked-apart pairs, at the committed line. One
+	// of the four is over it and the other three are not.
+	expect(outcome.violations).toBe(1);
+	expect(outcome.closest?.score).toBeCloseTo(0.9407, 6);
+});
+
+test('two stored int8 vectors score the angle between them, not their length', () => {
+	// The quantisation scale cancels, so doubling one side changes nothing. A
+	// decoder that forgot to normalise would fail this and still look plausible.
+	const left = Int8Array.from([3, 4, 0]);
+	const right = Int8Array.from([6, 8, 0]);
+
+	expect(cosineInt8(left, right)).toBeCloseTo(1, 9);
+	expect(cosineInt8(Int8Array.from([1, 0]), Int8Array.from([0, 1]))).toBeCloseTo(0, 9);
+});
+
+test('two vectors of different widths score nothing rather than a prefix', () => {
+	// Two widths are two encoders. A dot product over the shorter of them is a
+	// number that looks exactly like a score and means nothing.
+	expect(cosineInt8(Int8Array.from([1, 0, 0]), Int8Array.from([1, 0]))).toBe(0);
+	expect(cosineInt8(Int8Array.from([]), Int8Array.from([]))).toBe(0);
+});
+
+test('the key-point term is the share of words the two have between them', () => {
+	// Two words shared, five between them.
+	expect(keyPointOverlap(['a', 'b', 'c'], ['b', 'c', 'd', 'e'])).toBeCloseTo(2 / 5, 9);
+	// No evidence rather than a match. A term may not decide on its own.
+	expect(keyPointOverlap([], ['b'])).toBe(0);
+});
+
+test('the reduction keeps letters and digits and drops everything else', () => {
+	expect(reduceWords('Budget 2026: the "big" deal -- signed')).toEqual([
+		'budget',
+		'2026',
+		'the',
+		'big',
+		'deal',
+		'signed'
+	]);
+	expect(reduceWords('!!! ...')).toEqual([]);
+});
+
+test('the score is the two terms under the two weights, and nothing else', () => {
+	expect(pairScore(0.9, 0.5, WEIGHTS)).toBeCloseTo(0.9, 9);
+	expect(
+		pairScore(0.9, 0.5, { cosineWeight: 0.8, keyPointWeight: 0.2, fittedOn: null })
+	).toBeCloseTo(0.82, 9);
+});
+
+test('the printed weights name where they came from', () => {
+	expect(weightsNote(WEIGHTS)).toContain('2026-09-18');
+	expect(weightsNote({ cosineWeight: 1, keyPointWeight: 0, fittedOn: null })).toContain(
+		'committed config'
+	);
+});
+
+test('a mark the day tree cannot answer for is counted with its reason', () => {
+	// A blank dot would say the margin is fine. A counted skip says the mark
+	// could not be checked, which is a different fact.
+	expect(skipNote([])).toBeNull();
+	const said = skipNote([
+		{ leftTitle: 'one', rightTitle: 'two', reason: 'the day it names is no longer published' }
+	]);
+	expect(said).toContain('1 marked pair could not be checked');
+	expect(said).toContain('no longer published');
+});

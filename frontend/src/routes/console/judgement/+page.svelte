@@ -16,9 +16,11 @@
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
 	import { windowOfDays } from '$lib/charts/viewport';
+	import { markedApart, scoreRange } from '$lib/console/holdout';
 	import WindowControl from '$lib/components/WindowControl.svelte';
 	import MergeLinePlot from './MergeLinePlot.svelte';
 	import MergedStoriesPanel from './MergedStoriesPanel.svelte';
+	import HoldoutMargin from './HoldoutMargin.svelte';
 	import JudgeAgreement from './JudgeAgreement.svelte';
 	import RecordGates from './RecordGates.svelte';
 	import VerdictSplit from './VerdictSplit.svelte';
@@ -65,6 +67,11 @@
 			data.console.today_anchor
 		)
 	);
+
+	/** Where the pairs a person read as two stories sit, for the one chart on
+	 * this route that has a date axis to draw the line walking into them. */
+	const apartSpan = $derived(markedApart(data.holdout.marks));
+	const apartAt = $derived(scoreRange(apartSpan.map((mark) => mark.score)));
 </script>
 
 <div data-console-panels="judgement">
@@ -95,6 +102,9 @@
 		tickDensity={data.chart.tick_density}
 		readoutMaxShare={data.chart.readout_max_share}
 		configuredLine={data.configuredLine}
+		markedApart={apartAt === null
+			? null
+			: { low: apartAt.min, high: apartAt.max, count: apartSpan.length }}
 	/>
 
 	<JudgeAgreement
@@ -129,6 +139,19 @@
 		axisMultiple={data.console.precision_axis_multiple}
 		width={data.console.chart_width}
 		figures={data.figures}
+	/>
+
+	<HoldoutMargin
+		marks={data.holdout.marks}
+		agreedScores={data.holdout.agreedScores}
+		skipped={data.holdout.skipped}
+		marked={data.holdout.marked}
+		applied={data.lines.at(-1)?.applied ?? data.configuredLine}
+		maxDownStep={data.similarity.max_down_bins * data.similarity.bin_width}
+		fitted={data.lines.length > 0}
+		weights={data.holdout.weights}
+		height={data.console.chart_height}
+		width={data.console.chart_width}
 	/>
 
 	<h2 class="console-h2">What the model made of each article</h2>
