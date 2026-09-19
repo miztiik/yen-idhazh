@@ -37,6 +37,43 @@ from ._harness import (
 pytestmark = pytest.mark.workflow
 
 
+def test_a_day_is_assembled_only_when_the_plan_it_is_built_from_succeeded() -> None:
+    """A failed worker still publishes. A failed plan has nothing to publish.
+
+    The two are one condition and they pull opposite ways. A bare condition gets
+    an implicit `success()`, which would hold the day back for a worker that
+    died - and the items the other shards finished are exactly the day worth
+    publishing. `always()` went the other way and started this job when the PLAN
+    failed, which it cannot survive: the first thing it does is download the
+    plan by name. The run then failed twice, and the job naming the cause was
+    not the one that failed last.
+
+    The status function is what buys the first half: without one, GitHub applies
+    `success()` over every job in `needs`.
+    """
+    workflow = _load_workflows()["digest.yml"]
+
+    assert _needs(workflow, "assemble") == ["plan", "work"]
+    assert _normalize_condition(_job(workflow, "assemble").get("if"), "assemble if") == (
+        "!cancelled() && needs.plan.result == 'success'"
+    )
+
+
+def test_the_plan_a_day_is_built_from_cannot_go_missing_quietly() -> None:
+    """The job downstream reads this artifact by name, so an absent one fails here.
+
+    `if-no-files-found` warns by default, so a plan job that wrote no plan.json
+    would finish green and hand a missing-artifact failure to `assemble` - one
+    job away from whatever actually went wrong.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    upload = _step(workflow, "plan", "uses", "actions/upload-artifact@v7")
+
+    settings = _mapping(upload.get("with"), "the plan upload's settings")
+    assert settings["name"] == "plan"
+    assert settings["if-no-files-found"] == "error"
+
+
 @pytest.mark.parametrize(("filename", "job_name"), VALIDATE_DAYS_JOBS)
 def test_every_committed_day_is_validated_where_the_build_stopped_doing_it(
     filename: str, job_name: str

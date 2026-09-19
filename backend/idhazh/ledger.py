@@ -974,12 +974,15 @@ def settle_header(
     short row left out, and an empty cell is what an absent optional already
     means.
 
-    **It never raises and it never drops a line.** An abort here would cost the
-    run every ledger row staged beside the file it was fixing, and a line it
-    cannot read is kept as it was and named in what comes back. A file it cannot
-    place at all - one carrying headings this contract's reader does not know -
-    is left byte-identical and reported, which is the refusal `migrate_header`
-    makes and for the same reason.
+    **It never raises, and it writes all of the repair or none of it.** An abort
+    here would cost the run every ledger row staged beside the file it was
+    fixing, so a line it cannot read comes back as a complaint instead - and the
+    file is left byte-identical, because a header written over a line that did
+    not move is a header that lies about its own rows, and the next append reads
+    that width as the one the contract asked for. A file carrying headings this
+    contract's reader does not know is left alone for the same reason.
+    `migrate_header` refuses on both conditions too; it raises where this
+    returns.
 
     Returns how many rows were re-filed, and a complaint for each line the caller
     should print.
@@ -997,6 +1000,8 @@ def settle_header(
             f"({', '.join(unplaceable[:5])}); it was left as it was"
         ]
     kept, moved, refused = _refile(lines, columns, read)
+    if refused:
+        return 0, refused
     if kept != lines:
         path.write_text("".join(kept), encoding="utf-8", newline="")
     return moved, refused

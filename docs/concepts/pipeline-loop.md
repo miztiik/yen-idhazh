@@ -87,7 +87,7 @@ Four invariants hold regardless of how the batches are sized:
   2026-08-25, 88 decided items and 9 rendered charts thrown away, and the day
   published 145 items with no visuals at all. A shard now uploads what it drew
   with the items it summarized, so there is no separate parcel to lose.
-- **The assemble step always runs, and always publishes.** A run with failures publishes a digest that says so, and the failure count lands in the ledger as a fact with a date on it. A run that publishes nothing on a bad day is a run whose bad days are invisible.
+- **The assemble step runs after a failed worker, and publishes.** A run with failures publishes a digest that says so, and the failure count lands in the ledger as a fact with a date on it. A run that publishes nothing on a bad day is a run whose bad days are invisible. It does not run after a failed plan: the plan is the thing it assembles, so there is nothing to publish, and starting it anyway only buries the run's one real failure under a second one about a missing artifact.
 - **Run counts stay run-scoped.** The day payload grows across runs. The run
  manifest does not. Each `runs[]` record says what that run planned, skipped,
  failed and introduced. Its `verticals[].published` count is the number of

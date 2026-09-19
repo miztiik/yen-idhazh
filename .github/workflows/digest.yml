@@ -237,6 +237,33 @@ jobs:
             echo "::warning title=Late run::Slot ${SLOT_HOUR}:${SLOT_MINUTE} UTC started ${LATE} minutes late. GitHub queues scheduled runs by load and drops slots it cannot place - see docs/reference/github-actions.md."
           fi
 
+      # The catch-up, and it is the only caller besides `assemble`. A run whose
+      # assemble never ran leaves its segments in the tree, and nothing else
+      # would ever fold them: this job runs five times a day, so a segment waits
+      # at most 4.8 hours.
+      #
+      # On the normal path it costs nothing measurable. The assemble of the run
+      # before this one drained the store and committed the deletions, and the
+      # `digest` concurrency group above stops this run starting before that one
+      # finished - so this lists an empty directory and writes nothing.
+      #
+      # BEFORE the plan, and before this job's own probe, for two different
+      # reasons. The probe writes a segment, and a fold that ran after it would
+      # write the day file here while `assemble` writes that same file again -
+      # two head writers in one run is the shape this design exists to remove,
+      # and a third arrives by looking like the second. The plan comes after
+      # because a fold that refuses a row ends this job, and a refusal that
+      # lands after the feed reads has spent them for nothing. Nothing in the
+      # fold needs the day the plan writes: a waiting row is filed under the
+      # date in its own cells.
+      #
+      # Never `prune.yml`. That workflow commits nothing on 29 of 30 wakes,
+      # stages only `corpus` on the day it is due, and ends in a force push, so a
+      # compaction there would delete every waiting segment from a runner that
+      # then throws itself away.
+      - name: Fold any segments an earlier run left behind
+        run: python -m idhazh compact
+
       # No weights load here. The plan job is feed reads and arithmetic, and it
       # finishes in seconds - which is what makes fanning out afterwards cheap.
       #
@@ -254,31 +281,6 @@ jobs:
           python -m idhazh plan
           --date "${{ steps.decide.outputs.date }}"
           --execution "${{ github.run_id }}"
-
-      # The catch-up, and it is the only caller besides `assemble`. A run whose
-      # assemble never ran leaves its segments in the tree, and nothing else
-      # would ever fold them: this job runs five times a day, so a segment waits
-      # at most 4.8 hours.
-      #
-      # On the normal path it costs nothing measurable. The assemble of the run
-      # before this one drained the store and committed the deletions, and the
-      # `digest` concurrency group above stops this run starting before that one
-      # finished - so this lists an empty directory and writes nothing.
-      #
-      # BEFORE this job's own probe, and that ordering is the whole of why a head
-      # still has one writer a run. The probe below writes a segment; a fold that
-      # ran after it would find that segment and write the day file here, and
-      # `assemble` would then write the same file again. The fold is idempotent
-      # so nothing would be lost - but two head writers in one run is the shape
-      # this design exists to remove, and a third arrives by looking like the
-      # second.
-      #
-      # Never `prune.yml`. That workflow commits nothing on 29 of 30 wakes,
-      # stages only `corpus` on the day it is due, and ends in a force push, so a
-      # compaction there would delete every waiting segment from a runner that
-      # then throws itself away.
-      - name: Fold any segments an earlier run left behind
-        run: python -m idhazh compact
 
       # Every job draws its own runner, so every job records the one it drew. A
       # run is only as fast as its slowest job, and until now only `work` said
@@ -370,11 +372,15 @@ jobs:
           bash .github/scripts/commit-and-push.sh
           state
 
+      # `error` rather than the default: `assemble` downloads this by name and
+      # cannot be built without it, so a plan job that finishes having written no
+      # plan has to fail here, where the cause is, and not one job later.
       - uses: actions/upload-artifact@v7
         with:
           name: plan
           path: backend/var/run/${{ steps.decide.outputs.date }}/plan.json
           retention-days: 1
+          if-no-files-found: error
 
   # This bound is the backstop, not the budget, and it is written in exactly one
   # place: `run.shard_timeout_minutes` in config/idhazh.json, which the plan job
@@ -1063,9 +1069,20 @@ jobs:
 
   assemble:
     needs: [plan, work]
-    # Always runs, even when a worker failed. A run that publishes nothing on a
+    # Runs even when a worker failed, because a run that publishes nothing on a
     # bad day is a run whose bad days are invisible.
-    if: always()
+    #
+    # `always()` said more than that and started this job when the PLAN failed
+    # too. There is nothing to assemble then - the plan is the artifact the step
+    # below downloads by name - so the run's one real failure arrived with a
+    # second, louder one stacked on top of it about a missing artifact, and the
+    # job that reported the cause was not the one anybody opened. A cancelled
+    # run started it as well.
+    #
+    # The status function is what keeps the failed-worker path: without one,
+    # GitHub applies an implicit `success()` and the workers would have to pass
+    # too.
+    if: ${{ !cancelled() && needs.plan.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
