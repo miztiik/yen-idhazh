@@ -34,8 +34,9 @@ import {
 	machineCounters,
 	machineLimits,
 	type MachineLimits,
-	type RunCounters
-} from '../src/lib/server/runtime-counters';
+	type MachineRun
+} from '../src/lib/server/machine-counters';
+import { ledgers, plan, type ShardReading } from './support/machine-rows';
 import { observabilityConfig, runConfig } from '../src/lib/server/config';
 
 /** `config/idhazh.json` read straight off disk, so a test's expectation comes
@@ -62,31 +63,9 @@ const LIMITS: MachineLimits = {
 	jobTimeoutSeconds: CONFIG.run.shard_timeout_minutes * 60
 };
 
-/** Every cell the counters ledger carries, so a fixture row is a whole row. */
-function counterRow(cells: Partial<Record<string, string | number>>): Record<string, string> {
-	const blank: Record<string, string> = {
-		version: '2026-08-31',
-		date: '2026-09-04',
-		run_id: '2026-09-04-1',
-		shard: '0',
-		shards: '2',
-		scraped_at: '2026-09-04T10:00:00Z',
-		prompt_tokens_total: '',
-		prompt_tokens_cached_total: '',
-		prompt_seconds_total: '',
-		tokens_predicted_total: '',
-		tokens_predicted_seconds_total: '',
-		n_decode_total: '',
-		n_tokens_max: '',
-		n_busy_slots_per_decode: '',
-		job_seconds: '',
-		cpu_model: '',
-		cpu_busy_pct: '',
-		peak_rss_bytes: '',
-		model_load_ms: ''
-	};
-	for (const [name, value] of Object.entries(cells)) blank[name] = String(value);
-	return blank;
+/** One shard of the fixture run, with the day and run every figure sits under. */
+function shardOf(reading: ShardReading): ShardReading {
+	return { date: '2026-09-04', runId: '2026-09-04-1', ...reading };
 }
 
 function healthRow(cells: Partial<Record<string, string | number>>): Record<string, string> {
@@ -109,43 +88,44 @@ function healthRow(cells: Partial<Record<string, string | number>>): Record<stri
 
 /** Two shards whose figures were chosen so every derived number can be checked
  * with a pencil: shard 0 reads 4x as fast as shard 1 and finishes sooner. */
-const TWO_SHARDS = [
-	counterRow({
+const TWO_SHARDS: ShardReading[] = [
+	{
 		shard: 0,
-		prompt_tokens_total: 8000,
-		prompt_tokens_cached_total: 2000,
-		prompt_seconds_total: 200,
-		tokens_predicted_total: 1000,
-		tokens_predicted_seconds_total: 200,
-		n_decode_total: 1010,
-		n_tokens_max: 4096,
-		n_busy_slots_per_decode: 1.0,
-		job_seconds: 600,
-		cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C',
-		cpu_busy_pct: 95,
-		peak_rss_bytes: 8_000_000_000,
-		model_load_ms: 3000
-	}),
-	counterRow({
+		serverPromptTokens: 8000,
+		serverPromptSeconds: 200,
+		cachedTokens: 2000,
+		writtenTokens: 1000,
+		writeSeconds: 200,
+		longestSequence: 4096,
+		jobSeconds: 600,
+		cpuModel: 'INTEL(R) XEON(R) PLATINUM 8573C',
+		cpuBusyPct: 95,
+		peakRssBytes: 8_000_000_000,
+		modelLoadMs: 3000
+	},
+	{
 		shard: 1,
-		prompt_tokens_total: 2000,
-		prompt_tokens_cached_total: 2000,
-		prompt_seconds_total: 200,
-		tokens_predicted_total: 1000,
-		tokens_predicted_seconds_total: 400,
-		n_decode_total: 1010,
-		n_tokens_max: 2048,
-		n_busy_slots_per_decode: 1.0,
-		job_seconds: 1200,
-		cpu_model: 'AMD EPYC 7763 64-Core Processor',
-		cpu_busy_pct: 88,
-		peak_rss_bytes: 9_000_000_000,
-		model_load_ms: 4000
-	})
+		serverPromptTokens: 2000,
+		serverPromptSeconds: 200,
+		cachedTokens: 2000,
+		writtenTokens: 1000,
+		writeSeconds: 400,
+		longestSequence: 2048,
+		jobSeconds: 1200,
+		cpuModel: 'AMD EPYC 7763 64-Core Processor',
+		cpuBusyPct: 88,
+		peakRssBytes: 9_000_000_000,
+		modelLoadMs: 4000
+	}
 ];
 
-function onlyRun(rows: Record<string, string>[]): RunCounters {
-	const { runs, refused } = machineCounters(rows, [], LIMITS);
+function runsOf(readings: ShardReading[], planned: [string, number][] = [['2026-09-04-1', 2]]) {
+	const { hosts, health } = ledgers(readings.map(shardOf));
+	return machineCounters(hosts, health, plan(...planned), LIMITS);
+}
+
+function onlyRun(readings: ShardReading[]): MachineRun {
+	const { runs, refused } = runsOf(readings);
 	expect(refused, 'the fixture was refused').toEqual([]);
 	expect(runs).toHaveLength(1);
 	return runs[0];
@@ -199,7 +179,7 @@ test.describe('the shard board', () => {
 	});
 
 	test('a shard that reported no clock is last and is not read as zero', () => {
-		const mixed = onlyRun([TWO_SHARDS[0], counterRow({ shard: 1, prompt_tokens_total: 10 })]);
+		const mixed = onlyRun([TWO_SHARDS[0], { shard: 1, serverPromptTokens: 10 }]);
 		const view = shardBoard(mixed, LIMITS.jobTimeoutSeconds);
 		expect(view.rows.map((row) => row.shard)).toEqual([0, 1]);
 		expect(view.rows[1].jobSeconds).toBeNull();
@@ -217,10 +197,19 @@ test.describe('the shard board', () => {
 
 test.describe('the prompt cache', () => {
 	test('a day is the sum of its runs, in absolute tokens, with its own share', () => {
-		const second = TWO_SHARDS.map((row) =>
-			counterRow({ ...row, run_id: '2026-09-04-2', prompt_tokens_total: 1000, prompt_tokens_cached_total: 1000 })
+		const second = TWO_SHARDS.map((reading) => ({
+			...reading,
+			runId: '2026-09-04-2',
+			serverPromptTokens: 1000,
+			cachedTokens: 1000
+		}));
+		const { runs } = runsOf(
+			[...TWO_SHARDS, ...second],
+			[
+				['2026-09-04-1', 2],
+				['2026-09-04-2', 2]
+			]
 		);
-		const { runs } = machineCounters([...TWO_SHARDS, ...second], [], LIMITS);
 		const [day] = cacheByDay(runs);
 		// Run one read 8,000 + 2,000 and cached 2,000 + 2,000; run two read 1,000
 		// twice and cached 1,000 twice.
@@ -231,7 +220,7 @@ test.describe('the prompt cache', () => {
 	});
 
 	test('a run that reported neither count is left out rather than counted as nothing', () => {
-		expect(cacheByDay(machineCounters([counterRow({ shards: 1 })], [], LIMITS).runs)).toEqual([]);
+		expect(cacheByDay(runsOf([{ shard: 0 }], [['2026-09-04-1', 1]]).runs)).toEqual([]);
 	});
 });
 
@@ -435,24 +424,20 @@ test.describe('the committed ledger, read as the page reads it', () => {
 	});
 
 	test('a run the reader refuses is named, never quietly dropped', () => {
-		// The committed ledger holds at least one run whose rows cannot be made
-		// into one run - two workflow runs computed the same id. The page prints
-		// the reason; this asserts the reason exists and is words.
-		const { refused } = machineCounters(
+		// Two machine records for one shard, each naming a different server, is a
+		// run whose rows cannot be made into one run. The page prints the reason;
+		// this asserts the reason exists and is words.
+		const { hosts, health } = ledgers(
 			[
 				...TWO_SHARDS,
-				counterRow({
-					shard: 1,
-					prompt_tokens_total: 1,
-					prompt_seconds_total: 1,
-					scraped_at: '2026-09-04T11:00:00Z'
-				})
-			],
-			[],
-			limits
+				{ shard: 1, serverPromptTokens: 1, serverPromptSeconds: 1 }
+			].map(shardOf)
 		);
+		const { refused } = machineCounters(hosts, health, plan(['2026-09-04-1', 2]), limits);
 		expect(refused).toHaveLength(1);
-		expect(refused[0].rows).toBe(3);
+		// Six, because each of the three readings states one machine row and one item
+		// row, and the count a refusal reports is what it could not read.
+		expect(refused[0].rows).toBe(6);
 		expect(refused[0].why.length).toBeGreaterThan(20);
 		expect(refused[0].why).toContain('shard 1');
 	});

@@ -266,8 +266,19 @@ function writeItemHealthCanary() {
 	 * instead, which keeps the stack adding up to the item rather than drawing a
 	 * band tens of seconds below the axis.
 	 *
-	 * `cpu_model` is the processor the shard counters below already name, so one
-	 * page cannot say the run drew two different machines.
+	 * `cpu_model` is the machine record's fallback and not its instrument: the
+	 * Hardware page reads the processor off `state/host-fingerprint/` and only
+	 * reaches for this cell on a shard that record never reached, so a row here
+	 * may name a different machine than the record without the page saying two
+	 * things at once.
+	 *
+	 * The three memory cells and `n_ctx_configured` are fixture as well, and they
+	 * are what the Hardware page folds per shard: a high-water for the server,
+	 * one for the Python process, one for the whole cgroup, and the window the
+	 * prompt had to fit. Each one ends in the item id's own spread, so a reader
+	 * checking the page against this file can see which row a figure came from.
+	 * `n_ctx_configured` is the committed `inference.n_ctx`, because a fixture
+	 * that disagreed with the config would draw a context share no run had.
 	 */
 	const clock = (rowDate, run, id, [fetchMs, extractMs, summarizeMs], model, calls) => {
 		const spread = [...id].reduce((total, letter) => total + letter.charCodeAt(0), 0);
@@ -283,8 +294,13 @@ function writeItemHealthCanary() {
 		const planMs = summary ? Math.round(summaryMs * 0.18) : '';
 		const totalMs = fetchMs + extractMs + summarizeMs + faithfulness + gap;
 		const waitMs = spread % 900;
+		const seat = place(rowDate, run, id, totalMs, waitMs);
+		// The one shard the machine record reached with no processor on it. Its item
+		// rows name none either, so the fallback cannot quietly fill the cell in and
+		// the board has a row that says "Not recorded".
+		const unrecorded = `${rowDate}-${run}-${seat.shard}` === `${date}-2-1`;
 		return {
-			...place(rowDate, run, id, totalMs, waitMs),
+			...seat,
 			queue_wait_ms: waitMs,
 			faithfulness_ms: faithfulness,
 			model_wait_ms: Math.round(summarizeMs * 0.02),
@@ -301,9 +317,13 @@ function writeItemHealthCanary() {
 			label_decode_tokens_per_s: label ? rate(label[4], label[2]) : '',
 			summary_prefill_tokens_per_s: summary ? rate(summary[3] - summary[5], summary[1]) : '',
 			summary_decode_tokens_per_s: summary ? rate(summary[4], summary[2]) : '',
-			cpu_model: 'AMD EPYC 7763 64-Core Processor',
+			cpu_model: unrecorded ? '' : 'AMD EPYC 7763 64-Core Processor',
 			cpu_busy_pct: Math.round((60 + (spread % 3500) / 100) * 100) / 100,
-			load_1m: Math.round((2 + (spread % 600) / 100) * 100) / 100
+			load_1m: Math.round((2 + (spread % 600) / 100) * 100) / 100,
+			llama_rss_peak_bytes: 12000000000 + (spread % 1000) * 1000000,
+			python_rss_bytes: 1700000000 + (spread % 1000) * 100000,
+			cgroup_peak_bytes: 13000000000 + (spread % 1000) * 1000000,
+			n_ctx_configured: 65536
 		};
 	};
 
@@ -355,9 +375,9 @@ function writeItemHealthCanary() {
 	};
 
 	/** An item the extractor threw away. Not a failure: dropping a page that is
-	 * not an article is the job, so the row is `ok` and the failed-item list
-	 * stays empty. It fetched and it parsed, so those two stages have a number.
-	 * The model never saw it, so summarize has none.
+	 * not an article is the job, so the row is `ok` and it is not on the
+	 * failed-item list. It fetched and it parsed, so those two stages have a
+	 * number. The model never saw it, so summarize has none.
 	 *
 	 * It carries an item clock all the same, because it really did occupy a shard
 	 * for as long as it took. That is the state the run timeline draws as a short
@@ -377,6 +397,46 @@ function writeItemHealthCanary() {
 			queue_wait_ms: 0,
 			item_total_ms: fetchMs + extractMs + 40,
 			stage_gap_ms: 40
+		});
+
+	/** An item the model read whole and then refused to answer for.
+	 *
+	 * **The five cost cells on a failed row are the state this row exists for.**
+	 * A refused reply costs the server the whole prompt, and until 2026-09-13 the
+	 * failure path threw that cost away - so the item ledger under-counted a
+	 * shard's reading while llama-server counted it. That is the one defect two
+	 * independent clocks catch and one clock cannot, and a fixture where every
+	 * row reads at the same rate could never put the panel in its red state.
+	 *
+	 * So this row reads deliberately fast: 1,600 tokens in 64 seconds, or 25.00 a
+	 * second, against about 11 on every other row of the day. That is inside the
+	 * 9.80 to 42.58 a second one recorded run measured across its own shards, so
+	 * it is a rate the fleet really runs at, and it is near enough the rest that
+	 * the throughput axis still ticks without falling back to zero. Its shard
+	 * sits 1.1 percent from the server WITH it and 52 percent out without it,
+	 * which is what lets a test blank five cells and watch the panel turn.
+	 *
+	 * Its three stage numbers are this day's own medians, so adding it moves
+	 * none of them.
+	 */
+	const refused = (rowDate, run, id, [fetchMs, extractMs, summarizeMs], model) =>
+		line({
+			...item(rowDate, run, id),
+			stage: 'summarize',
+			outcome: 'failed',
+			code: 'model_refused',
+			source_chars: 9400,
+			source_words: 1410,
+			fetch_ms: fetchMs,
+			extract_ms: extractMs,
+			summarize_ms: summarizeMs,
+			prefill_ms: model[0],
+			decode_ms: model[1],
+			input_tokens: model[2],
+			output_tokens: model[3],
+			cached_tokens: model[4],
+			...extraction(id),
+			...clock(rowDate, run, id, [fetchMs, extractMs, summarizeMs], model)
 		});
 
 	/** What the cap cost each source, so the source table has a table to draw.
@@ -570,10 +630,17 @@ function writeItemHealthCanary() {
 			]
 		),
 		// A whole page parsed, then thrown away for boilerplate. It makes the
-		// newest day a partly timed one for summarize: four items of five. Its
+		// newest day a partly timed one for summarize: five items of six. Its
 		// fetch and extract are that day's own medians, so neither median moves
-		// and the fifth item only widens the denominator.
+		// and the sixth item only widens the denominator.
 		dropped(date, 2, 'ai-05', 'boilerplate', 1180, 174, 200, 30),
+		// The model read this one whole and refused to answer. It shares shard 0 of
+		// the newest run with ai-03, which is what gives the two clocks panel a
+		// shard whose answer changes when one row's cost goes missing. It is also
+		// the only failed row this fixture writes, so the failed-item list, the
+		// failure code column and one stage's failure count draw something rather
+		// than their empty states.
+		refused(date, 2, 'ai-09', [200, 30, 700], [64000, 10300, 1700, 60, 100]),
 		...sourceCutRows()
 	];
 	// Forty days back, on the day the counters fixture already uses for its
@@ -611,148 +678,6 @@ function writeItemHealthCanary() {
 		mkdirSync(join(dir, day.slice(0, 4), day.slice(5, 7)), { recursive: true });
 		writeFileSync(target, [COLUMNS.join(','), ...dayRows].join('\n') + '\n');
 	}
-}
-
-/** What llama-server counted, for the two canary runs the item ledger already has.
- *
- * Without this file the Machine route draws nothing at all in the browser
- * suite, so every panel on it would be asserted only in its empty state - a
- * canary column nothing exercises is a chart state no test can reach.
- *
- * The numbers are chosen so three states are on the page at once and each one
- * can be checked with a pencil:
- *
- *  - **A real read spread.** Shard 0 of the newest run reads 800 prompt tokens
- *    in 40 seconds and shard 1 reads 253 in 52, which is 20.00 against 4.87 -
- *    4.11x apart inside one run, which is the whole reason the route exists.
- *  - **The two clocks agreeing without agreeing exactly.** The item rows above
- *    give run `<date>-2` 1,053 read tokens over 91.029 seconds, or 11.57 a
- *    second. This file gives the server 1,053 over 92, or 11.45 - 1.1 percent
- *    apart, inside the 5 percent `reconcile_prefill.py` gates on. Equal figures
- *    would pass a check that had never run.
- *  - **Absence drawn as absence.** Shard 1 of that run carries no `job_seconds`,
- *    no `cpu_model` and none of the three host cells, exactly as 24 of the 54
- *    committed rows do, because each of those columns landed after the ledger
- *    started. The board prints a dash and ranks that shard last rather than
- *    treating a blank clock as a fast one.
- *  - **A run only the widest span can reach.** One run sits 40 days back, so it
- *    is drawn at 90 days and at no other preset. Without it every preset draws
- *    the same runs on this fixture, and a route that wired the day count onto
- *    its surfaces while ignoring the window entirely would pass the window
- *    oracle - which is the one bug that oracle exists to catch.
- */
-function writeRuntimeCountersCanary() {
-	const year = newestDirectory(ROOT);
-	const month = newestDirectory(join(ROOT, year));
-	const day = newestDirectory(join(ROOT, year, month));
-	const date = `${year}-${month}-${day}`;
-	const back = (days) => {
-		const at = new Date(`${date}T00:00:00Z`);
-		at.setUTCDate(at.getUTCDate() - days);
-		return at.toISOString().slice(0, 10);
-	};
-	const before = back(1);
-	// Outside 7, 14 and 30 days, inside 90. The default window is 30, so nothing
-	// already pinned to this fixture moves.
-	const longAgo = back(40);
-
-	// Named cells for the same reason the item-health canary uses them: a column
-	// added to the row must not shift every number one place to the left.
-	const COUNTER_COLUMNS = [
-		'version', 'date', 'run_id', 'shard', 'shards', 'scraped_at',
-		'prompt_tokens_total', 'prompt_tokens_cached_total', 'prompt_seconds_total',
-		'tokens_predicted_total', 'tokens_predicted_seconds_total', 'n_decode_total',
-		'n_tokens_max', 'n_busy_slots_per_decode', 'job_seconds', 'cpu_model',
-		'cpu_busy_pct', 'peak_rss_bytes', 'model_load_ms', 'n_ctx_configured',
-		'python_peak_rss_bytes', 'cgroup_peak_bytes', 'job'
-	];
-	const row = (cells) => COUNTER_COLUMNS.map((name) => cells[name] ?? '').join(',');
-	const shard = (rowDate, run, index, cells) => ({
-		version: '2026-08-30',
-		date: rowDate,
-		run_id: `${rowDate}-${run}`,
-		shard: index,
-		shards: 2,
-		scraped_at: `${rowDate}T2${run}:0${index}:00Z`,
-		n_busy_slots_per_decode: '1.0',
-		// This page is the `work` series and only that series. The visuals job
-		// writes counters rows of its own from 2026-09-12 and `machine`
-		// keeps them out of the published mirror, so a canary carrying one would
-		// build a state the real site cannot reach.
-		job: 'work',
-		...cells
-	});
-
-	writeFileSync(join(STATE, 'runtime-counters.csv'), [
-		COUNTER_COLUMNS.join(','),
-		// The newest run. Shard 0 is fully instrumented; shard 1 is a shard that
-		// ran before the host cells existed.
-		row(shard(date, 2, 0, {
-			prompt_tokens_total: 800, prompt_tokens_cached_total: 700, prompt_seconds_total: 40,
-			tokens_predicted_total: 296, tokens_predicted_seconds_total: 60, n_decode_total: 299,
-			n_tokens_max: 4096, job_seconds: 900,
-			cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C',
-			cpu_busy_pct: 94.5, peak_rss_bytes: 12990730240, model_load_ms: 2470.828,
-			// cgroup_peak_bytes stays empty on purpose: /sys/fs/cgroup/memory.peak has
-			// measured absent on every GitHub-hosted runner this project has read.
-			n_ctx_configured: 8192, python_peak_rss_bytes: 1739882496
-		})),
-		row(shard(date, 2, 1, {
-			prompt_tokens_total: 253, prompt_tokens_cached_total: 583, prompt_seconds_total: 52,
-			tokens_predicted_total: 22, tokens_predicted_seconds_total: 4, n_decode_total: 23,
-			n_tokens_max: 2048
-		})),
-		// A second run on the same day, so the cache chart has a column to sum and
-		// the context panel has more than one bar to compare.
-		row(shard(date, 1, 0, {
-			prompt_tokens_total: 942, prompt_tokens_cached_total: 0, prompt_seconds_total: 79.1,
-			tokens_predicted_total: 170, tokens_predicted_seconds_total: 29.062, n_decode_total: 172,
-			n_tokens_max: 1112, job_seconds: 640,
-			cpu_model: 'AMD EPYC 7763 64-Core Processor',
-			cpu_busy_pct: 88.4, peak_rss_bytes: 10804060160, model_load_ms: 3881.795
-		})),
-		row(shard(date, 1, 1, {
-			prompt_tokens_total: 975, prompt_tokens_cached_total: 900, prompt_seconds_total: 7.12,
-			tokens_predicted_total: 167, tokens_predicted_seconds_total: 28.206, n_decode_total: 169,
-			n_tokens_max: 1875, job_seconds: 610,
-			cpu_model: 'AMD EPYC 7763 64-Core Processor',
-			cpu_busy_pct: 91.2, peak_rss_bytes: 11779497984, model_load_ms: 3769.648
-		})),
-		// The day before, so the cache chart draws a second column and a trend
-		// rather than one bar with nothing to be a trend against.
-		row(shard(before, 1, 0, {
-			prompt_tokens_total: 1497, prompt_tokens_cached_total: 900, prompt_seconds_total: 53.309,
-			tokens_predicted_total: 215, tokens_predicted_seconds_total: 40.21, n_decode_total: 218,
-			n_tokens_max: 1712, job_seconds: 720,
-			cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C',
-			cpu_busy_pct: 93.1, peak_rss_bytes: 13072498688, model_load_ms: 2418.609
-		})),
-		row(shard(before, 1, 1, {
-			prompt_tokens_total: 1765, prompt_tokens_cached_total: 900, prompt_seconds_total: 77.778,
-			tokens_predicted_total: 230, tokens_predicted_seconds_total: 43.436, n_decode_total: 233,
-			n_tokens_max: 1995, job_seconds: 780,
-			cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C',
-			cpu_busy_pct: 92.8, peak_rss_bytes: 12990730240, model_load_ms: 2470.828
-		})),
-		// Forty days back, so only the widest preset reaches it. Its readings sit
-		// outside the span of every other run - the lowest processor share, the
-		// highest memory and the slowest load - so widening the window moves the
-		// three host spans as well as adding a bar and a cache column.
-		row(shard(longAgo, 1, 0, {
-			prompt_tokens_total: 1210, prompt_tokens_cached_total: 300, prompt_seconds_total: 96.4,
-			tokens_predicted_total: 188, tokens_predicted_seconds_total: 35.5, n_decode_total: 190,
-			n_tokens_max: 3210, job_seconds: 1020,
-			cpu_model: 'AMD EPYC 7763 64-Core Processor',
-			cpu_busy_pct: 61.7, peak_rss_bytes: 14495514624, model_load_ms: 6120.5
-		})),
-		row(shard(longAgo, 1, 1, {
-			prompt_tokens_total: 640, prompt_tokens_cached_total: 120, prompt_seconds_total: 51.2,
-			tokens_predicted_total: 96, tokens_predicted_seconds_total: 18.9, n_decode_total: 98,
-			n_tokens_max: 2740, job_seconds: 940,
-			cpu_model: 'AMD EPYC 7763 64-Core Processor',
-			cpu_busy_pct: 64.3, peak_rss_bytes: 13958643712, model_load_ms: 5880.25
-		}))
-	].join('\n') + '\n');
 }
 
 /** One traced run's span rollup, so the console's span breakdown has a run to
@@ -823,9 +748,20 @@ function writeSpanRollupCanary() {
  * omitted; and one probe used a buffer smaller than that machine's L3, so the
  * reading has to say it measured cache rather than memory.
  *
- * Shard 1 of the newest run is deliberately left out. Its counters row carries
- * no processor name either, so the split panel has to give it a group of its
- * own in the reserved grey rather than folding it into a named machine.
+ * **This file is also the machine half of the Hardware page**, and the four
+ * cells after `measured_at` are the only place the server's own counters and
+ * the job clock reach a screen. Every `work` row's `server_prompt_tokens` over
+ * its `server_prompt_seconds` lands 1.0 to 1.1 percent from the same shard's
+ * rate in the item ledger, inside the 5 percent the two clocks panel allows.
+ * Equal figures would pass a check that had never run, so the gap is put there
+ * on purpose and every shard carries one.
+ *
+ * Three states nothing else can reach are written here as well. Shard 1 of the
+ * newest run carries the server's counters and neither clock, so the board has
+ * a dash to rank last. The two runs forty days back carry both clocks and no
+ * server counters, so the two clocks panel has a run it compared nothing on.
+ * And the day two days back keeps an empty file, so a quiet day is not an
+ * incident.
  */
 function writeHostFingerprintCanary() {
 	const COLUMNS = [
@@ -833,7 +769,8 @@ function writeHostFingerprintCanary() {
 		'cpu_family', 'cpu_model_number', 'cpu_stepping', 'microcode', 'cores', 'threads',
 		'l3_cache_bytes', 'mhz_max', 'mhz_at_probe', 'flags', 'boot_seconds', 'memcpy_gib_s',
 		'memcpy_probe_mib', 'vm_size', 'vm_location', 'vm_zone', 'vm_fault_domain', 'runner_name',
-		'measured_at'
+		'measured_at', 'model_load_ms', 'job_seconds', 'server_prompt_tokens',
+		'server_prompt_seconds'
 	];
 	const year = newestDirectory(ROOT);
 	const month = newestDirectory(join(ROOT, year));
@@ -844,6 +781,9 @@ function writeHostFingerprintCanary() {
 		at.setUTCDate(at.getUTCDate() - days);
 		return at.toISOString().slice(0, 10);
 	};
+	// Outside 7, 14 and 30 days, inside 90 - the same day the item ledger puts
+	// its two tail runs on.
+	const longAgo = back(40);
 
 	// The EPYC reports none of the watched AVX-512 entries, which is what the
 	// fleet's most common machine really does.
@@ -874,7 +814,7 @@ function writeHostFingerprintCanary() {
 	};
 
 	const line = (cells) => COLUMNS.map((name) => cells[name] ?? '').join(',');
-	const probe = (rowDate, run, job, index, machine) =>
+	const probe = (rowDate, run, job, index, machine, clocks) =>
 		line({
 			version: '2026-09-17',
 			date: rowDate,
@@ -885,23 +825,72 @@ function writeHostFingerprintCanary() {
 			boot_seconds: 410.5,
 			runner_name: `runner-${job}-${index}`,
 			measured_at: `${rowDate}T2${run}:0${index}:00Z`,
-			...machine
+			...machine,
+			...clocks
+		});
+
+	/** The half a job files after the work, with no probe behind it.
+	 *
+	 * A job writes its record in two halves at one key - the probe before the
+	 * work, the clocks and the server's counters after it - so a shard whose
+	 * probe never landed carries the clocks and no machine at all.
+	 */
+	const clocksOnly = (rowDate, run, job, index, clocks) =>
+		line({
+			version: '2026-09-17',
+			date: rowDate,
+			run_id: `${rowDate}-${run}`,
+			job,
+			shard: index,
+			...clocks
 		});
 
 	const rows = [
-		// The newest run: three jobs, two machines, and shard 1 recorded on neither.
+		// The newest run: three jobs and two machines.
 		probe(date, 2, 'plan', 0, EPYC),
-		probe(date, 2, 'work', 0, XEON),
+		probe(date, 2, 'work', 0, XEON, {
+			model_load_ms: 2470.828, job_seconds: 900,
+			server_prompt_tokens: 1700, server_prompt_seconds: 73.72
+		}),
+		// Absence drawn as absence. This shard carries the server's two counters and
+		// nothing else - no clock, no weights load, no processor - exactly as every
+		// row written before those columns landed. The board prints a dash for its
+		// job, says "Not recorded" for its machine and ranks it last, rather than
+		// reading a blank clock as a fast one.
+		clocksOnly(date, 2, 'work', 1, {
+			server_prompt_tokens: 962, server_prompt_seconds: 83.73
+		}),
 		probe(date, 2, 'assemble', 0, EPYC),
 		// Older runs inside the window, so the fleet count has more than one kind
 		// and a denominator. Far below the drawing threshold on purpose: that is
 		// the state the list-and-a-sentence exists for.
 		probe(date, 1, 'plan', 0, EPYC),
-		probe(date, 1, 'work', 0, EPYC),
-		probe(date, 1, 'work', 1, EPYC),
+		probe(date, 1, 'work', 0, EPYC, {
+			model_load_ms: 2309.44, job_seconds: 812,
+			server_prompt_tokens: 950, server_prompt_seconds: 80.65
+		}),
+		probe(date, 1, 'work', 1, EPYC, {
+			model_load_ms: 2298.17, job_seconds: 795,
+			server_prompt_tokens: 76, server_prompt_seconds: 7.29
+		}),
 		probe(back(1), 1, 'plan', 0, XEON),
-		probe(back(1), 1, 'work', 0, XEON),
-		probe(back(1), 1, 'assemble', 0, EPYC)
+		probe(back(1), 1, 'work', 0, XEON, {
+			model_load_ms: 2512.06, job_seconds: 868,
+			server_prompt_tokens: 1300, server_prompt_seconds: 117.74
+		}),
+		probe(back(1), 1, 'work', 1, XEON, {
+			model_load_ms: 2498.33, job_seconds: 851,
+			server_prompt_tokens: 860, server_prompt_seconds: 78.18
+		}),
+		probe(back(1), 1, 'assemble', 0, EPYC),
+		// Forty days back, on the day the item ledger puts its widest-preset runs.
+		// They carry a job clock and a weights load and no server counters at all,
+		// which is the state every run before the server counters landed is in: the
+		// board draws them and the two clocks panel says it compared nothing.
+		probe(longAgo, 1, 'work', 0, EPYC, { model_load_ms: 2290.5, job_seconds: 780 }),
+		probe(longAgo, 1, 'work', 1, EPYC, { model_load_ms: 2284.9, job_seconds: 774 }),
+		probe(longAgo, 2, 'work', 0, XEON, { model_load_ms: 2602.7, job_seconds: 836 }),
+		probe(longAgo, 2, 'work', 1, XEON, { model_load_ms: 2588.1, job_seconds: 829 })
 	];
 
 	// A day tree, the shape a bounded window reads.
@@ -928,7 +917,6 @@ function writeHostFingerprintCanary() {
 }
 
 writeItemHealthCanary();
-writeRuntimeCountersCanary();
 writeSpanRollupCanary();
 writeHostFingerprintCanary();
 execFileSync(

@@ -9,10 +9,9 @@ import pytest
 from conftest import FIXTURES_DIR
 
 from idhazh import config, ledger
-from idhazh.contracts import runtime_counters
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.run_plan import RunPlan
-from idhazh.contracts.runtime_counters import RuntimeCountersRow, ServerJob
 from idhazh.stages import compact as compact_stage
 from idhazh.telemetry import silicon
 
@@ -24,6 +23,16 @@ SERVER_LOG = FIXTURES_DIR / "runtime" / "2026-08-29-3-shard-0.server-head.txt"
 #: prompt counters on the host row are read from a real scrape for the same
 #: reason: the wire names are llama.cpp's, not ours.
 SERVER_METRICS = FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-0.prom"
+
+#: Every committed scrape of one run, and every committed server head of
+#: another. The oracles below are parametrized over them, so an empty glob would
+#: be a green test that collected no cases - which is what the first spelling of
+#: the server head did, because `.gitignore` carries `*.log`.
+METRICS_CAPTURES = sorted((FIXTURES_DIR / "runtime").glob("2026-08-26-5-shard-*.prom"))
+
+SERVER_LOG_CAPTURES = sorted(
+    (FIXTURES_DIR / "runtime").glob("2026-08-29-3-shard-*.server-head.txt")
+)
 
 
 def a_plan() -> RunPlan:
@@ -48,6 +57,7 @@ def a_probe() -> config.Settings:
     settings.app.observability.host_fingerprint = True
     settings.app.observability.host_fingerprint_bandwidth_mib = 0
     return settings
+
 
 CPUINFO_XEON = """processor\t: 0
 vendor_id\t: GenuineIntel
@@ -368,9 +378,7 @@ def test_a_day_file_written_before_the_two_prompt_cells_still_folds(tmp_path: Pa
     assert columns == list(HostFingerprintRow.csv_columns())
     rows = {
         cells["shard"]: cells
-        for cells in (
-            dict(zip(columns, line.split(","), strict=True)) for line in body
-        )
+        for cells in (dict(zip(columns, line.split(","), strict=True)) for line in body)
     }
     assert rows["0"]["server_prompt_tokens"] == "", "a reading nobody took is empty, not zero"
     assert rows["0"]["job_seconds"] == "5550", "the widening may not cost the cells already there"
@@ -511,54 +519,106 @@ def test_the_switch_being_off_records_no_clock_either(tmp_path: Path) -> None:
     assert not ledger.segment_files(tmp_path)
 
 
-def test_both_writers_of_the_two_job_cells_reach_the_same_arithmetic() -> None:
-    """Two ledgers carry these cells today, and two derivations would drift.
+def test_the_two_job_cells_are_decoded_from_a_real_capture() -> None:
+    """The four-field llama-server stamp is what a second copy of this would get wrong.
 
-    `RuntimeCountersRow` has held them since 2026-08-29 and the host row holds
-    them now, so the subtraction and the log decoding live once in
-    `contracts.runtime_counters` and both writers call it. Driven over a real
-    capture, because the four-field llama-server stamp is what a second copy
-    would get wrong.
+    `model_load_ms` is the gap between the two lines llama-server brackets its
+    load with, and `job_seconds` is the job's own clock against its scrape. Both
+    are driven over a real capture rather than a hand-typed line, because the
+    stamp's last field is microseconds and reads as milliseconds to anyone who
+    guesses.
     """
     text = SERVER_LOG.read_text(encoding="utf-8")
-    counters = RuntimeCountersRow.from_metrics_text(
-        "",
-        date="2026-09-16",
-        run_id="2026-09-16-1",
-        shard=0,
-        shards=1,
-        scraped_at="2026-09-16T04:11:02Z",
-        job_started_at=1789531312,
-        server_log=text,
-    )
 
-    assert runtime_counters.model_load_ms(text) == counters.model_load_ms
-    assert runtime_counters.job_seconds("2026-09-16T04:11:02Z", 1789531312) == counters.job_seconds
-    assert counters.model_load_ms is not None and counters.model_load_ms > 0
+    loaded = silicon.model_load_ms(text)
+
+    assert loaded is not None and 1000 < loaded < 60_000
+    assert silicon.job_seconds("2026-09-16T04:11:02Z", 1789531312) == 550
+    assert silicon.job_seconds("2026-09-16T04:11:02Z", None) is None
+    assert silicon.model_load_ms("load_model: loading model\n") is None, (
+        "one end of the bracket is not a load that took no time"
+    )
 
 
 def test_the_two_prompt_counters_are_read_off_one_table_and_never_a_second_copy() -> None:
-    """The host row's second instrument, held against the row that has held it since August.
+    """The host row's second instrument, over a real scrape.
 
-    Both readings come off `SERIES`, so a llama.cpp rename is one edit and shows
-    up as two empty cells rather than as two numbers that disagree with the row
-    beside them. Driven over a real scrape: the wire names are llama.cpp's.
+    Both readings come off one table of wire names, so a llama.cpp rename is one
+    edit and shows up as two empty cells rather than as two numbers that disagree
+    with the item rows beside them.
     """
     text = SERVER_METRICS.read_text(encoding="utf-8")
-    counters = RuntimeCountersRow.from_metrics_text(
-        text,
-        date="2026-09-16",
-        run_id="2026-09-16-1",
-        shard=0,
-        shards=1,
-        scraped_at="2026-09-16T04:11:02Z",
-    )
 
-    tokens, seconds = runtime_counters.server_prompt_totals(text)
+    tokens, seconds = silicon.server_prompt_totals(text)
 
     assert (tokens, seconds) == (30538, 2795.15)
-    assert tokens == counters.prompt_tokens_total
-    assert seconds == counters.prompt_seconds_total
+
+
+def test_every_runtime_capture_an_oracle_reads_is_committed() -> None:
+    """A parametrized oracle over an empty glob is green and proves nothing.
+
+    `.gitignore` carries `*.log`, so the first spelling of the server-log
+    capture was ignored the moment it was named after the file it came from -
+    and the test over it collected zero cases without saying so.
+    """
+    assert len(METRICS_CAPTURES) == 4
+    assert len(SERVER_LOG_CAPTURES) == 4
+
+
+@pytest.mark.parametrize("path", METRICS_CAPTURES, ids=lambda p: p.stem)
+def test_the_server_agrees_with_itself_about_what_a_prompt_token_is(path: Path) -> None:
+    """The Oracle for the definition: the server's own rate over its own counters.
+
+    llama-server publishes `prompt_tokens_seconds` as well as the two counters it
+    is made of. If `prompt_tokens_total` counted cached tokens too, the published
+    gauge and the counters would disagree - so this reproduces the gauge from the
+    counters and proves the field means what the host row says it means: prompt
+    tokens the model actually read, which is the item ledger's
+    `input_tokens - cached_tokens`.
+    """
+    text = path.read_text(encoding="utf-8")
+    tokens, seconds = silicon.server_prompt_totals(text)
+    published = {
+        line.split(" ")[0]: float(line.split(" ")[1])
+        for line in text.splitlines()
+        if line.startswith("llamacpp:")
+    }
+
+    assert tokens is not None and seconds is not None
+    # The gauge is printed to six significant figures, so the comparison is too.
+    assert tokens / seconds == pytest.approx(published["llamacpp:prompt_tokens_seconds"], rel=1e-5)
+    assert published["llamacpp:prompt_tokens_cached_total"] > 0, (
+        "a capture with no cache hits proves nothing here"
+    )
+
+
+@pytest.mark.parametrize("path", SERVER_LOG_CAPTURES, ids=lambda p: p.name)
+def test_the_model_load_time_is_the_gap_between_the_servers_own_two_lines(path: Path) -> None:
+    """The Oracle for `model_load_ms`: llama.cpp's stamp decoded from a real job.
+
+    The stamp is four dot-separated numbers and no page says what they are. The
+    third field reaches 809 on a real line, so it cannot be seconds-in-a-minute;
+    the last field steps by 15 between two lines printed back to back, and the
+    first field of the last line of a 99-minute job reads 99. That fixes it as
+    minutes, seconds, milliseconds, microseconds - and only a capture of a job
+    whose length is known settles it.
+    """
+    text = path.read_text(encoding="utf-8")
+    stamps: dict[str, int] = {}
+    for line in text.splitlines():
+        for marker in ("load_model: loading model", "llama_server: model loaded"):
+            if marker in line and marker not in stamps:
+                minutes, seconds, milli, micro = (int(p) for p in line.split(" ")[0].split("."))
+                stamps[marker] = (((minutes * 60) + seconds) * 1000 + milli) * 1000 + micro
+    assert len(stamps) == 2, f"{path.name} does not bracket a model load"
+
+    loaded = silicon.model_load_ms(text)
+
+    expected = stamps["llama_server: model loaded"] - stamps["load_model: loading model"]
+    assert loaded == expected / 1000
+    # Seconds, not minutes and not microseconds. A unit slip is the one mistake
+    # a gap between two stamps can make and still look plausible.
+    assert 1000 < loaded < 60_000
 
 
 def test_a_scrape_the_server_was_already_gone_for_reports_absence_rather_than_zero() -> None:
@@ -567,9 +627,9 @@ def test_a_scrape_the_server_was_already_gone_for_reports_absence_rather_than_ze
     A zero here would be averaged into a rate by the next reader, and a rate over
     a denominator nobody measured is the defect this instrument exists to catch.
     """
-    assert runtime_counters.server_prompt_totals(None) == (None, None)
-    assert runtime_counters.server_prompt_totals("") == (None, None)
-    assert runtime_counters.server_prompt_totals("# HELP nothing\n") == (None, None)
+    assert silicon.server_prompt_totals(None) == (None, None)
+    assert silicon.server_prompt_totals("") == (None, None)
+    assert silicon.server_prompt_totals("# HELP nothing\n") == (None, None)
 
 
 def test_a_renamed_series_leaves_the_cells_empty_and_a_broken_one_is_loud() -> None:
@@ -581,7 +641,7 @@ def test_a_renamed_series_leaves_the_cells_empty_and_a_broken_one_is_loud() -> N
     """
     renamed = "llamacpp:prompt_tokens_read_total 5\nllamacpp:prompt_seconds_total 2.5\n"
 
-    assert runtime_counters.server_prompt_totals(renamed) == (None, 2.5)
+    assert silicon.server_prompt_totals(renamed) == (None, 2.5)
 
     with pytest.raises(ValueError, match="prompt_tokens_total"):
-        runtime_counters.server_prompt_totals("llamacpp:prompt_tokens_total 5.5\n")
+        silicon.server_prompt_totals("llamacpp:prompt_tokens_total 5.5\n")

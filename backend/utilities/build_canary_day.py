@@ -784,6 +784,11 @@ def _record(
         decision_ms=decision_ms,
         site_bytes=_site_bytes(date),
         site_files=4,
+        # Two work shards, which is what the machine ledgers this fixture also
+        # writes report. It is the denominator every shard figure on the Hardware
+        # page divides by, so without it that page can only draw its "the run
+        # never said how many shards it planned" case.
+        shards=2,
     )
 
 
@@ -1150,7 +1155,7 @@ def console_payloads(*, state_root: Path, digest_root: Path) -> int:
     before it is taken.
 
     **It is a separate step from building the day, and it has to be.** The
-    item-health rows, the runtime counters, the span rollup and the telemetry
+    item-health rows, the host fingerprints, the span rollup and the telemetry
     projection are written by `frontend/scripts/build-canary.mjs`, which runs
     after this file's `main`. A band derived before them names one month where
     the telemetry holds two, and the console would then never ask for the older

@@ -29,9 +29,9 @@ from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 from pytest import LogCaptureFixture, MonkeyPatch
 
 from idhazh import config
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome
 from idhazh.contracts.run_plan import RunPlan
-from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.stages import common
 from idhazh.stages.work import stage_work
 from idhazh.telemetry import host
@@ -229,10 +229,10 @@ def test_the_shard_names_one_machine_on_every_row_it_records(
 ) -> None:
     """One `host_facts` call a shard, so two items cannot name two processors.
 
-    The item row and `state/runtime-counters.csv` both carry `cpu_model`. They
-    are separate stores on purpose - the counters row is the independent check on
-    the census's own timings - so what has to hold is that the machine they name
-    came from one reading.
+    The item row and `state/host-fingerprint/` both carry `cpu_model`. They are
+    separate stores on purpose - the host row is one a job and the item row is one
+    an item - so what has to hold is that the machine they name came from one
+    reading.
     """
     a_machine_that_answers(monkeypatch, tmp_path / "host")
     _, items_dir = worked(tmp_path, monkeypatch)

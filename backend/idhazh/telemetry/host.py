@@ -1,24 +1,15 @@
-"""What was the machine doing, at the two grains that ask - one sampler, two consumers.
+"""What was the machine doing around one item - one sampler, one reading each.
 
 A throughput number with no machine beside it is not a measurement (Guardrail
 #10), and two readers of one machine fact are two answers nobody can reconcile.
-So every host reading this project takes is taken here, once, and handed to both
-things that write it down:
+So every host reading this project takes is taken here, once, and handed to the
+item row through `Watch`. A shard figure cannot say whether one slow item met a
+noisy neighbour, which is the question a 4.2x between-runner spread raises, so
+the item is the grain.
 
-- **the item row**, through `Watch`, around one item. A shard figure cannot say
-  whether one slow item met a noisy neighbour, which is the question a 4.2x
-  between-runner spread raises.
-- **`state/runtime-counters.csv`**, through `stage_counters`, at shard grain.
-  That store is the independent check on the census's own timings, so it stays a
-  separate store: a check folded into the thing it checks stops being a check.
-  The row goes to this job's own segment and `stage_compact` folds it into that
-  head, so two model-server jobs of one run never open one path.
-
-The two grains are the point and they are not the same number. `cpu_busy_pct` on
-an item row is that item's window; on the shard row it is the whole job,
-including the cache restore and the weight load. What must never differ is a
-fact that does not change inside a job - the processor, the runner label - and
-those come from one `host_facts()` call.
+What must never differ is a fact that does not change inside a job - the
+processor, the runner label - and those come from one `host_facts()` call a
+shard rather than from one a item.
 
 **Every source is a local file read.** `/proc/stat`, `/proc/loadavg`,
 `/proc/meminfo`, `/proc/self/status`, `/proc/<server pid>/status` and the cgroup
@@ -26,11 +17,6 @@ peak file - one `open()` each, against a median 475,890 ms of model time.
 `psutil` would be a dependency, its install time and its shipped bytes for
 arithmetic that is four lines (Guardrail #8). What one reading costs is in
 `docs/reference/pipeline-cost.md`.
-
-**The arithmetic is not written twice.** `contracts.runtime_counters` already
-differences two `/proc/stat` captures into a busy share, and this module calls
-that rather than reproducing it (Guardrail #5). What is new here is the reading,
-not the maths.
 
 **A reading that cannot be taken records empty and never raises.** None of these
 paths exists on the developer machines this project is written on, and a missing
@@ -48,14 +34,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from idhazh import assemble, ledger, run_context
-from idhazh.contracts.run_plan import RunPlan
-from idhazh.contracts.runtime_counters import (
-    WORK_JOB,
-    RuntimeCountersRow,
-    ServerJob,
-    cpu_busy_pct_between,
-)
+from idhazh.contracts.base import ServerJob
 from idhazh.fingerprint import host_cpu
 
 LOG: Final = logging.getLogger("idhazh")
@@ -87,11 +66,30 @@ PROC: Final = Path("/proc")
 #: would kill the job over (Guardrail #2).
 CGROUP_PEAK: Final = Path("/sys/fs/cgroup/memory.peak")
 
-#: The key the shard job writes the kernel's peak under when it copies that file
-#: into `memory-peak.txt`. The copy exists so the runtime artifact and the
-#: operator get the number too. It is the same file, so it is read by the same
-#: function rather than by a second parser somewhere else.
-CGROUP_PEAK_KEY: Final = "cgroup_memory_peak_bytes"
+#: The columns of the aggregate `cpu` line of `/proc/stat`, in the order the
+#: kernel prints them. A kernel that publishes fewer is read as far as it goes.
+#: `/proc/stat` rather than a cgroup file on purpose: this project has measured
+#: `/sys/fs/cgroup/memory.peak` and `/sys/fs/cgroup/cpu.max` both absent on a
+#: GitHub-hosted runner, and `/proc/stat` is on every Linux there is.
+_CPU_FIELDS: Final = (
+    "user",
+    "nice",
+    "system",
+    "idle",
+    "iowait",
+    "irq",
+    "softirq",
+    "steal",
+    "guest",
+    "guest_nice",
+)
+
+#: Time the processors were available and took no work. Everything else is busy.
+_CPU_IDLE: Final = frozenset({"idle", "iowait"})
+
+#: The kernel counts guest time inside `user` and guest-nice inside `nice` as
+#: well as reporting it again, so a plain sum of the line counts it twice.
+_CPU_DOUBLE_COUNTED: Final = ("guest", "guest_nice")
 
 #: `/proc` reports these in kilobytes.
 _KB: Final = 1024
@@ -119,6 +117,53 @@ def _status_kb(pid: int | None, key: str) -> int | None:
             if cells and cells[0].isdigit():
                 return int(cells[0]) * _KB
     return None
+
+
+def cpu_ticks(text: str | None) -> dict[str, int] | None:
+    """The aggregate `cpu` line of `/proc/stat`, by field name.
+
+    Reads the line out of whatever it is handed - one line on its own is the same
+    fact as a whole capture of the file with the per-processor lines still
+    attached. Anything else - an empty variable, a truncated read - is absent
+    rather than a zero reading.
+    """
+    if not text:
+        return None
+    for line in text.splitlines():
+        cells = line.split()
+        if cells[:1] != ["cpu"] or len(cells) < 2:
+            continue
+        ticks: dict[str, int] = {}
+        for name, raw in zip(_CPU_FIELDS, cells[1:], strict=False):
+            if not raw.isdigit():
+                return None
+            ticks[name] = int(raw)
+        return ticks
+    return None
+
+
+def cpu_busy_pct_between(at_start: str | None, at_end: str | None) -> float | None:
+    """Busy processor time as a share of processor time available, between two reads.
+
+    Differencing two reads is what makes this the item's number rather than the
+    host's: `/proc/stat` counts since boot, and a runner boots minutes of mostly
+    idle time before the job starts. The denominator is every processor's time,
+    so nothing here needs to know how many there are.
+    """
+    start = cpu_ticks(at_start)
+    end = cpu_ticks(at_end)
+    if start is None or end is None:
+        return None
+    totals = []
+    idles = []
+    for ticks in (start, end):
+        totals.append(sum(ticks.values()) - sum(ticks.get(n, 0) for n in _CPU_DOUBLE_COUNTED))
+        idles.append(sum(ticks.get(n, 0) for n in _CPU_IDLE))
+    available = totals[1] - totals[0]
+    if available <= 0:
+        return None
+    busy = available - (idles[1] - idles[0])
+    return round(100 * busy / available, 2)
 
 
 def load_1m() -> float | None:
@@ -163,42 +208,34 @@ def meminfo_bytes(reported: str | None = None) -> dict[str, int | None]:
     return found
 
 
-def cgroup_peak_bytes(reported: str | None = None) -> int | None:
+def cgroup_peak_bytes() -> int | None:
     """What the kernel counted against the job's memory limit, at its highest.
 
-    One reader, and the one fact arrives in two shapes. The kernel writes a bare
-    count. The shard job copies that count into `memory-peak.txt` as
-    `cgroup_memory_peak_bytes=<count>`, and writes the word `unavailable` where
-    the kernel file is not there - which is what a GitHub-hosted runner has
-    measured every time. `reported` is that copy; with no copy in hand this opens
-    the kernel file itself. Anything that is not a plain count reads as unknown,
+    The kernel writes a bare count, and a GitHub-hosted runner has measured the
+    file absent every time. Anything that is not a plain count reads as unknown,
     and unknown is not zero.
     """
-    text = _text(CGROUP_PEAK) if reported is None else reported
+    text = _text(CGROUP_PEAK)
     if not text:
         return None
     for line in text.splitlines():
-        key, found, raw = line.strip().partition("=")
-        value = raw.strip() if found and key.strip() == CGROUP_PEAK_KEY else line.strip()
+        value = line.strip()
         if value.isdigit():
             return int(value)
     return None
 
 
-def cpu_model(reported: str | None = None) -> str | None:
+def cpu_model() -> str | None:
     """The processor this job drew, in the host's own words.
 
-    One reader, two callers. `reported` is what the shard job's first step read
-    out of `/proc/cpuinfo` before a checkout existed; with nothing reported this
-    reads the same file through `fingerprint.host_cpu`. Both answers are the same
-    file on the same host, which is why the item row and the shard row cannot
+    Read through `fingerprint.host_cpu`, so the item row and the host row cannot
     name two different processors.
 
-    A probe that reported nothing and could read nothing records nothing: an
-    empty cell means the reading was not taken, which is a different fact from a
-    processor with no name.
+    A probe that could read nothing records nothing: an empty cell means the
+    reading was not taken, which is a different fact from a processor with no
+    name.
     """
-    named = (reported or "").strip() or host_cpu().strip()
+    named = host_cpu().strip()
     return named or None
 
 
@@ -242,18 +279,18 @@ def llama_server_pid(comm: str = "llama-server") -> int | None:
 
 @dataclass(frozen=True, slots=True)
 class HostFacts:
-    """Every host cell that both consumers name, taken in one call.
+    """Every host cell that does not change inside a job, taken in one call.
 
-    The item row and `state/runtime-counters.csv` each carry a `cpu_model` and a
-    `cgroup_peak_bytes` column, so a second reader on either side is two answers
-    to one question and nothing to say which is right (Guardrail #10).
+    The item row carries a `cpu_model` and a `cgroup_peak_bytes` column, and the
+    host record carries `cpu_model` as well, so a second reader on either side is
+    two answers to one question and nothing to say which is right (Guardrail
+    #10).
 
     `runner_name` is the one field no consumer of this class takes any more -
-    the item row retired the column on 2026-09-17 and the counters row never had
-    it. It stays because this is the one call that reads the environment, and the
-    host record's own producer takes the same reading through `runner_name()`
-    below: dropping it here would leave the label read in one place and nowhere
-    to compare it against.
+    the item row retired the column on 2026-09-17. It stays because this is the
+    one call that reads the environment, and the host record's own producer takes
+    the same reading through `runner_name()` below: dropping it here would leave
+    the label read in one place and nowhere to compare it against.
     """
 
     cpu_model: str | None
@@ -289,26 +326,22 @@ class HostFacts:
 
 def host_facts(
     *,
-    reported_cpu_model: str | None = None,
-    reported_cgroup_peak: str | None = None,
     environ: dict[str, str] | None = None,
     job: ServerJob | None = None,
 ) -> HostFacts:
     """One call, so that no two consumers disagree about what machine this was.
 
-    Every argument is something the platform already handed a caller - the shard
-    job reads the processor and copies the kernel peak in its own shell, before
-    Python exists. Hand over nothing and nothing is assumed: each reading falls
-    back to the file this module would have opened anyway.
+    Every reading falls back to the file this module would have opened anyway, so
+    a host that publishes nothing costs a cell rather than the run.
 
     `job` is the one argument with no fallback, because there is nothing to fall
     back to: no file on the host names the workflow job, and a default would
     claim a machine for every row that never said which job it was.
     """
     return HostFacts(
-        cpu_model=cpu_model(reported_cpu_model),
+        cpu_model=cpu_model(),
         runner_name=runner_name(environ),
-        cgroup_peak_bytes=cgroup_peak_bytes(reported_cgroup_peak),
+        cgroup_peak_bytes=cgroup_peak_bytes(),
         job=job,
     )
 
@@ -529,125 +562,3 @@ class Watch:
             os_swap_total_bytes=end.swap_total_bytes,
             os_mem_available_min_bytes=min(self._headroom) if self._headroom else None,
         )
-
-
-def stage_counters(
-    plan: RunPlan,
-    *,
-    state_root: Path,
-    metrics_path: Path,
-    shard: int = 0,
-    shards: int = 1,
-    job: ServerJob = WORK_JOB,
-    job_started_at: int | None = None,
-    cpu_model_reported: str | None = None,
-    cpu_stat_at_start: str | None = None,
-    cpu_stat_at_end: str | None = None,
-    rss_samples_path: Path | None = None,
-    server_log_path: Path | None = None,
-    memory_peak_path: Path | None = None,
-    facts: HostFacts | None = None,
-) -> RuntimeCountersRow:
-    """Commit what this shard's model server counted, so the ledger can be checked.
-
-    Every timing on the item-health ledger is a field the summarize stage copied
-    out of one model reply. The server's own counters are the second instrument,
-    and until now they reached only a job log that keeps them for two days - so
-    the rates two published surfaces quote could not be reconciled with anything
-    (Guardrail #10).
-
-    Both counters are cumulative for the server process and a shard runs one
-    server for its whole job, so this one read covers the shard entirely.
-
-    The same row carries the job's own facts as well as the server's: the clock,
-    the host, how busy that host was, the window one sequence got, three memory
-    high points and what the weights cost to open. The server's counters and the
-    job's clock arrive as files this stage opens. **The host's readings arrive
-    from `host_facts`, which is the call the item row's `Watch` takes as well**,
-    so the processor named on an item row and the processor named on that shard's
-    row are one reading rather than two that happen to agree.
-
-    A missing or empty body still writes a row, with every counter null. A shard
-    whose server was already gone and a shard that never ran are different facts,
-    and pooling a run needs to see the shard that contributed nothing.
-
-    `job` is which of the two model-server jobs this is. It is on the row because
-    the two serve different weights, so nothing downstream can pool them and
-    nothing can tell them apart without it.
-
-    The row goes to this job's own segment, never to the head. Two model-server
-    jobs of one run each scrape their own counters, so both would be appending to
-    one file from two runners; `stage_compact` inside `assemble` folds the
-    segments into the head, and the attempt is in the segment's name so a re-run
-    corrects its first try rather than adding a second cumulative total for one
-    shard.
-    """
-    read = (
-        host_facts(
-            reported_cpu_model=cpu_model_reported,
-            reported_cgroup_peak=_text_if_readable(memory_peak_path) or None,
-        )
-        if facts is None
-        else facts
-    )
-    row = RuntimeCountersRow.from_metrics_text(
-        _text_if_readable(metrics_path),
-        date=plan.date,
-        run_id=plan.run_id,
-        shard=shard,
-        shards=shards,
-        scraped_at=assemble.utc_now(),
-        job=job,
-        job_started_at=job_started_at,
-        cpu_model=read.cpu_model,
-        cpu_stat_at_start=cpu_stat_at_start,
-        cpu_stat_at_end=cpu_stat_at_end,
-        rss_samples=_text_if_readable(rss_samples_path),
-        server_log=_text_if_readable(server_log_path),
-        cgroup_peak_bytes=read.cgroup_peak_bytes,
-    )
-    attempt = run_context.run_attempt()
-    landed = ledger.write_segment(
-        state_root,
-        ledger.SegmentLedger.RUNTIME_COUNTERS,
-        [row],
-        run_id=plan.run_id,
-        attempt=attempt,
-        job=job,
-        shard=shard,
-    )
-    LOG.info(
-        "counted job=%s shard=%s/%s run=%s read_tokens=%s read_seconds=%s job_seconds=%s "
-        "cpu=%s cpu_busy_pct=%s peak_rss_bytes=%s model_load_ms=%s n_ctx_configured=%s "
-        "python_peak_rss_bytes=%s cgroup_peak_bytes=%s rows=%s segment=%s",
-        row.job,
-        shard,
-        shards,
-        plan.run_id,
-        row.prompt_tokens_total,
-        row.prompt_seconds_total,
-        row.job_seconds,
-        row.cpu_model,
-        row.cpu_busy_pct,
-        row.peak_rss_bytes,
-        row.model_load_ms,
-        row.n_ctx_configured,
-        row.python_peak_rss_bytes,
-        row.cgroup_peak_bytes,
-        landed,
-        ledger.segment_relpath(
-            ledger.SegmentLedger.RUNTIME_COUNTERS,
-            run_id=plan.run_id,
-            attempt=attempt,
-            job=job,
-            shard=shard,
-        ),
-    )
-    return row
-
-
-def _text_if_readable(path: Path | None) -> str:
-    """A file the job may not have written is absent text, never a failed stage."""
-    if path is None or not path.exists():
-        return ""
-    return path.read_text(encoding="utf-8", errors="replace")

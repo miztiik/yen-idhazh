@@ -10,8 +10,8 @@ from conftest import CONFIG_DIR, read_text
 from pytest import MonkeyPatch
 
 from idhazh import config, ledger, run_context, telemetry
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.run_manifest import RunManifest
-from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.fingerprint import prose_changed_alone, text_digest
 from idhazh.stages import common

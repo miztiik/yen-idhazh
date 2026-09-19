@@ -10,7 +10,7 @@ import pytest
 from conftest import REPO_ROOT
 
 from idhazh import ledger, telemetry
-from idhazh.contracts.runtime_counters import ServerJob
+from idhazh.contracts.base import ServerJob
 from idhazh.evals import writer as score_writer
 
 from ._harness import (

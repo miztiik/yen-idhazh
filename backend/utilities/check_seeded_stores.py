@@ -1,6 +1,6 @@
 """Does this checkout carry the state stores a run stages before it has written one?
 
-Three ledgers ship with the contract rather than appearing on the first run that
+Two ledgers ship with the contract rather than appearing on the first run that
 has something to put in them. `commit-and-push.sh` runs `git add "$@"` under
 `set -euo pipefail`, so a path that is not there aborts the whole commit step and
 takes every sibling ledger staged in the same call with it. A header-only file
@@ -36,7 +36,6 @@ from typing import Final
 
 from idhazh import ledger
 from idhazh.contracts.feed_retirement import FeedRetirementRow
-from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
@@ -66,11 +65,6 @@ class Finding:
 def seeded_stores() -> tuple[Store, ...]:
     """The stores whose header ships with the contract, read off the contract."""
     return (
-        Store(
-            name="runtime counters",
-            relpath=ledger.runtime_counters_relpath(),
-            columns=RuntimeCountersRow.csv_columns(),
-        ),
         Store(
             name="feed retirements",
             relpath=ledger.feed_retirements_relpath(),

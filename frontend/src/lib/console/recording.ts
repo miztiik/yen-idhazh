@@ -28,7 +28,7 @@ import { shortDate } from '../format';
  *
  * It names `config/idhazh.json` and never the knob inside it: a term from a
  * subsystem is not a term for a user (CLAUDE.md section 0b), and an operator
- * looking for `runtime_counters_scrape` does not know that is what he wants.
+ * looking for `host_fingerprint` does not know that is what he wants.
  */
 export function measurementOff(lastRecorded: string | null): string {
 	const since =

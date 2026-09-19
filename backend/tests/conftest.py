@@ -27,7 +27,6 @@ from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.models import ModelRef
 from idhazh.contracts.run_plan import PlannedItem
-from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import SourceTier
@@ -133,50 +132,10 @@ def seed_span_rollup(state_dir: Path, date: str, rows: Iterable[SpanRollupRow]) 
     return len(kept)
 
 
-def seed_runtime_counters(state_dir: Path, rows: Iterable[RuntimeCountersRow]) -> int:
-    """Put a settled counters head on disk the way a finished run leaves it.
-
-    The same fixture builder as `seed_span_rollup`, for the same reason: each
-    model-server job writes its scrape to a segment and `stage_compact` folds it
-    into this head, so no one call reaches the settled file any more. A caller
-    here wants the head ALREADY settled - it is checking what an audit, the
-    post-merge pass or a projection does with a snapshot - so the fold itself
-    stays in `tests/pipeline/test_compact.py`.
-
-    Settled means what the compaction means by it: the first row for a
-    `RUNTIME_COUNTERS_KEY` wins, because the cells are cumulative totals for one
-    server process and a second row for a shard adds that shard's tokens to
-    themselves.
-
-    Returns the rows the file gained, so a caller that asserted on the old
-    writer's count asserts on the same number.
-    """
-    path = ledger.runtime_counters_path(state_dir)
-    columns = RuntimeCountersRow.csv_columns()
-    held = ledger.recorded_runtime_counters(path)
-    kept: list[dict[str, str]] = []
-    for row in rows:
-        cells = row.csv_row()
-        key = tuple(cells[name] for name in ledger.RUNTIME_COUNTERS_KEY)
-        if key in held:
-            continue
-        held.add(key)
-        kept.append(cells)
-    if not kept:
-        return 0
-    path.parent.mkdir(parents=True, exist_ok=True)
-    exists = path.exists()
-    with path.open("a", encoding="utf-8", newline="") as handle:
-        out = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
-        if not exists:
-            out.writeheader()
-        out.writerows({name: cells[name] for name in columns} for cells in kept)
-    return len(kept)
-
-
 def read_text(path: Path) -> str:
     """Read without newline translation, so a CRLF drift fails the comparison."""
     return path.read_bytes().decode("utf-8")
+
 
 def llama_server_flags() -> frozenset[str]:
     """Every flag `server_argv` can emit, taken from `server_argv`.
@@ -324,9 +283,7 @@ def refetched(
     )
 
 
-def refill_recorded(
-    article: Article, published: Published, **overrides: object
-) -> EvalRow:
+def refill_recorded(article: Article, published: Published, **overrides: object) -> EvalRow:
     """A ledger row for this pair, carrying the digest the join checks."""
     base = EvalRow.from_json(read_text(CONTRACT_FIXTURES_DIR / "eval-row" / "high.json"))
     return base.model_copy(
@@ -345,6 +302,7 @@ def refill_recorded(
 
 
 # --- The two calls that read one article, shared by two test modules ------
+
 
 class RecordedEndpoint:
     """A real local server that replays recorded llama-server replies in order.

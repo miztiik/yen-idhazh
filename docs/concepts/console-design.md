@@ -94,7 +94,7 @@ carries one of `recorded`, `off`, `lost` and `none` on every build.
 Two of them are worth reading twice. **A sampled figure is never scaled up** -
 multiplying a quarter-sample by four publishes an estimate as a measurement,
 which Guardrail #10 forbids. And **no string names a config key as if it were a
-word**: it is `Measurement is off`, never `runtime_counters_scrape is false`,
+word**: it is `Measurement is off`, never `host_fingerprint is false`,
 because a term from a subsystem is not a term for a user (section 0b).
 
 ### A figure in currency prints its rate, its source and the word for what it is
@@ -448,7 +448,8 @@ The Hardware route draws three panels about the machine a job drew: **Reading
 against writing, machine by machine**, **The machines this run drew**, and **What
 the platform has been giving us**. One measurement shapes all three.
 
-Measured 2026-09-17 over `state/runtime-counters.csv` - 380 rows, 95 runs, 19
+Measured 2026-09-17 over the per-shard machine ledger, before its columns moved -
+380 rows, 95 runs, 19
 dates - **86 of the 90 runs that name a processor drew more than one kind of
 processor**. Kinds per run: one on 4 runs, two on 39, three on 43, four on 4.
 Inside a single run the read rate between the fastest and the slowest machine

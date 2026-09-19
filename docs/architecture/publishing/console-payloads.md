@@ -25,7 +25,7 @@ Every path below is under `frontend/public/`. Every schema is under `schemas/`.
 | Published items | `payload.ts` `publishedItems` | `run-days/<YYYY-MM>.json` | `public-run-day` |
 | Published charts | `payload.ts` `publishedCharts` | `run-days/<YYYY-MM>.json` | `public-run-day` |
 | Day metrics | `payload.ts` `dayMetrics` | `day-metrics/<YYYY-MM>.json` | `day-metrics` |
-| Machine counters | `runtime-counters.ts` `loadMachineCounters` | `machine/<YYYY-MM>.csv` | `runtime-counters-row` |
+| Machine counters | `machine-counters.ts` `loadMachineCounters` | `machine/<YYYY-MM>.csv` | `machine-shard-row` |
 | Span rollup | `span-rollup.ts` `loadSpanRollup` | `span-rollup/<YYYY-MM>.csv` | `span-rollup-row` |
 | Run timeline | `run-timeline.ts` `loadRunTimeline` | `run-timeline/<YYYY-MM>.csv` | `run-timeline-row` |
 | Source health | `payload.ts` `sourceHealthView` | `source-health.json` | `source-health-view` |
@@ -102,7 +102,7 @@ shapes forbid nothing. `public-run-day` and `console-band` are not projections
 of a ledger row at all - one is a reduction of two documents to counts, the
 other a set of sentences the pipeline composed about its own run - so the
 refusal is structural: a fetched string has no field to arrive in. `day-metrics`,
-`runtime-counters-row`, `span-rollup-row` and `source-health-view` are published
+`machine-shard-row`, `span-rollup-row` and `source-health-view` are published
 whole, because every cell on each is a count or a duration of our own work.
 
 **One shape refuses anything, where three used to.** `public-eval` refused
@@ -133,7 +133,7 @@ day the run is publishing, and every projection's body stays in its own module
 | `console_band.py` | `console/band.json` | the run-day shards it wrote, `state/feed-health/`, one item-health shard, one day-metrics record, `state/host-fingerprint/` over the widest window, and the newest day's `run.json` |
 | `run_days.py` | `run-days/<YYYY-MM>.json` | one month of committed `run.json` and `digest.json` |
 | `day_metrics.py` `publish_public` | `day-metrics/<YYYY-MM>.json` | one month of `state/day-metrics/<YYYY>/<MM>/` |
-| `machine.py` | `machine/<YYYY-MM>.csv` | `state/runtime-counters.csv` |
+| `machine.py` | `machine/<YYYY-MM>.csv` | one month of `state/item-health/<YYYY>/<MM>/` and of `state/host-fingerprint/<YYYY>/<MM>/` |
 | `span_rollup.py` | `span-rollup/<YYYY-MM>.csv` | `state/span-rollup/<YYYY-MM>.csv` |
 | `run_timeline.py` | `run-timeline/<YYYY-MM>.csv` | one month of `state/item-health/<YYYY>/<MM>/` |
 
@@ -457,9 +457,9 @@ with nothing to fetch. The table also recorded `telemetryRows` as reading
 `state/telemetry/`; there is no such directory, and `TELEMETRY_ROOT` points at
 `frontend/public/telemetry/`.
 
-**Three shapes are published whole rather than projected.** The row asked for
-one model per dataset with no published shape, and for `day-metrics`,
-`runtime-counters-row` and `span-rollup-row` that would have produced a
+**Two shapes are published whole rather than projected.** The row asked for
+one model per dataset with no published shape, and for `day-metrics`
+and `span-rollup-row` that would have produced a
 projection field-for-field identical to its source - two schemas for one row,
 which is what rejected alternative 2 refuses for telemetry. The refusal is the
 same either way and it is written down either way; what changes is whether a

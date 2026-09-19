@@ -243,7 +243,7 @@ NOT_DIGESTED: Final[Mapping[str, Undigested]] = MappingProxyType(
             "hope: the target model verifies every drafted token and rejects any it "
             "would not itself have produced, so a drafted run and an undrafted run "
             "write the same text. What it moves is how long the run took, which "
-            "state/runtime-counters.csv records with the acceptance rate beside it.",
+                "state/host-fingerprint/ records beside the clock of the job that drew it.",
         ),
         "file": Undigested(
             False,

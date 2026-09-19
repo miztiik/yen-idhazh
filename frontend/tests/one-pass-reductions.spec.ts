@@ -2,7 +2,7 @@
  *
  * Six repeated reductions are now single passes over the same input: the config
  * accessors, the date and run buckets in `model-work`, the run-to-health join in
- * `runtime-counters`, the per-article band ladder, the per-bin scans in
+ * `machine-counters`, the per-article band ladder, the per-bin scans in
  * `distribution`, and the daily buckets in `failureSeries`.
  *
  * **Byte-identical output is the hard requirement** - the change moves no
@@ -36,13 +36,14 @@ import { distribution, quantile, type Distribution } from '../src/lib/charts/ser
 import { frameConfig, summarizeConfig } from '../src/lib/server/config';
 import { failureSeries } from '../src/lib/charts/series';
 import { modelByDate, modelWork, runLengths, sourceCuts } from '../src/lib/server/model-work';
-import { machineCounters, type MachineLimits } from '../src/lib/server/runtime-counters';
+import { machineCounters, type MachineLimits } from '../src/lib/server/machine-counters';
 import type { SummaryBand, TelemetryRow } from '../src/lib/charts/series';
 import {
 	BANDS,
-	counterRows,
 	dayOf,
 	healthRows,
+	machineRows,
+	plannedOf,
 	scoreRows,
 	telemetryRows,
 	timings,
@@ -66,11 +67,11 @@ const WINDOW = { start: dayOf(0), end: dayOf(TELEMETRY_DAYS - 1) };
 
 /** Everything the six reductions return over one input. */
 function reductions(): Record<string, unknown> {
-	const counters = counterRows(PARITY);
+	const hosts = machineRows(PARITY);
 	const health = healthRows(PARITY);
 	const scores = scoreRows(PARITY);
 	return {
-		machineCounters: machineCounters(counters, health, LIMITS),
+		machineCounters: machineCounters(hosts, health, plannedOf(PARITY), LIMITS),
 		modelWork: modelWork(scores, health),
 		modelByDate: [...modelByDate(scores)],
 		runLengths: runLengths(scores, BANDS),
@@ -150,7 +151,7 @@ test.describe('the run-to-health join visits each row once', () => {
 		const health = countingRows(healthRows(sizes), 'run_id', () => {
 			visits += 1;
 		});
-		const found = machineCounters(counterRows(sizes), health, LIMITS);
+		const found = machineCounters(machineRows(sizes), health, plannedOf(sizes), LIMITS);
 		// Every run has to be accepted, or a lower count would be the refusal
 		// rather than the reduction.
 		expect(found.refused, `refused runs at ${sizes.runs} runs`).toEqual([]);

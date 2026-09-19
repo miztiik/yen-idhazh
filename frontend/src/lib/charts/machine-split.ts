@@ -24,7 +24,7 @@
  * and no network, and the browser suite drives it in plain Node.
  */
 
-import type { RunCounters, ShardCounters } from '$lib/server/runtime-counters';
+import type { MachineRun, ShardCounters } from '$lib/server/machine-counters';
 import { seconds } from './machine';
 import {
 	machineKeys,
@@ -80,9 +80,10 @@ export interface SplitByMachine {
 	oneMachine: boolean;
 	/** True where no shard named a machine, so the one group IS the pooled split. */
 	noMachineNamed: boolean;
-	/** Shards that reported all four counters, and shards the run had. */
+	/** Shards that reported all four counters, and shards the run planned. Null
+	 * where its manifest recorded no count. */
 	from: number;
-	outOf: number;
+	outOf: number | null;
 	empty: boolean;
 }
 
@@ -104,14 +105,14 @@ function whole(shard: ShardCounters): boolean {
  *
  * `fingerprints` carries the digest the machine record wrote for this run's work
  * shards where it reached them; a shard it missed carries only the processor's
- * own string, which is what the counters ledger holds.
+ * own string, which the same record holds on its other half.
  */
 function seenBy(shard: ShardCounters, fingerprints: ReadonlyMap<number, string>): MachineSeen {
 	return { fingerprint: fingerprints.get(shard.shard) ?? null, cpuModel: shard.cpuModel };
 }
 
 export function splitByMachine(
-	run: RunCounters | null,
+	run: MachineRun | null,
 	options: {
 		colourStops: number;
 		/** Shard index to fingerprint, for the shards the machine record reached. */
@@ -137,7 +138,7 @@ export function splitByMachine(
 			oneMachine: false,
 			noMachineNamed: false,
 			from: 0,
-			outOf: run?.shards ?? 0,
+			outOf: run?.shards ?? null,
 			empty: true
 		};
 	}

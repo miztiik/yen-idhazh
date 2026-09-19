@@ -1,0 +1,23 @@
+{
+  "cached_tokens": null,
+  "cgroup_peak_bytes": null,
+  "cpu_busy_pct": null,
+  "cpu_model": null,
+  "date": "2026-09-16",
+  "items": 0,
+  "job_seconds": null,
+  "llama_rss_peak_bytes": null,
+  "longest_sequence": null,
+  "model_load_ms": null,
+  "n_ctx_configured": null,
+  "python_rss_bytes": null,
+  "read_ms": null,
+  "read_tokens": null,
+  "run_id": "2026-09-16-1",
+  "server_prompt_seconds": null,
+  "server_prompt_tokens": null,
+  "shard": 3,
+  "version": "2026-09-19",
+  "write_ms": null,
+  "written_tokens": null
+}

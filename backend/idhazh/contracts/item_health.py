@@ -23,6 +23,7 @@ from idhazh.contracts.base import (
     DateStamp,
     ItemId,
     RunId,
+    ServerJob,
     Slug,
     Timestamp,
     Url,
@@ -30,7 +31,6 @@ from idhazh.contracts.base import (
     fits_its_column,
 )
 from idhazh.contracts.call_cost import COST_FIELDS, CallKind
-from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier
 
@@ -432,8 +432,8 @@ class ItemHealthRow(Contract):
         ge=0,
         description=(
             "Which worker of the run produced this row, numbered the way stages.common.shard_of "
-            "numbers them. state/runtime-counters.csv carries the same number at the "
-            "run grain, so a per-shard rate can be read against the machine that ran "
+            "numbers them. state/host-fingerprint/ carries the same number at the "
+            "job grain, so a per-shard rate can be read against the machine that ran "
             "it. Null means no worker claimed the row: assemble writes the day's "
             "census from one job and cannot know which machine an item was for, and "
             "every row written before 2026-08-30 predates the column. Never read an "

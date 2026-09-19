@@ -12,10 +12,10 @@ from idhazh import (
     run_context,
     telemetry,
 )
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.run_plan import RunPlan
-from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.evals import writer
 from idhazh.stages import common
 from idhazh.stages.common import (

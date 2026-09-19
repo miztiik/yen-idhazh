@@ -35,6 +35,7 @@ from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.label_row import LabelRow
 from idhazh.contracts.machine_panels import MachinePanels
+from idhazh.contracts.machine_shard import MachineShardRow
 from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
 from idhazh.contracts.public_run_day import PublicRunDay
@@ -56,7 +57,6 @@ from idhazh.contracts.review_queue import ReviewQueue
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.run_timeline import RunTimelineRow
-from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.score_archive import ScoreArchive
 from idhazh.contracts.search_index import SearchIndex
 from idhazh.contracts.seen import PublishedRow, SeenRow
@@ -101,6 +101,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     ItemHealthRow,
     LabelRow,
     MachinePanels,
+    MachineShardRow,
     ModelsConfig,
     ObservationIndexRow,
     PipelineTestsConfig,
@@ -121,7 +122,6 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     PublishedRow,
     RunPlan,
     RunTimelineRow,
-    RuntimeCountersRow,
     ScoreArchive,
     SearchIndex,
     SeenRow,

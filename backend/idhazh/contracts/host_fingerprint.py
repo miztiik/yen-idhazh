@@ -26,14 +26,15 @@ from typing import Any, ClassVar, Self
 from pydantic import Field
 
 from idhazh.contracts.base import (
+    WORK_JOB,
     ChangelogEntry,
     Contract,
     DateStamp,
     FingerprintId,
     RunId,
+    ServerJob,
     Timestamp,
 )
-from idhazh.contracts.runtime_counters import WORK_JOB, ServerJob
 
 #: The instruction-set flags this project has a reason to read back. A flag
 #: outside this list is not recorded, so the column stays a fixed width and

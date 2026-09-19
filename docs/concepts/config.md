@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Guardrail #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -458,14 +458,17 @@ separate "more slots did not help" from "more slots were never used". The
 endpoint is llama-server's own loopback surface inside a CI job. No reader
 reaches it, so Guardrail #1 is untouched. `digest.yml` reads it once at the end of
 each `work` job, keeps the raw body in that shard's runtime artifact, and
-commits the counters that matter as one row of `state/runtime-counters.csv` -
-the artifact keeps them for two days and the row keeps them forever, which is
+commits the two prompt counters that matter onto that job's row of
+`state/host-fingerprint/<YYYY>/<MM>/<DD>.csv` -
+the artifact keeps them for two days and the row keeps them for as long as the
+day tree does, which is
 what makes the read rate on
 [../architecture/summarize/throughput.md](../architecture/summarize/throughput.md)
 checkable rather than merely reported.
 
 Turning `metrics` off is therefore not free any more. It costs the log lines it
-always did, and it also leaves every later run's counter row empty, so the
+always did, and it also leaves `server_prompt_tokens` and `server_prompt_seconds`
+empty on every later run's host row, so the
 reconciliation has nothing to hold the ledger against.
 
 `n_parallel: null` and `n_parallel: 1` are not the same runtime. `null` omits
@@ -732,7 +735,6 @@ retiring it is a removal with a read-side migration behind it (section 11).
 | --- | --- | --- |
 | `evaluation_enabled` | `true` | The faithfulness scorer, and so every row in `state/scores.csv`. |
 | `telemetry_publish` | `true` | The copy into `frontend/public/telemetry/<YYYY-MM>.csv`. |
-| `runtime_counters_scrape` | `true` | The llama-server `GET /metrics` read, and so every row in `state/runtime-counters.csv`. |
 | `tracing_enabled` | `true` | The span tree. False writes no trace under `state/traces/` and no span rollup. |
 | `sample_rate` | `1.0` | Nothing. It is the fraction of runs whose scorer runs. |
 | `item_health_full_grain_months` | `14` | Nothing. It is where `state/item-health/` stops being kept item by item. |
@@ -796,7 +798,7 @@ lot and overstate one that read a lot.
 
 **An instrument that did not run writes an empty cell, never a zero.** A switch
 here decides whether a row is written; it never changes the shape of a row. The
-rule is stated twice already - in `RuntimeCountersRow.csv_row` ("Empty is not
+rule is stated twice already - in `HostFingerprintRow.csv_row` ("Empty is not
 zero") and in the degrade rules of
 [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md)
 ("`<1`, never `0`") - and this block is bound by both rather than restating them
@@ -841,7 +843,7 @@ is not what bounds them:
 | `frontend/public/telemetry/` | `public_telemetry_keep_months` (14) | `item_health_full_grain_months` |
 | `frontend/public/run-days/` | `public_run_days_keep_months` (14) | nothing - the source is the day payloads, whose retention is the archive's |
 | `frontend/public/day-metrics/` | `public_day_metrics_keep_months` (14) | nothing - `state/day-metrics/` has no age of its own |
-| `frontend/public/machine/` | `public_machine_keep_months` (14) | nothing - the source is one appended CSV, so the copy is where a month boundary first exists |
+| `frontend/public/machine/` | `public_machine_keep_months` (14) | nothing - the source is two committed day trees with no month boundary of their own, so the published copy is where one first exists |
 | `frontend/public/span-rollup/` | `public_span_rollup_keep_months` (14) | nothing |
 
 **Two ages left this table on 2026-09-16.** `public_scores_keep_months` and
@@ -850,6 +852,13 @@ is not what bounds them:
 the two knobs with them. A config file still spelling either is refused by name
 rather than ignored, and it is sent nowhere: the two ledgers above keep their
 own ages, which is a different number for a different store.
+
+**A switch left the block above on 2026-09-19 the same way.**
+`runtime_counters_scrape` claimed to turn off the llama-server `GET /metrics`
+read, and no code ever asked it. The ledger it named is gone and the scrape
+stays: the job-clock step reads the same body for the two server-prompt cells on
+the host row. A config file still spelling it is refused by name, and sent
+nowhere, because there is no successor knob to send it to.
 
 **Two more ages sit outside this block**, because each is a read cover first and
 a cleanup age second: `observability.trace_window_days` bounds `state/traces/`,

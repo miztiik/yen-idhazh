@@ -53,14 +53,6 @@ The console reads it a month at a time through the published projection, which
 stays monthly: `public_telemetry.publish` folds a month from that month's day
 files.
 
-`state/runtime-counters.csv` answers "what did the model server itself count?"
-One row per model-server job per shard per run - the `work` job files one for
-each of its shards and the `visuals` job files one for the planner it served,
-and the `job` cell is what tells them apart. Read one run at a time by an audit
-that carries no time window, so it is one file. It is also the slowest-growing:
-eight shards times five runs a day, plus one visuals row a run, is 45 rows, and
-a year is about 16,400.
-
 `state/telemetry-aggregate/<YYYY-MM>.csv` is what is left of an item-health
 month once `observability.item_health_full_grain_months` has passed: one row per
 (date, stage), folded by `retention.fold_month`. It files by month because it
@@ -108,7 +100,7 @@ from pathlib import Path
 from typing import Final, NamedTuple, Protocol
 
 from idhazh import day_partition, month_partition
-from idhazh.contracts.base import RUN_ID_PATTERN
+from idhazh.contracts.base import RUN_ID_PATTERN, ServerJob
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
@@ -123,7 +115,6 @@ from idhazh.contracts.item_health import (
 )
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.observation_index import ObservationIndexRow
-from idhazh.contracts.runtime_counters import RuntimeCountersRow, ServerJob
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
@@ -172,12 +163,6 @@ SCORE_DISTRIBUTION_FILENAME: Final = "score-distribution.json"
 #: the checkout does not hold aborts the whole step.
 SCORE_ARCHIVE_DIRNAME: Final = "archive"
 
-#: The one head that is a flat file and still takes segments. The word is spelled
-#: once and the filename is built from it, so the transit directory under
-#: `state/segments/` and the file it drains into cannot be named two different
-#: things (`SegmentLedger` takes the directory name).
-RUNTIME_COUNTERS_DIRNAME: Final = "runtime-counters"
-RUNTIME_COUNTERS_FILENAME: Final = f"{RUNTIME_COUNTERS_DIRNAME}.csv"
 FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
 
 #: Where a writer puts its rows before a compaction folds them into a head. Not
@@ -213,21 +198,20 @@ ITEM_HEALTH_KEY: Final = ("date", "run_id", "item_id")
 #: `ITEM_HEALTH_KEY`: a re-run's items are skipped there too, so the two files
 #: stay describing the same attempt.
 #:
-#: `job` is in the key because two jobs write this file from 2026-09-12, and both
-#: spell shard 0 of the same run - the `visuals` job runs one server rather than
-#: a fan-out. Without it the visual planner's row is dropped as a repeat of the
-#: summarizer's, which is silent: the append filter returns a count, not a fault.
-RUNTIME_COUNTERS_KEY: Final = ("date", "run_id", "job", "shard")
-
-#: One machine a job, so the same four cells that identify a counter snapshot
+#: One machine a job, so the same four cells that identify a job's own segment
 #: identify the host that produced it.
+#:
+#: `job` is in the key because two jobs write a host row, and both spell shard 0
+#: of the same run - the `visuals` job runs one server rather than a fan-out.
+#: Without it the visual planner's row is dropped as a repeat of the summarizer's,
+#: which is silent: the append filter returns a count, not a fault.
 HOST_FINGERPRINT_KEY: Final = ("date", "run_id", "job", "shard")
 
 #: What makes two span-rollup rows the same record. One shard's fold of one span
 #: name, in one run. The row is derived from the shard's spans, so a re-run of a
 #: failed shard recomputes the same fold and a second row would add a count to
 #: itself rather than record a new fact. The first row wins, which matches
-#: `RUNTIME_COUNTERS_KEY`: a re-run's items are skipped there too, so the two
+#: `ITEM_HEALTH_KEY`: a re-run's items are skipped there too, so the two
 #: files stay describing the same attempt.
 SPAN_ROLLUP_KEY: Final = ("date", "run_id", "shard", "span_name")
 
@@ -542,6 +526,7 @@ def telemetry_aggregate_relpath(month: str) -> str:
     """`state/telemetry-aggregate/<YYYY-MM>.csv` - the POSIX form, for a log line."""
     return f"{STATE_DIRNAME}/{TELEMETRY_AGGREGATE_DIRNAME}/{month}.csv"
 
+
 def telemetry_aggregate_path(state_dir: Path, month: str) -> Path:
     """Where the folded summary of one item-health month lives.
 
@@ -585,15 +570,6 @@ def published_path(state_dir: Path, date: str) -> Path:
     shared shard - which `merge=union` cannot express.
     """
     return state_dir / PUBLISHED_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
-
-
-def runtime_counters_relpath() -> str:
-    """`state/runtime-counters.csv` - the POSIX form, for a log line."""
-    return f"{STATE_DIRNAME}/{RUNTIME_COUNTERS_FILENAME}"
-
-
-def runtime_counters_path(state_dir: Path) -> Path:
-    return state_dir / RUNTIME_COUNTERS_FILENAME
 
 
 def feed_retirements_relpath() -> str:
@@ -821,9 +797,7 @@ def _headings(lines: list[str], first_column: str) -> set[str]:
     return names
 
 
-def _unplaceable(
-    lines: list[str], columns: tuple[str, ...], carried: Collection[str]
-) -> list[str]:
+def _unplaceable(lines: list[str], columns: tuple[str, ...], carried: Collection[str]) -> list[str]:
     """The headings in this file the current contract cannot read a cell into.
 
     This is the direction test, and it is put as a question about cells rather
@@ -1159,8 +1133,7 @@ def load_published(state_dir: Path, *, today: str | None, within_days: int) -> d
         )
     else:
         paths = (
-            published_path(state_dir, on)
-            for on in day_partition.days_in_window(today, within_days)
+            published_path(state_dir, on) for on in day_partition.days_in_window(today, within_days)
         )
 
     published: dict[str, str] = {}
@@ -1235,6 +1208,7 @@ def append_health(state_dir: Path, date: str, rows: Iterable[FeedHealthRow]) -> 
     path = health_path(state_dir, date)
     landed = _append(path, FeedHealthRow.csv_columns(), list(rows))
     return landed - drop_repeated_rows(path, FEED_HEALTH_KEY)
+
 
 def _as_item_health_row(raw: dict[str, str]) -> dict[str, str]:
     """The contract's own reader, used as a row-to-row migration."""
@@ -1322,17 +1296,6 @@ def load_retirements(state_dir: Path) -> list[FeedRetirementRow]:
         except (KeyError, ValueError):
             continue
     return rows
-
-
-def recorded_runtime_counters(path: Path) -> set[tuple[str, ...]]:
-    """Every shard the file already carries a snapshot for.
-
-    A reader and no longer half of a writer, the way `recorded_span_rollup` is.
-    Each model-server job writes its counters into its own segment and
-    `stage_compact` folds them into this head, so the question this answers is
-    what the head already holds rather than what an append is about to skip.
-    """
-    return {tuple(row[name] for name in RUNTIME_COUNTERS_KEY) for row in _read_rows(path)}
 
 
 def recorded_span_rollup(path: Path) -> set[tuple[str, ...]]:
@@ -1545,7 +1508,6 @@ class SegmentLedger(StrEnum):
     SPAN_ROLLUP = SPAN_ROLLUP_DIRNAME
     SCORES = SCORES_DIRNAME
     SCORE_INDEX = SCORE_INDEX_DIRNAME
-    RUNTIME_COUNTERS = RUNTIME_COUNTERS_DIRNAME
     VALIDATION = VALIDATION_DIRNAME
 
 
@@ -1603,20 +1565,6 @@ def _span_rollup_head_relpath(date: str) -> str:
     return span_rollup_relpath(date[:7])
 
 
-# The one flat head, so a row's date says nothing about which file it lands in.
-# Every date names this same file, which is what lets the ledger stop being a
-# collider without also being moved to a day tree it is about to be deleted
-# from. The fold reads a head whole, so this one costs the whole file rather
-# than a day of it - still fewer reads than the scan-before-append it replaced,
-# which paid that same cost once per model-server job (Guardrail #12).
-def _runtime_counters_head(state_dir: Path, date: str) -> Path:
-    return runtime_counters_path(state_dir)
-
-
-def _runtime_counters_head_relpath(date: str) -> str:
-    return runtime_counters_relpath()
-
-
 class _HeadShape(NamedTuple):
     """One ledger's answer to "which file, and what settles two of its rows"."""
 
@@ -1663,12 +1611,6 @@ _SEGMENT_HEADS: Final[dict[SegmentLedger, _HeadShape]] = {
         OBSERVATION_INDEX_KEY,
         ObservationIndexRow,
         dates_from_run=True,
-    ),
-    SegmentLedger.RUNTIME_COUNTERS: _HeadShape(
-        _runtime_counters_head,
-        _runtime_counters_head_relpath,
-        RUNTIME_COUNTERS_KEY,
-        RuntimeCountersRow,
     ),
     SegmentLedger.VALIDATION: _HeadShape(
         validation_path,
@@ -2008,7 +1950,6 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     attempt at one execution and never a second run of the day.
     """
     flat: list[KeyedLedger] = [
-        KeyedLedger(runtime_counters_path(state_dir), RUNTIME_COUNTERS_KEY, RuntimeCountersRow),
         KeyedLedger(feed_retirements_path(state_dir), FEED_RETIREMENT_KEY, FeedRetirementRow),
     ]
     if date is not None:
@@ -2042,9 +1983,7 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
                 STORY_SIMILARITY_PAIR_KEY,
                 StorySimilarityPair,
             ),
-            KeyedLedger(
-                span_rollup_path(state_dir, date[:7]), SPAN_ROLLUP_KEY, SpanRollupRow
-            ),
+            KeyedLedger(span_rollup_path(state_dir, date[:7]), SPAN_ROLLUP_KEY, SpanRollupRow),
         ]
     return [
         *flat,
@@ -2233,30 +2172,6 @@ def write_telemetry_aggregate(path: Path, rows: list[TelemetryAggregateRow]) -> 
 def load_telemetry_aggregate(path: Path) -> list[TelemetryAggregateRow]:
     """Every folded row of one month. Empty for a month never folded."""
     return [TelemetryAggregateRow.from_csv_row(row) for row in _read_rows(path)]
-
-
-def load_runtime_counters(state_dir: Path, *, run_id: str) -> list[RuntimeCountersRow]:
-    """Every shard's snapshot for one run, in shard order.
-
-    One run at a time, because the question this file answers is about one run.
-    A caller that wants a trend reads several runs and says so.
-
-    Cover: one run. Bounded by construction rather than by a clock - a run id
-    already names its date, so the answer is a handful of shard rows however
-    long the file gets. Streamed rather than materialised, so the read costs
-    that answer instead of the file.
-
-    Nothing is partitioned, and that is the point: a declared cover can be one
-    run. Measured 2026-09-08: 209 rows over 12 days in 35,950 B, gaining 20 rows
-    on each of the last eight days, so a layout over it would buy an answer the
-    cover already gives (Guardrail #12).
-    """
-    rows = [
-        RuntimeCountersRow.from_csv_row(row)
-        for row in _stream_rows(runtime_counters_path(state_dir))
-        if row["run_id"] == run_id
-    ]
-    return sorted(rows, key=lambda row: (row.job, row.shard))
 
 
 def load_health(state_dir: Path, *, today: str, within_days: int) -> list[FeedHealthRow]:

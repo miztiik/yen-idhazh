@@ -48,7 +48,20 @@ def test_an_age_whose_store_is_gone_says_so_instead_of_naming_a_successor() -> N
         assert f"observability.{removed}" in str(raised.value)
 
 
-def test_the_removed_names_are_the_five_these_rows_retired() -> None:
+def test_a_switch_whose_ledger_is_gone_says_so_instead_of_naming_a_successor() -> None:
+    """`runtime_counters_scrape` named a scrape no code ever asked it about.
+
+    The ledger it wrote to was deleted on 2026-09-19 and the scrape itself
+    stays - the job clock reads the same body for the two server-prompt cells on
+    the host row. So there is no successor to send an operator to, and silence
+    would leave them believing a switch nothing reads.
+    """
+    with pytest.raises(ValidationError, match="nothing replaces it") as raised:
+        ObservabilityConfig.model_validate({"runtime_counters_scrape": False})
+    assert "observability.runtime_counters_scrape" in str(raised.value)
+
+
+def test_the_removed_names_are_the_six_these_rows_retired() -> None:
     """The map is what the refusal message reads, so it is the map that is asserted."""
     assert dict(SUPERSEDED_COLLECT_NAMES) == {
         "quarantine_after_failures": "availability_strikes_before_rest"
@@ -58,6 +71,7 @@ def test_the_removed_names_are_the_five_these_rows_retired() -> None:
         "hard_delete_after_months": "item_health_aggregate_keep_months",
         "public_scores_keep_months": "",
         "public_feed_health_keep_months": "",
+        "runtime_counters_scrape": "",
     }
 
 

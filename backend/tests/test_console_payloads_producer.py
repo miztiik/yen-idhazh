@@ -20,7 +20,7 @@ from typing import Any, Final
 import pytest
 
 from idhazh import config, ledger
-from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.base import ServerJob, derive_url_key
 from idhazh.contracts.console_band import ConsoleBand, Health, RouteId
 from idhazh.contracts.day_metrics import DayBands, DayMetrics, DayReasons, DaySource
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
@@ -39,7 +39,6 @@ from idhazh.contracts.run_manifest import (
     RunRecord,
     RunStatus,
 )
-from idhazh.contracts.runtime_counters import RuntimeCountersRow, ServerJob
 from idhazh.contracts.source_health_view import (
     SourceAvailability,
     SourceHealthRow,
@@ -131,19 +130,6 @@ def _feed_row(month: str, *, feed_id: str, outcome: FetchOutcome, items: int) ->
     )
 
 
-def _counters_row(month: str, *, shard: int, prompt: int, seconds: float) -> RuntimeCountersRow:
-    return RuntimeCountersRow(
-        version=RuntimeCountersRow.schema_version(),
-        date=f"{month}-01",
-        run_id=f"{month}-01-1",
-        shard=shard,
-        shards=2,
-        scraped_at=f"{month}-01T06:30:00Z",
-        prompt_tokens_total=prompt,
-        prompt_seconds_total=seconds,
-    )
-
-
 def _host_row(month: str, *, shard: int, prompt: int, seconds: float) -> HostFingerprintRow:
     """One work job's host row, carrying the two cells the server itself counted."""
     return HostFingerprintRow(
@@ -221,7 +207,9 @@ def _day(stamp: str, *, items: int, charts: int) -> DigestDay:
     )
 
 
-def _manifest(stamp: str, *, planned: int, succeeded: int, failed: int, site_bytes: int) -> RunManifest:
+def _manifest(
+    stamp: str, *, planned: int, succeeded: int, failed: int, site_bytes: int
+) -> RunManifest:
     return RunManifest(
         version=RunManifest.schema_version(),
         date=stamp,
@@ -304,7 +292,6 @@ def tree(tmp_path: Path) -> tuple[Path, Path]:
     """Twenty months of state and twenty published days, one a month."""
     state = tmp_path / "state"
     digest = tmp_path / "frontend" / "public" / "digest"
-    counters: list[dict[str, str]] = []
     for index, month in enumerate(MONTHS):
         stamp = f"{month}-01"
         _write_csv(
@@ -341,8 +328,6 @@ def tree(tmp_path: Path) -> tuple[Path, Path]:
         record = state / "day-metrics" / month[:4] / month[5:7] / "01.json"
         record.parent.mkdir(parents=True, exist_ok=True)
         record.write_text(_record(stamp).to_json(), encoding="utf-8")
-        counters.append(_counters_row(month, shard=0, prompt=1000, seconds=10.0).csv_row())
-        counters.append(_counters_row(month, shard=1, prompt=1000, seconds=20.0).csv_row())
         day_dir = digest / month[:4] / month[5:7] / "01"
         day_dir.mkdir(parents=True, exist_ok=True)
         (day_dir / "digest.json").write_text(
@@ -354,7 +339,6 @@ def tree(tmp_path: Path) -> tuple[Path, Path]:
             ).to_json(),
             encoding="utf-8",
         )
-    _write_csv(state / "runtime-counters.csv", RuntimeCountersRow.csv_columns(), counters)
     return state, digest
 
 
@@ -410,9 +394,7 @@ def _publish_all(state: Path, digest: Path, *, months: set[str] | None) -> None:
     day_metrics.publish_public(
         state_root=state, digest_root=digest, keep_months=14, today=TODAY, months=months
     )
-    run_days.publish(
-        digest_root=digest, keep_months=14, today=TODAY, months=months
-    )
+    run_days.publish(digest_root=digest, keep_months=14, today=TODAY, months=months)
 
 
 def test_the_second_run_opens_one_month_not_twenty(
@@ -432,10 +414,7 @@ def test_the_second_run_opens_one_month_not_twenty(
 
     read = [path for path in _OPENED if str(state) in path or str(digest) in path]
     source_months = {
-        part
-        for path in read
-        for part in [Path(path).stem]
-        if len(part) == 7 and part[4] == "-"
+        part for path in read for part in [Path(path).stem] if len(part) == 7 and part[4] == "-"
     }
     assert source_months == {NEWEST}, sorted(source_months)
 
@@ -466,9 +445,7 @@ def test_a_missing_target_is_written_even_when_its_month_was_not_named(
     console asking for it would get a 404 it cannot tell from a broken deploy.
     """
     state, digest = tree
-    machine.publish(
-        state_root=state, digest_root=digest, keep_months=20, today=TODAY, months=None
-    )
+    machine.publish(state_root=state, digest_root=digest, keep_months=20, today=TODAY, months=None)
     machine.shard_path(digest, MONTHS[0]).unlink()
 
     written = machine.publish(
@@ -524,10 +501,7 @@ def test_a_published_shard_reads_back_as_it_was_written(tree: tuple[Path, Path])
     assert len(span_rollup.read_shard(span_rollup.shard_path(digest, NEWEST))) == 1
     assert len(machine.read_shard(machine.shard_path(digest, NEWEST))) == 2
     assert len(run_days.read_shard(run_days.shard_path(digest, NEWEST))) == 1
-    assert (
-        len(day_metrics.read_public_shard(day_metrics.public_shard_path(digest, NEWEST)))
-        == 1
-    )
+    assert len(day_metrics.read_public_shard(day_metrics.public_shard_path(digest, NEWEST))) == 1
 
 
 # --- the run-day reduction ---------------------------------------------------
@@ -751,9 +725,9 @@ def test_an_editorial_fault_never_takes_the_band_from_a_failed_run() -> None:
     assert [c.severity for c in capped] == [console_band.EDITORIAL_CAP]
     assert capped[0].text == loud.text and capped[0].sentence == loud.sentence
     assert console_band.EDITORIAL_CAP < console_band.BROKEN
-    assert [
-        c.severity for c in console_band.dead_gate_candidates({"desk": 1.0})
-    ] == [console_band.BROKEN]
+    assert [c.severity for c in console_band.dead_gate_candidates({"desk": 1.0})] == [
+        console_band.BROKEN
+    ]
 
 
 def test_a_box_with_no_swap_is_not_a_box_that_has_run_out_of_swap() -> None:
@@ -1076,14 +1050,13 @@ def test_the_published_month_file_is_a_list_of_rows_each_carrying_its_stamp(
     state, digest = tree
     _publish_all(state, digest, months=None)
 
-    payload = json.loads(
-        run_days.shard_path(digest, NEWEST).read_text(encoding="utf-8")
-    )
+    payload = json.loads(run_days.shard_path(digest, NEWEST).read_text(encoding="utf-8"))
 
     assert isinstance(payload, list)
     assert {row["version"] for row in payload} == {
-        __import__("idhazh.contracts.public_run_day", fromlist=["PublicRunDay"])
-        .PublicRunDay.schema_version()
+        __import__(
+            "idhazh.contracts.public_run_day", fromlist=["PublicRunDay"]
+        ).PublicRunDay.schema_version()
     }
 
 

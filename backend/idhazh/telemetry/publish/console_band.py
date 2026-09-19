@@ -26,8 +26,8 @@ owns it, never re-derived from a wider one:
   day-metrics record, each keyed to the newest day the manifests hold;
 - the free-swap pair comes from that same item-health shard, which is the only
   place either cell is recorded;
-- the machine facts come from `state/runtime-counters.csv`, whose growing read
-  `machine` declares;
+- the machine facts come from that day's `state/host-fingerprint/` shard, and the
+  shard count they are measured against comes from the run manifest;
 - the compaction lag comes from the fold this run already ran, handed in by the
   caller. It is never a listing taken here, because the fold runs first and the
   directory is empty by the time this file is written.
@@ -171,18 +171,12 @@ __all__ = [
     "read_band",
 ]
 
-BAND_RELPATH: Final = series.relpath(
-    series.CONSOLE_DIRNAME, series.BAND_FILENAME
-)
+BAND_RELPATH: Final = series.relpath(series.CONSOLE_DIRNAME, series.BAND_FILENAME)
 
 
 def band_path(digest_root: Path) -> Path:
     """`frontend/public/console/band.json`, derived from the digest root."""
-    return (
-        series.console_root(digest_root)
-        / series.CONSOLE_DIRNAME
-        / series.BAND_FILENAME
-    )
+    return series.console_root(digest_root) / series.CONSOLE_DIRNAME / series.BAND_FILENAME
 
 
 def read_band(path: Path) -> ConsoleBand:
@@ -267,9 +261,7 @@ def site_cost(days: Sequence[PublicRunDay]) -> tuple[float | None, int]:
         day = ordered[index]
         if day.published_items <= 0:
             continue
-        measured.append(
-            (day.site_bytes - ordered[index - 1].site_bytes) / day.published_items
-        )
+        measured.append((day.site_bytes - ordered[index - 1].site_bytes) / day.published_items)
     return middle_of(measured), len(measured)
 
 
@@ -486,9 +478,7 @@ class BandModel:
     total_ms: int | None
 
 
-def band_model(
-    health_rows: Sequence[Mapping[str, str]], record: DayMetrics | None
-) -> BandModel:
+def band_model(health_rows: Sequence[Mapping[str, str]], record: DayMetrics | None) -> BandModel:
     """The band's model facts for one day, from its bounded rows and record."""
     times = [
         value
@@ -550,7 +540,7 @@ def model_candidates(day: BandModel | None) -> list[Candidate]:
             Candidate(
                 text=f'{n} marked "not sure"',
                 sentence=(
-                    f"{n} {'summary is' if n == 1 else 'summaries are'} marked \"not sure\", "
+                    f'{n} {"summary is" if n == 1 else "summaries are"} marked "not sure", '
                     f"so the checker could not hold {'it' if n == 1 else 'them'} against the "
                     "article."
                 ),
@@ -691,9 +681,7 @@ def _one_run(rows: Sequence[Mapping[str, str]], planned: int | None) -> MachineF
     # One shard cannot spread against itself, so a run of one reports nothing
     # rather than 1.00x, which would read as "the hosts agreed".
     spread = None if len(rates) < 2 else max(rates) / min(rates)
-    return MachineFacts(
-        refused=0, shards=planned or 0, reported=len(kept), read_spread=spread
-    )
+    return MachineFacts(refused=0, shards=planned or 0, reported=len(kept), read_spread=spread)
 
 
 def machine_candidates(facts: MachineFacts) -> list[Candidate]:
@@ -821,9 +809,7 @@ def editorial(candidates: Sequence[Candidate]) -> list[Candidate]:
     return [
         candidate
         if candidate.severity <= EDITORIAL_CAP
-        else Candidate(
-            text=candidate.text, sentence=candidate.sentence, severity=EDITORIAL_CAP
-        )
+        else Candidate(text=candidate.text, sentence=candidate.sentence, severity=EDITORIAL_CAP)
         for candidate in candidates
     ]
 
@@ -944,9 +930,7 @@ class ReadSpread:
     ratio: float
 
 
-def read_spread_of(
-    date_stamp: str | None, rows: Sequence[Mapping[str, str]]
-) -> ReadSpread | None:
+def read_spread_of(date_stamp: str | None, rows: Sequence[Mapping[str, str]]) -> ReadSpread | None:
     """The read rate and not the write rate.
 
     Measured over the committed ledger the write rate barely moves and the read
@@ -1316,9 +1300,7 @@ def publish(
     widest = max(console.window_presets)
     months = months_a_window_can_touch(widest)
     day_root = series.series_root(digest_root, run_days.DIRNAME)
-    available = series.published_months(
-        digest_root, run_days.DIRNAME, run_days.SUFFIX
-    )
+    available = series.published_months(digest_root, run_days.DIRNAME, run_days.SUFFIX)
     days: list[PublicRunDay] = []
     for month in available[-months:]:
         days.extend(run_days.read_shard(day_root / f"{month}{run_days.SUFFIX}"))
@@ -1330,9 +1312,7 @@ def publish(
     anchor = newest_date or today.isoformat()
     feeds = ledger.load_health(state_root, today=anchor, within_days=widest)
     health_rows = (
-        []
-        if newest_date is None
-        else day_metrics.read_health_rows(state_root, newest_date)
+        [] if newest_date is None else day_metrics.read_health_rows(state_root, newest_date)
     )
     record = None
     if newest_date is not None:
@@ -1417,9 +1397,7 @@ def fetchable_months(digest_root: Path, telemetry_root: Path | None = None) -> l
     return sorted(found)
 
 
-def _machine_rows(
-    state_root: Path, *, within_days: int, anchor: str
-) -> list[Mapping[str, str]]:
+def _machine_rows(state_root: Path, *, within_days: int, anchor: str) -> list[Mapping[str, str]]:
     """The `work` host rows the widest span reaches, as raw cells.
 
     Raw rather than through `HostFingerprintRow`, because refusing a run is the
@@ -1470,8 +1448,4 @@ def _planned_shards(digest_root: Path, newest_date: str | None) -> dict[str, int
     if not source.is_file():
         return {}
     manifest = RunManifest.read(source)
-    return {
-        record.run_id: record.shards
-        for record in manifest.runs
-        if record.shards is not None
-    }
+    return {record.run_id: record.shards for record in manifest.runs if record.shards is not None}

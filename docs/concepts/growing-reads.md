@@ -110,9 +110,7 @@ names what to rewrite, `--every-shard` is the operator's full pass, and the
 command **refuses to run with neither flag** - a step that named neither would
 get the unbounded pass by accident.
 
-**One run, or one date.** `ledger.load_runtime_counters` already asked
-about one run and then read the lifetime file to find it; it streams now, and its
-cover is the run id it was handed. `ledger.load_settled_failures` and
+**One run, or one date.** `ledger.load_settled_failures` and
 `ledger.load_source_counts` take a date and open that day's shard.
 `corpus.scored_from_items` reads one run's own items directory. These are bounded
 by construction - the input never had a clock, and putting one on it could only
@@ -251,7 +249,6 @@ listed: its cover is its argument. These are `backend/`'s;
 | `ledger.load_settled_failures` | one item-health day file | one date |
 | `ledger.load_story_similarity_pairs` | one day file of `state/story-similarity/scored-pairs/` | one date. The fold counts a date into `score-distribution.json` once and the fit then reads only that record, so the day tree is opened by name and never walked. It costs the same on the thousandth day as on the third |
 | `ledger.load_source_counts` | one item-health day file | one date |
-| `ledger.load_runtime_counters` | streams `state/runtime-counters.csv` | one run |
 | `fingerprint.append_new` | streams `state/fingerprints.csv` | the identities on record, not the file |
 | `corpus.scored_from_items` | one run's items directory | one run |
 
@@ -315,6 +312,7 @@ than about this read ([run-the-pipeline.md](../how-to/run-the-pipeline.md#turnin
 | `span_rollup.publish` | the state shard for the month named | the month the run's own rows name, which the compaction folded before this read |
 | `public_telemetry.publish` | the `state/item-health/` days of the months the caller names, or every day when it names none | **the month the run appended to**, which is what `stages.assemble.stage_assemble` passes; `months=None` is unbounded on purpose |
 | `day_metrics.publish_public` | one month of `state/day-metrics/<YYYY>/<MM>/` | one month, which is at most 31 records for ever |
+| `machine.publish` | the `state/item-health/` and `state/host-fingerprint/` day files of the month named | the month the run appended to, plus any month whose published shard is missing and is not already below `public_machine_keep_months` - at most 31 days of each tree |
 | `run_days.publish` | one month of committed `run.json` and `digest.json` | one month, which is at most 31 days for ever |
 | `console_band.publish` | the newest `months_a_window_can_touch(widest)` run-day shards, the `state/host-fingerprint/` day files inside the window, and the newest day's `run.json` | `max(console.window_presets)`, committed at 90, for the first two; one file for the third |
 
@@ -325,15 +323,12 @@ month, for ever. Deriving the newest stem from today's date instead would answer
 nothing at all for a tree whose last run was two months ago - the same reason
 `payload.readShards` lists its own directory.
 
-**One is unbounded on purpose.** `machine.months_on_file` streams
-`state/runtime-counters.csv`, which is one appended file with no shards and no
-prune, so a run that wants September's rows walks every row ever appended to
-find them. No cover in days, no cover in months and no identity set answers
-"which rows are September's" more cheaply than reading them. It costs **one file
-handle** whatever it holds - the same handle `ledger.load_runtime_counters`
-already opens for one run - and what it WRITES is bounded: a row below
-`public_machine_keep_months` is dropped on the way through rather than written
-into a file the prune would delete on the next pass.
+**One left this block on 2026-09-19.** The machine series used to stream
+`state/runtime-counters.csv` whole to find one month's rows, because that file was
+one appended CSV with no shards and no prune. Its columns moved onto two day
+trees, so `machine.publish` is an ordinary month-scoped producer now and the row
+above is its cover. What that deletion cost is in
+[adaptive-pruning.md](adaptive-pruning.md#what-deleting-the-flat-counters-file-cost).
 
 **The eighth answers to a different knob, and that knob has never bitten,
 2026-09-12.** `public_telemetry.publish` is the odd member of this block: it
@@ -446,7 +441,7 @@ the last day there was.
 | `payload.evalRows` | through `readDayShards`, over `state/scores/` | the same 91 |
 | `payload.feedResults` | through `readDayShards`, over `state/feed-health/` | the same 91 |
 | `span-rollup.loadSpanRollup` | through `readShards`, over `state/span-rollup/` | the same 5, and the caller wants the newest entry |
-| `runtime-counters.loadMachineCounters` | one file, plus item-health through `readDayShards` | the day cover, and `state/runtime-counters.csv` is one file |
+| `machine-counters.loadMachineCounters` | `state/host-fingerprint/` and `state/item-health/`, both through `readDayShards` | the day cover, for both |
 | `payload.itemHealthForDay` | one item-health day file | one date |
 | `payload.dayMetrics` | one record a date | the dates handed in |
 | `payload.telemetryMonths`, `payload.indexMonths` | one directory listing, sliced to the newest months | `LEDGER_WINDOW_MONTHS`, where the caller takes it |
