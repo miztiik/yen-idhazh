@@ -115,10 +115,10 @@ entry pins `n_max: 2`. Nobody has run 4 to see whether the drift follows it.
 `runtime_candidate=draft_depth` runs four configurations inside one job - the
 head off, then `n_max` at 1, 2 and 4 - and reads the three against the head-off
 case rather than against a baseline, so no runner time is spent re-measuring the
-shipped configuration. It pins `temperature: 0` on every case, which is the
-control the four dispatches above did not have: every committed entry runs at
-0.2, where the seed decides which token is drawn, so a changed summary there
-could have been the sampler. At 0 a changed summary can only be the head.
+shipped configuration. **It pins `temperature: 0` on every case itself**, which
+is how a re-run today keeps the control every reading above was taken with. The
+pin sits in the case set rather than in the operator's hands, so a dispatch
+cannot forget it and three cases pinned with one forgotten cannot happen.
 [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md#the-cheapest-check-is-the-pipeline-tests-and-it-uses-the-real-prompts)
 carries the dispatch and what each argument is for.
 
