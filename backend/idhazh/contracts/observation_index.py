@@ -70,4 +70,5 @@ class ObservationIndexRow(Contract):
 
     @classmethod
     def from_csv_row(cls, row: dict[str, str]) -> Self:
-        return cls.model_validate({name: row[name] for name in cls.model_fields})
+        """A column the file does not carry reads as an empty cell, which both of these refuse."""
+        return cls.model_validate(dict.fromkeys(cls.model_fields, "") | dict(row))

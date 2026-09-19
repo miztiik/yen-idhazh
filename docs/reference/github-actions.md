@@ -211,18 +211,24 @@ The health check then asserts that
 configured filename. A shard that fails either one stops before it summarizes
 anything.
 
-Assemble runs even after a worker failure, then commits the digest and state.
+Assemble runs even after a worker failure, then commits the digest and state. It
+does not run after a PLAN failure: the plan is the artifact it downloads by name,
+so there is nothing to assemble, and starting it anyway reported a missing
+artifact one job away from whatever actually went wrong. The gate is
+`!cancelled() && needs.plan.result == 'success'`, and the status function is what
+keeps the failed-worker path - a bare condition gets an implicit `success()` over
+every job in `needs`, which would hold the day back for one shard that died.
 
-**A run that publishes nothing annotates the run summary.** `if: always()` buys
-the record of a bad day, and its cost is a stage that can decide nothing and
-still exit 0. Without the annotation, a run whose every shard refused at start-up
-commits an empty day and leaves the only sentence naming the cause in a work-job
-log that expires - so the published archive keeps the symptom for ever and the
-cause for ninety days. `stage_assemble` prints
+**A run that publishes nothing annotates the run summary.** Running after a
+failed worker buys the record of a bad day, and its cost is a stage that can
+decide nothing and still exit 0. Without the annotation, a run whose every shard
+refused at start-up commits an empty day and leaves the only sentence naming the
+cause in a work-job log that expires - so the published archive keeps the symptom
+for ever and the cause for ninety days. `stage_assemble` prints
 `::error title=The run published nothing::` when a day planned stories and
 published none, naming the counts and sending the reader to the work jobs. It
 does not exit non-zero: failing there would skip the steps that commit the day,
-which is the invisibility `if: always()` exists to prevent.
+which is the invisibility this job's condition exists to prevent.
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%

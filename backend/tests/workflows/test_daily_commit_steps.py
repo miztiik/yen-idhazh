@@ -19,6 +19,7 @@ from ._harness import (
     COMPACT_STEP,
     DROP_ENTRY_POINT,
     FINGERPRINT_STEP,
+    PLAN_STEP,
     SCRIPTS_DIR,
     SUBSTITUTED_DATE,
     SUBSTITUTED_DAY_DIR,
@@ -184,9 +185,16 @@ def test_the_catch_up_compaction_runs_before_the_plan_job_commits() -> None:
     same file again. Nothing would be lost - the fold is idempotent - but two
     head writers in one run is the shape this design removes, and the third
     arrives by looking like the second.
+
+    It runs before the PLAN as well, and that one is about what a refusal costs.
+    The fold is the one step here that does not degrade: a row it cannot read
+    ends the job. Placed after the feed reads, a refusal throws away every read
+    the job had already paid for. Nothing in the fold needs the day the plan
+    writes - a waiting row is filed under the date in its own cells.
     """
     workflow = _load_workflows()["digest.yml"]
     names = [step.get("name") for step in _steps(workflow, "plan")]
+    assert names.index(COMPACT_STEP) < names.index(PLAN_STEP)
     assert names.index(COMPACT_STEP) < names.index(COMMIT_STEPS["plan"])
     assert names.index(COMPACT_STEP) < names.index(FINGERPRINT_STEP)
     assert COMMIT_STAGED_PATHS["plan"] == ["state"]

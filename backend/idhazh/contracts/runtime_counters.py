@@ -422,8 +422,17 @@ class RuntimeCountersRow(Contract):
 
     @classmethod
     def from_csv_row(cls, row: dict[str, str]) -> Self:
-        """The inverse. An empty cell is an absent value, never a zero."""
-        payload: dict[str, Any] = {name: row[name] for name in cls.model_fields}
+        """The inverse. An empty cell is an absent value, never a zero.
+
+        A column the file does not carry at all reads as an empty cell too, so a
+        row written before a column existed still opens. No cell here reads as a
+        measurement when it is blank: a series this build does not publish comes
+        back absent, and every other column fails its own field parser.
+
+        A column this build cannot place is kept rather than projected away, so
+        the model refuses the row instead of quietly losing the cell.
+        """
+        payload: dict[str, Any] = dict.fromkeys(cls.model_fields, "") | dict(row)
         for name in cls._absent_when_blank():
             if payload[name] == "":
                 payload[name] = None
