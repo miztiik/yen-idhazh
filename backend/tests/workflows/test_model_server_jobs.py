@@ -570,6 +570,11 @@ def test_a_counters_row_that_cannot_say_which_job_wrote_it_is_refused() -> None:
     whose cell is empty rather than default it: a defaulted blank would file the
     planner's numbers under the summarizer's name and every gate would stay
     green.
+
+    A column the file never carried reads as that same empty cell, so an absent
+    column and a blank one are one refusal here, named after the column. The
+    `work` default further down is the JSON payload's and it stays: a payload
+    carries no header, so nothing in it can say the column was ever there.
     """
     with COUNTERS_FIXTURE.open(encoding="utf-8", newline="") as handle:
         raw = list(csv.DictReader(handle))
@@ -595,9 +600,9 @@ def test_a_counters_row_that_cannot_say_which_job_wrote_it_is_refused() -> None:
         assert rate > 0, f"the {job_name} row has no decode rate"
 
     nameless = {name: value for name, value in raw[0].items() if name != "job"}
-    with pytest.raises(KeyError):
+    with pytest.raises(ValidationError, match="job"):
         runtime_counters.RuntimeCountersRow.from_csv_row(nameless)
-    with pytest.raises(ValidationError):
+    with pytest.raises(ValidationError, match="job"):
         runtime_counters.RuntimeCountersRow.from_csv_row({**raw[0], "job": ""})
 
     # And the other half of `CLAUDE.md` section 11: a row written before the

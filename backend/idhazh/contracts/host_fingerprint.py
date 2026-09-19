@@ -270,8 +270,24 @@ class HostFingerprintRow(Contract):
 
     @classmethod
     def from_csv_row(cls, row: dict[str, str]) -> Self:
-        """The inverse. An empty cell is an absent reading, never a zero."""
-        payload: dict[str, Any] = {name: row[name] for name in cls.model_fields}
+        """The inverse. An empty cell is an absent reading, never a zero.
+
+        A column the file does not carry at all reads as an empty cell too, so a
+        row written before a column existed still opens. That is what keeps a
+        widening additive: every cell this row can be missing is one whose
+        absence means nobody took the reading, and every other cell fails its own
+        field parser by name rather than raising on a bare key.
+
+        `flags` is the one column that has to be there. An empty `flags` is a
+        reading - it says the host reported none of the watched instruction-set
+        flags - so a file that never carried the column would arrive as that
+        reading, and nothing downstream could tell the two apart.
+
+        A column this build cannot place is kept rather than projected away, so
+        the model refuses the row instead of quietly losing the cell.
+        """
+        payload: dict[str, Any] = dict.fromkeys(cls.model_fields, "") | dict(row)
+        payload["flags"] = row["flags"]
         for name in cls._absent_when_blank():
             if payload[name] == "":
                 payload[name] = None
