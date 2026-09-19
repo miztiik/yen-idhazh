@@ -18,7 +18,8 @@ the labeller's name is on every row rather than in a header somewhere.
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Self
+from collections.abc import Mapping
+from typing import Any, ClassVar, Final, Self
 
 from pydantic import Field, model_validator
 
@@ -31,6 +32,23 @@ from idhazh.contracts.base import (
     derive_url_key,
 )
 from idhazh.contracts.item_health import OneLine
+
+_MARKS: Final[Mapping[str, bool]] = {"true": True, "false": False}
+
+
+def _mark(cell: str) -> bool:
+    """The `same_story` cell as a bool, refusing any spelling it does not know.
+
+    Comparing against one spelling reads every other spelling as false, and false
+    is the load-bearing mark here: a file read that way becomes all two-story
+    pairs, and the floor fitted from it refuses every merge without erroring.
+    """
+    try:
+        return _MARKS[cell.strip().lower()]
+    except KeyError:
+        raise ValueError(
+            f"same_story is {cell!r}, and a mark has to be one of {sorted(_MARKS)}"
+        ) from None
 
 
 class SimilarityHoldoutPair(Contract):
@@ -135,5 +153,5 @@ class SimilarityHoldoutPair(Contract):
     @classmethod
     def from_csv_row(cls, row: dict[str, str]) -> Self:
         payload: dict[str, Any] = {name: row.get(name, "") for name in cls.model_fields}
-        payload["same_story"] = row.get("same_story", "") == "True"
+        payload["same_story"] = _mark(row.get("same_story", ""))
         return cls.model_validate(payload)
