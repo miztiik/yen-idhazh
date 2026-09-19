@@ -1226,6 +1226,20 @@
           "title": "Host Fingerprint Bandwidth Mib",
           "type": "integer"
         },
+        "host_fingerprint_keep_months": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How long state/host-fingerprint/ keeps a month. Null means never, and never is the default, so a clone that configures nothing deletes nothing. config/idhazh.json sets 14. A row here is one job's silicon on one run - the machine the platform handed us and what its model server counted - so it is deleted rather than folded: a total over a month fourteen months back names no machine and answers nothing. Without a window this tree grows every run for ever, one row per job per shard (Guardrail #12). Set, it may not sit below public_machine_keep_months, because the published machine shard is rebuilt from this ledger. The ledger files by day and this age is a month, so the prune takes a month's day files whole.",
+          "title": "Host Fingerprint Keep Months"
+        },
         "item_health_aggregate_keep_months": {
           "anyOf": [
             {
@@ -1256,7 +1270,7 @@
         },
         "public_machine_keep_months": {
           "default": 14,
-          "description": "How long frontend/public/machine/ keeps a month of runtime counters. Fourteen on the same argument. The source is one appended CSV rather than a shard directory, so the published copy is where the month boundary is first drawn and this is the only age it has.",
+          "description": "How long frontend/public/machine/ keeps a month of machine rows. Fourteen on the same argument. The shard is folded from state/item-health/ and state/host-fingerprint/, so it may not outlive either source: a published month whose source months are gone cannot be rebuilt, which is the argument public_telemetry_keep_months makes for its own pair.",
           "minimum": 1,
           "title": "Public Machine Keep Months",
           "type": "integer"
@@ -2393,6 +2407,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "observability.host_fingerprint_keep_months, additive, default null.",
+      "version": "2026-09-19T09:00",
+      "why": "state/host-fingerprint/ was the one committed ledger with no age at all."
+    },
+    {
       "change": "The three extract.chrome_* knobs, removed with the store they governed.",
       "version": "2026-09-18T11:00",
       "why": "Over a full run the store moved the boilerplate signal zero times."
@@ -2406,11 +2425,6 @@
       "change": "adaptive_dedup_threshold and run.judge_shard_timeout_minutes, additive.",
       "version": "2026-09-18T09:00",
       "why": "The merge line was set by one reading and nothing re-read it."
-    },
-    {
-      "change": "extract.reject_too_short, additive, default false. Never rejects an abstract.",
-      "version": "2026-09-17T17:00",
-      "why": "Two of the three shape signals had a switch and the third did not."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2491,7 +2505,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-18T11:00",
+      "default": "2026-09-19T09:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2502,5 +2516,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-18T11:00"
+  "version": "2026-09-19T09:00"
 }

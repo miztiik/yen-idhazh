@@ -845,11 +845,22 @@ def test_a_fresh_clone_measures_itself_and_the_committed_config_agrees() -> None
     default. On or off, the committed file and a fresh clone must agree - the
     point of this test is that the shipped config never silently diverges from
     the defaults the code carries.
+
+    **One age is allowed to diverge, and it is named rather than skipped.**
+    `host_fingerprint_keep_months` defaults to null - never delete - because a
+    deletion default is a promise (`RetentionConfig`'s own rule), and the
+    committed file names the window one step ahead of it. Every other field
+    still has to agree, and this one still has to diverge in the one direction
+    that is safe: unconfigured keeps everything, committed names a window.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     fresh = AppConfig.model_validate({})
 
-    assert fresh.observability == committed.observability
+    assert committed.observability.model_dump(
+        exclude={"host_fingerprint_keep_months"}
+    ) == fresh.observability.model_dump(exclude={"host_fingerprint_keep_months"})
+    assert fresh.observability.host_fingerprint_keep_months is None
+    assert committed.observability.host_fingerprint_keep_months is not None
     assert fresh.observability.evaluation_enabled
     assert fresh.observability.telemetry_publish
     assert fresh.observability.runtime_counters_scrape

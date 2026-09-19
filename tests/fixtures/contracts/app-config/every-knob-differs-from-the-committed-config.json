@@ -224,6 +224,7 @@
     "feed_health_keep_months": 20,
     "host_fingerprint": false,
     "host_fingerprint_bandwidth_mib": 256,
+    "host_fingerprint_keep_months": 26,
     "item_health_aggregate_keep_months": 36,
     "item_health_full_grain_months": 18,
     "public_day_metrics_keep_months": 21,

@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Guardrail #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -738,6 +738,7 @@ retiring it is a removal with a read-side migration behind it (section 11).
 | `item_health_full_grain_months` | `14` | Nothing. It is where `state/item-health/` stops being kept item by item. |
 | `item_health_aggregate_keep_months` | `null` | Nothing by default. Null means a folded month is never removed. |
 | `feed_health_keep_months` | `14` | Nothing. It is where `state/feed-health/` stops keeping a month, and past it the month is deleted rather than summarised. |
+| `host_fingerprint_keep_months` | `null`, committed `14` | Nothing by default. Null means `state/host-fingerprint/` never loses a month, and the committed file names the window one step ahead of the default. Set, it may not sit below `public_machine_keep_months`. |
 | `scores_full_grain_months` | `14` | Where `state/scores/` stops being kept item by item. Past it a month becomes `state/score-archive/<YYYY-MM>.json` and the shard is deleted. |
 | `score_archive_keep_months` | `null` | Nothing by default. Null means a summarised score month is never removed. |
 | `visuals_full_grain_months` | `14` | Where `state/visuals/` stops being kept attempt by attempt. Past it a month folds to the eight-term group in `state/visual-aggregate/` and the shard is deleted. |
@@ -832,6 +833,7 @@ today ([adaptive-pruning.md](adaptive-pruning.md#the-visual-fold-key-is-eight-te
 | `state/scores/` | `scores_full_grain_months` (14) | `score_archive_keep_months` (null) |
 | `state/visuals/` | `visuals_full_grain_months` (14) | `visual_aggregate_keep_months` (null) |
 | `state/feed-health/` | `feed_health_keep_months` (14) | none - a per-feed-per-run record is not a total worth keeping |
+| `state/host-fingerprint/` | `host_fingerprint_keep_months` (null by default, 14 committed) | none - one job's silicon on one run, and a total over an old month names no machine |
 
 And one for each published copy, because a reader fetches those and our own disk
 is not what bounds them:
@@ -841,7 +843,7 @@ is not what bounds them:
 | `frontend/public/telemetry/` | `public_telemetry_keep_months` (14) | `item_health_full_grain_months` |
 | `frontend/public/run-days/` | `public_run_days_keep_months` (14) | nothing - the source is the day payloads, whose retention is the archive's |
 | `frontend/public/day-metrics/` | `public_day_metrics_keep_months` (14) | nothing - `state/day-metrics/` has no age of its own |
-| `frontend/public/machine/` | `public_machine_keep_months` (14) | nothing - the source is one appended CSV, so the copy is where a month boundary first exists |
+| `frontend/public/machine/` | `public_machine_keep_months` (14) | `host_fingerprint_keep_months`, which may not sit below it - the shard is folded from that tree and from `state/item-health/` |
 | `frontend/public/span-rollup/` | `public_span_rollup_keep_months` (14) | nothing |
 
 **Two ages left this table on 2026-09-16.** `public_scores_keep_months` and
@@ -957,7 +959,10 @@ only strengthens.
 `public_telemetry_keep_months`, deletes `state/feed-health/` past
 `feed_health_keep_months`, and archives `state/scores/` past
 `scores_full_grain_months` before deleting the shard. `score_archive_keep_months`
-is the sixth and is null, so nothing has ever deleted an archive.
+is the sixth and is null, so nothing has ever deleted an archive. From 2026-09-19
+the same step also deletes `state/host-fingerprint/` past
+`host_fingerprint_keep_months`, which was the one committed day-filed ledger with
+no age at all.
 
 **A score month is summarised before it is deleted, and it is the only store here
 with a summary in front of the deletion.** The archive is
