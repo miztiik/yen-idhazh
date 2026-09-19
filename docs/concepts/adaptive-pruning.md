@@ -1,6 +1,6 @@
 # Adaptive Pruning
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 
 One question, asked of every file this project writes:
 
@@ -166,6 +166,7 @@ is the count of month shards a console read opens, and no read opens a visual
 | --- | --- | --- | --- |
 | `state/seen/` | Delete (lookup) | `collect.seen_window_days` | `ledger.load_seen` opens the day files that window names and nothing else, so an older day answers no question anybody asks. The one age here counted in days, so the prune keeps exactly the files the read opens |
 | `state/feed-health/` | Delete (lookup) | `observability.feed_health_keep_months` | a per-feed-per-run record, not a total worth keeping. The quarantine reads 31 days and the console reaches 367 inclusive days, a year and a day |
+| `state/host-fingerprint/` | Delete (lookup) | `observability.host_fingerprint_keep_months` | one job's silicon on one run, so a total over an old month names no machine. The age is null by default - a deletion default is a promise - and `config/idhazh.json` names 14, the floor `public_machine_keep_months` sets because the published shard is folded from this tree |
 | `state/traces/` | Delete (lookup) | `observability.trace_window_days` | a trace is what an operator opens to see one recent run step by step. No committed instance yet |
 | `state/item-health/` | **Fold** -> `state/telemetry-aggregate/` | `observability.item_health_full_grain_months` | every console rate divides by this census, so the daily totals have to outlive the per-item grain |
 | `state/scores/` | **Fold** -> `state/score-archive/` | `observability.scores_full_grain_months` | it is the evidence behind every published quality claim, so the summary is written, read back and reconciled first |
@@ -179,7 +180,6 @@ is the count of month shards a console read opens, and no read opens a visual
 | `state/span-rollup/` | Keep | none of its own | the committed record a trace is not. No committed instance yet |
 | `state/visual-prunes/` | Keep | none | it is property 5 - the record of what the prune did, including the runs it did nothing |
 | `state/feed-retirements.csv` | Keep | never | it carries no time window at all. A run that forgot a retired address would start asking a dead one again |
-| `state/fingerprints.csv` | Keep | none | one stamp a run |
 | `state/day-validations.csv` | Keep | none | one receipt a day, from `idhazh validate-days` |
 | `state/labels.csv` | **Keep, always** | never | the only ground truth here, and the one file in `state/` a person wrote rather than a machine. No committed instance yet |
 | `state/<run.trial_state_dirname>/validation/` | Keep | none of its own | one verdict a dispatch, filed on the day tree. It lands under the trial root because only a qualification writes it, and `prune-state` already bounds that root |

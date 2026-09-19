@@ -15,7 +15,7 @@ from typing import Final
 import pytest
 
 from idhazh import ledger
-from idhazh.contracts.base import ServerJob, derive_url_key
+from idhazh.contracts.base import Contract, ServerJob, derive_url_key
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.observation_index import ObservationIndexRow
@@ -518,6 +518,152 @@ def test_the_store_top_may_hold_the_file_that_keeps_it_in_a_checkout(tmp_path: P
 
     assert ledger.segment_files(state) == []
     assert compact.stage_compact(state).segments_read == 0
+
+
+def test_a_segment_written_before_a_column_existed_still_folds(tmp_path: Path) -> None:
+    """The widening, driven where it actually breaks: a segment, under its own header.
+
+    A run that opened before a column was added leaves its segment behind, and
+    the next run reads that file with the wider contract. A build that cannot
+    place it is not widening the ledger, it is abandoning the rows already in it
+    - and the rows it abandons are the ones a failed run left, which are the
+    only reason the store has a catch-up at all.
+
+    **The head is the wrong file to drive this with.** A head is re-filed under
+    the current columns before anything reads it, and a short line under a wide
+    header is padded by the CSV reader, so a head-driven case passes whether or
+    not the contract can read a narrow row. A segment carries its own header and
+    nothing pads it, so the cell count below is an assertion that can fail.
+    """
+    state = tmp_path / ledger.STATE_DIRNAME
+    added = ("server_prompt_tokens", "server_prompt_seconds")
+    cells = _host_row(
+        TODAY, RUN, job=ServerJob.WORK, shard=0, cpu_model="AMD EPYC 7763", job_seconds=5550
+    )
+    narrow = tuple(name for name in HostFingerprintRow.csv_columns() if name not in added)
+    _write(
+        state,
+        ledger.SegmentLedger.HOST_FINGERPRINT,
+        f"{RUN}-1-{ServerJob.WORK.value}-00.csv",
+        ledger.render_file(narrow, [cells]),
+    )
+
+    report = compact.stage_compact(state)
+
+    header, *body = (
+        ledger.host_fingerprint_path(state, TODAY).read_text(encoding="utf-8").splitlines()
+    )
+    columns = header.split(",")
+    assert columns == list(HostFingerprintRow.csv_columns())
+    assert report.rows_merged == 1
+    written = dict(zip(columns, next(csv.reader(body)), strict=True))
+    assert [written[name] for name in added] == ["", ""], "a reading nobody took is empty"
+    assert written["job_seconds"] == "5550", "the widening may not cost the cells already there"
+    assert HostFingerprintRow.from_csv_row(written).server_prompt_tokens is None
+
+
+def _a_column_that_may_be_missing(model: type[Contract]) -> str:
+    """One cell this row can be without, derived so a rename cannot rot the case."""
+    return next(name for name, field in model.model_fields.items() if field.default is None)
+
+
+def _folds_without(
+    state: Path,
+    which: ledger.SegmentLedger,
+    job: ServerJob,
+    columns: tuple[str, ...],
+    cells: dict[str, str],
+    dropped: str,
+) -> dict[str, str]:
+    """Fold one segment written before `dropped` existed, and hand back the head's row."""
+    narrow = tuple(name for name in columns if name != dropped)
+    _write(state, which, f"{RUN}-1-{job.value}-00.csv", ledger.render_file(narrow, [cells]))
+
+    compact.stage_compact(state)
+
+    header, *body = (
+        ledger.segment_head(state, which, TODAY).path.read_text(encoding="utf-8").splitlines()
+    )
+    return dict(zip(header.split(","), next(csv.reader(body)), strict=True))
+
+
+def test_a_counters_segment_written_before_a_column_existed_still_folds(tmp_path: Path) -> None:
+    """The same widening, on the second ledger a run leaves segments of."""
+    written = _counters_model(TODAY, RUN, job=ServerJob.WORK, shard=0)
+    dropped = _a_column_that_may_be_missing(RuntimeCountersRow)
+
+    row = _folds_without(
+        tmp_path / ledger.STATE_DIRNAME,
+        ledger.SegmentLedger.RUNTIME_COUNTERS,
+        ServerJob.WORK,
+        RuntimeCountersRow.csv_columns(),
+        written.csv_row(),
+        dropped,
+    )
+
+    assert row[dropped] == "", "a series this build did not publish is empty, not zero"
+    assert RuntimeCountersRow.from_csv_row(row).shard == 0
+
+
+def test_a_verdict_segment_written_before_a_column_existed_still_folds(tmp_path: Path) -> None:
+    """And on the ledger a candidate's verdict lands in, which `validate.yml` writes."""
+    written = _verdict(TODAY, RUN, model_id="gemma-4-e4b", qualified=True)
+    dropped = _a_column_that_may_be_missing(ValidationRow)
+
+    row = _folds_without(
+        tmp_path / ledger.STATE_DIRNAME,
+        ledger.SegmentLedger.VALIDATION,
+        ServerJob.DECIDE,
+        ValidationRow.csv_columns(),
+        written.csv_row(),
+        dropped,
+    )
+
+    assert row[dropped] == "", "a prior nobody published is empty, not zero"
+    assert ValidationRow.from_csv_row(row).model_id == "gemma-4-e4b"
+
+
+def test_a_segment_missing_the_cell_that_would_read_as_a_reading_is_refused(
+    tmp_path: Path,
+) -> None:
+    """`flags` is the one column an absent cell may not stand in for.
+
+    An empty `flags` is a reading - it says the host reported none of the watched
+    instruction-set flags - so a file that never carried the column would arrive
+    as that reading and nothing downstream could tell the two apart. Every other
+    cell here either comes back absent or fails its own field parser.
+    """
+    state = tmp_path / ledger.STATE_DIRNAME
+    columns = tuple(name for name in HostFingerprintRow.csv_columns() if name != "flags")
+    _write(
+        state,
+        ledger.SegmentLedger.HOST_FINGERPRINT,
+        f"{RUN}-1-{ServerJob.WORK.value}-00.csv",
+        ledger.render_file(columns, [_host_row(TODAY, RUN, job=ServerJob.WORK, shard=0)]),
+    )
+
+    with pytest.raises(ValueError, match="flags"):
+        compact.stage_compact(state)
+
+
+def test_a_segment_carrying_a_column_this_build_cannot_place_is_refused(tmp_path: Path) -> None:
+    """A file wider than the contract is a writer this build has not met.
+
+    Reading it onto the columns we know would drop that cell and fold on, which
+    is how a ledger loses a column with nothing printed and exit 0.
+    """
+    state = tmp_path / ledger.STATE_DIRNAME
+    unplaceable = "server_decode_tokens"
+    cells = _host_row(TODAY, RUN, job=ServerJob.WORK, shard=0) | {unplaceable: "12"}
+    _write(
+        state,
+        ledger.SegmentLedger.HOST_FINGERPRINT,
+        f"{RUN}-1-{ServerJob.WORK.value}-00.csv",
+        ledger.render_file((*HostFingerprintRow.csv_columns(), unplaceable), [cells]),
+    )
+
+    with pytest.raises(ValueError, match=unplaceable):
+        compact.stage_compact(state)
 
 
 def test_a_segment_row_the_contract_cannot_read_names_the_row(tmp_path: Path) -> None:

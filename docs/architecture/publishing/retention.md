@@ -48,9 +48,11 @@ suffix, deletes rendered charts only, and is explicitly forbidden from touching
 a day's payload or its date directory. Unpublishing is the opposite operation
 and it needs its own name.
 
-**A published day is eleven things, and a command that misses one leaves a
+**A published day is the artefacts below, and a command that misses one leaves a
 reader on a broken page.** The daily publish stages exactly this set, so this
-set is what an unpublish has to answer for:
+set is what an unpublish has to answer for. A count is deliberately not given:
+the last one said eleven over twelve rows, because a row was added and the
+sentence above it was not.
 
 | Artefact | Grain | What an unpublish owes it |
 | --- | --- | --- |
@@ -59,11 +61,13 @@ set is what an unpublish has to answer for:
 | `frontend/public/digest/<Y>/<M>/<D>/<item_id>.json` | day | remove |
 | `frontend/public/assist/index/<Y>-<M>.json` and `.bin` | month | **rebuild**, never edit |
 | `frontend/public/telemetry/<Y>-<M>.csv` | month | rewrite without the day's rows |
+| `frontend/public/machine/<Y>-<M>.csv` | month | **rebuild** from the day files that are left |
 | `frontend/public/source-health.json` | whole site | rebuild |
 | `state/published/<Y>/<M>/<D>.csv` | day | remove |
 | `state/scores/<Y>/<M>/<D>.csv` | day | remove |
 | `state/score-index/<Y>/<M>/<D>.csv` | day | remove |
 | `state/item-health/<Y>/<M>/<D>.csv` | day | remove |
+| `state/host-fingerprint/<Y>/<M>/<D>.csv` | day | remove |
 | `corpus/corpus.jsonl` | rolling window | rewrite without the day |
 
 The month-grain rows are the trap. Three of them are shards a later run appends
@@ -74,12 +78,17 @@ already regenerates a whole month from the days present - so the index needs a
 rebuild call rather than an edit, and it is the one artefact that repairs itself
 correctly for free.
 
-**`state/seen/` and `state/fingerprints.csv` are deliberately absent from that
-table.** `state/seen/` records that a URL was *seen*, not that it was published;
-removing a day's rows there would let the next run rediscover every story it
-just unpublished, which turns one operator command into a loop.
-`state/fingerprints.csv` has had no writer since 2026-09-12 and is removed
-outright rather than unpublished from.
+`state/host-fingerprint/` is a day file and removing it is one `rm`, but it is
+the row that carries a second obligation: `telemetry/publish/machine.py` folds
+the published machine shard from that tree and from `state/item-health/`, so the
+day has to come off both and the month has to be republished from what is left.
+Deleting the source day alone leaves the drawn month still naming a machine for
+a day the site no longer has.
+
+**`state/seen/` is deliberately absent from that table.** It records that a URL
+was *seen*, not that it was published; removing a day's rows there would let the
+next run rediscover every story it just unpublished, which turns one operator
+command into a loop.
 
 **The reader-facing half is already designed and must not be re-decided.** This
 page's retention rules bind an unpublished day exactly as they bind a pruned
@@ -275,6 +284,7 @@ primitive pointed at the repository is the one accident nobody can undo.
 | --- | --- |
 | `counterfactual-scores` | nothing today |
 | `feed-health` | `observability.feed_health_keep_months` |
+| `host-fingerprint` | `observability.host_fingerprint_keep_months` |
 | `item-health` | `observability.item_health_full_grain_months` |
 | `score-index` | `observability.scores_full_grain_months` |
 | `scores` | `observability.scores_full_grain_months` |
@@ -302,7 +312,15 @@ guard's median and out of what step 4 compares this week against.
 outside it.** They file `<DD>.json` and `<DD>-<run>-<shard>.jsonl`, which
 `day_partition.day_files` refuses, and a second walker inside the prune would be
 a second answer to what a day file is. Bringing either in means teaching that
-one walker its suffix, which is where the question belongs.
+one walker its suffix, which is where the question belongs. `state/span-rollup/`
+files by month and `state/segments/` is scratch the compaction drains, so
+neither is a day store at all.
+
+**`host-fingerprint` joined the vocabulary on 2026-09-19 and was a real gap.**
+It has filed `<YYYY>/<MM>/<DD>.csv` since 2026-09-16, so the membership rule
+above already covered it and the list did not - an operator could take a day's
+census, scores and feeds back and leave the machines that produced them
+standing. The table above is where that day's obligation is written down.
 
 **`published` and `seen` are refused by name, with the reason attached.** Not
 forgetting is their whole job. `state/published/` is the guard against

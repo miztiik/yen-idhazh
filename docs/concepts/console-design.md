@@ -736,8 +736,9 @@ half-quote, and a rule whose reason has stopped holding is a rule to change.
   then the panel prints the ceiling beside the figure.** Everywhere else the
   domain comes from the data drawn, niced by the scale library - which is what
   `linearAxis` already does. A fixed axis over adaptive data wastes the plot; an
-  adaptive axis over a limit deletes the comparison. **Four things are not "the
-  data drawn", and each one widens the domain rather than replacing it.** Each is
+  adaptive axis over a limit deletes the comparison. **Five things are not "the
+  data drawn". Four of them widen the domain rather than replacing it; the fifth
+  narrows it, and is allowed only on the condition written beside it.** Each is
   named with the shipped site that proves it, because an exception nobody can
   point at is an exception nobody can check.
   - **A limit the panel exists to measure distance from** - 16 GiB of runner
@@ -765,6 +766,15 @@ half-quote, and a rule whose reason has stopped holding is a rule to change.
     per-plot domain inside one panel deletes every comparison the panel was built
     for. Shipped in the five tail plots on `/console/machine/`, which take one
     `linearAxis` over the extent of all five.
+  - **A distance far smaller than the population it sits in takes a window
+    around the limit instead**, and every value outside that window is counted at
+    the edge with its own figure printed rather than drawn. This is the one case
+    that narrows the domain, so it carries a condition: **the breach side has to
+    stay inside the window**, or it is the clipped breach the first case already
+    refuses. Shipped once, on the holdout panel of `/console/judgement/` - see
+    [the holdout margin is drawn at the scale of the
+    margin](#the-holdout-margin-is-drawn-at-the-scale-of-the-margin-not-of-the-score)
+    for the two measurements that forced it. Owner, 2026-09-19.
 
   **The cost this rule accepts, stated rather than hidden:** an adaptive axis
   re-nices when the reader moves the window, so the same panel on two days is not
@@ -1030,6 +1040,79 @@ behind them - `day-metrics.addresses_considered` and
 `run-days` and `span-rollup` payloads are clean.
 
 Authority: Susan, 2026-09-16.
+
+## The holdout margin is drawn at the scale of the margin, not of the score
+
+`The pairs a person marked apart` on `/console/judgement/` answers one question:
+would tonight's merge line fold together two articles a labeller read as two
+different stories? **The comparison it draws, written as a sentence: how far the
+closest marked-apart pair sits from the line, against how far the line may fall
+in one day.** That is a question about a distance, and the distance is **0.0007**
+as of 2026-09-19 while the scores it sits between run from 0.73 to 0.99. A panel
+that draws the population cannot draw the distance.
+
+**So the axis is the line and one day's legal fall, never the band.** It runs
+from two days' fall below the line to one day's fall above it - one fall cap
+either side of `floor_min`, both off `config/idhazh.json`, so the window is the
+same width every day and two days of this panel compare. The cap is not a score
+in the config: it is `max_down_bins` slots of `bin_width`, and the contract
+derives the score from them, so the panel multiplies the same two numbers.
+Measured on the built page at 1440: the margin drew at **5.8 px of a 1033 px
+plot** on the 0.88 to 1.00 band, and **24 px** on this one. At 5.8 px a dot 13 px
+across sits on top of the rule it is measured against, so a reader cannot see
+which side of the line the closest call is on - which is the whole of what the
+panel is for. The test gates on the 14 px a dot needs, not on the 24, because
+the reading moves whenever the fall cap does.
+
+**It reaches two days down because the sentence counts two days.** At the
+committed cap of 0.010 one day's legal fall already moves the count on the wrong
+side from 1 to all 4, and the day after adds none. The axis still draws both,
+because the headline names the day after and an axis stopping at one day would
+print a count for a line it had not drawn.
+
+**The zone goes down and only down.** The clamp caps both directions, but only a
+fall folds a pair the line refuses today - a rise folds fewer. A corridor drawn
+either side of the line would tint scores tomorrow cannot reach. The tint says:
+every mark in here is a pair tomorrow could fold.
+
+**The rule stays neutral and the panel takes the tone.** A line is a setting, so
+drawing it red would report a fault every day of its life. The panel is what
+changes hue - `bad` where a mark is already on the wrong side, `warn` where one
+day's fall would put one there - because the fault is the reading, not the
+setting.
+
+**Both costs of the line are drawn, not one.** The pairs marked as two stories
+are dots; the pairs marked as one story are a range strip on the same axis, the
+shape `What the judge said about the line` already ships two of. 117 of the 196
+one-story marks score below the line, and each of those is a story the reader
+sees twice. Only their scores reach the document - 1.7 KB against 88 KB for the
+same rows carrying their addresses and headlines, which the strip does not draw.
+**They are carried at six decimal places and that is load-bearing**: the count is
+a comparison against the line, two of the 196 sit between 0.93995 and 0.94, and
+at four places they round onto the line and the panel prints 115.
+
+**This panel is not a time series, and the owner's picture ships on the chart
+above it.** Four marks spanning 0.0064 on a 0.12-tall axis is 10 px of a 190 px
+plot, and four rules inside 10 px is one grey smear. `Where the merge line sits`
+already has days on one axis and score on the other, so the same marks are a
+tinted strip across that plot: the applied line walking down into the strip is
+the crossing, in the picture that can show it happening. Two drawings, two
+halves of one question - this one has the distance and no date, that one has the
+date and no distance.
+
+**What the reader loses.** A mark far below the line is off this scale, so it is
+counted at the edge with its score printed in words rather than drawn. That is
+the safe end of the axis and never the breach - a mark above the line always
+falls inside the window - but it means a reader cannot see the spread of the
+misses from the picture. The shut table under the panel carries every marked
+pair at zero attention cost, which is where that spread is.
+
+**This is the fifth case in [the thirteen chart
+rules](#thirteen-rules-hold-for-every-chart-on-this-console), and the only one
+that narrows a domain.** It is allowed here because the breach side stays inside
+the window; a fixed axis that clipped the breach is what the first case already
+refuses. Authority: owner, 2026-09-19, after a design review failed the panel on
+all five sufficiency checks in [design-system.md](design-system.md).
 
 ## Design rationale
 

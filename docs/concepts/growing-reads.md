@@ -442,16 +442,43 @@ the last day there was.
 | `payload.readDayShards`, `payload.itemHealthRows` | the newest `days` day files of `state/item-health/` | `LEDGER_WINDOW_DAYS`, which is `shardDays(90)` and so 91 |
 | `payload.evalRows` | through `readDayShards`, over `state/scores/` | the same 91 |
 | `payload.feedResults` | through `readDayShards`, over `state/feed-health/` | the same 91 |
+| `similarity-ledger.fittedLines` | through `readDayShards`, over `state/story-similarity/fitted-thresholds/` | its caller's `days`. The Judgement route hands it the widest window preset, worked out before the first file is opened |
+| `similarity-holdout.holdoutReading` | `state/story-similarity/holdout-pairs.csv`, then one published day payload for each distinct date that file names | the length of the holdout file, and nothing else |
 | `span-rollup.loadSpanRollup` | through `readShards`, over `state/span-rollup/` | the same 5, and the caller wants the newest entry |
 | `machine-counters.loadMachineCounters` | `state/host-fingerprint/` and `state/item-health/`, both through `readDayShards` | the day cover, for both |
 | `payload.itemHealthForDay` | one item-health day file | one date |
 | `payload.dayMetrics` | one record a date | the dates handed in |
 | `payload.telemetryMonths`, `payload.indexMonths` | one directory listing, sliced to the newest months | `LEDGER_WINDOW_MONTHS`, where the caller takes it |
 
+**The holdout read is the one on this page whose cover is a file rather than a
+number, and it is the one that reaches outside the window.** It asks whether the
+merge line still sits clear of every pair a person marked as two different
+stories, and that question is about those marks: a published day nothing marks
+is never opened, and a marked pair on a day the window no longer reaches still
+sets a floor the line has to stay above. So the bound cannot be a span of days
+without deleting evidence, and it cannot be a knob without a knob that means
+"how many of somebody's marks to believe".
+
+What it costs: at most two day payloads a marked row, de-duplicated to one read
+a distinct date. The committed file holds 200 marks naming 25 distinct dates, so
+it opens 25 files. **Another year of archive adds none of them.** Another
+hundred marks add at most a hundred, and they are added by a person or a
+labelling run rather than by the pipeline - which is the distinction Guardrail
+#12 draws: cost that rises because somebody asked for more is priced where they
+asked, and cost that rises because a run appended another day is the cost this
+page exists to refuse.
+
+The read is bounded inside each file too. The addresses and the dates the file
+names are worked out before the first day is opened, so a day payload is parsed
+once and everything outside those addresses is dropped on the way past - which
+matters, because the vector block is most of what a day payload weighs.
+
 **Two residues are named rather than hidden.** `publishedDates` lists the root
 once to find the newest year, which costs one directory entry a year for ever.
 `readShards`, `telemetryMonths` and `indexMonths` list their directory to learn
-which shards are newest, which costs one entry a month for ever. Neither opens a
+which shards are newest, which costs one entry a month for ever.
+`readDayShards` is the bigger one and `fittedLines` inherits it: the walk names
+one entry a recorded day where the month tree named one a month. Neither opens a
 file it does not need, and deriving the newest stem from today's date instead
 would answer nothing at all for a ledger whose last run was two months ago.
 

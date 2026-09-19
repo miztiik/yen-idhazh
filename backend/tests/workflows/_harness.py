@@ -711,6 +711,11 @@ COMMIT_STEPS: Final = {
 #: ends in a force push and commits nothing on 29 of 30 wakes.
 COMPACT_STEP: Final = "Fold any segments an earlier run left behind"
 
+#: The step the `plan` job exists for. The catch-up above runs ahead of it: a
+#: fold that refuses a row ends the job, and a refusal that lands after the feed
+#: reads has spent them for nothing.
+PLAN_STEP: Final = "Plan the day"
+
 COMMIT_BASE_ENV: Final = frozenset(
     {"COMMIT_MESSAGE", "NOTHING_STAGED_MESSAGE", "PUSH_FAILED_MESSAGE"}
 )

@@ -319,13 +319,17 @@ def test_a_row_survives_the_round_trip_through_the_ledger_shape(tmp_path: Path) 
 
 
 def test_a_day_file_written_before_the_two_prompt_cells_still_folds(tmp_path: Path) -> None:
-    """The read-side migration, proved on a file that is missing the columns.
+    """A head two columns narrower than the contract, and a new segment beside it.
 
-    Yesterday's run wrote a head two columns narrower than today's contract, and
-    a build that could not read it would be a contract break rather than a
-    widening. The settlement re-files the head on the next fold and the two cells
-    come back empty - which says the reading was not taken, not that the server
-    read nothing.
+    The settlement re-files the head on the next fold and the two cells come back
+    empty - which says the reading was not taken, not that the server read
+    nothing. Both rows end under one header.
+
+    **This is the scenario, not the proof of the widening.** A head is re-filed
+    before anything reads it and a short line under a wide header is padded by
+    the CSV reader, so this case passes whether or not the contract can read a
+    narrow row. What can fail is a segment under its own header, and that case
+    lives in `tests/pipeline/test_compact.py`.
 
     Built here rather than read off `state/`: a committed head is re-filed by the
     first fold that touches it, so a test that read one would pass today by

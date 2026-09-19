@@ -1384,15 +1384,13 @@ def test_the_records_a_day_already_holds_are_read_in_one_pass(
     )
 
 
-def test_the_settlement_repairs_a_torn_row_and_keeps_what_it_cannot_read(
+def test_the_settlement_repairs_a_torn_row(
     tmp_path: Path,
 ) -> None:
-    """A row shorter than its header is repaired, and an unreadable one is kept.
+    """A row shorter than its header is repaired, and the contract says with what.
 
     A short row is what a merge can leave when two sides wrote different widths,
-    and the contract's own reader knows what an absent cell means. A row it
-    cannot read at all is left exactly as it was and named in what comes back -
-    dropping it would lose a fact to fix a shape.
+    and the contract's own reader knows what an absent cell means.
 
     A row of the right width under the right header is not read at all. This pass
     repairs a shape; asking whether every committed cell still parses would be a
@@ -1403,19 +1401,51 @@ def test_the_settlement_repairs_a_torn_row_and_keeps_what_it_cannot_read(
     path = ledger.item_health_path(state, DATE)
     columns = ItemHealthRow.csv_columns()
     torn = ",".join(carried_row(2, source_id="wire").csv_row()[name] for name in columns[:11])
-    unreadable = "not-a-version,2026-09-15,2026-09-15-1"
     with path.open("a", encoding="utf-8", newline="") as handle:
-        handle.write(f"{torn}\n{unreadable}\n")
+        handle.write(f"{torn}\n")
 
     moved, complaints = ledger.settle_header(
         path, columns, ledger.refiler(ItemHealthRow), carried=ledger.ITEM_HEALTH_CARRIED
     )
 
     assert moved == 1, "the short row was re-filed under the full header"
-    assert len(complaints) == 1, complaints
+    assert complaints == []
     rows = _committed_rows(path)
-    assert [len(row) for row in rows[:3]] == [len(columns)] * 3
-    assert rows[3][0] == "not-a-version", "the line nobody could read is the line that was read"
+    assert [len(row) for row in rows] == [len(columns)] * len(rows)
+
+
+def test_the_settlement_leaves_the_file_alone_when_one_line_cannot_be_read(
+    tmp_path: Path,
+) -> None:
+    """One unreadable line stops the whole repair, and nothing is dropped.
+
+    Writing the rest would leave a header over a line that did not move, and the
+    width in that header is the one the next append checks itself against - so
+    the ragged row stops being visible as damage and becomes the file's own
+    shape. Nothing here reads that row to find out; the repair simply does not
+    half-land.
+
+    `migrate_header` refuses on the same condition. It raises where this returns,
+    because an abort here would cost the run every ledger row staged beside the
+    file it was fixing.
+    """
+    state = tmp_path / "state"
+    assert seed_item_health(state, DATE, [carried_row(1, source_id="wire")]) == 1
+    path = ledger.item_health_path(state, DATE)
+    columns = ItemHealthRow.csv_columns()
+    torn = ",".join(carried_row(2, source_id="wire").csv_row()[name] for name in columns[:11])
+    unreadable = "not-a-version,2026-09-15,2026-09-15-1"
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        handle.write(f"{torn}\n{unreadable}\n")
+    before = path.read_bytes()
+
+    moved, complaints = ledger.settle_header(
+        path, columns, ledger.refiler(ItemHealthRow), carried=ledger.ITEM_HEALTH_CARRIED
+    )
+
+    assert moved == 0, "the repair lands whole or not at all"
+    assert len(complaints) == 1, complaints
+    assert path.read_bytes() == before, "not one cell moved, and no line was dropped"
 
 
 def test_the_day_count_is_what_each_feed_put_in_front_of_a_reader(tmp_path: Path) -> None:

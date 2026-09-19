@@ -85,9 +85,14 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-09-19T02:00",
+            version="2026-09-20",
             change="observability.runtime_counters_scrape, removed with the store it governed.",
             why="The four cells a reader wants are on the host row, from the same scrape.",
+        ),
+        ChangelogEntry(
+            version="2026-09-19T09:00",
+            change="observability.host_fingerprint_keep_months, additive, default null.",
+            why="state/host-fingerprint/ was the one committed ledger with no age at all.",
         ),
         ChangelogEntry(
             version="2026-09-19T01:00",
@@ -98,11 +103,6 @@ class AppConfig(Contract):
             version="2026-09-19",
             change="adaptive_dedup_threshold.max_down_step loses its upper bound of 0.0083.",
             why="Fresh labels put the nearest two-story pair above the line, so the gap is gone.",
-        ),
-        ChangelogEntry(
-            version="2026-09-18T11:00",
-            change="The three extract.chrome_* knobs, removed with the store they governed.",
-            why="Over a full run the store moved the boilerplate signal zero times.",
         ),
         ChangelogEntry(
             version="2026-08-21",

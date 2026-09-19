@@ -293,6 +293,22 @@ class ObservabilityConfig(Model):
             "whole."
         ),
     )
+    host_fingerprint_keep_months: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "How long state/host-fingerprint/ keeps a month. Null means never, and "
+            "never is the default, so a clone that configures nothing deletes nothing. "
+            "config/idhazh.json sets 14. A row here is one job's silicon on one run - "
+            "the machine the platform handed us and what its model server counted - so "
+            "it is deleted rather than folded: a total over a month fourteen months "
+            "back names no machine and answers nothing. Without a window this tree "
+            "grows every run for ever, one row per job per shard (Guardrail #12). Set, "
+            "it may not sit below public_machine_keep_months, because the published "
+            "machine shard is rebuilt from this ledger. The ledger files by day and "
+            "this age is a month, so the prune takes a month's day files whole."
+        ),
+    )
     scores_full_grain_months: int = Field(
         default=14,
         ge=1,
@@ -381,10 +397,12 @@ class ObservabilityConfig(Model):
         default=14,
         ge=1,
         description=(
-            "How long frontend/public/machine/ keeps a month of shard rows. "
-            "Fourteen on the same argument. Both sources file by day, so the month "
-            "boundary is inherited from them and this bounds the published copy "
-            "without claiming to bound either ledger."
+            "How long frontend/public/machine/ keeps a month of machine rows. "
+            "Fourteen on the same argument. The shard is folded from "
+            "state/item-health/ and state/host-fingerprint/, so it may not outlive "
+            "either source: a published month whose source months are gone cannot be "
+            "rebuilt, which is the argument public_telemetry_keep_months makes for "
+            "its own pair."
         ),
     )
     public_span_rollup_keep_months: int = Field(
@@ -534,10 +552,14 @@ class ObservabilityConfig(Model):
     def _the_published_copy_lasts_as_long_as_its_source(self) -> Self:
         """A projection and the ledger it projects age together.
 
-        `public_telemetry` is the only pair left. The other four published
-        payloads have no state ledger of their own and so appear in no pair here -
-        `public_run_days`, `public_day_metrics`, `public_machine` and
-        `public_span_rollup` are bounded by their own knob and by
+        Two pairs. `public_telemetry` is the browser's copy of
+        `state/item-health/` and must EQUAL it. `public_machine` is folded from
+        `state/host-fingerprint/` and may not outlive it, but it may be shorter:
+        the state ledger carries columns the published shard drops, so an
+        operator who wants the raw machines longer than the drawn ones is asking
+        for something coherent. `public_run_days`, `public_day_metrics` and
+        `public_span_rollup` appear in neither pair - they have no state ledger
+        of their own and are bounded by their own knob and by
         `refuse_windows_shorter_than`.
         """
         for published, source in (
@@ -550,4 +572,12 @@ class ObservabilityConfig(Model):
                     "a published month nothing can check or a window the console cannot "
                     "draw"
                 )
+        host_months = self.host_fingerprint_keep_months
+        if host_months is not None and host_months < self.public_machine_keep_months:
+            raise ValueError(
+                "observability.host_fingerprint_keep_months must be at least "
+                "public_machine_keep_months. The published machine shard is folded from "
+                "state/host-fingerprint/, so a source month deleted while the published "
+                "one is still kept is a shard nothing can rebuild"
+            )
         return self
