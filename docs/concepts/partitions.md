@@ -311,7 +311,6 @@ commitment to convert any of them.
 | Collection | Path | Writer | Why not |
 | --- | --- | --- | --- |
 | Pipeline fingerprints | `state/fingerprints.csv` | `fingerprint.append_new`, from `stages.assemble.stage_assemble` | "Has this exact input run before" carries no window. Never pruned. |
-| Runtime counters | `state/runtime-counters.csv` | `stages.compact.stage_compact`, folding the segments `telemetry.host.stage_counters` writes | Read one run at a time by an audit with no time bound, and the slowest-growing ledger here. Each model-server job writes its own segment from 2026-09-18, so the one file has one writer again. |
 | Feed retirements | `state/feed-retirements.csv` | `ledger.append_retirements` | A retirement is permanent for one address. A run that forgot one would start asking a dead server again. |
 | Day validations | `state/day-validations.csv` | `stages.validate_days.stage_validate_days`, through `stages.validate_days._record_receipts` | A receipt file, read once a run. No window, so a partition would open every file anyway. |
 | Source health view | `frontend/public/source-health.json` | `telemetry.publish.source_health` | One document, rewritten whole each run. The read behind it was [audit finding 12](../reference/data-growth-audit.md); row 20 of the constant-cost-reads plan bounded it to the recorded dates it needs (#485), so it no longer walks all history to write the same document. |

@@ -31,9 +31,9 @@ from pytest import MonkeyPatch
 
 from idhazh import config, ledger, telemetry
 from idhazh.contracts.article import Article
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
-from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.contracts.summary import Summary
 from idhazh.stages.assemble import stage_assemble
 from idhazh.stages.compact import stage_compact

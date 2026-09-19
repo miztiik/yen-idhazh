@@ -19,7 +19,6 @@ from conftest import (
     FIXTURES_DIR,
     read_text,
     seed_item_health,
-    seed_runtime_counters,
     seed_span_rollup,
 )
 
@@ -39,12 +38,12 @@ from idhazh.contracts.item_health import (
     ItemStage,
 )
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
-from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
 from idhazh.stages import compact as compact_stage
+from idhazh.telemetry import silicon
 from utilities import split_published_ledger as split_ledger
 from utilities import split_visual_prunes as split_prunes
 from utilities.migrate_published_ledger import narrow
@@ -157,9 +156,7 @@ def fingerprint_row(*, on: str = DATE, shard: int = 0, cpu: str = "one") -> Host
     )
 
 
-def a_fingerprint_day(
-    state_dir: Path, rows: list[HostFingerprintRow], *, attempt: int = 1
-) -> None:
+def a_fingerprint_day(state_dir: Path, rows: list[HostFingerprintRow], *, attempt: int = 1) -> None:
     """The machine day built the way production builds it: a segment each, then the fold.
 
     Nothing appends to this head any more. Ten jobs of one run each draw a
@@ -835,9 +832,9 @@ def test_the_split_files_every_row_under_the_day_its_own_date_names(tmp_path: Pa
         "published/2026/09/02.csv",
     ]
     header = ",".join(PublishedRow.csv_columns())
-    assert _raw(_day_file(state, "2026-08-31")) == (
-        f"{header}\n{written[0]}\n{written[2]}\n"
-    ), "the two rows that name this day, verbatim and in the order the flat file held them"
+    assert _raw(_day_file(state, "2026-08-31")) == (f"{header}\n{written[0]}\n{written[2]}\n"), (
+        "the two rows that name this day, verbatim and in the order the flat file held them"
+    )
     assert _whole_ledger(state) == before
 
 
@@ -1102,9 +1099,7 @@ def test_a_day_file_under_a_retired_header_alone_is_appendable_again(tmp_path: P
     path = ledger.item_health_path(state, DATE)
     path.parent.mkdir(parents=True, exist_ok=True)
     stranded = timed_row(1)
-    path.write_text(
-        a_generation(A_RETIRED_GENERATION, [stranded]), encoding="utf-8", newline=""
-    )
+    path.write_text(a_generation(A_RETIRED_GENERATION, [stranded]), encoding="utf-8", newline="")
 
     assert seed_item_health(state, DATE, [carried_row(2, source_id="wire")]) == 1
 
@@ -1316,9 +1311,7 @@ class _CountedRead:
         return getattr(self._handle, name)
 
 
-def counted_reads(
-    monkeypatch: pytest.MonkeyPatch, path: Path
-) -> tuple[list[int], list[int]]:
+def counted_reads(monkeypatch: pytest.MonkeyPatch, path: Path) -> tuple[list[int], list[int]]:
     """Count how often `path` is opened to read, and how many lines come out."""
     opens = [0]
     lines = [0]
@@ -1351,9 +1344,9 @@ def test_the_header_check_reads_one_line_whatever_the_file_holds(
     path = ledger.item_health_path(state, DATE)
     _, lines = counted_reads(monkeypatch, path)
 
-    assert ledger.migrate_header(
-        path, ItemHealthRow.csv_columns(), ledger.refiler(ItemHealthRow)
-    ) == 0
+    assert (
+        ledger.migrate_header(path, ItemHealthRow.csv_columns(), ledger.refiler(ItemHealthRow)) == 0
+    )
 
     assert lines[0] == 1, f"the header check read {lines[0]} lines of a 51-line file"
 
@@ -1568,7 +1561,7 @@ def test_the_retirement_ledger_is_named_where_the_commit_step_stages_it() -> Non
     `set -euo pipefail`, so a retirement file that only appears on the first run
     that retires something would cost that job the sight and health ledgers
     staged beside it. The header ships with the contract instead, exactly as
-    `state/runtime-counters.csv` does.
+    `state/similarity-holdout.csv` does.
 
     Whether this checkout carries the file is a question about a working copy,
     not about code: no commit can make it false, and a short or sparse clone
@@ -1608,10 +1601,7 @@ def test_the_judged_pairs_are_filed_under_the_day_they_were_drawn_from() -> None
     date = "2026-09-18"
     state = Path("state")
 
-    assert (
-        ledger.scored_pairs_relpath(date)
-        == "state/story-similarity/scored-pairs/2026/09/18.csv"
-    )
+    assert ledger.scored_pairs_relpath(date) == "state/story-similarity/scored-pairs/2026/09/18.csv"
     assert ledger.scored_pairs_path(state, date) == Path(
         "state/story-similarity/scored-pairs/2026/09/18.csv"
     )
@@ -1776,7 +1766,9 @@ def test_a_repeated_cleanup_row_is_settled_inside_the_day_that_holds_it(
     with path.open("a", encoding="utf-8", newline="") as handle:
         handle.write(clean.splitlines()[1] + "\n")
 
-    registered = {target.path: target.key for target in ledger.keyed_paths(state, date="2026-09-07")}
+    registered = {
+        target.path: target.key for target in ledger.keyed_paths(state, date="2026-09-07")
+    }
     assert registered[path] == ledger.VISUAL_PRUNE_KEY
     assert ledger.drop_repeated_rows(path, ledger.VISUAL_PRUNE_KEY) == 1
     assert path.read_text(encoding="utf-8") == clean
@@ -1876,7 +1868,6 @@ def test_the_split_says_so_when_there_is_nothing_left_to_move(tmp_path: Path) ->
         split_prunes.run(tmp_path / "state")
 
 
-
 # --- The pass that runs after the merge ------------------------------------
 
 
@@ -1888,38 +1879,37 @@ def test_a_repeated_row_is_dropped_and_every_other_byte_is_left_alone(tmp_path: 
     Rewriting rather than re-serializing is what makes a clean file a no-op -
     a pass that re-quoted a cell would show up as a diff on every run.
     """
-    path = tmp_path / "runtime-counters.csv"
-    header = ",".join(RuntimeCountersRow.csv_columns())
-    assert seed_runtime_counters(tmp_path, [counters_row(0, prompt_tokens_total=100)]) == 1
-    assert seed_runtime_counters(tmp_path, [counters_row(1, prompt_tokens_total=200)]) == 1
+    path = ledger.host_fingerprint_path(tmp_path, DATE)
+    header = ",".join(HostFingerprintRow.csv_columns())
+    a_fingerprint_day(tmp_path, [fingerprint_row(shard=0), fingerprint_row(shard=1)])
     clean = path.read_text(encoding="utf-8")
     assert clean.startswith(header)
 
     # What the union merge leaves behind: the same key twice, different cells.
-    second_scrape = clean.splitlines()[1].replace(",100,", ",999,")
+    second_probe = clean.splitlines()[1].replace(",one,", ",another,")
     with path.open("a", encoding="utf-8", newline="") as handle:
-        handle.write(f"{second_scrape}\n")
-    assert ledger.repeated_keys(path, ledger.RUNTIME_COUNTERS_KEY)
+        handle.write(f"{second_probe}\n")
+    assert ledger.repeated_keys(path, ledger.HOST_FINGERPRINT_KEY)
 
-    assert ledger.drop_repeated_rows(path, ledger.RUNTIME_COUNTERS_KEY) == 1
+    assert ledger.drop_repeated_rows(path, ledger.HOST_FINGERPRINT_KEY) == 1
     assert path.read_text(encoding="utf-8") == clean
-    assert ledger.drop_repeated_rows(path, ledger.RUNTIME_COUNTERS_KEY) == 0
+    assert ledger.drop_repeated_rows(path, ledger.HOST_FINGERPRINT_KEY) == 0
     assert path.read_text(encoding="utf-8") == clean
 
 
 def test_the_pass_leaves_a_ledger_it_cannot_key_alone(tmp_path: Path) -> None:
-    """A shard written before the key existed is not a shard to start deleting from.
+    """A row written before the key existed is not a row to start deleting from.
 
     Refusing would cost a run the whole commit step it was called from, over a
     file nothing is appending to any more.
     """
-    path = tmp_path / "runtime-counters.csv"
+    path = tmp_path / "host-fingerprint.csv"
     path.write_text("date,shard\n2026-08-29,0\n2026-08-29,0\n", encoding="utf-8", newline="")
     before = path.read_bytes()
 
-    assert ledger.drop_repeated_rows(path, ledger.RUNTIME_COUNTERS_KEY) == 0
+    assert ledger.drop_repeated_rows(path, ledger.HOST_FINGERPRINT_KEY) == 0
     assert path.read_bytes() == before
-    assert ledger.drop_repeated_rows(tmp_path / "absent.csv", ledger.RUNTIME_COUNTERS_KEY) == 0
+    assert ledger.drop_repeated_rows(tmp_path / "absent.csv", ledger.HOST_FINGERPRINT_KEY) == 0
 
 
 def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> None:
@@ -1942,7 +1932,6 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     """
     ledger.append_seen(tmp_path, DATE, [seen_row()])
     ledger.append_health(tmp_path, DATE, [health_row()])
-    seed_runtime_counters(tmp_path, [counters_row(0)])
     ledger.append_visual_prunes(tmp_path, DATE, [prune_row(on=DATE)])
     ledger.append_counterfactual_scores(tmp_path, DATE, [counterfactual_row()])
     a_fingerprint_day(tmp_path, [fingerprint_row()])
@@ -1953,11 +1942,8 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     item_health.write_text(",".join(ItemHealthRow.csv_columns()) + "\n", encoding="utf-8")
     fitted = ledger.fitted_thresholds_path(tmp_path, DATE)
     fitted.parent.mkdir(parents=True, exist_ok=True)
-    fitted.write_text(
-        ",".join(FittedSimilarityThreshold.csv_columns()) + "\n", encoding="utf-8"
-    )
+    fitted.write_text(",".join(FittedSimilarityThreshold.csv_columns()) + "\n", encoding="utf-8")
     named = [
-        ("runtime-counters.csv", ledger.RUNTIME_COUNTERS_KEY),
         ("feed-retirements.csv", ledger.FEED_RETIREMENT_KEY),
         (f"visual-prunes/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv", ledger.VISUAL_PRUNE_KEY),
         (
@@ -1984,9 +1970,7 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     every = ledger.keyed_paths(tmp_path, date=None)
     this_run = ledger.keyed_paths(tmp_path, date=DATE)
 
-    assert [
-        (target.path.relative_to(tmp_path).as_posix(), target.key) for target in every
-    ] == named
+    assert [(target.path.relative_to(tmp_path).as_posix(), target.key) for target in every] == named
     assert [
         (target.path.relative_to(tmp_path).as_posix(), target.key) for target in this_run
     ] == named
@@ -2208,7 +2192,9 @@ def test_the_day_grain_answers_what_the_month_grain_answered_over_the_same_rows(
 
     assert len(list(day_partition.day_files(day_tree / ledger.HEALTH_DIRNAME))) == PARITY_DAYS
     assert len(named) == window + 1, "both ends are named, so a cover of n is n + 1 days"
-    assert {row.date for row in from_days} == named, "the day case read a day the window did not name"
+    assert {row.date for row in from_days} == named, (
+        "the day case read a day the window did not name"
+    )
     assert len(from_days) == len(named) * len(PARITY_FEEDS)
     assert len(from_months) > len(from_days), (
         "the month shards have to hold rows outside the window or the trade is not shown"
@@ -2290,168 +2276,6 @@ def test_a_repeated_row_the_appender_did_not_catch_is_settled_by_key(tmp_path: P
 # --- The server's own counters, and what they are for ----------------------
 
 
-def counters_row(shard: int, **counters: object) -> RuntimeCountersRow:
-    return RuntimeCountersRow.model_validate(
-        {
-            "date": DATE,
-            "run_id": RUN_ID,
-            "shard": shard,
-            "shards": 4,
-            "scraped_at": STAMP,
-            **counters,
-        }
-    )
-
-
-def test_every_ledger_a_work_shard_stages_is_named_before_the_first_run() -> None:
-    """`git add` on a path that is not there aborts the whole commit step.
-
-    The script runs under `set -euo pipefail` and stages the work job's paths in
-    one call. The shard no longer stages this head - it writes a segment and
-    `assemble` folds it in - but `assemble` stages `state` whole and the audit
-    that reads the head opens it by name, so a file that only appeared once a
-    scrape had succeeded would still be a read with nothing behind it. The
-    header ships with the contract instead.
-
-    The path and its header come from the contract, so a rename or a widening
-    breaks this. Whether the file is in the working copy does not: that is a
-    clone question and `backend/utilities/check_seeded_stores.py` asks it
-    (`CLAUDE.md` section 13).
-    """
-    assert ledger.runtime_counters_relpath() == "state/runtime-counters.csv"
-    assert ledger.runtime_counters_path(Path("state")) == Path("state/runtime-counters.csv")
-    assert set(ledger.RUNTIME_COUNTERS_KEY) <= set(RuntimeCountersRow.csv_columns())
-
-
-def test_one_runs_shards_are_read_back_in_shard_order(tmp_path: Path) -> None:
-    """The audit asks for one run and gets that run's shards, lowest first.
-
-    Order is not decoration here: `pool_counters` reports parts as well as a
-    rate, and every surface that quotes a per-shard figure lines it up against
-    the shard rows in this order.
-
-    What settles a second row for one shard is no longer here. The cells are
-    cumulative totals for a server process, so a re-run of a failed shard is its
-    own tokens added to themselves - and that is now decided when the segments
-    fold, by the attempt in the segment's name
-    (`tests/pipeline/test_compact.py`).
-    """
-    assert seed_runtime_counters(tmp_path, [counters_row(0, prompt_tokens_total=100)]) == 1
-    assert seed_runtime_counters(tmp_path, [counters_row(1, prompt_tokens_total=200)]) == 1
-
-    landed = ledger.load_runtime_counters(tmp_path, run_id=RUN_ID)
-    assert [row.shard for row in landed] == [0, 1]
-    assert [row.prompt_tokens_total for row in landed] == [100, 200]
-
-
-def test_a_shard_whose_server_was_gone_still_counts_as_a_shard(tmp_path: Path) -> None:
-    """Pooling a run has to see the shard that contributed nothing.
-
-    Three shards' tokens quoted as a four-shard run is a number nobody can read.
-    An empty scrape writes nulls, not zeroes, so the row says "this shard ran and
-    the server did not answer" rather than "this shard read no tokens".
-    """
-    seed_runtime_counters(
-        tmp_path, [counters_row(0, prompt_tokens_total=100, prompt_seconds_total=10.0)]
-    )
-    seed_runtime_counters(tmp_path, [counters_row(1)])
-
-    pooled = pool_counters(ledger.load_runtime_counters(tmp_path, run_id=RUN_ID))
-
-    assert pooled.parts == 2, "a silent shard is still a shard"
-    assert pooled.tokens == 100
-    assert pooled.rate == 10.0
-
-
-def _counters_fixture(path: Path, *, runs: int, shards: int) -> list[RuntimeCountersRow]:
-    """One row per shard for `runs` runs. Returns what run `RUN_ID` owes, in shard order.
-
-    Only the run id changes from run to run, so both cases of the peak check hold
-    the same answer and the file is the only thing that differs. The shard rows
-    are built through the contract once and rewritten under each run id, so a
-    fixture line is the shape a real work job appends.
-    """
-    wanted = [
-        RuntimeCountersRow.model_validate(
-            {
-                "date": DATE,
-                "run_id": RUN_ID,
-                "shard": shard,
-                "shards": shards,
-                "scraped_at": STAMP,
-                "prompt_tokens_total": 100_000 + shard,
-                "prompt_seconds_total": 10.5 + shard,
-                "cpu_model": "Intel(R) Core(TM) i7-1265U",
-            }
-        )
-        for shard in range(shards)
-    ]
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8", newline="") as handle:
-        out = csv.DictWriter(
-            handle, fieldnames=RuntimeCountersRow.csv_columns(), lineterminator="\n"
-        )
-        out.writeheader()
-        for number in range(runs):
-            run_id = RUN_ID if number == 0 else f"{DATE}-{number + 100}"
-            for row in wanted:
-                out.writerow({**row.csv_row(), "run_id": run_id})
-    return wanted
-
-
-def _peak_of_load_runtime_counters(state: Path) -> tuple[list[RuntimeCountersRow], int]:
-    tracemalloc.start()
-    try:
-        counted = ledger.load_runtime_counters(state, run_id=RUN_ID)
-        return counted, tracemalloc.get_traced_memory()[1]
-    finally:
-        tracemalloc.stop()
-
-
-def test_loading_one_runs_counters_costs_the_run_and_not_the_file(tmp_path: Path) -> None:
-    """The read already asks about one run, so it must cost one run.
-
-    `state/runtime-counters.csv` is never windowed and never partitioned - one
-    lifetime file that gains 20 rows on a full day. The question put to it is
-    always about a single run, and a run id already names its date, so the
-    answer is a handful of shard rows however long the file gets. Materialising
-    every row to find eight of them made the cost the file's instead.
-
-    Measured 2026-09-08 on an Intel Core i7-1265U, Windows 11, over 2,400 and
-    4,800 lines carrying the same eight shard rows. Before, three runs each:
-    2,197,419 B of peak against 4,237,123 B - the file doubled and the cost went
-    with it, 1.93x. After: 193,513 B against 193,481 B, a ratio of 1.000. So the
-    4,800-line case peaks 21.9 times lower and stops moving when the file grows.
-    Spread over the three runs was 32 B or less on every case. On the committed
-    ledger as it stands - 209 rows, 35,950 B - the newest run's read went from
-    429,441 B to 173,831 B, 2.47 times lower.
-
-    A threshold in bytes a row would pass for the wrong reason, because what the
-    read legitimately keeps is the run's own rows. So the property is asserted
-    directly: hold the answer still, double the file, and the peak must not
-    follow. Both populations are built and fixed, so this costs the same on the
-    day the committed ledger holds ten times either (Guardrail #12, section 13).
-    """
-    shards = 8
-    small = tmp_path / "small"
-    large = tmp_path / "large"
-    owed_small = _counters_fixture(ledger.runtime_counters_path(small), runs=300, shards=shards)
-    owed_large = _counters_fixture(ledger.runtime_counters_path(large), runs=600, shards=shards)
-
-    assert owed_small == owed_large, "both cases must owe one answer or this proves nothing"
-    assert len(owed_large) == shards, "the answer is a run's shards, and one row would prove less"
-
-    counted_small, peak_small = _peak_of_load_runtime_counters(small)
-    counted_large, peak_large = _peak_of_load_runtime_counters(large)
-
-    assert counted_small == owed_small, "the rows one run owes must not move"
-    assert counted_large == owed_large
-    assert peak_large < peak_small * 1.1, (
-        f"twice the runs over the same {shards} shard rows moved peak from {peak_small} B "
-        f"to {peak_large} B, so the read is still holding the file rather than the run"
-    )
-
-
 def test_the_ledgers_prefill_rate_agrees_with_the_servers_own_counters() -> None:
     """The ledger's prefill rate holds against the server's own counters, on one real captured run.
 
@@ -2471,17 +2295,19 @@ def test_the_ledgers_prefill_rate_agrees_with_the_servers_own_counters() -> None
     The pooled rate is identical either way, which is what makes the fixture the
     same evidence rather than a smaller one.
     """
-    rows = [
-        RuntimeCountersRow.from_metrics_text(
-            path.read_text(encoding="utf-8"),
-            date=RECONCILED_DATE,
-            run_id=RECONCILED_RUN,
-            shard=int(path.stem[-1]),
-            shards=4,
-            scraped_at="2026-08-26T21:32:30Z",
+    rows = []
+    for path in sorted((FIXTURES_DIR / "runtime").glob("2026-08-26-5-shard-*.prom")):
+        tokens, seconds = silicon.server_prompt_totals(path.read_text(encoding="utf-8"))
+        rows.append(
+            HostFingerprintRow(
+                version=HostFingerprintRow.schema_version(),
+                date=RECONCILED_DATE,
+                run_id=RECONCILED_RUN,
+                shard=int(path.stem[-1]),
+                server_prompt_tokens=tokens,
+                server_prompt_seconds=seconds,
+            )
         )
-        for path in sorted((FIXTURES_DIR / "runtime").glob("2026-08-26-5-shard-*.prom"))
-    ]
     assert len(rows) == 4, "all four shards, or the run figure is not the run"
 
     server = pool_counters(rows)

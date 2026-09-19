@@ -1,6 +1,6 @@
 # Test Execution Audit
 
-**Last Updated**: 2026-09-06
+**Last Updated**: 2026-09-19
 
 Historical test executions and the current selection controls, checked against
 `main` at `3b425be8`. This records an investigation, not a change to the testing
@@ -110,7 +110,7 @@ npm run test:browser -- --list --reporter=list
 ```
 
 [../../frontend/tests/console-machine-data.spec.ts](../../frontend/tests/console-machine-data.spec.ts)
-read the absent `backend/var/canary/state/runtime-counters.csv` during module
+read an absent canary state file during module
 collection. The runner's `Total: 0 tests in 0 files` therefore describes a
 collection failure, not an empty suite. No fixture build was started to hide
 that failure.

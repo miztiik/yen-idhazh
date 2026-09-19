@@ -102,7 +102,7 @@ shapes forbid nothing. `public-run-day` and `console-band` are not projections
 of a ledger row at all - one is a reduction of two documents to counts, the
 other a set of sentences the pipeline composed about its own run - so the
 refusal is structural: a fetched string has no field to arrive in. `day-metrics`,
-`runtime-counters-row`, `span-rollup-row` and `source-health-view` are published
+`machine-shard-row`, `span-rollup-row` and `source-health-view` are published
 whole, because every cell on each is a count or a duration of our own work.
 
 **One shape refuses anything, where three used to.** `public-eval` refused
@@ -457,9 +457,9 @@ with nothing to fetch. The table also recorded `telemetryRows` as reading
 `state/telemetry/`; there is no such directory, and `TELEMETRY_ROOT` points at
 `frontend/public/telemetry/`.
 
-**Three shapes are published whole rather than projected.** The row asked for
-one model per dataset with no published shape, and for `day-metrics`,
-`runtime-counters-row` and `span-rollup-row` that would have produced a
+**Two shapes are published whole rather than projected.** The row asked for
+one model per dataset with no published shape, and for `day-metrics`
+and `span-rollup-row` that would have produced a
 projection field-for-field identical to its source - two schemas for one row,
 which is what rejected alternative 2 refuses for telemetry. The refusal is the
 same either way and it is written down either way; what changes is whether a

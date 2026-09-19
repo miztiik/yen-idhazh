@@ -1,6 +1,6 @@
 # Pipeline Loop
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 
 The stages one article passes through, what each stage owns, and the rule that they talk in payloads rather than calls. This is the build-time equivalent of a product's core loop: it is the thing that happens over and over, and every other concept doc hangs off it.
 
@@ -166,10 +166,8 @@ all record the same day there, which is the same race with more writers in it,
 and the item census is the one where a repeat is visible to a reader: the count
 of rows in a day feeds a feed's share of the day and the day's own metrics.
 
-`state/span-rollup/` and `state/runtime-counters.csv` joined them that day. Both
-are written once a job rather than once an item, and both had every work shard
-opening one head. The counters file is the one flat head in the store: its rows
-carry a date and the compaction reads it, but every date names the same file.
+`state/span-rollup/` joined them that day. It is written once a job rather than
+once an item, and it had every work shard opening one head.
 
 The compaction is the one writer here that rewrites a head rather than appending
 to it, and the segment store is what makes that safe: a rewrite is a race only

@@ -19,7 +19,7 @@ import re
 from typing import Any, Final
 
 from idhazh.contracts.article import Article, ArticleStatus
-from idhazh.contracts.base import fit_cell
+from idhazh.contracts.base import ServerJob, fit_cell
 from idhazh.contracts.call_cost import COST_FIELDS, DERIVED_FIELDS, CallCost
 from idhazh.contracts.feed_health import RobotsOutcome
 from idhazh.contracts.item_health import (
@@ -32,7 +32,6 @@ from idhazh.contracts.item_health import (
     ItemStage,
 )
 from idhazh.contracts.run_plan import PlannedItem
-from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.elements import ExtractionHealth
 from idhazh.fetch import BLOCKED_REASONS, ROBOTS_REFUSALS

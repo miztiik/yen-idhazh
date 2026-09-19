@@ -88,6 +88,7 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import config, ledger
+from idhazh.contracts.base import WORK_JOB
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.day_partition import day_files
 from idhazh.extract import TOKENS_PER_WORD
@@ -242,9 +243,7 @@ def shard_clocks(state_dir: Path, items: Sequence[Item]) -> list[ShardClock]:
         mine = [item for item in items if item.run_id == run_id]
         if mine and all(item.shard is not None for item in mine):
             for shard in sorted({item.shard for item in mine if item.shard is not None}):
-                clocks.append(
-                    _clock(run_id, shard, [r for r in rows if r["shard"] == shard], mine)
-                )
+                clocks.append(_clock(run_id, shard, [r for r in rows if r["shard"] == shard], mine))
         else:
             clocks.append(_clock(run_id, None, rows, mine))
     return clocks
@@ -267,16 +266,18 @@ def _clock(
 
 
 def _counter_rows(state_dir: Path) -> list[dict[str, str]]:
-    """`state/runtime-counters.csv` as raw cells.
+    """Every `work` job's host row, from every day file, as raw cells.
 
-    Read as text rather than through `load_runtime_counters`, which filters to
-    one run and so cannot say which runs exist.
+    The `work` rows only. The item rows this clock is joined against are one per
+    summarized item, so a `plan` or `assemble` job's clock would add seconds no
+    item was charged under.
     """
-    path = ledger.runtime_counters_path(state_dir)
-    if not path.exists():
-        return []
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return list(csv.DictReader(handle))
+    directory = state_dir / ledger.HOST_FINGERPRINT_DIRNAME
+    rows: list[dict[str, str]] = []
+    for path in day_files(directory):
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            rows.extend(row for row in csv.DictReader(handle) if row.get("job") == WORK_JOB.value)
+    return rows
 
 
 def percentile(values: Sequence[int], share: float) -> int:
@@ -402,9 +403,7 @@ def admissions(state_dir: Path, items: Sequence[Item], *, cap_tokens: int) -> li
         if not sized:
             continue
         cut_by_the_cap = any(
-            i.truncation_cap_tokens == cap_tokens
-            for i in items
-            if i.run_id == run_id
+            i.truncation_cap_tokens == cap_tokens for i in items if i.run_id == run_id
         )
         out.append(
             Admission(

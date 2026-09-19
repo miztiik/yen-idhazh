@@ -28,6 +28,7 @@ SUPERSEDED_RETENTION_NAMES: Final[Mapping[str, str]] = MappingProxyType(
         "hard_delete_after_months": "item_health_aggregate_keep_months",
         "public_scores_keep_months": "",
         "public_feed_health_keep_months": "",
+        "runtime_counters_scrape": "",
     }
 )
 
@@ -201,17 +202,6 @@ class ObservabilityConfig(Model):
             "MiB, because a buffer that fits in cache measures cache and reads as a "
             "memory figure four times too high. Raise it when a drawn machine "
             "reports an L3 at or above this."
-        ),
-    )
-    runtime_counters_scrape: bool = Field(
-        default=True,
-        description=(
-            "Whether a work shard reads llama-server's GET /metrics before it stops "
-            "the server. False writes no row to state/runtime-counters.csv for that "
-            "shard, so context headroom, reading against writing, cache hits and the "
-            "shard clock all read as ABSENT for the run rather than as zero. Nothing "
-            "else about the run changes - the counters are read after the last item "
-            "is summarized."
         ),
     )
     sample_rate: float = Field(
@@ -391,10 +381,10 @@ class ObservabilityConfig(Model):
         default=14,
         ge=1,
         description=(
-            "How long frontend/public/machine/ keeps a month of runtime counters. "
-            "Fourteen on the same argument. The source is one appended CSV rather than "
-            "a shard directory, so the published copy is where the month boundary is "
-            "first drawn and this is the only age it has."
+            "How long frontend/public/machine/ keeps a month of machine readings. "
+            "Fourteen on the same argument. The source is two committed ledgers rather "
+            "than a published shard directory, so the published copy is where the month "
+            "boundary is first drawn and this is the only age it has."
         ),
     )
     public_span_rollup_keep_months: int = Field(
@@ -458,7 +448,7 @@ class ObservabilityConfig(Model):
     @model_validator(mode="before")
     @classmethod
     def _refuse_a_removed_knob(cls, data: Any) -> Any:
-        """Fail a config that still names one of the four retired ages.
+        """Fail a config that still names one of the five retired knobs.
 
         `keep_months` and `hard_delete_after_months` governed `state/item-health/`
         and nothing else, while three other stores had no age at all. They were
@@ -466,11 +456,15 @@ class ObservabilityConfig(Model):
         one at a time; now that every reader has moved, a file still spelling one
         is refused by name.
 
-        `public_scores_keep_months` and `public_feed_health_keep_months` are the
-        other two, and they have no successor because the trees they bounded are
-        gone. They pruned published copies of `state/scores/` and
-        `state/feed-health/` that nothing ever fetched; the ledgers stay and keep
-        their own ages.
+        `public_scores_keep_months` and `public_feed_health_keep_months` are two of
+        the three with no successor, because the trees they bounded are gone. They
+        pruned published copies of `state/scores/` and `state/feed-health/` that
+        nothing ever fetched; the ledgers stay and keep their own ages.
+
+        `runtime_counters_scrape` is the third. It named a scrape no code ever
+        asked it about, and the ledger it wrote to is gone. The scrape itself
+        stays: the job clock reads the same body for the two server-prompt cells
+        on the host row.
 
         Refused rather than ignored, and refused rather than carried forward. The
         old value was set against a check that could not answer the question - it

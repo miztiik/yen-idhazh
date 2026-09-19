@@ -13,12 +13,12 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import assemble, config, ledger, rank, run_context, telemetry
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
 from idhazh.contracts.run_plan import RunPlan
-from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.contracts.seen import PublishedRow
 from idhazh.contracts.source_health_view import SourceHealthView
 from idhazh.contracts.summary import Summary, SummaryStatus

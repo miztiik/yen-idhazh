@@ -16,10 +16,10 @@ from idhazh.contracts.article import Article
 from idhazh.contracts.base import StalePayloadError
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, TimeSource
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan, VerticalPlan
-from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
 from idhazh.contracts.visual_decision import VisualDecision
@@ -31,7 +31,7 @@ from idhazh.stages.compact import stage_compact
 from idhazh.stages.plan import _next_run_n, stage_plan
 from idhazh.stages.record import stage_record
 from idhazh.stages.work import stage_work
-from idhazh.telemetry.host import stage_counters
+from idhazh.telemetry.silicon import stage_job_clock
 
 from ._builders import (
     FULL_TEXT,
@@ -175,10 +175,7 @@ def test_abstract_items_publish_a_sentence_not_a_badge() -> None:
     )
 
     assert item.source_form is SourceForm.ABSTRACT
-    assert (
-        item.reader_note
-        == "This is a summary of the paper's abstract. The full paper is a PDF."
-    )
+    assert item.reader_note == "This is a summary of the paper's abstract. The full paper is a PDF."
 
 
 def test_truncated_items_publish_the_partial_read_sentence() -> None:
@@ -427,6 +424,15 @@ def health_rows(state_dir: Path, date: str) -> list[ItemHealthRow]:
         return [ItemHealthRow.from_csv_row(record) for record in csv.DictReader(handle)]
 
 
+def machine_rows(state_dir: Path, date: str) -> list[HostFingerprintRow]:
+    """Every host row the committed day holds, in file order."""
+    path = ledger.host_fingerprint_path(state_dir, date)
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8", newline="") as handle:
+        return [HostFingerprintRow.from_csv_row(record) for record in csv.DictReader(handle)]
+
+
 def test_a_run_that_dies_before_assemble_keeps_what_its_workers_measured(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
@@ -652,61 +658,6 @@ def test_an_item_whose_summary_is_not_written_yet_is_not_recorded(
     assert telemetry.is_final(None, None) is False
 
 
-def test_a_shard_commits_what_its_model_server_counted(
-    tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
-    """The second instrument survives the job that read it.
-
-    Every timing on the item-health ledger is a field copied out of one model
-    reply. The server counts the same work for itself, and until this stage
-    existed those counters reached only a job log with two days of retention -
-    so the read rate two published surfaces quote could be reported and never
-    reconciled (Guardrail #10).
-
-    The stage writes this shard's own segment and the fold is what puts it in
-    the head, so both run here: what a reader opens is the head, and a stage
-    that filled a segment nothing drained would still have lost the row.
-    """
-    run_plan = plan()
-    isolate_ledgers(tmp_path, monkeypatch)
-    capture = FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-3.prom"
-
-    row = stage_counters(
-        run_plan, state_root=common.STATE_ROOT, metrics_path=capture, shard=0, shards=1
-    )
-    stage_compact(tmp_path / "state")
-
-    assert row.prompt_tokens_total == 23411
-    assert row.prompt_seconds_total == 2128.08
-    committed = ledger.load_runtime_counters(tmp_path / "state", run_id=run_plan.run_id)
-    assert committed == [row]
-    assert ledger.read_header(ledger.runtime_counters_path(tmp_path / "state")) == (
-        RuntimeCountersRow.csv_columns()
-    )
-
-
-def test_a_shard_whose_server_died_still_files_a_row(
-    tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
-    """No file at all is a fact about the shard, not an absence of one.
-
-    Pooling a run has to see the shard that contributed nothing, or three
-    shards' tokens get quoted as a four-shard run. The cells are null rather
-    than zero: the server did not answer, it did not read nothing.
-    """
-    run_plan = plan()
-    isolate_ledgers(tmp_path, monkeypatch)
-
-    row = stage_counters(
-        run_plan, state_root=common.STATE_ROOT, metrics_path=tmp_path / "never-written.prom"
-    )
-    stage_compact(tmp_path / "state")
-
-    assert row.prompt_tokens_total is None
-    assert row.run_id == run_plan.run_id
-    assert ledger.load_runtime_counters(tmp_path / "state", run_id=run_plan.run_id) == [row]
-
-
 def test_the_two_ledgers_agree_about_which_shards_ran(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
@@ -735,13 +686,17 @@ def test_the_two_ledgers_agree_about_which_shards_ran(
             model_endpoint=closed_loopback_endpoint(),
         )
         stage_record(run_plan, settings=settings, shard=shard, shards=2)
-        stage_counters(
-            run_plan, state_root=common.STATE_ROOT, metrics_path=capture, shard=shard, shards=2
+        stage_job_clock(
+            run_plan,
+            settings=settings,
+            state_root=common.STATE_ROOT,
+            shard=shard,
+            metrics_path=capture,
         )
 
     stage_compact(state)
     rows = health_rows(state, run_plan.date)
-    counted = ledger.load_runtime_counters(state, run_id=run_plan.run_id)
+    counted = machine_rows(state, run_plan.date)
 
     assert {row.shard for row in rows} == {row.shard for row in counted} == {0, 1}
     assert len(rows) == len(run_plan.items)
@@ -1241,9 +1196,7 @@ def test_a_run_records_how_many_feeds_a_desk_could_ask_and_against_what_floor() 
     floored = base.model_copy(
         update={
             "verticals": [
-                vertical.model_copy(update={"feed_floor": 35})
-                if vertical.id == "ai"
-                else vertical
+                vertical.model_copy(update={"feed_floor": 35}) if vertical.id == "ai" else vertical
                 for vertical in base.verticals
             ]
         }
@@ -1359,7 +1312,9 @@ def test_the_manifest_records_what_the_planner_cost() -> None:
     one alone answers no question about the budget (Guardrail #10).
     """
     settings = config.load(CONFIG_DIR)
-    decided = VisualDecision.from_json(read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json"))
+    decided = VisualDecision.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "visual-decision" / "chart-rendered.json")
+    )
     day = assemble.build_day(
         plan=plan(),
         items=[digest_item()],

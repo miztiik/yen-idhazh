@@ -88,7 +88,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 10 | `model_load_ms` and `job_seconds` join `host-fingerprint` | 2 | C | IN-FLIGHT | p33c10 | #887 | - |
 | 12 | Delete the merge machinery | 2, 3, 4, 6, 17 | D | IN-FLIGHT | p33d12b | - | - |
 | 13 | Compaction lag and free swap on the console band | 1, 5, 7, 12 | D | IN-FLIGHT | p33d13 | - | - |
-| 11 | Delete `runtime-counters` and everything that reads it | 7, 10, 17 | E | IN-FLIGHT | p33e11p2 | - | - |
+| 11 | Delete `runtime-counters` and everything that reads it | 7, 10, 17 | E | IN-FLIGHT | p33e11p3 | - | - |
 | 15 | Generated TypeScript contracts replace the hand-written ones | 10, 11 | F | PENDING | - | - | - |
 | 16 | Docs, and the orphan sweep | all | G | PENDING | - | - | - |
 | 18 | Chart-craft doctrine - the thirteen rules, written once | - | H | DONE | p33r18 | #863 | - |
