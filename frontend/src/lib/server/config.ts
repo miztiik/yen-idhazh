@@ -175,19 +175,19 @@ export interface VisualsConfig {
 
 /** The band the merge line may move in, and the clamps that shape how it moves.
  *
- * Only the keys a console panel draws. The block carries fifteen more - the
- * gates, the judge's own limits, the pair budget - and none of them is a number
- * a chart puts on screen, so none of them is declared here. `band_low` and
- * `band_high` are the score axis; `max_down_step` is the envelope behind the
- * applied line; `step_change_multiple` is what the guard fires against.
+ * Only the keys a console panel draws. The block carries sixteen more - the
+ * gates, the judge's own limits, the pair budget, the daily caps - and none of
+ * them is a number a chart puts on screen, so none of them is declared here.
+ * `band_low` and `band_high` are the score axis; `step_change_multiple` is what
+ * the guard fires against. The envelope behind the applied line is drawn from
+ * the fitted ROW rather than from config, because it is the cap the run used
+ * and not the cap the file holds today.
  */
 export interface SimilarityConfig {
 	/** The lowest score the record holds a slot for. The bottom of the axis. */
 	band_low: number;
 	/** The top of the band. 1.00, because a cosine goes no higher. */
 	band_high: number;
-	/** The furthest the line may fall in one day. The height of the clamp band. */
-	max_down_step: number;
 	/** What share of judged two-story pairs the fit leaves above the line. The
 	 * target the precision line is drawn against. */
 	discard_share: number;
@@ -398,8 +398,7 @@ const VISUALS_DEFAULTS: VisualsConfig = { min_chart_points: 3 };
 const SIMILARITY_DEFAULTS: SimilarityConfig = {
 	band_low: 0.88,
 	band_high: 1.0,
-	max_down_step: 0.005,
-	discard_share: 0.01,
+	discard_share: 0.03,
 	step_change_multiple: 5,
 	disagreement_max: 0.15,
 	unclear_max: 0.35,

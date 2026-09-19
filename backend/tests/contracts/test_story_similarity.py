@@ -93,9 +93,11 @@ def a_fit(**overrides: Any) -> dict[str, Any]:
         "proposed": 0.938,
         "after_damping": 0.9397,
         "applied": 0.9397,
-        "discard_share": 0.01,
-        "smoothing_weight": 0.15,
-        "max_down_step": 0.005,
+        "discard_share": 0.03,
+        "fall_weight": 0.5,
+        "rise_weight": 0.15,
+        "max_down_step": 0.01,
+        "max_up_step": 0.003,
         "step_change_multiple": 5.0,
         "pairs_in_band": 400,
         "pairs_judged": 200,
@@ -372,6 +374,57 @@ def test_the_clamp_movement_is_what_the_clamp_held_back() -> None:
 
     with pytest.raises(ValidationError, match="the guard holds the line"):
         FittedSimilarityThreshold.model_validate(a_fit(clamp_kind=ClampKind.GUARD))
+
+
+def test_an_upward_clamp_records_a_distance_rather_than_a_negative() -> None:
+    """Both directions are capped now, so the movement column is a distance.
+
+    An upward clamp pulls the applied line BELOW the damped proposal, so a
+    movement written as applied minus after_damping would be negative - and the
+    column is refused below zero. Reading it as a distance is what lets one
+    column carry both walls.
+    """
+    rose = FittedSimilarityThreshold.model_validate(
+        a_fit(
+            proposed=0.99,
+            after_damping=0.9475,
+            applied=0.943,
+            clamp_kind=ClampKind.STEP,
+            clamp_movement=0.0045,
+        )
+    )
+
+    assert rose.applied > rose.previous, "the line rose"
+    assert rose.after_damping is not None
+    assert rose.applied < rose.after_damping, "and the cap pulled it back"
+    assert rose.clamp_movement > 0.0
+
+
+def test_a_line_resting_on_a_band_wall_has_a_word_of_its_own() -> None:
+    """A line at the top of the band folds nothing, which is not the same as silence.
+
+    `none` would say the damped proposal stood as it was, and a reader of a run
+    that merged nothing for a week would have no column telling them the line was
+    pinned rather than the feature switched off.
+    """
+    ceiling = FittedSimilarityThreshold.model_validate(
+        a_fit(proposed=1.0, after_damping=1.0, applied=1.0, clamp_kind=ClampKind.CEILING)
+    )
+    floor = FittedSimilarityThreshold.model_validate(
+        a_fit(
+            previous=0.885,
+            proposed=0.80,
+            after_damping=0.8825,
+            applied=0.88,
+            clamp_kind=ClampKind.FLOOR,
+            clamp_movement=0.0025,
+        )
+    )
+
+    assert ceiling.clamp_kind is ClampKind.CEILING
+    assert ceiling.clamp_movement == 0.0, "it was already resting there"
+    assert floor.clamp_kind is ClampKind.FLOOR
+    assert floor.applied == pytest.approx(0.88)
 
 
 def test_a_holdout_row_recomputes_its_own_keys() -> None:

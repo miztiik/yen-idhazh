@@ -3,7 +3,7 @@
 One stage, one module. `idhazh.cli` chooses which stage runs and holds no stage
 body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
 
-It calls no model and opens no socket. The four steps are in
+It calls no model and opens no socket. The five steps are in
 `idhazh.similarity.fit`; this module reads the record, the day and the written
 rows, decides whether the gates let a fit run, and writes the row either way.
 
@@ -75,7 +75,7 @@ def stage_judge_fit(
     state_dir: Path | None = None,
     digest_root: Path = common.PUBLIC_ROOT,
 ) -> FittedSimilarityThreshold | None:
-    """Walk the record, damp the fall, clamp what is left, and write the day's row.
+    """Walk the record, damp the move, clamp what is left, and write the day's row.
 
     **Every read is bounded** (Guardrail #12). One published day and the manifest
     beside it, the fixed-size record, the one day file the date names, and the
@@ -165,8 +165,15 @@ def stage_judge_fit(
         after_damping: float | None = None
         is_settled = False
     else:
-        after_damping = fit.damp(
-            proposal, previous, smoothing_weight=knobs.smoothing_weight
+        after_damping = (
+            fit.damp(
+                proposal,
+                previous,
+                fall_weight=knobs.fall_weight,
+                rise_weight=knobs.rise_weight,
+            )
+            if fit.is_a_move(proposal, previous, dead_zone=knobs.dead_zone)
+            else previous
         )
         guard_fires = (
             knobs.step_change_guard_enforced
@@ -177,7 +184,14 @@ def stage_judge_fit(
         shaped = (
             fit.held_at(previous, after_damping)
             if guard_fires
-            else fit.clamp(after_damping, previous, max_down_step=knobs.max_down_step)
+            else fit.clamp(
+                after_damping,
+                previous,
+                max_down_step=knobs.max_down_step,
+                max_up_step=knobs.max_up_step,
+                band_low=knobs.band_low,
+                band_high=knobs.band_high,
+            )
         )
         is_settled = fit.settled(
             earlier,
@@ -202,8 +216,10 @@ def stage_judge_fit(
         held_reason=HeldReason.NONE if held is None else held,
         settled=is_settled,
         discard_share=knobs.discard_share,
-        smoothing_weight=knobs.smoothing_weight,
+        fall_weight=knobs.fall_weight,
+        rise_weight=knobs.rise_weight,
         max_down_step=knobs.max_down_step,
+        max_up_step=knobs.max_up_step,
         step_change_multiple=knobs.step_change_multiple,
         daily_shift=shift,
         typical_shift=typical,

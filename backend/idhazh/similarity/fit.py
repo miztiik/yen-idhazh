@@ -4,10 +4,17 @@ Pure arithmetic over a fixed record and a handful of written rows. Nothing here
 opens a file, calls a model or looks at a clock - `idhazh.stages.judge_fit` does
 the reading and the writing, and this module answers only the placement question.
 
-Four steps, in this order and never another: walk the record to a proposal, damp
-a fall towards yesterday, clamp what is left of the fall, and ask whether a week
-of fresh evidence is still moving the answer. Each step is its own function so a
-red test names the step that broke rather than the sequence.
+Five steps, in this order and never another: walk the record to a proposal, ask
+whether the proposal is far enough from today's line to be a move at all, damp
+what is left towards yesterday, clamp it to the day's cap and to the band, and
+ask whether a week of fresh evidence is still moving the answer. Each step is its
+own function so a red test names the step that broke rather than the sequence.
+
+The line falls fast and rises slow. Both directions are damped and both are
+capped; what differs is the size of each. Lowering the line publishes less, and
+publishing less is the house rule, so down is the quick direction. Anyone about
+to make this symmetric should read the design rationale in
+`docs/architecture/publishing/same-story.md` first.
 """
 
 from __future__ import annotations
@@ -20,6 +27,7 @@ from datetime import timedelta
 from statistics import median
 
 from idhazh.contracts.fitted_similarity_threshold import (
+    LINE_TOLERANCE,
     ClampKind,
     FittedSimilarityThreshold,
     HeldReason,
@@ -31,7 +39,7 @@ from idhazh.similarity.fold import SlotCounts
 
 @dataclass(frozen=True, slots=True)
 class Clamped:
-    """What step 3 let through, which clamp shaped it, and how far it was held back."""
+    """What step 4 let through, what shaped it, and how far it was held back."""
 
     applied: float
     kind: ClampKind
@@ -134,44 +142,83 @@ def without(
     return record.model_copy(update={"slots": tuple(slots)})
 
 
-def damp(proposal: float, previous: float, *, smoothing_weight: float) -> float:
-    """Step 2: a rise lands whole, a fall lands at `smoothing_weight` of the way.
+def is_a_move(proposal: float, previous: float, *, dead_zone: float) -> bool:
+    """Step 2: is the proposal far enough from today's line to be worth applying?
 
-    Damping is one-directional on purpose. Raising the line removes wrong merges
-    and lowering it admits them, so the safe move arrives today and the risky one
-    arrives over a week. Symmetric damping would make the safe move a week late
-    for no gain.
+    A proposal inside `dead_zone` of the applied line is not a move. The line is
+    a slot's upper edge, so a step of less than one slot lands on no edge the
+    next walk can produce - and without this the damping leaves a geometric tail
+    whose steps shrink below one slot for ever, so the applied line never
+    formally arrives at its proposal. The dead zone deletes that tail honestly.
     """
-    if proposal >= previous:
-        return proposal
-    return previous + smoothing_weight * (proposal - previous)
+    return abs(proposal - previous) >= dead_zone
 
 
-def clamp(after_damping: float, previous: float, *, max_down_step: float) -> Clamped:
-    """Step 3: the line may not fall further than `max_down_step` in one day.
+def damp(
+    proposal: float, previous: float, *, fall_weight: float, rise_weight: float
+) -> float:
+    """Step 3: a fall lands at `fall_weight` of the way, a rise at `rise_weight`.
 
-    `movement` is how far the clamp held the line back, which is at or above zero
-    because there is no upward clamp - a rise is never something this step has an
-    opinion about.
+    Both directions are damped, and the weights are different on purpose.
+    Lowering the line publishes less, which is the house rule, so a fall is the
+    quick direction and a rise arrives over weeks.
+
+    Damping stays on the quick direction rather than letting a fall land whole.
+    One judge misreading one news cluster produces a block of adjacent wrong
+    verdicts on a single night - in the 200 labelled pairs of 2026-09-19 all four
+    two-story marks came from one cluster - and an undamped fall would take that
+    whole block at once. Damping filters a one-day spike; a bare cap only slows
+    it down and lets it persist.
     """
-    lowest_today = previous - max_down_step
-    if after_damping >= lowest_today:
-        return Clamped(applied=after_damping, kind=ClampKind.NONE, movement=0.0)
-    return Clamped(
-        applied=lowest_today,
-        kind=ClampKind.STEP,
-        movement=lowest_today - after_damping,
-    )
+    if proposal < previous:
+        return previous + fall_weight * (proposal - previous)
+    return previous + rise_weight * (proposal - previous)
+
+
+def clamp(
+    after_damping: float,
+    previous: float,
+    *,
+    max_down_step: float,
+    max_up_step: float,
+    band_low: float,
+    band_high: float,
+) -> Clamped:
+    """Step 4: hold the move to the day's cap, and the result inside the band.
+
+    Two caps rather than one, and the fall cap is the wider of the two. The
+    step-change guard ships off, so the caps and the damping are the whole brake
+    - an uncapped direction would have no bound a reader could state.
+
+    The band walls bind after the caps. The record holds slots only between
+    `band_low` and `band_high`, so a line outside them is a line the next walk
+    cannot propose again. A line resting on a wall is reported as its own kind
+    rather than as silence: at `band_high` the line folds nothing at all, which
+    from the outside looks like the feature is switched off instead of pinned.
+
+    `movement` is a distance, so it is at or above zero whichever wall moved the
+    line and in whichever direction.
+    """
+    lowest_today = max(previous - max_down_step, band_low)
+    highest_today = min(previous + max_up_step, band_high)
+    applied = min(max(after_damping, lowest_today), highest_today)
+    movement = abs(applied - after_damping)
+    if applied >= band_high - LINE_TOLERANCE:
+        return Clamped(applied=applied, kind=ClampKind.CEILING, movement=movement)
+    if applied <= band_low + LINE_TOLERANCE:
+        return Clamped(applied=applied, kind=ClampKind.FLOOR, movement=movement)
+    if movement > LINE_TOLERANCE:
+        return Clamped(applied=applied, kind=ClampKind.STEP, movement=movement)
+    return Clamped(applied=applied, kind=ClampKind.NONE, movement=0.0)
 
 
 def held_at(previous: float, after_damping: float) -> Clamped:
     """The step-change guard firing: the line stays where it was for one more day.
 
-    A separate answer from `clamp` rather than a fourth branch inside it. The
-    daily clamp shapes a fall it still lets through; the guard refuses the whole
+    A separate answer from `clamp` rather than another branch inside it. The
+    daily caps shape a move they still let through; the guard refuses the whole
     move because one day's evidence disagreed with the fortnight before it, and
-    a guard that let a fraction through would be a slower clamp rather than a
-    hold.
+    a guard that let a fraction through would be a slower cap rather than a hold.
     """
     return Clamped(
         applied=previous, kind=ClampKind.GUARD, movement=abs(previous - after_damping)
