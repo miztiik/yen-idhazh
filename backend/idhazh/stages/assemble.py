@@ -170,9 +170,20 @@ def _report_nothing_published(day: DigestDay, plan: RunPlan) -> None:
 
 
 def stage_assemble(
-    plan: RunPlan, *, settings: config.Settings, commit_sha: str, runner: str = "local"
+    plan: RunPlan,
+    *,
+    settings: config.Settings,
+    commit_sha: str,
+    runner: str = "local",
+    shards: int | None = None,
 ) -> DigestDay:
-    """Collect whatever finished, publish it, and append the ledger."""
+    """Collect whatever finished, publish it, and append the ledger.
+
+    `shards` is the count the plan derived, handed down by the router that
+    derived it. This stage never counts the work jobs that filed a row: a
+    denominator taken from those rows could not disagree with them, and
+    disagreeing is the only thing the cell is for.
+    """
     items_dir = _run_dir(plan.date) / "items"
     names = assemble.source_names(settings.sources)
     kinds = assemble.source_kinds(settings.sources)
@@ -335,6 +346,7 @@ def stage_assemble(
         config_digests=settings.digests,
         site_bytes=site_bytes,
         site_files=site_files,
+        shards=shards,
         inputs=recorded_inputs,
         item_health_rows=item_health_rows,
         decisions=decisions,

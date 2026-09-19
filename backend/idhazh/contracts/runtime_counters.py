@@ -194,6 +194,10 @@ _WHOLE: Final = frozenset(
     }
 )
 
+#: The two the host row keeps as its second instrument. Named here beside
+#: `SERIES` so the pair and the wire names they are read from cannot drift apart.
+_SERVER_PROMPT: Final = frozenset({"prompt_tokens_total", "prompt_seconds_total"})
+
 #: The columns of the aggregate `cpu` line of `/proc/stat`, in the order the
 #: kernel prints them. A kernel that publishes fewer is read as far as it goes.
 #: `/proc/stat` rather than a cgroup file on purpose: this project has measured
@@ -715,6 +719,39 @@ def job_seconds(scraped_at: str, job_started_at: int | None) -> int | None:
         return None
     scraped = datetime.strptime(scraped_at, _SCRAPED_AT_FORMAT).replace(tzinfo=UTC)
     return int(scraped.timestamp()) - job_started_at
+
+
+def server_prompt_totals(text: str | None) -> tuple[int | None, float | None]:
+    """The two prompt counters the server itself kept, as (tokens, seconds).
+
+    Public for `model_load_ms`'s reason, and for one more: these two are the
+    second instrument. The item ledger's own answer to the same question is
+    arithmetic over that ledger, and arithmetic over a ledger cannot check it, so
+    the only reading that can disagree is the server's own. `host_fingerprint`
+    carries them at the same grain under the same key.
+
+    Read with `SERIES` and `_number`, the same table and the same rule the row
+    above uses - so a llama.cpp rename leaves both cells empty rather than
+    inventing a zero, and a count that arrives fractional raises instead of being
+    truncated into a number a later reader would average. Text nobody could read
+    is two empty cells, which says the reading was not taken.
+    """
+    if not text:
+        return None, None
+    found: dict[str, float | int] = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        name, _, raw = line.partition(" ")
+        field = SERIES.get(name)
+        if field is not None and field in _SERVER_PROMPT:
+            found[field] = _number(name, field, raw.strip())
+    tokens = found.get("prompt_tokens_total")
+    seconds = found.get("prompt_seconds_total")
+    return (None if tokens is None else int(tokens)), (
+        None if seconds is None else float(seconds)
+    )
 
 
 def _cpu_model_cell(cpu_model: str | None) -> str | None:
