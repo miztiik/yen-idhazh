@@ -1,6 +1,6 @@
 # Published Console
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 The operator's surface: which panel is on which route, the question each one
 answers, and the ruling behind its shape. `/console/` tells the owner what
 happened to the pipeline, where the digest tells a reader what happened in the
@@ -198,11 +198,23 @@ two boxes that overlap.
 **Every label carries its own worst state**, computed at build time from the
 committed ledger - `Machine - shards read 4.31x apart`, not `Machine`.
 Without it a route is where a metric goes to die: nobody opens a page to find
-out whether it was worth opening. Machine's candidates are a run the counters
-reader refused, a shard that committed no row, and the newest run's read spread.
+out whether it was worth opening. Machine's candidates are a run the machine
+record refused, a shard that committed no row, and the newest run's read spread.
 The spread is reported at the lowest rank on purpose: nobody has agreed how far
 apart two shards of one run may read before it is a problem, so ranking it any
 higher would publish a threshold this project has not taken.
+
+**The shard that committed no row is counted against a number from another
+file.** The denominator is `shards` on the day's `run.json` - what the plan
+asked the matrix for, recorded before any work job existed. The numerator is how
+many work jobs filed a row in `state/host-fingerprint/`. Taking both off the
+host rows would make them equal by construction: `N shards reported nothing`
+could never be anything but zero, and the guard that refuses a run with more
+shards than the plan sized would read `len(kept) > len(kept)`. A number that
+cannot disagree with its neighbour is not a check (`CLAUDE.md` Guardrail #10).
+The read spread is read the same way - off `server_prompt_tokens` and
+`server_prompt_seconds`, which are llama-server's own counters and not
+arithmetic over the item ledger.
 
 **An editorial fault caps at `WORTH_A_LOOK`, and there is one exception.** The
 band prints the one worst thing across every route, so a loud rule on Judgement

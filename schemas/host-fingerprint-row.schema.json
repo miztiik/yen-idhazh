@@ -19,6 +19,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added `server_prompt_tokens`, `server_prompt_seconds`.",
+      "version": "2026-09-19",
+      "why": "Arithmetic over the item ledger cannot check the item ledger."
+    },
+    {
       "change": "Added `model_load_ms`, `job_seconds`; `fingerprint`, `measured_at` optional.",
       "version": "2026-09-18",
       "why": "A job's clock is only known at its end, so the row arrives in two halves."
@@ -302,6 +307,34 @@
       "description": "The runner label the platform gave this job.",
       "title": "Runner Name"
     },
+    "server_prompt_seconds": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Seconds llama-server itself counted reading prompts. Pairs with the cell above - a rate is a ratio, and the 80 percent defect this check caught in August 2026 was in the numerator, so one cell alone could not see it.",
+      "title": "Server Prompt Seconds"
+    },
+    "server_prompt_tokens": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Prompt tokens llama-server itself counted reading, cached tokens excluded. The second instrument. The item ledger's own answer is `sum(input_tokens) - sum(cached_tokens)`; a gap over 5 percent means one of the two is wrong, and arithmetic over that ledger could never say so.",
+      "title": "Server Prompt Tokens"
+    },
     "shard": {
       "description": "The shard within that job. A single-shard job writes 0.",
       "minimum": 0,
@@ -323,7 +356,7 @@
       "title": "Threads"
     },
     "version": {
-      "default": "2026-09-18",
+      "default": "2026-09-19",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -388,5 +421,5 @@
   ],
   "title": "HostFingerprintRow",
   "type": "object",
-  "version": "2026-09-18"
+  "version": "2026-09-19"
 }
