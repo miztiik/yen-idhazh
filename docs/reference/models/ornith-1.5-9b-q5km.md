@@ -54,9 +54,13 @@ on its own.
 
 ## Sampling: what we set, against what the publisher asks for
 
-Read from the model card on 2026-09-19
-([ornith-ai/Ornith-1.5-9B](https://huggingface.co/ornith-ai/Ornith-1.5-9B),
-Quickstart). Two recipes, and **every value this entry pins is outside both.**
+Read on 2026-09-19 from
+[ornith-ai/Ornith-1.5-9B-GGUF](https://huggingface.co/ornith-ai/Ornith-1.5-9B-GGUF#quickstart)
+at revision `abdd624b12eb` - **the repository this entry pulls**, so the card and
+the bytes are the same publication. The safetensors card,
+[ornith-ai/Ornith-1.5-9B](https://huggingface.co/ornith-ai/Ornith-1.5-9B#quickstart),
+carries the identical recipe. Two recipes, and **every value this entry pins is
+outside both.**
 
 | Task | temperature | top_p | top_k | min_p | presence_penalty |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -170,6 +174,7 @@ other.
 
 | What | Where |
 | --- | --- |
+| The publisher's sampling recipe, read 2026-09-19 | [ornith-ai/Ornith-1.5-9B-GGUF](https://huggingface.co/ornith-ai/Ornith-1.5-9B-GGUF#quickstart), the repository this entry pulls |
 | Every prefill and decode draw, with its processor | [../benchmarks/the-processor-lottery.md](../benchmarks/the-processor-lottery.md) |
 | The bench dispatch that took the wall-clock and memory readings | GitHub Actions run `34938565911`, 2026-09-15 |
 | The declared identity | `config/models/ornith-1.5-9b-q5km.json` |
