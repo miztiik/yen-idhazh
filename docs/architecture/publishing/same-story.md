@@ -1,6 +1,6 @@
 # When two items are the same story
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-20
 
 A day runs the same story from more than one of our feeds. This page owns the
 rule that decides when two items are one story, what the page does about it, and
@@ -574,6 +574,7 @@ published summary is judged is a different loop with a different ledger
 ## See also
 
 - [layout.md](layout.md) - the published shape this decision is written into, and the addresses a reader gets.
+- [../../how-to/label-the-similarity-holdout.md](../../how-to/label-the-similarity-holdout.md) - how a holdout mark is drawn, read and harvested, and why it is read off the summaries rather than the headlines.
 - [../../concepts/placement.md](../../concepts/placement.md) - the one order a day publishes, and the frame a person set over its head.
 - [../../concepts/digest.md](../../concepts/digest.md) - what a reader is told about a folded story.
 - [../sources/freshness.md](../sources/freshness.md) - where an item's id comes from, which is what lets a later run recognise what an earlier one published.

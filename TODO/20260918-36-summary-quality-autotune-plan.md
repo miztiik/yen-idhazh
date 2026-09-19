@@ -119,9 +119,10 @@ engineering contract), [`docs/how-to/execute-a-plan.md`](../docs/how-to/execute-
 runs), [`docs/agents/bootstrap.md`](../docs/agents/bootstrap.md) (which page owns the surface a row
 touches), and [`docs/how-to/run-the-gates.md`](../docs/how-to/run-the-gates.md) (the gate commands). The
 design of record is [`docs/concepts/summary-quality-autotune.md`](../docs/concepts/summary-quality-autotune.md)
-(the four metrics, the fold-fit loop, the publish gate). The loop this plan mirrors is
-[`20260917-34-similarity-autotune-plan.md`](20260917-34-similarity-autotune-plan.md) - Row 1 extracts its
-fit core. Owning pages per surface: contracts + schema versioning ->
+(the four metrics, the fold-fit loop, the publish gate). The loop this plan mirrors is the adaptive
+merge line in [`docs/architecture/publishing/same-story.md`](../docs/architecture/publishing/same-story.md)
+- Row 1 extracts its fit core from `backend/idhazh/similarity/fit.py`. Owning pages per surface:
+contracts + schema versioning ->
 [`docs/architecture/contracts/schemas.md`](../docs/architecture/contracts/schemas.md); evaluation + the
 console -> [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md). Every row's `Files touched`
 is the exact surface; every persisted change stamps its schema `version` + `changelog` (CLAUDE.md 11).
@@ -650,8 +651,8 @@ removed in the same commit.
 
 ## See also
 
-- [`20260917-34-similarity-autotune-plan.md`](20260917-34-similarity-autotune-plan.md) - the loop this
-  plan mirrors, and the fit core Row 1 extracts.
+- [`docs/architecture/publishing/same-story.md`](../docs/architecture/publishing/same-story.md) - the
+  merge line that fits itself: the loop this plan mirrors, and the fit core Row 1 extracts.
 - [`20260918-35-search-eval-key-points-plan.md`](20260918-35-search-eval-key-points-plan.md) - the
   cleanup and the recorded-only scorers this plan consumes.
 - [`docs/concepts/summary-quality-autotune.md`](../docs/concepts/summary-quality-autotune.md) - the
