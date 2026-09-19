@@ -1,6 +1,6 @@
 # Freshness and Identity
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 
 How often the pipeline runs, what makes an article worth today's slot, what stops the same article being published twice, and how an item keeps its name across the runs of one day. This page owns the decisions the planning step makes before any model loads.
 
@@ -448,7 +448,7 @@ refused it.
 | The number behind it is contaminated | The 20.7 s and 40.3 s per-item planning figures were measured over 703 items that all ran with `diagram` in `visuals.enabled_kinds`, so the model was asked about every one of them: `asked=False` appears zero times in all 703. `diagram` is off now, and with it off a measured 68 of 145 items (46.9 percent) never reach the model at all. |
 | It throttles the wrong stage, and a reader pays for it | A plan-stage budget bounds what `summarize` is handed, in order to protect `visuals`. `summarize` runs as four worker jobs by default, eight at the ceiling, and has no stage clock at all - its only bound is the `work` job's timeout, which is `run.shard_timeout_minutes` and is 200 minutes. `visuals` is one job with a 40-minute stage clock. On 2026-08-24 the committed digest carries **731 items**; a 59-item budget over five runs caps that day at 295 and deletes about 436 of them. |
 
-**The corrected cost, labelled an estimate because that is what it is (Rule
+**The corrected cost, labelled an estimate because that is what it is (Guardrail
 #10).** Multiply the measured per-item cost by the measured share that still
 reaches the model: about **11.0 s an item on the fast host and 21.4 s on the slow
 one**, which is roughly **218 and 112 items** inside the 40-minute clock. Nobody
