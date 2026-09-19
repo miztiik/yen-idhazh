@@ -1,6 +1,6 @@
 # Ornith-1.5-9B-Q5_K_M
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-19
 **Status: evaluated.** It has been benched and it has never served a published
 item. `evaluated` is one of three words a dossier's status line may hold -
 `evaluated`, `incumbent`, `superseded` - and this line is the only place this
@@ -51,6 +51,40 @@ the bytes rather than a restatement of the setting.
 
 **It declares no draft head.** Every decode figure below is this model decoding
 on its own.
+
+## Sampling: what we set, against what the publisher asks for
+
+Read from the model card on 2026-09-19
+([ornith-ai/Ornith-1.5-9B](https://huggingface.co/ornith-ai/Ornith-1.5-9B),
+Quickstart). Two recipes, and **every value this entry pins is outside both.**
+
+| Task | temperature | top_p | top_k | min_p | presence_penalty |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| General | 1.0 | 0.95 | 20 | 0.0 | 1.5 |
+| Precise coding | 0.6 | 0.95 | 20 | 0.0 | 0.0 |
+| **`config/models/ornith-1.5-9b-q5km.json`** | **0.2** | **1.00** | unset | unset | unset |
+
+The lowest the card names is 0.6, for coding rather than for writing. The owner
+pinned 0.2 across every committed entry on 2026-09-17
+([../../architecture/contracts/determinism.md](../../architecture/contracts/determinism.md));
+what has never been taken is a reading of this model at its own recipe against
+0.2 on one corpus. `top_k`, `min_p` and `presence_penalty` appear in both
+recipes and in none of our entries.
+
+**The card calls this a reasoning model and this entry says it does not think.**
+Verbatim: *"Ornith-1.5-9B is a reasoning model: by default the assistant turn
+opens with a `<think> ... </think>` block before the final answer."* The entry
+pins `thinking_close: null`, which declares that no template here reads a
+thinking keyword.
+
+The two are not in conflict as measured - they are unexplained. On 2026-09-17
+the `reasoning_leakage` gate passed on this model with zero reasoning channels
+and zero non-empty think blocks, and its median reply was 587 tokens against
+Gemma's 4,692 ([../benchmarks/four-candidates-on-one-news-day.md](../benchmarks/four-candidates-on-one-news-day.md)),
+which is not the shape of a model emitting a hidden reasoning span. **So
+something suppresses it and nothing on this page records what.** The candidates
+are the GGUF's own chat template and llama.cpp's reasoning parser; reading the
+template out of the file would settle it in one command.
 
 ## Prefill and decode
 
