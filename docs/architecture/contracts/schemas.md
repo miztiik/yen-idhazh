@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -89,9 +89,9 @@ That is not "pre-creating an empty module for later" (`CLAUDE.md` section 10). T
 
 The training corpus ships the same way and for the same reason: `corpus/corpus.jsonl` is committed empty, `corpus/corpus.meta.json` holds a zero census, and `corpus/holdout.txt` is empty. A test asserts all three are tracked.
 
-`state/feed-retirements.csv` is the third, committed as a header and no rows on 2026-09-02 - one commit before the plan stage started writing it. It is also registered in `ledger.keyed_paths`, keyed on `endpoint_key` alone, so the post-merge settlement already covers it: `state/**/*.csv` is `merge=union`, and two stale checkouts each appending the same retirement would otherwise leave one address retired twice. Registering the key with the shape rather than with the first writer is what makes the settlement true from the first row rather than from the second.
+`state/feed-retirements.csv` is the third, committed as a header and no rows on 2026-09-02 - one commit before the plan stage started writing it. It is also registered in `ledger.keyed_paths`, keyed on `endpoint_key` alone, so what makes two of its rows one record is declared with the shape rather than with its first writer - which is what makes the rule true from the first row rather than from the second.
 
-`state/story-similarity/holdout-pairs.csv` is the fourth, committed as a header on 2026-09-18, and it needs one more than the others do: a person types it, so on a fresh clone it holds nothing but its header for as long as nobody has sat down to mark a pair. It is the one `state/` CSV that is `merge=text` rather than `merge=union` - two edits of it are two people disagreeing about the same rows, and a union merge of a disagreement silently keeps both marks.
+`state/story-similarity/holdout-pairs.csv` is the fourth, committed as a header on 2026-09-18, and it needs one more than the others do: a person types it, so on a fresh clone it holds nothing but its header for as long as nobody has sat down to mark a pair. It is the one `state/` CSV that names `merge=text` - two edits of it are two people disagreeing about the same rows, and a union merge of a disagreement silently keeps both marks. Only `state/published/**` and `state/visual-prunes/**` carry a union driver at all.
 
 ### The one row contract whose CSV omits `version`
 

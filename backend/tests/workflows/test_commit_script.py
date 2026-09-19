@@ -37,7 +37,6 @@ from ._harness import (
     _run_commit_script,
     _scripted_origin,
     _seed_ledger,
-    _settled_in_the_clone,
     _step_outputs,
     _tracked,
     _write,
@@ -78,7 +77,6 @@ def test_the_commit_step_pushes_what_it_staged(tmp_path: Path, job_name: str) ->
     env = _isolated_env(tmp_path)
     origin, runner = _scripted_origin(tmp_path, env, staged_paths)
     _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
-    settings = _settled_in_the_clone(settings, _seed_ledger(staged_paths[0]), "header")
     if "REGENERATE_COMMAND" in settings:
         # The push wins here, so the producer never runs. Point it at the
         # harness one anyway: the pipeline's own `assemble` anchors its paths on
@@ -102,7 +100,6 @@ def test_the_commit_step_says_so_and_stops_when_nothing_changed(tmp_path: Path) 
     staged_paths, settings = _commit_call("plan")
     env = _isolated_env(tmp_path)
     origin, runner = _scripted_origin(tmp_path, env, staged_paths)
-    settings = _settled_in_the_clone(settings, _seed_ledger(staged_paths[0]), "header")
     before = _git(origin, env, "rev-parse", "main").strip()
 
     result = _run_commit_script(runner, env, staged_paths, settings)
@@ -123,7 +120,6 @@ def test_the_commit_step_rebases_past_a_racing_commit(tmp_path: Path) -> None:
     _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
     _write(runner / "runner-noise.txt", "dirty\n")
     _write(runner / "leftover.log", "kept\n")
-    settings = _settled_in_the_clone(settings, _seed_ledger(staged_paths[0]), "header")
 
     result = _run_commit_script(runner, env, staged_paths, settings)
 
@@ -171,7 +167,6 @@ def test_a_rebase_is_not_blocked_by_an_untracked_file_the_tip_carries(tmp_path: 
     _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
     _write(runner / unstaged, "version\nthis shard\n")
     _write(runner / "llama-server.log", "kept\n")
-    settings = _settled_in_the_clone(settings, _seed_ledger(staged_paths[0]), "header")
 
     result = _run_commit_script(runner, env, staged_paths, settings)
 
@@ -202,7 +197,6 @@ def test_a_push_that_landed_first_try_reports_no_rebase(tmp_path: Path) -> None:
     env = _isolated_env(tmp_path)
     _, runner = _scripted_origin(tmp_path, env, staged_paths)
     _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
-    settings = _settled_in_the_clone(settings, _seed_ledger(staged_paths[0]), "header")
     settings, written = _reading_its_output(tmp_path, settings)
 
     result = _run_commit_script(runner, env, staged_paths, settings)
@@ -218,7 +212,6 @@ def test_a_commit_that_staged_nothing_reports_no_rebase(tmp_path: Path) -> None:
     staged_paths, settings = _commit_call("plan")
     env = _isolated_env(tmp_path)
     _, runner = _scripted_origin(tmp_path, env, staged_paths)
-    settings = _settled_in_the_clone(settings, _seed_ledger(staged_paths[0]), "header")
     settings, written = _reading_its_output(tmp_path, settings)
 
     result = _run_commit_script(runner, env, staged_paths, settings)
@@ -241,7 +234,6 @@ def test_a_push_that_lost_the_race_reports_the_rebase(tmp_path: Path) -> None:
     _, runner = _scripted_origin(tmp_path, env, staged_paths)
     _race(tmp_path, env, "docs/unrelated.md", "racing\n")
     _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
-    settings = _settled_in_the_clone(settings, _seed_ledger(staged_paths[0]), "header")
     settings, written = _reading_its_output(tmp_path, settings)
 
     result = _run_commit_script(runner, env, staged_paths, settings)
@@ -263,7 +255,6 @@ def test_the_commit_script_still_runs_where_no_step_output_exists(tmp_path: Path
     env = _isolated_env(tmp_path)
     origin, runner = _scripted_origin(tmp_path, env, staged_paths)
     _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
-    settings = _settled_in_the_clone(settings, _seed_ledger(staged_paths[0]), "header")
 
     assert "GITHUB_OUTPUT" not in {**env, **settings}, "the harness is what removes it"
     result = _run_commit_script(runner, env, staged_paths, settings)
@@ -308,24 +299,29 @@ def test_every_way_out_of_the_commit_script_says_whether_it_rebased() -> None:
 
 
 @requires_bash
-def test_a_racing_append_to_the_same_ledger_unions_instead_of_conflicting(
-    tmp_path: Path,
-) -> None:
-    """Two runs appended two independent rows. Both belong, and nothing has to choose.
+def test_two_runs_writing_their_own_segments_both_land(tmp_path: Path) -> None:
+    """Two writers, two files, one rebase, and nothing has to choose.
 
     This is where the loop used to die. `git pull --rebase origin main` was the
     one unguarded command in it, so a conflicting rebase ended the script inside
     attempt 1 under `set -e`: no attempt 2, no failure message, no day, and a
     checkout left mid-rebase. Measured that way on 2026-08-25, git 2.55.0, bash
-    5.3.15. The ledgers carry `merge=union` now, so the union of both appends is
-    the merge, and every command in the loop is guarded.
+    5.3.15. Every command in the loop is guarded now.
+
+    A union merge driver on the shared ledger head was the other half of the
+    answer until 2026-09-19, and it was the wrong half: it concatenated two
+    attempts at the same row as readily as two independent ones. Each writer
+    takes a segment named for its own run, attempt, job and shard instead, so
+    two sides of a race are two adds of two paths and the rebase applies both
+    whole.
     """
     staged_paths, settings = _commit_call("plan")
     env = _isolated_env(tmp_path)
     origin, runner = _scripted_origin(tmp_path, env, staged_paths)
-    _race(tmp_path, env, f"{staged_paths[0]}/ledger.csv", "header\nrow-0\ntheirs\n")
-    _write(runner / staged_paths[0] / "ledger.csv", "header\nrow-0\nours\n")
-    settings = _settled_in_the_clone(settings, f"{staged_paths[0]}/ledger.csv", "header")
+    theirs = f"{staged_paths[0]}/segments/item-health/2026-09-19-1-1-plan-0.csv"
+    ours = f"{staged_paths[0]}/segments/item-health/2026-09-19-2-1-plan-0.csv"
+    _race(tmp_path, env, theirs, "header\ntheirs\n")
+    _write(runner / ours, "header\nours\n")
 
     result = _run_commit_script(runner, env, staged_paths, settings)
 
@@ -336,9 +332,8 @@ def test_a_racing_append_to_the_same_ledger_unions_instead_of_conflicting(
         settings["COMMIT_MESSAGE"],
         "racing change",
     ]
-    landed = _git(origin, env, "show", f"main:{staged_paths[0]}/ledger.csv").splitlines()
-    assert landed[0] == "header"
-    assert sorted(landed[1:]) == ["ours", "row-0", "theirs"]
+    assert _git(origin, env, "show", f"main:{theirs}").splitlines() == ["header", "theirs"]
+    assert _git(origin, env, "show", f"main:{ours}").splitlines() == ["header", "ours"]
     assert not _mid_rebase(runner)
 
 
@@ -360,7 +355,6 @@ def test_a_rebase_it_cannot_finish_still_ends_the_script_cleanly(tmp_path: Path)
     _git(other, env, "commit", "-m", "retire the ledger")
     _git(other, env, "push", "origin", "main")
     _write(runner / staged_paths[0] / "ledger.csv", "header\nrow-0\nours\n")
-    settings = _settled_in_the_clone(settings, f"{staged_paths[0]}/ledger.csv", "header")
 
     result = _run_commit_script(runner, env, staged_paths, settings)
 

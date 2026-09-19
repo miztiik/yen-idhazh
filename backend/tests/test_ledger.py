@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextlib
 import csv
 import io
 import json
@@ -24,7 +23,7 @@ from conftest import (
     seed_span_rollup,
 )
 
-from idhazh import cli, config, day_partition, ledger
+from idhazh import config, day_partition, ledger
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.call_cost import COST_FIELDS, CallKind
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
@@ -45,10 +44,7 @@ from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.contracts.visual_prune import VisualPruneRow
-from idhazh.evals import writer
-from idhazh.evals.writer import OBSERVATION_KEY
 from idhazh.stages import compact as compact_stage
-from idhazh.stages.dedupe_ledgers import stage_dedupe_ledgers
 from utilities import split_published_ledger as split_ledger
 from utilities import split_visual_prunes as split_prunes
 from utilities.migrate_published_ledger import narrow
@@ -1020,17 +1016,18 @@ def _committed_rows(path: Path) -> list[list[str]]:
 def test_a_day_file_that_carries_two_headers_is_refiled_by_the_settlement(
     tmp_path: Path,
 ) -> None:
-    """`merge=union` stacks two generations and calls the merge clean.
+    """A union merge stacked two generations and git called the merge clean.
 
-    That is the right answer for two runs appending different rows and no answer
+    That was the right answer for two runs appending different rows and no answer
     at all for two runs appending under different headings. Line 1 still names
     the contract, so the header check alone passes and the file stays split -
     which is how `state/item-health/2026/09/14.csv` came to hold 394 rows under
     one header and 71 under another.
 
-    The repair is the settlement's, not the append's. Only a merge can make this
-    shape, the merge happens after this run's appends, and the settlement is the
-    step that runs on the merged file.
+    No path under `state/` carries a union driver any more, so nothing can make
+    this shape again. Files that already hold it are committed, and the fold is
+    what reads them back: the compaction calls it on every head before it merges
+    a segment into one.
     """
     state = tmp_path / "state"
     path = ledger.item_health_path(state, DATE)
@@ -1043,8 +1040,15 @@ def test_a_day_file_that_carries_two_headers_is_refiled_by_the_settlement(
         newline="",
     )
 
+    moved, complaints = ledger.settle_header(
+        path,
+        current,
+        ledger.refiler(ItemHealthRow),
+        carried=ledger.ITEM_HEALTH_CARRIED,
+    )
+    assert (moved, complaints) == (1, [])
+
     assert seed_item_health(state, DATE, [carried_row(3, source_id="wire")]) == 1
-    assert stage_dedupe_ledgers(state_dir=state, date=DATE) == 0
 
     rows = _committed_rows(path)
     assert rows[0] == list(current), "one header, on line 1, and it is the contract's"
@@ -1055,8 +1059,8 @@ def test_a_day_file_that_carries_two_headers_is_refiled_by_the_settlement(
         stranded.item_id,
         carried_row(3, source_id="wire").item_id,
     ], "the stranded row keeps its place, and the new row lands after it"
-    moved = read_back[1]
-    assert moved.csv_row() == stranded.csv_row(), (
+    refiled = read_back[1]
+    assert refiled.csv_row() == stranded.csv_row(), (
         "every cell the retired headings carried reaches the column it migrated to"
     )
 
@@ -1413,21 +1417,6 @@ def test_the_settlement_repairs_a_torn_row_and_keeps_what_it_cannot_read(
     rows = _committed_rows(path)
     assert [len(row) for row in rows[:3]] == [len(columns)] * 3
     assert rows[3][0] == "not-a-version", "the line nobody could read is the line that was read"
-
-
-def test_the_settlement_stage_returns_zero_on_a_file_it_cannot_fully_repair(
-    tmp_path: Path,
-) -> None:
-    """An abort here costs the run every ledger row staged beside this one."""
-    state = tmp_path / "state"
-    assert seed_item_health(state, DATE, [carried_row(1, source_id="wire")]) == 1
-    path = ledger.item_health_path(state, DATE)
-    before = path.read_text(encoding="utf-8")
-    with path.open("a", encoding="utf-8", newline="") as handle:
-        handle.write("not-a-version,2026-09-15,2026-09-15-1\n")
-
-    assert stage_dedupe_ledgers(state_dir=state, date=DATE) == 0
-    assert path.read_text(encoding="utf-8").startswith(before), "nothing already on record moved"
 
 
 def test_the_day_count_is_what_each_feed_put_in_front_of_a_reader(tmp_path: Path) -> None:
@@ -2278,12 +2267,13 @@ def test_the_attempt_that_carried_articles_wins_however_late_it_ran(tmp_path: Pa
     assert [(row.outcome, row.items) for row in health_rows(later)] == [(FetchOutcome.OK, 9)]
 
 
-def test_the_settlement_reads_the_union_a_merge_leaves_behind(tmp_path: Path) -> None:
-    """The post-merge half, on the shape `merge=union` really produces.
+def test_a_repeated_row_the_appender_did_not_catch_is_settled_by_key(tmp_path: Path) -> None:
+    """The settlement picks the same winner the appender would have picked.
 
-    `state/**/*.csv` never conflicts - it concatenates - so a settled shard comes
-    back repeated with no marker to notice. The pass has to be unconditional,
-    and it has to pick the same winner it picked before the merge.
+    `append_health` settles what it writes against the file it can see, and the
+    same rule has to hold when a row it could not see turns up beside it - a row
+    a merge brought, or one an interrupted earlier attempt left. It is
+    unconditional because a repeat arrives with no marker to notice.
     """
     path = ledger.health_path(tmp_path, DATE)
     ledger.append_health(tmp_path, DATE, [account(FetchOutcome.TRANSIENT, at="06:00:00")])
@@ -2295,198 +2285,6 @@ def test_the_settlement_reads_the_union_a_merge_leaves_behind(tmp_path: Path) ->
     assert ledger.drop_repeated_rows(path, ledger.FEED_HEALTH_KEY) == 1
     assert [(row.outcome, row.items) for row in health_rows(tmp_path)] == [(FetchOutcome.OK, 4)]
     assert ledger.drop_repeated_rows(path, ledger.FEED_HEALTH_KEY) == 0
-
-
-def test_the_whole_state_tree_settles_in_one_call(tmp_path: Path) -> None:
-    """What the commit step calls between the rebase and the push.
-
-    It returns zero whatever it finds, because a repeat it drops is a repair
-    rather than a finding: a non-zero exit inside `commit-and-push.sh` runs under
-    `set -euo pipefail` and would abort the commit, costing the run every ledger
-    row staged beside the one it just fixed.
-    """
-    state = tmp_path / "state"
-    seed_runtime_counters(state, [counters_row(0, prompt_tokens_total=100)])
-    counters = ledger.runtime_counters_path(state)
-    with counters.open("a", encoding="utf-8", newline="") as handle:
-        handle.write(counters.read_text(encoding="utf-8").splitlines()[1] + "\n")
-
-    assert stage_dedupe_ledgers(state_dir=state, date=DATE) == 0
-    assert ledger.repeated_keys(counters, ledger.RUNTIME_COUNTERS_KEY) == {}
-    assert len(ledger.load_runtime_counters(state, run_id=RUN_ID)) == 1
-
-
-# --- What the settlement covers, and what that costs ------------------------
-
-
-@contextlib.contextmanager
-def _file_opens() -> Iterator[list[Path]]:
-    """Every file opened inside the block, in the order it was opened.
-
-    The instrument Guardrail #12 asks for. A pass that costs more every month spends
-    it in `open`, and a count of opens is the one thing a shared 4 vCPU box can
-    hold still - a stopwatch there measures the neighbour's build as much as
-    this one.
-    """
-    opened: list[Path] = []
-    real = Path.open
-
-    def record(self: Path, *args: Any, **kwargs: Any) -> Any:
-        opened.append(self)
-        return real(self, *args, **kwargs)
-
-    with pytest.MonkeyPatch.context() as patched:
-        patched.setattr(Path, "open", record)
-        yield opened
-
-
-def _repeat_last_row(path: Path) -> None:
-    """Append the file's last row again - the shape `merge=union` leaves behind."""
-    last = path.read_text(encoding="utf-8").splitlines()[-1]
-    with path.open("a", encoding="utf-8", newline="") as handle:
-        handle.write(last + "\n")
-
-
-def _month_of_history(state: Path, date: str) -> tuple[Path, Path, Path]:
-    """One month's three sharded ledgers, each left holding one repeated key.
-
-    Built here rather than read from the committed tree, and written by the
-    shipped appenders rather than by hand: the archive offers one shape however
-    far it grows, and a test that walked it would cost more every month than the
-    pass it is measuring (Guardrail #12, section 13).
-    """
-    ledger.append_health(state, date, [account(FetchOutcome.OK, items=1)])
-    seed_item_health(state, date, [carried_row(1, source_id="wire", date=date)])
-    scores = writer.ledger_path(state, date)
-    scores.parent.mkdir(parents=True, exist_ok=True)
-    scores.write_text(_scores(date=date), encoding="utf-8", newline="")
-    shards = (ledger.health_path(state, date), ledger.item_health_path(state, date), scores)
-    for shard in shards:
-        _repeat_last_row(shard)
-    return shards
-
-
-def test_a_repeat_in_a_shard_this_run_wrote_is_still_settled(tmp_path: Path) -> None:
-    """The behaviour that matters. Bounding what it reads may not change what it fixes.
-
-    All four keyed shapes a commit step stages, each holding the repeat a union
-    merge leaves: the three month shards and one of the flat ledgers.
-    """
-    state = tmp_path / "state"
-    health, items, scores = _month_of_history(state, DATE)
-    seed_runtime_counters(state, [counters_row(0, prompt_tokens_total=100)])
-    counters = ledger.runtime_counters_path(state)
-    _repeat_last_row(counters)
-
-    assert stage_dedupe_ledgers(state_dir=state, date=DATE) == 0
-
-    assert ledger.repeated_keys(health, ledger.FEED_HEALTH_KEY) == {}
-    assert ledger.repeated_keys(items, ledger.ITEM_HEALTH_KEY) == {}
-    assert ledger.repeated_keys(scores, OBSERVATION_KEY) == {}
-    assert ledger.repeated_keys(counters, ledger.RUNTIME_COUNTERS_KEY) == {}
-
-
-def test_the_settlement_opens_no_shard_from_a_month_this_run_did_not_write(
-    tmp_path: Path,
-) -> None:
-    """Guardrail #12, proved by a count of opens rather than by a clock.
-
-    A run appends only to the shard its own date routes to, so a repeat the
-    merge left can only be in a file this run wrote. Every other month was
-    settled when it was written and cannot change again, so reading it buys an
-    answer we already had.
-    """
-    state = tmp_path / "state"
-    older = _month_of_history(state, "2026-05-14")
-    _month_of_history(state, DATE)
-
-    with _file_opens() as opened:
-        assert stage_dedupe_ledgers(state_dir=state, date=DATE) == 0
-
-    assert [path.as_posix() for path in opened if path in older] == []
-    assert ledger.repeated_keys(older[0], ledger.FEED_HEALTH_KEY) != {}, (
-        "the older month still holds its repeat, so the pass really did skip it"
-    )
-
-
-def test_more_history_does_not_make_the_ordinary_settlement_read_more(tmp_path: Path) -> None:
-    """Twelve months of archive against one, same run, same count of opens.
-
-    Without this a bounded pass and an unbounded one are indistinguishable until
-    the archive is big enough to hurt - which is years after the commit that made
-    it unbounded.
-
-    The operator's pass is measured beside it and is expected to rise, because a
-    comparison where both cases were flat would prove the fixture broken rather
-    than the bound real.
-
-    Measured on the fixture below, 2026-09-15: the run's cover opens 8 files at
-    one month of history and 8 at twelve. The operator's opens 16 and 104 - eight
-    more for every month the archive gains. These are exact counts rather than
-    timings, so the spread is zero and the hardware does not enter (Guardrail #10).
-
-    Eight and not six because the header fold added a read: a file that exists is
-    opened once to fold its header blocks onto one and once to drop a repeated
-    key. Two of the three files this fixture writes get both passes - the score
-    ledger declares no reader, so it is settled for repeats only. The flatness
-    across months is what this test is for, not the constant.
-    """
-
-    def opens(cover: str, months: int) -> int:
-        state = tmp_path / f"state-{cover}-{months}"
-        for year in range(2000, 2000 + months):
-            _month_of_history(state, f"{year}-01-14")
-        _month_of_history(state, DATE)
-        settled = DATE if cover == "run" else None
-        with _file_opens() as opened:
-            assert stage_dedupe_ledgers(state_dir=state, date=settled) == 0
-        return len(opened)
-
-    reads = {
-        (cover, months): opens(cover, months)
-        for cover in ("run", "every-shard")
-        for months in (1, 12)
-    }
-
-    assert reads[("run", 1)] == reads[("run", 12)] == 8, f"the settlement read the archive: {reads}"
-    assert reads[("every-shard", 12)] > reads[("every-shard", 1)], (
-        f"the operator's pass is the case that does read the archive: {reads}"
-    )
-
-
-def test_the_operator_pass_settles_a_repeat_an_older_month_kept(tmp_path: Path) -> None:
-    """What the bounded pass gives up, and who gets it back.
-
-    A settle step that failed leaves a repeat no later run will find, because no
-    later run writes that month. `--every-shard` is the pass a person runs on
-    demand to clear it, and it is the only caller that pays for the history.
-    """
-    state = tmp_path / "state"
-    health, items, scores = _month_of_history(state, "2026-05-14")
-    _month_of_history(state, DATE)
-
-    assert stage_dedupe_ledgers(state_dir=state, date=None) == 0
-
-    assert ledger.repeated_keys(health, ledger.FEED_HEALTH_KEY) == {}
-    assert ledger.repeated_keys(items, ledger.ITEM_HEALTH_KEY) == {}
-    assert ledger.repeated_keys(scores, OBSERVATION_KEY) == {}
-
-
-def test_the_settlement_refuses_to_run_until_it_is_told_what_it_covers() -> None:
-    """An unbounded pass is a person's decision and never a default (Guardrail #12).
-
-    `--date` is what a commit step passes, and it settles that run's shards.
-    `--every-shard` is the operator's full pass. Neither is the default, so a
-    step that forgot to say which one gets an error rather than a silent walk
-    over the whole archive.
-    """
-    with pytest.raises(SystemExit) as unsaid:
-        cli.main(["dedupe-ledgers"])
-    assert unsaid.value.code == 2
-
-    with pytest.raises(SystemExit) as both:
-        cli.main(["dedupe-ledgers", "--date", DATE, "--every-shard"])
-    assert both.value.code == 2
 
 
 # --- The server's own counters, and what they are for ----------------------
