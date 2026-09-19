@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**
@@ -93,17 +93,22 @@ Sometimes a clock would answer a different question from the one asked. Then the
 answer is a cheaper cover, not a shorter memory. Three shapes, all in service
 today.
 
-**The files this run staged.** `stages.dedupe_ledgers.stage_dedupe_ledgers` settles the keyed
-ledgers after a push race merged two sides of a CSV. A run appends only to the
-shard its own date routes to, so a repeat can only be in a file that run wrote.
-The ordinary pass reads **six files whether the archive holds one month or
-sixty**; it used to glob every feed-health, item-health and score shard and find
-nothing, because a finished month was settled when it was written. Nothing here
-is a clock: an older month is skipped because this run did not write it, not
-because it is old, so the bound does not weaken when a run runs long or crosses
-midnight. The full pass survives as `idhazh dedupe-ledgers --every-shard`, and
-the command **refuses to run with neither flag** - a step that named neither
-would get the unbounded pass by accident.
+**The files this run staged.** The settlement that ran after a push race is the
+worked example, and it is history rather than code: `stage_dedupe_ledgers` went
+with the union merge driver on 2026-09-19, because a writer that owns its own
+segment leaves nothing for a merge to stack. What it did while it lived is the
+shape worth keeping. A run appends only to the shard its own date routes to, so a
+repeat could only be in a file that run wrote; the ordinary pass read **six files
+whether the archive held one month or sixty**, where it used to glob every
+feed-health, item-health and score shard and find nothing, because a finished
+month was settled when it was written. Nothing there was a clock: an older month
+was skipped because this run did not write it, not because it was old, so the
+bound did not weaken when a run ran long or crossed midnight.
+
+`idhazh rebuild-score-index` carries the live copy of the same shape. `--month`
+names what to rewrite, `--every-shard` is the operator's full pass, and the
+command **refuses to run with neither flag** - a step that named neither would
+get the unbounded pass by accident.
 
 **One run, or one date.** `ledger.load_runtime_counters` already asked
 about one run and then read the lifetime file to find it; it streams now, and its
@@ -241,7 +246,6 @@ listed: its cover is its argument. These are `backend/`'s;
 | Read | What it opens | Its cover |
 | --- | --- | --- |
 | `evals.writer.recorded_observations` | `state/score-index/` and `state/score-archive/` | every observation identity, as 76-byte digests |
-| `stages.dedupe_ledgers.stage_dedupe_ledgers`, via `ledger.keyed_paths` | nine files on the ordinary pass | the files this run staged |
 | `stages.validate_days.stage_validate_days` | one `stat` a day, plus `state/day-validations.csv` | a receipt on payload length, digest and validator identity |
 | `ledger.append_counterfactual_scores` | one day file of `state/counterfactual-scores/` | one date, and inside it the run's own bounded pool - every item the run took plus `lens_weights.counterfactual_refused_per_desk` refused candidates a desk. A run's write costs the same on a five-year archive as on a fresh clone |
 | `ledger.load_settled_failures` | one item-health day file | one date |

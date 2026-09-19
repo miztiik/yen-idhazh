@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 
 The console's interactive charts read a published projection of item health. They
 never read `state/item-health/` directly.
@@ -646,8 +646,8 @@ anyway. A run id carries the identity of the execution that made it, so two
 workflow runs can no longer compute one; and from 2026-09-18 each model-server
 job writes its counters into its own segment under `state/segments/`, so no two
 writers open this file at all and the frozen scan-before-append that could not
-see a sibling's push is gone. `ledger.drop_repeated_rows` still settles the file
-after the merge while the union driver is on it. See
+see a sibling's push is gone. The union driver that made the repeat possible came
+off every head under `state/` on 2026-09-19. See
 [../sources/item-health.md](../sources/item-health.md#the-structure). What
 remains is that a reader of a committed file cannot assume the run that wrote it
 was made by today's pipeline, so refusing an inconsistent run stays correct and

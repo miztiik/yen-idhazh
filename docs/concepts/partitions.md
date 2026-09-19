@@ -1,6 +1,6 @@
 # Partitions
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 A **partition** is one file holding one period of a collection that grows. The
 directory is the collection and the name says the period - `<YYYY-MM>` for a month,
 `<YYYY>/<MM>/<DD>` for a day. A reader opens the periods its window names and skips
@@ -168,7 +168,7 @@ Authority: owner, 2026-09-06.
 | --- | --- | --- | --- |
 | Eval ledger | `state/scores/<YYYY>/<MM>/<DD>.csv` | `evals.writer.append` | Partitioned by **day** since 2026-09-13. It files each row by the row's own `date`, so a day is closed once no row being written names it. A run either side of midnight writes two day files and neither is wrong. The day grain buys what it buys for `state/item-health/`: two runs collide on a file only when they are the same day, and taking a day back is one `rm`. It had a monthly mirror under `frontend/public/scores/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
 | Score index | `state/score-index/<YYYY>/<MM>/<DD>.csv` | `evals.writer.append`, refilled by `refresh_index` | Partitioned by **day** since 2026-09-13, and it files by the ledger's day rather than a grain of its own: `refresh_index` fills a partition with no index from the partition beside it, so two grains in one relationship would be a mapping somebody maintains. Its rows carry no date at all, which is why the committed history was **regenerated** by `idhazh rebuild-score-index` rather than split - nothing in the file said which day a row belonged to. Closed when the day beside it is. |
-| Item health | `state/item-health/<YYYY>/<MM>/<DD>.csv` | `ledger.append_item_health` | Partitioned by **day** since 2026-09-13. It takes one date and appends to that day alone, filtering against `ITEM_HEALTH_KEY` in that one file. Closed once the run's date leaves the day. The day grain buys the two things `state/published/` buys: two runs collide on a file only when they are the same day, and taking a day back is one `rm` rather than an edit inside a shared shard, which `merge=union` cannot express. |
+| Item health | `state/item-health/<YYYY>/<MM>/<DD>.csv` | `ledger.append_item_health` | Partitioned by **day** since 2026-09-13. It takes one date and appends to that day alone, filtering against `ITEM_HEALTH_KEY` in that one file. Closed once the run's date leaves the day. The day grain buys the two things `state/published/` buys: two runs collide on a file only when they are the same day, and taking a day back is one `rm` rather than an edit inside a shared shard, which no merge driver can express. |
 | Feed health | `state/feed-health/<YYYY>/<MM>/<DD>.csv` | `ledger.append_health` | Partitioned by **day** since 2026-09-13. The same one-date append, then it settles that one day file against `FEED_HEALTH_KEY`. Closed once the run's date leaves the day. The day grain buys what it buys for `state/item-health/`: two runs collide on a file only when they are the same day, and taking a day back is one `rm` rather than an edit inside a shared shard. It had a monthly mirror under `frontend/public/feed-health/` until 2026-09-16; nothing fetched it, so there is no published grain to keep in step. |
 | Seen addresses | `state/seen/<YYYY>/<MM>/<DD>.csv` | `ledger.append_seen` | Partitioned by **day** since 2026-09-13. The same one-date append, and the date is the run's own digest date - which is why `first_seen_run[:10]` names the file every row inside it sits in. Closed once the run's date leaves the day. It has no published mirror at all, so unlike the two health ledgers there is no second grain anywhere near it. |
 | Counterfactual scores | `state/counterfactual-scores/<YYYY>/<MM>/<DD>.csv` | `ledger.append_counterfactual_scores` | Partitioned by **day** since 2026-09-14. The plan stage appends the run's own digest date and nothing else, so the day closes when the day's last run finishes. It is the one collection here whose day file is created even when the run has no rows for it: the plan job's commit step names the directory, and `git add` under `set -e` aborts on a path that is not there. Its only reader opens a trailing window, and `retention.prune_counterfactual_scores` deletes what falls below it. |
@@ -178,7 +178,7 @@ Authority: owner, 2026-09-06.
 | Search index | `frontend/public/assist/index/<YYYY-MM>.json` and `<YYYY-MM>.bin` | `assemble.rebuild_search_index` | It is derived whole from the committed days of that month, so the month is closed once no day inside it changes. `stages.assemble.stage_assemble` rebuilds only `month_of(plan.date)`. |
 | Published addresses | `state/published/<YYYY>/<MM>/<DD>.csv` | `ledger.append_published` | Partitioned by **day**, not by month. The caller hands the date and the writer appends to that day alone, so a day is closed once the run's date leaves it. Its read carries `collect.published_window_days`, which the committed config sets to `-1` - the cover is open, and the partition is what a finite value would have to skip. **A finite value must be strictly wider than `collect.seen_window_days`**, and `CollectConfig` refuses one that is not: an undated address whose sight row expires the same week reads as first-seen-today and republishes as new. |
 | Day metrics | `state/day-metrics/<YYYY>/<MM>/<DD>.json` | `telemetry.publish.day_metrics.write` | Partitioned by **day**. One record per published day, mirroring the published tree it is derived from, and closed the moment that day is. The site opens only the dates a page names, so nothing walks the tree. |
-| Visual prunes | `state/visual-prunes/<YYYY>/<MM>/<DD>.csv` | `ledger.append_visual_prunes` | Partitioned by **day**, and the one collection here whose read will never carry a window - the question is the whole series. It files by day anyway, for the two things the grain buys with no read time at all: two runs collide on a file only when they are the same day, and taking a day back off the record is one `rm` rather than an edit inside a shared file, which `merge=union` cannot express. |
+| Visual prunes | `state/visual-prunes/<YYYY>/<MM>/<DD>.csv` | `ledger.append_visual_prunes` | Partitioned by **day**, and the one collection here whose read will never carry a window - the question is the whole series. It files by day anyway, for the two things the grain buys with no read time at all: two runs collide on a file only when they are the same day, and taking a day back off the record is one `rm` rather than an edit inside a shared file, which its own `merge=union` line cannot express. |
 | Scored pairs | `state/story-similarity/scored-pairs/<YYYY>/<MM>/<DD>.csv` | none yet | Partitioned by **day**, and the first collection here that nests one directory deeper than `state/` - the whole adaptive merge line hangs off `state/story-similarity/`, so a commit step stages one prefix. A day is closed once its pairs have been folded into the score record, which happens once. The shape, the path and the header ship ahead of the step that appends to them (Guardrail #3). |
 | Fitted thresholds | `state/story-similarity/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` | none yet | Partitioned by **day** for the reason its sibling is, and unlike that sibling its read does carry a window: the step-change guard takes a median over the newest `step_change_window_rows` written rows, and `assemble` looks back `applied_lookback_days` for a line to apply. Closed once the run's date leaves the day. |
 | Model validation | `state/<run.trial_state_dirname>/validation/<YYYY>/<MM>/<DD>.csv` | `stages.compact.stage_compact`, folding the segment `stages.qualify_decide` or `stages.decide` writes | Partitioned by **day** since 2026-09-18, where it was `state/validation-<date>.csv` at the root of `state/`. The old path was a hardcoded string joined to the repository root, so no config could move it and a trial dispatch wrote production state. Closed once the run's date leaves the day. Two candidates can be dispatched at once, so neither opens the day file: each writes its own segment and the fold settles them against `VALIDATION_KEY`. |
@@ -209,7 +209,7 @@ their grain from different things.
 - **A `state/` store's grain follows what a run writes and what a removal takes
  away.** A run writes one day, two runs collide on a file only when they are the
  same day, and taking a day back is one `rm` rather than an edit inside a shared
- shard - which `merge=union` cannot express.
+ shard - which no merge driver can express.
 - **A `frontend/public/` mirror's grain follows what a browser fetches.** The
  console prices a window in files: `console.window_presets` ends at 90, and
  `WindowControl.svelte` tells the operator how many files a preset costs. At
@@ -253,9 +253,12 @@ permits, and it is the whole reason the rule says "only when a correction target
 rather than "never".
 
 Two constraints make a correction a deliberate act rather than an ordinary write.
-`.gitattributes` sets `merge=union` on `state/**/*.csv`, so a commit that removes rows
-from a shard, rebased onto a tip that added some, resolves by keeping both sides - the
-removal silently does not happen. And a shard's header is checked against the contract
+A commit that removes rows from a shard, rebased onto a tip that added some, is a
+rebase git cannot apply - so the removal stops the push rather than landing
+half-done. Until 2026-09-19 `.gitattributes` set `merge=union` on
+`state/**/*.csv` and the same rebase resolved by keeping both sides, which was
+worse: the removal silently did not happen. And a shard's header is checked
+against the contract
 before any append, so a rewrite that changes the shape has to move every month at once.
 A correction therefore ships as a committed one-shot utility under `backend/utilities/`,
 not as an ad-hoc script; `migrate_published_ledger.py` and `migrate_to_day_shards.py` are

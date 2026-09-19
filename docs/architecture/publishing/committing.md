@@ -1,6 +1,6 @@
 # How a run's rows reach the repository
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 
 Ten jobs of one run commit to one branch, and every one of them can lose the
 push race. This page owns what they run to win it: the three-attempt rebase
@@ -34,10 +34,10 @@ with the runner. It names no store itself, so a thirteenth one is covered the
 day its writer lands rather than the day somebody remembers to add it to a list.
 
 The same file holds the second half of that. A ledger that declares a key must be
-in `ledger.keyed_paths`, the registry the post-merge settlement walks, and a
-ledger that declares none must be absent from it. The two sides are compared as
-sets rather than as a subset, so the registry's one deliberate absence has to stay
-the one its own docstring claims.
+in `ledger.keyed_paths`, the registry that pairs each ledger with what makes two
+of its rows one record, and a ledger that declares none must be absent from it.
+The two sides are compared as sets rather than as a subset, so the registry's one
+deliberate absence has to stay the one its own docstring claims.
 
 **A rebase refuses to start while a tracked file is modified.** A file committed
 with CRLF against a `text eol=lf` attribute is the trap: every Linux checkout
@@ -79,26 +79,29 @@ give it. Ledger by ledger, so one revert takes one ledger.
 
 **There are two ways to lose the push race, and they need different answers.**
 
-The plan job only records what it saw, and so does a work shard. Their ledgers
-are append-only and every row is independent of its neighbours, so two runs that
-both appended are not in disagreement and the union of both sides is the answer.
-Every file under `state/` carries `merge=union` in `.gitattributes`, so that
-rebase resolves itself. A reader of those ledgers already deduplicates.
+The plan job only records what it saw, and so does a work shard. Every path they
+write has one writer: a head is filled by the compaction inside one job, and a
+shard's rows go to `state/segments/<ledger>/<run>-<attempt>-<job>-<shard>.csv`,
+which names the one writer that can take it. Two sides of a lost race are
+therefore two different paths, and the rebase applies both whole.
 
-That is the answer for two runs writing different rows and the wrong one for two
+**Until 2026-09-19 those files were shared and `.gitattributes` gave every one of
+them `merge=union`**, which resolved the rebase by concatenating both sides. That
+is the right answer for two runs writing different rows and the wrong one for two
 attempts writing the same row, and an appending stage cannot tell them apart: it
 filters against the file it checked out, and `actions/checkout` pins the job to
-the commit its run was triggered at. So the work shard's commit step names
-`DROP_REPEATED_ROWS_COMMAND`, which runs after the rebase, on the merged file -
-the only artefact that has ever held both attempts. The first row for a key wins,
-which is the rule the appending stages already state.
+the commit its run was triggered at. A settling pass ran after each rebase to
+take the repeats back out. Both are gone: the union driver is off every head, no
+commit step settles anything, and a second attempt that really does race its own
+first attempt now stops at the rebase instead of landing a row twice. Only
+`state/published/**` and `state/visual-prunes/**` keep a union driver, and each
+has one writing job.
 
 A shard's two steps carry `continue-on-error`, so neither can fail the shard. The
 shard owes the run its items artifact, and assemble writes the same census again,
 so a ledger that will not push costs this run an early copy of rows it gets
 anyway - while a failed shard costs the day a whole worker. Eight shards racing
-one branch is the contention case the loop's three attempts and the union driver
-exist for.
+one branch is the contention case the loop's three attempts exist for.
 
 The assemble job rebuilds what it commits, so it rebuilds. `actions/checkout@v6`
 carries no `ref`, so the job takes main's tip at trigger time, and a run takes

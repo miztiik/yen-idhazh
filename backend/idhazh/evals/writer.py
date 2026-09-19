@@ -85,10 +85,10 @@ def ledger_days(state_dir: Path) -> list[Path]:
     counts as a day is `day_partition.day_files` and nothing local - this
     directory is the one where getting that wrong deletes a file.
 
-    The daily settlement is no longer a caller. A run appends to the one day file
-    `ledger_path` names, so that file is the only place a repeat can be, and
-    walking the rest charged every run for every day on record (Guardrail #12,
-    `stages.dedupe_ledgers.stage_dedupe_ledgers`). The operator's full pass still comes here.
+    The daily settlement was the caller that made this a cost, and it is gone. A
+    run appends to the one day file `ledger_path` names, so that file is the only
+    place a repeat can be, and walking the rest charged every run for every day on
+    record (Guardrail #12). The operator's full pass still comes here.
     """
     return list(day_partition.day_files(state_dir / LEDGER_DIRNAME))
 
@@ -227,8 +227,8 @@ def refresh_index(state_dir: Path) -> int:
     operator runs against the days it names and which checks its own result.
 
     A partial fill is safe in the direction that matters. It under-reports, so a
-    measurement lands twice and `idhazh dedupe-ledgers` settles it against
-    `OBSERVATION_KEY` on the next run. Over-reporting is the one that cannot be
+    measurement lands twice and the compaction settles the two against
+    `OBSERVATION_KEY` when it folds them. Over-reporting is the one that cannot be
     repaired, and nothing here can produce it.
     """
     live = {day_partition.date_of(day): day for day in ledger_days(state_dir)}
@@ -367,9 +367,9 @@ def _digests_of_day(path: Path) -> frozenset[str]:
 def _distinct(digests: Iterable[str]) -> list[str]:
     """The digests in the order they were first seen, each one once.
 
-    A day file can hold the same observation twice between a `merge=union` and
-    the `dedupe-ledgers` pass that settles it. The index is a set, so it records
-    the identity once and the repeat costs nothing.
+    A day file can hold the same observation twice between the two segments that
+    carried it and the compaction that folds them. The index is a set, so it
+    records the identity once and the repeat costs nothing.
     """
     seen: set[str] = set()
     ordered: list[str] = []
@@ -467,7 +467,7 @@ def append(state_dir: Path, rows: Iterable[EvalRow]) -> int:
                 writer.writerow({name: payload[name] for name in columns()})
         # The rows first, then the index, and the order is the whole argument. A
         # crash between the two leaves a measurement recorded and not indexed,
-        # which the next run appends a second time and `dedupe-ledgers` settles
+        # which the next run appends a second time and the compaction settles
         # against `OBSERVATION_KEY`. The other order leaves a digest whose row
         # was never written - a measurement nothing will ever take again, and
         # nothing on disk that says it is missing.

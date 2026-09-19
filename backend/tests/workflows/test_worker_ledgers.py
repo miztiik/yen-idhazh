@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from conftest import REPO_ROOT, read_text
+from conftest import REPO_ROOT
 
 from idhazh import ledger, telemetry
 from idhazh.contracts.runtime_counters import ServerJob
@@ -43,12 +43,9 @@ from ._harness import (
     _mapping,
     _mid_rebase,
     _normalize_condition,
-    _race,
     _run_commit_script,
     _script,
     _scripted_origin,
-    _seed_ledger,
-    _settled_in_the_clone,
     _step,
     _steps,
     _substitute,
@@ -422,129 +419,88 @@ def test_the_observation_index_travels_with_the_rows_it_describes() -> None:
     assert tracked, f"{score_writer.INDEX_RELDIR} must be in a fresh checkout"
 
 
-def test_the_retirement_ledger_needs_no_gitattributes_edit() -> None:
-    """`state/**/*.csv` already answers union, so the new ledger inherits the driver.
+def test_no_ledger_head_carries_a_merge_driver_and_a_segment_refuses_one() -> None:
+    """Asked of git rather than of a pattern matcher written here.
 
-    Asked of git rather than of a pattern matcher written here, for the same
-    reason the test above is: `.gitattributes` is the file that decides. Two
-    stale checkouts can each append the same retirement, and the union keeps both
-    lines - which is why the file is also registered in `ledger.keyed_paths`, so
-    the post-merge settlement collapses them to one.
+    `.gitattributes` is the file that decides, so the question goes to the tool
+    that reads it. The two answers are different words and they mean different
+    things: `unspecified` is git's ordinary text merge, which stops the push when
+    two sides changed one file, and `unset` is `-merge`, which refuses to merge
+    the file at all.
+
+    Neither path has to exist. `check-attr` matches a name against the rules and
+    never opens a file, and a committed date literal in a test is a date that
+    stops being interesting.
+
+    Every head under `state/` carried `merge=union` until 2026-09-19, which is
+    what let a second attempt at one job stack a row the first attempt had
+    already pushed. The two day trees that keep a union driver keep it in their
+    own named lines, and they have one writing job each.
     """
-    relative = ledger.feed_retirements_relpath()
+    paths = [
+        "state/item-health/2026/01/01.csv",
+        ledger.feed_retirements_relpath(),
+        "state/segments/item-health/x.csv",
+        "state/published/2026/01/01.csv",
+        "state/visual-prunes/2026/01/01.csv",
+    ]
 
     answered = subprocess.run(
-        ["git", "check-attr", "merge", "--", relative],
+        ["git", "check-attr", "merge", "--", *paths],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
         check=True,
     ).stdout.splitlines()
 
-    assert answered == [f"{relative}: merge: union"]
+    assert answered == [
+        f"{paths[0]}: merge: unspecified",
+        f"{paths[1]}: merge: unspecified",
+        f"{paths[2]}: merge: unset",
+        f"{paths[3]}: merge: union",
+        f"{paths[4]}: merge: union",
+    ]
 
 
 @requires_bash
 @requires_space_free_paths
 def test_every_shard_of_a_full_fan_out_lands_its_rows(tmp_path: Path) -> None:
-    """Eight workers, one branch, one row each.
+    """Eight workers, one branch, one segment each.
 
     They run in turn from clones taken before any of them pushed, so every one
     after the first finds a base that has already moved - which is the state a
     real fan-out puts them in. What this proves is that the rebase resolves it
-    and no row is lost, and that the post-merge pass leaves eight different rows
-    alone: they share a file, not a key. It does not prove the three-attempt
-    budget: eight truly concurrent pushes cannot be made deterministic in a test.
+    and no shard's rows are lost. It does not prove the three-attempt budget:
+    eight truly concurrent pushes cannot be made deterministic in a test.
+
+    They wrote one shared file until 2026-09-18 and a union merge driver is what
+    made that survive a race. Each shard writes the segment its own run, attempt,
+    job and shard index name now, so the eight sides of the race are eight adds
+    of eight paths and no merge driver is asked to settle anything.
     """
     staged_paths, settings = _commit_call("work")
     env = _isolated_env(tmp_path)
     origin, _ = _scripted_origin(tmp_path, env, staged_paths)
-    relative = _seed_ledger(staged_paths[0])
-    settings = _settled_in_the_clone(settings, relative, "header")
     shards = range(8)
+    segments = {
+        shard: f"state/segments/item-health/2026-09-19-1-1-work-{shard}.csv" for shard in shards
+    }
     runners = []
     for shard in shards:
         runner = tmp_path / f"shard-{shard}"
         _git(tmp_path, env, "clone", str(origin), str(runner))
-        _write(runner / relative, f"header\nrow-0\nshard-{shard}\n")
+        _write(runner / segments[shard], f"header\nshard-{shard}\n")
         runners.append(runner)
 
     results = [_run_commit_script(runner, env, staged_paths, settings) for runner in runners]
 
     assert [result.returncode for result in results] == [0] * len(runners)
-    landed = _git(origin, env, "show", f"main:{relative}").splitlines()
-    assert landed[0] == "header"
-    assert sorted(landed[1:]) == ["row-0", *(f"shard-{shard}" for shard in shards)]
+    for shard in shards:
+        assert _git(origin, env, "show", f"main:{segments[shard]}").splitlines() == [
+            "header",
+            f"shard-{shard}",
+        ]
     assert not any(_mid_rebase(runner) for runner in runners)
-
-
-def _keyed_origin(tmp_path: Path, env: dict[str, str], relative: str) -> tuple[Path, Path]:
-    """An origin holding one keyed ledger, and a clone taken before anything raced it.
-
-    Built here rather than through `_scripted_origin`, which seeds a one-word
-    ledger: two rows that share a key and disagree about everything else need
-    two columns, and that shape is what this file is about.
-    """
-    origin = tmp_path / "origin.git"
-    tmp_path.mkdir(parents=True, exist_ok=True)
-    _git(tmp_path, env, "init", "--bare", "-b", "main", str(origin))
-    seed = tmp_path / "seed"
-    _git(tmp_path, env, "clone", str(origin), str(seed))
-    _write(seed / ".gitattributes", read_text(REPO_ROOT / ".gitattributes"))
-    _write(seed / relative, "key,cells\n")
-    _git(seed, env, "add", ".gitattributes", relative)
-    _git(seed, env, "commit", "-m", "seed")
-    _git(seed, env, "push", "-u", "origin", "main")
-    runner = tmp_path / "runner"
-    _git(tmp_path, env, "clone", str(origin), str(runner))
-    return origin, runner
-
-
-@requires_bash
-@requires_space_free_paths
-def test_a_second_attempt_at_one_shard_leaves_the_row_the_first_one_pushed(
-    tmp_path: Path,
-) -> None:
-    """The defect this step exists for, reproduced and then closed, on real git.
-
-    A shard's append filters against the checkout, and `actions/checkout` pins a
-    job to the commit its run was triggered at. So a second attempt at the same
-    work cannot see the row the first attempt pushed afterwards: it appends its
-    own, `merge=union` keeps both lines, and the ledger ends up with a key twice.
-    That is how run `2026-08-29-3` came to hold six counter rows for four shards.
-
-    Both cases run the shipped script over the same repository. The one without
-    the setting is the defect; the one with it is the fix. The row that survives
-    is the one origin already published, so the commit adds nothing and deletes
-    nothing the tip holds - which is the property that makes settling after a
-    merge safe rather than a rewrite of somebody else's history.
-    """
-    relative = "state/runtime-counters.csv"
-    _, settings = _commit_call("work")
-
-    def attempt(root: Path, drop: bool) -> list[str]:
-        root.mkdir(parents=True, exist_ok=True)
-        env = _isolated_env(root)
-        origin, runner = _keyed_origin(root, env, relative)
-        _race(root, env, relative, "key,cells\nk1,attempt-one\n")
-        _write(runner / relative, "key,cells\nk1,attempt-two\n")
-        settled = (
-            _settled_in_the_clone(settings, relative, "key")
-            if drop
-            else {name: value for name, value in settings.items() if "REPEATED" not in name}
-        )
-        result = _run_commit_script(runner, env, [relative], settled)
-        assert result.returncode == 0, result.stderr
-        assert "rebasing" in result.stdout, "the push has to lose, or nothing merged"
-        return _git(origin, env, "show", f"main:{relative}").splitlines()
-
-    assert attempt(tmp_path / "unsettled", drop=False) == [
-        "key,cells",
-        "k1,attempt-one",
-        "k1,attempt-two",
-    ], "without the pass the union keeps both attempts, which is the defect"
-
-    assert attempt(tmp_path / "settled", drop=True) == ["key,cells", "k1,attempt-one"]
 
 
 def test_assemble_hands_back_every_ledger_a_worker_committed() -> None:
@@ -555,8 +511,8 @@ def test_assemble_hands_back_every_ledger_a_worker_committed() -> None:
     the race. The loop answers a lost race by restoring the rebuilt paths from
     the tip it wants and running the producer again - so the assemble that
     finally commits reads the file the workers wrote and files against it. A
-    staged path missing from that refresh set would be rebased instead, and
-    `merge=union` keeps both appends.
+    staged path missing from that refresh set would be rebased instead, and a
+    rebase of two appends to one file stops the push.
     """
     refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
 

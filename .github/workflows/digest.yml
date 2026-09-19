@@ -354,28 +354,18 @@ jobs:
       # ledger beside it. `state` is in every checkout; a collection inside it
       # need not be.
       #
-      # `append_health` settles the day file it wrote, but against the checkout,
-      # which is frozen at the commit this run was triggered at - so a SECOND
-      # ATTEMPT at this same plan cannot see the rows the first attempt pushed
-      # and appends its own verdict for every feed. The union merge then keeps
-      # both, and one bad run reads as two failures.
-      # `DROP_REPEATED_ROWS_COMMAND` is the half that runs after the merge, on
-      # the merged file - the only place the two attempts have ever been
-      # together. It settles the retirement ledger too, where two stale checkouts
-      # reading the same five 410 results would otherwise retire one address
-      # twice.
-      #
-      # `--date` is what it settles. This run appended to one feed-health day
-      # file, so that file is the only one a repeat can be in, and naming it is
-      # what keeps the pass costing the same on a five-year archive as on a fresh
-      # clone (Guardrail #12).
+      # `append_health` settles the day file it wrote against the checkout, which
+      # is frozen at the commit this run was triggered at - so a SECOND ATTEMPT
+      # at this same plan cannot see the rows the first attempt pushed. Until
+      # 2026-09-19 `.gitattributes` gave the file a union merge driver, the merge
+      # kept both verdicts, and a settling pass ran here afterwards to take one
+      # back out. The driver is gone, so a second attempt now stops at the rebase
+      # instead of landing a feed's verdict twice.
       - name: Commit what the plan saw
         env:
           COMMIT_MESSAGE: "plan: ${{ steps.decide.outputs.date }}"
           NOTHING_STAGED_MESSAGE: "nothing new to record"
           PUSH_FAILED_MESSAGE: "could not push what the plan saw after three attempts"
-          DROP_REPEATED_ROWS_COMMAND: >-
-            python -m idhazh dedupe-ledgers --date ${{ steps.decide.outputs.date }}
         run: >-
           bash .github/scripts/commit-and-push.sh
           state
@@ -812,17 +802,13 @@ jobs:
       # counters each go to their writer's own segment, and the compaction
       # settles them by key - which is what `state/segments` below is.
       #
-      # `DROP_REPEATED_ROWS_COMMAND` stays wired while `.gitattributes` still
-      # gives `state/**/*.csv` the union driver. A second attempt at this shard
-      # sees a checkout frozen at the commit this run was triggered at, so it
-      # cannot see what the first attempt pushed; the pass runs after the merge,
-      # on the merged file, which is the only place two attempts have ever been
-      # together.
-      #
-      # `--date` is what it settles. This run appended to the files its own date
-      # routes to, so those are the only files a repeat can be in, and naming
-      # them is what keeps the pass costing the same however many days the
-      # archive holds (Guardrail #12).
+      # Nothing here shares a file with another writer any more, which is why no
+      # settling pass runs after the rebase. Until 2026-09-19 one did:
+      # `.gitattributes` gave `state/**/*.csv` a union merge driver, a second
+      # attempt at this shard could not see what the first attempt pushed, and
+      # the merge kept both rows. Each writer takes its own segment now, so two
+      # attempts write two files and the second one replaces the first when the
+      # compaction folds them by key.
       #
       # `state/span-rollup` was staged here from 2026-09-15 because a shard was
       # the only thing that wrote it. `roll_up_spans` folds the shard's spans and
@@ -837,8 +823,8 @@ jobs:
       # opens a file sink at `state/traces/<YYYY>/<MM>/<DD>-<run>-<shard>.jsonl` on
       # this runner whenever tracing is on, which it has been since 2026-09-06. A
       # trace file is named for one shard of one run, so two shards never write one
-      # path and no merge driver is needed - unlike a ledger head, which is why
-      # `merge=union` covers `state/**/*.csv` and not this.
+      # path and no merge driver is needed - which is now true of every path this
+      # job stages.
       #
       # `state/segments` is where everything this shard measured now goes, and
       # it is the only ledger path left in the list below. The machine row moved
@@ -851,11 +837,10 @@ jobs:
       # the heads, and the heads are no longer staged here because this job no
       # longer writes them.
       #
-      # `.gitattributes` gives that path `-merge` rather than the union driver
-      # the remaining ledgers carry, for the reason `state/traces` is outside
-      # it: a segment is named for one shard of one run, so there is nothing for
-      # a merge driver to settle and a union of two would silently stack copies
-      # of a file that is meant to have one writer.
+      # `.gitattributes` gives that path `-merge`, for the reason `state/traces`
+      # needs no driver at all: a segment is named for one shard of one run, so
+      # there is nothing for a merge driver to settle and a union of two would
+      # silently stack copies of a file that is meant to have one writer.
       - name: Commit what this shard measured
         if: always()
         continue-on-error: true
@@ -863,8 +848,6 @@ jobs:
           COMMIT_MESSAGE: "work: ${{ needs.plan.outputs.date }} shard ${{ matrix.shard }}"
           NOTHING_STAGED_MESSAGE: "nothing measured to record"
           PUSH_FAILED_MESSAGE: "could not push what this shard measured after three attempts"
-          DROP_REPEATED_ROWS_COMMAND: >-
-            python -m idhazh dedupe-ledgers --date ${{ needs.plan.outputs.date }}
         run: >-
           bash .github/scripts/commit-and-push.sh
           state/traces state/segments

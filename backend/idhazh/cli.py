@@ -72,7 +72,6 @@ from idhazh.stages import (
     common,
     compact,
     decide,
-    dedupe_ledgers,
     harvest,
     judge_draw,
     judge_fit,
@@ -122,7 +121,6 @@ STAGES: Final[tuple[str, ...]] = (
     "assemble",
     "harvest",
     "compact",
-    "dedupe-ledgers",
     "rebuild-score-index",
     "prune-stamp",
     "prune-state",
@@ -506,9 +504,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help=(
             "The operator's full pass over every committed shard, and the only one that "
-            "costs more every month. `dedupe-ledgers` settles them all rather than the "
-            "run's; `rebuild-score-index` rewrites every month's index rather than the "
-            "months named."
+            "costs more every month. `rebuild-score-index` rewrites every month's index "
+            "rather than the months named."
         ),
     )
     parser.add_argument(
@@ -641,26 +638,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         compact.stage_compact(common.STATE_ROOT if args.state_root is None else args.state_root)
         return 0
 
-    if args.stage == "dedupe-ledgers":
-        # Above the fetcher because it reads and rewrites committed files only.
-        # It runs from inside a commit step, between a rebase and a push, and a
-        # step that opened a socket there would read the open web to decide what
-        # to keep.
-        #
-        # The cover is stated, never defaulted. `--date` is what a commit step
-        # passes and it settles that run's shards; `--every-shard` walks the
-        # archive and is a person's decision (Guardrail #12). A step that named
-        # neither would get the unbounded pass by accident, which is exactly the
-        # cost this stage stopped paying.
-        if (args.date is None) == (not args.every_shard):
-            parser.error(
-                "dedupe-ledgers needs --date (the run whose shards it settles) "
-                "or --every-shard (the operator's full pass), and not both"
-            )
-        return dedupe_ledgers.stage_dedupe_ledgers(date=None if args.every_shard else args.date)
-
     if args.stage == "rebuild-score-index":
-        # Above the fetcher for the same reason dedupe-ledgers is: it reads and
+        # Above the fetcher for the same reason `compact` is: it reads and
         # rewrites committed files only.
         #
         # The cover is stated, never defaulted. `--month` names what to rewrite;

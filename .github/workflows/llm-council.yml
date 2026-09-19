@@ -353,8 +353,6 @@ jobs:
           COMMIT_MESSAGE: "judge: ${{ needs.draw.outputs.date }}"
           NOTHING_STAGED_MESSAGE: "no pairs were judged"
           PUSH_FAILED_MESSAGE: "could not push the judged pairs after three attempts"
-          DROP_REPEATED_ROWS_COMMAND: >-
-            python -m idhazh dedupe-ledgers --date ${{ needs.draw.outputs.date }}
         run: >-
           bash .github/scripts/commit-and-push.sh
           state/story-similarity/scored-pairs

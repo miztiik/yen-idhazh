@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 
 How a published summary is judged, and how the judgement is kept honest. This page fixes the vocabulary; the tunable bands live in [config.md](config.md).
 
@@ -996,8 +996,8 @@ has to take its own old files away.
 score row of every month it is given, which is the read the index exists to
 avoid ([`../../CLAUDE.md`](../../CLAUDE.md) Guardrail #12) - so the cover is stated,
 never defaulted: `--month` names the months and `--every-shard` is the full pass
-over the archive, and the command refuses to run with neither, which is the
-shape `idhazh dedupe-ledgers` already uses for the same question. And an index
+over the archive, and the command refuses to run with neither, so a caller that
+named neither gets an error rather than the archive. And an index
 that repaired itself on a schedule would hide the drift it exists to reveal -
 the dedupe would go on being right while nobody learned that something had made
 it wrong. Authority: Fowler, 2026-09-12.
