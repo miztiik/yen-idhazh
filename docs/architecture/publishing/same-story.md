@@ -1,6 +1,6 @@
 # When two items are the same story
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-19
 
 A day runs the same story from more than one of our feeds. This page owns the
 rule that decides when two items are one story, what the page does about it, and
@@ -121,6 +121,181 @@ The one false merge at 0.93 is on 2026-08-30: Ontario's pushback against the lak
 
 **The run writes down which number grouped it.** `same_story_floor_applied` on the run record, because without it a reader of a committed `run.json` cannot tell a day grouped at 0.94 from a day grouped at 0.937 - and the grouping is the thing this whole block moves. A run that published before the column existed carries no value, which is every run before that date.
 
+## The line fits itself, once a night
+
+**A second workflow reads yesterday's published day and asks a model where the
+line should have been.** `LLM-COUNCIL`, in
+[../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml),
+runs on its own clock hours after the last digest slot. It is deliberately not
+part of `digest.yml`: at the cap the block permits, the model time alone would
+push the job past the 6 h ceiling GitHub kills a job at, and a shape that only
+fits on a median day is a shape that finds out on a busy one.
+
+**The name is about where this goes rather than where it is** - owner ruling,
+2026-09-18. The legs shard a list today and never confer, so `judges` would be
+the more literal word for what is on disk. What is coming is not one question:
+this loop argues a case, and a case needs something to adjudicate it - a judge,
+a jury or a plain heuristic - and some of those paths put a person in the loop.
+One roof for all of them, named for the room rather than for the one job being
+done in it this month.
+
+```mermaid
+%%{init: {"theme": "base", "themeVariables": {"background": "#0f1117", "primaryColor": "#222834", "primaryTextColor": "#e6e9f0", "primaryBorderColor": "#4b5468", "lineColor": "#8b93a7", "textColor": "#e6e9f0", "clusterBkg": "#1a1e27", "clusterBorder": "#3a4254", "titleColor": "#e6e9f0", "edgeLabelBackground": "#1a1e27", "fontSize": "14px"}}}%%
+flowchart TD
+  subgraph pub["digest.yml - the assemble stage"]
+    day[("The published day")]
+    pick{"Is there a fitted line<br/>inside the lookback?"}
+    usefit["Group at the fitted line"]
+    usefloor["Group at the committed floor"]
+  end
+  subgraph council["llm-council.yml - the draw and judge jobs"]
+    draw["Score every cross-source pair again.<br/>Keep the ones inside the band.<br/>Take every pair above the line first,<br/>then fill the budget in hash order"]
+    legs["One leg a shard, one model server each.<br/>Read every pair twice, the two summaries<br/>the other way round the second time"]
+  end
+  subgraph foldjob["llm-council.yml - the fold job"]
+    rows[("Every reading the legs returned,<br/>one committed row a pair")]
+    legsin{"Did every leg<br/>report?"}
+    inputs{"Do the band, the slot width and<br/>both model stamps still<br/>match the config?"}
+    archive["Archive the record.<br/>Start an empty one"]
+    agree{"Did this pair's two<br/>readings agree?"}
+    drop["Counted nowhere. Two answers to one<br/>pair is a reading about the judge,<br/>not about the pair"]
+    count["Add the verdict to the slot<br/>its score falls in"]
+    record[("The record: one fixed row<br/>of slots, rewritten whole")]
+    sheet{"Enough NO readings, enough merges<br/>looked at, enough days?"}
+    steady{"Do the two readings agree often<br/>enough, and is the UNCLEAR<br/>share low enough?"}
+    hold["Hold. The line stays where it was<br/>and the row names the reason"]
+    walk["Set aside the top share of NO readings.<br/>Take the upper edge of the slot<br/>the walk stopped in"]
+    damp["A rise lands whole.<br/>A fall lands part of the way"]
+    shape{"Is the fall past the daily limit, or is<br/>today far out of line with<br/>the last fortnight?"}
+    clamped["Clamp it. guard holds an out-of-line day,<br/>step bounds an ordinary fall"]
+    fitrow[("One fitted row a day, written<br/>even when nothing moved")]
+  end
+  day --> draw
+  draw --> legs
+  legs --> rows
+  rows --> legsin
+  legsin -- "no, legs_missing" --> hold
+  legsin -- "yes" --> inputs
+  inputs -- "no, inputs_changed" --> archive
+  archive --> hold
+  inputs -- "yes" --> agree
+  agree -- "no" --> drop
+  agree -- "yes" --> count
+  count --> record
+  record --> sheet
+  sheet -- "no, sheet_too_small" --> hold
+  sheet -- "yes" --> steady
+  steady -- "no, judge_unstable or judge_uncertain" --> hold
+  steady -- "yes" --> walk
+  walk --> damp
+  damp --> shape
+  shape -- "yes" --> clamped
+  shape -- "no" --> fitrow
+  clamped --> fitrow
+  hold --> fitrow
+  fitrow --> pick
+  pick -- "yes" --> usefit
+  pick -- "no" --> usefloor
+  usefit --> day
+  usefloor --> day
+  classDef stage fill:#222834,stroke:#4b5468,stroke-width:1px,color:#e6e9f0;
+  classDef decision fill:#11141c,stroke:#5b6477,stroke-width:1.5px,color:#ffffff;
+  classDef warn fill:#7a5400,stroke:#c08a12,stroke-width:1.5px,color:#ffffff;
+  classDef store fill:#1b3a5c,stroke:#2d6ca3,stroke-width:1.5px,color:#ffffff;
+  classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
+  classDef sysModel fill:#1a1e27,stroke:#9b6bd6,stroke-width:1.5px,color:#cfb0f0;
+  classDef sysEval fill:#1a1e27,stroke:#c79a2e,stroke-width:1.5px,color:#f0d79a;
+  class draw,legs,archive,count,walk,damp,clamped,usefit,usefloor stage;
+  class pick,agree,legsin,inputs,sheet,steady,shape decision;
+  class drop,hold warn;
+  class day,rows,record,fitrow store;
+  class pub sysPublish;
+  class council sysModel;
+  class foldjob sysEval;
+```
+
+**No green and no red anywhere on it, and that is a choice.** Those two colours
+mean an outcome passed or failed, and no arm of this loop does either - a held
+day is an ordinary day, a dropped pair costs nothing, and every other box does
+work. Spending the two colours decoratively here would spend them for the pair
+diagram above, which needs them.
+
+**The judge is handed the two summaries and nothing else.** Not the similarity
+score, which would hand it the number this whole loop exists to set. Not the
+source names, which invite a verdict about publishers rather than about events.
+Not the publication times, which answer the question by proxy. `user_turn` in
+[../../../backend/idhazh/similarity/prompt.py](../../../backend/idhazh/similarity/prompt.py)
+is the only thing that builds the ask, and the two summaries go in fenced as
+untrusted data like every other piece of text that came off the open web
+([../sources/trust-boundary.md](../sources/trust-boundary.md)).
+
+**Every pair is read twice and a pair the two readings disagree about is counted
+nowhere.** The second read puts the summaries the other way round. A model that
+answers one way on the pair and the other way on the same pair reversed has told
+us about itself rather than about the pair. The row is still committed, so the
+disagreement is a fact somebody can count rather than a row that vanished, and
+the day's disagreement rate is what `disagreement_max` gates on.
+
+**The record is a fixed row of slots, rewritten whole and never appended to.**
+It covers `band_low` up to `band_high` in slices `bin_width` wide, which on the
+committed block is 120 slots. That record is the whole input to the fit, so the
+fit costs the same on the thousandth day as on the tenth, and a reader who takes
+the walk to mean "sort every pair ever judged" has put back the growing read this
+shape exists to avoid ([../../concepts/growing-reads.md](../../concepts/growing-reads.md)).
+A date goes in once: a second fold of one date is refused, which is what makes
+re-running a day free rather than damaging.
+
+**Five reasons hold the line, and a held day is an ordinary day.** The row is
+still written, it carries yesterday's line, and it names what stopped the fit.
+Three of them are the gates the fit asks of the record and of the judge; the
+other two are the fold's own refusal, handed up.
+`gates` in [../../../backend/idhazh/similarity/fit.py](../../../backend/idhazh/similarity/fit.py)
+asks all five in one fixed order, so two runs over one held day name the same
+reason and an operator comparing two rows is comparing one answer. `none` is the
+sixth value the column can carry and it is not a hold: it says a fit ran.
+
+| Reason | What it says |
+| --- | --- |
+| `inputs_changed` | The encoder, a scoring weight, a band edge or the slot width no longer matches what the counts were filed under. The old record is archived, an empty one starts, and the line freezes until that one fills. A config edit is a person acting on purpose, so the run records it rather than vetoing it. |
+| `legs_missing` | A judging leg returned nothing. Its siblings' rows are still committed, but the day is not folded at all, because the record counts a date once and a partial fold would put the missing leg's verdicts out of reach for ever. A re-dispatch of that date folds it cleanly. |
+| `sheet_too_small` | Too few NO readings, too few merges looked at, or too few days. `minimum_negatives`, `minimum_above_line` and `minimum_days` are the three, and this reason comes before the judge's own health because on a young record every later gate is being asked of a sample too small to answer it. |
+| `judge_unstable` | Too many pairs came back with two different answers in the two orders. `disagreement_max` is the bar. |
+| `judge_uncertain` | Too large a share of the usable verdicts read UNCLEAR. `unclear_max` is the bar. |
+| `none` | A fit ran. |
+
+**Two clamps shape a fall, and a clamp is not a gate.** A gate refuses the move
+and writes a reason; a clamp lets the move through and shapes it, so the row
+carries `held_reason = none` and says which clamp bit. `step` is the daily limit:
+the line may not fall further than `max_down_step` in a day, and a validator
+refuses a value at or above the measured holdout margin, so no single step this
+design can take could cross the margin the table above measured. `guard` is the
+step-change hold: a day whose own evidence moved the answer far further than the
+last fortnight of days did keeps the line exactly where it was, because a day
+that looks nothing like the fortnight before it is a signal that something
+upstream changed rather than evidence about the line. The guard is asked first
+and it ships recorded rather than enforced - `step_change_guard_enforced` is off,
+so the row carries `daily_shift` and `typical_shift` for a person to read while
+nobody has yet measured what a normal day looks like.
+
+**Nothing has been judged yet.** The committed record carries no folded dates and
+`enabled` is false, so every published day is still grouped at `floor_min` and
+every number above describes a mechanism rather than a history. The operator
+console is where the loop is watched once it starts
+([console.md](console.md)).
+
+**What each committed store answers.**
+
+| Store | The one question it answers |
+| --- | --- |
+| `state/story-similarity/scored-pairs/` | What did the judge say about this pair, in both orders, and under which models? |
+| `state/story-similarity/score-distribution.json` | Across everything judged so far, how many YES, NO and UNCLEAR readings sit in each slice of the band? |
+| `state/story-similarity/fitted-thresholds/` | On this day, what did the record propose, what shaped it, and what did the run apply? |
+| `state/story-similarity/holdout-pairs.csv` | Which pairs did a person mark, and which way? |
+
+The fields, the types and the bounds are in
+[../contracts/schemas.md](../contracts/schemas.md). How each store is partitioned,
+and why, is in [../../concepts/partitions.md](../../concepts/partitions.md).
+
 ## One headline, two outlets, and why 0.94 was not what changed
 
 The vector pass alone left the same story on the page several times. `dolly parton, country music icon, dies at 80` published five times on 2026-08-25 from five different feeds. On 2026-09-03 one acquisition ran five times under two spellings of its price.
@@ -194,11 +369,90 @@ Two passes read the finished day inside `assemble.build_day`, and both were writ
 
 **What is still not a rule.** Nothing forbids a lead being a story the grouping folded, or two members of one group both leading - the source cap does not catch that, because a group is always across outlets. The first no longer leaves a dead link: the block is resolved against the list the page holds, which is the list after the fold, so a folded lead is not in the block at all. The block is one entry shorter and the story is still behind the anchor's pill, which is the trade the fold makes everywhere else. The second would print one story twice at the top of the page, which is what the block exists to avoid, and it has never fired on a committed day. Both are rules to write when the first day produces one.
 
+## Design rationale
+
+**Damping runs in one direction only.** A rise lands whole and a fall lands at
+`smoothing_weight` of the way. Raising the line removes wrong merges and lowering
+it admits them, so the safe move arrives today and the risky one arrives over a
+week. A filter that treats the two directions alike delays the one action this
+loop exists to take.
+
+**The walk sets a share aside rather than stopping at the single highest NO
+reading.** Stopping at the maximum lets one wrong verdict on a genuine pair set
+the line for good, because the line is the stopped slot's upper edge and the slot
+is `bin_width` wide. `discard_share` is what makes a single bad verdict unable to
+decide the number, and `minimum_negatives` is sized so the record holds enough
+NO readings for that share to set even one aside.
+
+**The daily clamp is sized under the measured holdout margin, not over it.** The
+gap between today's floor and the one pair a person marked as two stories is
+thin, and a clamp bigger than the margin it protects is not a clamp. A validator
+refuses `max_down_step` at or above that reading, so the bound moves when the
+measurement does rather than when somebody edits a comment. What it buys is
+exact: one day cannot cross the margin, two consecutive days can. What bounds the
+walk is the record itself, because each new day is a smaller share of it.
+
+**The record is fixed-size and the fit never reads the judged pairs back.** The
+alternative - sort every pair ever judged - answers the same question and costs
+more every day the archive grows, which is the cost Guardrail #12 exists to
+catch. The record is the whole input, so the fit's cost is set by the band and
+the slot width and by nothing that accumulates.
+
+**The legs are CI jobs, not processes on one runner.** The runner is 2 physical
+cores behind 4 logical CPUs, and one `llama-server` on the configured weights
+peaks near the runner's whole memory
+([../../reference/models/qwen3.5-9b-q4km.md](../../reference/models/qwen3.5-9b-q4km.md)).
+A second server on one runner does not fit at all, never mind four. The legs also
+commit nothing: one job downloads every leg's verdicts and makes one push, so
+there is no merge driver to trust, no union stacking to census afterwards, and no
+leg that can die having pushed half its rows.
+
+## Rejected alternatives
+
+**A precision target of 98 percent or better.** About four pairs a day clear the
+line, so the precision on one day can only be 0, 25, 50, 75 or 100 percent -
+there is nothing between 75 and 100, and "at least 98" is the same instruction as
+"exactly zero wrong merges" with a number painted on it. Over a filled record it
+is worse than the rule that shipped: it licenses wrong merges where the walk
+delivers none.
+
+**A seven-day variance test to decide the line has settled.** A damped series
+carries most of yesterday into today, so a week of it is worth about half of one
+independent observation. The test fires on a quiet week that means nothing, and
+it is circular: the damping exists to stop the line moving, and the test then
+asks whether the line stopped moving. The shipped test compares what the record
+proposed a week ago against what it proposes today - the evidence rather than the
+output.
+
+**A symmetric smoothing filter.** It is the same machinery in both directions and
+it costs a week of delay on the only move that removes a wrong merge. Damping
+downward alone gives up nothing: a rise cannot cause the expensive error, so
+slowing one down buys no safety.
+
+**A hard floor the line may never go below.** Most of the world's coverage is
+regurgitated, so more merging is the goal rather than less, and a floor set by
+hand is the same number read once by one person that this loop exists to replace.
+Three things carry its job instead: the discarded share puts the line above
+almost every judged NO pair by construction, the daily clamp stops any one day
+making a large move down, and the hand-marked holdout is reported against every
+day so a day that merged a marked pair is recorded loudly.
+
+**Asking the model to grade a published summary.** The judge answers one closed
+question about two summaries, in one of three words, under a grammar. It is never
+asked whether a summary is good. A quality verdict has no slot to fall into - the
+record files a verdict by the pair's similarity score, and a judgement about
+prose is not on that scale - and mixing the two would put one model's opinion
+about writing inside the number that decides what a reader can see. How a
+published summary is judged is a different loop with a different ledger
+([../../concepts/evaluation.md](../../concepts/evaluation.md)).
+
 ## See also
 
 - [layout.md](layout.md) - the published shape this decision is written into, and the addresses a reader gets.
 - [../../concepts/placement.md](../../concepts/placement.md) - the one order a day publishes, and the frame a person set over its head.
 - [../../concepts/digest.md](../../concepts/digest.md) - what a reader is told about a folded story.
 - [../sources/freshness.md](../sources/freshness.md) - where an item's id comes from, which is what lets a later run recognise what an earlier one published.
-- [../contracts/schemas.md](../contracts/schemas.md) - the shapes the adaptive block will read and write.
+- [../contracts/schemas.md](../contracts/schemas.md) - the shapes the adaptive block reads and writes.
+- [../../concepts/evaluation.md](../../concepts/evaluation.md) - how a published summary is judged, which is a different loop with a different ledger.
+- [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) - the workflow that draws the pairs, judges them and fits the line.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #10, which is why every number here carries its conditions.
