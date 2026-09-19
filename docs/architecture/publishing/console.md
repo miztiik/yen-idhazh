@@ -405,12 +405,14 @@ all and a surface that comes and goes cannot report a day count.
 
 ## What the Hardware route draws
 
-Fifteen panels. Eleven read `state/runtime-counters.csv` and
-`state/item-health/`; three - the two machine panels and the split - also read
-`state/host-fingerprint/`; one - where a shard's clock went - reads
-`state/span-rollup/`; one - where the run's time went, item by item - reads the
-published mirror `frontend/public/run-timeline/`. All five are read at build time
-under `$lib/server/` and nothing on the route is fetched: the four `state/`
+Fifteen panels. Eleven read `state/item-health/` and
+`state/host-fingerprint/`, which are the two instruments this route puts beside
+each other; three - the two machine panels and the split - read the machine
+record for the processor and the flags as well; one - where a shard's clock went
+- reads `state/span-rollup/`; one - where the run's time went, item by item -
+reads the published mirror `frontend/public/run-timeline/`. All five are read at
+build time under `$lib/server/` and nothing on the route is fetched: the four
+`state/`
 ledgers add no telemetry column and no reader sees a cell of any of them, and the
 published mirror carries no address, no title and no fetched text.
 
@@ -625,11 +627,12 @@ hides the panel explaining another route's numbers.
 
 ### The run strip is a time axis, and a day nothing ran is drawn
 
-The pipeline has written `state/runtime-counters.csv` since 2026-08-26 and no
-page has ever read a cell of it. The route exists before its panels do, and says
-what is missing once at the top and once per named panel. A route that hid
-itself until it had data would be a route nobody knew to check - which is
-exactly how a ledger goes four days unread.
+The pipeline has written a machine row per shard per run to
+`state/host-fingerprint/` and an item row to `state/item-health/` for longer than
+this route has existed, and no page had ever put the two together. The route
+exists before its panels do, and says what is missing once at the top and once
+per named panel. A route that hid itself until it had data would be a route
+nobody knew to check - which is exactly how a ledger goes four days unread.
 
 **The run strip is a time axis: one column per day of the window, oldest on the
 left.** Days advance left to right the way every other time series does, so "it

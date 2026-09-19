@@ -21,7 +21,7 @@
  */
 
 import type { HostFingerprint } from '$lib/server/host-fingerprint';
-import type { RunCounters } from '$lib/server/runtime-counters';
+import type { MachineRun } from '$lib/server/machine-counters';
 import { recordDestroyed, type LostDay } from '$lib/console/recording';
 import {
 	machineKeys,
@@ -51,8 +51,9 @@ export interface MachineWhere {
 
 export interface MachineCard {
 	identity: MachineIdentity;
-	/** Which ledger built it. `counters` carries a name and nothing else. */
-	source: 'fingerprint' | 'counters';
+	/** Which ledger built it. `name-only` is the item ledger's `cpu_model`, which
+	 * carries a name and nothing else. */
+	source: 'fingerprint' | 'name-only';
 	/** Family, model and stepping as `25/1/1`. */
 	part: string | null;
 	/** Twelve chips, or none at all where the instruction set was never read. */
@@ -89,9 +90,9 @@ export interface MachineCards {
 	nothing: 'recording-off' | 'record-lost' | 'no-machine' | null;
 	/** False where the machine record is switched off.
 	 *
-	 * Carried even when there are cards, because the counters ledger still names
-	 * a processor: a panel that drew those cards silently would say the
-	 * instruction set is missing when it was never asked for.
+	 * Carried even when there are cards, because the item ledger still names a
+	 * processor: a panel that drew those cards silently would say the instruction
+	 * set is missing when it was never asked for.
 	 */
 	recording: boolean;
 	/** True where no card could carry an instruction set, so the panel says the
@@ -130,11 +131,11 @@ function chips(row: HostFingerprint | null, watched: readonly string[]): FlagChi
  *
  * `fingerprints` are the machine record's rows for this run - one a job, so a
  * work shard, the planner and the assembler each contribute one. A work shard
- * the record did not reach still contributes a placement, off the counters
- * ledger, carrying its processor's name and nothing else.
+ * the record did not reach still contributes a placement, off the item ledger's
+ * own `cpu_model`, carrying its processor's name and nothing else.
  */
 export function machineCards(
-	run: RunCounters | null,
+	run: MachineRun | null,
 	fingerprints: readonly HostFingerprint[],
 	options: {
 		watchedFlags: readonly string[];
@@ -219,7 +220,7 @@ export function machineCards(
 		const buffer = row?.memcpyProbeMib ?? null;
 		cards.push({
 			identity,
-			source: row === null ? 'counters' : 'fingerprint',
+			source: row === null ? 'name-only' : 'fingerprint',
 			part: row === null ? null : part(row),
 			flags: chips(row, options.watchedFlags),
 			flagsRecorded: row !== null && options.watchedFlags.length > 0,
@@ -250,7 +251,7 @@ export function machineCards(
 		cards,
 		nothing: null,
 		recording: options.recording,
-		nameOnly: cards.every((card) => card.source === 'counters'),
+		nameOnly: cards.every((card) => card.source === 'name-only'),
 		lost,
 		lostNote,
 		record: recordState(
