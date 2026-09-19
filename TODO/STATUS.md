@@ -38,7 +38,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 29 | 6 | 22 | 0 |
 | [20260917-34-similarity-autotune-plan.md](20260917-34-similarity-autotune-plan.md) | 4 | 0 | 4 | 0 |
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
-| [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 11 | 0 | 11 | 0 |
+| [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 12 | 0 | 12 | 0 |
 
 ## In flight - 6
 
@@ -95,7 +95,7 @@ section 3 is where it is answered.
 | #7 | 35 | A / eval-core | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - |
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
 
-## Waiting on another row - 83
+## Waiting on another row - 84
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -182,6 +182,7 @@ section 3 is where it is answered.
 | #11 | 36 | W1 / coherence-ram (alone) | 3-model RAM: measure peak, sequential-eviction fallback, shard timeout 220 | 35 coherence names no row |
 | #9 | 36 | W3 / console-panels | Console: the quality bands + the not-published/withhold panel | 5 is PENDING; 7 is PENDING |
 | #8 | 36 | W4 / apply-gate (alone) | Flip the flag: withhold = absent + item-health telemetry (E7 placement) | 7 is PENDING |
+| #12 | 36 | W3 / rejects-store | The rejects store + corpus fence (`state/rejects/`, 30-day prune) | 3 is PENDING; 7 is PENDING |
 
 ## Finished - 19 plans with no live row
 
