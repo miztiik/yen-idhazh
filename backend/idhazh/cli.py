@@ -809,12 +809,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             job=args.job,
             job_started_at=int(args.job_started_at) if args.job_started_at else None,
             server_log_path=args.server_log,
+            metrics_path=args.counters_file,
         )
         return 0
 
     if args.stage in ("assemble", "run"):
+        assemble_plan = common._load_plan(date)
         assemble_stage.stage_assemble(
-            common._load_plan(date), settings=settings, commit_sha=args.commit, runner=args.runner
+            assemble_plan,
+            settings=settings,
+            commit_sha=args.commit,
+            runner=args.runner,
+            # The same arithmetic the `shards` verb prints for the workflow's
+            # fanout, read off the same plan file. The manifest records what was
+            # planned; the machine rows record who answered. Two instruments.
+            shards=shard_count(len(assemble_plan.items), run=settings.app.run),
         )
 
     if args.stage == "harvest":

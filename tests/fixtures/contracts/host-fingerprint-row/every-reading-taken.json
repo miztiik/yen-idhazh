@@ -21,6 +21,8 @@
   "model_load_ms": 3789.15,
   "run_id": "2026-09-16-1",
   "runner_name": "GitHub Actions 12",
+  "server_prompt_seconds": 2216.408,
+  "server_prompt_tokens": 1184302,
   "shard": 0,
   "threads": 4,
   "version": "2026-09-16",

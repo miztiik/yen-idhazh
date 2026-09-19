@@ -21,6 +21,8 @@
   "model_load_ms": null,
   "run_id": "2026-09-16-1",
   "runner_name": null,
+  "server_prompt_seconds": null,
+  "server_prompt_tokens": null,
   "shard": 0,
   "threads": null,
   "version": "2026-09-16",

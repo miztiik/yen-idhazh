@@ -19,12 +19,13 @@ from typing import Any, Final
 
 import pytest
 
-from idhazh import config
+from idhazh import config, ledger
 from idhazh.contracts.console_band import Health, RouteId
 from idhazh.contracts.day_metrics import DayBands, DayMetrics, DayReasons, DaySource
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.models import ModelRef
@@ -140,6 +141,19 @@ def _counters_row(month: str, *, shard: int, prompt: int, seconds: float) -> Run
     )
 
 
+def _host_row(month: str, *, shard: int, prompt: int, seconds: float) -> HostFingerprintRow:
+    """One work job's host row, carrying the two cells the server itself counted."""
+    return HostFingerprintRow(
+        version=HostFingerprintRow.schema_version(),
+        date=f"{month}-01",
+        run_id=f"{month}-01-1",
+        shard=shard,
+        cpu_model="AMD EPYC 7763 64-Core Processor",
+        server_prompt_tokens=prompt,
+        server_prompt_seconds=seconds,
+    )
+
+
 def _span_row(month: str) -> SpanRollupRow:
     return SpanRollupRow(
         version=SpanRollupRow.schema_version(),
@@ -217,6 +231,11 @@ def _manifest(stamp: str, *, planned: int, succeeded: int, failed: int, site_byt
                 status=RunStatus.COMPLETED,
                 commit_sha="0" * 40,
                 runner="test-cpu",
+                # What the plan asked the matrix for. The host rows say who
+                # answered, and the band's Hardware slice reads the two against
+                # each other - so they are seeded from different files here for
+                # the same reason the pipeline writes them to different files.
+                shards=2,
                 items_planned=planned,
                 items_succeeded=succeeded,
                 items_failed=failed,
@@ -304,6 +323,17 @@ def tree(tmp_path: Path) -> tuple[Path, Path]:
             state / "span-rollup" / f"{month}.csv",
             SpanRollupRow.csv_columns(),
             [_span_row(month).csv_row()],
+        )
+        # Two work jobs a run, reading 100 and 50 tokens a second, so the band's
+        # spread has two hosts to spread between. The manifest above says the
+        # plan asked for two, which is the other half of that check.
+        _write_csv(
+            ledger.host_fingerprint_path(state, f"{month}-01"),
+            HostFingerprintRow.csv_columns(),
+            [
+                _host_row(month, shard=0, prompt=1000, seconds=10.0).csv_row(),
+                _host_row(month, shard=1, prompt=1000, seconds=20.0).csv_row(),
+            ],
         )
         record = state / "day-metrics" / month[:4] / month[5:7] / "01.json"
         record.parent.mkdir(parents=True, exist_ok=True)
@@ -847,23 +877,79 @@ def test_a_tree_with_no_run_says_so_rather_than_printing_a_zero(tmp_path: Path) 
 
 
 def test_a_run_whose_shards_disagree_is_refused_whole(tree: tuple[Path, Path]) -> None:
-    """Two servers answered for one shard and neither can be added to the other.
+    """Two hosts answered for one shard and neither can be added to the other.
     A page that prints half a reconcilable run is worse than one that says which
     run it cannot read."""
     state, digest = tree
-    rows = list(csv.DictReader((state / "runtime-counters.csv").read_text(encoding="utf-8").splitlines()))
+    source = ledger.host_fingerprint_path(state, NEWEST_DAY)
+    rows = list(csv.DictReader(source.read_text(encoding="utf-8").splitlines()))
     doubled = dict(rows[-1])
-    doubled["prompt_tokens_total"] = "999999"
-    _write_csv(
-        state / "runtime-counters.csv",
-        RuntimeCountersRow.csv_columns(),
-        [*rows, doubled],
-    )
+    doubled["cpu_model"] = "INTEL(R) XEON(R) PLATINUM 8573C"
+    _write_csv(source, HostFingerprintRow.csv_columns(), [*rows, doubled])
 
     band = _band(state, digest)
 
-    machine = next(route for route in band.routes if route.id is RouteId.MACHINE)
-    assert machine.worst == "1 run cannot be read"
+    machine_route = next(route for route in band.routes if route.id is RouteId.MACHINE)
+    assert machine_route.worst == "1 run cannot be read"
+
+
+def test_more_hosts_than_the_plan_asked_for_refuses_the_run(tree: tuple[Path, Path]) -> None:
+    """The guard that needs two instruments, fired.
+
+    The denominator is the shard count the plan recorded on the manifest; the
+    numerator is how many work jobs filed a host row. Counted off the host rows
+    themselves the two could never differ and this guard would read
+    `len(kept) > len(kept)`, which is never true - a check with no red state.
+    Here a third shard answered a run the plan sized at two, which is a matrix
+    nobody dispatched, and the run is refused rather than published half-read.
+    """
+    state, digest = tree
+    source = ledger.host_fingerprint_path(state, NEWEST_DAY)
+    rows = list(csv.DictReader(source.read_text(encoding="utf-8").splitlines()))
+    stray = dict(rows[-1])
+    stray["shard"] = "2"
+    _write_csv(source, HostFingerprintRow.csv_columns(), [*rows, stray])
+
+    band = _band(state, digest)
+
+    machine_route = next(route for route in band.routes if route.id is RouteId.MACHINE)
+    assert machine_route.worst == "1 run cannot be read"
+
+
+def test_the_spread_is_read_off_the_cells_the_server_itself_counted(
+    tree: tuple[Path, Path],
+) -> None:
+    """One shard read 100 tokens a second and the other 50, so they read 2x apart.
+
+    Both numbers are llama-server's own counters on the host row. The item ledger
+    answers the same question by arithmetic over its own rows, which cannot check
+    those rows - this is the reading that can disagree with them.
+    """
+    state, digest = tree
+
+    band = _band(state, digest)
+
+    machine_route = next(route for route in band.routes if route.id is RouteId.MACHINE)
+    assert machine_route.worst == "shards read 2.00x apart"
+
+
+def test_a_shard_that_filed_no_host_row_is_counted_against_the_plan(
+    tree: tuple[Path, Path],
+) -> None:
+    """The silent shard, which only a denominator from elsewhere can see.
+
+    The plan recorded two shards on the manifest. One filed a host row, so one
+    did not, and the run's totals are short by whatever it did.
+    """
+    state, digest = tree
+    source = ledger.host_fingerprint_path(state, NEWEST_DAY)
+    rows = list(csv.DictReader(source.read_text(encoding="utf-8").splitlines()))
+    _write_csv(source, HostFingerprintRow.csv_columns(), rows[:1])
+
+    band = _band(state, digest)
+
+    machine_route = next(route for route in band.routes if route.id is RouteId.MACHINE)
+    assert machine_route.worst == "1 shard reported nothing"
 
 
 def test_the_band_is_written_only_when_its_bytes_move(tree: tuple[Path, Path]) -> None:
