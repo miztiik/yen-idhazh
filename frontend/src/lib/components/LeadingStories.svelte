@@ -1,5 +1,5 @@
 <script lang="ts">
-	/** The day's leading stories: the page's first screen.
+	/** A compact index of the day's leading stories.
 	 *
 	 * Five at most, chosen across the whole day by the pipeline and published on
 	 * the day payload. The block draws what it is handed and decides nothing:
@@ -27,25 +27,15 @@
 
 {#if stories.length > 0}
 	<section class="leading" aria-labelledby="leading-heading" data-leading>
-		<h2
-			id="leading-heading"
-			class="mb-3 text-sm font-semibold tracking-wide text-text-tertiary uppercase"
-		>
-			Leading today
-		</h2>
+		<h2 id="leading-heading" class="leading-heading">Top stories</h2>
 		<ul class="leading-list">
 			{#each stories as story (story.item_id)}
 				<li class="lead" data-lead={story.item_id}>
-					<!-- The measure sits on this block, not on the two lines inside it. A
-					     `ch` resolves against the element that uses it, so the title and
-					     the reason carrying it separately were two different widths. It is
-					     not on the `li`, because the rule between leads is drawn there and
-					     should span the card. -->
 					<div class="lead-prose">
-						<a class="lead-title text-xl font-semibold text-text" href="#{story.item_id}">
+						<a class="lead-title" href="#{story.item_id}">
 							{story.title}
 						</a>
-						<p class="mt-1 text-base text-text-secondary">{story.reason}</p>
+						<p class="lead-reason">{story.reason}</p>
 					</div>
 				</li>
 			{/each}
@@ -54,56 +44,57 @@
 {/if}
 
 <style>
-	/* The item's card, to the token: same surface, same hairline, same radius.
-	   The block that opens the day and the blocks that fill it then read as one
-	   site rather than as two designs. It takes no hover lift - the card is not
-	   a target, and the links inside it answer the pointer themselves. */
 	.leading {
 		margin-block-end: var(--space-5);
-		padding: var(--space-4);
-		border: 1px solid var(--item-edge);
-		border-radius: var(--radius-lg);
-		background: var(--color-surface);
+		padding-block: var(--space-4);
+		border-block: 1px solid var(--color-rule);
+	}
+
+	.leading-heading {
+		margin: 0 0 var(--space-3);
+		color: var(--color-text-secondary);
+		font-size: var(--text-sm);
+		line-height: var(--leading-sm);
+		font-weight: 600;
+		letter-spacing: 0;
 	}
 
 	.leading-list {
 		display: grid;
-		gap: var(--space-4);
+		grid-template-columns: repeat(auto-fit, minmax(min(var(--zone-aside), 100%), 1fr));
+		gap: var(--space-4) var(--space-5);
 		margin: 0;
 		padding: 0;
 		list-style: none;
 	}
 
-	/* A rule between the leads and none above the first or below the last. The
-	   card's own edge already does that job, and a second line beside it reads
-	   as a box inside a box. */
-	.lead + .lead {
-		padding-block-start: var(--space-4);
-		border-block-start: 1px solid var(--color-rule);
+	.lead {
+		min-width: 0;
 	}
 
-	/* One measure for the lead, set once at the size the reason is written in.
-
-	   Below the wide breakpoint this block is a full-width part of the stream
-	   (app.css), so the cap binds and a lead that wore `.measure` on its title and
-	   again on its reason had two right edges. Inside the aside the column is
-	   narrower than the measure and neither binds, which is why the step only
-	   showed on the layout most readers get. */
 	.lead-prose {
 		max-width: var(--measure);
 		font-size: var(--text-base);
+		overflow-wrap: anywhere;
 		text-wrap: pretty;
 	}
 
 	.lead-title {
 		display: block;
+		color: var(--color-text);
+		font-family: var(--font-display);
+		font-size: var(--text-base);
+		line-height: var(--leading-base);
+		font-weight: 600;
+		letter-spacing: 0;
 		text-decoration: none;
-		text-wrap: balance;
-		/* An unbroken headline token is the one thing in this block that can force
-		   a horizontal scrollbar, and no reader-facing surface carries one. Stated
-		   here rather than left to a utility, so the promise holds wherever this
-		   component is drawn. */
-		overflow-wrap: anywhere;
+	}
+
+	.lead-reason {
+		margin: var(--space-1) 0 0;
+		color: var(--color-text-secondary);
+		font-size: var(--text-sm);
+		line-height: var(--leading-sm);
 	}
 
 	.lead-title:hover,

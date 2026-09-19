@@ -81,9 +81,8 @@ const FOOTER_GONE: Array<[string, RegExp]> = [
 
 /** What the old footer stated about today's run, in its new wording. */
 const DAY_FACTS: Array<[string, RegExp]> = [
-	['the run stamp', /This page came from run \d+, at \d\d:\d\d UTC\./],
-	['the did-not-finish count', /did not finish/],
-	['the reason a story was skipped', /could not read enough of the page/]
+	['the run stamp', /Updated \d\d:\d\d UTC \(update \d+\)\./],
+	['the did-not-finish count', /did not finish/]
 ];
 
 test.describe('the one-line footer', () => {
@@ -158,19 +157,20 @@ test.describe('a document that renders no day carries none of the day', () => {
 		const opens = html.indexOf('aria-label="About today"');
 		const notice = html.slice(opens, html.indexOf('</section>', opens));
 
-		expect(occurrences(notice, /This page came from run \d+, at \d\d:\d\d UTC\./)).toBe(1);
+		expect(occurrences(notice, /Updated \d\d:\d\d UTC \(update \d+\)\./)).toBe(1);
 		expect(occurrences(footerOf(html), /run \d+/)).toBe(0);
 	});
 });
 
 test.describe('what the layout hands every page', () => {
-	test('the skipped-story reason is in the day notice and gone from the footer', () => {
+	test('the day notice counts unfinished articles without inventing their cause', () => {
 		const notice = readFileSync(join(COMPONENTS, 'DayNotice.svelte'), 'utf8');
 		const footer = readFileSync(join(COMPONENTS, 'SiteFooter.svelte'), 'utf8');
 
 		// The canary day records no failure, so a canary build reaches this
 		// sentence on no page. It is pinned at the source rather than not at all.
-		expect(notice).toContain('could not read enough of the page to summarize');
+		expect(notice).toContain('did not finish.');
+		expect(notice).not.toContain('could not read enough of the page');
 		expect(notice).toContain('day.items_failed');
 		expect(footer).not.toContain('could not read enough');
 		expect(footer).not.toContain('items_failed');

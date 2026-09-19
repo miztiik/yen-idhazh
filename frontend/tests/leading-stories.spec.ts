@@ -179,6 +179,35 @@ test.describe('the day gets its first screen from the block it was handed', () =
 		await expect(page.locator('[data-leading]')).toHaveCount(0);
 	});
 
+	test('the index uses columns when they fit and stacks on a phone', async ({ page }) => {
+		const draw = await renderer('LeadingStories');
+		const out = draw({ stories: FIVE });
+		for (const width of [1000, 360]) {
+			await show(page, out, width);
+			const columns = await page.locator('[data-lead]').evaluateAll((nodes) =>
+				new Set(nodes.map((node) => Math.round(node.getBoundingClientRect().left))).size
+			);
+			if (width === 360) expect(columns).toBe(1);
+			else expect(columns).toBeGreaterThan(1);
+		}
+	});
+
+	test('the index keeps context quieter than the headline without a surrounding card', async ({
+		page
+	}) => {
+		const draw = await renderer('LeadingStories');
+		await show(page, draw({ stories: FIVE }), 360);
+		const treatment = await page.locator('[data-leading]').evaluate((node) => ({
+			title: parseFloat(getComputedStyle(node.querySelector('a')!).fontSize),
+			reason: parseFloat(getComputedStyle(node.querySelector('p')!).fontSize),
+			radius: getComputedStyle(node).borderRadius,
+			background: getComputedStyle(node).backgroundColor
+		}));
+		expect(treatment.title).toBeGreaterThan(treatment.reason);
+		expect(treatment.radius).toBe('0px');
+		expect(treatment.background).toBe('rgba(0, 0, 0, 0)');
+	});
+
 	test('the block fits a phone, with no horizontal scrollbar', async ({ page }) => {
 		const draw = await renderer('LeadingStories');
 		const long: LeadingStory[] = [

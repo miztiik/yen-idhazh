@@ -13,19 +13,6 @@
 	 * footer of every page on the site - including the ones that show no day.
 	 * It goes last, because a reader came for the stories and not for us.
 	 *
-	 * One paragraph, one sentence per fact. Every run used to print its own
-	 * near-identical paragraph stating one thing.
-	 *
-	 * It wears the card an item wears - same surface, same hairline, same radius -
-	 * so the block that opens the day and the blocks that fill it read as one
-	 * site. What it does not take is the item's hover lift: this is a header, not
-	 * something to point at.
-	 *
-	 * Two lines, not one. What the day HELD is the fact a reader came for, and how
-	 * many did not finish belongs beside it because it changes that number's
-	 * meaning. Which run wrote the page is provenance, and it goes quieter and
-	 * last. All four in one paragraph gave the block no order to be read in.
-	 *
 	 * **The count arrives as a prop and is never taken off `day.items`.** A
 	 * reading document carries a seed of the day and fetches the rest, so a count
 	 * of the list in hand states the seed - it ticks up while the reader watches
@@ -50,30 +37,30 @@
 </script>
 
 <section class="notice" aria-label="About today">
-	<h1 class="notice-date">
-		{longDate(day.date)}
-	</h1>
+	<div class="notice-heading">
+		<h1 class="notice-date">{longDate(day.date)}</h1>
+		<p class="notice-count">
+			{#if count === 0}
+				No stories today.
+			{:else}
+				{count} {count === 1 ? 'story' : 'stories'}.
+			{/if}
+		</p>
+	</div>
 
-	<p class="notice-count">
-		{#if count === 0}
-			No stories today.
-		{:else}
-			{count}
-			{count === 1 ? 'story' : 'stories'}.
-		{/if}
-		{#if day.partial === true && day.items_failed !== null && day.items_failed !== undefined}
-			{day.items_failed} did not finish, because we could not read enough of the page to summarize
-			them fairly.
-		{/if}
-	</p>
+	{#if day.partial === true && day.items_failed !== null && day.items_failed !== undefined}
+		<p class="notice-status">
+			{day.items_failed} {day.items_failed === 1 ? 'article' : 'articles'} did not finish.
+		</p>
+	{/if}
 
 	{#if laterAdded > 0 || lastRun}
 		<p class="notice-run">
-			{#if laterAdded > 0}
-				{laterAdded} arrived after the first run.
-			{/if}
 			{#if lastRun}
-				This page came from run {lastRun.n}, at {clockUtc(lastRun.at)}.
+				<span>Updated {clockUtc(lastRun.at)} (update {lastRun.n}).</span>
+			{/if}
+			{#if laterAdded > 0}
+				<span>{laterAdded} added since the first update.</span>
 			{/if}
 		</p>
 	{/if}
@@ -82,33 +69,33 @@
 <style>
 	.notice {
 		margin-block-end: var(--space-5);
-		padding: var(--space-4);
-		/* The item's card, to the token. The rule underneath it used to be the only
-		   thing separating the day's facts from the day's stories, and a rule is not
-		   a surface: nothing was in front of anything. */
-		border: 1px solid var(--item-edge);
-		border-radius: var(--radius-lg);
-		background: var(--color-surface);
 	}
 
-	/* Quiet on purpose. It is the page's heading because the page is a day, but a
-	   reader came for the stories and not for the date. */
+	.notice-heading {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: var(--space-1) var(--space-4);
+	}
+
 	.notice-date {
 		margin: 0;
-		font-size: var(--text-sm);
-		line-height: var(--leading-sm);
-		letter-spacing: 0.06em;
-		text-transform: uppercase;
-		color: var(--color-text-tertiary);
-	}
-
-	.notice-count {
-		margin: var(--space-1) 0 0;
-		font-size: var(--text-lg);
-		line-height: var(--leading-lg);
+		font-family: var(--font-display);
+		font-size: var(--text-xl);
+		line-height: var(--leading-xl);
+		font-weight: 600;
+		letter-spacing: 0;
 		color: var(--color-text);
 	}
 
+	.notice-count {
+		margin: 0;
+		font-size: var(--text-sm);
+		line-height: var(--leading-sm);
+		color: var(--color-text-secondary);
+	}
+
+	.notice-status,
 	.notice-run {
 		margin: var(--space-2) 0 0;
 		font-size: var(--text-sm);
@@ -116,9 +103,9 @@
 		color: var(--color-text-secondary);
 	}
 
-	@media (min-width: 1024px) {
-		.notice {
-			padding: var(--space-5);
-		}
+	.notice-run {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-1) var(--space-3);
 	}
 </style>

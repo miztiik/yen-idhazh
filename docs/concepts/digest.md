@@ -1,6 +1,6 @@
 # Digest
 
-**Last Updated**: 2026-09-05
+**Last Updated**: 2026-09-19
 
 What a reader actually gets: the published surface, the item, and the rule that decides whether an item gets a picture. This page fixes the vocabulary and the invariants; the concrete layout and typography are Jony's territory and live in [ui-shell.md](ui-shell.md) and [design-system.md](design-system.md).
 
@@ -72,8 +72,8 @@ The system knows things about its own output that a reader cannot see: that a so
 - A top-band item says nothing at all. Copy about the absence of a problem is ink a reader cannot act on.
 - **Confidence is stated per item and never as a day-level chart.** A three-segment bar of the day's bands was deleted on 2026-08-24: its proportions were the same every day (57.7 / 24.2 / 18.1 re-banded at n=447), it shared its tokens with the item mark so it trained a reader to ignore the mark that does vary, and it spread a number over hundreds of items a reader could neither locate nor act on. Colour is spent where it changes between two items on one screen.
 - A partial run **publishes, and says it was partial.** The failure count is a tracked number with a date on it, not something noticed when a human complains.
-- **The day is stated in one line, once.** Every run used to print its own near-identical paragraph saying one fact. The line is the count, the failures, how many arrived after the first run, and which run made the page.
-- The line says: "N did not finish, because we could not read enough of the page to summarize them fairly." It sat in the footer until 2026-08-31, which printed it on every route including the ones that render no day, and printed it a second time under a page whose day notice was already saying it.
+- **The day's facts appear once in its header.** The date and stable published count come first. The update time and number come last, with the count added since the first update. These are recorded publication facts, not counts of the stories currently visible or the build clock of the site.
+- An incomplete day says "N articles did not finish", with the singular form for one. The count does not say why they failed, so the page does not attribute every failure to inadequate source text. An unknown count or absent update history adds no claim. The footer carries none of these day-specific facts.
 - A run with zero successes still publishes. A day whose failures are invisible is a day nobody fixes.
 
 Surfacing this without turning every item into a disclaimer is a typography and hierarchy problem, and it is a real one.
@@ -85,10 +85,11 @@ carrying **one sentence saying why it is there**. Below three it does not
 render at all and the day goes straight to the stream: four real leads beat
 five with one filler.
 
-The block is a **way into the day and never a version of it**. Every lead is
+The `Top stories` index is a **way into the day and never a version of it**. Every lead is
 still in the stream below, in the published order, and every story a rule kept
 out still publishes there too, marked exactly as it was. The block holds ids and
-sentences; the day holds the stories.
+sentences; the day holds the stories. It keeps every title and reason visible,
+using the compact index treatment in [design-system.md](design-system.md#typography-is-the-interface).
 
 It replaced the topic sections on 2026-09-01. Those drew three stories under
 each desk heading and put the rest behind five links, which on the 431-story day
