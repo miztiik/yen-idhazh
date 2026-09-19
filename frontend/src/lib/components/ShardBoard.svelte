@@ -55,7 +55,7 @@
 	{:else}
 		<p class="board-note">
 			Run <strong>{board.runId}</strong> on {board.date}, {board.rows.length}
-			{board.shards === null ? 'shards reporting' : `of ${board.shards} shards reporting`}. 
+			{board.shards === null ? 'shards reporting' : `of ${board.shards} shards reporting`}.
 			{#if board.shards === null}
 				The run's plan recorded no shard count, so how many filed nothing is unknown rather
 				than none.
