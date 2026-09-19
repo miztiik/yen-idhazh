@@ -13,18 +13,20 @@ import csv
 import json
 import sys
 from collections.abc import Iterator
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Final
 
 import pytest
 
-from idhazh import config
-from idhazh.contracts.console_band import Health, RouteId
+from idhazh import config, ledger
+from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.console_band import ConsoleBand, Health, RouteId
 from idhazh.contracts.day_metrics import DayBands, DayMetrics, DayReasons, DaySource
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
+from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.models import ModelRef
@@ -36,7 +38,7 @@ from idhazh.contracts.run_manifest import (
     RunRecord,
     RunStatus,
 )
-from idhazh.contracts.runtime_counters import RuntimeCountersRow
+from idhazh.contracts.runtime_counters import RuntimeCountersRow, ServerJob
 from idhazh.contracts.source_health_view import (
     SourceAvailability,
     SourceHealthRow,
@@ -45,6 +47,7 @@ from idhazh.contracts.source_health_view import (
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.visual_decision import VisualKind, VisualState
 from idhazh.evals import writer as score_writer
+from idhazh.stages.compact import stage_compact
 from idhazh.telemetry.publish import (
     console_band,
     day_metrics,
@@ -723,6 +726,44 @@ def test_an_editorial_fault_never_takes_the_band_from_a_failed_run() -> None:
     ] == [console_band.BROKEN]
 
 
+def test_a_box_with_no_swap_is_not_a_box_that_has_run_out_of_swap() -> None:
+    """Zero free of zero total is a machine that cannot swap, and is silent.
+
+    The pair exists for exactly this: `SwapFree` at zero reads as "no swap on
+    this box" and "swap fully consumed" equally, and only the second is worth an
+    operator's morning. A band that announced the first would teach him to
+    scroll past the line on the day it is real.
+    """
+    none_at_all = [{"os_swap_free_bytes": "0", "os_swap_total_bytes": "0"}]
+    unsampled = [{"os_swap_free_bytes": "", "os_swap_total_bytes": ""}]
+    untouched = [{"os_swap_free_bytes": "4194304", "os_swap_total_bytes": "4194304"}]
+
+    for rows in (none_at_all, unsampled, untouched):
+        assert console_band.swap_candidates(console_band.swap_facts(rows)) == []
+
+
+def test_the_tightest_item_of_the_day_names_the_swap_the_machine_had_left() -> None:
+    """The minimum and its own total, taken off one row rather than two.
+
+    The two cells are one reading of one machine, so a minimum from one row and
+    a total from another could describe a box nobody ran on.
+    """
+    rows = [
+        {"os_swap_free_bytes": "4194304", "os_swap_total_bytes": "4194304"},
+        {"os_swap_free_bytes": "1048576", "os_swap_total_bytes": "4194304"},
+        {"os_swap_free_bytes": "", "os_swap_total_bytes": ""},
+    ]
+
+    facts = console_band.swap_facts(rows)
+    found = console_band.swap_candidates(facts)
+
+    assert facts.free_bytes == 1048576
+    assert facts.total_bytes == 4194304
+    assert [c.text for c in found] == ["free swap fell to 1.0 MB"]
+    assert found[0].severity == console_band.WORTH_A_LOOK
+    assert "4.0 MB" in found[0].sentence
+
+
 def test_voices_names_a_feed_the_ranker_has_discounted_as_far_as_it_goes() -> None:
     """The one state where the ranker is actively discounting a feed.
 
@@ -958,6 +999,159 @@ def test_the_published_month_file_is_a_list_of_rows_each_carrying_its_stamp(
         __import__("idhazh.contracts.public_run_day", fromlist=["PublicRunDay"])
         .PublicRunDay.schema_version()
     }
+
+
+# --- the compaction lag ------------------------------------------------------
+
+#: The backlog the oracle folds. A count the fixture builds rather than one the
+#: committed store happens to hold, so it cannot drift when a run appends.
+WAITING_ROWS: Final = 303
+STALE_DAYS: Final = 2
+STALE_DAY: Final = (TODAY - timedelta(days=STALE_DAYS)).isoformat()
+
+
+def _health_row(stamp: str, index: int) -> ItemHealthRow:
+    """One census row, enough of it to read back through its own contract."""
+    url = f"https://canary.example/{stamp}/{index}"
+    return ItemHealthRow(
+        version=ItemHealthRow.schema_version(),
+        date=stamp,
+        run_id=f"{stamp}-1",
+        item_id=f"item-{index:04d}",
+        url_key=derive_url_key(url),
+        canonical_url=url,
+        vertical="ai",
+        source_id="canary",
+        stage=ItemStage.PUBLISH,
+        outcome=ItemOutcome.OK,
+    )
+
+
+def _waiting_segment(state: Path, stamp: str, rows: int, *, shard: int) -> None:
+    """One job's slice of `item-health`, left in the store for a later fold."""
+    ledger.write_segment(
+        state,
+        ledger.SegmentLedger.ITEM_HEALTH,
+        [_health_row(stamp, index) for index in range(rows)],
+        run_id=f"{stamp}-1",
+        attempt=1,
+        job=ServerJob.WORK,
+        shard=shard,
+    )
+
+
+def _band_after_folding(state: Path, digest: Path) -> Any:
+    """The band as `assemble` writes it: fold first, then report what waited.
+
+    The three figures are taken off the fold's own return value and never off a
+    listing, because the fold drained the directory - a listing taken here is
+    always empty, so the fields could never be anything but zero.
+    """
+    folded = stage_compact(state)
+    _publish_all(state, digest, months=None)
+    console_band.publish(
+        state_root=state,
+        digest_root=digest,
+        generated_at=f"{NEWEST_DAY}T19:00:00Z",
+        today=TODAY,
+        console=CONSOLE,
+        run=RUN,
+        collect=COLLECT,
+        compaction_lag_days=folded.lag_days(NEWEST_DAY),
+        rows_uncompacted=folded.rows_waiting_before(NEWEST_DAY),
+        covers_through=folded.newest_row_date,
+    )
+    return console_band.read_band(console_band.band_path(digest))
+
+
+def test_the_oracle_a_backlog_two_days_old_reaches_the_band(
+    tree: tuple[Path, Path],
+) -> None:
+    """THE ORACLE: a segment directory two days old holding 303 rows.
+
+    The band names the days, the rows and the date the record now reaches. The
+    run's own segment is staged beside the stale one because that is the shape
+    of the recovering run: it folds what it wrote today and what an earlier run
+    left behind, and the date the heads reach afterwards is today's.
+
+    What it cannot settle: whether an operator acts on it.
+    """
+    state, digest = tree
+    _waiting_segment(state, STALE_DAY, WAITING_ROWS, shard=0)
+    _waiting_segment(state, NEWEST_DAY, 2, shard=1)
+
+    band = _band_after_folding(state, digest)
+
+    assert band.compaction_lag_days == STALE_DAYS
+    assert band.rows_uncompacted == WAITING_ROWS
+    assert band.covers_through == NEWEST_DAY
+
+
+def test_the_oracle_an_empty_segment_store_puts_nothing_on_the_band(
+    tree: tuple[Path, Path],
+) -> None:
+    """THE ORACLE, the other half: nothing waiting says nothing at all.
+
+    Zero is the state of every normal run, so it is the state the console has to
+    render as silence. A band that printed `0 days behind` on every clean run
+    would teach an operator to read past the line on the day it is not zero.
+    """
+    state, digest = tree
+
+    band = _band_after_folding(state, digest)
+
+    assert band.compaction_lag_days == 0
+    assert band.rows_uncompacted == 0
+    assert band.covers_through is None
+
+
+def test_the_rows_this_run_wrote_itself_are_not_counted_as_a_backlog(
+    tree: tuple[Path, Path],
+) -> None:
+    """A normal run folds its own segments and has waited for nothing.
+
+    Every run writes segments, so a count of rows folded would be non-zero on
+    every run and would report the pipeline working as if it were behind.
+    """
+    state, digest = tree
+    _waiting_segment(state, NEWEST_DAY, 5, shard=0)
+
+    band = _band_after_folding(state, digest)
+
+    assert band.compaction_lag_days == 0
+    assert band.rows_uncompacted == 0
+    assert band.covers_through == NEWEST_DAY
+
+
+def test_a_band_written_before_the_compaction_fields_still_reads(
+    tree: tuple[Path, Path],
+) -> None:
+    """The read-side migration for the widening of 2026-09-19.
+
+    A browser holds a console document from one deploy and fetches a band from
+    the next, so a payload written before these three names has to validate
+    against today's model. The keys are removed from a payload rather than read
+    off an older committed file: a committed file ages out, and a test built on
+    one is a test with a date on it (`CLAUDE.md` section 13).
+
+    Zero and null are not a false claim here. They say this run folded no
+    backlog, which is exactly what a run that predates the fields reported by
+    saying nothing.
+    """
+    state, digest = tree
+    _waiting_segment(state, STALE_DAY, WAITING_ROWS, shard=0)
+    _band_after_folding(state, digest)
+    payload = json.loads(console_band.band_path(digest).read_text(encoding="utf-8"))
+    widened = {"compaction_lag_days", "rows_uncompacted", "covers_through"}
+    assert widened <= set(payload), "the producer stopped writing the fields this proves"
+
+    older = ConsoleBand.model_validate(
+        {name: value for name, value in payload.items() if name not in widened}
+    )
+
+    assert older.compaction_lag_days == 0
+    assert older.rows_uncompacted == 0
+    assert older.covers_through is None
 
 
 # --- the dispatcher ----------------------------------------------------------
