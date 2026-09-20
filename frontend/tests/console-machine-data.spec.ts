@@ -1112,6 +1112,11 @@ test.describe('Row #20 - peak memory is a maximum and never a sum', () => {
 
 	test('THE ORACLE: the built page prints the ledger own bytes, and no sum', async ({ page }) => {
 		await page.goto('/console/machine/');
+		// The per-shard bars are the shard grain of the merged memory panel, so
+		// the grain has to be the one on screen before they are in the document.
+		await page
+			.locator('[data-shape-switch="memory-grain"] [data-shape-option="shard"]')
+			.click();
 
 		const drawn = await page.evaluate(() => {
 			const panel = document.querySelector('[data-peak-memory]');

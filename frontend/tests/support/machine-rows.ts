@@ -51,6 +51,23 @@ export interface ShardReading {
 	swapFree?: number | '';
 	swapTotal?: number | '';
 	peakRssBytes?: number | '';
+	/** The worker process when the item ended. A second process on the box. */
+	workerRssBytes?: number | '';
+	/** The kernel's own account: what the machine has, what was left at the
+	 * item's worst moment, and what was left when it ended. Not namespaced, so
+	 * inside a container these are the HOST's figures. */
+	memTotal?: number | '';
+	memAvailable?: number | '';
+	memAvailableMin?: number | '';
+	/** The quietest the processor got over the item's model window. */
+	cpuBusyMin?: number | '';
+	/** When this item's work began. What run order is taken from. */
+	startedAt?: string;
+	/** Items this item's shard was given. The denominator for coverage. */
+	shardItemCount?: number | '';
+	/** This item's own name. One row a shard is the default, so a spec that
+	 * wants several items on one shard names each of them. */
+	itemId?: string;
 	/** Seconds the item ledger charged to read. The other clock. */
 	ledgerReadSeconds?: number | '';
 	/** The processor the item ledger recorded, where the machine record missed
@@ -97,7 +114,7 @@ export function itemRow(reading: ShardReading): Record<string, string> {
 		version: '2026-09-18',
 		date: reading.date ?? DATE,
 		run_id: reading.runId ?? RUN,
-		item_id: `item-${reading.shard ?? 0}`,
+		item_id: reading.itemId ?? `item-${reading.shard ?? 0}`,
 		shard: cell(reading.shard ?? 0),
 		input_tokens: cell(prompt),
 		cached_tokens: cell(reading.cachedTokens),
@@ -107,10 +124,17 @@ export function itemRow(reading: ShardReading): Record<string, string> {
 		decode_ms: typeof reading.writeSeconds === 'number' ? String(reading.writeSeconds * 1000) : '',
 		cpu_busy_pct: cell(reading.cpuBusyPct),
 		cpu_busy_max: cell(reading.cpuBusyMax),
+		cpu_busy_min: cell(reading.cpuBusyMin),
 		load_1m: cell(reading.load),
 		os_swap_free_bytes: cell(reading.swapFree),
 		os_swap_total_bytes: cell(reading.swapTotal),
+		os_mem_total_bytes: cell(reading.memTotal),
+		os_mem_available_bytes: cell(reading.memAvailable),
+		os_mem_available_min_bytes: cell(reading.memAvailableMin),
 		llama_rss_peak_bytes: cell(reading.peakRssBytes),
+		python_rss_bytes: cell(reading.workerRssBytes),
+		item_started_at: cell(reading.startedAt),
+		shard_item_count: cell(reading.shardItemCount),
 		cpu_model: cell(reading.itemCpuModel)
 	};
 }
