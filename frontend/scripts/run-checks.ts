@@ -305,9 +305,12 @@ async function main(args: string[]): Promise<number> {
 				step.tests = pytestCounts(python, report, env);
 			}
 			if (selected.contracts) {
-				const before = treeFingerprint(join(root, 'schemas'));
+				// Both generated trees, because one command writes both: the schemas
+				// and the TypeScript the frontend imports.
+				const generated = [join(root, 'schemas'), join(root, 'frontend', 'src', 'contracts')];
+				const before = generated.map(treeFingerprint);
 				await run('schema export', python, ['-m', 'idhazh.contracts.export']);
-				if (treeFingerprint(join(root, 'schemas')) !== before) {
+				if (generated.map(treeFingerprint).some((now, index) => now !== before[index])) {
 					throw new Error('Schema export changed generated files. Review them and rerun the selected checks.');
 				}
 			}
