@@ -37,7 +37,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 4 |
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
-| [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 8 | 14 | 8 |
+| [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 7 | 15 | 2 |
 | [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 22 | 0 | 22 | 2 |
 
 ## In flight - 0
@@ -45,7 +45,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 38
+## Ready now - 32
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -81,18 +81,12 @@ section 3 is where it is answered.
 | #5 | 35 | A / search | Live-day search - instant + semantic (+ frontend `key_points` owner, C2) | - |
 | #7 | 35 | A / eval-core | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - |
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
+| #9 | 37 | B | Panels grouped by the decision they serve | 7 |
 | #5 | 37 | C | `ItemHealthRow` gains three columns and loses one | 4 |
-| #12 | 37 | C | What one article costs the machine | 9 |
-| #13 | 37 | C | Three panels leave the page | 9 |
-| #14 | 37 | C | The memory board drops the disputed mark | 2, 9 |
-| #15 | 37 | C | The shard board gains the clocks nobody reads | 9 |
-| #16 | 37 | C | Machine cards gain uptime, clock speed, cache size and copy speed | 6, 9 |
-| #19 | 37 | C | Which prompts get re-read, and how fast | 9 |
-| #21 | 37 | C | What the context window actually costs | 9 |
 | #1 | 38 | A | A shard keeps the verdicts it paid for | - |
 | #3 | 38 | B | The separation, written where the next agent reads it | - |
 
-## Waiting on another row - 98
+## Waiting on another row - 105
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -168,10 +162,17 @@ section 3 is where it is answered.
 | #8 | 36 | W4 / apply-gate (alone) | Flip the flag: withhold = absent + item-health telemetry (E7 placement) | 7 is PENDING |
 | #12 | 36 | W3 / rejects-store | The rejects store + corpus fence (`state/rejects/`, 30-day prune) | 3 is PENDING; 7 is PENDING |
 | #13 | 36 | W4 / plan34-gaps | Retro: plan-34 latent gaps + the shared space-trap guard | 34 landed names no row; 6 is PENDING |
-| #10 | 37 | C | Did another tenant take the processor | 5 is PENDING |
-| #11 | 37 | C | Is the kernel taking the model's weights back | 5 is PENDING |
-| #20 | 37 | C | What is holding the runner's memory | 5 is PENDING |
-| #22 | 37 | C | Dotted rules where a setting moved | 21 is PENDING |
+| #10 | 37 | C | Did another tenant take the processor | 5 is PENDING; 9 is PENDING |
+| #11 | 37 | C | Is the kernel taking the model's weights back | 5 is PENDING; 9 is PENDING |
+| #12 | 37 | C | What one article costs the machine | 9 is PENDING |
+| #13 | 37 | C | Three panels leave the page | 9 is PENDING |
+| #14 | 37 | C | The memory board drops the disputed mark | 9 is PENDING |
+| #15 | 37 | C | The shard board gains the clocks nobody reads | 9 is PENDING |
+| #16 | 37 | C | Machine cards gain uptime, clock speed, cache size and copy speed | 9 is PENDING |
+| #19 | 37 | C | Which prompts get re-read, and how fast | 9 is PENDING |
+| #20 | 37 | C | What is holding the runner's memory | 5 is PENDING; 9 is PENDING |
+| #21 | 37 | C | What the context window actually costs | 9 is PENDING |
+| #22 | 37 | C | Dotted rules where a setting moved | 9 is PENDING; 21 is PENDING |
 | #17 | 37 | D | Every published column names its reader | 5 is PENDING; 10 is PENDING; 11 is PENDING; 12 is PENDING; 13 is PENDING; 14 is PENDING; 15 is PENDING; 16 is PENDING; 19 is PENDING; 20 is PENDING; 21 is PENDING; 22 is PENDING |
 | #18 | 37 | E | Docs, the living-page corrections, and the orphan sweep | all names no row |
 | #2 | 38 | A | The council knows which run it is | 1 is PENDING |
