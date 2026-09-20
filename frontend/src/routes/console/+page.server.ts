@@ -7,7 +7,7 @@ import { extraction, type Extraction } from '$lib/console/extraction';
 import { pipelineChanges, wasCut } from '$lib/server/model-work';
 import { loadRunTimeline, runTimelineView } from '$lib/server/run-timeline';
 import { loadSpanRollup, subStepReadout } from '$lib/server/span-rollup';
-import { chartConfig, consoleConfig, retentionConfig, runConfig, summarizeConfig, visualsConfig } from '$lib/server/config';
+import { chartConfig, consoleConfig, panelGroupsFor, retentionConfig, runConfig, summarizeConfig, visualsConfig } from '$lib/server/config';
 import {
 	dayMetrics,
 	evalRows,
@@ -203,6 +203,27 @@ function cutsByRun(rows: Record<string, string>[]): Map<string, number> {
 	return new Map([...seen].map(([runId, keys]) => [runId, keys.size]));
 }
 
+/** Every section this route draws, as the ids `console.panel_groups` orders.
+ *
+ * The list is here rather than in the config because it is a fact about the
+ * markup: a section exists because a snippet in `+page.svelte` draws it. The
+ * config decides the order, and `panelGroupsFor` refuses a config that
+ * disagrees with this list either way round.
+ */
+const DRAWN_PANELS = [
+	'at-a-glance',
+	'site-cost-per-item',
+	'failure-mix',
+	'item-time-split',
+	'run-timeline',
+	'run-health',
+	'throughput-viewport',
+	'stage-timings',
+	'item-cost',
+	'chart-drawing',
+	'extraction'
+] as const;
+
 /** The console reads the committed ledger and nothing else.
  *
  * Every number here was measured when the run happened and written down. None
@@ -375,6 +396,9 @@ export async function load() {
 		// operator downloaded to open the console, for panels most visits never
 		// scroll to (measured 2026-09-09, Intel Core i7-1265U, one build).
 		console,
+		// The order the sections above are drawn in, and the headings they group
+		// under, from `config/appearance.json` rather than from markup order.
+		panelGroups: panelGroupsFor('pipelines', DRAWN_PANELS),
 		// How many separate figures of one unit make an article chartable. The
 		// extraction panel prints it, and the pass it reports on reads the same knob.
 		visuals: visualsConfig(),

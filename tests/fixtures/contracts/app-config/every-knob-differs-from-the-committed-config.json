@@ -121,6 +121,48 @@
     "min_attempts_for_rate": 3,
     "min_window_days": 7,
     "pan_days": 3,
+    "panel_groups": {
+      "machine": [
+        {
+          "id": "tuned-machine",
+          "panels": [
+            "counterfactual-cost",
+            "read-against-written",
+            "tail-trend",
+            "outside-the-model-call",
+            "context-headroom",
+            "prompt-cache",
+            "platform-mix",
+            "reading-against-writing",
+            "machine-cards",
+            "newest-run-tail",
+            "memory-board",
+            "shard-board",
+            "two-clocks"
+          ],
+          "title": ""
+        }
+      ],
+      "pipelines": [
+        {
+          "id": "tuned-pipelines",
+          "panels": [
+            "extraction",
+            "chart-drawing",
+            "run-timeline",
+            "item-cost",
+            "stage-timings",
+            "throughput-viewport",
+            "item-time-split",
+            "failure-mix",
+            "site-cost-per-item",
+            "at-a-glance",
+            "run-health"
+          ],
+          "title": ""
+        }
+      ]
+    },
     "precision_axis_multiple": 10.0,
     "shimmer_after_ms": 400,
     "source_rows": 4,

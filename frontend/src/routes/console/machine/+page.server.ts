@@ -33,6 +33,7 @@ import {
 	consoleConfig,
 	inferenceConfig,
 	observabilityConfig,
+	panelGroupsFor,
 	runConfig
 } from '$lib/server/config';
 import { itemHealthRows, evalRows, loadDay, loadManifests, shardDays } from '$lib/server/payload';
@@ -121,6 +122,29 @@ export interface RunSeries {
 	context: ContextBar[];
 	latency: LatencyRun[];
 }
+
+/** Every panel this route draws, as the ids `console.panel_groups` orders.
+ *
+ * The list is here rather than in the config because it is a fact about the
+ * markup: a panel exists because a snippet in `+page.svelte` draws it. The
+ * config decides the order and the headings, and `panelGroupsFor` refuses a
+ * config that disagrees with this list either way round.
+ */
+const DRAWN_PANELS = [
+	'shard-board',
+	'memory-board',
+	'reading-against-writing',
+	'prompt-cache',
+	'context-headroom',
+	'two-clocks',
+	'machine-cards',
+	'platform-mix',
+	'outside-the-model-call',
+	'tail-trend',
+	'newest-run-tail',
+	'read-against-written',
+	'counterfactual-cost'
+] as const;
 
 /** What the two surviving ledgers counted, read once at build time.
  *
@@ -460,6 +484,7 @@ export async function load() {
 		shardTimeoutMinutes: runConfig().shard_timeout_minutes,
 		contextWindow: inferenceConfig().n_ctx,
 		clocksTolerancePct: CLOCKS_AGREE_WITHIN_PCT,
+		panelGroups: panelGroupsFor('machine', DRAWN_PANELS),
 		console: console_,
 		chart
 	};

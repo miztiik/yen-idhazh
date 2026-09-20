@@ -173,6 +173,98 @@ test.describe('the console frame', () => {
 		expect(panels).toBeGreaterThan(0);
 	});
 
+	test('THE ORACLE: every Hardware panel hangs off a heading of its own group', async ({
+		page
+	}) => {
+		// Thirteen equal siblings down one column is the finding this grouping
+		// closes, and neither a screenshot nor a title scan can see it: both pass
+		// on a page where every heading weighs the same. So the assertion is the
+		// document structure - a group element, its own heading, and the panels
+		// underneath it stepped down a level - read off the DOM rather than off
+		// what any paragraph says.
+		await page.setViewportSize(DESKTOP);
+		await page.goto('/console/machine/');
+
+		const groups = await page.locator('[data-console-group]').evaluateAll((nodes) =>
+			nodes.map((node) => ({
+				id: node.getAttribute('data-console-group') ?? '',
+				declared: Number(node.getAttribute('data-console-group-panels')),
+				heading: node.querySelector(':scope > h2')?.textContent?.trim() ?? '',
+				held: node.querySelectorAll('[data-console-panel]').length,
+				stepped: node.querySelectorAll('[data-console-panel] > header > h3').length
+			}))
+		);
+
+		expect(groups.length, 'the Hardware route draws no groups at all').toBe(3);
+		for (const group of groups) {
+			expect(group.heading.length, `${group.id} draws no heading of its own`).toBeGreaterThan(0);
+			expect(group.declared, `${group.id} declares no panel count`).toBeGreaterThan(0);
+			expect(group.held, `${group.id} holds a different count from the one it declares`).toBe(
+				group.declared
+			);
+			// A panel title still at h2 would sit beside the group heading in the
+			// outline rather than under it, which is the flat page this row closed.
+			expect(group.stepped, `${group.id} holds a panel title that is not an h3`).toBe(
+				group.declared
+			);
+		}
+
+		// Nothing is left outside. A panel the config forgot renders nowhere, and
+		// a panel drawn beside the groups is the flat sibling this row removed.
+		const loose = await page.locator('[data-console-panel]').count();
+		expect(loose, 'a Hardware panel sits outside every group').toBe(
+			groups.reduce((sum, group) => sum + group.held, 0)
+		);
+	});
+
+	test('THE ORACLE: a group heading outweighs the panel titles under it', async ({ page }) => {
+		// The grouping only buys anything if the eye can tell a heading from the
+		// thirteen titles below it. Measured rather than looked at, because a
+		// token rename that put them back at one size would pass every other
+		// check on this page.
+		await page.setViewportSize(DESKTOP);
+		await page.goto('/console/machine/');
+
+		const sizes = await page.evaluate(() => {
+			const group = document.querySelector('[data-console-group]');
+			const heading = group?.querySelector(':scope > h2');
+			const title = group?.querySelector('[data-console-panel] > header > h3');
+			const size = (node: Element | null | undefined) =>
+				node ? parseFloat(getComputedStyle(node).fontSize) : 0;
+			return { heading: size(heading), title: size(title) };
+		});
+
+		expect(sizes.title, 'no panel title found under the first group').toBeGreaterThan(0);
+		expect(
+			sizes.heading,
+			'the group heading is drawn no larger than the titles it groups'
+		).toBeGreaterThan(sizes.title);
+	});
+
+	test('THE ORACLE: each route opens on the panel that verdicts the rest', async ({ page }) => {
+		// The thirteenth chart rule: a verdict panel sits above the panels it
+		// verdicts, or an operator reads ten readings before he reaches the line
+		// that says whether to trust them. Asserted on the attribute the panel
+		// declares, never on its title, so a rename cannot quietly retire it.
+		for (const route of ['/console/', '/console/machine/']) {
+			await page.goto(route);
+			const panels = page.locator('[data-console-panel]');
+			expect(await panels.count(), `${route} draws no panels`).toBeGreaterThan(0);
+			expect(
+				await panels.first().getAttribute('data-panel-verdict'),
+				`${route} does not open on its verdict panel`
+			).toBe('route');
+			expect(
+				await panels.first().getAttribute('data-panel-question'),
+				`${route}'s first panel does not say which question it answers`
+			).toBe('is it working');
+			expect(
+				await page.locator('[data-panel-verdict="route"]').count(),
+				`${route} names more than one verdict panel`
+			).toBe(1);
+		}
+	});
+
 	test('the run strip actually grows in a browser, not just in the arithmetic', async ({
 		page
 	}) => {

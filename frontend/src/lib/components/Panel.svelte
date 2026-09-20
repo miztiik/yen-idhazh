@@ -17,6 +17,8 @@
 		note = null,
 		tone = 'neutral',
 		wide = false,
+		heading = 'h2',
+		verdict = false,
 		children
 	}: {
 		title: string;
@@ -25,13 +27,32 @@
 		tone?: 'neutral' | 'info' | 'good' | 'warn' | 'bad';
 		/** Set where the content is a table or a chart that needs the full frame. */
 		wide?: boolean;
+		/** Which level the title takes. A panel under a group heading is an `h3`
+		 * below that heading's `h2`, so the outline says what contains what
+		 * instead of drawing every title at one weight. */
+		heading?: 'h2' | 'h3';
+		/** Set on the one panel that verdicts the rest of its route. It sits
+		 * first, so an operator reads whether to trust the readings before he
+		 * reads ten of them. */
+		verdict?: boolean;
 		children: Snippet;
 	} = $props();
 </script>
 
-<section class="panel-block" data-console-panel={title} data-tone={tone} class:wide>
+<section
+	class="panel-block"
+	data-console-panel={title}
+	data-tone={tone}
+	data-panel-verdict={verdict ? 'route' : undefined}
+	data-panel-question={verdict ? 'is it working' : undefined}
+	class:wide
+>
 	<header class="panel-head">
-		<h2 class="panel-title">{title}</h2>
+		{#if heading === 'h3'}
+			<h3 class="panel-title">{title}</h3>
+		{:else}
+			<h2 class="panel-title">{title}</h2>
+		{/if}
 		{#if note}<p class="panel-note">{note}</p>{/if}
 	</header>
 	<div class="panel-body">
