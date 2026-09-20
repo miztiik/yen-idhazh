@@ -161,6 +161,68 @@ vocabulary lives in the contract rather than in the schema.
 **An empty `flags` is a reading, not a gap.** The machine we draw most, the EPYC
 7763, reports none of the watched AVX-512 entries at all.
 
+## What the processor will not tell us
+
+**No cache hit rate, no cache miss rate, no cache occupancy.** The guest has no
+hardware performance monitoring unit, so there is no counter to read. The gap is
+in the machine, not in this record's column set.
+
+Read on `ubuntu-latest` on 2026-09-20 by
+[`.github/workflows/probe.yml`](../../.github/workflows/probe.yml), on three
+draws of image `ubuntu-24.04` 20260907.300.1, kernel `6.17.0-1022-azure`. An AMD
+EPYC 9V74 80-Core and an AMD EPYC 7763 64-Core answered all six reads
+identically; an Intel Xeon Platinum 8573C answered the first two the same way.
+
+```
+$ cat /proc/sys/kernel/perf_event_paranoid
+4
+
+$ ls /sys/bus/event_source/devices/
+breakpoint
+kprobe
+msr
+software
+tracepoint
+uprobe
+
+$ ls /sys/bus/event_source/devices/cpu/events/
+-> no such directory
+
+$ ls -d /sys/fs/resctrl
+no resctrl
+
+$ grep -om1 rdt_a /proc/cpuinfo
+no rdt_a
+
+$ grep -om1 cqm_occup_llc /proc/cpuinfo
+no cqm
+```
+
+**The `cpu` event source is the one that decides it.** Every source the guest
+does list is the kernel's own software instrumentation - a breakpoint, a probe
+point, a tracepoint, a model-specific register - and none of them counts a cache
+access. `cpu` is the entry a hardware unit publishes, and its directory is not
+there at all. So the rule is: **an absent or empty
+`/sys/bus/event_source/devices/cpu/events/` closes the question.** No profiling
+toolchain reads what the host does not expose, and installing one only moves the
+failure later.
+
+**`perf_event_paranoid` at 4 sits beside that and is not the blocker.** It is a
+sysctl, and the runner carries passwordless sudo, so it is adjustable. A missing
+unit is not.
+
+**Cache occupancy through the resource-director interface is gone the same way.**
+`/sys/fs/resctrl` is not mounted and `/proc/cpuinfo` carries neither `rdt_a` nor
+`cqm_occup_llc` - which is what a host keeps to itself when it isolates tenants.
+Even where it answered, the reading would vary by draw, because the L3 sizes
+recorded above span 32 MiB to 480 MiB, so it could not be compared across a run.
+
+**What this reading cannot settle:** whether a different runner image, or a
+different pool, would answer differently. It names the image and the kernel it
+read, so the next person can tell whether they are asking the same machine.
+Three draws across two vendors answering identically is the reason it is written
+down once rather than retaken per draw.
+
 ## What the machine was doing when we asked
 
 | Column | Type | What it is | What it is for |
