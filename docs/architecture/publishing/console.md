@@ -424,7 +424,7 @@ published mirror carries no address, no title and no fetched text.
 | Where the run's time went, item by item | one bar an item | Which item queued, which one ran long, and where in a run the time actually went. |
 | How near the runner's ceiling this run got, item by item | one mark an item, with a shard grain and a window grain | Which item took the machine nearest its limit, whether it gave the memory back, and how long the queue was. |
 | Reading against writing, machine by machine | one group a machine | What a written token costs against a read one, on the machine that paid it. |
-| The machines this run drew | one card a machine | What machine this is, and what it can do, and whether its record survived the day. |
+| The machines this run drew | one card a machine | What machine this is, what it can do against the others this run drew, and whether its record survived the day. |
 | What the platform has been giving us | one group a day, one bar a machine kind | What kinds of machine we keep being handed, and whether that is changing. |
 | Prompt cache | one column a day | Whether a bigger cache would save wall clock. |
 | Context headroom | one mark a run | Whether raising the truncation cap is even possible. |
