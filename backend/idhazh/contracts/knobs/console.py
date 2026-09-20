@@ -327,6 +327,65 @@ class ConsoleConfig(Model):
             "either collide with a sixth or need a ninth stop nobody has drawn."
         ),
     )
+    processor_lost_pct_marked: float = Field(
+        default=1.0,
+        gt=0.0,
+        le=100.0,
+        description=(
+            "The share of an interval the host gave to another tenant's machine at "
+            "which that day is drawn as a filled tile rather than an outlined one. "
+            "One percent is where a reading stops rounding to zero, which is a "
+            "statement about the platform's own accounting rather than about this "
+            "design. A floor above zero, because a threshold of zero would mark a "
+            "day on which nothing was taken. A DECLARED ESTIMATE and not a "
+            "measurement (CLAUDE.md Guardrail #10): no committed row separates what "
+            "the host took from what we spent, because the busy figure holds both. "
+            "What replaces it is the distribution of the separated reading over the "
+            "first day that records one."
+        ),
+    )
+    processor_lost_pct_named: float = Field(
+        default=10.0,
+        gt=0.0,
+        le=100.0,
+        description=(
+            "The share at which the panel's headline sentence names that day as its "
+            "worst case, instead of leaving the tiles to speak for themselves. Ten "
+            "percent is anchored on the work shard's own budget: a tenth of "
+            "run.shard_timeout_minutes is the size of loss that turns a shard which "
+            "fits into one which does not. A DECLARED ESTIMATE on the same footing "
+            "as the mark above it, and the same reading replaces both."
+        ),
+    )
+    model_disk_reads_marked: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "How many times the model server had to go to disk for memory it "
+            "expected to be resident before that day is drawn as a filled tile. "
+            "Counted over the items that are NOT first in their shard: the server "
+            "maps its weights, so the first touch of each page is itself a read from "
+            "disk, and item_index 0 records a server starting rather than a kernel "
+            "taking pages back. What that exclusion costs, stated rather than "
+            "implied: a reclaim inside the first item of a shard is invisible, and "
+            "the panel says so. One, because with the exclusion the honest expected "
+            "value is zero and the first recorded read is the finding. A DECLARED "
+            "ESTIMATE and not a measurement (CLAUDE.md Guardrail #10); what replaces "
+            "it is the first day recording a non-zero count away from index 0."
+        ),
+    )
+    model_disk_reads_named: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "How many such reads put that day in the panel's headline sentence. "
+            "Equal to the mark, and deliberately: a signal whose expected value is "
+            "zero has no distribution to separate the two, so every day worth "
+            "marking is worth naming. The pair is two knobs rather than one so that "
+            "the day a steady background appears, somebody raises this number in the "
+            "config file instead of editing a chart."
+        ),
+    )
     panel_groups: dict[str, list[ConsolePanelGroup]] = Field(
         default_factory=lambda: {
             "pipelines": [
@@ -455,6 +514,31 @@ class ConsoleConfig(Model):
             raise ValueError(
                 "console.window_presets must offer a span of at least chart_rule_days"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _a_day_is_marked_no_later_than_it_is_named(self) -> Self:
+        """A rare event is drawn twice, and the drawing has to happen in that order.
+
+        Crossing the first threshold fills the day's tile. Crossing the second
+        puts that day in the panel's headline sentence. Set the second below the
+        first and the sentence names a day the strip under it left outlined, so
+        the reader is told about a day the evidence says was quiet.
+
+        Equal is allowed. A signal whose expected value is zero has no
+        distribution to separate the two, and forcing a gap would make somebody
+        invent one.
+        """
+        pairs = (
+            ("processor_lost_pct", self.processor_lost_pct_marked, self.processor_lost_pct_named),
+            ("model_disk_reads", self.model_disk_reads_marked, self.model_disk_reads_named),
+        )
+        for signal, marked, named in pairs:
+            if marked > named:
+                raise ValueError(
+                    f"console.{signal}_marked must not exceed {signal}_named: a day the "
+                    "headline names is a day the strip has already marked"
+                )
         return self
 
     @model_validator(mode="after")

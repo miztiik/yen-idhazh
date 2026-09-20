@@ -120,6 +120,8 @@
     "max_window_days": 180,
     "min_attempts_for_rate": 3,
     "min_window_days": 7,
+    "model_disk_reads_marked": 3,
+    "model_disk_reads_named": 9,
     "pan_days": 3,
     "panel_groups": {
       "machine": [
@@ -164,6 +166,8 @@
       ]
     },
     "precision_axis_multiple": 10.0,
+    "processor_lost_pct_marked": 2.0,
+    "processor_lost_pct_named": 25.0,
     "shimmer_after_ms": 400,
     "source_rows": 4,
     "timeline_bars": 60,

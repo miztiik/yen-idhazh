@@ -269,6 +269,18 @@ export interface ConsoleConfig {
 	/** Machines that get a colour of their own before the rest fold into one row
 	 * named in words. The eighth chart stop is reserved for an unrecorded machine. */
 	machine_colour_stops: number;
+	/** The share of an interval the host gave to another tenant's machine at which
+	 * that day is drawn as a filled tile. A declared estimate - see `console.py`. */
+	processor_lost_pct_marked: number;
+	/** The share at which the headline sentence names that day as its worst case.
+	 * Anchored on a tenth of a work shard's timeout - see `console.py`. */
+	processor_lost_pct_named: number;
+	/** Times the model server went to disk for memory it expected to be resident,
+	 * away from the first item of a shard, before that day's tile fills. */
+	model_disk_reads_marked: number;
+	/** The same count that puts the day in the headline sentence. Equal to the
+	 * mark, because a signal whose expected value is zero has no spread to split. */
+	model_disk_reads_named: number;
 }
 
 /** One heading on a console route, and the panels under it, in drawn order.
@@ -490,7 +502,11 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	fleet_min_rows: 160,
 	fleet_top_kinds: 4,
 	bandwidth_min_kinds: 3,
-	machine_colour_stops: 7
+	machine_colour_stops: 7,
+	processor_lost_pct_marked: 1.0,
+	processor_lost_pct_named: 10.0,
+	model_disk_reads_marked: 1,
+	model_disk_reads_named: 1
 };
 /** The running order a fresh clone draws, and the one the committed config
  * repeats. Three headings on Hardware, because fifteen equal siblings down one

@@ -77,7 +77,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 1 | Does this runner expose a hardware PMU | - | A | IN-FLIGHT | p37r1 | - | - |
 | 3 | One status read a tick, not two | - | A | IN-FLIGHT | p37r3 | - | - |
 | 7 | One file a panel | - | A | IN-FLIGHT | p37r7 | - | - |
-| 8 | The rare-event thresholds become knobs | - | A | IN-FLIGHT | p37r8 | - | - |
+| 8 | The rare-event thresholds become knobs | - | A | DONE | p37r8 | - | worker |
 | 2 | Settle the peak that falls | 1 | A | PENDING | - | - | - |
 | 6 | The bandwidth probe sizes itself against the cache | 1, 3, 8 | A | PENDING | - | - | - |
 | 4 | The sampler stops calling theft our work | 2, 3 | B | PENDING | - | - | - |
