@@ -38,7 +38,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 | [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 7 | 15 | 2 |
-| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 20 | 0 | 20 | 2 |
+| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 22 | 0 | 22 | 2 |
 
 ## In flight - 0
 
@@ -86,7 +86,7 @@ section 3 is where it is answered.
 | #1 | 38 | A | A shard keeps the verdicts it paid for | - |
 | #3 | 38 | B | The separation, written where the next agent reads it | - |
 
-## Waiting on another row - 103
+## Waiting on another row - 105
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -193,6 +193,8 @@ section 3 is where it is answered.
 | #18 | 38 | I | The store groups under the judge that fills it | 17 is PENDING |
 | #19 | 38 | J | Where the line stands against its holdout | 7 is PENDING; 18 is PENDING |
 | #20 | 38 | K | The plan pointer | 19 is PENDING |
+| #21 | 38 | A | A night that recorded nothing says so | 1 is PENDING |
+| #22 | 38 | A | The reason a shard does not commit is rewritten | 21 is PENDING |
 
 ## Finished - 18 plans with no live row
 
