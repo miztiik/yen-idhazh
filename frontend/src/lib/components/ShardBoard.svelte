@@ -8,21 +8,25 @@
 	 * A per-run average reports neither end of that, which is why the shard is a
 	 * visible unit here and not a tooltip.
 	 *
-	 * What the board is for: deciding whether a slow day was the WORK or the
-	 * MACHINE. A long bar with a normal read rate is a lot of articles; a long
-	 * bar with a read rate a quarter of its neighbour's is the host lottery, and
-	 * nothing else on this site can tell those apart.
+	 * **This is a break panel and not a verdict one.** It takes the extreme and
+	 * the shard that owns it, and it covers every shard of one run. Its question
+	 * is what is broken, and the answer it exists to give is work or the host: a
+	 * long clock at a normal read rate and a high item count is a lot of
+	 * articles, and a long clock at a quarter of its neighbour's read rate, with
+	 * load past the cores and swap falling, is the machine. Every host fact that
+	 * answer needs is on the row. They used to be spread over four other panels,
+	 * so the board's own claim could not be checked without leaving it.
 	 *
 	 * Reading and writing are never one bar. Read time varies more than 4x on
 	 * this ledger and write time barely moves, so a single "model seconds" figure
 	 * would average two different machines together.
 	 *
-	 * At 1024px and under the five columns become one card a shard, and every
+	 * At 1280px and under the six columns become one card a shard, and every
 	 * cell carries its own label. A column heading that only exists on a desktop
 	 * is a value with no name on a phone.
 	 */
 	import TargetBar from './TargetBar.svelte';
-	import { gib, seconds, type ShardBoardView } from '$lib/charts/machine';
+	import { gib, seconds, type RangeMark, type ShardBoardView } from '$lib/charts/machine';
 	import { grouped } from '$lib/charts/series';
 
 	let {
@@ -37,6 +41,16 @@
 	/** Shards the plan dispatched that filed nothing. Null where the run's
 	 * manifest recorded no plan, because an unknown total subtracts to nothing. */
 	const missing = $derived(board.shards === null ? null : board.shards - board.rows.length);
+
+	const rate = (value: number | null) => (value === null ? '-' : value.toFixed(2));
+	const percent = (value: number | null) => (value === null ? '-' : `${value.toFixed(1)}%`);
+
+	/** What a range mark says in one sentence, for the hover and for the reader
+	 * who has none. Never the only carrier of any of it. */
+	function spread(mark: RangeMark, unit: (value: number | null) => string): string {
+		if (mark.empty) return 'not recorded on this run';
+		return `${unit(mark.median)} on a typical item, ${unit(mark.max)} at its worst`;
+	}
 </script>
 
 <div
@@ -45,6 +59,13 @@
 	data-shard-board-shards={board.shards ?? ''}
 	data-shard-board-reported={board.rows.length}
 	data-shard-board-timeout-seconds={board.timeoutSeconds ?? ''}
+	data-shard-board-rate-scale={board.rateScale}
+	data-shard-board-write-rate-scale={board.writeRateScale}
+	data-shard-board-rate-ratio={board.rateRatio === null ? '' : board.rateRatio.toFixed(4)}
+	data-shard-board-rates-share-axis={board.ratesShareAxis}
+	data-shard-board-memory-scale={board.memoryScaleBytes}
+	data-shard-board-swap-known={board.swapKnown}
+	data-panel-question="what is broken"
 	data-readout-none="one row per shard, and every figure on a row is printed beside its bar"
 >
 	{#if board.empty}
@@ -67,14 +88,35 @@
 			{#if board.readSpread !== null}
 				The fastest reader ran <strong>{board.readSpread.toFixed(2)}x</strong> the slowest.
 			{/if}
-			Bars share one scale: the widest stands for {seconds(board.scaleSeconds)}.
+		</p>
+
+		<!-- Every domain here comes from the figures drawn, so a 4x spread draws a
+		     quarter-length bar instead of being clipped at a round number somebody
+		     chose. The memory ceiling joins the memory figures rather than capping
+		     them, so a shard past 16 GiB would draw past the line. -->
+		<p class="board-note" data-shard-board-domains>
+			Clock bars share one scale: the widest stands for {seconds(board.scaleSeconds)}. Rate bars
+			share one: the widest stands for {rate(board.rateScale)} tokens a second.
+			{#if board.rateRatio === null}
+				Only one of the two rates was measured, so there is no ratio to compare them on.
+			{:else if board.ratesShareAxis}
+				Reading and writing are {board.rateRatio.toFixed(2)}x apart, inside the 20x at which
+				the smaller reads as zero, so they share that scale and their lengths compare.
+			{:else}
+				Reading and writing are {board.rateRatio.toFixed(2)}x apart, past the 20x at which the
+				smaller reads as zero, so writing is drawn on its own scale of {rate(
+					board.writeRateScale
+				)} tokens a second and the two lengths do not compare.
+			{/if}
+			Memory marks run to {gib(board.memoryScaleBytes)}, which is the runner's own ceiling.
 		</p>
 
 		<div class="head" aria-hidden="true">
 			<span>Shard</span>
 			<span>Reading against writing</span>
-			<span>Read rate</span>
-			<span>Processor</span>
+			<span>Rate</span>
+			<span>Host</span>
+			<span>Memory and CPU</span>
 			<span>Job clock</span>
 		</div>
 
@@ -82,16 +124,36 @@
 			<div
 				class="row"
 				data-shard-row={row.shard}
+				data-shard-items={row.items}
 				data-shard-read-seconds={row.readSeconds ?? ''}
 				data-shard-write-seconds={row.writeSeconds ?? ''}
 				data-shard-model-seconds={row.modelSeconds ?? ''}
+				data-shard-split-drawn={row.splitDrawn}
 				data-shard-read-tps={row.readTokensPerSecond ?? ''}
+				data-shard-write-tps={row.writeTokensPerSecond ?? ''}
 				data-shard-job-seconds={row.jobSeconds ?? ''}
+				data-shard-model-load-ms={row.modelLoadMs ?? ''}
 				data-shard-cpu={row.cpuModel ?? ''}
+				data-shard-cores={row.cores ?? ''}
+				data-shard-load={row.loadMax ?? ''}
+				data-shard-mem-median={row.memory.median ?? ''}
+				data-shard-mem-max={row.memory.max ?? ''}
+				data-shard-cpu-median={row.cpu.median ?? ''}
+				data-shard-cpu-max={row.cpu.max ?? ''}
+				data-shard-swap-state={row.swapState}
+				data-shard-swap-free={row.swapFreeBytes ?? ''}
+				data-shard-swap-total={row.swapTotalBytes ?? ''}
 			>
 				<p class="shard">
 					<span class="cell-label" data-shard-name="shard" aria-hidden="true">Shard</span>
 					<span data-shard-figure="shard">{row.shard}</span>
+					<!-- The work half of work-or-host. A long clock is only a machine
+					     problem once the item count says it was not a long queue. It
+					     names itself at every width, so it declares no figure of its
+					     own: "20 items" is a value and its name in one string. -->
+					<span class="unit">
+						{row.items === 1 ? '1 item' : `${grouped(row.items)} items`}
+					</span>
 				</p>
 
 				<div class="split">
@@ -106,52 +168,192 @@
 						<div
 							class="track"
 							role="img"
+							title="Shard {row.shard}: {seconds(row.readSeconds)} reading, {seconds(
+								row.writeSeconds
+							)} writing."
 							aria-label="Shard {row.shard} spent {seconds(row.readSeconds)} reading and {seconds(
 								row.writeSeconds
 							)} writing, {seconds(row.modelSeconds)} in the model altogether."
 						>
-							<span class="seg read" style="inline-size: {row.readWidth}"></span>
-							<span class="seg write" style="inline-size: {row.writeWidth}"></span>
+							{#if row.splitDrawn}
+								<span class="seg read" style="inline-size: {row.readWidth}"></span>
+								<span class="seg write" style="inline-size: {row.writeWidth}"></span>
+							{:else}
+								<!-- One of the two would draw under a pixel. A band nobody can
+								     see teaches a reader the category is zero, so the track draws
+								     whole and both seconds are printed below it. -->
+								<span class="seg whole"></span>
+							{/if}
 						</div>
 						<p class="legend" data-shard-figure="split">
 							<span class="legend-pair">
-								<span class="key read"></span>reading {seconds(row.readSeconds)}
+								<span class="key read" class:whole={!row.splitDrawn}></span>reading {seconds(
+									row.readSeconds
+								)}
 							</span>
 							<span class="legend-pair">
-								<span class="key write"></span>writing {seconds(row.writeSeconds)}
+								<span class="key write" class:whole={!row.splitDrawn}></span>writing {seconds(
+									row.writeSeconds
+								)}
 							</span>
 						</p>
 					{/if}
 				</div>
 
-				<p class="figure tabular-nums" data-shard-cell="rate">
-					<span class="cell-label" data-shard-name="rate" aria-hidden="true">Read rate</span>
-					{#if row.readTokensPerSecond === null}
-						<span class="absent" data-shard-figure="rate">-</span>
+				<div class="rates" data-shard-cell="rate">
+					<span class="cell-label" data-shard-name="rate" aria-hidden="true">Rate</span>
+					{#if row.readTokensPerSecond === null && row.writeTokensPerSecond === null}
+						<p class="absent" data-shard-figure="rate">
+							Neither rate was measured on this shard.
+						</p>
 					{:else}
-						<span data-shard-figure="rate">{row.readTokensPerSecond.toFixed(2)}</span>
-						<span class="unit">prompt tokens a second</span>
+						<span
+							class="rate-line"
+							title="Shard {row.shard} read at {rate(
+								row.readTokensPerSecond
+							)} prompt tokens a second."
+						>
+							<span
+								class="rate-track"
+								role="img"
+								aria-label="Shard {row.shard} read at {rate(
+									row.readTokensPerSecond
+								)} prompt tokens a second"
+							>
+								<span class="seg read" style="inline-size: {row.readRateWidth}"></span>
+							</span>
+						</span>
+						<span
+							class="rate-line"
+							title="Shard {row.shard} wrote at {rate(row.writeTokensPerSecond)} tokens a second."
+						>
+							<span
+								class="rate-track"
+								role="img"
+								aria-label="Shard {row.shard} wrote at {rate(
+									row.writeTokensPerSecond
+								)} tokens a second"
+							>
+								<span class="seg write" style="inline-size: {row.writeRateWidth}"></span>
+							</span>
+						</span>
+						<p class="legend tabular-nums" data-shard-figure="rate">
+							<span class="legend-pair">
+								<span class="key read"></span>reading {rate(row.readTokensPerSecond)}
+							</span>
+							<span class="legend-pair">
+								<span class="key write"></span>writing {rate(row.writeTokensPerSecond)}
+							</span>
+						</p>
+						<span class="unit">tokens a second</span>
 					{/if}
-				</p>
+				</div>
 
 				<!-- Text, never a hue on its own. A colour is one signal and the
 				     processor is the one host fact that changes an answer, so it is
 				     spelled out even when it makes the row wider. -->
-				<p class="cpu" data-shard-cell="cpu">
-					<span class="cell-label" data-shard-name="cpu" aria-hidden="true">Processor</span>
-					<span data-shard-figure="cpu">
-						{#if row.cpuModel === null}
-							<span class="absent">Not recorded on this run</span>
-						{:else}
-							{row.cpuModel}
-						{/if}
-					</span>
-					{#if row.cpuBusyPct !== null}
-						<span class="unit">{row.cpuBusyPct.toFixed(1)}% busy</span>
-					{/if}
-				</p>
+				<div class="host">
+					<p class="cpu" data-shard-cell="cpu">
+						<span class="cell-label" data-shard-name="cpu" aria-hidden="true">Processor</span>
+						<span data-shard-figure="cpu">
+							{#if row.cpuModel === null}
+								<span class="absent">Not recorded on this run</span>
+							{:else}
+								{row.cpuModel}
+							{/if}
+						</span>
+					</p>
 
-				<!-- No cell label here: the bar prints its own, at every width. -->
+					<!-- No cell label on the load: the bar prints its own at every
+					     width, and the sentence that replaces it when the cores are
+					     unknown names itself too. -->
+					{#if row.load.empty}
+						<span class="unit absent" data-shard-cell="load">
+							{row.loadMax === null
+								? 'No load reading on this shard.'
+								: `Load reached ${row.loadMax.toFixed(2)}, and this run did not record the host's core count - so whether that is a queue cannot be said.`}
+						</span>
+					{:else}
+						<span
+							class="load"
+							data-shard-cell="load"
+							title="Shard {row.shard} reached a one-minute load of {rate(row.loadMax)} on {row.cores} cores."
+						>
+							<TargetBar
+								marks={row.load}
+								label="Shard {row.shard} load"
+								valueText={rate(row.loadMax)}
+								targetText="load, against {row.cores} {row.cores === 1
+									? 'core'
+									: 'cores'} - past that the work is queueing"
+								emptyNote="This shard recorded no load."
+							/>
+						</span>
+					{/if}
+
+					<p class="unit" data-shard-cell="swap">
+						<span class="cell-label" data-shard-name="swap" aria-hidden="true">Free swap</span>
+						<span data-shard-figure="swap">
+							{#if row.swapState === 'unrecorded'}
+								<span class="absent">Swap not recorded on this run.</span>
+							{:else if row.swapState === 'none'}
+								This host has no swap, so it cannot be swapping.
+							{:else}
+								{gib(row.swapFreeBytes)} free of {gib(row.swapTotalBytes)}
+							{/if}
+						</span>
+					</p>
+				</div>
+
+				<div class="ranges" data-shard-cell="ranges">
+					<!-- A typical item and the worst one on one track. Two bars each for
+					     memory and CPU would be four bars a row, and eighty across a run
+					     of twenty shards. -->
+					<p class="range-line" title="Shard {row.shard} memory: {spread(row.memory, gib)}.">
+						<span class="cell-label" data-shard-name="memory" aria-hidden="true">Memory</span>
+						{#if row.memory.empty}
+							<span class="absent" data-shard-figure="memory">No memory reading</span>
+						{:else}
+							<span
+								class="range"
+								role="img"
+								aria-label="Shard {row.shard} memory, {spread(row.memory, gib)}"
+							>
+								<span class="range-fill" style="inline-size: {row.memory.medianWidth}"></span>
+								<span class="range-notch" style="inset-inline-start: {row.memory.notchWidth}"
+								></span>
+							</span>
+							<span class="range-figure tabular-nums" data-shard-figure="memory">
+								{gib(row.memory.median)} to {gib(row.memory.max)}
+							</span>
+						{/if}
+					</p>
+					<p class="range-line" title="Shard {row.shard} processor: {spread(row.cpu, percent)}.">
+						<span class="cell-label" data-shard-name="cpu-range" aria-hidden="true">
+							Processor busy
+						</span>
+						{#if row.cpu.empty}
+							<span class="absent" data-shard-figure="cpu-range">No CPU reading</span>
+						{:else}
+							<span
+								class="range"
+								role="img"
+								aria-label="Shard {row.shard} processor busy, {spread(row.cpu, percent)}"
+							>
+								<span class="range-fill cpu-fill" style="inline-size: {row.cpu.medianWidth}"
+								></span>
+								<span class="range-notch" style="inset-inline-start: {row.cpu.notchWidth}"></span>
+							</span>
+							<span class="range-figure tabular-nums" data-shard-figure="cpu-range">
+								{percent(row.cpu.median)} to {percent(row.cpu.max)} busy
+							</span>
+						{/if}
+					</p>
+					<span class="unit">fill is a typical item, notch is the worst one</span>
+				</div>
+
+				<!-- No cell label here: the bar prints its own, at every width, and so
+				     does the sentence under it. -->
 				<div class="clock" data-shard-cell="clock">
 					<TargetBar
 						marks={row.job}
@@ -163,6 +365,11 @@
 							: ''}"
 						emptyNote="This shard recorded no job clock."
 					/>
+					<span class="unit">
+						{row.modelLoadMs === null
+							? 'Weights load not recorded'
+							: `${seconds(row.modelLoadMs / 1000)} of it opening the weights, before the first item`}
+					</span>
 				</div>
 			</div>
 		{/each}
@@ -172,13 +379,20 @@
 		<ul class="sr-only" data-shard-values>
 			{#each board.rows as row (row.shard)}
 				<li>
-					Shard {row.shard}: {seconds(row.readSeconds)} reading, {seconds(row.writeSeconds)}
-					writing, {row.readTokensPerSecond === null
-						? 'no read rate'
-						: `${row.readTokensPerSecond.toFixed(2)} prompt tokens a second`}, on
-					{row.cpuModel ?? 'a processor this run did not record'}, job clock {seconds(
-						row.jobSeconds
-					)}{row.cpuBusyPct === null ? '' : `, ${row.cpuBusyPct.toFixed(1)} percent busy`}.
+					Shard {row.shard}: {row.items} items, {seconds(row.readSeconds)} reading, {seconds(
+						row.writeSeconds
+					)} writing, {rate(row.readTokensPerSecond)} prompt tokens a second read and {rate(
+						row.writeTokensPerSecond
+					)} written, on {row.cpuModel ?? 'a processor this run did not record'}, job clock
+					{seconds(row.jobSeconds)}, memory {spread(row.memory, gib)}, processor {spread(
+						row.cpu,
+						percent
+					)}, load {rate(row.loadMax)} on {row.cores ?? 'an unrecorded number of'} cores,
+					{row.swapState === 'measured'
+						? `${gib(row.swapFreeBytes)} swap free of ${gib(row.swapTotalBytes)}`
+						: row.swapState === 'none'
+							? 'no swap on this host'
+							: 'swap not recorded'}.
 				</li>
 			{/each}
 		</ul>
@@ -202,9 +416,11 @@
 	.head,
 	.row {
 		display: grid;
-		grid-template-columns: 3rem minmax(12rem, 2.2fr) 7rem minmax(10rem, 1.4fr) minmax(9rem, 1fr);
-		gap: var(--space-4);
-		align-items: center;
+		grid-template-columns:
+			4.5rem minmax(9rem, 1.8fr) minmax(7rem, 1fr) minmax(10rem, 1.5fr)
+			minmax(9rem, 1.3fr) minmax(8rem, 1fr);
+		gap: var(--space-3);
+		align-items: start;
 	}
 
 	.head {
@@ -246,7 +462,11 @@
 		color: var(--color-text);
 	}
 
-	.split {
+	.split,
+	.rates,
+	.host,
+	.ranges {
+		display: block;
 		min-inline-size: 0;
 	}
 
@@ -269,6 +489,13 @@
 
 	.seg.write {
 		background: var(--chart-4);
+	}
+
+	/* The undrawn split. One ground and no bands, because a band under a pixel
+	   is the very mark the rule refuses. */
+	.seg.whole {
+		inline-size: 100%;
+		background: var(--color-text-tertiary);
 	}
 
 	.legend {
@@ -305,11 +532,57 @@
 		background: var(--chart-4);
 	}
 
-	.figure {
-		margin: 0;
-		font-size: var(--text-base);
-		font-weight: 600;
-		color: var(--color-text);
+	/* A key for a band the track did not draw would claim a mark that is not
+	   there. The seconds beside it still carry the fact. */
+	.key.whole {
+		background: var(--color-text-tertiary);
+	}
+
+	.rate-line,
+	.range-line {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		margin-block-start: var(--space-1);
+	}
+
+	.rate-track,
+	.range {
+		position: relative;
+		display: block;
+		flex: 1 1 auto;
+		min-inline-size: 2.5rem;
+		block-size: 10px;
+		border-radius: var(--radius-full);
+		background: var(--color-surface-sunken);
+		overflow: hidden;
+	}
+
+	.range-figure {
+		flex: 0 0 auto;
+		font-size: var(--text-xs);
+		color: var(--color-text-secondary);
+	}
+
+	.range-fill {
+		display: block;
+		block-size: 100%;
+		background: var(--chart-2);
+	}
+
+	.range-fill.cpu-fill {
+		background: var(--chart-3);
+	}
+
+	/* The worst reading, as a mark across the track rather than a second bar. A
+	   bar beside a bar invites the reader to compare two lengths and lose which
+	   one is the extreme. */
+	.range-notch {
+		position: absolute;
+		inset-block: 0;
+		inline-size: 2px;
+		background: var(--chart-marker);
+		transform: translateX(-1px);
 	}
 
 	.cpu {
@@ -319,11 +592,22 @@
 		color: var(--color-text-secondary);
 	}
 
+	.load {
+		display: block;
+		margin-block-start: var(--space-2);
+	}
+
 	.unit {
 		display: block;
 		font-size: var(--text-xs);
 		font-weight: 400;
 		color: var(--color-text-tertiary);
+	}
+
+	.host .unit,
+	.ranges .unit,
+	.clock .unit {
+		margin-block-start: var(--space-1);
 	}
 
 	.absent {
@@ -336,7 +620,7 @@
 
 	/* One card a shard.
 	 *
-	 * Above this width the row is five columns and the head names them. Below
+	 * Above this width the row is six columns and the head names them. Below
 	 * it the head is gone, and the two-column fallback this replaced pushed the
 	 * read rate and the job clock into the 3rem shard column: measured
 	 * 2026-09-01 at 360px, `1 h 28 m` was drawn in a 20px box over four lines,
@@ -344,12 +628,17 @@
 	 * six lines in 41px. A card gives every cell the full width and its own
 	 * name.
 	 *
+	 * The breakpoint moved from 1024px to 1280px when the row went from five
+	 * columns to six. Six cells inside the old width leave the two range marks
+	 * a track under 60px, and a fill and a notch that close together are one
+	 * smudge rather than a span.
+	 *
 	 * An edge, not a fill. Every quiet line in a row is --color-text-tertiary,
 	 * which reads 4.72:1 on --color-surface and 4.26:1 on
 	 * --color-surface-raised - so a lifted card would put four strings under
 	 * 4.5:1 in the dark theme to buy a tint. The bars need the ground too: both
 	 * tracks are --color-surface-sunken, and a sunken card would erase them. */
-	@media (max-width: 1024px) {
+	@media (max-width: 1280px) {
 		.board {
 			gap: var(--space-3);
 		}
@@ -365,9 +654,9 @@
 		.row {
 			display: flex;
 			flex-direction: column;
-			/* The five-column rule centres its cells on the row's baseline. In a
-			   column that becomes centring on the card's midline, which shrinks
-			   every cell to its text and leaves the labels ragged. */
+			/* The six-column rule aligns its cells to the row's top. In a column
+			   that becomes a stretch, which is what the range marks and the two
+			   rate tracks need to stay full width. */
 			align-items: stretch;
 			gap: var(--space-3);
 			padding: var(--space-4);
@@ -391,11 +680,21 @@
 			display: inline;
 		}
 
-		/* The unit is the rate's name and belongs on the rate's line, not under
-		   it: three stacked lines for one number is what the label already fixed. */
-		.figure .unit {
+		/* A range line is a flex row, so a label inside it would sit beside the
+		   track it names instead of over it. */
+		.range-line {
+			flex-wrap: wrap;
+		}
+
+		.range-line .cell-label {
+			flex: 1 0 100%;
+		}
+
+		/* The unit is the figure's name and belongs on the figure's line, not
+		   under it: three stacked lines for one number is what the label already
+		   fixed. */
+		.shard .unit {
 			display: inline;
-			margin-inline-start: 0.35em;
 		}
 	}
 </style>
