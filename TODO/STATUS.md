@@ -193,8 +193,8 @@ section 3 is where it is answered.
 | #18 | 38 | I | The store groups under the judge that fills it | 17 is PENDING |
 | #19 | 38 | J | Where the line stands against its holdout | 7 is PENDING; 18 is PENDING |
 | #20 | 38 | K | The plan pointer | 19 is PENDING |
-| #21 | 38 | A | A night that recorded nothing says so | 1 is PENDING |
-| #22 | 38 | A | The reason a shard does not commit is rewritten | 21 is PENDING |
+| #21 | 38 | A | The council repairs its own missing nights | 1 is PENDING; 2 is PENDING |
+| #22 | 38 | F | The guard that stops a shard committing is renamed and re-reasoned | 13 is PENDING; 21 is PENDING |
 
 ## Finished - 18 plans with no live row
 
