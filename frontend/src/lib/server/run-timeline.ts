@@ -254,9 +254,9 @@ export interface TimelineTick {
 
 /** Everything the panel draws, worked out once on the server.
  *
- * A snapshot of one run and not a window, for the reason `SpanBreakdown` is: the
- * clock is a per-run quantity and narrowing a span cannot narrow a single run.
- * The panel names the run it drew instead.
+ * A snapshot of one run and not a window: the clock is a per-run quantity and
+ * narrowing a span cannot narrow a single run. The panel names the run it drew
+ * instead.
  */
 export interface RunTimelineView {
 	empty: boolean;

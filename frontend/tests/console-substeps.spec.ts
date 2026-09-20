@@ -236,6 +236,26 @@ test.describe('a band under one pixel is a printed figure, not a segment', () =>
 		expect(readout.printed).toBe(false);
 		expect(readout.smallestPx).toBeGreaterThan(1);
 	});
+
+	test('no sub-step is drawn as a band on the page, at either width', async ({ page }) => {
+		// The other half of the rule, asserted where the marks actually are. A step
+		// printed AND drawn is the same seconds counted twice, and a step under a
+		// pixel drawn at all is a legend entry with no mark. The canary's split is
+		// the wide case, so this holds on the side of the rule a fixture cannot
+		// reach through the page - and it holds by construction rather than by
+		// width, which is what the readout promises.
+		await page.goto('/console/');
+		const printed = await page
+			.locator('[data-substep]')
+			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-substep') ?? ''));
+		expect(printed.length, 'the readout printed no sub-step').toBeGreaterThan(0);
+		for (const name of printed) {
+			await expect(
+				page.locator(`[data-timeline-seg="${name}"]`),
+				`${name} is drawn as a band as well as printed`
+			).toHaveCount(0);
+		}
+	});
 });
 
 test.describe('the reader folds the committed rollup', () => {
