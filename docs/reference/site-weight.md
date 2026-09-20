@@ -1706,6 +1706,7 @@ What a browser fetches before a reader does anything: the prerendered document, 
 - [../archive/measurements-2026-08.md](../archive/measurements-2026-08.md) - finished experiments and superseded levels.
 - [../architecture/publishing/layout.md](../architecture/publishing/layout.md) - the published-size arithmetic these numbers feed.
 - [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md) - the reader's surface these figures were taken on.
+- [../architecture/publishing/console-caps.md](../architecture/publishing/console-caps.md) - the panel that draws this as a rate, so an operator sees the 1 GB cap coming rather than arriving.
 - [../how-to/run-the-gates.md](../how-to/run-the-gates.md) - the bundle gate that reads every ceiling here.
 - [../concepts/config.md](../concepts/config.md) - the knobs these numbers set.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #2 (the runner is the architecture) and #10 (measured, not estimated).
