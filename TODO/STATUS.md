@@ -39,7 +39,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 
-## In flight - 9
+## In flight - 10
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
@@ -51,6 +51,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | #12 | 33 | D | Delete the merge machinery | p33d12b |
 | #13 | 33 | D | Compaction lag and free swap on the console band | p33d13 |
 | #11 | 33 | E | Delete `runtime-counters` and everything that reads it | p33e11p3b |
+| #15 | 33 | F | Generated TypeScript contracts replace the hand-written ones | p33f15 |
 | #29 | 33 | J | `prune.yml` wakes outside the digest window | p33j29 |
 
 ## Ready now - 28
@@ -90,7 +91,7 @@ section 3 is where it is answered.
 | #7 | 35 | A / eval-core | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - |
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
 
-## Waiting on another row - 85
+## Waiting on another row - 84
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -149,10 +150,9 @@ section 3 is where it is answered.
 | #8 | 27 | C | What the model saw, kept for 90 days | 4 is PENDING |
 | #9 | 27 | D | A cut reply keeps its summary | 1 is PENDING |
 | #11 | 27 | E | Two articles, three arms, one runner | 4 is PENDING |
-| #15 | 33 | F | Generated TypeScript contracts replace the hand-written ones | 10 is IN-FLIGHT; 11 is IN-FLIGHT |
 | #16 | 33 | G | Docs, and the orphan sweep | all names no row |
 | #19 | 33 | I | The shard board | 11 is IN-FLIGHT |
-| #21 | 33 | I | Memory and load, three grains - ABSORBS Row #14 | 15 is PENDING; 19 is PENDING |
+| #21 | 33 | I | Memory and load, three grains - ABSORBS Row #14 | 15 is IN-FLIGHT; 19 is PENDING |
 | #23 | 33 | I | What a run reads against what it writes, in tokens and in seconds | 21 is PENDING |
 | #25 | 33 | I | Outside the model call, as range marks | 23 is PENDING |
 | #22 | 33 | I | Platform mix as grouped bars | 25 is PENDING |
