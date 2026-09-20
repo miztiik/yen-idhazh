@@ -86,7 +86,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 10 | Did another tenant take the processor | 5, 8, 9 | C | PENDING | - | - | - |
 | 11 | Is the kernel taking the model's weights back | 5, 8, 9 | C | PENDING | - | - | - |
 | 12 | What one article costs the machine | 9 | C | PENDING | - | - | - |
-| 13 | Three panels leave the page | 9 | C | PENDING | - | - | - |
+| 13 | Two panels leave the page | 9 | C | PENDING | - | - | - |
 | 14 | The memory board drops the disputed mark | 2, 9 | C | PENDING | - | - | - |
 | 15 | The shard board gains the clocks nobody reads | 9 | C | PENDING | - | - | - |
 | 16 | Machine cards gain uptime, clock speed, cache size and copy speed | 6, 9 | C | PENDING | - | - | - |
@@ -370,9 +370,10 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | --- | --- | --- | --- | --- |
 | 1 | Derive the per-article cost from the run total divided by the item count | It cannot disagree with the run total, so it is not a check - the ground that retired the derived decode count in plan 33 | A number that reads as a measurement and is arithmetic | Fowler |
 
-## Row #13 - Three panels leave the page
+## Row #13 - Two panels leave the page
 
 - **Scope:** the panel holding three unrelated figures is deleted and the single-run distribution panel is deleted.
+- **Corrected 2026-09-20:** the title said three panels. Decision 4 cancelled the cache fold, so two panels leave and Row #19 rebuilds the cache panel at call grain.
 - **Files touched:** the panel components Row #7 creates, `frontend/src/lib/charts/machine.ts`, `frontend/src/lib/server/payload.ts`, `frontend/src/routes/console/machine/+page.svelte`, `config/appearance.json`, `frontend/tests/`, `docs/architecture/publishing/console.md`
 - **Acceptance gates:** as Row #9, plus the payload shrinks: the prerendered figure count and the per-span array count both fall.
 - **Oracle:** the route's payload carries two fewer prerendered figures and the removed per-span arrays are absent, asserted on the built output rather than on the source. **What it cannot settle:** whether an operator was using a deleted panel in a way nobody recorded.
@@ -571,7 +572,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 1 | A fixed-size read over a static list, never a walk of the committed tree | CLAUDE.md section 13 - a test's cost belongs to the code it checks, and a run must not be able to turn it red |
 | 2 | The emptiness census is an operator surface under `backend/utilities/`, never a test | CLAUDE.md section 13 - whether a column is empty depends on what runs have written, so an assertion on it goes red because somebody edited the tree |
 | 3 | It runs after the console rows, not before | The console rows are what create the readers the test asserts |
-| 4 | Scope is every published column, not only the machine ones | Susan, 2026-09-20 - the census found three more empty columns beyond the one Row #5 deletes. `truncation_cap_tokens` and `prefix_shared_with_previous` are empty on all 13,717 committed item rows, and the top clock column is empty on all 57 host rows. Two of the three are not machine columns, so a machine-only gate would have missed them |
+| 4 | Scope is every published column, not only the machine ones | Susan, 2026-09-20 - the census found four more empty columns beyond the one Row #5 deletes. `truncation_cap_tokens` and `failed_field` are empty on every committed item row, and `mhz_max` and `vm_zone` are empty on every committed host row. Two of the four are not machine columns, so a machine-only gate would have missed them. **Corrected 2026-09-20** from a first reading that named `prefix_shared_with_previous` as empty and missed `failed_field` and `vm_zone`: it read one day file's header as the column list, and the day files are two widths. `prefix_shared_with_previous` holds values |
 
 - **Rejected alternatives:**
 

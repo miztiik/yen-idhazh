@@ -165,7 +165,7 @@ section 3 is where it is answered.
 | #10 | 37 | C | Did another tenant take the processor | 5 is PENDING; 9 is PENDING |
 | #11 | 37 | C | Is the kernel taking the model's weights back | 5 is PENDING; 9 is PENDING |
 | #12 | 37 | C | What one article costs the machine | 9 is PENDING |
-| #13 | 37 | C | Three panels leave the page | 9 is PENDING |
+| #13 | 37 | C | Two panels leave the page | 9 is PENDING |
 | #14 | 37 | C | The memory board drops the disputed mark | 9 is PENDING |
 | #15 | 37 | C | The shard board gains the clocks nobody reads | 9 is PENDING |
 | #16 | 37 | C | Machine cards gain uptime, clock speed, cache size and copy speed | 9 is PENDING |
