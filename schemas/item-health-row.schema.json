@@ -124,6 +124,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "llama_rss_peak_bytes says what it measures: a whole-life mark that can fall.",
+      "version": "2026-09-20T15:30",
+      "why": "It read as a per-item peak that cannot fall, which is neither thing it is."
+    },
+    {
       "change": "Six os_ columns: what the machine had, not only what a process held.",
       "version": "2026-09-17T18:00",
       "why": "An RSS mark counts evictable weight pages, so it cannot answer headroom."
@@ -137,11 +142,6 @@
       "change": "job names the workflow job whose machine took this row's readings.",
       "version": "2026-09-17",
       "why": "Shard alone does not reach the host record: more than one job spells shard 0."
-    },
-    {
-      "change": "The three slot columns carry the item's first call.",
-      "version": "2026-09-16T12:30",
-      "why": "All three were declared with no producer; the pinned build reports them."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -801,7 +801,7 @@
         }
       ],
       "default": null,
-      "description": "Peak resident memory of the model server over the item.",
+      "description": "The model server's high-water resident memory, as `VmHWM` in `/proc/<pid>/status` reported it - the higher of one reading when the item opened and one when it closed. It covers the server's whole life up to that moment, not this item. And it can read lower than an earlier item's: the kernel prints the larger of the current resident set and a stored mark it refreshes only when the process itself gives memory back, so a page the kernel reclaims takes the figure down with it.",
       "title": "Llama Rss Peak Bytes"
     },
     "load_1m": {
@@ -1617,7 +1617,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-17T18:00",
+      "default": "2026-09-20T15:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1708,5 +1708,5 @@
   ],
   "title": "ItemHealthRow",
   "type": "object",
-  "version": "2026-09-17T18:00"
+  "version": "2026-09-20T15:30"
 }

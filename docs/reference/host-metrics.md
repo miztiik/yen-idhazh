@@ -223,6 +223,58 @@ read, so the next person can tell whether they are asking the same machine.
 Three draws across two vendors answering identically is the reason it is written
 down once rather than retaken per draw.
 
+## Why the model server's memory mark reads lower than it did
+
+`llama_rss_peak_bytes` on the item row is `VmHWM` for the model server, and one
+server serves a whole shard - so a figure that goes down from one item to the
+next says something is wrong. It goes down in every shard. **Almost all of that
+is the rows being read in an order the mark was never taken in, and the small
+remainder is the kernel's own rule for what `VmHWM` prints.**
+
+Measured 2026-09-20 over the whole committed `state/item-health/` tree by
+[`backend/utilities/server_memory_mark.py`](../../backend/utilities/server_memory_mark.py)
+- 1,250 rows carrying the mark, over 28 day files and 68 jobs. Exact counts over
+committed files, so no spread.
+
+| Rows read in this order | Pairs | Falls | Jobs with a fall |
+| --- | --- | --- | --- |
+| `item_started_at` - where the fetch loop reached the item | 1,182 | 277 | 68 of 68 |
+| `item_ended_at` - where the mark was read | 1,182 | 15 | 13 of 68 |
+
+**The row carries two clocks and they are two different orders.** The work stage
+fetches every item and then runs the model over them sorted by source length, so
+`item_started_at` is the fetch loop's order and the mark is read one statement
+before `item_ended_at` is stamped. 1,144 of the 1,250 rows sit at a different
+position under the two. Read on the fetch clock, 95 percent of the falls are an
+item's mark compared against an item whose mark was taken later.
+
+**The 15 that survive are the kernel, not a restart.** Every one of them has the
+server holding within 0.75 percent of the resident set it held on the row
+before - a restarted server has given the weights back and reads a fraction of
+12 GB - and every drop is a whole number of 4 KiB pages, between 136 KiB and
+620 KiB. Meanwhile the server's current resident set falls in 324 of the same
+1,182 pairs, worst drop 566 MB, so the machine is taking pages back from it all
+the time.
+
+`VmHWM` is the larger of the current resident set and a stored mark the kernel
+refreshes only when the process itself gives memory back. It never reclaims
+into that stored mark. So a resident set that climbs, gets read, and is then
+reclaimed before any unmap records it leaves the next read lower than the last
+one. The archive shows the outside of that rule directly: the mark reads below
+the current set on 0 of 1,250 rows, and equals it exactly on 298.
+
+**What this reading cannot settle:** no row carries the server's process id, so
+a restart is ruled out by the resident set rather than by identity. That
+separates a restart from a reclaimed page; it cannot separate two processes that
+happened to hold the same amount. It also says nothing about how much of the
+mark is weights against working memory - there is no per-region reading here.
+
+**The committed rows are not wrong; the column's description was.** Every value
+is what `/proc/<pid>/status` printed at that item's two boundaries, highest of
+the two. What was wrong was the sentence beside it, which said "peak resident
+memory of the model server over the item" - it is not scoped to the item, and it
+is not a peak that only rises.
+
 ## What the machine was doing when we asked
 
 | Column | Type | What it is | What it is for |
