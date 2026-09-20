@@ -85,6 +85,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-20T01:00",
+            change="observability.host_fingerprint_bandwidth_mib renamed to ..._floor_mib.",
+            why="The probe now derives its buffer from the cache, so the value is a floor.",
+        ),
+        ChangelogEntry(
             version="2026-09-20",
             change="observability.runtime_counters_scrape, removed with the store it governed.",
             why="The four cells a reader wants are on the host row, from the same scrape.",
@@ -98,11 +103,6 @@ class AppConfig(Contract):
             version="2026-09-19T01:00",
             change="adaptive_dedup_threshold: caps in slots, a rise cap, two damping weights.",
             why="The line falls fast and rises slow, and a slot count is checkable.",
-        ),
-        ChangelogEntry(
-            version="2026-09-19",
-            change="adaptive_dedup_threshold.max_down_step loses its upper bound of 0.0083.",
-            why="Fresh labels put the nearest two-story pair above the line, so the gap is gone.",
         ),
         ChangelogEntry(
             version="2026-08-21",

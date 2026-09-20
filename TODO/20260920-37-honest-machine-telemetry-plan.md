@@ -79,7 +79,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 7 | One file a panel | - | A | IN-FLIGHT | p37r7 | - | - |
 | 8 | The rare-event thresholds become knobs | - | A | DONE | p37r8 | - | worker |
 | 2 | Settle the peak that falls | 1 | A | PENDING | - | - | - |
-| 6 | The bandwidth probe sizes itself against the cache | 1, 3, 8 | A | PENDING | - | - | - |
+| 6 | The bandwidth probe sizes itself against the cache | 1, 3, 8 | A | DONE | p37r6 | - | worker |
 | 4 | The sampler stops calling theft our work | 2, 3 | B | PENDING | - | - | - |
 | 9 | Panels grouped by the decision they serve | 7 | B | PENDING | - | - | - |
 | 5 | `ItemHealthRow` gains three columns and loses one | 4 | C | PENDING | - | - | - |

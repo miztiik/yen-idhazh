@@ -97,15 +97,32 @@ def test_the_busy_share_is_the_whole_item_and_not_a_mean_of_samples(
     assert cells.cpu_busy_pct == pytest.approx(40.0)
 
 
-def test_a_zero_interval_takes_both_ends_and_never_starts_a_thread() -> None:
-    """`waiting_heartbeat_seconds = 0` turns the heartbeat off, not the readings."""
+def test_a_zero_interval_takes_both_ends_and_never_starts_a_thread(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """`waiting_heartbeat_seconds = 0` turns the heartbeat off, not the readings.
+
+    The captures are written here because the both-ends half cannot fail without
+    them: on a machine with no `/proc/stat` every cell reads absent, so the
+    assertion would pass whether or not either end was taken. The second capture
+    answers every read after the first, because `close()` runs twice - once from
+    the `with`, once by hand - and a starved second close reports absence.
+    """
+    opening = iter(["cpu  100 0 100 800 0 0 0 0 0 0\n"])
+    settled = "cpu  250 0 250 1500 0 0 0 0 0 0\n"
+
+    def one_file(path: Path) -> str | None:
+        return next(opening, settled) if path == host.PROC_STAT else None
+
+    monkeypatch.setattr(host, "_text", one_file)
     ticks: list[float] = []
 
     with host.Watch(interval_s=0, on_tick=ticks.append) as watch:
         pass
 
     assert ticks == []
-    assert watch.close().cells()["cpu_busy_pct"] is None or True
+    # 300 busy ticks of 1,000 elapsed, with no sample taken between the two ends.
+    assert watch.close().cells()["cpu_busy_pct"] == pytest.approx(30.0)
 
 
 #: The six cells the machine's own account of itself fills. Named once, so a

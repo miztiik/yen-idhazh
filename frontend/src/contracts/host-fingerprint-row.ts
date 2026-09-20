@@ -76,7 +76,7 @@ export interface HostFingerprintRow {
 	/** Logical processors. Four on every stock runner so far. */
 	threads?: number | null;
 
-	/** L3 as the host reports it. Read beside `memcpy_probe_mib`: a probe buffer smaller than this measured cache rather than memory. */
+	/** L3 as the host reports it, and what sizes the bandwidth probe. Read beside `memcpy_probe_mib`: a probe buffer that does not clear this measured cache rather than memory. */
 	l3_cache_bytes?: number | null;
 
 	/** `CPU max MHz`, where the host publishes one. */
@@ -94,7 +94,7 @@ export interface HostFingerprintRow {
 	/** Large-block copy bandwidth, bytes read plus bytes written, the way STREAM counts a copy. Decode is bandwidth bound and nothing else here measures bandwidth. Absent where the probe was switched off. */
 	memcpy_gib_s?: number | null;
 
-	/** The buffer each side of the copy used. Below `l3_cache_bytes` the figure is a cache reading. */
+	/** The buffer each side of the copy used, as used rather than as configured: the larger of the configured floor and twice `l3_cache_bytes`. Under twice that cache the figure cannot be read as a memory rate, which is what rows written before 2026-09-20 carry. */
 	memcpy_probe_mib?: number | null;
 
 	/** The platform's own name for this machine size, from the host metadata service. This is the placement decision in the platform's vocabulary rather than ours. Absent where the service did not answer. */

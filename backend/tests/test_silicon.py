@@ -45,7 +45,7 @@ def a_probe() -> config.Settings:
     """
     settings = config.load()
     settings.app.observability.host_fingerprint = True
-    settings.app.observability.host_fingerprint_bandwidth_mib = 0
+    settings.app.observability.host_fingerprint_bandwidth_floor_mib = 0
     return settings
 
 CPUINFO_XEON = """processor\t: 0
@@ -121,7 +121,7 @@ def test_the_row_reads_family_model_stepping_off_the_text_it_is_given() -> None:
         run_id="2026-09-16-1",
         job=ServerJob.WORK,
         shard=0,
-        probe_mib=0,
+        probe_floor_mib=0,
         ask_placement=False,
         cpuinfo=CPUINFO_XEON,
     )
@@ -140,7 +140,7 @@ def test_the_clock_is_the_mean_across_processors_and_threads_is_their_count() ->
         run_id="2026-09-16-1",
         job=ServerJob.WORK,
         shard=0,
-        probe_mib=0,
+        probe_floor_mib=0,
         ask_placement=False,
         cpuinfo=CPUINFO_XEON,
     )
@@ -158,7 +158,7 @@ def test_a_probe_size_of_zero_switches_the_bandwidth_reading_off() -> None:
         run_id="2026-09-16-1",
         job=ServerJob.WORK,
         shard=0,
-        probe_mib=0,
+        probe_floor_mib=0,
         ask_placement=False,
         cpuinfo=CPUINFO_MILAN,
     )
@@ -188,14 +188,79 @@ def test_a_cache_directory_that_is_not_there_reads_as_unknown(tmp_path: Path) ->
     assert silicon.cache_bytes(root=tmp_path / "absent") is None
 
 
-def test_a_reported_cache_size_is_read_in_the_units_the_kernel_wrote(tmp_path: Path) -> None:
-    """The kernel writes `260M`, and a reader that takes that for 260 bytes is worse than none."""
-    level = tmp_path / "index3"
+def a_cache_tree(root: Path, size: str) -> Path:
+    """One L3 directory laid out the way the kernel lays it out."""
+    level = root / "index3"
     level.mkdir(parents=True)
     (level / "level").write_text("3\n", encoding="utf-8")
-    (level / "size").write_text("260M\n", encoding="utf-8")
+    (level / "size").write_text(f"{size}\n", encoding="utf-8")
+    return root
 
-    assert silicon.cache_bytes(root=tmp_path) == 260 * 1024 * 1024
+
+def test_a_reported_cache_size_is_read_in_the_units_the_kernel_wrote(tmp_path: Path) -> None:
+    """The kernel writes `260M`, and a reader that takes that for 260 bytes is worse than none."""
+    assert silicon.cache_bytes(root=a_cache_tree(tmp_path, "260M")) == 260 * 1024 * 1024
+
+
+def test_a_cache_larger_than_the_floor_raises_the_buffer_clear_of_it() -> None:
+    """A 512 MiB buffer against 480 MiB of L3 is a 1.07x margin, which settles nothing.
+
+    Both figures are drawn machines: 480 MiB is the Xeon 6973P-C and 260 MiB the
+    Xeon 8573C, and a 512 MiB constant covers neither by twice.
+    """
+    assert silicon.probe_buffer_mib(512, 480 * 1024 * 1024) == 960
+    assert silicon.probe_buffer_mib(512, 260 * 1024 * 1024) == 520
+
+
+def test_a_small_cache_keeps_the_configured_floor_and_the_floor_still_decides_it() -> None:
+    """The machine drawn most reports 32 MiB, and 64 MiB is not a memory reading.
+
+    The second pair is the substitution test: the floor is the only input that
+    moved, and the answer moved with it (CLAUDE.md Guardrail #6).
+    """
+    assert silicon.probe_buffer_mib(512, 32 * 1024 * 1024) == 512
+    assert silicon.probe_buffer_mib(1024, 32 * 1024 * 1024) == 1024
+
+
+def test_a_machine_that_reports_no_cache_keeps_the_floor_rather_than_losing_the_probe() -> None:
+    """An unknown cache is not a small one, and there is nothing else to derive from."""
+    assert silicon.probe_buffer_mib(512, None) == 512
+
+
+def test_the_off_switch_survives_a_machine_with_a_large_cache() -> None:
+    """Zero says do not probe. A derivation that overrode it would take the knob away."""
+    assert silicon.probe_buffer_mib(0, 480 * 1024 * 1024) == 0
+
+
+def test_a_cache_that_is_not_a_whole_number_of_mib_is_still_cleared() -> None:
+    """Rounding down would leave the buffer inside the cache, which is the whole defect."""
+    odd = 3 * 1024 * 1024 + 1
+
+    assert silicon.probe_buffer_mib(1, odd) * 1024 * 1024 >= 2 * odd
+
+
+def test_the_row_records_the_buffer_it_probed_and_not_the_floor_it_was_handed(
+    tmp_path: Path,
+) -> None:
+    """`memcpy_probe_mib` is what says whether a rate measured memory or cache.
+
+    Small sizes on purpose: this checks the derived figure reached both the copy
+    and the column, never what this machine is worth.
+    """
+    row = silicon.read_row(
+        date="2026-09-16",
+        run_id="2026-09-16-1",
+        job=ServerJob.WORK,
+        shard=0,
+        probe_floor_mib=1,
+        ask_placement=False,
+        cpuinfo=CPUINFO_MILAN,
+        cache_root=a_cache_tree(tmp_path, "4M"),
+    )
+
+    assert row.l3_cache_bytes == 4 * 1024 * 1024
+    assert row.memcpy_probe_mib == 8, "the 1 MiB floor it was handed would have measured cache"
+    assert row.memcpy_gib_s is not None
 
 
 def test_uptime_is_the_first_field_and_a_missing_file_is_not_a_zero() -> None:

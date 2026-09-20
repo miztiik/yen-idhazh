@@ -1301,11 +1301,11 @@
           "title": "Host Fingerprint",
           "type": "boolean"
         },
-        "host_fingerprint_bandwidth_mib": {
+        "host_fingerprint_bandwidth_floor_mib": {
           "default": 512,
-          "description": "The buffer each side of the memory-bandwidth probe allocates, so the probe holds twice this. Zero switches the probe off and leaves the bandwidth cell empty; every other cell of the fingerprint still gets written. The default beats the largest L3 this project has drawn, 480 MiB, because a buffer that fits in cache measures cache and reads as a memory figure four times too high. Raise it when a drawn machine reports an L3 at or above this.",
+          "description": "The smallest buffer each side of the memory-bandwidth probe may allocate, so the probe holds twice this. Zero switches the probe off and leaves the bandwidth cell empty; every other cell of the fingerprint still gets written. It is a floor and not the answer: a buffer that does not clear the cache measures cache and reads as a memory figure several times too high, and the reported L3 across the machines this project draws spans 32 MiB to 480 MiB. So the probe raises the buffer to twice whatever cache the machine it drew reports, and this value is what a machine reporting no cache at all gets. memcpy_probe_mib on the row records the size that was used.",
           "minimum": 0,
-          "title": "Host Fingerprint Bandwidth Mib",
+          "title": "Host Fingerprint Bandwidth Floor Mib",
           "type": "integer"
         },
         "host_fingerprint_keep_months": {
@@ -2504,6 +2504,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "observability.host_fingerprint_bandwidth_mib renamed to ..._floor_mib.",
+      "version": "2026-09-20T01:00",
+      "why": "The probe now derives its buffer from the cache, so the value is a floor."
+    },
+    {
       "change": "observability.runtime_counters_scrape, removed with the store it governed.",
       "version": "2026-09-20",
       "why": "The four cells a reader wants are on the host row, from the same scrape."
@@ -2517,11 +2522,6 @@
       "change": "adaptive_dedup_threshold: caps in slots, a rise cap, two damping weights.",
       "version": "2026-09-19T01:00",
       "why": "The line falls fast and rises slow, and a slot count is checkable."
-    },
-    {
-      "change": "adaptive_dedup_threshold.max_down_step loses its upper bound of 0.0083.",
-      "version": "2026-09-19",
-      "why": "Fresh labels put the nearest two-story pair above the line, so the gap is gone."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2602,7 +2602,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-20",
+      "default": "2026-09-20T01:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2613,5 +2613,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-20"
+  "version": "2026-09-20T01:00"
 }
