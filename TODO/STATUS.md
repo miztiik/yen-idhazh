@@ -37,7 +37,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 4 |
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
-| [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 4 | 18 | 1 |
+| [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 5 | 17 | 1 |
 
 ## In flight - 1
 
@@ -81,9 +81,9 @@ section 3 is where it is answered.
 | #5 | 35 | A / search | Live-day search - instant + semantic (+ frontend `key_points` owner, C2) | - |
 | #7 | 35 | A / eval-core | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - |
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
-| #2 | 37 | A | Settle the peak that falls | 1 |
+| #4 | 37 | B | The sampler stops calling theft our work | 2, 3 |
 
-## Waiting on another row - 88
+## Waiting on another row - 87
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -159,14 +159,13 @@ section 3 is where it is answered.
 | #8 | 36 | W4 / apply-gate (alone) | Flip the flag: withhold = absent + item-health telemetry (E7 placement) | 7 is PENDING |
 | #12 | 36 | W3 / rejects-store | The rejects store + corpus fence (`state/rejects/`, 30-day prune) | 3 is PENDING; 7 is PENDING |
 | #13 | 36 | W4 / plan34-gaps | Retro: plan-34 latent gaps + the shared space-trap guard | 34 landed names no row; 6 is PENDING |
-| #4 | 37 | B | The sampler stops calling theft our work | 2 is PENDING |
 | #9 | 37 | B | Panels grouped by the decision they serve | 7 is IN-FLIGHT |
 | #5 | 37 | C | `ItemHealthRow` gains three columns and loses one | 4 is PENDING |
 | #10 | 37 | C | Did another tenant take the processor | 5 is PENDING; 9 is PENDING |
 | #11 | 37 | C | Is the kernel taking the model's weights back | 5 is PENDING; 9 is PENDING |
 | #12 | 37 | C | What one article costs the machine | 9 is PENDING |
 | #13 | 37 | C | Three panels leave the page | 9 is PENDING |
-| #14 | 37 | C | The memory board drops the disputed mark | 2 is PENDING; 9 is PENDING |
+| #14 | 37 | C | The memory board drops the disputed mark | 9 is PENDING |
 | #15 | 37 | C | The shard board gains the clocks nobody reads | 9 is PENDING |
 | #16 | 37 | C | Machine cards gain uptime, clock speed, cache size and copy speed | 9 is PENDING |
 | #19 | 37 | C | Which prompts get re-read, and how fast | 9 is PENDING |
