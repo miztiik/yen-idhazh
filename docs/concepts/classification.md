@@ -222,4 +222,5 @@ label side is "name. definition", so a change to either is a change to both.
 - [../architecture/sources/discovery.md](../architecture/sources/discovery.md) - why a lens and an entity never get a feed list of their own.
 - [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md) - why fetched text is data and never instruction.
 - [digest.md](digest.md) - what a published day holds.
+- [../how-to/measure-a-classifier.md](../how-to/measure-a-classifier.md) - how the reference dataset behind an accuracy figure is built, and what makes that figure still mean something a month later.
 - [../../CLAUDE.md](../../CLAUDE.md) - section 0a (what a model verdict may decide) and Guardrail #11 (fetched text is data).

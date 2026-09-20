@@ -111,7 +111,13 @@ def measure(root: Path) -> list[Row]:
     counts inbound links, and a page cannot know who links to it by reading
     itself. 87 pages is a few megabytes and the walk is the cheap half of this
     tool.
+
+    **The root is resolved first, and that is load-bearing.** A link target is
+    resolved to compare it, so a relative root makes every comparison fail and
+    every page read as one nobody links to - a wrong answer that looks like a
+    finding rather than like a fault.
     """
+    root = root.resolve()
     pages = pages_under(root)
     text = {p: p.read_text(encoding="utf-8") for p in pages}
 
@@ -166,6 +172,7 @@ def faults(root: Path) -> dict[str, list[str]]:
     with no date to price staleness from, no way out of the page, or a heading
     the anchor links cannot reach.
     """
+    root = root.resolve()
     pages = sorted(root.glob("docs/**/*.md"))
     text = {p: p.read_text(encoding="utf-8") for p in pages}
 
