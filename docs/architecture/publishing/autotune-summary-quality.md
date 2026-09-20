@@ -3,9 +3,14 @@
 **Last Updated**: 2026-09-20
 
 How yen-idhazh measures whether a summary is good, and how the thresholds tune themselves with no human
-in the loop. Faithfulness (HHEM) ships today; coverage, coherence, fluency and the autotuning loop
-below are the target design, implemented by a feedback-loop plan under `TODO/` that reuses the
-`LLM-JUDGES` workflow and the `Fit` pattern from the same-story similarity judge.
+in the loop.
+
+**Status: design of record, not deployed behaviour.** Faithfulness (HHEM) ships today and is defined
+on [../../concepts/evaluation.md](../../concepts/evaluation.md#faithfulness-scored-twice). Coverage,
+coherence, fluency and the autotuning loop below are the target design, implemented by
+[../../../TODO/20260918-36-summary-quality-autotune-plan.md](../../../TODO/20260918-36-summary-quality-autotune-plan.md),
+which reuses the `LLM-COUNCIL` workflow and the `Fit` pattern from the same-story similarity judge
+([autotune-content-similarity.md](autotune-content-similarity.md)).
 
 ## The four metrics
 
@@ -38,11 +43,11 @@ thinks exists is worse than leaving the axis unnamed.
 
 ## How each is measured
 
-- **Faithfulness** = `HHEM(premise = article, hypothesis = summary)`, taken as the **max over
-  overlapping windows** of the article (a claim is supported if any window supports it; a mean would
-  punish length). Scored twice - against the text the model read and against the whole article - and
-  the gap is the truncation cost. It is the only metric reliable enough to WITHHOLD a story, and it
-  withholds only at the absolute 0.50 line, never at the drifting adaptive floor (see the publish gate).
+- **Faithfulness** is defined on
+  [../../concepts/evaluation.md](../../concepts/evaluation.md#faithfulness-scored-twice), which owns
+  the windowing, the two scorings and what the gap between them means. What matters here is only its
+  role in the loop: it is the one metric reliable enough to WITHHOLD a story, and it withholds at the
+  absolute 0.50 line, never at the drifting adaptive floor (see the publish gate).
 - **Coverage** = ROUGE-recall: `|content_ngrams(summary) & content_ngrams(source)| /
   |content_ngrams(source)|`. Recognised, reference-free, needs the source, so it runs same-day.
 - **Coherence** = mean cosine of adjacent summary sentences. With unit vectors `v_1..v_n` for the
@@ -85,7 +90,7 @@ flowchart TD
   gate -- "yes -> withhold" --> withheld["withheld (not published)"]
   gate -- "no -> publish<br/>(adaptive floor downgrades faithfulness;<br/>coverage/coherence watch only)" --> pub["published item<br/>+ publish_decision stamp"]
 
-  subgraph nextday["Next-day - LLM-JUDGES council (reads committed EvalRows only)"]
+  subgraph nextday["Next-day - LLM-COUNCIL (reads committed EvalRows only)"]
     sample["stratified sample<br/>~30 summaries/day"] --> geval["G-Eval judge<br/>Fluency 1..5 -> 0..1"]
     geval --> row
     row --> fold["Fold -> MetricScoreDistribution<br/>(fixed-size rolling histogram)"]
@@ -166,7 +171,9 @@ sample.
 
 ## See also
 
-- `docs/concepts/evaluation.md` - the eval ledger, HHEM, and the metrics that ship today.
-- `docs/architecture/publishing/autotune-content-similarity.md` - the merge line that already fits itself: the
-  `LLM-COUNCIL` workflow and the fold-fit pattern this loop reuses.
-- `TODO/20260918-35-search-eval-key-points-plan.md` - the cleanup that precedes this loop.
+- [../../concepts/evaluation.md](../../concepts/evaluation.md) - the eval ledger, HHEM, and the metrics that ship today. Faithfulness is defined there, not here.
+- [../../concepts/summary-metrics.md](../../concepts/summary-metrics.md) - what one number about one summary means, and what it cannot see.
+- [autotune-content-similarity.md](autotune-content-similarity.md) - the merge line that already fits itself: the `LLM-COUNCIL` workflow and the fold-fit pattern this loop reuses.
+- [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - where the next-day council sits in the two loops.
+- [../../../TODO/20260918-36-summary-quality-autotune-plan.md](../../../TODO/20260918-36-summary-quality-autotune-plan.md) - the plan that builds this, and names this page its design of record.
+- [../../../TODO/20260918-35-search-eval-key-points-plan.md](../../../TODO/20260918-35-search-eval-key-points-plan.md) - the cleanup that precedes this loop.

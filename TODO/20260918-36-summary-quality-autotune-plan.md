@@ -38,7 +38,7 @@ EvalRow churn (its rows 6, 7, 8) are on main. Confirm both are merged before dis
 
 STEP 0 - COLD START. Read, in order: CLAUDE.md; docs/how-to/execute-a-plan.md (you are
 "the owner"); docs/agents/bootstrap.md; docs/how-to/run-the-gates.md;
-docs/how-to/ship-a-pr.md; the design of record docs/concepts/autotune-summary-quality.md;
+docs/how-to/ship-a-pr.md; the design of record docs/architecture/publishing/autotune-summary-quality.md;
 then this plan's Section 0, its Onboarding subsection, Sections 0a-0e (0e holds the current
 owner rulings that SUPERSEDE earlier E-/G-items - read it before trusting any link-only or
 eviction language above it), Section 0d Tables B and C (PR grouping + optimistic dispatch),
@@ -92,7 +92,7 @@ with row-ids, decisions as five-part requests.
 
 CLOSURE. When every row is DONE/COLLAPSED: resolve the Reckoner, distil anything durable
 (distill-a-plan.md) - the offline-judge TODO note in Section 0e moves to
-docs/concepts/autotune-summary-quality.md as the named future consumer - delete the plan-doc,
+docs/architecture/publishing/autotune-summary-quality.md as the named future consumer - delete the plan-doc,
 then sweep the worktrees.
 
 FIRST ACTION: confirm plan 34's fit core and plan 35's EvalRow churn are on main; then STEP 1
@@ -118,7 +118,7 @@ A worker picks up any row with no prior context by reading, in order: [`CLAUDE.m
 engineering contract), [`docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) (how this plan
 runs), [`docs/agents/bootstrap.md`](../docs/agents/bootstrap.md) (which page owns the surface a row
 touches), and [`docs/how-to/run-the-gates.md`](../docs/how-to/run-the-gates.md) (the gate commands). The
-design of record is [`docs/concepts/autotune-summary-quality.md`](../docs/concepts/autotune-summary-quality.md)
+design of record is [`docs/architecture/publishing/autotune-summary-quality.md`](../docs/architecture/publishing/autotune-summary-quality.md)
 (the four metrics, the fold-fit loop, the publish gate). The loop this plan mirrors is the adaptive
 merge line in [`docs/architecture/publishing/autotune-content-similarity.md`](../docs/architecture/publishing/autotune-content-similarity.md)
 - Row 1 extracts its fit core from `backend/idhazh/similarity/fit.py`. Owning pages per surface:
@@ -216,7 +216,7 @@ first; the link-only references in this section are historical.)
 | G11 | E8 rename touch-points; E9 Row 6/10 sequencing. | Rows 6, 10 | If the `LLM-COUNCIL` rename lands, Row 6 edits only `name:`, `concurrency.group`, `_harness.py`. Row 6's leg timeout is a LABELLED estimate x generous margin and does NOT hard-block on Row 10 (E9); Row 10 measures the merged call after. E10(b): Row 6 canary asserts containment (`geval` never reaches `publish_decision`) + thinking off. |
 | G12 | Row 3 dec 1 stale premise; the `downgraded` dead value. | Row 3 | Fix dec 1: a withheld item is ABSENT from the day but recorded in item-health telemetry (0e H1/H2); the `EvalRow` stamp still records every scored item including the withheld. Resolve `publish_decision`: values are `published` \| `withheld`; keep `downgraded` only if reserved for a named future promotion, else drop. |
 | G13 | Row 2 omits the contract fixtures + `export.py` tuple. | Row 2 | Name `tests/fixtures/contracts/<stem>/` fixtures for both new contracts and the `CONTRACTS` tuple + import in `export.py`. |
-| G14 | The design-of-record doc lags the corrections. | Row 5 + Row 8 commits | Widen the reconciliation: `docs/concepts/autotune-summary-quality.md` drops the faithfulness-downgrades-below-adaptive-floor language (E1), the `block p01` phrasing, and the asymmetric "damp the raise" (E3); the publish-gate section says withhold = absent + item-health telemetry, surfaced in the console (0e H1/H2/H4), NOT a link-only card. |
+| G14 | The design-of-record doc lags the corrections. | Row 5 + Row 8 commits | Widen the reconciliation: `docs/architecture/publishing/autotune-summary-quality.md` drops the faithfulness-downgrades-below-adaptive-floor language (E1), the `block p01` phrasing, and the asymmetric "damp the raise" (E3); the publish-gate section says withhold = absent + item-health telemetry, surfaced in the console (0e H1/H2/H4), NOT a link-only card. |
 
 **Table B - PR-wave grouping (11 PRs across 4 waves; each PR independently green)**
 
@@ -292,7 +292,7 @@ an expiring CI artifact - revisit if the repository's visibility changes.
 TODO (a note, not a plan row; distils to `docs/` per distill-a-plan.md): the OFFLINE JUDGE that reads
 the rejects store - a bigger model or a person auditing the withheld tail (J7/J8) - is a deferred
 follow-up with no row in this plan. When this plan distils it moves to
-`docs/concepts/autotune-summary-quality.md` as the named future consumer that makes the corpus-fence
+`docs/architecture/publishing/autotune-summary-quality.md` as the named future consumer that makes the corpus-fence
 auditable.
 
 ## Section 1 - Status Reckoner
@@ -416,7 +416,7 @@ disjointness check, never the letter (execute-a-plan.md).
   gates clear on day one.
 - **Files touched:** new `backend/idhazh/quality/fit.py` (the second `edge.py` adapter),
   `backend/idhazh/stages/quality_fit.py`, `backend/idhazh/ledger.py`, a seeding step that reads the
-  committed HHEM readings once, and **`docs/concepts/autotune-summary-quality.md`** (G14) - strike the
+  committed HHEM readings once, and **`docs/architecture/publishing/autotune-summary-quality.md`** (G14) - strike the
   four stale phrases: faithfulness-downgrades-below-an-adaptive-floor (E1), `block p01` (E1), the
   asymmetric "damp the raise" (E3), and any "coherence runs same-day in the work shard" wording
   (coherence runs in `assemble`, 0e H5).
@@ -527,7 +527,7 @@ disjointness check, never the letter (execute-a-plan.md).
   | # | Decision | Authority |
   | --- | --- | --- |
   | 1 | The not-published/withhold rate is a first-class panel with its own alarm, read from item-health (D8, 0e H4) | Editor |
-  | 2 | A tiny glyph links each metric to `docs/concepts/autotune-summary-quality.md` | Susan |
+  | 2 | A tiny glyph links each metric to `docs/architecture/publishing/autotune-summary-quality.md` | Susan |
 
 ### Row #10 - measure a real G-Eval call
 
@@ -644,7 +644,7 @@ disjointness check, never the letter (execute-a-plan.md).
 ## Section 3 - the loop, and where it is documented
 
 The design of record, with the mermaid and the formulas, is
-[`docs/concepts/autotune-summary-quality.md`](../docs/concepts/autotune-summary-quality.md). That page
+[`docs/architecture/publishing/autotune-summary-quality.md`](../docs/architecture/publishing/autotune-summary-quality.md). That page
 carries the four metrics, how each is measured, the fold-fit loop, and the publish gate; this plan
 sizes the rows that build it. When Row 8 lands, the page's "target design (in flight)" framing is
 removed in the same commit.
@@ -655,5 +655,5 @@ removed in the same commit.
   merge line that fits itself: the loop this plan mirrors, and the fit core Row 1 extracts.
 - [`20260918-35-search-eval-key-points-plan.md`](20260918-35-search-eval-key-points-plan.md) - the
   cleanup and the recorded-only scorers this plan consumes.
-- [`docs/concepts/autotune-summary-quality.md`](../docs/concepts/autotune-summary-quality.md) - the
+- [`docs/architecture/publishing/autotune-summary-quality.md`](../docs/architecture/publishing/autotune-summary-quality.md) - the
   metrics, the formulas, and the loop diagram.
