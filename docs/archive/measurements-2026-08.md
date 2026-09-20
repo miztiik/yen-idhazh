@@ -2494,3 +2494,11 @@ costs the reader, and whether 200 should move, is a `config/` question that this
 page does not answer - see
 [../concepts/config.md](../concepts/config.md) on why a guard sitting in the
 working range stops being a guard.
+
+## See also
+
+- [../reference/pipeline-cost.md](../reference/pipeline-cost.md) - the instrument log these sections were moved out of, carrying the figure now in force for each quantity.
+- [../reference/benchmarks/](../reference/documentation-structure.md#a-benchmark-run-gets-its-own-page-and-never-the-logs-name) - where a run written today goes instead, and why a record never takes the log's name.
+- [../reference/documentation-structure.md](../reference/documentation-structure.md) - the admission rule above is the delete test, written for this page's class.
+- [../concepts/config.md](../concepts/config.md) - the knobs several of these readings were taken to set.
+

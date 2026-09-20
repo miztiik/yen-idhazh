@@ -1,9 +1,15 @@
-"""Measure what the docs cost a reader, and hand the numbers to the three tests.
+"""Hold every page against the documentation standard, and print what it says.
 
-This tool decides nothing. Every column it prints is an input to a test written
-in `docs/reference/documentation-structure.md`, and no number here is a
-threshold - the standard deliberately gives no page a maximum length, because a
-line limit is met by starting a second file.
+The standard has two halves and they need opposite treatment. Its three tests -
+split, merge, delete - are judgement, so this tool hands them numbers and no
+verdict: no column here is a threshold, and the standard deliberately gives no
+page a maximum length, because a line limit is met by starting a second file.
+Its required elements have one correct answer each, so those are reported as
+faults rather than as measurements.
+
+**Nothing here fails a build.** The standard has no doc gate, for the same
+reason it has no length limit, and a fault printed beside the page that carries
+it is what the rule was ever going to get.
 
 Run it with no arguments from the repository root:
 
@@ -40,10 +46,29 @@ SUPERSEDED = re.compile(
 
 LINK = re.compile(r"\]\(([^)\s]+\.md)[)#]")
 
+#: The stamp a reader prices staleness from, so its shape is checked too - a
+#: date nobody can compare is the same as no date.
+STAMP = re.compile(r"^\*\*Last Updated\*\*:\s*\d{4}-\d{2}-\d{2}\s*$")
+
+#: How far under the title the stamp may sit before a reader stops finding it.
+STAMP_WITHIN = 5
+
 
 def tokens(text: str) -> int:
     """About four characters a token. A declared estimate, not a measurement."""
     return len(text) // 4
+
+
+def prose(text: str) -> list[str]:
+    """The lines that are Markdown. A `# ` inside a shell block is a comment."""
+    out: list[str] = []
+    fence = False
+    for line in text.split("\n"):
+        if line.startswith("```"):
+            fence = not fence
+        elif not fence:
+            out.append(line)
+    return out
 
 
 def sections(text: str) -> list[tuple[str, str]]:
@@ -129,6 +154,66 @@ def legend() -> None:
     print(f"\nRead the three tests in full at {STANDARD}.")
 
 
+def faults(root: Path) -> dict[str, list[str]]:
+    """Every page under `docs/` that is missing something the standard requires.
+
+    Only `docs/` is held to this. `CLAUDE.md` and `README.md` are the contract
+    and the front door rather than pages the placement rules route to, and the
+    standard's required-elements list is written for the tree it organises.
+
+    A fault here is not an opinion about the page. Each one names a thing the
+    standard says every page carries, so a reader who does not find it is left
+    with no date to price staleness from, no way out of the page, or a heading
+    the anchor links cannot reach.
+    """
+    pages = sorted(root.glob("docs/**/*.md"))
+    text = {p: p.read_text(encoding="utf-8") for p in pages}
+
+    out: dict[str, list[str]] = {}
+    for page in pages:
+        rel = page.relative_to(root).as_posix()
+        body = text[page]
+        lines = body.split("\n")
+        found: list[str] = []
+
+        titles = sum(1 for line in prose(body) if line.startswith("# "))
+        if titles != 1:
+            found.append(f"{titles} H1 titles, and the standard asks for exactly one")
+        if not any(STAMP.match(line) for line in lines[:STAMP_WITHIN]):
+            found.append(f"no **Last Updated**: YYYY-MM-DD in the first {STAMP_WITHIN} lines")
+        if not any(line.lower().startswith("## see also") for line in prose(body)):
+            found.append('no "## See also", so the page is a dead end')
+        if rel.count("/") > 3:
+            found.append("nested past docs/<tier>/<topic>/<file>.md, so it is two topics")
+        odd = sorted({ch for ch in body if ord(ch) > 127})
+        if odd:
+            shown = " ".join(f"U+{ord(ch):04X}" for ch in odd[:4])
+            found.append(f"{len(odd)} non-ASCII characters, first: {shown}")
+        for href in sorted(set(LINK.findall(body))):
+            if "<" in href:
+                continue  # a placeholder in a worked example names no page
+            if not (page.parent / href).exists():
+                found.append(f"links to a page that is not there: {href}")
+
+        if found:
+            out[rel] = found
+    return out
+
+
+def report_faults(flagged: dict[str, list[str]], scope: str) -> None:
+    """Print the faults, or say the pages carry what the standard asks for."""
+    print("\nREQUIRED ELEMENTS - one correct answer each, so these are faults not numbers")
+    if not flagged:
+        print(f"  {scope} carries all of them.")
+        return
+    for name, found in sorted(flagged.items()):
+        print(f"  {name}")
+        for fault in found:
+            print(f"      {fault}")
+    print("\n  Nothing here fails a build. The standard has no doc gate, for the same")
+    print("  reason it sets no page length: a count is met by starting a second file.")
+
+
 def changed(root: Path, named: list[str]) -> None:
     """The rows for the pages one change touched, and nothing else.
 
@@ -157,6 +242,7 @@ def changed(root: Path, named: list[str]) -> None:
             f"  {name:<52} {tok:>6,} {h2:>4} {str(share) + '%':>7} {from_n:>5} {sup:>6} {rank:>7}"
         )
     legend()
+    report_faults({k: v for k, v in faults(root).items() if k in wanted}, "Every page you touched")
     print("\nThe page you add to pays first. Apply the SPLIT TEST to any page above")
     print("that already answers two questions; one addition buys at most one cut.")
 
@@ -198,6 +284,7 @@ def whole(root: Path) -> None:
     for tok, name, h2, share, from_n, sup in rows[:20]:
         print(f"  {name:<52} {tok:>6,} {h2:>4} {str(share) + '%':>7} {from_n:>5} {sup:>6}")
     legend()
+    report_faults(faults(root), "Every page under docs/")
 
 
 def main(argv: list[str] | None = None) -> None:

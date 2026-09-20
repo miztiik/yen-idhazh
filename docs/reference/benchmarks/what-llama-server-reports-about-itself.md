@@ -15,7 +15,7 @@ whole model-loader block is missing.
 So a check that flash attention is ACTIVE, rather than that a flag was accepted,
 is writable today. It costs one flag on the server and about 15 KB of log per
 server start. This is the instrument
-[row 3 of the runtime plan](../../TODO/20260905-09-pin-the-runtime-plan.md) was
+[row 3 of the runtime plan](../../../TODO/20260905-09-pin-the-runtime-plan.md) was
 held on - its section 1a reads "the instrument does not exist" - and the same
 flag hands row 4 the KV-buffer and compute-buffer lines it needs. The hold
 itself is not lifted by this page: the row's other trigger is memory, which this
@@ -143,7 +143,7 @@ absent = neither - which means the verbosity was not raised, and is a
 ```
 
 Three states, not two, and why the third one has to exist is in
-[agent-notes/git-and-github.md](agent-notes/git-and-github.md#reading-a-run).
+[agent-notes/git-and-github.md](../agent-notes/git-and-github.md#reading-a-run).
 Corroborate with `sched_reserve: CPU compute buffer
 size`, which is a physical consequence rather than a restatement: on this model
 at `n_ctx` 8192 it is 112.01 MiB with attention fused and 572.01 MiB without.
