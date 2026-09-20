@@ -75,7 +75,7 @@ export function fleetOverWindow(
 			(options.start === undefined || row.date >= options.start) &&
 			(options.end === undefined || row.date <= options.end)
 	);
-	const seen = inWindow.map((row) => ({ fingerprint: row.fingerprint, cpuModel: row.cpuModel }));
+	const seen = inWindow.map((row) => ({ fingerprint: row.fingerprint, cpuModel: row.cpu_model }));
 	const resolve = options.keys ?? machineKeys(seen);
 	const keys = seen.map(resolve);
 	const ramp = options.ramp ?? machineRamp(keys, options.colourStops);

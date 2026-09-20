@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-20
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -352,13 +352,14 @@ Run all five from the repository root. Each must be clean.
 .\.venv\Scripts\python.exe -m pytest
 .\.venv\Scripts\shellcheck.exe --severity=style (Get-ChildItem.github/scripts/*.sh).FullName
 .\.venv\Scripts\python.exe -m idhazh.contracts.export
-git diff --exit-code -- schemas/
+git diff --exit-code -- schemas/ frontend/src/contracts/
 ```
 
 The last two lines
-are the contract drift gate: the export regenerates `schemas/` from the Pydantic
-models, and a non-empty diff means a generated artifact was hand-edited or a
-model changed without regenerating ([../architecture/contracts/schemas.md](../architecture/contracts/schemas.md)).
+are the contract drift gate: the export regenerates `schemas/` AND
+`frontend/src/contracts/` from the Pydantic models, and a non-empty diff in
+either means a generated artifact was hand-edited or a model changed without
+regenerating ([../architecture/contracts/schemas.md](../architecture/contracts/schemas.md)).
 
 **`shellcheck` is the same binary CI runs**, installed by the `dev` extra rather
 than downloaded, so the local gate and the CI gate cannot disagree about a

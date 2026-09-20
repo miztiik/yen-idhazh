@@ -32,24 +32,37 @@ const STOPS = APPEARANCE.console.machine_colour_stops;
 
 function row(over: Partial<HostFingerprint>): HostFingerprint {
 	return {
+		version: '2026-09-19',
 		date: '2026-09-12',
-		runId: '2026-09-12-1',
+		run_id: '2026-09-12-1',
 		job: 'work',
 		shard: 0,
 		fingerprint: '3a7f0b1c2d4e5f60',
-		cpuModel: 'AMD EPYC 7763 64-Core Processor',
-		cpuFamily: 25,
-		cpuModelNumber: 1,
-		cpuStepping: 1,
+		cpu_model: 'AMD EPYC 7763 64-Core Processor',
+		cpu_vendor: 'AuthenticAMD',
+		cpu_family: 25,
+		cpu_model_number: 1,
+		cpu_stepping: 1,
 		microcode: '0xa0011d3',
-		l3CacheBytes: 33_554_432,
-		flags: ['avx2'],
-		memcpyGibPerSecond: 12.4,
-		memcpyProbeMib: 512,
-		vmSize: null,
-		vmLocation: null,
-		vmZone: null,
-		vmFaultDomain: null,
+		cores: 2,
+		threads: 4,
+		l3_cache_bytes: 33_554_432,
+		mhz_max: null,
+		mhz_at_probe: null,
+		flags: 'avx2',
+		boot_seconds: null,
+		memcpy_gib_s: 12.4,
+		memcpy_probe_mib: 512,
+		vm_size: null,
+		vm_location: null,
+		vm_zone: null,
+		vm_fault_domain: null,
+		runner_name: null,
+		measured_at: null,
+		model_load_ms: null,
+		job_seconds: null,
+		server_prompt_tokens: null,
+		server_prompt_seconds: null,
 		...over
 	};
 }
@@ -61,7 +74,7 @@ function draws(count: number, over: Partial<HostFingerprint>): HostFingerprint[]
 
 const XEON = {
 	fingerprint: 'c81d9e0a1b2c3d4e',
-	cpuModel: 'INTEL(R) XEON(R) PLATINUM 8573C'
+	cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C'
 };
 
 function view(rows: HostFingerprint[], recording = true) {
@@ -171,7 +184,7 @@ test.describe('the window and the switch', () => {
 	test('a job that recorded no processor name still counts as a placement', () => {
 		// Its fingerprint is what the record was built for, and a machine with no
 		// name is still a machine the platform gave us.
-		const unnamed = view([row({ cpuModel: null, fingerprint: '0000111122223333' })]);
+		const unnamed = view([row({ cpu_model: null, fingerprint: '0000111122223333' })]);
 		expect(unnamed.placements).toBe(1);
 		expect(unnamed.kinds[0].identity.colourStop).not.toBe(UNRECORDED_STOP);
 	});

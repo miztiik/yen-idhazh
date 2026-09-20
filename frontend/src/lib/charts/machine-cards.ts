@@ -116,14 +116,16 @@ interface Placement {
 }
 
 function part(row: HostFingerprint): string | null {
-	const cells = [row.cpuFamily, row.cpuModelNumber, row.cpuStepping];
+	const cells = [row.cpu_family, row.cpu_model_number, row.cpu_stepping];
 	if (cells.some((cell) => cell === null)) return null;
 	return cells.join('/');
 }
 
 function chips(row: HostFingerprint | null, watched: readonly string[]): FlagChip[] {
 	if (row === null || watched.length === 0) return [];
-	const present = new Set(row.flags);
+	// The contract's own shape is one space-joined cell, split here rather than in
+	// the reader: that module is server-only and this one is bundled for a browser.
+	const present = new Set(row.flags.split(/\s+/).filter((flag) => flag !== ''));
 	return watched.map((name) => ({ name, present: present.has(name) }));
 }
 
@@ -154,13 +156,13 @@ export function machineCards(
 	const date = run?.date ?? '';
 	const lost = options.lost ?? null;
 	const lostNote = recordDestroyed(lost === null ? [] : [lost]);
-	const forRun = run === null ? [] : fingerprints.filter((row) => row.runId === run.runId);
+	const forRun = run === null ? [] : fingerprints.filter((row) => row.run_id === run.runId);
 	const covered = new Set(
 		forRun.filter((row) => row.job === 'work').map((row) => String(row.shard))
 	);
 
 	const seen: MachineSeen[] = [
-		...forRun.map((row) => ({ fingerprint: row.fingerprint, cpuModel: row.cpuModel })),
+		...forRun.map((row) => ({ fingerprint: row.fingerprint, cpuModel: row.cpu_model })),
 		...(run?.reported ?? [])
 			.filter((shard) => !covered.has(String(shard.shard)))
 			.map((shard) => ({ fingerprint: null, cpuModel: shard.cpuModel }))
@@ -170,7 +172,7 @@ export function machineCards(
 	const placements: Placement[] = [];
 	for (const row of forRun) {
 		placements.push({
-			...resolve({ fingerprint: row.fingerprint, cpuModel: row.cpuModel }),
+			...resolve({ fingerprint: row.fingerprint, cpuModel: row.cpu_model }),
 			row
 		});
 	}
@@ -216,8 +218,8 @@ export function machineCards(
 		// construction - the digest is taken over exactly those cells - so this
 		// only ever chooses between a recorded row and an absent one.
 		const row = drawn.find((placement) => placement.row !== null)?.row ?? null;
-		const l3 = row?.l3CacheBytes ?? null;
-		const buffer = row?.memcpyProbeMib ?? null;
+		const l3 = row?.l3_cache_bytes ?? null;
+		const buffer = row?.memcpy_probe_mib ?? null;
 		cards.push({
 			identity,
 			source: row === null ? 'name-only' : 'fingerprint',
@@ -225,7 +227,7 @@ export function machineCards(
 			flags: chips(row, options.watchedFlags),
 			flagsRecorded: row !== null && options.watchedFlags.length > 0,
 			l3CacheBytes: l3,
-			memcpyGibPerSecond: row?.memcpyGibPerSecond ?? null,
+			memcpyGibPerSecond: row?.memcpy_gib_s ?? null,
 			memcpyProbeMib: buffer,
 			measuredCache:
 				buffer !== null && buffer > 0 && l3 !== null && buffer * 1024 * 1024 <= l3,
@@ -235,12 +237,12 @@ export function machineCards(
 				row === null
 					? null
 					: {
-							vmSize: row.vmSize,
-							vmLocation: row.vmLocation,
-							vmZone: row.vmZone,
-							vmFaultDomain: row.vmFaultDomain,
+							vmSize: row.vm_size,
+							vmLocation: row.vm_location,
+							vmZone: row.vm_zone,
+							vmFaultDomain: row.vm_fault_domain,
 							microcode: row.microcode,
-							cpuModelRaw: row.cpuModel
+							cpuModelRaw: row.cpu_model
 						}
 		});
 	}

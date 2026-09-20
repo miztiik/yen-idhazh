@@ -123,6 +123,13 @@ test('contract and config changes include both languages and drift checks', () =
 	}
 });
 
+test('a generated frontend contract selects the drift check too', () => {
+	// One command writes `schemas/` and `frontend/src/contracts/`, so an edit to
+	// either is the same defect and the same check has to catch it.
+	const selection = selectPaths(['frontend/src/contracts/article.ts']);
+	assert.equal(selection.contracts, true);
+});
+
 //: A change, and what the `scope` job has to buy for it on a pull request: the
 //: browser half at all, and the operator console's own specs inside it. The
 //: backend rows are the trap the allow-list exists to avoid - a module the
