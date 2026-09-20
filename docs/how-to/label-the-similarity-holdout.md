@@ -8,7 +8,7 @@ each pair is one news event or two. The marks land in
 merge line has to stay above.
 
 The rule the floor guards is in
-[../architecture/publishing/auto-tune-content-similarity.md](../architecture/publishing/auto-tune-content-similarity.md).
+[../architecture/publishing/Autotune-content-similarity.md](../architecture/publishing/Autotune-content-similarity.md).
 This page is how a mark gets made.
 
 ## What the holdout is for
@@ -215,7 +215,7 @@ weighted back to that day's own band populations.
 
 ## See also
 
-- [../architecture/publishing/auto-tune-content-similarity.md](../architecture/publishing/auto-tune-content-similarity.md) - what the line decides, how it moves, and what the current marks say about it.
+- [../architecture/publishing/Autotune-content-similarity.md](../architecture/publishing/Autotune-content-similarity.md) - what the line decides, how it moves, and what the current marks say about it.
 - [label-the-faithfulness-queue.md](label-the-faithfulness-queue.md) - the other labelling loop, over summaries rather than pairs.
 - [run-the-pipeline.md](run-the-pipeline.md) - producing a day, and the `judge-draw` verb that writes the draw.
 - [../reference/repository-layout.md](../reference/repository-layout.md) - why the holdout file is one of two committed `state/` files nothing generated.

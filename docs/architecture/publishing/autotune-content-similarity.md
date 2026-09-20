@@ -1,4 +1,4 @@
-# Auto-tuning the similarity line that groups one story
+# Autotuning the similarity line that groups one story
 
 **Last Updated**: 2026-09-20
 
