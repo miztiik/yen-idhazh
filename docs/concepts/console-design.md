@@ -921,6 +921,41 @@ The rate domain is the largest rate on the board and never a round number. A
 shard reading at a quarter of its neighbour draws a quarter-length bar, which is
 the reading the panel exists for.
 
+## A comparison drawn in one unit can be confidently wrong, so it carries both
+
+**Reading and writing are two quantities only if you count them.** Counted in
+tokens they are one quantity in two directions and the fourth rule above binds;
+so are they counted in seconds. What the two counts do not have to agree about
+is which side is bigger, and where they disagree the unit is the whole answer.
+
+The shipped case is `What a run reads against what it writes` on
+`/console/machine/`. A run reads far more tokens than it writes, so in tokens the
+read bar towers. **Reading is batched prefill and writing is sequential decode,
+so a tall read bar is not a run that spent itself reading.** A panel that offers
+only the count teaches that it is, fast and without a caveat, and a reader who
+acts on it tunes the prompt when the clock belongs to the answer. So the panel
+carries a unit switch, and the switch is the finding rather than a convenience:
+which side is taller in each unit is exactly the question "where did the model
+time go", answered by looking rather than by a caption.
+
+**The switch qualifies under the fifth rule because one call returns both
+units, and the row set is decided once.** An item row is admitted on its token
+counts, and its `prefill_ms` and `decode_ms` are then summed over exactly those
+rows. Two independent filters would let the two units cover different runs, and
+a panel whose units disagree about what they measured cannot be recovered by
+reading it harder. It needs no new column: both durations already reach the
+frontend for the read and write rates on the shard board.
+
+**Each unit measures its own ratio and prints it**, so the fourth rule's
+threshold is taken from the data drawn rather than assumed - and where one unit
+passes 20:1 the smaller series takes its own row in that unit only. **What the
+reader loses, named:** a unit switch is a state to remember, and an operator who
+reads the panel in tokens on Monday and in seconds on Tuesday is comparing two
+pictures. The panel opens on the same unit every time and prints the unit beside
+the ratio, which is the most a switch can do about that.
+
+Authority: owner, 2026-09-17. Susan rules the unit it opens on.
+
 ## A stacked chart offers lines only where no data is re-shaped
 
 Stacked says what the mix is and how big the total got. Lines say what one

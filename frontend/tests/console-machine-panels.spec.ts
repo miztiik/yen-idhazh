@@ -404,3 +404,67 @@ test.describe('what the platform has been giving us', () => {
 		expect(text).not.toMatch(/\d\s*%|percent|probability|chance of/i);
 	});
 });
+
+test.describe('what a run reads against what it writes', () => {
+	const PANEL = '[data-console-panel="What a run reads against what it writes"]';
+
+	test('one chart, two series, and one axis per unit', async ({ page }) => {
+		await page.goto('/console/machine/');
+		const panel = page.locator(PANEL);
+		await expect(panel).toBeVisible();
+		// One drawing, not two panes. The predecessor drew a chart each for the
+		// two series and neither could be compared to the other.
+		await expect(panel.locator('[data-chart]')).toHaveCount(1);
+		const board = panel.locator('[data-read-write-unit]');
+		await expect(board).toHaveAttribute('data-panel-question', 'is it working');
+		// The shape is picked from a measurement, and the measurement is printed.
+		await expect(board).toHaveAttribute('data-read-write-split', 'no');
+		await expect(panel.locator('[data-read-write-measured]')).toContainText(
+			(await board.getAttribute('data-read-write-ratio')) ?? 'no ratio'
+		);
+	});
+
+	test('the switch moves the unit, and both units read the same runs', async ({ page }) => {
+		await page.goto('/console/machine/');
+		const board = page.locator(PANEL).locator('[data-read-write-unit]');
+		await expect(board).toBeVisible();
+		// The server drew one unit and the radio for it is already checked, so the
+		// first paint and the control agree before a script has run.
+		const opened = await board.getAttribute('data-read-write-unit');
+		await expect(page.locator('[data-shape-switch="work-unit"]')).toHaveAttribute(
+			'data-shape',
+			opened ?? ''
+		);
+
+		const runs = await board.getAttribute('data-read-write-runs');
+		const other = opened === 'seconds' ? 'tokens' : 'seconds';
+		await page.locator(`[data-shape-switch="work-unit"] [data-shape-option="${other}"]`).click();
+		await expect(board).toHaveAttribute('data-read-write-unit', other);
+		// One row set answers both units, so the run count cannot move with the
+		// switch. A count that moved would mean the two grains covered different
+		// runs, and nothing on the page could say which.
+		await expect(board).toHaveAttribute('data-read-write-runs', runs ?? '');
+	});
+
+	test('the seconds grain states its absence rather than drawing an empty chart', async ({
+		page
+	}) => {
+		await page.goto('/console/machine/');
+		const board = page.locator(PANEL).locator('[data-read-write-unit]');
+		const units = page.locator('[data-shape-switch="work-unit"]');
+		await units.locator('[data-shape-option="seconds"]').click();
+		await expect(board).toHaveAttribute('data-read-write-unit', 'seconds');
+		const timed = Number(await board.getAttribute('data-read-write-timed-runs'));
+		if (timed === 0) {
+			await expect(board.locator('[data-work-absent="seconds"]')).toBeVisible();
+			await expect(board.locator('[data-chart]')).toHaveCount(0);
+			return;
+		}
+		// The other arm: a run the ledger timed draws, and the count grain is
+		// never taken down with the clock.
+		await expect(board.locator('[data-work-absent="seconds"]')).toHaveCount(0);
+		await expect(board.locator('[data-chart]')).toHaveCount(1);
+		await units.locator('[data-shape-option="tokens"]').click();
+		await expect(board.locator('[data-chart]')).toHaveCount(1);
+	});
+});

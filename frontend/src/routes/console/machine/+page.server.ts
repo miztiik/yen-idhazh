@@ -9,14 +9,16 @@ import {
 	memoryBoard,
 	percentileChart,
 	percentileHistory,
+	readAgainstWritten,
 	shardBoard,
-	tokenChart,
-	tokensByRun,
+	workChart,
+	DEFAULT_WORK_UNIT,
 	type CacheDay,
 	type ContextBar,
 	type CostRate,
 	type LatencyRun,
-	type RunTokens
+	type ReadWriteSummary,
+	type RunWork
 } from '$lib/charts/machine';
 import { splitByMachine } from '$lib/charts/machine-split';
 import { machineCards, type MachineCards } from '$lib/charts/machine-cards';
@@ -95,7 +97,12 @@ export interface MachineWindow {
 	modelLoadSpan: FigureSpan;
 	/** What kinds of machine the platform gave us over this span, and how often. */
 	fleet: FleetView;
-	tokens: RunTokens[];
+	tokens: RunWork[];
+	/** Everything about the read-against-written comparison that is not a row:
+	 * the ratio each unit measured, which side it makes taller, and whether that
+	 * ratio passed the shared-axis limit. Scalars only - the rows are `tokens`,
+	 * and carrying them twice would put the same numbers in the document twice. */
+	work: ReadWriteSummary;
 	tokenTotals: { input: number; output: number; items: number };
 }
 
@@ -204,7 +211,10 @@ export async function load() {
 		const healthRows = health.filter(
 			(row) => (row.date ?? '') >= span.start && (row.date ?? '') <= span.end
 		);
-		const tokens = tokensByRun(healthRows);
+		// One call, both units, one row set. A row qualifies on its token counts
+		// and its durations are summed over exactly those rows, so the two grains
+		// can never cover different runs.
+		const { runs: tokens, ...work } = readAgainstWritten(healthRows);
 		// One line of text and not a chart. It reads 1 on every row the ledger
 		// holds, because `models.summarize.inference.n_parallel` is 1, and it earns
 		// a chart the day that knob moves.
@@ -272,6 +282,7 @@ export async function load() {
 				lost: lostInSpan
 			}),
 			tokens,
+			work,
 			tokenTotals: tokens.reduce(
 				(carry, run) => ({
 					input: carry.input + run.input,
@@ -380,8 +391,9 @@ export async function load() {
 		outputPerMillion: observability.cost_output_per_million
 	};
 	const cache = cacheChart(opening.cacheDays);
-	const inputPlot = tokenChart(opening.tokens, (run) => run.input, 'prompt tokens', '--chart-1');
-	const outputPlot = tokenChart(opening.tokens, (run) => run.output, 'written tokens', '--chart-4');
+	// Drawn at the unit the panel opens on, so the first paint and the radio that
+	// is already checked agree before a script has run.
+	const workPlot = workChart(opening.tokens, opening.work, DEFAULT_WORK_UNIT);
 
 	// Three cells that landed on 2026-08-30 and that no page had printed. The
 	// newest run's own reading; the span across the open window sits beside it on
@@ -446,10 +458,9 @@ export async function load() {
 		},
 		newestTail,
 		percentileSvg: await draw(percentilePlot, chart.height_px),
-		inputSvg: await draw(inputPlot, chart.height_px),
-		inputGrid: inputPlot.grid,
-		outputSvg: await draw(outputPlot, chart.height_px),
-		outputGrid: outputPlot.grid,
+		workSvg: await draw(workPlot, chart.height_px),
+		workGrid: workPlot.grid,
+		workUnit: DEFAULT_WORK_UNIT,
 		rate,
 		limits,
 		shardTimeoutMinutes: runConfig().shard_timeout_minutes,

@@ -399,9 +399,10 @@ borrowing the counters' newest, so the two are never silently conflated.
 Eight surfaces on Hardware declare `data-windowed`, and each one prints the day
 count in its own words: the run count at the top, the prompt cache, context
 headroom, what the platform has been giving us, the server panel's three spans,
-the latency plots, tokens per run and the cost panel. The refused-run list
-follows the window without declaring it, because a clean span renders nothing at
-all and a surface that comes and goes cannot report a day count.
+the latency plots, what a run reads against what it writes and the cost panel.
+The refused-run list follows the window without declaring it, because a clean
+span renders nothing at all and a surface that comes and goes cannot report a
+day count.
 
 ## What the Hardware route draws
 
@@ -431,7 +432,7 @@ published mirror carries no address, no title and no fetched text.
 | What the server did outside the model call | the newest run | How busy the machine was, and how long the weights took to open. |
 | How the tail moved | one plot a percentile, one mark a run | Whether the slow end of a run is moving. |
 | How long the newest run's tail was | the newest run | What the whole distribution of one run looks like at once. |
-| Tokens per run | one bar a run, twice | How much the model read and how much it wrote. |
+| What a run reads against what it writes | one group a run, in either unit | Which half of the model call the run actually spent itself on. |
 | What this would have cost somewhere else | the whole span | Whether the runner time was a good trade. |
 
 **A run is not a machine, and three of those panels exist because the route said

@@ -25,10 +25,14 @@ import {
 	percentileHistory,
 	pooledReadRate,
 	quantile,
+	readAgainstWritten,
 	shardBoard,
-	tokensByRun,
+	workChart,
+	workValues,
+	DEFAULT_WORK_UNIT,
 	PERCENTILES,
-	RUNNER_MEMORY_BYTES
+	RUNNER_MEMORY_BYTES,
+	SHARED_AXIS_LIMIT
 } from '../src/lib/charts/machine';
 import {
 	machineCounters,
@@ -631,25 +635,144 @@ test.describe('the percentile curve', () => {
 	});
 });
 
-test.describe('tokens, and what they would have cost somewhere else', () => {
+test.describe('what a run reads against what it writes', () => {
 	const health = [
-		healthRow({ item_id: 'x', input_tokens: 1_000_000, output_tokens: 200_000 }),
-		healthRow({ item_id: 'y', input_tokens: 500_000, output_tokens: 100_000 }),
-		healthRow({ item_id: 'z', run_id: '2026-09-04-2', input_tokens: 2000, output_tokens: 400 }),
+		healthRow({
+			item_id: 'x',
+			input_tokens: 1_000_000,
+			output_tokens: 200_000,
+			prefill_ms: 40_000,
+			decode_ms: 120_000
+		}),
+		healthRow({
+			item_id: 'y',
+			input_tokens: 500_000,
+			output_tokens: 100_000,
+			prefill_ms: 20_000,
+			decode_ms: 60_000
+		}),
+		healthRow({
+			item_id: 'z',
+			run_id: '2026-09-04-2',
+			input_tokens: 2000,
+			output_tokens: 400,
+			prefill_ms: 100,
+			decode_ms: 300
+		}),
 		healthRow({ item_id: 'w', input_tokens: 999, output_tokens: '' })
 	];
 
 	test('a run is the sum of the items that reported both counts', () => {
-		const runs = tokensByRun(health);
-		expect(runs.map((run) => run.runId)).toEqual(['2026-09-04-1', '2026-09-04-2']);
+		const view = readAgainstWritten(health);
+		expect(view.runs.map((run) => run.runId)).toEqual(['2026-09-04-1', '2026-09-04-2']);
 		// `w` reported no output, so it is not an item that wrote nothing.
-		expect(runs[0]).toEqual({
+		expect(view.runs[0]).toEqual({
 			runId: '2026-09-04-1',
 			date: '2026-09-04',
 			input: 1_500_000,
 			output: 300_000,
-			items: 2
+			prefillMs: 60_000,
+			decodeMs: 180_000,
+			items: 2,
+			timed: 2
 		});
+	});
+
+	test('both units are summed over one row set, and the row set is the token one', () => {
+		// The same two rows answer both grains. A row admitted by one and refused
+		// by the other would let the panel's two grains cover different runs.
+		const view = readAgainstWritten(health);
+		expect(view.runs.map((run) => run.items)).toEqual([2, 1]);
+		expect(view.runs.map((run) => run.timed)).toEqual([2, 1]);
+		// `w` is outside both: it is refused on its token counts, and its
+		// durations are never reached.
+		const untimed = readAgainstWritten([
+			...health,
+			healthRow({ item_id: 'v', input_tokens: 7, output_tokens: 3 })
+		]);
+		expect(untimed.runs[0].items).toBe(3);
+		expect(untimed.runs[0].timed).toBe(2);
+		// The extra row moves the count grain and leaves the clock alone, because
+		// it carried tokens and no clock.
+		expect(untimed.runs[0].input).toBe(1_500_007);
+		expect(untimed.runs[0].prefillMs).toBe(60_000);
+	});
+
+	test('the taller bar inverts between the two units, and that is the finding', () => {
+		// Reads outnumber writes 5 to 1; decode outlasts prefill 3 to 1.
+		const view = readAgainstWritten(health);
+		expect(view.taller.tokens).toBe('read');
+		expect(view.taller.seconds).toBe('written');
+		expect(view.ratio.tokens).toBeCloseTo(5.0, 12);
+		expect(view.ratio.seconds).toBeCloseTo(3.0, 12);
+	});
+
+	test('a run nobody timed draws no seconds and still draws its tokens', () => {
+		const view = readAgainstWritten([
+			healthRow({ item_id: 'x', input_tokens: 1000, output_tokens: 200 })
+		]);
+		expect(view.runs[0].input).toBe(1000);
+		expect(view.runs[0].prefillMs).toBeNull();
+		expect(view.runs[0].decodeMs).toBeNull();
+		// Zero timed runs is the seconds grain's absent state, and it is the
+		// figure the page branches on.
+		expect(view.timedRuns).toBe(0);
+		expect(view.ratio.seconds).toBeNull();
+		expect(view.taller.seconds).toBeNull();
+		expect(workChart(view.runs, view, 'seconds').empty).toBe(true);
+		expect(workChart(view.runs, view, 'tokens').empty).toBe(false);
+	});
+
+	test('milliseconds reach the drawing as seconds, and absence stays absence', () => {
+		const view = readAgainstWritten(health);
+		expect(workValues(view.runs[0], 'tokens')).toEqual({ read: 1_500_000, written: 300_000 });
+		expect(workValues(view.runs[0], 'seconds')).toEqual({ read: 60, written: 180 });
+		const untimed = readAgainstWritten([
+			healthRow({ item_id: 'x', input_tokens: 1000, output_tokens: 200 })
+		]);
+		expect(workValues(untimed.runs[0], 'seconds')).toEqual({ read: null, written: null });
+	});
+
+	test('one axis under the measured limit, and the smaller series takes a row past it', () => {
+		const view = readAgainstWritten(health);
+		expect(view.split.tokens).toBe(false);
+		expect(view.split.seconds).toBe(false);
+		const shared = workChart(view.runs, view, 'tokens').option;
+		expect(Array.isArray(shared.grid)).toBe(false);
+		expect(shared.series).toHaveLength(2);
+
+		// Past the limit the smaller side draws under 5 percent of a shared axis
+		// and reads as zero, so it gets its own row on the same categories.
+		const lopsided = readAgainstWritten([
+			healthRow({
+				item_id: 'x',
+				input_tokens: 1_000_000,
+				output_tokens: 1000,
+				prefill_ms: 10,
+				decode_ms: 20
+			})
+		]);
+		expect(lopsided.ratio.tokens).toBeGreaterThan(SHARED_AXIS_LIMIT);
+		expect(lopsided.split.tokens).toBe(true);
+		expect(lopsided.split.seconds).toBe(false);
+		const rows = workChart(lopsided.runs, lopsided, 'tokens').option;
+		expect(Array.isArray(rows.grid)).toBe(true);
+		expect((rows.grid as unknown[]).length).toBe(2);
+		// Larger on top, smaller below, on one set of categories.
+		expect((rows.series as { name: string }[]).map((series) => series.name)).toEqual([
+			'Read',
+			'Written'
+		]);
+		expect((rows.xAxis as { data: string[] }[])[0].data).toEqual(
+			(rows.xAxis as { data: string[] }[])[1].data
+		);
+	});
+
+	test('the unit the panel opens on is named once, and both readers take it from there', () => {
+		// The server draws this unit and the page checks its radio at it. Two
+		// literals would eventually be two units.
+		expect(['tokens', 'seconds']).toContain(DEFAULT_WORK_UNIT);
+		expect(DEFAULT_WORK_UNIT).toBe('seconds');
 	});
 
 	test('input and output are priced apart, at the rate per million', () => {

@@ -175,12 +175,12 @@ async function heldCount(page: Page): Promise<number> {
 	);
 }
 
-/** Where the prompt-tokens input chart sits among the engine hosts, or -1 where
- * the panel drew none. Recomputed after a window change, because the set of
- * drawn charts can change with the data a span holds. */
-async function inputTokenHost(page: Page): Promise<number> {
+/** Where the read-against-written chart sits among the engine hosts, or -1
+ * where the panel drew none. Recomputed after a window change, because the set
+ * of drawn charts can change with the data a span holds. */
+async function readWriteHost(page: Page): Promise<number> {
 	return page.evaluate(() => {
-		const host = document.querySelector('[data-token-chart="input"] [data-chart]');
+		const host = document.querySelector('[data-read-write-unit] [data-chart]');
 		return host === null ? -1 : [...document.querySelectorAll('[data-chart]')].indexOf(host);
 	});
 }
@@ -451,27 +451,27 @@ test('THE ORACLE: a window change redraws the chart in place, it does not remoun
 		'the window control never came alive'
 	).toBeEnabled({ timeout: DRAWN });
 
-	// Start at the widest span, where the prompt-tokens chart has the most runs to
-	// draw, and come to it so the engine has drawn it.
+	// Start at the widest span, where the read-against-written chart has the most
+	// runs to draw, and come to it so the engine has drawn it.
 	await setWindow(page, WIDEST);
-	let index = await inputTokenHost(page);
+	let index = await readWriteHost(page);
 	expect(
 		index,
-		'the prompt-tokens panel drew no engine chart at the widest span'
+		'the read-against-written panel drew no engine chart at the widest span'
 	).toBeGreaterThanOrEqual(0);
 	await comeTo(page, index);
 	const wide = await settledMarks(page, index);
-	expect(wide.length, 'the prompt-tokens chart drew nothing to compare').toBeGreaterThan(4);
+	expect(wide.length, 'the read-against-written chart drew nothing to compare').toBeGreaterThan(4);
 	const wideState = (await hostStates(page))[index];
 	const heldBefore = await heldCount(page);
 
 	// Move to the narrowest span. The chart is never torn down: it stays the same
 	// live instance and is handed the new span's option in place.
 	await setWindow(page, NARROWEST);
-	index = await inputTokenHost(page);
+	index = await readWriteHost(page);
 	expect(
 		index,
-		'the prompt-tokens panel drew no engine chart at the narrowest span'
+		'the read-against-written panel drew no engine chart at the narrowest span'
 	).toBeGreaterThanOrEqual(0);
 	await expect(
 		page.locator('[data-chart]').nth(index),

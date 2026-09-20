@@ -55,8 +55,12 @@
 		percentileChart,
 		percentileColumns,
 		seconds,
-		tokenChart,
-		PERCENTILES
+		workChart,
+		workValues,
+		DEFAULT_WORK_UNIT,
+		PERCENTILES,
+		SHARED_AXIS_LIMIT,
+		type WorkUnit
 	} from '$lib/charts/machine';
 	import { grouped } from '$lib/charts/series';
 	import {
@@ -134,12 +138,22 @@
 	const clocksOption = $derived(clocksChart(data.clocks.pairs).option);
 	const newestCurve = $derived(data.newestTail === null ? [] : [curveOf(data.newestTail)]);
 	const percentileOption = $derived(percentileChart(newestCurve).option);
-	const inputOption = $derived(
-		tokenChart(view.tokens, (run) => run.input, 'prompt tokens', '--chart-1').option
-	);
-	const outputOption = $derived(
-		tokenChart(view.tokens, (run) => run.output, 'written tokens', '--chart-4').option
-	);
+	// The unit the read-against-written panel opens on. The server drew this one,
+	// so the first paint and the radio that is already checked agree; picking the
+	// other redraws the same row set in the other currency.
+	let workUnit = $state<WorkUnit>(DEFAULT_WORK_UNIT);
+	const WORK_UNITS: { value: WorkUnit; text: string }[] = [
+		{ value: 'tokens', text: 'Tokens' },
+		{ value: 'seconds', text: 'Seconds' }
+	];
+	const workOption = $derived(workChart(view.tokens, view.work, workUnit).option);
+	/** Absent where the open unit has nothing to draw. The seconds grain goes
+	 * absent on its own while the count grain still draws: a run nobody timed did
+	 * not take no time. */
+	const workAbsent = $derived(workUnit === 'seconds' && view.work.timedRuns === 0);
+	/** The measured ratio at one precision, so the figure the panel prints and the
+	 * figure it stamps can never be two different readings of one measurement. */
+	const workRatio = $derived(view.work.ratio[workUnit]?.toFixed(2) ?? null);
 
 	// The strips under every chart that has a column to land on. Built here from
 	// the same arrays the options are, so a column the strip prints and a column
@@ -152,36 +166,41 @@
 	/** The insets `percentileChart` draws its grid at. The strip's column centres
 	 * are computed from them, so a pointer and the strip agree. */
 	const PERCENTILE_GRID = { left: 60, right: 44 };
-	/** One series each, and each still earns a strip: the axis carries the run's
-		* day and the strip carries the run itself, so the bar a pointer is on is
-		* the one place a run id and its count can be read together. These read the
-		* open span, because the bars do. */
+	/** One strip for one panel: the axis carries the run's day and the strip
+		* carries the run itself, so the group a pointer is on is the one place a
+		* run id and both its figures can be read together. It reads the open span,
+		* because the bars do, and the open unit, because 19D7 forbids the tooltip
+		* being the only carrier of a fact the panel is about. */
 	const tokenRuns = $derived(view.tokens.map((run) => run.runId));
-	const inputStrip = $derived(
+	const workNumber = (value: number | null) =>
+		value === null ? '-' : workUnit === 'tokens' ? grouped(value) : `${value.toFixed(1)}s`;
+	const workStrip = $derived(
 		columnStrip(tokenRuns, [
 			{
-				label: 'Prompt tokens',
+				label: 'Read',
 				colour: 'var(--chart-1)',
-				value: (index) => grouped(view.tokens[index]?.input ?? 0)
+				value: (index) =>
+					workNumber(
+						view.tokens[index] === undefined ? null : workValues(view.tokens[index], workUnit).read
+					)
 			},
 			{
-				label: 'Items that reported both counts',
-				colour: '',
-				value: (index) => grouped(view.tokens[index]?.items ?? 0)
-			}
-		])
-	);
-	const outputStrip = $derived(
-		columnStrip(tokenRuns, [
-			{
-				label: 'Written tokens',
+				label: 'Written',
 				colour: 'var(--chart-4)',
-				value: (index) => grouped(view.tokens[index]?.output ?? 0)
+				value: (index) =>
+					workNumber(
+						view.tokens[index] === undefined
+							? null
+							: workValues(view.tokens[index], workUnit).written
+					)
 			},
 			{
-				label: 'Items that reported both counts',
+				label: workUnit === 'tokens' ? 'Items counted' : 'Items timed',
 				colour: '',
-				value: (index) => grouped(view.tokens[index]?.items ?? 0)
+				value: (index) =>
+					grouped(
+						(workUnit === 'tokens' ? view.tokens[index]?.items : view.tokens[index]?.timed) ?? 0
+					)
 			}
 		])
 	);
@@ -1395,53 +1414,82 @@
 		data-model-rule-none="one bar a run, so there is no day edge to draw between"
 	>
 		<Panel
-			title="Tokens per run"
-			note="Prompt tokens and written tokens, one bar per run over the last {windowDays} days. They are different quantities with different prices, so each carries its own axis."
+			title="What a run reads against what it writes"
+			note="One group per run over the last {windowDays} days, a read bar beside a written bar on one axis. The switch changes the unit: the tokens each half counted, or the seconds the model server spent on it."
 		>
 			{#if view.tokens.length === 0}
 				<p class="empty" data-machine-panel-empty="tokens">
 					No run in these {view.days} days recorded both a prompt count and a written count.
 				</p>
 			{:else}
-				<div class="pair">
-					<figure class="pane" data-token-chart="input">
-						<figcaption>Prompt tokens</figcaption>
+				<div
+					data-read-write-unit={workUnit}
+					data-read-write-runs={view.tokens.length}
+					data-read-write-timed-runs={view.work.timedRuns}
+					data-read-write-taller={view.work.taller[workUnit] ?? ''}
+					data-read-write-ratio={workRatio ?? ''}
+					data-read-write-split={view.work.split[workUnit] ? 'yes' : 'no'}
+					data-panel-question="is it working"
+				>
+					<!-- Top right of its own panel, and radio inputs: two named states a
+					     reader can see both of beat one state and a verb. -->
+					<div class="units">
+						<ShapeSwitch
+							bind:shape={workUnit}
+							name="work-unit"
+							label="Which unit to count in"
+							options={WORK_UNITS}
+						/>
+					</div>
+
+					{#if workAbsent}
+						<p class="empty" data-work-absent="seconds">
+							No run in these {view.days} days timed the model call, so there are no seconds to draw.
+							That is a measurement that did not survive, not a run that took no time. Count the
+							tokens instead.
+						</p>
+					{:else}
 						<Chart
-							svg={data.inputSvg ?? ''}
-							option={inputOption}
+							svg={data.workSvg ?? ''}
+							option={workOption}
 							width={data.chart.width_px}
 							height={data.chart.height_px}
-							label="Prompt tokens each run sent to the model over {view.days} days. One bar is one run."
-							columns={inputStrip}
-							readoutName="tokens-input"
+							label="What each run read beside what it wrote, in {workUnit}, over {view.days} days. One group is one run."
+							columns={workStrip}
+							readoutName="read-against-written"
 							readoutMaxShare={data.chart.readout_max_share}
-							grid={data.inputGrid}
+							grid={data.workGrid}
 							restingNote=", the last run"
 							hint="Point at a run to read it. Left and Right step through them, Escape returns to the last."
 						/>
-					</figure>
-					<figure class="pane" data-token-chart="output">
-						<figcaption>Written tokens</figcaption>
-						<Chart
-							svg={data.outputSvg ?? ''}
-							option={outputOption}
-							width={data.chart.width_px}
-							height={data.chart.height_px}
-							label="Tokens each run's answers were made of over {view.days} days. One bar is one run."
-							columns={outputStrip}
-							readoutName="tokens-output"
-							readoutMaxShare={data.chart.readout_max_share}
-							grid={data.outputGrid}
-							restingNote=", the last run"
-							hint="Point at a run to read it. Left and Right step through them, Escape returns to the last."
-						/>
-					</figure>
+					{/if}
+
+					<p class="reads" data-token-totals>
+						{grouped(view.tokenTotals.input)} tokens read and {grouped(view.tokenTotals.output)}
+						written, over {view.tokens.length}
+						{view.tokens.length === 1 ? 'run' : 'runs'} and {grouped(view.tokenTotals.items)} items.
+						{#if view.work.timedRuns < view.tokens.length}
+							{view.work.timedRuns} of those
+							{view.work.timedRuns === 1 ? 'run' : 'runs'} timed the model call.
+						{/if}
+					</p>
+					<!-- 19D4's threshold is a measurement, so the panel prints the one it
+					     took rather than asserting the shape was safe. -->
+					<p class="reads" data-read-write-measured>
+						{#if workRatio === null}
+							Nothing in {workUnit} to divide over this span, so the two bars carry no ratio.
+						{:else}
+							Measured over these runs: {workRatio}
+							{workUnit}
+							{view.work.taller[workUnit] === 'read' ? 'read' : 'written'} for every one
+							{view.work.taller[workUnit] === 'read' ? 'written' : 'read'}.
+							{#if view.work.split[workUnit]}
+								Past {SHARED_AXIS_LIMIT} to one the smaller side draws under 5 percent of a shared
+								axis and reads as zero, so it takes its own row here.
+							{/if}
+						{/if}
+					</p>
 				</div>
-				<p class="reads" data-token-totals>
-					{grouped(view.tokenTotals.input)} prompt tokens and {grouped(view.tokenTotals.output)}
-					written, over {view.tokens.length}
-					{view.tokens.length === 1 ? 'run' : 'runs'} and {grouped(view.tokenTotals.items)} items.
-				</p>
 			{/if}
 		</Panel>
 	</div>
@@ -1601,22 +1649,9 @@
 		color: var(--color-text-tertiary);
 	}
 
-	.pair {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
-		gap: var(--space-5);
-	}
-
-	.pane {
-		margin: 0;
-		min-inline-size: 0;
-	}
-
-	.pane figcaption {
-		font-size: var(--text-xs);
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-		color: var(--color-text-tertiary);
+	.units {
+		display: flex;
+		justify-content: flex-end;
 	}
 
 	.cost {
