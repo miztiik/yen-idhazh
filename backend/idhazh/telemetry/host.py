@@ -89,9 +89,11 @@ MEMINFO_KEYS: Final = ("MemTotal", "MemAvailable", "Cached", "SwapFree", "SwapTo
 PROC: Final = Path("/proc")
 
 #: The two `/proc/<pid>/status` lines this project reads, spelled the kernel's
-#: way. `VmRSS` is what the process holds now and `VmHWM` is the most it has
-#: ever held. One open answers both, because two opens would describe two
-#: instants.
+#: way. `VmRSS` is what the process holds now. `VmHWM` is the larger of that and
+#: a mark the kernel refreshes only when the process itself gives memory back -
+#: so it is a whole-life figure that a reclaimed page can still pull DOWN, and
+#: not a peak that only rises (`docs/reference/host-metrics.md`). One open
+#: answers both, because two opens would describe two instants.
 STATUS_KEYS: Final = ("VmRSS", "VmHWM")
 
 #: The kernel's own high-water mark for the whole job. Measured absent on every
@@ -139,7 +141,7 @@ def _kb_keys(text: str | None, keys: tuple[str, ...]) -> dict[str, int | None]:
 
 
 def status_bytes(pid: int | None) -> dict[str, int | None]:
-    """What one process holds now and the most it has held, from one open.
+    """What one process holds now and its high-water mark, from one open.
 
     Two lines of one file, read together because they have to describe one
     instant - the same reason `meminfo_bytes` below takes its five keys in one

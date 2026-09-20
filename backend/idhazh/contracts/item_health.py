@@ -360,6 +360,11 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-20T15:30",
+            change="llama_rss_peak_bytes says what it measures: a whole-life mark that can fall.",
+            why="It read as a per-item peak that cannot fall, which is neither thing it is.",
+        ),
+        ChangelogEntry(
             version="2026-09-17T18:00",
             change="Six os_ columns: what the machine had, not only what a process held.",
             why="An RSS mark counts evictable weight pages, so it cannot answer headroom.",
@@ -373,11 +378,6 @@ class ItemHealthRow(Contract):
             version="2026-09-17",
             change="job names the workflow job whose machine took this row's readings.",
             why="Shard alone does not reach the host record: more than one job spells shard 0.",
-        ),
-        ChangelogEntry(
-            version="2026-09-16T12:30",
-            change="The three slot columns carry the item's first call.",
-            why="All three were declared with no producer; the pinned build reports them.",
         ),
         ChangelogEntry(
             version="2026-08-23",
@@ -850,7 +850,17 @@ class ItemHealthRow(Contract):
         default=None, ge=0, description="Resident memory of the model server when the item ended."
     )
     llama_rss_peak_bytes: int | None = Field(
-        default=None, ge=0, description="Peak resident memory of the model server over the item."
+        default=None,
+        ge=0,
+        description=(
+            "The model server's high-water resident memory, as `VmHWM` in "
+            "`/proc/<pid>/status` reported it - the higher of one reading when the item "
+            "opened and one when it closed. It covers the server's whole life up to that "
+            "moment, not this item. And it can read lower than an earlier item's: the "
+            "kernel prints the larger of the current resident set and a stored mark it "
+            "refreshes only when the process itself gives memory back, so a page the "
+            "kernel reclaims takes the figure down with it."
+        ),
     )
     python_rss_bytes: int | None = Field(
         default=None, ge=0, description="Resident memory of the worker process when the item ended."

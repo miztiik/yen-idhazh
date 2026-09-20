@@ -394,7 +394,7 @@ export interface ItemHealthRow {
 	/** Resident memory of the model server when the item ended. */
 	llama_rss_bytes?: number | null;
 
-	/** Peak resident memory of the model server over the item. */
+	/** The model server's high-water resident memory, as `VmHWM` in `/proc/<pid>/status` reported it - the higher of one reading when the item opened and one when it closed. It covers the server's whole life up to that moment, not this item. And it can read lower than an earlier item's: the kernel prints the larger of the current resident set and a stored mark it refreshes only when the process itself gives memory back, so a page the kernel reclaims takes the figure down with it. */
 	llama_rss_peak_bytes?: number | null;
 
 	/** Resident memory of the worker process when the item ended. */
