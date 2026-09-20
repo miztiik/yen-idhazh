@@ -14,7 +14,9 @@ whether the readings are right, and whether two rows of one shard can disagree.
 
 from __future__ import annotations
 
+import os
 import threading
+from collections import Counter
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
@@ -310,6 +312,101 @@ def test_a_process_table_this_machine_will_not_open_reports_nothing(
     monkeypatch.setattr(host, "PROC", tmp_path / "absent")
 
     assert host.llama_server_pid() is None
+
+
+#: One process's memory, at values the test chooses. `VmPeak` is the VIRTUAL
+#: high-water mark - a different fact that shares a prefix with `VmHWM` - so a
+#: reader matching on `Vm` rather than on the whole key is caught here.
+A_SERVER_RSS_KB = 12_570_364
+A_SERVER_PEAK_KB = 12_884_901
+A_VIRTUAL_PEAK_KB = 23_456_789
+OUR_OWN_RSS_KB = 1_530_112
+
+
+def proc_status(name: str, *, rss_kb: int, peak_kb: int) -> str:
+    """One `/proc/<pid>/status`, in the kernel's own layout and its own unit.
+
+    Written here rather than read off the box: the file does not exist on the
+    machines this suite runs on. The neighbouring lines are real ones, so the
+    two that are read have to be found among the rest rather than on their own.
+    """
+    return (
+        f"Name:\t{name}\n"
+        "State:\tS (sleeping)\n"
+        f"VmPeak:\t{A_VIRTUAL_PEAK_KB} kB\n"
+        f"VmHWM:\t{peak_kb} kB\n"
+        f"VmRSS:\t{rss_kb} kB\n"
+        f"RssAnon:\t{rss_kb - 2048} kB\n"
+        "Threads:\t9\n"
+    )
+
+
+def test_one_open_a_tick_answers_both_of_a_processs_status_lines(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    """Two lines of one file describe one instant, so one open has to answer both.
+
+    **The Oracle is the count, not the values.** A second open returns the same
+    two numbers on any quiet machine, so reading the values back would pass
+    whether the file was opened once or twice; what can fail is how many times
+    it was opened. One open per process per tick, and two processes are read, so
+    a tick opens two status files and never three.
+
+    The values are asserted underneath only so that one open recovering nothing
+    from the file cannot pass. **What this cannot settle:** nothing material -
+    the values are unchanged by construction.
+    """
+    # One more than our own, so the two processes are two files whatever pid the
+    # test worker drew.
+    server_pid = os.getpid() + 1
+    for pid, status in (
+        (server_pid, proc_status("llama-server", rss_kb=A_SERVER_RSS_KB, peak_kb=A_SERVER_PEAK_KB)),
+        (os.getpid(), proc_status("python3", rss_kb=OUR_OWN_RSS_KB, peak_kb=OUR_OWN_RSS_KB)),
+    ):
+        entry = tmp_path / str(pid)
+        entry.mkdir()
+        (entry / "status").write_text(status, encoding="utf-8")
+    monkeypatch.setattr(host, "PROC", tmp_path)
+    # A spy over the module's one reader, so what is counted is a real open of a
+    # real file rather than a stand-in that returned text (Guardrail #7).
+    reads_a_file = host._text
+    opened: list[Path] = []
+
+    def counted(path: Path) -> str | None:
+        opened.append(path)
+        return reads_a_file(path)
+
+    monkeypatch.setattr(host, "_text", counted)
+
+    # A zero interval starts no sampling thread, so the ticks are the two ends.
+    cells = host.Watch(interval_s=0, server_pid=server_pid).close()
+
+    ticks = 2
+    opens = Counter(opened)
+    assert opens[tmp_path / str(server_pid) / "status"] == ticks
+    assert opens[tmp_path / str(os.getpid()) / "status"] == ticks
+    assert max(opens.values()) <= ticks, f"a file was opened twice in one tick: {opens}"
+    assert cells.llama_rss_bytes == A_SERVER_RSS_KB * 1024
+    assert cells.llama_rss_peak_bytes == A_SERVER_PEAK_KB * 1024
+    assert cells.python_rss_bytes == OUR_OWN_RSS_KB * 1024
+
+
+def test_a_status_line_this_project_does_not_read_is_ignored(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    """Two keys out of about sixty, matched whole, and a key the file lacks is unknown.
+
+    A pid nobody named and a process this machine will not open are the same
+    answer as a file with neither line in it: two unknowns, never two zeros.
+    """
+    entry = tmp_path / "9931"
+    entry.mkdir()
+    (entry / "status").write_text(f"VmPeak:\t{A_VIRTUAL_PEAK_KB} kB\n", encoding="utf-8")
+    monkeypatch.setattr(host, "PROC", tmp_path)
+
+    assert host.status_bytes(9931) == dict.fromkeys(host.STATUS_KEYS)
+    assert host.status_bytes(None) == dict.fromkeys(host.STATUS_KEYS)
+    assert host.status_bytes(4242) == dict.fromkeys(host.STATUS_KEYS)
 
 
 def _aggregate_cpu_line(text: str) -> list[int]:

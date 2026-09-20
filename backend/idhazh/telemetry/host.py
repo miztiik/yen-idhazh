@@ -88,6 +88,12 @@ MEMINFO_KEYS: Final = ("MemTotal", "MemAvailable", "Cached", "SwapFree", "SwapTo
 #: Where a process reports its own resident and peak-resident memory.
 PROC: Final = Path("/proc")
 
+#: The two `/proc/<pid>/status` lines this project reads, spelled the kernel's
+#: way. `VmRSS` is what the process holds now and `VmHWM` is the most it has
+#: ever held. One open answers both, because two opens would describe two
+#: instants.
+STATUS_KEYS: Final = ("VmRSS", "VmHWM")
+
 #: The kernel's own high-water mark for the whole job. Measured absent on every
 #: GitHub-hosted runner this project has probed, which is why it degrades rather
 #: than failing - and why it is worth reading anyway: it is the number the runner
@@ -106,20 +112,46 @@ def _text(path: Path) -> str | None:
         return None
 
 
-def _status_kb(pid: int | None, key: str) -> int | None:
-    """One `VmRSS:`- or `VmHWM:`-shaped line of `/proc/<pid>/status`, in bytes."""
-    if pid is None:
-        return None
-    text = _text(PROC / str(pid) / "status")
+def _kb_keys(text: str | None, keys: tuple[str, ...]) -> dict[str, int | None]:
+    """`Key:<space><count> kB` lines, by key, in bytes.
+
+    `/proc/meminfo` and `/proc/<pid>/status` both print that layout, so one
+    parser serves both rather than one per reader (Guardrail #5). The kernel
+    reports the counts in kilobytes, so the conversion happens here and not at
+    each caller.
+
+    A key the text does not carry stays unknown, and unknown is not zero
+    (CLAUDE.md section 1a). The key has to match whole: `VmHWM` and `VmPeak` are
+    two different facts that share a prefix.
+    """
+    found: dict[str, int | None] = dict.fromkeys(keys)
     if text is None:
-        return None
+        return found
     for line in text.splitlines():
-        name, found, rest = line.partition(":")
-        if found and name.strip() == key:
-            cells = rest.split()
-            if cells and cells[0].isdigit():
-                return int(cells[0]) * _KB
-    return None
+        name, marked, rest = line.partition(":")
+        key = name.strip()
+        if not marked or key not in found:
+            continue
+        cells = rest.split()
+        if cells and cells[0].isdigit():
+            found[key] = int(cells[0]) * _KB
+    return found
+
+
+def status_bytes(pid: int | None) -> dict[str, int | None]:
+    """What one process holds now and the most it has held, from one open.
+
+    Two lines of one file, read together because they have to describe one
+    instant - the same reason `meminfo_bytes` below takes its five keys in one
+    read.
+
+    A pid nobody named, or a process this machine will not open, answers two
+    unknowns and never raises. That is the ordinary path on every machine this
+    project is written on.
+    """
+    if pid is None:
+        return dict.fromkeys(STATUS_KEYS)
+    return _kb_keys(_text(PROC / str(pid) / "status"), STATUS_KEYS)
 
 
 def load_1m() -> float | None:
@@ -189,9 +221,7 @@ def cpu_busy_pct_between(at_start: str | None, at_end: str | None) -> float | No
 def meminfo_bytes(reported: str | None = None) -> dict[str, int | None]:
     """The five `/proc/meminfo` lines this project reads, in bytes.
 
-    One open for five readings, because they have to describe one instant. The
-    kernel reports these in kilobytes, so the conversion is here rather than at
-    each reader.
+    One open for five readings, because they have to describe one instant.
 
     A machine with no `/proc/meminfo` answers five unknowns and never raises,
     which is what every machine this project is written on does. A key the file
@@ -200,18 +230,7 @@ def meminfo_bytes(reported: str | None = None) -> dict[str, int | None]:
     and that is a different fact from a box that was never asked.
     """
     text = _text(MEMINFO) if reported is None else reported
-    found: dict[str, int | None] = dict.fromkeys(MEMINFO_KEYS)
-    if text is None:
-        return found
-    for line in text.splitlines():
-        name, marked, rest = line.partition(":")
-        key = name.strip()
-        if not marked or key not in found:
-            continue
-        cells = rest.split()
-        if cells and cells[0].isdigit():
-            found[key] = int(cells[0]) * _KB
-    return found
+    return _kb_keys(text, MEMINFO_KEYS)
 
 
 def cgroup_peak_bytes() -> int | None:
@@ -373,12 +392,14 @@ class HostReading:
 def read_now(*, server_pid: int | None = None) -> HostReading:
     """Every point-in-time reading, taken together so they describe one instant."""
     machine = meminfo_bytes()
+    server = status_bytes(server_pid)
+    ours = status_bytes(os.getpid())
     return HostReading(
         cpu_stat=_text(PROC_STAT),
         load_1m=load_1m(),
-        llama_rss_bytes=_status_kb(server_pid, "VmRSS"),
-        llama_rss_peak_bytes=_status_kb(server_pid, "VmHWM"),
-        python_rss_bytes=_status_kb(os.getpid(), "VmRSS"),
+        llama_rss_bytes=server["VmRSS"],
+        llama_rss_peak_bytes=server["VmHWM"],
+        python_rss_bytes=ours["VmRSS"],
         mem_available_bytes=machine["MemAvailable"],
         mem_total_bytes=machine["MemTotal"],
         mem_cached_bytes=machine["Cached"],
