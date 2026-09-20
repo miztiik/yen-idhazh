@@ -93,7 +93,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 16 | Docs, and the orphan sweep | all | G | PENDING | - | - | - |
 | 18 | Chart-craft doctrine - the thirteen rules, written once | - | H | DONE | p33r18 | #863 | - |
 | 28 | Pipeline panels: the share track goes, Extraction gains a trend | 18 | H | DONE | p33h28 | #867 | - |
-| 19 | The shard board | 11, 18 | I | PENDING | - | - | - |
+| 19 | The shard board | 11, 18 | I | IN-FLIGHT | p33i19 | - | - |
 | 21 | Memory and load, three grains - ABSORBS Row #14 | 5, 7, 15, 19 | I | PENDING | - | - | - |
 | 23 | What a run reads against what it writes, in tokens and in seconds | 21 | I | PENDING | - | - | - |
 | 25 | Outside the model call, as range marks | 23 | I | PENDING | - | - | - |

@@ -31,6 +31,8 @@ export interface ShardReading {
 	serverPromptSeconds?: number | '';
 	jobSeconds?: number | '';
 	cpuModel?: string;
+	/** Cores the host let the job see. What a load reading is read against. */
+	cores?: number | '';
 	modelLoadMs?: number | '';
 	/** Prompt tokens the item reused instead of reading. */
 	cachedTokens?: number | '';
@@ -41,6 +43,13 @@ export interface ShardReading {
 	/** Prompt plus answer, which is what the context ceiling is a share of. */
 	longestSequence?: number | '';
 	cpuBusyPct?: number | '';
+	/** The busiest the processor got over the item's model window. */
+	cpuBusyMax?: number | '';
+	/** The one-minute load when the item ended. A queue once it passes `cores`. */
+	load?: number | '';
+	/** Swap left when the item ended, and swap the host has. */
+	swapFree?: number | '';
+	swapTotal?: number | '';
 	peakRssBytes?: number | '';
 	/** Seconds the item ledger charged to read. The other clock. */
 	ledgerReadSeconds?: number | '';
@@ -65,6 +74,7 @@ export function hostRow(reading: ShardReading): Record<string, string> {
 		job: reading.job ?? '',
 		shard: cell(reading.shard ?? 0),
 		cpu_model: cell(reading.cpuModel),
+		cores: cell(reading.cores),
 		model_load_ms: cell(reading.modelLoadMs),
 		job_seconds: cell(reading.jobSeconds),
 		server_prompt_tokens: cell(reading.serverPromptTokens),
@@ -96,6 +106,10 @@ export function itemRow(reading: ShardReading): Record<string, string> {
 			typeof reading.ledgerReadSeconds === 'number' ? String(reading.ledgerReadSeconds * 1000) : '',
 		decode_ms: typeof reading.writeSeconds === 'number' ? String(reading.writeSeconds * 1000) : '',
 		cpu_busy_pct: cell(reading.cpuBusyPct),
+		cpu_busy_max: cell(reading.cpuBusyMax),
+		load_1m: cell(reading.load),
+		os_swap_free_bytes: cell(reading.swapFree),
+		os_swap_total_bytes: cell(reading.swapTotal),
 		llama_rss_peak_bytes: cell(reading.peakRssBytes),
 		cpu_model: cell(reading.itemCpuModel)
 	};
