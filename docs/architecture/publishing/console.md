@@ -429,7 +429,7 @@ published mirror carries no address, no title and no fetched text.
 | Prompt cache | one column a day | Whether a bigger cache would save wall clock. |
 | Context headroom | one mark a run | Whether raising the truncation cap is even possible. |
 | The two clocks, compared | one bar a shard | Whether the day's rates can be trusted at all. |
-| What the server did outside the model call | the newest run | How busy the machine was, and how long the weights took to open. |
+| What the server did outside the model call | one track a figure, over the window | How busy the machine was, and how long the weights took to open, each against the window that measured it. |
 | How the tail moved | one plot a percentile, one mark a run | Whether the slow end of a run is moving. |
 | How long the newest run's tail was | the newest run | What the whole distribution of one run looks like at once. |
 | What a run reads against what it writes | one group a run, in either unit | Which half of the model call the run actually spent itself on. |

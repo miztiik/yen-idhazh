@@ -96,7 +96,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 19 | The shard board | 11, 18 | I | IN-FLIGHT | p33i19 | - | - |
 | 21 | Memory and load, three grains - ABSORBS Row #14 | 5, 7, 15, 19 | I | IN-FLIGHT | p33i21 | - | - |
 | 23 | What a run reads against what it writes, in tokens and in seconds | 21 | I | IN-FLIGHT | p33i23 | - | - |
-| 25 | Outside the model call, as range marks | 23 | I | PENDING | - | - | - |
+| 25 | Outside the model call, as range marks | 23 | I | IN-FLIGHT | p33i25 | - | - |
 | 22 | Platform mix as grouped bars | 25 | I | PENDING | - | - | - |
 | 24 | Counterfactual cost gets a shape | 22 | I | PENDING | - | - | - |
 | 20 | Timing panels merge and move to Pipeline | 24 | I | PENDING | - | - | - |

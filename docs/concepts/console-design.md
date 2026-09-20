@@ -831,8 +831,8 @@ half-quote, and a rule whose reason has stopped holding is a rule to change.
   that never carried it. A key for an absent series is a claim the data does not
   support.
 - **A figure with a span is drawn as a range, never written as two sentences.**
-  Value, low, high, one track. Four figures that each have a span, each written
-  as prose, is four sentences no two of which can be compared.
+  Value, low, high, one track. Figures that each have a span, each written as
+  prose, are sentences no two of which can be compared.
 - **A panel whose title asks a trend question draws a time axis.** A ranked list
   answers "which is biggest", never "what is changing". The title and the shape
   have to agree, or one of them is wrong.
@@ -905,6 +905,52 @@ item, which is a different grain and an instrument nobody has built - and the
 panel says it cannot answer it rather than leaving the reader to assume it did.
 
 Authority: Susan, 2026-09-17.
+
+## A reading and the window it is read against are one track
+
+A **span track** is a band and an upright. The band runs from the lowest reading
+the window holds to the highest, and the upright stands where the newest run
+read. Whether that run was unusual is then one look, rather than three numbers a
+reader converts and subtracts.
+
+**Why it exists: a sentence cannot be compared with the sentence beside it.**
+`What the server did outside the model call` on `/console/machine/` carries a
+processor share and a weight-opening time. Each was a reading followed by its
+span in prose, in a different unit from its neighbour and with its ends buried
+mid-paragraph, so a reader who wanted to know which of the two was the odd one
+this run had to do the conversion by hand. Two tracks make that comparison free,
+and the shape is the one the memory panel's window grain already draws - so this
+is one shape reused rather than a second shape learned. Susan, 2026-09-20.
+
+**One shape, two drawings, stated rather than hidden.** The memory panel drew
+this shape first, in its own markup. The maths now lives once, in
+`frontend/src/lib/charts/span-track.ts`, and the host panel draws from it; the
+memory panel has not been repointed. **What that costs:** two pieces of markup
+that have to agree by eye, so a change to the band or the upright is a change in
+two places until the memory panel becomes a caller.
+
+**What the reader loses, named.** A span track says nothing about the shape
+between its ends, and nothing about when in the window each end fell: a figure
+that drifted steadily and one that jumped once and held draw identically. That
+is a question for a series over runs, which is a different grain - `How the tail
+moved` on the same route is the panel built for it, for a different figure.
+
+**An absent span is said, never drawn.** Where no run in the window recorded the
+figure the panel says so in words and draws nothing, because a band of no length
+would report a window that read the same thing every day. Where the window has
+both ends but they sit closer than one pixel at `console.chart_width`, the span
+is printed and the band becomes a mark - the eighth rule above, applied to a
+band rather than to a split. A run that recorded nothing keeps the band it
+cannot be placed on: the window still measured something, and the missing
+upright is the fact.
+
+**A figure with no span is not given a track.** Parallel slots sits in that same
+panel as one line of text, because it is a count of what a server offered and
+has no low-to-high window to place a run inside. The tenth rule binds a figure
+with a span; a shape reused where it does not fit is a shape a reader stops
+trusting.
+
+Authority: Susan, 2026-09-20.
 
 ## The two rates on a shard row are measured before they are drawn
 

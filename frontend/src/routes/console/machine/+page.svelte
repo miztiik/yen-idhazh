@@ -38,6 +38,7 @@
 	import RateControl from '$lib/components/RateControl.svelte';
 	import ShapeSwitch from '$lib/components/ShapeSwitch.svelte';
 	import ShardBoard from '$lib/components/ShardBoard.svelte';
+	import HostFigure from './HostFigure.svelte';
 	import SpanPanel from './SpanPanel.svelte';
 	import RunTimelinePanel from './RunTimelinePanel.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
@@ -62,6 +63,7 @@
 		SHARED_AXIS_LIMIT,
 		type WorkUnit
 	} from '$lib/charts/machine';
+	import { spanTrack } from '$lib/charts/span-track';
 	import { grouped } from '$lib/charts/series';
 	import {
 		chartWidth,
@@ -121,6 +123,25 @@
 	 * a stored preset the config no longer offers cannot blank the page. */
 	const view = $derived(
 		data.windows[String(windowDays)] ?? data.windows[String(data.console.default_window_days)]
+	);
+
+	/** The two figures the server records outside the model call that have both a
+	 * reading and a window to read it against. One shape for both, so the reader
+	 * compares them by looking rather than by converting two sentences.
+	 *
+	 * A processor share is read against 100 because that is the comparison - a
+	 * shard that idled is the gap. Opening the weights has no ceiling, so its
+	 * track ends at the slowest thing drawn on it. */
+	const cpuBusyTrack = $derived(
+		spanTrack(data.host.cpuBusy?.value ?? null, view.cpuBusySpan, {
+			ceiling: 100,
+			width: data.chart.width_px
+		})
+	);
+	const modelLoadTrack = $derived(
+		spanTrack(data.host.modelLoad?.value ?? null, view.modelLoadSpan, {
+			width: data.chart.width_px
+		})
 	);
 
 	// The option a live chart hydrates from is rebuilt here rather than handed
@@ -1086,47 +1107,33 @@
 	<div data-windowed="machine-host" data-window-days={windowDays}>
 		<Panel
 			title="What the server did outside the model call"
-			note="What the machine and the server spent outside the model call itself. Each figure carries its ceiling: a counter without one is not a measurement. Each also carries its span over the last {windowDays} days, which is what says whether the newest run was unusual."
+			note="What the machine and the server spent outside the model call itself. Each figure carries its ceiling: a counter without one is not a measurement. A figure with a span is one track - the band is what the last {windowDays} days read, the upright is this run's own mark on it, and that is what says whether the newest run was unusual."
 		>
 			<dl class="host">
-				<div data-host="cpu-busy" data-host-value={data.host.cpuBusy?.value ?? ''}>
-					<dt>Least busy shard</dt>
-					<dd>
-						{#if data.host.cpuBusy === null || data.host.cpuBusy.value === null}
-							<span class="absent">Not recorded on this run.</span>
-						{:else}
-							{data.host.cpuBusy.value.toFixed(2)}% of every processor second
-							<span class="unit">
-								Near 100 is the expected reading, so the gap is the share of that shard's job spent
-								waiting rather than computing. Over these {view.days} days the lowest reading ran
-								{(view.cpuBusySpan.low ?? 0).toFixed(2)}% to
-								{(view.cpuBusySpan.high ?? 0).toFixed(2)}%, on
-								{view.cpuBusySpan.from} of {view.cpuBusySpan.outOf} runs.
-							</span>
-						{/if}
-					</dd>
-				</div>
+				<!-- Two figures, one shape. Each was a reading and a span written as
+				     prose, which a reader can follow but cannot compare: a track puts
+				     the run's own mark on the window that measured it. -->
+				<HostFigure
+					name="cpu-busy"
+					label="Least busy shard"
+					track={cpuBusyTrack}
+					format={(pct) => `${pct.toFixed(2)}%`}
+					windowDays={view.days}
+					note="Of every processor second. Near 100 is the expected reading, so the gap is the share of that shard's job spent waiting rather than computing."
+				/>
 
 				<!-- The memory row that sat here was the window's span of the same
 				     figure the panel above draws, written as prose. It is now that
 				     panel's window grain, where it is a track beside the run's own
 				     mark rather than a sentence a reader has to hold in their head. -->
-				<div data-host="model-load" data-host-value={data.host.modelLoad?.value ?? ''}>
-					<dt>Opening the weights</dt>
-					<dd>
-						{#if data.host.modelLoad === null || data.host.modelLoad.value === null}
-							<span class="absent">Not recorded on this run.</span>
-						{:else}
-							{grouped(Math.round(data.host.modelLoad.value))} ms on its slowest shard
-							<span class="unit">
-								Over these {view.days} days: {grouped(
-									Math.round(view.modelLoadSpan.low ?? 0)
-								)} to {grouped(Math.round(view.modelLoadSpan.high ?? 0))} ms, on
-								{view.modelLoadSpan.from} of {view.modelLoadSpan.outOf} runs.
-							</span>
-						{/if}
-					</dd>
-				</div>
+				<HostFigure
+					name="model-load"
+					label="Opening the weights"
+					track={modelLoadTrack}
+					format={(ms) => `${grouped(Math.round(ms))} ms`}
+					windowDays={view.days}
+					note="The run's slowest shard."
+				/>
 
 				<!-- One line of text, not a chart. The server serves one request at a
 				     time because `models.summarize.inference.n_parallel` is 1, and this
