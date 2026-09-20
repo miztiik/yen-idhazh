@@ -92,7 +92,7 @@ MEMINFO: Final = Path("/proc/meminfo")
 #: One open answers all five, because five opens would describe five instants.
 MEMINFO_KEYS: Final = ("MemTotal", "MemAvailable", "Cached", "SwapFree", "SwapTotal")
 
-#: Where a process reports its own resident and peak-resident memory.
+#: Where a process reports its own memory and its own fault counters.
 PROC: Final = Path("/proc")
 
 #: The two `/proc/<pid>/status` lines this project reads, spelled the kernel's
@@ -102,11 +102,6 @@ PROC: Final = Path("/proc")
 #: not a peak that only rises (`docs/reference/host-metrics.md`). One open
 #: answers both, because two opens would describe two instants.
 STATUS_KEYS: Final = ("VmRSS", "VmHWM")
-
-#: Where the fault counters are, which is not `/proc/<pid>/status`: that file
-#: carries no fault count at all, so this is a second file rather than a third
-#: key of the one the sampler already parses.
-PROC_PID_STAT: Final = "stat"
 
 #: `majflt` is the twelfth field of `/proc/<pid>/stat`, and the first two are the
 #: pid and the command. The kernel brackets the command and it may hold a space
@@ -278,12 +273,16 @@ def major_faults(pid: int | None) -> int | None:
     A counter since the process started, so one read says nothing about an item.
     `Watch` differences two of them.
 
+    `/proc/<pid>/stat` and not the `status` file the sampler already parses:
+    that one carries no fault count at all, so this is a second file rather than
+    a third key of the first.
+
     A pid nobody named, a process this machine will not open, and a file that is
     not the kernel's layout are all unknown - and unknown is not zero.
     """
     if pid is None:
         return None
-    text = _text(PROC / str(pid) / PROC_PID_STAT)
+    text = _text(PROC / str(pid) / "stat")
     if text is None:
         return None
     _, bracketed, rest = text.rpartition(")")
