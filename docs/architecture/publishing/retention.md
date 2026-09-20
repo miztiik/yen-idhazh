@@ -1,6 +1,6 @@
 # Retention
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-20
 
 What may be deleted, when, and what bounds every collection a run appends to.
 Unpublishing a day, the state tree's own ceilings, and the score shards that
@@ -68,7 +68,6 @@ sentence above it was not.
 | `state/score-index/<Y>/<M>/<D>.csv` | day | remove |
 | `state/item-health/<Y>/<M>/<D>.csv` | day | remove |
 | `state/host-fingerprint/<Y>/<M>/<D>.csv` | day | remove |
-| `state/runtime-counters.csv` | append-only | rewrite without the day |
 | `corpus/corpus.jsonl` | rolling window | rewrite without the day |
 
 The month-grain rows are the trap. Three of them are shards a later run appends

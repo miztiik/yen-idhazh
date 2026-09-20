@@ -224,7 +224,6 @@
     "public_run_timeline_keep_months": 2,
     "public_span_rollup_keep_months": 14,
     "public_telemetry_keep_months": 14,
-    "runtime_counters_scrape": true,
     "sample_rate": 1.0,
     "score_archive_keep_months": null,
     "scores_full_grain_months": 14,

@@ -1303,12 +1303,6 @@
           "title": "Public Telemetry Keep Months",
           "type": "integer"
         },
-        "runtime_counters_scrape": {
-          "default": true,
-          "description": "Whether a work shard reads llama-server's GET /metrics before it stops the server. False writes no row to state/runtime-counters.csv for that shard, so context headroom, reading against writing, cache hits and the shard clock all read as ABSENT for the run rather than as zero. Nothing else about the run changes - the counters are read after the last item is summarized.",
-          "title": "Runtime Counters Scrape",
-          "type": "boolean"
-        },
         "sample_rate": {
           "default": 1.0,
           "description": "The fraction of RUNS whose scorer runs - never the fraction of items. A run scores every item or none, so a day's rows are never a partial sample of that day and a per-day rate stays honest. Below 1.0 most days write no eval row and the console's score panels thin to the sampled days. Not a switch: `evaluation_enabled` is the way to say off, and a rate of zero is refused so the two can never disagree about it. The draw is a digest of the run id, so it is reproducible from the committed manifest and blind to the run's content, and both the rate and the draw land on the run manifest whether or not the run was taken. A published rate is still computed from the item-health census, which is never sampled; the thinned ledger publishes distributions only.",
@@ -2428,6 +2422,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "observability.runtime_counters_scrape, removed with the store it governed.",
+      "version": "2026-09-20",
+      "why": "The four cells a reader wants are on the host row, from the same scrape."
+    },
+    {
       "change": "observability.host_fingerprint_keep_months, additive, default null.",
       "version": "2026-09-19T09:00",
       "why": "state/host-fingerprint/ was the one committed ledger with no age at all."
@@ -2441,11 +2440,6 @@
       "change": "adaptive_dedup_threshold.max_down_step loses its upper bound of 0.0083.",
       "version": "2026-09-19",
       "why": "Fresh labels put the nearest two-story pair above the line, so the gap is gone."
-    },
-    {
-      "change": "The three extract.chrome_* knobs, removed with the store they governed.",
-      "version": "2026-09-18T11:00",
-      "why": "Over a full run the store moved the boilerplate signal zero times."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2526,7 +2520,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-19T09:00",
+      "default": "2026-09-20",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2537,5 +2531,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-19T09:00"
+  "version": "2026-09-20"
 }

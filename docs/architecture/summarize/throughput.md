@@ -1,6 +1,6 @@
 # Model throughput and why it drifts inside a run
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-20
 What the two model rates mean, why the slow half of a run is slow, and what a
 change in either number is allowed to prove.
 
@@ -237,8 +237,8 @@ failure modes. Until 2026-08-27 those counters reached only a job log that keeps
 them for two days, so this page published a rate nothing committed could check -
 and under Guardrail #10 a number that cannot be reconciled cannot justify a design.
 
-Each `work` shard now commits its server's counters as one row of
-`state/runtime-counters.csv`, and
+Each `work` shard now commits its server's counters onto its own row of
+`state/host-fingerprint/`, and
 `backend/utilities/reconcile_prefill.py` pools both sides of one run and prints
 the gap. **Measured on run `2026-08-26-5`: the ledger says 11.1755 tok/s and the
 server says 11.1796, which is 0.037 percent apart against a 5 percent bound
@@ -387,7 +387,7 @@ so the reading is one comparison over that ledger, and
 below says what came back. The second is the summarize-and-plan call's decode: its output budget is
 4,735 tokens and the one reply ever measured was 327, and a reply at half the
 budget is 144 minutes of the summarize-and-plan call alone on a 20-item shard. The third is the worst
-`work` shard against the 180-minute bar in `state/runtime-counters.csv`.
+`work` shard against the 180-minute bar in `state/host-fingerprint/`.
 
 ## The sequence is declared once, and the window was checked against it
 
@@ -520,7 +520,7 @@ Three things follow for anyone reading a rate off this page or the console:
 
 - **A rate that moved between two runs is not evidence of a change we made**
  until both runs are known to have drawn the same processor. `cpu_model` is a
- committed per-shard cell on `state/runtime-counters.csv`, so that check costs
+ committed per-shard cell on `state/host-fingerprint/`, so that check costs
  a column read.
 - **Compare within a processor, never across one.** Every paired figure in
  [../../reference/pipeline-cost.md](../../reference/pipeline-cost.md) that prices a
@@ -663,7 +663,7 @@ at the width it occupies, so one unit is one pixel. The server draws at
 ## See also
 
 - [`../sources/item-health.md`](../sources/item-health.md) - the columns, and how a rate is derived.
-- [`../contracts/schemas.md`](../contracts/schemas.md) - `RuntimeCountersRow`, and why the snapshot is its own contract.
+- [`../contracts/schemas.md`](../contracts/schemas.md) - `HostFingerprintRow`, and why a job-grain fact is its own contract.
 - [`prompt.md`](prompt.md) - the bands, and why the ask changes with article length.
 - [`../../reference/pipeline-cost.md`](../../reference/pipeline-cost.md) - every number here, with hardware and date.
 - [`../../concepts/pipeline-loop.md`](../../concepts/pipeline-loop.md) - why a worker may reorder inside its shard.

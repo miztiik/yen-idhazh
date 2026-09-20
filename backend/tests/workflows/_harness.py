@@ -602,8 +602,7 @@ MEMORY_PEAK_FILE: Final = "memory-peak.txt"
 CGROUP_PEAK_PATH: Final = "/sys/fs/cgroup/memory.peak"
 
 # The two steps of the work job that write and read those files. The third,
-# which writes `memory-peak.txt` and hands it to the stage, is `COUNTERS_STEP`
-# below.
+# which writes `memory-peak.txt`, is `SCRAPE_STEP` below.
 SAMPLE_MEMORY_STEP: Final = "Sample memory"
 
 MEMORY_SUMMARY_STEP: Final = "What memory this shard used"
@@ -626,7 +625,7 @@ RSS_SAMPLE_FIELDS: Final = {
 }
 
 # The roll-call beside it: one row per python process per sample, so the count
-# in `python_procs` can be attributed. Same two-reader hazard as above - the
+# in `python_procs` can be attributed. Same reader hazard as above - the
 # operator print reads it by position - so the same agreement is written down.
 PYTHON_PROCS_FILE: Final = "python-procs.tsv"
 
@@ -638,18 +637,6 @@ PYTHON_PROCS_FIELDS: Final = {
     7: "args",
 }
 
-
-#: The one reading that has to be taken at both ends of the job. `/proc/stat`
-#: counts since boot, so a single read is mostly the minutes the runner spent
-#: booting. `/proc/stat` rather than a cgroup file because two cgroup files this
-#: repository has read - `memory.peak` and `cpu.max` - are absent on a
-#: GitHub-hosted runner, and `/proc/stat` is on every Linux there is.
-CPU_STAT_READING: Final = "awk '/^cpu / { print }' /proc/stat"
-
-
-#: The step that takes the first of the two readings. The second is taken in
-#: `COUNTERS_STEP`, which is also where both are handed to the row.
-CPU_STAT_STEP: Final = "Stamp the shard clock and the host"
 
 # llama-server's own loopback counters, read once at job end. The two series are
 # named because they are the two a run is read by: the busy-slot average says
@@ -763,9 +750,9 @@ COMMIT_STAGED_PATHS: Final = {
     # taken from and was missed the same way.
     #
     # `state/segments` replaced `state/host-fingerprint` on 2026-09-17, and
-    # `state/item-health`, `state/scores`, `state/score-index`,
-    # `state/span-rollup` and `state/runtime-counters.csv` followed it on
-    # 2026-09-18. Each of those heads used to be appended to by up to eight work
+    # `state/item-health`, `state/scores`, `state/score-index` and
+    # `state/span-rollup` followed it on 2026-09-18. Each of those heads used to
+    # be appended to by up to eight work
     # shards and by assemble; every writer now writes its own segment and
     # `assemble` folds them in, so this job stages the segment store and no
     # longer stages a head it does not write.
@@ -857,20 +844,10 @@ CONSOLE_SEED: Final = tuple(
     if path.is_file()
 )
 
-# The third ledger the same commit step stages: what llama-server itself counted
-# for this shard. It has to sit between the other two, because the row it writes
-# is committed by the step after it.
-COUNTERS_STEP: Final = "What the server counted"
-
-COUNTERS_COMMAND: Final = "python -m idhazh counters"
-
-# The flag that says which job a row came from. Only `work` stands a server up
-# now, and the flag stays because the committed ledger holds rows from the
-# retired visuals job: a row that cannot say which job wrote it proves nothing,
-# and the two jobs both spelled shard 0 of the same run.
-COUNTERS_JOB_FLAG: Final = "--job"
-
-COUNTERS_JOBS: Final = {"work": "work"}
+# The step that scrapes llama-server's own counters and copies the kernel's
+# memory peak out for the operator. It has to run before `JOB_CLOCK_STEP`,
+# which reads the file it writes.
+SCRAPE_STEP: Final = "What the server counted"
 
 # Every job that records the machine it drew, and the `--job` value it files
 # under. All three of them since 2026-09-17: a run is only as fast as its
@@ -896,20 +873,17 @@ FINGERPRINT_BENCH_JOB: Final = "runtime"
 # carries a case the committed ledger has never held (Guardrail #12). The
 # `visuals` row is history - plan 11 row #6 retired that job - and the reader
 # still has to read it back.
-COUNTERS_FIXTURE: Final = FIXTURES_DIR / "runtime-counters" / "visuals-job-row.csv"
-
 # Deliberately not `--metrics`: that is llama-server's own flag, and
 # `test_every_job_that_starts_a_server_reaches_the_one_argv_builder` forbids any
 # workflow step from spelling one.
 COUNTERS_FLAG: Final = "--counters-file"
 
-# The step that stamps the shard job's own clock and names the host it drew.
-# First in the job, so the clock covers the cache restore and the weight load as
-# well as the model time, and read at the counters step - which is the only step
-# that writes a committed row at shard grain.
-CLOCK_STEP: Final = "Stamp the shard clock and the host"
+# The step that stamps the shard job's own clock. First in the job, so the clock
+# covers the cache restore and the weight load as well as the model time, and
+# read at `JOB_CLOCK_STEP`, which files the difference onto the host row.
+CLOCK_STEP: Final = "Stamp the shard clock"
 
-CLOCK_VARIABLES: Final = ("JOB_STARTED_AT", "CPU_MODEL", "CPU_STAT_AT_START")
+CLOCK_VARIABLES: Final = ("JOB_STARTED_AT",)
 
 # The other end of `FINGERPRINT_STEP`. The probe runs before the model server so
 # the bandwidth reading gets an idle machine; the job's own clock and what the
@@ -922,7 +896,7 @@ JOB_CLOCK_COMMAND: Final = "python -m idhazh job-clock"
 # Neither of the work job's two steps may fail the shard. See the comment above
 # them in the workflow for which loss is the cheaper one. `BaseLoader` keeps
 # every scalar a string, so the value to compare is the word, not the boolean.
-WORK_LEDGER_STEPS: Final = (RECORD_STEP, COUNTERS_STEP, JOB_CLOCK_STEP, COMMIT_STEPS["work"])
+WORK_LEDGER_STEPS: Final = (RECORD_STEP, SCRAPE_STEP, JOB_CLOCK_STEP, COMMIT_STEPS["work"])
 
 TOLERATED: Final = "true"
 
@@ -1001,7 +975,6 @@ COMMIT_REFRESH_PATHS: Final = {
         "state/scores",
         "state/score-index",
         "state/item-health",
-        "state/runtime-counters.csv",
         "state/span-rollup",
         "state/traces",
         "state/host-fingerprint",

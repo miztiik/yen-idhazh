@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 import os
 import re
 import subprocess
@@ -10,23 +9,15 @@ from pathlib import Path
 
 import pytest
 from conftest import REPO_ROOT, llama_server_flags, read_text
-from pydantic import ValidationError
 
-from idhazh import ledger
-from idhazh.contracts import runtime_counters
 from idhazh.llm.server import DEFAULT_ENDPOINT, DEFAULT_PORT
-from idhazh.telemetry import host
+from idhazh.telemetry import silicon
 
 from ._harness import (
     ARGV_MODULE_CALL,
     CGROUP_PEAK_PATH,
-    COUNTERS_COMMAND,
-    COUNTERS_FIXTURE,
-    COUNTERS_JOB_FLAG,
-    COUNTERS_JOBS,
-    COUNTERS_STEP,
-    CPU_STAT_READING,
-    CPU_STAT_STEP,
+    COUNTERS_FLAG,
+    JOB_CLOCK_STEP,
     LLAMA_PORT_ENV,
     LLAMA_PORT_READ,
     LLAMA_PORT_VALUE,
@@ -48,6 +39,7 @@ from ._harness import (
     RUNTIME_LOG_UNCLAIMED_TAG,
     SAMPLE_MEMORY_STEP,
     SAMPLE_SCRIPT,
+    SCRAPE_STEP,
     SCRIPTS_DIR,
     SERVER_LOG_FILE,
     SERVER_STARTER_MODULES,
@@ -224,16 +216,14 @@ def test_both_model_server_jobs_sample_memory_with_the_one_shared_script() -> No
         assert "nohup" in script, f"the {job_name} sampler must outlive its own step"
 
 
-def test_the_memory_sampler_and_both_its_readers_agree_on_the_columns() -> None:
-    """One writer, two readers, and only one of them reads by name.
+def test_the_memory_sampler_and_its_reader_agree_on_the_columns() -> None:
+    """One writer, one reader, and the reader reads by position.
 
-    `rss-samples.tsv` has two consumers and they disagree about what a column
-    is. `RuntimeCountersRow` reads it by NAME, so a rename there costs one empty
-    cell and the row reads as unknown. The operator print in the same job reads
-    it by POSITION, so a column inserted anywhere but the end shifts every field
-    after it and the job log reports `python_procs` - a count of three - as a
-    peak in kilobytes. Nothing fails, and the number is off by six orders of
-    magnitude.
+    `rss-samples.tsv` is written by the sampler and printed by the operator step
+    in the same job. That print reads by POSITION, so a column inserted anywhere
+    but the end shifts every field after it and the job log reports
+    `python_procs` - a count of three - as a peak in kilobytes. Nothing fails,
+    and the number is off by six orders of magnitude.
 
     That is why the sampler appends a new column at the END of the row. Nothing
     held it there until this test.
@@ -241,9 +231,6 @@ def test_the_memory_sampler_and_both_its_readers_agree_on_the_columns() -> None:
     header = _sample_header()
     assert header[0] == "ts", header
     assert len(header) == len(set(header)), f"a column name is written twice: {header}"
-
-    for column in (runtime_counters._RSS_PEAK_COLUMN, runtime_counters._PYTHON_RSS_PEAK_COLUMN):
-        assert column in header, f"the row reads {column} by name and the sampler stopped writing it"
 
     operator = _work_step(MEMORY_SUMMARY_STEP)
     assert RSS_SAMPLE_FILE in operator, f"{MEMORY_SUMMARY_STEP} must read {RSS_SAMPLE_FILE}"
@@ -255,34 +242,23 @@ def test_the_memory_sampler_and_both_its_readers_agree_on_the_columns() -> None:
         )
 
 
-def test_the_kernel_peak_is_written_before_the_row_that_reads_it() -> None:
-    """A file written after the row is a file the row never saw.
+def test_the_kernel_peak_is_written_once_and_printed_by_the_operator_step() -> None:
+    """Two readings of a live kernel counter would not agree, so only one is taken.
 
-    One step writes `memory-peak.txt` and then calls the stage that reads it, so
-    the order inside that body is the whole promise. Reversed, the committed row
-    carries an empty cell while the job log prints a number that reached nobody.
-    The operator print below takes no second reading of its own, for the same
-    reason: two readings of a live kernel counter would not agree.
+    One step copies `/sys/fs/cgroup/memory.peak` into `memory-peak.txt` and the
+    operator print reads that copy. A print that opened the kernel file again
+    would report a different instant from the artifact a person downloads.
     """
-    counters = _work_step(COUNTERS_STEP)
+    scrape = _work_step(SCRAPE_STEP)
 
-    written = counters.find(f"> {MEMORY_PEAK_FILE}")
-    read = counters.find(f"--memory-peak-file {MEMORY_PEAK_FILE}")
-    assert written >= 0, f"{COUNTERS_STEP} must write {MEMORY_PEAK_FILE}"
-    assert read >= 0, f"{COUNTERS_STEP} must pass {MEMORY_PEAK_FILE} to the stage"
-    assert written < read, f"{COUNTERS_STEP} reads {MEMORY_PEAK_FILE} before it writes it"
+    assert f"> {MEMORY_PEAK_FILE}" in scrape, f"{SCRAPE_STEP} must write {MEMORY_PEAK_FILE}"
 
     # Guarded, because no GitHub-hosted runner this project has measured has the
     # file. An unguarded read fails the step and costs the shard its whole row.
-    assert f"[ -f {CGROUP_PEAK_PATH} ]" in counters, f"{COUNTERS_STEP} must guard the cgroup read"
-    assert host.CGROUP_PEAK_KEY in counters, "the sampler parses the key this step writes"
-
-    # The other two files the row reads are ones this job wrote.
-    assert f"--rss-samples-file {RSS_SAMPLE_FILE}" in counters
-    assert f"--server-log {SERVER_LOG_FILE}" in counters
+    assert f"[ -f {CGROUP_PEAK_PATH} ]" in scrape, f"{SCRAPE_STEP} must guard the cgroup read"
 
     operator = _work_step(MEMORY_SUMMARY_STEP)
-    assert f"cat {MEMORY_PEAK_FILE}" in operator, "the print must read the file the row read"
+    assert f"cat {MEMORY_PEAK_FILE}" in operator, "the print must read the file the scrape wrote"
     assert CGROUP_PEAK_PATH not in operator, "the print must not take a second kernel reading"
 
 
@@ -516,129 +492,26 @@ def test_every_reader_of_a_server_log_reads_the_one_the_start_call_wrote() -> No
         assert log_file in _digest_step(job_name, summary_step), f"{summary_step} must read {log_file}"
 
 
-def test_the_counters_step_and_the_row_agree_on_what_it_reads() -> None:
-    """Three readings, two of them taken in different steps an hour apart.
+def test_the_scrape_step_and_the_row_agree_on_what_it_reads() -> None:
+    """Two readings of one file, taken in two steps, and a third in another language.
 
-    The metrics body is written by one line of the step and read by two more, so
-    a rename in any one of them leaves the row's counter cells empty and prints
-    nothing that says why. The two series are named again in the contract that
-    parses them, in another language, and llama.cpp has renamed a counter
-    before. And `/proc/stat` is read at both ends of the job by two separate
-    steps: a reading of the per-cpu line at one end and the aggregate at the
-    other would make `cpu_busy_pct` a number with no meaning, and nothing would
-    fail.
+    The metrics body is written by one line of the scrape step and read by two
+    more - the step's own grep and the job-clock step after it - so a rename in
+    any one of them leaves the host row's counter cells empty and prints nothing
+    that says why. The two series are named again in the module that parses
+    them, in Python, and llama.cpp has renamed a counter before.
     """
-    counters = _work_step(COUNTERS_STEP)
-    assert f"-o {METRICS_FILE}" in counters, f"{COUNTERS_STEP} must write {METRICS_FILE}"
-    assert f'"{METRICS_ENDPOINT}"' in counters, f"{COUNTERS_STEP} must scrape {METRICS_ENDPOINT}"
-    assert f"--counters-file {METRICS_FILE}" in counters, "the stage must read the file curl wrote"
+    scrape = _work_step(SCRAPE_STEP)
+    assert f"-o {METRICS_FILE}" in scrape, f"{SCRAPE_STEP} must write {METRICS_FILE}"
+    assert f'"{METRICS_ENDPOINT}"' in scrape, f"{SCRAPE_STEP} must scrape {METRICS_ENDPOINT}"
     for series in METRICS_SERIES:
-        assert series in counters, f"{COUNTERS_STEP} stopped naming {series}"
-        assert series in runtime_counters.SERIES, f"the row no longer parses {series}"
+        assert series in scrape, f"{SCRAPE_STEP} stopped naming {series}"
 
-    clock = _work_step(CPU_STAT_STEP)
-    assert clock.count(CPU_STAT_READING) == 1, f"{CPU_STAT_STEP} must read /proc/stat once"
-    assert counters.count(CPU_STAT_READING) == 1, f"{COUNTERS_STEP} must read /proc/stat once"
-    assert "--cpu-stat-at-start" in counters and "--cpu-stat-at-end" in counters, (
-        "both readings must reach the row, or the difference between them is not taken"
-    )
-    assert runtime_counters._CPU_FIELDS[0] == "user", (
-        "the row parses the aggregate cpu line, which is what both steps read"
-    )
-
-
-def test_a_counters_row_that_cannot_say_which_job_wrote_it_is_refused() -> None:
-    """A row with no job name proves nothing.
-
-    Two jobs of the daily run used to stand a llama-server up and they served
-    different weights - `work` the summarizer at Qwen3.5-9B, `visuals` the
-    planner at Qwen3-4B - and both spelled shard 0 of the same run. So
-    `(date, run_id, shard)` names one record and described two servers, and a
-    reader pooling them reports a rate that belongs to no model. The second job
-    is retired; the committed ledger still holds its rows, so the
-    reader still has to tell them apart.
-
-    Driven from a two-row fixture rather than from `state/runtime-counters.csv`,
-    which a run appends to five times a day (Guardrail #12). The fixture also carries
-    a case the committed ledger cannot: until the job name was recorded, every row in it came
-    from `work`.
-
-    Three assertions, because three things can go wrong. The reader has to
-    separate the rows BY JOB, not by shard - they share a shard index. Each side
-    has to carry a decode rate, or the fixture proves the separation and nothing
-    about whether either row is worth having. And the parser has to REFUSE a row
-    whose cell is empty rather than default it: a defaulted blank would file the
-    planner's numbers under the summarizer's name and every gate would stay
-    green.
-
-    A column the file never carried reads as that same empty cell, so an absent
-    column and a blank one are one refusal here, named after the column. The
-    `work` default further down is the JSON payload's and it stays: a payload
-    carries no header, so nothing in it can say the column was ever there.
-    """
-    with COUNTERS_FIXTURE.open(encoding="utf-8", newline="") as handle:
-        raw = list(csv.DictReader(handle))
-    rows = [runtime_counters.RuntimeCountersRow.from_csv_row(row) for row in raw]
-
-    by_job = {row.job: row for row in rows}
-    assert set(by_job) == {row["job"] for row in raw}, "the reader must separate them by job"
-    assert len(by_job) == len(rows), "two rows of one job prove nothing about the column"
-    assert len({(row.date, row.run_id, row.shard) for row in rows}) == 1, (
-        "the fixture has to share a shard index, or it proves the wrong thing"
-    )
-    assert len({(row.date, row.run_id, row.job, row.shard) for row in rows}) == len(rows), (
-        "the job is what tells the two apart, and nothing else on the row does"
-    )
-    assert tuple(ledger.RUNTIME_COUNTERS_KEY) == ("date", "run_id", "job", "shard"), (
-        "the ledger key must hold the job, or the second row is dropped as a repeat"
-    )
-
-    for job_name, row in by_job.items():
-        assert row.tokens_predicted_total, f"the {job_name} row carries no decoded tokens"
-        assert row.tokens_predicted_seconds_total, f"the {job_name} row carries no decode seconds"
-        rate = row.tokens_predicted_total / row.tokens_predicted_seconds_total
-        assert rate > 0, f"the {job_name} row has no decode rate"
-
-    nameless = {name: value for name, value in raw[0].items() if name != "job"}
-    with pytest.raises(ValidationError, match="job"):
-        runtime_counters.RuntimeCountersRow.from_csv_row(nameless)
-    with pytest.raises(ValidationError, match="job"):
-        runtime_counters.RuntimeCountersRow.from_csv_row({**raw[0], "job": ""})
-
-    # And the other half of `CLAUDE.md` section 11: a row written before the
-    # column existed still validates. Proved by removing the key from a payload,
-    # which cannot age out the way a count of unmigrated rows would.
-    older = {
-        name: value
-        for name, value in rows[0].model_dump(mode="json").items()
-        if name != "job"
-    }
-    assert runtime_counters.RuntimeCountersRow.model_validate(older).job == (
-        runtime_counters.WORK_JOB
-    )
-
-
-@pytest.mark.parametrize("job_name", sorted(COUNTERS_JOBS))
-def test_every_counters_step_says_which_job_it_is(job_name: str) -> None:
-    """A default is not a statement, and every caller has to make one.
-
-    `--job` defaults to `work`, which is what lets a row written before the
-    column existed still validate. That same default is why every step has to
-    name its own value out loud: a second server job would otherwise file its
-    numbers under the summarizer's name, the ledger would accept them, and the
-    console would pool two models into one rate. The committed ledger already
-    holds rows from the retired visuals job, which is what the column is read
-    back for.
-    """
-    step_name = {"work": COUNTERS_STEP}[job_name]
-    script = _digest_step(job_name, step_name)
-    assert COUNTERS_COMMAND in script, f"{step_name} must run {COUNTERS_COMMAND}"
-    assert f"{COUNTERS_JOB_FLAG} {COUNTERS_JOBS[job_name]}" in script, (
-        f"{step_name} must say it is the {job_name} job"
-    )
-    for other, value in COUNTERS_JOBS.items():
-        if other != job_name:
-            assert f"{COUNTERS_JOB_FLAG} {value}" not in script
+    clock = _work_step(JOB_CLOCK_STEP)
+    assert f"{COUNTERS_FLAG} {METRICS_FILE}" in clock, "the stage must read the file curl wrote"
+    assert f"--server-log {SERVER_LOG_FILE}" in clock, "and the log the server wrote beside it"
+    for wire in silicon._SERIES:
+        assert wire in scrape, f"{SCRAPE_STEP} no longer names {wire}, which the host row parses"
 
 
 def _uncommented(text: str) -> str:

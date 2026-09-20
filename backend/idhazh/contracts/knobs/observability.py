@@ -28,6 +28,7 @@ SUPERSEDED_RETENTION_NAMES: Final[Mapping[str, str]] = MappingProxyType(
         "hard_delete_after_months": "item_health_aggregate_keep_months",
         "public_scores_keep_months": "",
         "public_feed_health_keep_months": "",
+        "runtime_counters_scrape": "",
     }
 )
 
@@ -201,17 +202,6 @@ class ObservabilityConfig(Model):
             "MiB, because a buffer that fits in cache measures cache and reads as a "
             "memory figure four times too high. Raise it when a drawn machine "
             "reports an L3 at or above this."
-        ),
-    )
-    runtime_counters_scrape: bool = Field(
-        default=True,
-        description=(
-            "Whether a work shard reads llama-server's GET /metrics before it stops "
-            "the server. False writes no row to state/runtime-counters.csv for that "
-            "shard, so context headroom, reading against writing, cache hits and the "
-            "shard clock all read as ABSENT for the run rather than as zero. Nothing "
-            "else about the run changes - the counters are read after the last item "
-            "is summarized."
         ),
     )
     sample_rate: float = Field(
@@ -476,7 +466,7 @@ class ObservabilityConfig(Model):
     @model_validator(mode="before")
     @classmethod
     def _refuse_a_removed_knob(cls, data: Any) -> Any:
-        """Fail a config that still names one of the four retired ages.
+        """Fail a config that still names one of the five retired knobs.
 
         `keep_months` and `hard_delete_after_months` governed `state/item-health/`
         and nothing else, while three other stores had no age at all. They were
@@ -484,18 +474,23 @@ class ObservabilityConfig(Model):
         one at a time; now that every reader has moved, a file still spelling one
         is refused by name.
 
-        `public_scores_keep_months` and `public_feed_health_keep_months` are the
-        other two, and they have no successor because the trees they bounded are
-        gone. They pruned published copies of `state/scores/` and
-        `state/feed-health/` that nothing ever fetched; the ledgers stay and keep
-        their own ages.
+        `public_scores_keep_months` and `public_feed_health_keep_months` are next,
+        and they have no successor because the trees they bounded are gone. They
+        pruned published copies of `state/scores/` and `state/feed-health/` that
+        nothing ever fetched; the ledgers stay and keep their own ages.
+
+        `runtime_counters_scrape` is the fifth and has no successor either. It
+        switched off a row in `state/runtime-counters.csv`, and that store is
+        gone: the four cells a reader still wants are on the host row, which
+        `job-clock` writes from the same scrape. Honouring the flag would now
+        switch off nothing at all.
 
         Refused rather than ignored, and refused rather than carried forward. The
-        old value was set against a check that could not answer the question - it
-        compared `months * 30` against the console window instead of the shards
-        that window selects - so honouring it would honour the defect, and
-        dropping it silently would leave an operator believing a number nothing
-        reads.
+        old age values were set against a check that could not answer the question
+        - it compared `months * 30` against the console window instead of the
+        shards that window selects - so honouring them would honour the defect,
+        and dropping any of the five silently would leave an operator believing a
+        number nothing reads.
         """
         return refuse_a_removed_knob("observability", data, SUPERSEDED_RETENTION_NAMES)
 

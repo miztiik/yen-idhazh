@@ -20,7 +20,7 @@ from typing import Any, Final
 import pytest
 
 from idhazh import config, ledger
-from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.base import ServerJob, derive_url_key
 from idhazh.contracts.console_band import ConsoleBand, Health, RouteId
 from idhazh.contracts.day_metrics import DayBands, DayMetrics, DayReasons, DaySource
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
@@ -39,7 +39,6 @@ from idhazh.contracts.run_manifest import (
     RunRecord,
     RunStatus,
 )
-from idhazh.contracts.runtime_counters import RuntimeCountersRow, ServerJob
 from idhazh.contracts.source_health_view import (
     SourceAvailability,
     SourceHealthRow,
@@ -128,19 +127,6 @@ def _feed_row(month: str, *, feed_id: str, outcome: FetchOutcome, items: int) ->
         outcome=outcome,
         items=items,
         detail=None if outcome is FetchOutcome.OK else "our own one-line reason",
-    )
-
-
-def _counters_row(month: str, *, shard: int, prompt: int, seconds: float) -> RuntimeCountersRow:
-    return RuntimeCountersRow(
-        version=RuntimeCountersRow.schema_version(),
-        date=f"{month}-01",
-        run_id=f"{month}-01-1",
-        shard=shard,
-        shards=2,
-        scraped_at=f"{month}-01T06:30:00Z",
-        prompt_tokens_total=prompt,
-        prompt_seconds_total=seconds,
     )
 
 
@@ -304,7 +290,6 @@ def tree(tmp_path: Path) -> tuple[Path, Path]:
     """Twenty months of state and twenty published days, one a month."""
     state = tmp_path / "state"
     digest = tmp_path / "frontend" / "public" / "digest"
-    counters: list[dict[str, str]] = []
     for index, month in enumerate(MONTHS):
         stamp = f"{month}-01"
         _write_csv(
@@ -341,8 +326,6 @@ def tree(tmp_path: Path) -> tuple[Path, Path]:
         record = state / "day-metrics" / month[:4] / month[5:7] / "01.json"
         record.parent.mkdir(parents=True, exist_ok=True)
         record.write_text(_record(stamp).to_json(), encoding="utf-8")
-        counters.append(_counters_row(month, shard=0, prompt=1000, seconds=10.0).csv_row())
-        counters.append(_counters_row(month, shard=1, prompt=1000, seconds=20.0).csv_row())
         day_dir = digest / month[:4] / month[5:7] / "01"
         day_dir.mkdir(parents=True, exist_ok=True)
         (day_dir / "digest.json").write_text(
@@ -354,7 +337,6 @@ def tree(tmp_path: Path) -> tuple[Path, Path]:
             ).to_json(),
             encoding="utf-8",
         )
-    _write_csv(state / "runtime-counters.csv", RuntimeCountersRow.csv_columns(), counters)
     return state, digest
 
 
