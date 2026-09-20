@@ -204,12 +204,14 @@ jobs:
 
       # A generated artifact that was hand-edited regenerates to something else.
       # The suite already asserts this against a temp directory; doing it again
-      # against the working tree catches an exporter that writes in place.
+      # against the working tree catches an exporter that writes in place. Both
+      # generated trees, because one command writes both: the schemas the
+      # backend validates against, and the TypeScript the frontend trusts.
       - name: Contract drift gate
         if: needs.scope.outputs.code == 'true'
         run: |
           python -m idhazh.contracts.export
-          git diff --exit-code -- schemas/
+          git diff --exit-code -- schemas/ frontend/src/contracts/
 
       # The same trade as the gate above, and it used to be the same shape: the
       # Status Reckoners are the source of what is done, TODO/STATUS.md is the

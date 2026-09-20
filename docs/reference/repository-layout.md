@@ -127,11 +127,12 @@ types. Filing it under either half would make the other half import across the
 boundary that section 4 forbids. At the top, both sides read a neutral artifact
 and neither owns it.
 
-The frontend end of that arrow is still hand-written -
-`frontend/src/lib/payload/types.ts` mirrors `schemas/digest-day.schema.json` by
-hand, and the generator and its drift gate have not landed
+The frontend end of that arrow is generated too. `python -m idhazh.contracts.export`
+writes `schemas/` and `frontend/src/contracts/` from one list of models, and the
+drift gate regenerates both and fails on any diff
 ([../architecture/contracts/schemas.md](../architecture/contracts/schemas.md)).
-That is a known gap, not the design.
+`frontend/src/lib/payload/types.ts` is the one mirror still written by hand, and
+that page says why it has not moved yet.
 
 **`frontend/public/` is committed pipeline output, not source.** The backend is
 its only writer; the site only renders what is already there. That is the whole

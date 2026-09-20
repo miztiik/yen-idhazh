@@ -35,7 +35,7 @@ import { ledgers, plan, type ShardReading } from './support/machine-rows';
 const LIMITS: MachineLimits = { contextWindow: 8192, jobTimeoutSeconds: 21_600 };
 const STOPS = 7;
 
-/** The twelve, read where the page reads them: the generated schema. */
+/** The twelve, read where the page reads them: the generated contract. */
 const FLAGS = watchedFlags();
 
 const MIB = 1024 * 1024;
@@ -47,24 +47,37 @@ function shardOf(reading: ShardReading): ShardReading {
 
 function fingerprint(over: Partial<HostFingerprint>): HostFingerprint {
 	return {
+		version: '2026-09-19',
 		date: '2026-09-12',
-		runId: '2026-09-12-1',
+		run_id: '2026-09-12-1',
 		job: 'work',
 		shard: 0,
 		fingerprint: '3a7f0b1c2d4e5f60',
-		cpuModel: 'AMD EPYC 7763 64-Core Processor',
-		cpuFamily: 25,
-		cpuModelNumber: 1,
-		cpuStepping: 1,
+		cpu_model: 'AMD EPYC 7763 64-Core Processor',
+		cpu_vendor: 'AuthenticAMD',
+		cpu_family: 25,
+		cpu_model_number: 1,
+		cpu_stepping: 1,
 		microcode: '0xa0011d3',
-		l3CacheBytes: 32 * MIB,
-		flags: ['avx2', 'f16c', 'fma', 'sse4_2'],
-		memcpyGibPerSecond: 12.4,
-		memcpyProbeMib: 512,
-		vmSize: 'Standard_D4ads_v5',
-		vmLocation: 'eastus',
-		vmZone: '1',
-		vmFaultDomain: '0',
+		cores: 2,
+		threads: 4,
+		l3_cache_bytes: 32 * MIB,
+		mhz_max: null,
+		mhz_at_probe: null,
+		flags: 'avx2 f16c fma sse4_2',
+		boot_seconds: null,
+		memcpy_gib_s: 12.4,
+		memcpy_probe_mib: 512,
+		vm_size: 'Standard_D4ads_v5',
+		vm_location: 'eastus',
+		vm_zone: '1',
+		vm_fault_domain: '0',
+		runner_name: null,
+		measured_at: null,
+		model_load_ms: null,
+		job_seconds: null,
+		server_prompt_tokens: null,
+		server_prompt_seconds: null,
 		...over
 	};
 }
@@ -96,18 +109,12 @@ function cardsFor(rows: HostFingerprint[], recording = true) {
 }
 
 test.describe('the flag vocabulary', () => {
-	test('the twelve come from the generated schema, so no copy can drift', () => {
+	test('the twelve come from the generated contract, so no copy can drift', () => {
 		const schema = JSON.parse(
 			readFileSync(resolve(process.cwd(), '..', 'schemas', 'machine-panels.schema.json'), 'utf8')
 		) as { $defs: { WatchedFlag: { enum: string[] } } };
 		expect(FLAGS).toEqual(schema.$defs.WatchedFlag.enum);
 		expect(FLAGS).toHaveLength(12);
-	});
-
-	test('an unreadable schema draws no chip rather than twelve absent ones', () => {
-		// Nothing recorded and reported none of them are different facts, and only
-		// one of them is a machine with no AVX-512.
-		expect(watchedFlags(resolve(process.cwd(), 'no-such-schema.json'))).toEqual([]);
 	});
 });
 
@@ -141,12 +148,12 @@ test.describe('what a card says a machine can do', () => {
 
 	test('family, model and stepping are one string, and absent where any is', () => {
 		expect(cardsFor([fingerprint({})]).cards[0].part).toBe('25/1/1');
-		expect(cardsFor([fingerprint({ cpuStepping: null })]).cards[0].part).toBeNull();
+		expect(cardsFor([fingerprint({ cpu_stepping: null })]).cards[0].part).toBeNull();
 	});
 
 	test('the heading is the name a person reads and the raw string survives behind it', () => {
 		const [card] = cardsFor([
-			fingerprint({ cpuModel: 'INTEL(R) XEON(R) PLATINUM 8573C', fingerprint: 'c81d9e0a1b2c3d4e' })
+			fingerprint({ cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C', fingerprint: 'c81d9e0a1b2c3d4e' })
 		]).cards;
 		expect(card.identity.name).toBe('Intel Xeon Platinum 8573C');
 		expect(card.where?.cpuModelRaw).toBe('INTEL(R) XEON(R) PLATINUM 8573C');
@@ -157,7 +164,7 @@ test.describe('what a card says a machine can do', () => {
 		// same processor name and nothing else. One machine, one card - two cards
 		// under one heading reads as a defect rather than as the absence it is.
 		const view = cardsFor([
-			fingerprint({ cpuModel: 'INTEL(R) XEON(R) PLATINUM 8573C', fingerprint: 'c81d9e0a1b2c3d4e' })
+			fingerprint({ cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C', fingerprint: 'c81d9e0a1b2c3d4e' })
 		]);
 		expect(view.cards).toHaveLength(1);
 		expect(view.cards[0].jobsDrawn).toBe(2);
@@ -184,13 +191,13 @@ test.describe('the bandwidth reading and the buffer it was taken with', () => {
 	});
 
 	test('a buffer at or below L3 says it measured cache, not memory', () => {
-		const [card] = cardsFor([fingerprint({ l3CacheBytes: 480 * MIB, memcpyProbeMib: 480 })]).cards;
+		const [card] = cardsFor([fingerprint({ l3_cache_bytes: 480 * MIB, memcpy_probe_mib: 480 })]).cards;
 		expect(card.measuredCache).toBe(true);
 		expect(bandwidthSentence(card)).toContain('this measured cache, not memory');
 	});
 
 	test('a probe that was switched off is a sentence, never a rate of zero', () => {
-		const [card] = cardsFor([fingerprint({ memcpyGibPerSecond: null, memcpyProbeMib: 0 })]).cards;
+		const [card] = cardsFor([fingerprint({ memcpy_gib_s: null, memcpy_probe_mib: 0 })]).cards;
 		expect(card.memcpyGibPerSecond).toBeNull();
 		expect(bandwidthSentence(card)).toBe('Bandwidth was not measured on this job.');
 		// The cache still prints: one reading being absent does not remove another.
@@ -211,7 +218,7 @@ test.describe('how many jobs drew a machine', () => {
 				job: 'work',
 				shard: 1,
 				fingerprint: 'c81d9e0a1b2c3d4e',
-				cpuModel: 'INTEL(R) XEON(R) PLATINUM 8573C'
+				cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C'
 			}),
 			fingerprint({ job: 'assemble', shard: 0 })
 		]);
