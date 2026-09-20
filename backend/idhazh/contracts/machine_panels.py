@@ -275,7 +275,13 @@ class MachineSplit(Model):
 
 
 class FleetKind(Model):
-    """One kind of machine, counted over the window."""
+    """One kind of machine, counted over the window.
+
+    The panel also draws this count day by day. That grain is DERIVED from the
+    `date` every fingerprint row already carries, and is declared nowhere: a
+    field for it would be a second place for the day grain to disagree with
+    itself, written by nothing.
+    """
 
     identity: MachineIdentity
     placements: int = Field(
@@ -293,6 +299,11 @@ class MachinePanels(Contract):
 
     __schema_stem__: ClassVar[str] = "machine-panels"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-20",
+            change="FleetKind records that the fleet panel's day grain is derived.",
+            why="The panel draws a day axis the declared shape does not describe.",
+        ),
         ChangelogEntry(
             version="2026-09-17",
             change="Initial shape: machine cards, the split per machine, and the fleet count.",

@@ -34,7 +34,6 @@
 	import MachineSplitGroup from '$lib/components/MachineSplitGroup.svelte';
 	import MemoryBoard from '$lib/components/MemoryBoard.svelte';
 	import Panel from '$lib/components/Panel.svelte';
-	import RankedList from '$lib/components/RankedList.svelte';
 	import RateControl from '$lib/components/RateControl.svelte';
 	import ShapeSwitch from '$lib/components/ShapeSwitch.svelte';
 	import ShardBoard from '$lib/components/ShardBoard.svelte';
@@ -64,6 +63,7 @@
 		type WorkUnit
 	} from '$lib/charts/machine';
 	import { spanTrack } from '$lib/charts/span-track';
+	import { fleetChart, fleetColumns } from '$lib/charts/fleet';
 	import { grouped } from '$lib/charts/series';
 	import {
 		chartWidth,
@@ -184,6 +184,10 @@
 	const cacheStrip = $derived(cacheColumns(view.cacheDays));
 	const clockStrip = $derived(clockColumns(data.clocks.pairs));
 	const percentileStrip = $derived(percentileColumns(newestCurve));
+	/** The fleet trend, redrawn in the browser from the same counts the server
+	 * drew, so a span the operator picks gets the same bars as the first paint. */
+	const fleetOption = $derived(fleetChart(view.fleet.trend).option);
+	const fleetStrip = $derived(fleetColumns(view.fleet.trend));
 	/** The insets `percentileChart` draws its grid at. The strip's column centres
 	 * are computed from them, so a pointer and the strip agree. */
 	const PERCENTILE_GRID = { left: 60, right: 44 };
@@ -1041,11 +1045,11 @@
 	<div
 		data-windowed="machine-fleet"
 		data-window-days={windowDays}
-		data-readout-none="a ranked list has no column"
+		data-readout-none={view.fleet.drawBars ? undefined : 'a list of counts has no column'}
 	>
 		<Panel
 			title="What the platform has been giving us"
-			note="How often each kind of machine turned up over the last {windowDays} days. A count of what happened, never a rate: what the next job will draw is the one thing this cannot say."
+			note="How often each kind of machine turned up over the last {windowDays} days, day by day. A count of what happened, never a rate: what the next job will draw is the one thing this cannot say."
 		>
 			{#if view.fleet.nothing === 'recording-off'}
 				<p class="empty" data-machine-panel-empty="fleet-off">
@@ -1062,28 +1066,44 @@
 					after the record ships.
 				</p>
 			{:else if view.fleet.drawBars}
-				<p class="reads" data-fleet-basis={view.fleet.placements}>
-					Over {view.fleet.placements} job placements in these {view.fleet.days} days.
-				</p>
-				<RankedList
-					caption="Machines by how often the platform gave us one"
-					ranked={view.fleet.ranked}
-					maxText="{view.fleet.ranked.max} placements"
-					unmeasuredNote="Nothing has recorded which machine a job drew yet."
-					emptyNote="No job in these {view.fleet.days} days recorded which machine it drew."
+				<!-- The title asks what has been given lately, so the shape is a time
+				     axis and not a ranked list. The ordering a list carried is the
+				     sentence above the plot: that is the loss, named rather than
+				     absorbed. -->
+				<div
+					data-fleet-days={view.fleet.trend.days.length}
+					data-fleet-series={view.fleet.trend.series.length}
+					data-fleet-folded={view.fleet.trend.folded}
+					data-fleet-top-kinds={view.fleet.trend.topKinds}
+					data-fleet-other={view.fleet.trend.other}
+					data-fleet-outside-top={view.fleet.trend.outsideTop}
+					data-panel-question="is it working"
 				>
-					{#snippet glyph(row)}
-						<span
-							class="fleet-edge"
-							aria-hidden="true"
-							data-fleet-stop={view.fleet.kinds.find((kind) => kind.identity.key === row.key)
-								?.identity.colourStop ?? ''}
-							style="background: var(--chart-{view.fleet.kinds.find(
-								(kind) => kind.identity.key === row.key
-							)?.identity.colourStop ?? 8})"
-						></span>
-					{/snippet}
-				</RankedList>
+					<p class="reads" data-fleet-basis={view.fleet.placements}>
+						Over {view.fleet.placements} job placements in these {view.fleet.days} days,
+						{view.fleet.trend.days.length}
+						{view.fleet.trend.days.length === 1 ? 'day' : 'days'} of which recorded one. The kind we
+						are given most is {view.fleet.kinds[0].identity.name}, {view.fleet.kinds[0].placements} of
+						them.
+						{#if view.fleet.trend.folded > 0}
+							The {view.fleet.trend.folded} rarest kinds are drawn as one bar:
+							{view.fleet.trend.series.at(-1)?.identity.folded.join(', ')}.
+						{/if}
+					</p>
+					<Chart
+						svg={data.fleetSvg ?? ''}
+						option={fleetOption}
+						width={data.chart.width_px}
+						height={data.chart.height_px}
+						label="Job placements per day over {view.fleet.days} days, one bar per kind of machine. One group is one day."
+						columns={fleetStrip}
+						readoutName="machine-fleet"
+						readoutMaxShare={data.chart.readout_max_share}
+						grid={data.fleetGrid}
+						restingNote=", the newest day"
+						hint="Point at a day to read every kind on it. Left and Right step through them, Escape returns to the newest."
+					/>
+				</div>
 			{:else}
 				<ul class="shares" data-fleet-list={view.fleet.placements}>
 					{#each view.fleet.kinds as kind (kind.identity.key)}
@@ -1598,16 +1618,6 @@
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(min(var(--auto-grid-min, 20rem), 100%), 1fr));
 		gap: var(--space-4);
-	}
-
-	/* The machine's colour beside its name in the ranked list. The name is on
-	   the row in words, so this repeats a fact rather than carrying one. */
-	.fleet-edge {
-		display: inline-block;
-		inline-size: 4px;
-		block-size: 1em;
-		border-radius: 2px;
-		vertical-align: -0.15em;
 	}
 
 	.reads {

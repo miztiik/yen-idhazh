@@ -55,7 +55,7 @@ export const MEMORY_POLARITY: Polarity = 'lower-is-better';
  * own top tick, so the widest label it can draw is the largest value grouped
  * plus at most one more character; that character is the slack added here.
  */
-function valueGutter(highest: number, fontSize = 11): number {
+export function valueGutter(highest: number, fontSize = 11): number {
 	const widest = labelWidth(grouped(Math.round(highest)), fontSize) + fontSize * LABEL_ADVANCE_EM;
 	return Math.ceil(widest) + AXIS_LABEL_GAP_PX;
 }

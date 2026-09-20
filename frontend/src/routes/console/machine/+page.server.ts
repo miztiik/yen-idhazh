@@ -23,7 +23,7 @@ import {
 import { splitByMachine } from '$lib/charts/machine-split';
 import { machineCards, type MachineCards } from '$lib/charts/machine-cards';
 import { machineKeys, machineRamp } from '$lib/charts/machine-colour';
-import { fleetOverWindow, type FleetView } from '$lib/charts/fleet';
+import { fleetChart, fleetOverWindow, type FleetView } from '$lib/charts/fleet';
 import { hostFingerprints, machineRecordDays, watchedFlags } from '$lib/server/host-fingerprint';
 import { windowOfDays } from '$lib/charts/viewport';
 import { recordingNotes, type LostDay, type RecordingNotes } from '$lib/console/recording';
@@ -274,6 +274,7 @@ export async function load() {
 				days,
 				minRows: console_.fleet_min_rows,
 				colourStops: console_.machine_colour_stops,
+				topKinds: console_.fleet_top_kinds,
 				recording: observability.host_fingerprint,
 				ramp,
 				keys,
@@ -394,6 +395,9 @@ export async function load() {
 	// Drawn at the unit the panel opens on, so the first paint and the radio that
 	// is already checked agree before a script has run.
 	const workPlot = workChart(opening.tokens, opening.work, DEFAULT_WORK_UNIT);
+	// The fleet trend at the span the page opens on. It is drawn only where the
+	// count cleared the list floor, because under it the panel is a list.
+	const fleetPlot = fleetChart(opening.fleet.trend);
 
 	// Three cells that landed on 2026-08-30 and that no page had printed. The
 	// newest run's own reading; the span across the open window sits beside it on
@@ -461,6 +465,8 @@ export async function load() {
 		workSvg: await draw(workPlot, chart.height_px),
 		workGrid: workPlot.grid,
 		workUnit: DEFAULT_WORK_UNIT,
+		fleetSvg: opening.fleet.drawBars ? await draw(fleetPlot, chart.height_px) : null,
+		fleetGrid: fleetPlot.grid,
 		rate,
 		limits,
 		shardTimeoutMinutes: runConfig().shard_timeout_minutes,

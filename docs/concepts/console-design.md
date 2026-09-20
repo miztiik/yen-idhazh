@@ -511,6 +511,22 @@ quotable number on the route.
  read as a distribution, and a reader who has read one will act on it. **It
  ships at 160 as a declared estimate and not a measurement** - see the design
  rationale below.
+- **Over that floor the count is a trend, one group a day and one bar a kind.**
+ The panel's title asks what the platform has been giving us lately, and a
+ ranked list answers which is biggest rather than what is changing. The
+ ordering the list carried is not lost, it is the sentence above the plot.
+ **Only days that recorded a placement are drawn** - a zero-height group would
+ say the platform gave us nothing that day, and a day the record never reached
+ says nothing at all - so the count of days missing from the window is printed
+ in the same sentence.
+- **Past `console.fleet_top_kinds` the rarest kinds are one bar, named in
+ words.** A grouped bar is only a bar while it is wide enough to paint: at
+ `console.chart_width` of 760 and the widest span the window control offers, 90
+ days, a day band is 8.4 px, five bars in it draw 1.09 px each after the chart
+ engine's own gaps and seven draw 0.77 px. Four kinds plus the fold row is the
+ largest set that clears a pixel there. **The fold bar equals the kinds it
+ folded, in the window and on every day of it**, and the page carries both
+ figures so it can be held to them agreeing.
 - **None of the empty states is tinted and none gets the reserved box.** The
  route is prerendered and reads `state/` at build time, so there is no fetch,
  no waiting state and no unreachable state. Every nothing here is settled at

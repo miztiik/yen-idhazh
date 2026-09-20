@@ -384,14 +384,25 @@ test.describe('what the platform has been giving us', () => {
 		await expect(panel).toBeVisible();
 		const list = panel.locator('[data-fleet-list]');
 		if ((await list.count()) === 0) {
-			// At or above the threshold the panel draws bars instead, which is the
-			// other arm and is asserted over built rows in `console-fleet.spec.ts`.
-			await expect(panel.locator('[data-ranked="rows"]')).toBeVisible();
+			// At or above the threshold the panel draws a trend instead. The fold
+			// arithmetic is asserted over built rows in `console-fleet.spec.ts`;
+			// what is asserted here is that the drawn bar and the counts it was
+			// folded from are the same figure.
+			const board = panel.locator('[data-fleet-series]');
+			await expect(board).toBeVisible();
+			await expect(panel.locator('[data-chart]')).toHaveCount(1);
+			await expect(board).toHaveAttribute('data-panel-question', 'is it working');
+			const kept = Number(await board.getAttribute('data-fleet-top-kinds'));
+			const drawn = Number(await board.getAttribute('data-fleet-series'));
+			expect(drawn).toBeLessThanOrEqual(kept + 1);
+			expect(await board.getAttribute('data-fleet-other')).toBe(
+				await board.getAttribute('data-fleet-outside-top')
+			);
 			return;
 		}
 		const placements = Number(await list.getAttribute('data-fleet-list'));
 		expect(placements).toBeLessThan(APPEARANCE.console.fleet_min_rows);
-		await expect(panel.locator('[data-ranked-cell="bar"]')).toHaveCount(0);
+		await expect(panel.locator('[data-chart]')).toHaveCount(0);
 		await expect(panel.locator('[data-fleet-under]')).toContainText(
 			String(APPEARANCE.console.fleet_min_rows)
 		);
