@@ -39,7 +39,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 
-## In flight - 11
+## In flight - 13
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
@@ -53,6 +53,8 @@ run `--in-flight` instead; neither belongs in a committed file.
 | #11 | 33 | E | Delete `runtime-counters` and everything that reads it | p33e11p3b |
 | #15 | 33 | F | Generated TypeScript contracts replace the hand-written ones | p33f15 |
 | #19 | 33 | I | The shard board | p33i19 |
+| #21 | 33 | I | Memory and load, three grains - ABSORBS Row #14 | p33i21 |
+| #26 | 33 | I | Machine cards: L3 and bandwidth as bars - AMENDS Row #5 | p33i26 |
 | #29 | 33 | J | `prune.yml` wakes outside the digest window | p33j29 |
 
 ## Ready now - 28
@@ -92,7 +94,7 @@ section 3 is where it is answered.
 | #7 | 35 | A / eval-core | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - |
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
 
-## Waiting on another row - 83
+## Waiting on another row - 81
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -152,14 +154,12 @@ section 3 is where it is answered.
 | #9 | 27 | D | A cut reply keeps its summary | 1 is PENDING |
 | #11 | 27 | E | Two articles, three arms, one runner | 4 is PENDING |
 | #16 | 33 | G | Docs, and the orphan sweep | all names no row |
-| #21 | 33 | I | Memory and load, three grains - ABSORBS Row #14 | 15 is IN-FLIGHT; 19 is IN-FLIGHT |
-| #23 | 33 | I | What a run reads against what it writes, in tokens and in seconds | 21 is PENDING |
+| #23 | 33 | I | What a run reads against what it writes, in tokens and in seconds | 21 is IN-FLIGHT |
 | #25 | 33 | I | Outside the model call, as range marks | 23 is PENDING |
 | #22 | 33 | I | Platform mix as grouped bars | 25 is PENDING |
 | #24 | 33 | I | Counterfactual cost gets a shape | 22 is PENDING |
 | #20 | 33 | I | Timing panels merge and move to Pipeline | 24 is PENDING |
-| #26 | 33 | I | Machine cards: L3 and bandwidth as bars - AMENDS Row #5 | 11 is IN-FLIGHT |
-| #27 | 33 | K | Route grouping and panel order | 20 is PENDING; 26 is PENDING |
+| #27 | 33 | K | Route grouping and panel order | 20 is PENDING; 26 is IN-FLIGHT |
 | #14 | 33 | - | The per-item machine load panel | - |
 | #8 | 33 | - | Memory split by prefill and decode | - |
 | #6 | 35 | A / eval-core | Remove `new_fact_rate` + `key_point_weight` (+#34 field, judge stages, C3) | #34 names no row |
