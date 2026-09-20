@@ -35,7 +35,8 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | --- | --- | --- |
 | A host fingerprint on each judging shard | The council cannot say which processor ran a shard | A council reading that depends on the machine. The digest pipeline already characterises the same runner pool, and the bandwidth probe wants 1.9 GiB on the widest part in the fleet against a server that peaks at 96 percent of the runner |
 | Per-call spans folded into the shared span rollup | Per-call attribution. The judge's own row carries the call count, the total and the worst instead | A question the three aggregate numbers cannot answer |
-| Segments and the compaction verb as the council's shipping path | Durability the moment a shard finishes, and cross-run recovery by the row's own date. **Segments exist to remove a merge conflict by construction** - many committing shards on one day file - and the council has no committing shards, so there is no conflict here for them to prevent | A judging shard needing to commit something itself: output too large for an artifact, or output that must survive a dead collecting job (row #15, decision 4) |
+| Each judging shard committing its own rows instead of uploading them | **Segments would break the job that counts the shards, not protect it.** Every checkout in the council names no ref, so each job is pinned to the commit the run was triggered at - rows a shard commits at 22:40 are invisible to a collecting job checked out at 22:00. Segments remove a conflict between many committing writers on one file; the council has one committing writer, and its day file is already settled on every write by a key carrying the run id | A judging shard whose output is too large for an artifact, or which must survive the artifact's 24-hour retention. Neither is true today |
+| The council running the compaction verb | It takes no ledger filter and no date filter: it folds every waiting segment and then deletes the files it read. `origin/main` carries 21 waiting files across five ledgers right now. A council run would fold and delete all 21 while committing only its own folders. **And it raises rather than skips on a directory naming an unregistered ledger** - it is the first step of the digest run's planning job, so one unregistered directory stops publishing five times a day | **Nothing. This is refused for as long as the verb has no filter**, and it is a separate refusal from the one above |
 | A shared judge metric schema | Nothing. Each judge declares its own | Never. This is the defect the plan exists to remove |
 | A `Judge` base class, protocol or registry | The second judge duplicates the stage shape, about 150 lines | A third judge sharing three of the four steps |
 | One workflow per judge | Every judge shares one schedule and one runner label | A judge needing different weights or a different cadence |
@@ -69,6 +70,8 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 18 | The store groups under the judge that fills it | 17 | I | PENDING | - | - | - |
 | 19 | Where the line stands against its holdout | 7, 18 | J | PENDING | - | - | - |
 | 20 | The plan pointer | 19 | K | PENDING | - | - | - |
+| 21 | A night that recorded nothing says so | 1 | A | PENDING | - | - | - |
+| 22 | The reason a shard does not commit is rewritten | 21 | A | PENDING | - | - | - |
 
 **A `Parallel-group` letter is one pull request.** Rows sharing a letter are written together, gated once and merged once, and are chained in `Depends-on` where they write the same files - which is why every row inside C and F carries a predecessor.
 
@@ -643,21 +646,22 @@ Committed value `200`, bounds unchanged. It moves beside the pair budget and the
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | **The capability declares nothing about the payload.** It takes a contract instance, a judge identity and an output directory, validates, and writes one file a shard with a temp-file-then-rename. | Owner, 2026-09-20 |
-| 2 | **The council's own artifact path, not the digest pipeline's segment store - and the reason is who commits.** Segments exist to remove a merge conflict by construction: the digest pipeline has four to eight work shards on four to eight runners, each producing rows for one day file and **each committing**, and that many pushes racing on one file cannot be resolved by a workflow. Each shard commits a uniquely-named file instead, and one later process compacts. **The council has no committing shards.** Its shards upload and commit nothing, a test pins that, the concurrency group serialises two council runs, and the push script replays rows onto a new base when it loses a race to the digest run. One writer cannot conflict with itself, so there is no conflict here for a segment to prevent. | Owner, 2026-09-20 |
-| 3 | This is the path the council already runs for its primary data: the collecting stage appends every judged pair to the day file and pushes, tonight and every night. The metrics take the path the verdicts already take. | Carmack |
-| 4 | **The trigger that adopts segments, stated so it is a condition rather than a preference:** the day a judging shard must commit something itself - because its output is too large for an artifact, or because it must survive a collecting job that died. Segments are then the right answer, and the price is four rebase races at 22:00 and the end of the shards-commit-nothing ruling. | Owner, 2026-09-20 |
-| 5 | **Running the compaction verb is a separate hazard from writing segments, and only the verb is refused.** It takes no filter: it files away every ledger waiting in transit and deletes the transit copies, and the digest run's are often still waiting at 22:00 - measured 2026-09-20, 21 files across five ledgers. A council run that compacted and then committed only its own folders would destroy three ledgers a night. Writing segments without compacting would have avoided that; it is refused on decision 2, not on this one. | Carmack |
-| 6 | The upload carries an always condition. A shard that stopped on its deadline has metrics worth more than a shard that finished. | Carmack |
-| 7 | The collecting job appends each row to the store its own contract names, so a second judge needs no change here. | Fowler |
-| 8 | The staging drift guard is widened in this row to every workflow reaching a store writer, not only the daily one. Scoping a drift guard to a file rather than to a question is what let a second writer through before. | Carmack |
+| 2 | **The council's own artifact path, and the reason is that a commit would not reach the reader.** Every checkout in the council names no ref, so each job is pinned to the commit the run started at. A shard that commits its rows at 22:40 puts them where the collecting job - checked out at 22:00 - cannot see them, and the counting step decides whether every shard reported by counting the files it downloaded. Moving the rows into the tree does not make them safer; it makes them unreachable. | Fowler |
+| 3 | **Segments solve a conflict this workflow does not have.** The compaction's own docstring says they are where a writer puts its rows when more than one job writes one ledger. The digest pipeline has four to eight committing shards on one day file; the council has one committing writer, and its day file is already settled on every write by a key carrying the run id - which is the property segments exist to provide. | Fowler |
+| 4 | This is the path the council already runs for its primary data: the collecting stage appends every judged pair to the day file and pushes, tonight and every night. The metrics take the path the verdicts already take. | Carmack |
+| 5 | **The trigger that adopts segments, stated so it is a condition rather than a preference:** a judging shard whose output is too large for an artifact, or which must survive the artifact's 24-hour retention. Adopting them then also requires giving the collecting job a way to see commits made during its own run, which it does not have today. | Owner, 2026-09-20 |
+| 6 | **A judge that needs no model needs no shards.** Sharding exists because the model is slow. A pure-Python judge gets one job, so it has one writer and none of this applies to it. | Carmack |
+| 7 | The upload carries an always condition, and the shard uploads as it goes rather than once at the end. **The real exposure was never the collecting job dying - it is a shard dying**, which today ships nothing at all after up to 79 minutes of judging. | Carmack |
+| 8 | The collecting job appends each row to the store its own contract names, so a second judge needs no change here. | Fowler |
+| 9 | The staging drift guard is widened in this row to every workflow reaching a store writer, not only the daily one. | Carmack |
 
 - **Rejected alternatives:**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | Shards commit segments; the council never compacts, and the digest pipeline's compaction files them later | It buys durability the moment a shard finishes and cross-run recovery by the row's own date - both real. But it ends the ruling that judging shards commit nothing and the test pinning it, and puts four pushes at 22:00 where the council chose to have none | Four rebase races a night, and a ruling reversed. **Take it the day decision 4's trigger fires** | Owner |
-| 2 | The collecting job writes segments instead of appending | One writer cannot conflict with itself, so the indirection has no beneficiary - and the rows stay unreadable until somebody else's compaction runs | A dependency on another pipeline's schedule for no gain | Fowler |
-| 3 | Segments plus the council running the compaction verb | The compaction has no filter and the transit directory is shared; the council would delete data it never wrote | Three ledgers destroyed nightly, silently | Carmack |
+| 1 | Shards commit segments; the digest pipeline's compaction files them later | The collecting job cannot see commits made during its own run, so a re-run finds an empty directory. It also makes the council able to stop publishing: the compaction parses every waiting row through its contract and runs before the digest run plans a day, so one malformed judge row ends that run | Rows the counting step cannot reach, a cross-pipeline outage path, and three closed sets widened per judge | Fowler |
+| 2 | The collecting job writes segments instead of appending | One writer cannot conflict with itself, and the rows then wait for another pipeline's schedule - up to 4.8 hours - to become readable | A dependency on someone else's cron for no gain | Fowler |
+| 3 | Segments plus the council running the compaction verb | The verb has no filter and the transit directory is shared | Twenty-one waiting files deleted, their heads uncommitted | Carmack |
 | 4 | A capability that defines the metric columns | That is the council dictating a judge's metrics - the coupling this plan removes | Judge two files columns it cannot have | Owner |
 
 ---
@@ -780,3 +784,47 @@ Committed value `200`, bounds unchanged. It moves beside the pair budget and the
 | 1 | A plan absent from the index is invisible to the next agent. | Fowler |
 | 2 | **The plan-queue page is not touched.** A gate refuses any pull request that edits it and tells the author to restore it from the trunk; one job writes it after merge, and it discovers plans structurally - it already names this plan. | Fowler |
 | 3 | The findings that outlive the plan go to the living doc that owns them. The separation itself went to the council page in row #3, which is why it is not repeated here. | Guardrail #4 |
+
+---
+
+### Row #21 - A night that recorded nothing says so
+
+- **Scope:** a council run that produced no committed evidence is detectable, so a lost night costs a re-dispatch rather than going unnoticed until somebody reads the record weeks later.
+- **Files touched:** `backend/utilities/check_council_nights.py` (new), `.github/workflows/llm-council.yml`, `docs/architecture/publishing/llm-council.md`, `backend/tests/`
+- **Acceptance gates:** local - the utility's own test module, ruff, mypy, `doc_load.py --changed`. CI - full suite.
+- **Oracle:** the check reports a gap for a date the council was scheduled to judge and for which no row exists in the judged-pairs store, driven against a fixture tree. **It is bounded by the window it is asked about**, never by walking the archive (Guardrail #12). It cannot settle why the night is missing.
+- **Decisions:**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | **What makes a lost night expensive is silence, not loss.** A collecting job that dies before its first commit writes no judged rows, no fitted row and no held reason - the night leaves no trace at all, and the existing missing-shard reason only exists when that job actually runs. | Andre |
+| 2 | The loss itself is bounded, recoverable and cheap. The first fitted line is about 25 nights away because the scarce input is agreed NO readings at 8 a night against a floor of 200, so one night is about 4 percent of the run-up. The workflow takes a date input, the selection is a deterministic hash over the date and the committed day, and the record refuses only a second fold of a date it already counted - so re-dispatching a lost date redraws exactly the same pairs. Cost of the re-run: about four runner-hours. | Andre |
+| 3 | The line is not wired to a published day yet, so a lost night costs a reader nothing today. That changes when it is enabled, and the alarm is what makes the change safe. | Andre |
+| 4 | An operator surface under `backend/utilities/`, which pytest does not collect, so a real gap in the archive never turns a test suite red for a reason no reviewer could have seen (section 13). | Fowler |
+| 5 | This is the cheapest thing in the plan that moves the failure from permanent to a re-dispatch, which is why it sits with the defects rather than with the telemetry. | Owner, 2026-09-20 |
+
+- **Rejected alternatives:**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | Make the loss impossible instead, by having shards commit | It does not make it impossible - it makes the rows unreachable by the job that counts them, because every checkout is pinned to the commit the run started at | Rows on the branch that nothing reads | Fowler |
+| 2 | Measure the failure rate first, then decide | Bounding it at one night in ten needs about 30 clean nights, which is longer than the run-up to the first fit. The measurement arrives after the decision it would inform | A month of waiting for a number that changes nothing | Andre |
+| 3 | A test that walks the committed archive for gaps | A run can turn it red, and no reviewer can see it coming (section 13) | A suite that reports the weather | Fowler |
+
+---
+
+### Row #22 - The reason a shard does not commit is rewritten
+
+- **Scope:** the guard that stops a judging shard committing keeps its assertion and loses its dead reason, and the council page gains the design rationale it has never carried.
+- **Files touched:** `backend/tests/workflows/test_llm_council_workflow.py`, `.github/workflows/llm-council.yml`, `docs/architecture/publishing/llm-council.md`
+- **Acceptance gates:** local - the workflow harness, `doc_load.py --changed`. CI - full suite.
+- **Oracle:** the guard still refuses a judging job that commits, **and it detects one issued from a composite action** rather than only from an inline script. It cannot settle whether the new reason is the best one.
+- **Decisions:**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The assertion stays. The reason goes: it says four shards would push into one union-merged file, and union merging left the judged-pairs store on 2026-09-19. Quoting it today quotes a dead fact and invites a reader to retire the guard with it. | Fowler |
+| 2 | The reason that replaces it cannot be retired by a config edit: **the job that counts the shards is pinned to the commit the run started at, so rows a shard commits during the run are invisible to it.** | Fowler |
+| 3 | The same dead premise is repeated in the workflow's own comment and is corrected in the same pass. | Carmack |
+| 4 | **The guard is a substring search over the job's inline scripts, so it sees nothing issued from a composite action** - and the composite-action row moves the model block into exactly such an action. It is widened here, in the row that owns it, rather than discovered later. | Carmack |
+| 5 | The council page asserts the artifact choice and has never priced it. It gains a `## Design rationale` naming the pinned checkout, the conflict segments solve, and the trigger that would change the answer. | Guardrail #4 |
