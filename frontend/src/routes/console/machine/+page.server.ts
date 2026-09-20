@@ -20,6 +20,7 @@ import {
 	type ReadWriteSummary,
 	type RunWork
 } from '$lib/charts/machine';
+import { costChart, costOverDays, DEFAULT_COST_SHAPE } from '$lib/charts/cost';
 import { splitByMachine } from '$lib/charts/machine-split';
 import { machineCards, type MachineCards } from '$lib/charts/machine-cards';
 import { machineKeys, machineRamp } from '$lib/charts/machine-colour';
@@ -395,6 +396,11 @@ export async function load() {
 	// Drawn at the unit the panel opens on, so the first paint and the radio that
 	// is already checked agree before a script has run.
 	const workPlot = workChart(opening.tokens, opening.work, DEFAULT_WORK_UNIT);
+	// Both shapes of the counterfactual out of one call, priced at the configured
+	// rate because that is the rate the prerendered document states. An operator
+	// who types his own gets the same arrays multiplied by it, in the browser.
+	const costShapes = costOverDays(opening.tokens, rate, { heightPx: chart.height_px });
+	const costPlot = costChart(costShapes, DEFAULT_COST_SHAPE, rate.currency);
 	// The fleet trend at the span the page opens on. It is drawn only where the
 	// count cleared the list floor, because under it the panel is a list.
 	const fleetPlot = fleetChart(opening.fleet.trend);
@@ -465,6 +471,9 @@ export async function load() {
 		workSvg: await draw(workPlot, chart.height_px),
 		workGrid: workPlot.grid,
 		workUnit: DEFAULT_WORK_UNIT,
+		costSvg: await draw(costPlot, chart.height_px),
+		costGrid: costPlot.grid,
+		costShape: DEFAULT_COST_SHAPE,
 		fleetSvg: opening.fleet.drawBars ? await draw(fleetPlot, chart.height_px) : null,
 		fleetGrid: fleetPlot.grid,
 		rate,

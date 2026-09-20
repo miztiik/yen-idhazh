@@ -114,6 +114,14 @@ owner's carve-out for that one on conditions this section holds:
  Guardrail #10 exists to prevent.
 - **The word for what it is sits in the panel, not in a tooltip**: what the run
  would have cost somewhere else, never an amount owed.
+- **Once the figure has a shape, the word rides the shape.** The value axis
+ reads `Counterfactual cost, USD`, and the running shape reads `Counterfactual
+ cost so far, USD`; the chart's own description says it again for a reader who
+ cannot see the marks. A currency code alone on an axis is the shape a bill
+ takes just as surely as a symbol is, and an axis title is the label a reader
+ meets before any of the numbers - so it is the one place the word cannot be
+ missed. The four figures above the chart keep the sentence they already
+ carried. The chart does not inherit it by being near it.
 - **Digits are grouped by hand, never by `toLocaleString`.** The server draws
  the page and two builds have to agree; a locale-dependent separator moves the
  prerendered document and the byte gate reads it as a regression.
@@ -1054,6 +1062,28 @@ stronger form still holds, and it is still the one to prefer.
 switch. A panel whose shapes come out of one call but are not the same array owes
 its own oracle comparing the two shapes' numbers, the way `console-chrome.spec.ts`
 already compares the two that qualify under the stronger form.
+
+**The counterfactual-cost panel is the first to ship under the widened form, and
+this is the oracle it paid.** `costOverDays` walks the window's runs once and
+returns one array of days, each carrying what reading cost, what writing cost,
+and the running total to that day. The bars read the first two, the line reads
+the third, and neither derives anything. `console-machine.spec.ts` asserts the
+line's last point equals every bar added up, and asserts it a second time against
+the window total the four figures above the chart print - so the two shapes and
+the headline number are one piece of arithmetic reached three ways.
+`console-machine-panels.spec.ts` then asserts in a browser that moving the switch
+changes neither the day count nor that total, which is what a second derivation
+would have moved.
+
+**Reading is the bottom band and writing the top, and the panel measures whether
+the split may be drawn at all.** At the committed rate, over the 25 days the
+ledger held on 2026-09-20, the writing half ran between 27.4 and 45.4 percent of
+its own day, and the thinnest band of all measured 2.0 percent of the tallest
+column - 3.3 px of a 164 px plot, so the split draws. The rate is the operator's
+to type, though, and a writing rate near zero takes that band under a pixel. The
+builder measures the thinnest band against the tallest column before it picks a
+shape; under a pixel the column draws whole and the split becomes the printed
+figure beside it, with the measurement it was decided on printed too.
 
 ## A chart says how much of its window it measured, once, above the plot
 

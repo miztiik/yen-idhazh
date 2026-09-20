@@ -62,6 +62,15 @@
 		SHARED_AXIS_LIMIT,
 		type WorkUnit
 	} from '$lib/charts/machine';
+	import {
+		costChart,
+		costColumns,
+		costLabel,
+		costOverDays,
+		COST_SHAPES,
+		DEFAULT_COST_SHAPE,
+		type CostShape
+	} from '$lib/charts/cost';
 	import { spanTrack } from '$lib/charts/span-track';
 	import { fleetChart, fleetColumns } from '$lib/charts/fleet';
 	import { grouped } from '$lib/charts/series';
@@ -474,6 +483,22 @@
 	const totalCost = $derived(inputCost + outputCost);
 	const perArticle = $derived(
 		view.tokenTotals.items === 0 ? null : totalCost / view.tokenTotals.items
+	);
+
+	// One call, both shapes. The bars and the line are two readings of one array,
+	// so the line's last point and the total printed above it are the same
+	// arithmetic rather than two derivations that can drift apart.
+	const costShapes = $derived(costOverDays(view.tokens, rate, { heightPx: data.chart.height_px }));
+	// The shape the panel opens on. The server drew this one, so the first paint
+	// and the radio that is already checked agree before a script has run.
+	let costShape = $state<CostShape>(DEFAULT_COST_SHAPE);
+	const costOption = $derived(costChart(costShapes, costShape, rate.currency).option);
+	const costStrip = $derived(costColumns(costShapes, costShape, rate.currency));
+	/** The thinnest band as a share of the tallest day, at one precision, so the
+	 * figure the panel prints and the figure the shape was picked on can never be
+	 * two readings of one measurement. */
+	const costThinnest = $derived(
+		costShapes.thinnestShare === null ? null : (costShapes.thinnestShare * 100).toFixed(1)
 	);
 </script>
 
@@ -1559,6 +1584,62 @@
 						</dd>
 					</div>
 				</dl>
+
+				<div
+					data-cost-shape={costShape}
+					data-cost-days={costShapes.days.length}
+					data-cost-running-total={costShapes.runningTotal}
+					data-cost-split={costShapes.splitTooThin ? 'printed' : 'drawn'}
+					data-cost-thinnest-pct={costThinnest ?? ''}
+					data-panel-question="is it working"
+				>
+					<!-- Top right of its own panel, and radio inputs: two named states a
+					     reader can see both of beat one state and a verb. -->
+					<div class="units">
+						<ShapeSwitch
+							bind:shape={costShape}
+							name="cost-shape"
+							label="Which shape to draw the counterfactual in"
+							options={COST_SHAPES}
+						/>
+					</div>
+
+					{#if costShapes.days.length === 0}
+						<p class="empty" data-cost-absent="days">
+							No run in these {view.days} days carries a date, so there is nothing to lay on a
+							time axis. The four figures above still hold.
+						</p>
+					{:else}
+						<Chart
+							svg={data.costSvg ?? ''}
+							option={costOption}
+							width={data.chart.width_px}
+							height={data.chart.height_px}
+							label={costLabel(costShape, view.days)}
+							columns={costStrip}
+							readoutName="counterfactual-cost"
+							readoutMaxShare={data.chart.readout_max_share}
+							grid={data.costGrid}
+							restingNote=", the newest day"
+							hint="Point at a day to read it. Left and Right step through them, Escape returns to the newest."
+						/>
+					{/if}
+
+					<!-- 19D8's threshold is a measurement, so the panel prints the one it
+					     took rather than asserting the bands were safe to draw. -->
+					<p class="reads" data-cost-measured>
+						{#if costThinnest === null}
+							Nothing split in this window, so the columns carry no bands.
+						{:else if costShapes.splitTooThin}
+							Reading and writing are one column here. The smaller half measures {costThinnest}
+							percent of the tallest day, which draws under a pixel, and a band a browser paints
+							nothing for teaches a reader the half is zero.
+						{:else}
+							The smaller half of the busiest day measures {costThinnest} percent of the tallest
+							column, so both halves draw as bands rather than as a printed figure.
+						{/if}
+					</p>
+				</div>
 
 				<p class="reads" data-cost-basis>
 					What {view.tokens.length}

@@ -433,7 +433,7 @@ published mirror carries no address, no title and no fetched text.
 | How the tail moved | one plot a percentile, one mark a run | Whether the slow end of a run is moving. |
 | How long the newest run's tail was | the newest run | What the whole distribution of one run looks like at once. |
 | What a run reads against what it writes | one group a run, in either unit | Which half of the model call the run actually spent itself on. |
-| What this would have cost somewhere else | the whole span | Whether the runner time was a good trade. |
+| What this would have cost somewhere else | four figures over the whole span, and one column a day or one running line | Whether the runner time was a good trade, and whether the trade is getting worse. |
 
 **A run is not a machine, and three of those panels exist because the route said
 otherwise for weeks.** Measured 2026-09-17 over the committed counters ledger -

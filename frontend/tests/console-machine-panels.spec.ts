@@ -479,3 +479,94 @@ test.describe('what a run reads against what it writes', () => {
 		await expect(board.locator('[data-chart]')).toHaveCount(1);
 	});
 });
+
+test.describe('what this would have cost somewhere else', () => {
+	const PANEL = '[data-console-panel="What this would have cost somewhere else"]';
+
+	test('one chart beside the four numbers, and the switch opens where the server drew', async ({
+		page
+	}) => {
+		await page.goto('/console/machine/');
+		const panel = page.locator(PANEL);
+		await expect(panel).toBeVisible();
+		const board = panel.locator('[data-cost-shape]');
+		await expect(board).toHaveAttribute('data-panel-question', 'is it working');
+		await expect(panel.locator('[data-chart]')).toHaveCount(1);
+		// The four figures stay. A chart that replaced them would have taken the
+		// per-article reading, which no shape of the chart carries.
+		expect(
+			await panel.locator('[data-cost-figures] [data-cost]').evaluateAll((nodes) =>
+				nodes.map((node) => node.getAttribute('data-cost') ?? '').sort()
+			)
+		).toEqual(['input', 'output', 'per-article', 'total']);
+		// The server drew one shape and the radio for it is already checked, so
+		// the first paint and the control agree before a script has run.
+		const opened = await board.getAttribute('data-cost-shape');
+		await expect(page.locator('[data-shape-switch="cost-shape"]')).toHaveAttribute(
+			'data-shape',
+			opened ?? ''
+		);
+	});
+
+	test('the switch moves the shape and never the days it was taken over', async ({ page }) => {
+		await page.goto('/console/machine/');
+		const board = page.locator(PANEL).locator('[data-cost-shape]');
+		await expect(board).toBeVisible();
+		const days = await board.getAttribute('data-cost-days');
+		const total = await board.getAttribute('data-cost-running-total');
+		expect(Number(days)).toBeGreaterThan(0);
+
+		const opened = await board.getAttribute('data-cost-shape');
+		const other = opened === 'running' ? 'daily' : 'running';
+		await page.locator(`[data-shape-switch="cost-shape"] [data-shape-option="${other}"]`).click();
+		await expect(board).toHaveAttribute('data-cost-shape', other);
+		// One builder call answers both shapes, so neither the day count nor the
+		// total can move with the switch. A total that moved would mean two
+		// derivations of one quantity, with nothing on screen saying which to
+		// believe.
+		await expect(board).toHaveAttribute('data-cost-days', days ?? '');
+		await expect(board).toHaveAttribute('data-cost-running-total', total ?? '');
+	});
+
+	test('the line ends where the four numbers above it say it should', async ({ page }) => {
+		await page.goto('/console/machine/');
+		const panel = page.locator(PANEL);
+		const board = panel.locator('[data-cost-shape]');
+		// A typed rate, because the committed one puts the window total under the
+		// two decimals the headline figure prints, and a comparison taken across
+		// that floor would be decided by the rounding.
+		for (const [which, value] of [
+			['input', '100'],
+			['output', '300']
+		] as const) {
+			const field = page.locator(`[data-rate-input="${which}"]`);
+			await expect(field).toBeEnabled();
+			await field.fill(value);
+			await field.blur();
+		}
+		await expect(panel.locator('[data-cost-figures]')).toHaveAttribute('data-cost-source', 'yours');
+
+		const running = Number(await board.getAttribute('data-cost-running-total'));
+		const printed = Number(
+			(await panel.locator('[data-cost="total"] dd').innerText()).replace(/[^0-9.]/g, '')
+		);
+		expect(running).toBeGreaterThan(0.1);
+		// The sum of the bars and the sum of the tokens are the same arithmetic,
+		// reached two ways. The printed figure carries two decimals, so that is
+		// the precision the comparison is owed.
+		expect(running).toBeCloseTo(printed, 2);
+	});
+
+	test('the split is drawn as bands or printed as a figure, and the panel says which', async ({
+		page
+	}) => {
+		await page.goto('/console/machine/');
+		const board = page.locator(PANEL).locator('[data-cost-shape]');
+		const split = await board.getAttribute('data-cost-split');
+		expect(['drawn', 'printed']).toContain(split);
+		// Whichever arm it took, the measurement it took it on is on the page.
+		const measured = await board.getAttribute('data-cost-thinnest-pct');
+		expect(Number(measured)).toBeGreaterThan(0);
+		await expect(board.locator('[data-cost-measured]')).toContainText(measured ?? 'no measurement');
+	});
+});
