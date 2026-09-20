@@ -16,17 +16,19 @@ becoming that many opinions.
 | --- | --- |
 | this page | the inventory: which panel, on which route, answering what, plus the chrome every route shares |
 | [console-machine.md](console-machine.md) | the Hardware route: what machine the run drew, and whether the day's rate means anything because of it |
-| [console-caps.md](console-caps.md) | the two caps and what each is costing: words the truncation cap removed, and bytes left before the 1 GB site |
+| [console-truncation.md](console-truncation.md) | what the truncation cap costs, and the four places across three routes that say it |
+| [console-site-size.md](console-site-size.md) | whether the published site outgrows the 1 GB Pages cap, drawn as a rate rather than a level |
 | [console-charts.md](console-charts.md) | the machinery every chart shares: the frame, the readout, the marks |
 | [../../concepts/console-design.md](../../concepts/console-design.md) | the presentation rule: wording, colour, ranking, empty states |
 | [console-payloads.md](console-payloads.md) | the wire: what a browser may fetch, and the trust boundary |
 | [telemetry-series.md](telemetry-series.md) | the grain: what a figure was measured over |
 
-**The two children are questions a person arrives holding, not chapters.**
-Somebody asking "what box did this run get" is not reading the panel inventory,
-and somebody asking "how close is the site to the cap" is not either. What stays
-here is what you need to place any panel at all: the two questions, the routes,
-the band and the window.
+**Each child is a question a person arrives holding, not a chapter.** Somebody
+asking "what box did this run get" is not reading the panel inventory; somebody
+asking "how close is the site to the cap" is not either; and the truncation cap
+is said in four places across three routes, so it belongs to no single one of
+them. What stays here is what you need to place any panel at all: the two
+questions, the routes, the band and the window.
 
 It is instrumentation: it takes no ornament and spends no reader attention, and
 what it owes instead is legibility - a figure readable at a glance, a table that

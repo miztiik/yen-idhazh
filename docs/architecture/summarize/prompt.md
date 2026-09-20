@@ -1472,5 +1472,5 @@ restamping and no committed `output_digest` stopped verifying (section 11).
 - [`../sources/trust-boundary.md`](../sources/trust-boundary.md) - why article text, including its headline, is data.
 - [`../contracts/determinism.md`](../contracts/determinism.md) - the recorded input manifest this prompt is part of.
 - [`../../reference/pipeline-cost.md`](../../reference/pipeline-cost.md) - the token cost.
-- [`../publishing/console-caps.md`](../publishing/console-caps.md) - what the truncation cap is costing, and the four places the console says it.
+- [`../publishing/console-truncation.md`](../publishing/console-truncation.md) - what the truncation cap is costing, and the four places the console says it.
 - [`../../../.github/agents/andre.agent.md`](../../../.github/agents/andre.agent.md) - the persona who owns prompt strategy.
