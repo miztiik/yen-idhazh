@@ -1,9 +1,7 @@
 {
   "auto_retire": false,
-  "complete_dates": 25,
+  "complete_dates": 27,
   "dwell_dates": [
-    "2026-09-04",
-    "2026-09-05",
     "2026-09-06",
     "2026-09-07",
     "2026-09-08",
@@ -15,37 +13,27 @@
     "2026-09-14",
     "2026-09-15",
     "2026-09-16",
-    "2026-09-17"
+    "2026-09-17",
+    "2026-09-18",
+    "2026-09-19"
   ],
   "dwell_days": 14,
   "first_date": "2026-08-24",
-  "generated_at": "2026-09-18T14:40:00Z",
+  "generated_at": "2026-09-20T10:18:44Z",
   "headline_sentence": "10 of 156 feeds are discounted to the 50% floor, which is as far as the ranking takes one.",
-  "last_date": "2026-09-17",
+  "last_date": "2026-09-19",
   "min_complete_days": 30,
   "reliability_floor": 0.5,
   "reliability_window_days": 30,
-  "run_id": "2026-09-18-35339202390",
+  "run_id": "2026-09-20-35497768799",
   "sources": [
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 198,
+      "opportunities": 203,
       "permission": "allowed",
-      "publications": 191,
+      "publications": 196,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -117,10 +105,22 @@
           "opportunities": 6,
           "publications": 6,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 3,
+          "publications": 3,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -132,22 +132,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 158,
+      "opportunities": 160,
       "permission": "allowed",
-      "publications": 154,
+      "publications": 156,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 8,
-          "publications": 8,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 8,
@@ -219,10 +207,22 @@
           "opportunities": 3,
           "publications": 3,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -239,18 +239,6 @@
       "publications": 1,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -321,10 +309,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -341,18 +341,6 @@
       "publications": 31,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -423,10 +411,22 @@
           "opportunities": 1,
           "publications": 1,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -443,18 +443,6 @@
       "publications": 6,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -525,10 +513,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -540,22 +540,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 211,
+      "opportunities": 215,
       "permission": "allowed",
       "publications": 78,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 10,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -627,10 +615,22 @@
           "opportunities": 9,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 4,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -646,18 +646,6 @@
       "permission": "allowed",
       "publications": 26,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -729,10 +717,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -744,22 +744,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 193,
+      "opportunities": 196,
       "permission": "allowed",
-      "publications": 184,
+      "publications": 187,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 9,
-          "publications": 9,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 9,
-          "publications": 9,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -831,10 +819,22 @@
           "opportunities": 6,
           "publications": 6,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -850,18 +850,6 @@
       "permission": "denied",
       "publications": 0,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -930,6 +918,18 @@
         },
         {
           "date": "2026-09-17",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
@@ -953,18 +953,6 @@
       "publications": 0,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -1032,6 +1020,18 @@
         },
         {
           "date": "2026-09-17",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
@@ -1055,18 +1055,6 @@
       "publications": 140,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 10,
           "publications": 10,
@@ -1137,10 +1125,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -1157,18 +1157,6 @@
       "publications": 23,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -1239,10 +1227,22 @@
           "opportunities": 1,
           "publications": 1,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -1254,22 +1254,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 56,
+      "opportunities": 58,
       "permission": "allowed",
-      "publications": 54,
+      "publications": 56,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 2,
-          "publications": 2,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 1,
-          "publications": 1,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -1341,10 +1329,22 @@
           "opportunities": 4,
           "publications": 4,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
-      "reliability": 0.9918032786885246,
-      "reliability_reads": 122,
+      "reliability": 0.992,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -1356,22 +1356,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 55,
+      "opportunities": 57,
       "permission": "allowed",
-      "publications": 55,
+      "publications": 57,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 5,
-          "publications": 5,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 1,
@@ -1443,10 +1431,22 @@
           "opportunities": 2,
           "publications": 2,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -1458,22 +1458,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 14,
+      "opportunities": 17,
       "permission": "allowed",
       "publications": 0,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -1545,10 +1533,22 @@
           "opportunities": 7,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 3,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -1565,18 +1565,6 @@
       "publications": 1,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -1647,10 +1635,22 @@
           "opportunities": 1,
           "publications": 1,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 44,
+      "reliability_reads": 47,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -1662,22 +1662,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 125,
+      "opportunities": 129,
       "permission": "allowed",
-      "publications": 115,
+      "publications": 118,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 3,
-          "publications": 3,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 5,
@@ -1749,14 +1737,26 @@
           "opportunities": 3,
           "publications": 3,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 4,
+          "publications": 3,
+          "source_failures": 1
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
-      "source_failures": 8,
+      "source_failures": 9,
       "source_id": "bbc-business",
       "title": "BBC - Business",
       "vertical": "business-economy"
@@ -1764,22 +1764,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 63,
+      "opportunities": 64,
       "permission": "allowed",
-      "publications": 57,
+      "publications": 58,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 5,
-          "publications": 5,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 1,
-          "publications": 0,
-          "source_failures": 1
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -1851,10 +1839,22 @@
           "opportunities": 1,
           "publications": 1,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -1866,22 +1866,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 171,
+      "opportunities": 172,
       "permission": "allowed",
-      "publications": 166,
+      "publications": 167,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 7,
-          "publications": 7,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 8,
-          "publications": 8,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 9,
@@ -1953,10 +1941,22 @@
           "opportunities": 5,
           "publications": 5,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -1973,18 +1973,6 @@
       "publications": 0,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -2055,10 +2043,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 0.5,
-      "reliability_reads": 8,
+      "reliability_reads": 9,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -2070,22 +2070,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 25,
+      "opportunities": 30,
       "permission": "allowed",
-      "publications": 23,
+      "publications": 28,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -2157,10 +2145,22 @@
           "opportunities": 6,
           "publications": 6,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 3,
+          "publications": 3,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 26,
+      "reliability_reads": 29,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -2170,24 +2170,12 @@
       "vertical": "ai"
     },
     {
-      "availability": "failing",
+      "availability": "resting",
       "days_under_the_mark": 0,
       "opportunities": 0,
       "permission": "allowed",
       "publications": 0,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -2259,10 +2247,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 0.5,
-      "reliability_reads": 19,
+      "reliability_reads": 20,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -2274,22 +2274,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 177,
+      "opportunities": 184,
       "permission": "allowed",
-      "publications": 165,
+      "publications": 171,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -2361,14 +2349,26 @@
           "opportunities": 8,
           "publications": 7,
           "source_failures": 1
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 5,
+          "publications": 4,
+          "source_failures": 1
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
-      "source_failures": 6,
+      "source_failures": 7,
       "source_id": "business-today-in",
       "title": "Business Today",
       "vertical": "business-economy"
@@ -2380,18 +2380,6 @@
       "permission": "allowed",
       "publications": 5,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -2463,10 +2451,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -2483,18 +2483,6 @@
       "publications": 45,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 2,
-          "publications": 2,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -2565,10 +2553,22 @@
           "opportunities": 2,
           "publications": 2,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -2585,18 +2585,6 @@
       "publications": 19,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 2,
-          "publications": 2,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -2667,10 +2655,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -2682,22 +2682,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 31,
+      "opportunities": 34,
       "permission": "allowed",
-      "publications": 29,
+      "publications": 32,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -2769,10 +2757,22 @@
           "opportunities": 3,
           "publications": 3,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 49,
+      "reliability_reads": 52,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -2784,22 +2784,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 44,
+      "opportunities": 50,
       "permission": "allowed",
-      "publications": 44,
+      "publications": 50,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -2871,10 +2859,22 @@
           "opportunities": 4,
           "publications": 4,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 4,
+          "publications": 4,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 49,
+      "reliability_reads": 52,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -2886,22 +2886,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 39,
+      "opportunities": 40,
       "permission": "allowed",
-      "publications": 35,
+      "publications": 36,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -2973,10 +2961,22 @@
           "opportunities": 4,
           "publications": 3,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 49,
+      "reliability_reads": 52,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -2988,22 +2988,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 38,
+      "opportunities": 42,
       "permission": "allowed",
-      "publications": 36,
+      "publications": 40,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -3075,10 +3063,22 @@
           "opportunities": 3,
           "publications": 3,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 49,
+      "reliability_reads": 52,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -3095,18 +3095,6 @@
       "publications": 0,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -3177,10 +3165,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -3196,18 +3196,6 @@
       "permission": "allowed",
       "publications": 91,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 8,
-          "publications": 8,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 8,
-          "publications": 8,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 3,
@@ -3279,10 +3267,22 @@
           "opportunities": 1,
           "publications": 1,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -3294,22 +3294,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 146,
+      "opportunities": 153,
       "permission": "allowed",
-      "publications": 141,
+      "publications": 148,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 6,
-          "publications": 6,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 1,
@@ -3381,10 +3369,22 @@
           "opportunities": 8,
           "publications": 8,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 5,
+          "publications": 5,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -3396,22 +3396,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 134,
+      "opportunities": 137,
       "permission": "allowed",
-      "publications": 129,
+      "publications": 132,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 7,
-          "publications": 7,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 5,
-          "publications": 5,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -3483,10 +3471,22 @@
           "opportunities": 3,
           "publications": 3,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -3503,18 +3503,6 @@
       "publications": 1,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -3585,10 +3573,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -3605,18 +3605,6 @@
       "publications": 3,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -3687,10 +3675,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -3707,18 +3707,6 @@
       "publications": 28,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 1,
-          "publications": 1,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 2,
           "publications": 2,
@@ -3789,10 +3777,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -3809,18 +3809,6 @@
       "publications": 1,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -3891,10 +3879,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -3911,18 +3911,6 @@
       "publications": 12,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 6,
-          "publications": 6,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -3993,10 +3981,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -4012,18 +4012,6 @@
       "permission": "allowed",
       "publications": 0,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -4095,10 +4083,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 44,
+      "reliability_reads": 47,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -4110,22 +4110,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 62,
+      "opportunities": 66,
       "permission": "allowed",
-      "publications": 61,
+      "publications": 65,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 3,
-          "publications": 3,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -4197,10 +4185,22 @@
           "opportunities": 2,
           "publications": 2,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -4212,22 +4212,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 164,
+      "opportunities": 172,
       "permission": "allowed",
-      "publications": 159,
+      "publications": 166,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 8,
-          "publications": 8,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -4299,10 +4287,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 6,
+          "publications": 5,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 94,
+      "reliability_reads": 97,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -4319,18 +4319,6 @@
       "publications": 47,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -4401,10 +4389,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -4416,22 +4416,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 135,
+      "opportunities": 140,
       "permission": "allowed",
-      "publications": 133,
+      "publications": 138,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -4503,10 +4491,22 @@
           "opportunities": 6,
           "publications": 6,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 4,
+          "publications": 4,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -4523,18 +4523,6 @@
       "publications": 106,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 8,
-          "publications": 8,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 2,
-          "publications": 2,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 5,
           "publications": 5,
@@ -4605,10 +4593,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -4624,18 +4624,6 @@
       "permission": "allowed",
       "publications": 17,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 2,
-          "publications": 2,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 3,
-          "publications": 3,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -4707,10 +4695,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -4722,22 +4722,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 220,
+      "opportunities": 228,
       "permission": "allowed",
-      "publications": 213,
+      "publications": 221,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -4809,10 +4797,22 @@
           "opportunities": 10,
           "publications": 10,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 6,
+          "publications": 6,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -4828,18 +4828,6 @@
       "permission": "denied",
       "publications": 19,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -4908,6 +4896,18 @@
         },
         {
           "date": "2026-09-17",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
@@ -4926,22 +4926,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 164,
+      "opportunities": 168,
       "permission": "allowed",
-      "publications": 160,
+      "publications": 164,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 7,
-          "publications": 7,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 1,
@@ -5013,10 +5001,22 @@
           "opportunities": 5,
           "publications": 5,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -5032,18 +5032,6 @@
       "permission": "allowed",
       "publications": 0,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -5115,10 +5103,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -5130,22 +5130,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 147,
+      "opportunities": 150,
       "permission": "allowed",
-      "publications": 143,
+      "publications": 145,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 8,
-          "publications": 8,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 9,
@@ -5217,10 +5205,22 @@
           "opportunities": 4,
           "publications": 4,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 2,
+          "publications": 1,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -5236,18 +5236,6 @@
       "permission": "allowed",
       "publications": 10,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -5316,6 +5304,18 @@
         },
         {
           "date": "2026-09-17",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
@@ -5334,22 +5334,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 78,
+      "opportunities": 79,
       "permission": "allowed",
-      "publications": 77,
+      "publications": 78,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 7,
-          "publications": 7,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -5421,10 +5409,22 @@
           "opportunities": 2,
           "publications": 2,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -5441,18 +5441,6 @@
       "publications": 92,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 4,
-          "publications": 4,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 5,
-          "publications": 5,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 5,
           "publications": 5,
@@ -5523,10 +5511,22 @@
           "opportunities": 2,
           "publications": 2,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -5542,18 +5542,6 @@
       "permission": "allowed",
       "publications": 0,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -5625,10 +5613,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -5640,22 +5640,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 206,
+      "opportunities": 211,
       "permission": "allowed",
-      "publications": 185,
+      "publications": 190,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -5727,10 +5715,22 @@
           "opportunities": 7,
           "publications": 7,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 4,
+          "publications": 4,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
-      "reliability": 0.9836065573770492,
-      "reliability_reads": 122,
+      "reliability": 0.984,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -5742,22 +5742,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 68,
+      "opportunities": 71,
       "permission": "allowed",
-      "publications": 64,
+      "publications": 67,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 8,
-          "publications": 8,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 1,
-          "publications": 1,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 1,
@@ -5829,10 +5817,22 @@
           "opportunities": 1,
           "publications": 1,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -5844,22 +5844,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 26,
+      "opportunities": 28,
       "permission": "allowed",
-      "publications": 26,
+      "publications": 28,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 1,
-          "publications": 1,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -5931,10 +5919,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
-      "reliability": 0.9918032786885246,
-      "reliability_reads": 122,
+      "reliability": 0.992,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -5946,22 +5946,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 16,
+      "opportunities": 18,
       "permission": "allowed",
-      "publications": 16,
+      "publications": 17,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -6033,10 +6021,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 2,
+          "publications": 1,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -6053,18 +6053,6 @@
       "publications": 1,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -6135,10 +6123,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 44,
+      "reliability_reads": 47,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -6155,18 +6155,6 @@
       "publications": 0,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -6237,10 +6225,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 44,
+      "reliability_reads": 47,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -6256,18 +6256,6 @@
       "permission": "allowed",
       "publications": 5,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -6339,10 +6327,22 @@
           "opportunities": 1,
           "publications": 1,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 26,
+      "reliability_reads": 29,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -6358,18 +6358,6 @@
       "permission": "allowed",
       "publications": 6,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -6441,10 +6429,22 @@
           "opportunities": 3,
           "publications": 3,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
-      "reliability": 0.9615384615384616,
-      "reliability_reads": 26,
+      "reliability": 0.9655172413793104,
+      "reliability_reads": 29,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -6460,18 +6460,6 @@
       "permission": "allowed",
       "publications": 6,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -6543,10 +6531,22 @@
           "opportunities": 1,
           "publications": 1,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -6558,22 +6558,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 186,
+      "opportunities": 194,
       "permission": "allowed",
-      "publications": 176,
+      "publications": 184,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -6645,10 +6633,22 @@
           "opportunities": 8,
           "publications": 8,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 6,
+          "publications": 6,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -6660,22 +6660,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 118,
+      "opportunities": 119,
       "permission": "allowed",
-      "publications": 114,
+      "publications": 115,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 6,
-          "publications": 6,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 3,
-          "publications": 3,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 3,
@@ -6747,10 +6735,22 @@
           "opportunities": 3,
           "publications": 1,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -6767,18 +6767,6 @@
       "publications": 15,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 1,
-          "publications": 1,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 3,
-          "publications": 3,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 2,
           "publications": 2,
@@ -6849,10 +6837,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -6864,22 +6864,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 13,
+      "opportunities": 16,
       "permission": "allowed",
-      "publications": 12,
+      "publications": 15,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -6951,10 +6939,22 @@
           "opportunities": 1,
           "publications": 1,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 58,
+      "reliability_reads": 61,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -6966,22 +6966,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 9,
+      "opportunities": 10,
       "permission": "allowed",
-      "publications": 9,
+      "publications": 10,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 1,
-          "publications": 1,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -7053,10 +7041,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
-      "reliability": 0.98989898989899,
-      "reliability_reads": 99,
+      "reliability": 0.9901960784313726,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -7068,22 +7068,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 50,
+      "opportunities": 51,
       "permission": "allowed",
-      "publications": 50,
+      "publications": 51,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -7155,10 +7143,22 @@
           "opportunities": 1,
           "publications": 1,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -7175,18 +7175,6 @@
       "publications": 52,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 2,
-          "publications": 2,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -7257,10 +7245,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -7272,22 +7272,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 20,
+      "opportunities": 21,
       "permission": "allowed",
       "publications": 18,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 2,
-          "publications": 2,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 1,
-          "publications": 1,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 1,
@@ -7359,10 +7347,22 @@
           "opportunities": 1,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 1,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -7374,22 +7374,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 148,
+      "opportunities": 152,
       "permission": "allowed",
-      "publications": 144,
+      "publications": 148,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 5,
-          "publications": 5,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 5,
-          "publications": 5,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 3,
@@ -7461,10 +7449,22 @@
           "opportunities": 4,
           "publications": 4,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 3,
+          "publications": 3,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -7476,22 +7476,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 161,
+      "opportunities": 167,
       "permission": "allowed",
-      "publications": 155,
+      "publications": 161,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 8,
-          "publications": 8,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -7563,10 +7551,22 @@
           "opportunities": 5,
           "publications": 5,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 5,
+          "publications": 5,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -7578,22 +7578,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 189,
+      "opportunities": 194,
       "permission": "allowed",
-      "publications": 176,
+      "publications": 181,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 8,
-          "publications": 8,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 7,
@@ -7665,10 +7653,22 @@
           "opportunities": 8,
           "publications": 8,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 4,
+          "publications": 4,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -7685,18 +7685,6 @@
       "publications": 21,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 4,
-          "publications": 2,
-          "source_failures": 2
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 2,
-          "publications": 0,
-          "source_failures": 2
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -7767,10 +7755,22 @@
           "opportunities": 2,
           "publications": 1,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -7782,22 +7782,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 205,
+      "opportunities": 212,
       "permission": "allowed",
-      "publications": 200,
+      "publications": 207,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 9,
-          "publications": 9,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -7869,10 +7857,22 @@
           "opportunities": 6,
           "publications": 6,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 5,
+          "publications": 5,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -7889,18 +7889,6 @@
       "publications": 53,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -7971,10 +7959,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -7991,18 +7991,6 @@
       "publications": 27,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -8073,10 +8061,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -8093,18 +8093,6 @@
       "publications": 9,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -8175,10 +8163,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -8195,18 +8195,6 @@
       "publications": 16,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -8277,10 +8265,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -8296,18 +8296,6 @@
       "permission": "allowed",
       "publications": 191,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 9,
-          "publications": 9,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -8379,6 +8367,18 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 0.9375,
@@ -8394,22 +8394,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 223,
+      "opportunities": 229,
       "permission": "allowed",
-      "publications": 209,
+      "publications": 214,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -8481,10 +8469,22 @@
           "opportunities": 8,
           "publications": 8,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 5,
+          "publications": 4,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -8500,18 +8500,6 @@
       "permission": "allowed",
       "publications": 45,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 2,
-          "publications": 2,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 5,
-          "publications": 5,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 2,
@@ -8583,10 +8571,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -8602,18 +8602,6 @@
       "permission": "allowed",
       "publications": 8,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -8685,10 +8673,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -8700,22 +8700,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 154,
+      "opportunities": 159,
       "permission": "allowed",
-      "publications": 153,
+      "publications": 158,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 8,
-          "publications": 8,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -8787,10 +8775,22 @@
           "opportunities": 5,
           "publications": 5,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 4,
+          "publications": 4,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -8806,18 +8806,6 @@
       "permission": "allowed",
       "publications": 4,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -8889,10 +8877,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -8908,18 +8908,6 @@
       "permission": "allowed",
       "publications": 17,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 2,
-          "publications": 2,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -8991,10 +8979,22 @@
           "opportunities": 1,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -9006,22 +9006,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 3,
+      "opportunities": 4,
       "permission": "allowed",
-      "publications": 3,
+      "publications": 4,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -9093,10 +9081,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -9113,18 +9113,6 @@
       "publications": 0,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -9195,10 +9183,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -9210,22 +9210,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 210,
+      "opportunities": 217,
       "permission": "allowed",
-      "publications": 203,
+      "publications": 210,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 9,
-          "publications": 9,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -9297,10 +9285,22 @@
           "opportunities": 8,
           "publications": 8,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 5,
+          "publications": 5,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -9312,22 +9312,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 99,
+      "opportunities": 100,
       "permission": "allowed",
-      "publications": 83,
+      "publications": 84,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 6,
-          "publications": 6,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 5,
-          "publications": 5,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 3,
@@ -9399,10 +9387,22 @@
           "opportunities": 1,
           "publications": 1,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -9413,23 +9413,11 @@
     },
     {
       "availability": "answering",
-      "days_under_the_mark": 0,
-      "opportunities": 19,
+      "days_under_the_mark": 1,
+      "opportunities": 22,
       "permission": "allowed",
-      "publications": 9,
+      "publications": 11,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -9501,14 +9489,26 @@
           "opportunities": 2,
           "publications": 2,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 0,
+          "source_failures": 1
         }
       ],
-      "reliability": 0.6551724137931034,
-      "reliability_reads": 58,
+      "reliability": 0.6721311475409836,
+      "reliability_reads": 61,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
-      "source_failures": 10,
+      "source_failures": 11,
       "source_id": "marktechpost",
       "title": "MarkTechPost",
       "vertical": "ai"
@@ -9520,18 +9520,6 @@
       "permission": "allowed",
       "publications": 11,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -9603,10 +9591,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -9623,18 +9623,6 @@
       "publications": 9,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -9705,10 +9693,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -9725,18 +9725,6 @@
       "publications": 46,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -9807,10 +9795,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -9822,22 +9822,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 49,
+      "opportunities": 50,
       "permission": "allowed",
-      "publications": 48,
+      "publications": 49,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -9909,10 +9897,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -9929,18 +9929,6 @@
       "publications": 23,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 2,
-          "publications": 2,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -10011,10 +9999,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -10026,22 +10026,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 52,
+      "opportunities": 53,
       "permission": "allowed",
-      "publications": 51,
+      "publications": 52,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 2,
-          "publications": 2,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 1,
-          "publications": 1,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -10113,10 +10101,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -10128,22 +10128,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 91,
+      "opportunities": 92,
       "permission": "allowed",
-      "publications": 86,
+      "publications": 87,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 8,
-          "publications": 8,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 3,
-          "publications": 3,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 1,
@@ -10215,10 +10203,22 @@
           "opportunities": 6,
           "publications": 4,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -10230,22 +10230,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 58,
+      "opportunities": 61,
       "permission": "allowed",
-      "publications": 55,
+      "publications": 58,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 2,
-          "publications": 2,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -10317,10 +10305,22 @@
           "opportunities": 2,
           "publications": 2,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 3,
+          "publications": 3,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -10337,18 +10337,6 @@
       "publications": 0,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -10419,10 +10407,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 0.5,
-      "reliability_reads": 8,
+      "reliability_reads": 9,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -10439,18 +10439,6 @@
       "publications": 39,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -10518,6 +10506,18 @@
         },
         {
           "date": "2026-09-17",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
@@ -10540,18 +10540,6 @@
       "permission": "allowed",
       "publications": 52,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -10623,10 +10611,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
-      "reliability": 0.9918032786885246,
-      "reliability_reads": 122,
+      "reliability": 0.992,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -10642,18 +10642,6 @@
       "permission": "allowed",
       "publications": 0,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -10725,10 +10713,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -10740,22 +10740,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 39,
+      "opportunities": 40,
       "permission": "allowed",
-      "publications": 39,
+      "publications": 40,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -10827,10 +10815,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -10846,18 +10846,6 @@
       "permission": "allowed",
       "publications": 0,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -10929,10 +10917,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -10944,22 +10944,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 53,
+      "opportunities": 55,
       "permission": "allowed",
-      "publications": 52,
+      "publications": 54,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 3,
-          "publications": 3,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 1,
-          "publications": 1,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 2,
@@ -11031,10 +11019,22 @@
           "opportunities": 1,
           "publications": 1,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
-      "reliability": 0.9918032786885246,
-      "reliability_reads": 122,
+      "reliability": 0.992,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -11046,22 +11046,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 115,
+      "opportunities": 116,
       "permission": "allowed",
       "publications": 110,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 8,
-          "publications": 8,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 6,
-          "publications": 6,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 5,
@@ -11133,10 +11121,22 @@
           "opportunities": 3,
           "publications": 2,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 1,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
-      "reliability": 0.9918032786885246,
-      "reliability_reads": 122,
+      "reliability": 0.992,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -11152,18 +11152,6 @@
       "permission": "allowed",
       "publications": 4,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -11235,10 +11223,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -11254,18 +11254,6 @@
       "permission": "allowed",
       "publications": 48,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -11337,10 +11325,22 @@
           "opportunities": 1,
           "publications": 1,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -11352,22 +11352,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 69,
+      "opportunities": 70,
       "permission": "allowed",
-      "publications": 69,
+      "publications": 70,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 3,
-          "publications": 3,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -11439,10 +11427,22 @@
           "opportunities": 1,
           "publications": 1,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -11454,22 +11454,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 181,
+      "opportunities": 183,
       "permission": "allowed",
-      "publications": 177,
+      "publications": 179,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 7,
-          "publications": 7,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 5,
@@ -11541,10 +11529,22 @@
           "opportunities": 8,
           "publications": 8,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -11555,23 +11555,11 @@
     },
     {
       "availability": "answering",
-      "days_under_the_mark": 11,
-      "opportunities": 55,
+      "days_under_the_mark": 12,
+      "opportunities": 56,
       "permission": "allowed",
       "publications": 0,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -11643,14 +11631,26 @@
           "opportunities": 5,
           "publications": 0,
           "source_failures": 5
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 1,
+          "publications": 0,
+          "source_failures": 1
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 81,
+      "reliability_reads": 84,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
-      "source_failures": 55,
+      "source_failures": 56,
       "source_id": "openai-news",
       "title": "OpenAI",
       "vertical": "ai"
@@ -11662,18 +11662,6 @@
       "permission": "allowed",
       "publications": 31,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 2,
-          "publications": 2,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -11745,10 +11733,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -11765,18 +11765,6 @@
       "publications": 0,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -11847,10 +11835,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 0.5,
-      "reliability_reads": 8,
+      "reliability_reads": 9,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -11867,18 +11867,6 @@
       "publications": 0,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -11949,10 +11937,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 0.5,
-      "reliability_reads": 8,
+      "reliability_reads": 9,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -11969,18 +11969,6 @@
       "publications": 0,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -12051,10 +12039,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 0.5,
-      "reliability_reads": 8,
+      "reliability_reads": 9,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -12071,18 +12071,6 @@
       "publications": 42,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 2,
-          "publications": 2,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -12153,10 +12141,22 @@
           "opportunities": 2,
           "publications": 2,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -12168,22 +12168,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 117,
+      "opportunities": 123,
       "permission": "allowed",
-      "publications": 107,
+      "publications": 113,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 9,
-          "source_failures": 1
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 3,
-          "publications": 1,
-          "source_failures": 2
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -12255,10 +12243,22 @@
           "opportunities": 2,
           "publications": 1,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 5,
+          "publications": 5,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -12270,22 +12270,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 24,
+      "opportunities": 25,
       "permission": "allowed",
-      "publications": 20,
+      "publications": 21,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 1,
-          "publications": 1,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -12357,10 +12345,22 @@
           "opportunities": 2,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -12372,22 +12372,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 100,
+      "opportunities": 102,
       "permission": "allowed",
-      "publications": 91,
+      "publications": 93,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 8,
-          "publications": 8,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 4,
-          "publications": 4,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 4,
@@ -12459,10 +12447,22 @@
           "opportunities": 6,
           "publications": 5,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
-      "reliability": 0.8383838383838383,
-      "reliability_reads": 99,
+      "reliability": 0.8431372549019608,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -12479,18 +12479,6 @@
       "publications": 7,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 1,
-          "publications": 1,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -12561,10 +12549,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -12581,18 +12581,6 @@
       "publications": 0,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -12663,10 +12651,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 0.5,
-      "reliability_reads": 8,
+      "reliability_reads": 9,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -12678,22 +12678,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 117,
+      "opportunities": 121,
       "permission": "allowed",
-      "publications": 114,
+      "publications": 118,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -12765,10 +12753,22 @@
           "opportunities": 2,
           "publications": 2,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -12780,22 +12780,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 103,
+      "opportunities": 106,
       "permission": "allowed",
-      "publications": 101,
+      "publications": 104,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 4,
-          "publications": 4,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -12867,10 +12855,22 @@
           "opportunities": 7,
           "publications": 6,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 3,
+          "publications": 3,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -12882,22 +12882,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 64,
+      "opportunities": 66,
       "permission": "allowed",
-      "publications": 63,
+      "publications": 65,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 2,
-          "publications": 2,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 2,
-          "publications": 2,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 4,
@@ -12969,10 +12957,22 @@
           "opportunities": 1,
           "publications": 1,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -12983,23 +12983,11 @@
     },
     {
       "availability": "answering",
-      "days_under_the_mark": 1,
-      "opportunities": 114,
+      "days_under_the_mark": 0,
+      "opportunities": 117,
       "permission": "allowed",
-      "publications": 109,
+      "publications": 110,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 9,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 8,
-          "publications": 8,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -13071,14 +13059,26 @@
           "opportunities": 1,
           "publications": 0,
           "source_failures": 1
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 2,
+          "publications": 0,
+          "source_failures": 2
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
-      "reliability": 0.9426229508196722,
-      "reliability_reads": 122,
+      "reliability": 0.944,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
-      "source_failures": 2,
+      "source_failures": 4,
       "source_id": "solar-quarter",
       "title": "SolarQuarter",
       "vertical": "energy"
@@ -13086,22 +13086,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 64,
+      "opportunities": 72,
       "permission": "allowed",
-      "publications": 59,
+      "publications": 67,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -13173,10 +13161,22 @@
           "opportunities": 8,
           "publications": 7,
           "source_failures": 1
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 6,
+          "publications": 6,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 49,
+      "reliability_reads": 52,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -13187,23 +13187,11 @@
     },
     {
       "availability": "answering",
-      "days_under_the_mark": 0,
-      "opportunities": 68,
+      "days_under_the_mark": 2,
+      "opportunities": 73,
       "permission": "allowed",
       "publications": 26,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -13275,14 +13263,26 @@
           "opportunities": 8,
           "publications": 6,
           "source_failures": 2
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 4,
+          "publications": 0,
+          "source_failures": 4
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 0,
+          "source_failures": 1
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 49,
+      "reliability_reads": 52,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
-      "source_failures": 39,
+      "source_failures": 44,
       "source_id": "straitstimes-opinion",
       "title": "The Straits Times",
       "vertical": "ai"
@@ -13294,18 +13294,6 @@
       "permission": "allowed",
       "publications": 4,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -13377,10 +13365,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 0.5,
-      "reliability_reads": 40,
+      "reliability_reads": 41,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -13397,18 +13397,6 @@
       "publications": 0,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -13479,10 +13467,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -13492,24 +13492,12 @@
       "vertical": "ai"
     },
     {
-      "availability": "failing",
+      "availability": "resting",
       "days_under_the_mark": 0,
       "opportunities": 21,
       "permission": "allowed",
       "publications": 21,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -13581,10 +13569,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
-      "reliability": 0.8913043478260869,
-      "reliability_reads": 92,
+      "reliability": 0.8817204301075269,
+      "reliability_reads": 93,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -13596,22 +13596,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 149,
+      "opportunities": 154,
       "permission": "allowed",
-      "publications": 149,
+      "publications": 154,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 5,
-          "publications": 5,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 1,
@@ -13683,10 +13671,22 @@
           "opportunities": 4,
           "publications": 4,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 3,
+          "publications": 3,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -13698,22 +13698,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 40,
+      "opportunities": 45,
       "permission": "allowed",
-      "publications": 33,
+      "publications": 38,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -13785,10 +13773,22 @@
           "opportunities": 4,
           "publications": 4,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 4,
+          "publications": 4,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 49,
+      "reliability_reads": 52,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -13804,18 +13804,6 @@
       "permission": "denied",
       "publications": 23,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -13884,6 +13872,18 @@
         },
         {
           "date": "2026-09-17",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
@@ -13902,22 +13902,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 133,
+      "opportunities": 140,
       "permission": "allowed",
-      "publications": 128,
+      "publications": 135,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -13989,10 +13977,22 @@
           "opportunities": 6,
           "publications": 6,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 5,
+          "publications": 5,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
-      "reliability": 0.98989898989899,
-      "reliability_reads": 99,
+      "reliability": 0.9901960784313726,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -14009,18 +14009,6 @@
       "publications": 0,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -14091,10 +14079,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -14106,22 +14106,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 234,
+      "opportunities": 242,
       "permission": "allowed",
-      "publications": 220,
+      "publications": 228,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -14193,10 +14181,22 @@
           "opportunities": 10,
           "publications": 10,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 6,
+          "publications": 6,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -14208,22 +14208,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 70,
+      "opportunities": 71,
       "permission": "allowed",
-      "publications": 68,
+      "publications": 69,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 6,
-          "publications": 6,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 6,
-          "publications": 6,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 5,
@@ -14295,10 +14283,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
-      "reliability": 0.7049180327868853,
-      "reliability_reads": 122,
+      "reliability": 0.712,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -14310,22 +14310,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 223,
+      "opportunities": 231,
       "permission": "allowed",
-      "publications": 216,
+      "publications": 224,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -14397,10 +14385,22 @@
           "opportunities": 9,
           "publications": 9,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 6,
+          "publications": 6,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -14412,22 +14412,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 168,
+      "opportunities": 175,
       "permission": "allowed",
-      "publications": 165,
+      "publications": 171,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 8,
-          "publications": 8,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 1,
@@ -14499,10 +14487,22 @@
           "opportunities": 7,
           "publications": 7,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 5,
+          "publications": 4,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -14514,22 +14514,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 219,
+      "opportunities": 227,
       "permission": "allowed",
-      "publications": 208,
+      "publications": 216,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 10,
-          "publications": 9,
-          "source_failures": 1
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -14601,10 +14589,22 @@
           "opportunities": 8,
           "publications": 7,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 6,
+          "publications": 6,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -14616,22 +14616,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 149,
+      "opportunities": 154,
       "permission": "allowed",
-      "publications": 142,
+      "publications": 147,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 8,
-          "publications": 8,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 8,
-          "publications": 8,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 8,
@@ -14703,10 +14691,22 @@
           "opportunities": 4,
           "publications": 4,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 4,
+          "publications": 4,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 1,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -14722,18 +14722,6 @@
       "permission": "allowed",
       "publications": 0,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -14805,10 +14793,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 0.5,
-      "reliability_reads": 8,
+      "reliability_reads": 9,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -14824,18 +14824,6 @@
       "permission": "allowed",
       "publications": 1,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -14907,10 +14895,22 @@
           "opportunities": 1,
           "publications": 1,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 26,
+      "reliability_reads": 29,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -14922,22 +14922,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 230,
+      "opportunities": 238,
       "permission": "allowed",
-      "publications": 219,
+      "publications": 227,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -15009,10 +14997,22 @@
           "opportunities": 9,
           "publications": 9,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 6,
+          "publications": 6,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -15024,22 +15024,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 219,
+      "opportunities": 227,
       "permission": "allowed",
-      "publications": 205,
+      "publications": 212,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 10,
-          "publications": 10,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 9,
-          "publications": 9,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 10,
@@ -15111,10 +15099,22 @@
           "opportunities": 8,
           "publications": 7,
           "source_failures": 1
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 6,
+          "publications": 5,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -15126,22 +15126,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 24,
+      "opportunities": 26,
       "permission": "allowed",
-      "publications": 24,
+      "publications": 26,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 2,
-          "publications": 2,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -15213,10 +15201,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 2,
+          "publications": 2,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -15233,18 +15233,6 @@
       "publications": 3,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -15315,10 +15303,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -15335,18 +15335,6 @@
       "publications": 59,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 4,
-          "publications": 4,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 1,
-          "publications": 1,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 2,
           "publications": 2,
@@ -15417,10 +15405,22 @@
           "opportunities": 2,
           "publications": 2,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -15437,18 +15437,6 @@
       "publications": 63,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 5,
-          "publications": 5,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -15519,10 +15507,22 @@
           "opportunities": 2,
           "publications": 2,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -15539,18 +15539,6 @@
       "publications": 1,
       "recent_days": [
         {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
           "date": "2026-09-06",
           "opportunities": 0,
           "publications": 0,
@@ -15618,6 +15606,18 @@
         },
         {
           "date": "2026-09-17",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
@@ -15636,22 +15636,10 @@
     {
       "availability": "answering",
       "days_under_the_mark": 0,
-      "opportunities": 170,
+      "opportunities": 176,
       "permission": "allowed",
-      "publications": 137,
+      "publications": 141,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 6,
-          "publications": 3,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 10,
-          "publications": 9,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 8,
@@ -15723,10 +15711,22 @@
           "opportunities": 4,
           "publications": 3,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 4,
+          "publications": 3,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 2,
+          "publications": 1,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 122,
+      "reliability_reads": 125,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -15742,18 +15742,6 @@
       "permission": "allowed",
       "publications": 5,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 1,
-          "publications": 1,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -15825,10 +15813,22 @@
           "opportunities": 0,
           "publications": 0,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
       "reliability": 1.0,
-      "reliability_reads": 99,
+      "reliability_reads": 102,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
@@ -15844,18 +15844,6 @@
       "permission": "allowed",
       "publications": 56,
       "recent_days": [
-        {
-          "date": "2026-09-04",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
-        {
-          "date": "2026-09-05",
-          "opportunities": 0,
-          "publications": 0,
-          "source_failures": 0
-        },
         {
           "date": "2026-09-06",
           "opportunities": 0,
@@ -15927,10 +15915,22 @@
           "opportunities": 1,
           "publications": 1,
           "source_failures": 0
+        },
+        {
+          "date": "2026-09-18",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
+        },
+        {
+          "date": "2026-09-19",
+          "opportunities": 0,
+          "publications": 0,
+          "source_failures": 0
         }
       ],
-      "reliability": 0.7761194029850746,
-      "reliability_reads": 67,
+      "reliability": 0.7857142857142857,
+      "reliability_reads": 70,
       "retired": false,
       "retired_on": null,
       "retires_on": null,
