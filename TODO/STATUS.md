@@ -38,14 +38,14 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 | [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 6 | 16 | 2 |
-| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 15 | 0 | 15 | 1 |
+| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 19 | 0 | 19 | 2 |
 
 ## In flight - 0
 
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 31
+## Ready now - 32
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -83,9 +83,10 @@ section 3 is where it is answered.
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
 | #4 | 37 | B | The sampler stops calling theft our work | 2, 3 |
 | #9 | 37 | B | Panels grouped by the decision they serve | 7 |
-| #1 | 38 | A | A cancelled leg keeps the verdicts it paid for | - |
+| #1 | 38 | A | A leg survives its own clock | - |
+| #2 | 38 | A | The council knows which run it is | - |
 
-## Waiting on another row - 100
+## Waiting on another row - 103
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -175,20 +176,23 @@ section 3 is where it is answered.
 | #22 | 37 | C | Dotted rules where a setting moved | 9 is PENDING; 21 is PENDING |
 | #17 | 37 | D | Every published column names its reader | 5 is PENDING; 10 is PENDING; 11 is PENDING; 12 is PENDING; 13 is PENDING; 14 is PENDING; 15 is PENDING; 16 is PENDING; 19 is PENDING; 20 is PENDING; 21 is PENDING; 22 is PENDING |
 | #18 | 37 | E | Docs, the living-page corrections, and the orphan sweep | all names no row |
-| #2 | 38 | B | The judge-call stamp, declared once | 1 is PENDING |
-| #3 | 38 | B | `ServerJob` and `SegmentLedger` admit judges | 1 is PENDING |
-| #4 | 38 | B | The stamp lands on the pair row | 2 is PENDING |
-| #5 | 38 | B | The judge-leg row and the holdout-score row | 2 is PENDING; 3 is PENDING |
-| #6 | 38 | C | The leg timeout moves to the block that validates it | 1 is PENDING |
-| #7 | 38 | C | The measured judge call replaces the derived one | 1 is PENDING |
-| #8 | 38 | D | Thinking is asserted off and the decode is stamped | 2 is PENDING |
-| #9 | 38 | E | The four verbs name their work | 3 is PENDING; 6 is PENDING |
-| #10 | 38 | F | The leg fills the stamp | 4 is PENDING; 8 is PENDING; 9 is PENDING |
-| #11 | 38 | F | The leg writes its row and opens its spans | 5 is PENDING; 10 is PENDING |
-| #12 | 38 | G | The council records the machine it ran on | 11 is PENDING |
-| #13 | 38 | H | The store groups under the judge that fills it | 5 is PENDING |
-| #14 | 38 | I | Where the judge stands against its holdout | 13 is PENDING |
-| #15 | 38 | G | The model block becomes one composite action | 12 is PENDING |
+| #3 | 38 | B | The judge-call stamp, declared once | 2 is PENDING |
+| #4 | 38 | B | `ServerJob` and `SegmentLedger` admit judges | 2 is PENDING |
+| #5 | 38 | B | A judge call is a committed span | 4 is PENDING |
+| #6 | 38 | B | The judge-leg row, and what prunes it | 3 is PENDING; 4 is PENDING |
+| #7 | 38 | B | The pair row gains the stamp, and the store is refiled | 3 is PENDING |
+| #8 | 38 | B | The line-against-holdout row | 4 is PENDING |
+| #9 | 38 | C | The leg timeout moves to the block that validates it | 1 is PENDING |
+| #10 | 38 | C | The measured judge pair replaces the derived call | 1 is PENDING |
+| #11 | 38 | D | Thinking is refused and the decode is stamped | 3 is PENDING |
+| #12 | 38 | E | The four verbs name their work | 4 is PENDING; 9 is PENDING |
+| #13 | 38 | F | The leg fills the stamp | 7 is PENDING; 11 is PENDING; 12 is PENDING |
+| #14 | 38 | F | The leg writes its row and opens its spans | 5 is PENDING; 6 is PENDING; 13 is PENDING |
+| #15 | 38 | G | The council records the machine it ran on | 14 is PENDING |
+| #16 | 38 | G | The model block becomes one composite action | 15 is PENDING |
+| #17 | 38 | H | The store groups under the judge that fills it | 15 is PENDING |
+| #18 | 38 | I | Where the line stands against its holdout | 8 is PENDING; 17 is PENDING |
+| #19 | 38 | J | The plan pointers | 18 is PENDING |
 
 ## Finished - 18 plans with no live row
 
