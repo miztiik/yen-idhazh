@@ -880,8 +880,8 @@ def test_two_candidates_of_one_date_land_two_rows_in_one_verdict_day(tmp_path: P
     Driven through `ledger.write_segment`, the call both decide stages make,
     because what this asks is whether two candidates dispatched at once can
     record their verdicts without taking each other's path. They shared
-    `state/validation-<date>.csv` until 2026-09-18, and `merge=union` was the
-    only thing keeping the two apart - which Row #12 deletes.
+    `state/validation-<date>.csv` until 2026-09-18, and a union merge driver was
+    the only thing keeping the two apart.
 
     What it cannot settle is whether two real dispatches on two runners produce
     this; the first live pair is that check.

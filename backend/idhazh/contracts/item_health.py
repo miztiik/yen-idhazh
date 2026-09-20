@@ -46,7 +46,7 @@ CALL_SLOTS: Final = ("label", "summary")
 UNSPECIFIED: Final = "unspecified failure"
 UNPRINTABLE: Final = "unprintable"
 
-#: One line of printable ASCII. A newline would break `merge=union` on the day
+#: One line of printable ASCII. A newline would split the row in two on the day
 #: file, and a control character would break the CSV, so the shape is the
 #: control rather than a promise in a docstring. The column folds its own cell,
 #: so there is no door a producer can miss: a value this class cannot hold is
@@ -110,7 +110,7 @@ class ItemStage(StrEnum):
     times three of these names and one emitter writes one of them.
 
     Declaration order is the funnel a person reads down, and
-    `retention.fold_month` sorts a month's groups by it. The order is free to
+    `retention.compact_month` sorts a month's groups by it. The order is free to
     change: this is a `StrEnum`, so the wire value is the string and never the
     position.
     """

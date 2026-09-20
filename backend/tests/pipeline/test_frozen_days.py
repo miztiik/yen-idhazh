@@ -157,7 +157,7 @@ def test_a_day_whose_payload_moved_is_opened_again(tmp_path: Path) -> None:
     re-encode moves it.
 
     The rewritten day then settles down. The row about the payload that used to
-    be there is still in the file - `merge=union` makes the file append-only -
+    be there is still in the file - the receipt file is append-only -
     and it is ignored rather than held against the day, so the next run is free
     again.
     """
@@ -304,7 +304,7 @@ def test_a_moved_validator_reopens_every_day_once(tmp_path: Path) -> None:
 
 
 def test_two_receipts_that_disagree_about_one_day_leave_it_unproved(tmp_path: Path) -> None:
-    """`merge=union` concatenates, so two runs really can leave two rows.
+    """Nothing takes a receipt back out, so two runs really can leave two rows.
 
     Where they disagree about the payload the day has no single claim, and a day
     with no single claim is read rather than trusted. This is what the recorded

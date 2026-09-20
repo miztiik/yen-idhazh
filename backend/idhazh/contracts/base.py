@@ -89,8 +89,8 @@ REL_PATH_PATTERN: Final = rf"^{_PATH_SEGMENT}(?:/{_PATH_SEGMENT})*$"
 # two are the only patterns `fit_cell` folds a value into and every pattern above
 # it leaves alone.
 #
-# One line of printable ASCII. A newline would break `merge=union` on a day file,
-# which resolves line by line, and a control character would break the CSV.
+# One line of printable ASCII. A newline splits the row in two for any reader
+# that takes a day file a line at a time, and a control character breaks the CSV.
 PRINTABLE_LINE_PATTERN: Final = r"^[ -~]+$"
 # A lowercase token the pipeline, a runtime or the config minted - a model id, a
 # finish reason, a clock name. Never a sentence and never fetched prose.
@@ -186,8 +186,8 @@ _STEM_PATTERN: Final = re.compile(SLUG_PATTERN)
 # narrowed here. A summary names people and places the open web spelled, so an
 # ASCII pattern would refuse correct text; what this refuses is the control
 # characters, which is a different rule and the one that matters. A tab or a
-# form feed in a published field breaks a CSV cell, a `merge=union` day file and
-# the reader's line box, and none of the three is worth a paragraph break.
+# form feed in a published field breaks a CSV cell and the reader's line box,
+# and neither is worth a paragraph break.
 PARAGRAPH_BREAK: Final = "\n\n"
 #: Every C0 control and DEL except the newline, which the break is made of.
 _CONTROL_EXCEPT_NEWLINE: Final = re.compile(r"[\x00-\x09\x0b-\x1f\x7f]")
@@ -334,9 +334,9 @@ def fold_to_ascii(text: str) -> str:
     """One line of printable ASCII, keeping every character that has an ASCII spelling.
 
     Three passes and each one is a different decision. Whitespace collapses
-    first, because a newline in a cell splits the row in two under a line-based
-    `merge=union` resolve and the CSV quoting that survives a comma does not
-    survive that. Then the spellings table and a compatibility decomposition
+    first, because a newline in a cell splits the row in two for any reader that
+    takes the file a line at a time, and the CSV quoting that survives a comma
+    does not survive that. Then the spellings table and a compatibility decomposition
     carry across everything that has a plain reading - `e-acute` becomes `e`, a
     curly quote becomes a straight one. What is left is replaced rather than
     transliterated: romanising Cyrillic would put an English reading of a Russian
@@ -428,8 +428,8 @@ CHARACTER_CLASS_PATTERNS: Final[frozenset[str]] = frozenset(
 
 #: The patterns `fit_cell` knows how to fold a value into. `None` is here and not
 #: above because a column with no pattern still gets the one-line collapse:
-#: nothing declares a newline illegal in those cells and `merge=union` still
-#: cannot hold one.
+#: nothing declares a newline illegal in those cells and a CSV row read a line at
+#: a time still cannot hold one.
 FOLDABLE_PATTERNS: Final[frozenset[str | None]] = frozenset({None}) | CHARACTER_CLASS_PATTERNS
 
 

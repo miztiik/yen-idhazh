@@ -258,7 +258,7 @@ def test_work_then_assemble_leaves_one_settled_head_and_no_waiting_segments(
     #12).
 
     **One header line.** The head is what every reader of this ledger opens, and
-    a second header block inside it is the shape `merge=union` makes and no
+    a second header block inside it is the shape a stacked append makes and no
     reader refuses - the day it appeared in the committed tree, 71 rows went
     unread under it.
 

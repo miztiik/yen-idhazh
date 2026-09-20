@@ -761,7 +761,7 @@ def test_adding_a_day_rewrites_only_that_month(tmp_path: Path) -> None:
     """The second half of the oracle: one changed month, one file written.
 
     The changed month costs its full output bytes - a projection is a whole-file
-    rewrite, not an append (the shard is deliberately not `merge=union`). The
+    rewrite, not an append. The
     saving is the month that did not change, which is neither read nor written.
     """
     state = tmp_path / "state"

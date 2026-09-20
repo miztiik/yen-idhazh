@@ -578,7 +578,7 @@ class MachineFacts:
     """The band's slice of the host rows, and only that slice.
 
     The Hardware route draws the whole picture from the published machine series.
-    What the band needs is three numbers, so three are derived here rather than
+    What the band needs is four numbers, so four are derived here rather than
     the twenty the route draws.
 
     `shards` is the count the plan derived, read off the run manifest, and
@@ -594,6 +594,10 @@ class MachineFacts:
     shards: int
     reported: int
     read_spread: float | None
+    #: How many shards carried a read rate, which is what the spread was taken
+    #: over. A ratio with no denominator beside it cannot be told from a fleet
+    #: reading, and this one is two shards of one run (Guardrail #10).
+    read_shards: int = 0
 
 
 def machine_facts(
@@ -635,6 +639,7 @@ def machine_facts(
         shards=newest.shards,
         reported=newest.reported,
         read_spread=newest.read_spread,
+        read_shards=newest.read_shards,
     )
 
 
@@ -693,7 +698,11 @@ def _one_run(rows: Sequence[Mapping[str, str]], planned: int | None) -> MachineF
     # rather than 1.00x, which would read as "the hosts agreed".
     spread = None if len(rates) < 2 else max(rates) / min(rates)
     return MachineFacts(
-        refused=0, shards=planned or 0, reported=len(kept), read_spread=spread
+        refused=0,
+        shards=planned or 0,
+        reported=len(kept),
+        read_spread=spread,
+        read_shards=len(rates),
     )
 
 
@@ -734,10 +743,15 @@ def machine_candidates(facts: MachineFacts) -> list[Candidate]:
     if facts.read_spread is not None:
         found.append(
             Candidate(
-                text=f"shards read {facts.read_spread:.2f}x apart",
+                text=(
+                    f"{plural(facts.read_shards, 'shard', 'shards')} read "
+                    f"{facts.read_spread:.2f}x apart"
+                ),
                 sentence=(
-                    f"The newest run's shards read {facts.read_spread:.2f}x apart, so a rate "
-                    "taken over the whole run hides how slow the slowest of them was."
+                    f"The newest run's shards read {facts.read_spread:.2f}x apart, over the "
+                    f"{plural(facts.read_shards, 'shard', 'shards')} of it that reported a "
+                    "read rate, so a rate taken over the whole run hides how slow the "
+                    "slowest of them was."
                 ),
                 severity=WORTH_KNOWING,
             )

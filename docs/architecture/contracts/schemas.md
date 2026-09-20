@@ -100,7 +100,7 @@ The shapes, and where each one lives once written:
 
 Everything under `state/` is a row contract rather than a file contract, because a file that is only ever appended to has no shape of its own - the row is the unit that has to hold. Which of those ledgers a later run reads back, and what each one answers, is [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md).
 
-`TelemetryAggregateRow` is the one exception and says so in its own line above: its file is derived from the item-health shard it replaces, so every run of the fold writes the same bytes and the file is rewritten rather than appended to. Appending would double a month whenever the fold ran twice over a shard a lost race had restored, and `merge=union` could not tell the copy from the original. What decides when a month is folded is `observability.item_health_full_grain_months`, and what it costs is in [../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree).
+`TelemetryAggregateRow` is the one exception and says so in its own line above: its file is derived from the item-health shard it replaces, so every run of the fold writes the same bytes and the file is rewritten rather than appended to. Appending would double a month whenever the fold ran twice over a shard a lost race had restored. What decides when a month is folded is `observability.item_health_full_grain_months`, and what it costs is in [../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree).
 
 `ScoreArchive` is the second exception and is a stronger one: it is not a row at all. A month of `state/scores/` past `observability.scores_full_grain_months` becomes one JSON document, and a document is the right shape here because two of the three things it holds are whole-month facts rather than per-row facts - the SHA-256 of that month's day files in day order, and the sorted index of every distinct measurement it held. A CSV would have had to spread both across rows that do not mean anything on their own. It is written temp-then-rename, read back through this contract, and reconciled field by field against a second reading of those day files before any of them is unlinked; `.github/workflows/prune.yml` force-pushes `main` on a schedule (`CLAUDE.md` section 8), so a file deleted on the strength of an unchecked summary does not come back. What it weighs is in [../publishing/retention.md](../publishing/retention.md#what-bounds-the-committed-state-tree).
 
@@ -247,7 +247,7 @@ tree.
 the layout buys the read nothing at all. What it buys is a merge surface and a
 removal - two runs collide on a file only when they are the same day, and taking
 a day back off the record is one `rm` rather than an edit inside a shared file,
-which `merge=union` cannot express.
+which an append-only ledger cannot express.
 
 **What a shard obliges its writer to do is a separate rule, and it is defined
 once.** A closed month is rewritten only when a correction targets it; every

@@ -1,6 +1,6 @@
 # Agent Notes - Git and GitHub
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-20
 
 Traps in `git`, worktrees, merges and the `gh` CLI. Index and scope:
 [../agent-notes.md](../agent-notes.md).
@@ -142,7 +142,7 @@ A module imported only by tests and by `backend/utilities/` is built and unwired
 
 ## Ledgers under merge
 
-**A header migration cannot survive a rebase, because `state/*.csv` is `merge=union`.** Union merge keeps every line from both sides - right for an append-only ledger, wrong for a file whose every line changed. One merge produced 4,349 data rows where 2,232 were expected, and the tell was a data row whose `run_id` cell read `run_id`. Do not resolve by hand:
+**A header migration cannot survive a rebase on a path that carries a union merge driver.** Two still do - `state/published/**/*.csv` and `state/visual-prunes/**/*.csv` - and every other head under `state/` lost one on 2026-09-19. Union merge keeps every line from both sides - right for an append-only ledger, wrong for a file whose every line changed. One merge produced 4,349 data rows where 2,232 were expected, and the tell was a data row whose `run_id` cell read `run_id`. Do not resolve by hand:
 
 ```powershell
 git checkout origin/main -- state/scores.csv

@@ -231,7 +231,7 @@ percent and it is not a `config/` knob: tuning it is how a failing check is made
 to pass.
 
 **These cells sit here and nowhere else, and that is on purpose.**
-`state/runtime-counters.csv` carried a second copy of them until 2026-09-19. The
+`state/runtime-counters.csv` carried a second copy of them until 2026-09-20. The
 arithmetic and the wire-name table behind them now live once, in
 [`backend/idhazh/telemetry/silicon.py`](../../backend/idhazh/telemetry/silicon.py),
 beside the stage that writes the row - two subtractions of one pair of instants,
