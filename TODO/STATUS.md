@@ -35,34 +35,14 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 16 | 12 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 4 |
-| [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 29 | 6 | 22 | 0 |
+| [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 29 | 26 | 2 | 0 |
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 
-## In flight - 20
+## In flight - 0
 
-| Row | Plan | Group | Title | Worktree |
-| --- | --- | --- | --- | --- |
-| #6 | 33 | A | The validation ledger leaves the root of `state/` | p33a6 |
-| #3 | 33 | B | `item-health`, `scores`, `score-index` write segments | p33b3 |
-| #4 | 33 | B | `span-rollup` writes segments | p33b4 |
-| #17 | 33 | B | `runtime-counters` writes segments | p33b17 |
-| #10 | 33 | C | `model_load_ms` and `job_seconds` join `host-fingerprint` | p33c10 |
-| #12 | 33 | D | Delete the merge machinery | p33d12b |
-| #13 | 33 | D | Compaction lag and free swap on the console band | p33d13 |
-| #11 | 33 | E | Delete `runtime-counters` and everything that reads it | p33e11p3b |
-| #15 | 33 | F | Generated TypeScript contracts replace the hand-written ones | p33f15 |
-| #16 | 33 | G | Docs, and the orphan sweep | p33i16 |
-| #19 | 33 | I | The shard board | p33i19 |
-| #21 | 33 | I | Memory and load, three grains - ABSORBS Row #14 | p33i21 |
-| #23 | 33 | I | What a run reads against what it writes, in tokens and in seconds | p33i23 |
-| #25 | 33 | I | Outside the model call, as range marks | p33i25 |
-| #22 | 33 | I | Platform mix as grouped bars | p33i22 |
-| #24 | 33 | I | Counterfactual cost gets a shape | p33i24 |
-| #20 | 33 | I | Timing panels merge and move to Pipeline | p33i20 |
-| #26 | 33 | I | Machine cards: L3 and bandwidth as bars - AMENDS Row #5 | p33i26 |
-| #27 | 33 | K | Route grouping and panel order | p33i27 |
-| #29 | 33 | J | `prune.yml` wakes outside the digest window | p33j29 |
+Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
+dispatches a row, so an empty table here and a busy worktree disagree.
 
 ## Ready now - 28
 
