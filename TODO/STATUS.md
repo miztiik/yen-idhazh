@@ -37,16 +37,15 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 4 |
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
-| [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 2 | 20 | 0 |
+| [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 3 | 19 | 2 |
 
-## In flight - 2
+## In flight - 1
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
-| #1 | 37 | A | Does this runner expose a hardware PMU | p37r1 |
 | #7 | 37 | A | One file a panel | p37r7 |
 
-## Ready now - 28
+## Ready now - 30
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -82,8 +81,10 @@ section 3 is where it is answered.
 | #5 | 35 | A / search | Live-day search - instant + semantic (+ frontend `key_points` owner, C2) | - |
 | #7 | 35 | A / eval-core | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - |
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
+| #2 | 37 | A | Settle the peak that falls | 1 |
+| #6 | 37 | A | The bandwidth probe sizes itself against the cache | 1, 3, 8 |
 
-## Waiting on another row - 90
+## Waiting on another row - 88
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -159,8 +160,6 @@ section 3 is where it is answered.
 | #8 | 36 | W4 / apply-gate (alone) | Flip the flag: withhold = absent + item-health telemetry (E7 placement) | 7 is PENDING |
 | #12 | 36 | W3 / rejects-store | The rejects store + corpus fence (`state/rejects/`, 30-day prune) | 3 is PENDING; 7 is PENDING |
 | #13 | 36 | W4 / plan34-gaps | Retro: plan-34 latent gaps + the shared space-trap guard | 34 landed names no row; 6 is PENDING |
-| #2 | 37 | A | Settle the peak that falls | 1 is IN-FLIGHT |
-| #6 | 37 | A | The bandwidth probe sizes itself against the cache | 1 is IN-FLIGHT |
 | #4 | 37 | B | The sampler stops calling theft our work | 2 is PENDING |
 | #9 | 37 | B | Panels grouped by the decision they serve | 7 is IN-FLIGHT |
 | #5 | 37 | C | `ItemHealthRow` gains three columns and loses one | 4 is PENDING |
