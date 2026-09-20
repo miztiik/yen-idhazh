@@ -46,6 +46,14 @@ SUPERSEDED = re.compile(
 
 LINK = re.compile(r"\]\(([^)\s]+\.md)[)#]")
 
+#: A link that names a section. The fragment is half the link: a file that still
+#: exists proves nothing about the heading somebody meant to land on.
+ANCHORED = re.compile(r"\]\(([^)\s#]+\.md)#([^)\s]+)\)")
+
+#: What GitHub does to a heading to make its anchor: lowercase it, drop anything
+#: that is not a word character, a space or a hyphen, then hyphenate the spaces.
+NOT_IN_ANCHOR = re.compile(r"[^\w\s-]")
+
 #: The stamp a reader prices staleness from, so its shape is checked too - a
 #: date nobody can compare is the same as no date.
 STAMP = re.compile(r"^\*\*Last Updated\*\*:\s*\d{4}-\d{2}-\d{2}\s*$")
@@ -68,6 +76,17 @@ def prose(text: str) -> list[str]:
             fence = not fence
         elif not fence:
             out.append(line)
+    return out
+
+
+def anchors(text: str) -> set[str]:
+    """Every heading on a page, as the fragment a link would have to name."""
+    out = set()
+    for line in prose(text):
+        if line.startswith("#"):
+            heading = line.lstrip("#").strip()
+            if heading:
+                out.add(re.sub(r"\s+", "-", NOT_IN_ANCHOR.sub("", heading.lower()).strip()))
     return out
 
 
@@ -175,6 +194,7 @@ def faults(root: Path) -> dict[str, list[str]]:
     root = root.resolve()
     pages = sorted(root.glob("docs/**/*.md"))
     text = {p: p.read_text(encoding="utf-8") for p in pages}
+    here = {p.resolve(): anchors(body) for p, body in text.items()}
 
     out: dict[str, list[str]] = {}
     for page in pages:
@@ -201,6 +221,12 @@ def faults(root: Path) -> dict[str, list[str]]:
                 continue  # a placeholder in a worked example names no page
             if not (page.parent / href).exists():
                 found.append(f"links to a page that is not there: {href}")
+        for href, fragment in sorted(set(ANCHORED.findall(body))):
+            if "<" in href:
+                continue
+            target = (page.parent / href).resolve()
+            if target in here and fragment not in here[target]:
+                found.append(f"links to a section that is not there: {href}#{fragment}")
 
         if found:
             out[rel] = found
