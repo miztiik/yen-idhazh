@@ -589,7 +589,7 @@ model. Plan 11 row #6 retired that job, so `work` is the only series a run
 appends to now and the older rows are read from `state/` by hand.
 
 Since 2026-08-31 `/console/machine/` draws them
-([console.md](console.md#what-the-hardware-route-draws)). Before that the
+([console-machine.md](console-machine.md#what-the-hardware-route-draws)). Before that the
 ledger had been committed for four days with no page reading a cell of it.
 
 | Figure | Made from | Composed as |
