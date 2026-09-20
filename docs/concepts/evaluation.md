@@ -1075,6 +1075,7 @@ that list. The first files it would take are the day files under
 ## See also
 
 - [summary-metrics.md](summary-metrics.md) - what each column on the eval row means, and what it cannot see. Arrive there holding a column name.
+- [../architecture/publishing/autotune-summary-quality.md](../architecture/publishing/autotune-summary-quality.md) - the design of record for the other three axes and the loop that would move these thresholds without a person.
 - [qualification.md](qualification.md) - the gates a candidate model clears before it may serve, and what a run that judged one proves.
 - [search-quality.md](search-quality.md) - the other instrument: whether archive search finds the right story.
 - [../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md) - the controlled procedure for testing and adopting a challenger.

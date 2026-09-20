@@ -111,12 +111,28 @@ def test_a_relative_root_counts_the_same_inbound_links_as_an_absolute_one(
 
 
 def page(root: Path, rel: str, body: str) -> None:
+    """Write a page, and the neighbour its See also points at.
+
+    A well-formed page has a way out, so the fixture cannot be one page: a
+    See also with nothing to click is itself a fault the tool now reports.
+    """
     path = root / rel
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(body, encoding="utf-8", newline="\n")
+    neighbour = path.parent / "neighbour.md"
+    if not neighbour.exists():
+        neighbour.write_text(
+            "# Neighbour\n\n**Last Updated**: 2026-09-20\n\nSomewhere to go.\n\n"
+            f"## See also\n\n- [back]({path.name})\n",
+            encoding="utf-8",
+            newline="\n",
+        )
 
 
-WELL_FORMED = "# Title\n\n**Last Updated**: 2026-09-20\n\nOne answer.\n\n## See also\n\n- nothing\n"
+WELL_FORMED = (
+    "# Title\n\n**Last Updated**: 2026-09-20\n\nOne answer.\n\n"
+    "## See also\n\n- [the neighbour](neighbour.md)\n- nothing\n"
+)
 
 
 def test_a_page_carrying_every_required_element_raises_nothing(tmp_path: Path) -> None:
@@ -143,7 +159,8 @@ def test_a_hash_inside_a_code_fence_is_a_comment_and_not_a_title(tmp_path: Path)
         tmp_path,
         "docs/how-to/do-a-thing.md",
         "# Do A Thing\n\n**Last Updated**: 2026-09-20\n\n"
-        "```powershell\n# install the thing first\nnpm ci\n```\n\n## See also\n\n- nothing\n",
+        "```powershell\n# install the thing first\nnpm ci\n```\n\n"
+        "## See also\n\n- [the neighbour](neighbour.md)\n",
     )
 
     assert doc_load.faults(tmp_path) == {}
@@ -182,6 +199,20 @@ def test_a_placeholder_in_a_worked_example_names_no_page(tmp_path: Path) -> None
     )
 
     assert doc_load.faults(tmp_path) == {}
+
+
+def test_a_see_also_carrying_no_link_is_the_same_dead_end(tmp_path: Path) -> None:
+    """Backticked repo paths look like a way out and cannot be clicked."""
+    page(
+        tmp_path,
+        "docs/concepts/looks-fine.md",
+        "# Looks Fine\n\n**Last Updated**: 2026-09-20\n\nOne answer.\n\n"
+        "## See also\n\n- `docs/concepts/other.md` - not a link\n",
+    )
+
+    found = doc_load.faults(tmp_path)["docs/concepts/looks-fine.md"]
+
+    assert any("carries no link" in f for f in found)
 
 
 def test_a_link_whose_capitals_are_wrong_is_found(tmp_path: Path) -> None:

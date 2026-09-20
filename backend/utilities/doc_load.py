@@ -222,8 +222,11 @@ def faults(root: Path) -> dict[str, list[str]]:
             found.append(f"{titles} H1 titles, and the standard asks for exactly one")
         if not any(STAMP.match(line) for line in lines[:STAMP_WITHIN]):
             found.append(f"no **Last Updated**: YYYY-MM-DD in the first {STAMP_WITHIN} lines")
-        if not any(line.lower().startswith("## see also") for line in prose(body)):
+        see_also = [line.lower().startswith("## see also") for line in prose(body)]
+        if not any(see_also):
             found.append('no "## See also", so the page is a dead end')
+        elif not LINK.search(body.split("## See also", 1)[-1]):
+            found.append('"## See also" carries no link, which is the same dead end')
         if rel.count("/") > 3:
             found.append("nested past docs/<tier>/<topic>/<file>.md, so it is two topics")
         odd = sorted({ch for ch in body if ord(ch) > 127})
