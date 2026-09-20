@@ -27,6 +27,8 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 **Which readings sit where.** The council records the shard's identity, its clock, its outcome, and the aggregate cost of the work it hosted - and nothing that needs a name for the unit. The judge records units dealt, read, unusable and abandoned; whether the grammar applied; the first-token margin; and any agreement or uncertainty reading its own design produces. A judge that runs no model at all files a metrics row with no model columns, and the council's record is unchanged.
 
+**A judge owns more than one store, and running under the council does not make any of them the council's.** The content-similarity judge owns two: `metrics/`, which is how its instrument behaved, and `merge-line-holdout-scores/`, which is how the line it produced stands against a benchmark labelled outside the loop. **The second is the one most likely to be mis-filed**, because the council is what runs it - but it measures a judge's output, so it is the judge's. The test is what the reading is ABOUT, never what executed it. A reading about the pipeline goes under `state/llm-council/`; a reading about a judge's instrument or a judge's output goes under that judge's slug, however many stores that takes.
+
 **Why the split is not a matter of taste.** A first draft put the funnel and the margin on one shared row. The margin means "the grammar chose and the model did not" for a judge whose emitted token is the answer, and "a legitimate middle score" for a judge whose distribution is the answer. A shared column would have made one fold sum two instruments, which is the defect the judge identity exists to prevent.
 
 ### Hard scope - out
@@ -60,7 +62,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | G | The judge fills its stamp and ships its metrics | 14, 15 |
 | H | The council records the machine and the model block folds into one action | 16, 17 |
 | I | The store groups under the judge that fills it | 18 |
-| J | Where the line stands against its holdout | 19 |
+| J | Where the judge's merge line stands against its holdout | 19 |
 | K | The plan pointer, and the guard is renamed | 20, 22 |
 | L | The council repairs its own missing nights | 21 |
 
@@ -74,7 +76,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 4 | The judge-call stamp, declared once | 2 | C | PENDING | - | - | - |
 | 5 | The council's own shard-outcome record | 4 | C | PENDING | - | - | - |
 | 6 | The content-similarity judge's own metrics | 5 | C | PENDING | - | - | - |
-| 7 | The line-against-holdout record | 5 | C | PENDING | - | - | - |
+| 7 | The judge's merge-line benchmark record | 5 | C | PENDING | - | - | - |
 | 8 | The pair row gains the stamp, and the store is rewritten | 5 | C | PENDING | - | - | - |
 | 9 | The shard timeout moves to the block that validates it | 2 | D | PENDING | - | - | - |
 | 10 | The measured judge pair replaces the derived call | 9 | D | PENDING | - | - | - |
@@ -86,7 +88,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 16 | The model block becomes one composite action | 15 | H | PENDING | - | - | - |
 | 17 | The council records its own shard outcomes | 16 | H | PENDING | - | - | - |
 | 18 | The store groups under the judge that fills it | 17 | I | PENDING | - | - | - |
-| 19 | Where the line stands against its holdout | 7, 18 | J | PENDING | - | - | - |
+| 19 | Where the judge's merge line stands against its holdout | 7, 18 | J | PENDING | - | - | - |
 | 20 | The plan pointer | 19 | K | PENDING | - | - | - |
 | 21 | The council repairs its own missing nights | 8, 11, 12 | L | PENDING | - | - | - |
 | 22 | The guard that stops a shard committing is renamed and re-reasoned | 13, 21 | F | PENDING | - | - | - |
@@ -209,9 +211,9 @@ A Literal for the reason the scorer id is one: a fold over a store mixing two in
 
 **No bare `decode_seconds` on this row.** The two totals are named for what they are, so no reader mistakes a per-call column for the typical call.
 
-### `LineHoldoutScoreRow` - new (`backend/idhazh/contracts/line_holdout_score_row.py`)
+### `MergeLineHoldoutScore` - new (`backend/idhazh/contracts/merge_line_holdout_score.py`)
 
-`class LineHoldoutScoreRow(Contract)`. `__schema_stem__ = "line-holdout-score-row"`. Key: `("date", "run_id")`. Store: `state/content-similarity-judge/line-holdout-scores/<YYYY>/<MM>/<DD>.csv`.
+`class MergeLineHoldoutScore(Contract)`. `__schema_stem__ = "content-similarity-judge-merge-line-holdout-score"`. Key: `("date", "run_id")`. Store: `state/content-similarity-judge/line-holdout-scores/<YYYY>/<MM>/<DD>.csv`.
 
 **It does not inherit the call stamp.** No judge reads anything here: the holdout rows carry no verdict, the scoring applies a threshold to a recomputed similarity, and the labels were written by a model outside the pipeline. Eight call columns would be five nulls and one asserting an instrument that never ran.
 
@@ -277,7 +279,7 @@ The council's own path, end to end, and **not** the digest pipeline's segment-an
 | `SHARD_OUTCOMES_DIRNAME` | `"shard-outcomes"` | |
 | `CONTENT_SIMILARITY_JUDGE_DIRNAME` | `"content-similarity-judge"` | `state/content-similarity-judge/metrics/` |
 | `JUDGE_METRICS_DIRNAME` | `"metrics"` | |
-| `LINE_HOLDOUT_SCORES_DIRNAME` | `"line-holdout-scores"` | |
+| `MERGE_LINE_HOLDOUT_SCORES_DIRNAME` | `"merge-line-holdout-scores"` | |
 
 Day-sharded, `<group>/<store>/<YYYY>/<MM>/<DD>.csv`. **Two directory levels and no more:** the day inventory globs one and two levels, so a third is invisible to the telemetry reader and the miss is silent.
 
@@ -465,10 +467,10 @@ Committed value `200`, bounds unchanged. It moves beside the pair budget and the
 
 ---
 
-### Row #7 - The line-against-holdout record
+### Row #7 - The content-similarity judge's merge-line benchmark record
 
 - **Scope:** the persisted shape for scoring the merge line against the labelled holdout, with its store and prune target.
-- **Files touched:** `backend/idhazh/contracts/line_holdout_score_row.py` (new), `backend/idhazh/contracts/export.py`, `backend/idhazh/ledger.py`, `backend/idhazh/telemetry/prune.py`, `schemas/line-holdout-score-row.schema.json` (generated), `frontend/src/contracts/` (generated), `docs/architecture/contracts/schemas.md`, `docs/concepts/partitions.md`, `backend/tests/contracts/`
+- **Files touched:** `backend/idhazh/contracts/merge_line_holdout_score.py` (new), `backend/idhazh/contracts/export.py`, `backend/idhazh/ledger.py`, `backend/idhazh/telemetry/prune.py`, `schemas/content-similarity-judge-merge-line-holdout-score.schema.json` (generated), `frontend/src/contracts/` (generated), `docs/architecture/contracts/schemas.md`, `docs/concepts/partitions.md`, `backend/tests/contracts/`
 - **Acceptance gates:** local - the contract test modules, contract export, drift gate, `doc_load.py --changed`. CI - full suite.
 - **Oracle:** the row refuses a set of cells whose sum exceeds the labelled population. It cannot settle whether the cells were counted correctly; row #19 does that.
 - **Decisions:**
@@ -541,57 +543,61 @@ Committed value `200`, bounds unchanged. It moves beside the pair budget and the
 
 ---
 
-### Row #10 - The measured judge pair replaces the derived call
+### Row #10 - The judge's own bound reads a measured number
 
-- **Scope:** every surface quoting a per-call cost derived from a tokens-a-second figure carries the measured per-pair reading, and that reading gets its own benchmark page.
-- **Files touched:** `config/idhazh.json`, `backend/idhazh/contracts/knobs/run.py`, `backend/idhazh/contracts/knobs/placement.py`, `backend/idhazh/contracts/app_config.py`, `backend/utilities/measure_judge_call.py`, `.github/workflows/llm-council.yml`, `docs/concepts/pipeline-loop.md`, `docs/architecture/publishing/llm-council.md`, `docs/reference/benchmarks/what-a-judge-pair-costs.md` (new), `TODO/20260920-a-second-judge-in-the-council-handover.md`, `backend/tests/test_measure_judge_call.py`, `schemas/app-config.schema.json` (generated), `frontend/src/contracts/app-config.ts` (generated)
-- **Acceptance gates:** local - the named test module, contract export, drift gate, `doc_load.py --changed`. CI - full suite.
-- **Oracle:** the page's figures reproduce by re-running its stated arithmetic over the committed file it names. It cannot settle the per-call split - the committed column is the sum of both calls and the prefix is shared.
+- **Scope:** the judge's shard bound is sized from a measured per-pair reading instead of a derived per-call one, and the reading is written up. **Nothing outside the judge's own arithmetic moves.**
+- **Files touched:** `backend/idhazh/contracts/knobs/placement.py` (a new judge-specific constant beside the existing one, which does not change), `backend/idhazh/contracts/app_config.py` (the judge's validator arm only), `.github/workflows/llm-council.yml` (the header comment), `docs/reference/benchmarks/what-a-judge-pair-costs.md` (new), `backend/tests/contracts/test_app_config.py`
+- **Acceptance gates:** local - the named test module, `doc_load.py --changed`. CI - full suite.
+- **Oracle:** the page's figures reproduce by re-running its stated arithmetic over the committed file it names, **and the validator arm that bounds the work shard returns the same value before and after this row**. The second half is the load-bearing one: it proves the judge's number did not move anybody else's.
 - **Decisions:**
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | The reading is **94.53 s a pair** - min 72.80, max 110.98, population sd 7.84, n = 82, judged 2026-09-18 on four stock runners, `Qwen3.5-9B-Q4_K_M`. The four shards' means spread 88.24 to 99.89 s, a 13.2 percent lottery. | Carmack |
-| 2 | **47.3 s a call is not published as a measurement.** The column is the sum of both calls and the second reuses the system-turn prefix, so the split is knowably uneven with the direction known and the magnitude unknown. It is labelled an inference. | Andre |
-| 3 | The bound is sized against the worst measured pair, not the mean. A max 17 percent above the mean is what a bad night looks like, and the page says which statistic sizes the bound. | Carmack |
-| 4 | The council page's justification for a separate workflow becomes false at the measured figure - 200 pairs is 5.25 h, under the ceiling. It is rewritten to state the real reason: the work job already occupies the day. | Carmack |
-| 5 | The handover's "the council has never run" line is false as of 2026-09-18 and is corrected in the same pass. | Carmack |
+| 2 | **`SECONDS_A_CALL` does not change.** It sizes the work shard's budget as well as the judge's, so one judge's measurement moving it drags every other budget with it - and the other consumers have no measurement behind the move. The judge gets its own constant, measured, beside the shared one. | Owner, 2026-09-21 |
+| 3 | **A per-pair figure, not a per-call one.** The committed column is the sum of both calls and the second reuses the system-turn prefix, so any halving is an inference with the direction known and the magnitude unknown. Sizing a pair budget in pairs removes the need to split it at all. | Andre |
+| 4 | The bound is sized against the worst measured pair, not the mean. A max 17 percent above the mean is what a bad night looks like, and the page says which statistic sizes the bound. | Carmack |
+| 5 | **The council page and the handover are left alone.** Their stale figures are corrected by the rows that already touch them - row #3 rewrites the council page and row #19 the handover - rather than dragging two more files into a budget row. | Owner, 2026-09-21 |
 
 - **Rejected alternatives:**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | Publish the per-call figure as measured | It is a halved sum of two unequal calls, and it sizes a budget | A budget built on an unlabelled inference | Andre |
-| 2 | Keep the conservative derived figure | An unlabelled margin is a wrong number | A 1.64x error inherited by every later decision | Carmack |
+| 1 | Replace the shared constant everywhere it is quoted | One judge's measurement then re-sizes the work shard's budget, the placement arithmetic and two doc pages, none of which was measured | A twelve-file row that fails on a surface nobody was changing | Owner |
+| 2 | Keep the derived figure | An unlabelled 1.64x margin sizes the judge's bound | A budget built on a number nobody took | Carmack |
 | 3 | Wait for a night at the cap | The cap has never run and nothing schedules it | One dispatched run | Carmack |
 
 ---
 
-### Row #11 - Thinking is refused and the decode is stamped
+### Row #11 - The judge can think, and the decode says whether it did
 
-- **Scope:** a judge call refuses a model entry that opens a thinking channel, asks for the whole grammar-legal first-token set under a pinned probability mode, takes the margin over the three verdict openings, and digests the six sampler keys of the body it posted.
-- **Files touched:** `backend/idhazh/llm/server.py`, `backend/idhazh/similarity/judge.py`, `backend/idhazh/similarity/prompt.py`, `backend/idhazh/similarity/stamps.py`, `backend/tests/test_similarity_judge.py`, `backend/tests/fixtures/`, `docs/reference/benchmarks/which-probabilities-the-server-returns.md` (new)
+- **Scope:** the judge call adopts the two-span shape the summariser already uses, so a model with a thinking channel reasons first and answers inside the grammar second; the stamp records which shape ran; and the margin is taken over the verdict openings under a pinned probability mode.
+- **Files touched:** `backend/idhazh/llm/server.py`, `backend/idhazh/similarity/judge.py`, `backend/idhazh/similarity/prompt.py`, `backend/idhazh/similarity/stamps.py`, `backend/idhazh/similarity/fold.py` (the change detector), `backend/tests/test_similarity_judge.py`, `backend/tests/fixtures/`, `docs/reference/benchmarks/which-probabilities-the-server-returns.md` (new)
 - **Acceptance gates:** local - the similarity test modules, ruff, mypy, `doc_load.py --changed`. CI - full suite.
-- **Oracle:** a canary drives a call against an entry declaring a thinking close and asserts refusal; a second drives a recorded reply whose window omits a verdict opening and asserts the row records a null margin rather than a gap between two prefixes. It cannot settle what a live model returns.
+- **Oracle:** a canary drives a recorded reply from a model entry declaring a thinking close and asserts the verdict is read from the **answer** span with the thinking span recorded and not parsed as a verdict; a second drives a reply whose returned window omits a verdict opening and asserts a null margin rather than a gap between two prefixes. It cannot settle what a live model returns.
 - **Decisions:**
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Three of five registry entries declare a non-null thinking close; the active entry does not, so the committed rows are clean. The guard is a precondition, not a property of today's config. | Andre |
-| 2 | Refuse the call rather than record the flag. The grammar would force a verdict token where the model meant to start reasoning, the reply would still parse, and the margin would describe a reasoning channel. The refusal is scoped to the judge call - the summariser legitimately uses a thinking channel. | Andre |
-| 3 | The window is sized to the grammar's legal first-token set - the 25 non-empty prefixes of its six legal strings - not to the count of verdict words. | Andre |
-| 4 | **Widening the window alone changes the margin by nothing**, because the margin is the top two of whatever came back. So the margin is taken over the three verdict-opening ids, renormalised, and is null when fewer than two are present. The stage already computes those ids and discards them. | Andre |
-| 5 | The probability mode is sent explicitly rather than inherited from a build default, and which mode the server returns is measured and written up. | Andre |
-| 6 | The digest covers exactly six posted keys and is held to the payload by a test that enumerates the builder's keys and fails on one the digest neither covers nor excludes by name. | Andre |
-| 7 | The space-trap guard and the encode-in-position helper move into the model layer, because every judge needs them and only one has them. | Fowler |
+| 1 | **Thinking is supported, not refused.** An earlier draft refused a call whose model entry opened a thinking channel. That was wrong: the temperature is already above zero for writing that reads like a person wrote it, and thinking mode is coming. A guard that breaks the judge the day the feature lands is not a guard. | Owner, 2026-09-21 |
+| 2 | **The machinery already exists and the judge is the only caller not using it.** The model layer carries a thinking span and an answer span, and the summariser's payload builder sends the template flag that turns the channel on. The judge's builder is single-span and sends no flag. It adopts the two-span shape. | Owner, 2026-09-21 |
+| 3 | **The grammar constrains the answer span, never position zero.** That is the whole defect the refusal was reaching for: constraining the first token forces a verdict where the model meant to start reasoning, the reply still parses, and the margin then describes a reasoning channel with nothing saying so. Constraining the answer span makes the margin a reading about the verdict again, whether or not the model thought first. | Andre |
+| 4 | **The stamp records which shape ran**, so a margin taken after a thinking span and one taken without are distinguishable. The change detector sees it, because a verdict produced after reasoning is not the same measurement as one produced cold. | Andre |
+| 5 | The window is sized to the grammar's legal first-token set at the answer position - the 25 non-empty prefixes of its six legal strings - not to the count of verdict words. | Andre |
+| 6 | **Widening the window alone changes the margin by nothing**, because the margin is the top two of whatever came back. So it is taken over the three verdict-opening ids, renormalised, and is null when fewer than two are present. The stage already computes those ids and discards them. | Andre |
+| 7 | The probability mode is sent explicitly rather than inherited from a build default, and which mode the server returns is measured and written up. | Andre |
+| 8 | The digest covers exactly six posted keys and is held to the payload by a test that enumerates the builder's keys and fails on one the digest neither covers nor excludes by name. | Andre |
+| 9 | The change detector gains the temperature, the decode digest and the thinking shape in this commit. A stamp column the detector cannot see is a stamp that lies. | Andre |
+| 10 | ESCALATE: widening the detector resets the distribution once, by construction. Row #21 decision 5 says why that is correct and how it is recorded. | Section 6 |
 
 - **Rejected alternatives:**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | Record the thinking flag without refusing | A recorded defect is still a defect, and the verdicts are unusable either way | A night of judging to discard | Andre |
-| 2 | Keep the three-wide window | It is sized to the answer set rather than to what the grammar admits | A margin over the wrong tokens | Andre |
-| 3 | Assert thinking off in the prompt wording | Prompt wording is not a control, and a template cannot close a channel the server opened | A guard that reads as one without being one | Andre |
+| 1 | Refuse a call whose model entry opens a thinking channel | It breaks the judge on the day thinking mode ships, and thinking mode is a stated direction. A guard against a feature you intend to use is a bug with a schedule | A judge that stops working when the writing improves | Owner |
+| 2 | Constrain the first token and let the model think inside the grammar | The grammar admits three verdict words; a model that meant to reason emits one of them at position zero and the reasoning never happens. The reply parses and the reading is wrong | A silent measurement failure | Andre |
+| 3 | Keep the three-wide window | It is sized to the answer set rather than to what the grammar admits | A margin over the wrong tokens | Andre |
+| 4 | Assert thinking off in the prompt wording | Prompt wording is not a control, and a template cannot close a channel the server opened | A guard that reads as one without being one | Andre |
 
 ---
 
@@ -780,10 +786,10 @@ Committed value `200`, bounds unchanged. It moves beside the pair budget and the
 
 ---
 
-### Row #19 - Where the line stands against its holdout
+### Row #19 - Where the content-similarity judge's merge line stands against its holdout
 
 - **Scope:** the merge line is scored against the labelled holdout and the four counts are committed, with the negative population beside them and a floor below which the reading is refused.
-- **Files touched:** `backend/idhazh/similarity/holdout.py` (new), `backend/idhazh/stages/score_line_holdout.py` (new), `backend/idhazh/cli.py`, `backend/idhazh/ledger.py`, `backend/idhazh/contracts/knobs/placement.py`, `frontend/src/lib/server/similarity-holdout.ts`, `frontend/src/routes/console/judgement/+page.server.ts`, `docs/architecture/publishing/autotune-content-similarity.md`, `docs/how-to/label-the-similarity-holdout.md`, `docs/concepts/growing-reads.md`, `backend/tests/workflows/test_ledger_staging.py`, `backend/tests/`
+- **Files touched:** `backend/idhazh/similarity/holdout.py` (new), `backend/idhazh/stages/score_merge_line_holdout.py` (new), `backend/idhazh/cli.py`, `backend/idhazh/ledger.py`, `backend/idhazh/contracts/knobs/placement.py`, `frontend/src/lib/server/similarity-holdout.ts`, `frontend/src/routes/console/judgement/+page.server.ts`, `docs/architecture/publishing/autotune-content-similarity.md`, `docs/how-to/label-the-similarity-holdout.md`, `docs/concepts/growing-reads.md`, `backend/tests/workflows/test_ledger_staging.py`, `backend/tests/`
 - **Acceptance gates:** local - the similarity and contract test modules, ruff, mypy, `doc_load.py --changed`, the frontend build. CI - full suite, plus the published-site smoke.
 - **Oracle:** the four cells plus the unresolved count sum to the labelled population, **and** the resolved count clears the floor - without the floor, a run that resolved nothing satisfies the sum with four zeros and a full unresolved count, and the row reads as a measurement.
 - **Decisions:**
@@ -795,7 +801,7 @@ Committed value `200`, bounds unchanged. It moves beside the pair budget and the
 | 3 | The read is bounded by the holdout file, whose rows name their own two days. | Guardrail #12 |
 | 4 | ESCALATE: the floor is **half the labelled population**, a constant beside the frozen two-story maximum rather than a config knob, because it is a property of what makes the reading meaningful and not something to tune down to make a red row green. Retention deletes days the holdout still names, so this floor is reached by the calendar rather than by a bug. | Owner, 2026-09-20 |
 | 5 | The frozen two-story maximum in the knobs module is reconciled with this row or retired, so one number does not have two sources. | Andre |
-| 6 | The verb is `score-line-holdout`. A person types it; nothing in the daily pipeline calls it. | Carmack |
+| 6 | The verb is `score-merge-line-holdout`. A person types it; nothing in the daily pipeline calls it. | Carmack |
 
 - **Rejected alternatives:**
 
