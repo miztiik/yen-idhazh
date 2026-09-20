@@ -163,7 +163,7 @@ row's `Files touched` is the exact surface; every persisted change stamps its sc
 
 Fowler's ruling: the closed loop is one coherent Level-5 surface and gets its own plan, after #34,
 reusing #34's `Fit` core (extracted, direction-parameterised) and the `LLM-JUDGES` workflow. Design of
-record: [`docs/concepts/summary-quality-autotune.md`](../docs/concepts/summary-quality-autotune.md).
+record: [`docs/concepts/autotune-summary-quality.md`](../docs/concepts/autotune-summary-quality.md).
 Plan #36 rows: the fixed-size `MetricScoreDistribution`, the `FittedMetricBand` (block/watch floors),
 the publish gate (`publish_decision` on the item, flag off, record-only first), and the G-Eval fluency
 council. Cheapest loop that closes first: `hhem` -> one distribution -> one band -> gate; coherence,
@@ -267,7 +267,7 @@ row) in the opening window, sustained **2**, collapsing to **1** on the serial s
   | 3 | Adaptive y-axis floor = clamp(round_down_5(min-5), 50, 75); ceiling fixed 100 | Susan |
   | 4 | Draw the real 0.80 reference + tint, 0.50 edge caption; drop the "guess wearing a measurement's clothes" copy | Susan, Andre |
   | 5 | Horizontal legend; tooltip shows both percents + that day's count | Susan |
-  | 6 | A tiny glyph in the panel links to `docs/concepts/summary-quality-autotune.md` for the metric definitions | Susan |
+  | 6 | A tiny glyph in the panel links to `docs/concepts/autotune-summary-quality.md` for the metric definitions | Susan |
 
 ### Row #3 - Reword recorded-only copy; relabel `compression`
 

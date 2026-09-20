@@ -1,4 +1,4 @@
-# Summary quality: metrics and the auto-tuning loop
+# Auto-tuning summary quality: the metrics and the loop
 
 **Last Updated**: 2026-09-20
 
