@@ -6,8 +6,8 @@ import pytest
 
 from idhazh.contracts.base import Contract
 from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow
-from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.score_archive import ScoreArchive
 from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.visual_decision import VisualDecision
@@ -34,7 +34,7 @@ _ROLLUP_KEY_AND_STAMP: frozenset[str] = frozenset(
 #: folded, the archive - a rollup must not restate either.
 _LEDGERS_A_ROLLUP_MUST_NOT_RESTATE: dict[str, type[Contract]] = {
     "state/item-health": ItemHealthRow,
-    "state/runtime-counters.csv": RuntimeCountersRow,
+    "state/host-fingerprint": HostFingerprintRow,
     "state/scores (raw rows)": EvalRow,
     "state/scores (archived)": ScoreArchive,
     "state/visuals": VisualDecision,

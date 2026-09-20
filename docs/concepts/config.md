@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-20
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Guardrail #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -458,7 +458,8 @@ separate "more slots did not help" from "more slots were never used". The
 endpoint is llama-server's own loopback surface inside a CI job. No reader
 reaches it, so Guardrail #1 is untouched. `digest.yml` reads it once at the end of
 each `work` job, keeps the raw body in that shard's runtime artifact, and
-commits the counters that matter as one row of `state/runtime-counters.csv` -
+commits the counters that matter onto that shard's row of
+`state/host-fingerprint/` -
 the artifact keeps them for two days and the row keeps them forever, which is
 what makes the read rate on
 [../architecture/summarize/throughput.md](../architecture/summarize/throughput.md)
@@ -732,7 +733,6 @@ retiring it is a removal with a read-side migration behind it (section 11).
 | --- | --- | --- |
 | `evaluation_enabled` | `true` | The faithfulness scorer, and so every row in `state/scores.csv`. |
 | `telemetry_publish` | `true` | The copy into `frontend/public/telemetry/<YYYY-MM>.csv`. |
-| `runtime_counters_scrape` | `true` | The llama-server `GET /metrics` read, and so every row in `state/runtime-counters.csv`. |
 | `tracing_enabled` | `true` | The span tree. False writes no trace under `state/traces/` and no span rollup. |
 | `sample_rate` | `1.0` | Nothing. It is the fraction of runs whose scorer runs. |
 | `item_health_full_grain_months` | `14` | Nothing. It is where `state/item-health/` stops being kept item by item. |
@@ -797,7 +797,7 @@ lot and overstate one that read a lot.
 
 **An instrument that did not run writes an empty cell, never a zero.** A switch
 here decides whether a row is written; it never changes the shape of a row. The
-rule is stated twice already - in `RuntimeCountersRow.csv_row` ("Empty is not
+rule is stated twice already - in `silicon.server_prompt_totals` ("empty is not
 zero") and in the degrade rules of
 [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md)
 ("`<1`, never `0`") - and this block is bound by both rather than restating them

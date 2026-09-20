@@ -104,7 +104,7 @@ test.describe('what the recording was doing, in the owner words', () => {
 			'Measurement is off. Nothing has been recorded since 29 Aug 2026, so the figures below stop on that day. Turn it back on in config/idhazh.json.'
 		);
 		// A term from a subsystem is not a term for a user (CLAUDE.md section 0b).
-		expect(said).not.toContain('runtime_counters_scrape');
+		expect(said).not.toContain('host_fingerprint');
 		expect(said).not.toContain('evaluation_enabled');
 	});
 
@@ -414,7 +414,7 @@ test('a route in a state says which state, in the owner words', async ({ page })
 	for (const note of notes) {
 		expect(note.text.length).toBeGreaterThan(0);
 		// Never the knob's name, and never styled as an error.
-		expect(note.text).not.toContain('runtime_counters_scrape');
+		expect(note.text).not.toContain('host_fingerprint');
 		expect(note.text).not.toContain('evaluation_enabled');
 		expect(note.text).not.toContain('sample_rate');
 	}

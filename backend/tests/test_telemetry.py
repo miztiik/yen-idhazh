@@ -29,7 +29,7 @@ from pydantic import StringConstraints, TypeAdapter, ValidationError
 
 from idhazh import config, extract, ledger, summarize, telemetry
 from idhazh.contracts.article import Article, ArticleStatus
-from idhazh.contracts.base import column_bounds, derive_url_key, field_column
+from idhazh.contracts.base import ServerJob, column_bounds, derive_url_key, field_column
 from idhazh.contracts.call_cost import COST_FIELDS, DERIVED_FIELDS, CallCost, CallKind
 from idhazh.contracts.feed_health import FetchOutcome, RobotsOutcome
 from idhazh.contracts.item_health import (
@@ -42,7 +42,6 @@ from idhazh.contracts.item_health import (
     ItemStage,
 )
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
-from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.contracts.span_rollup import RollupSpan, SpanRollupRow
 from idhazh.contracts.summary import Summary
 from idhazh.elements import ExtractionHealth

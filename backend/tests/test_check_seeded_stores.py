@@ -17,7 +17,6 @@ import pytest
 
 from idhazh import ledger
 from idhazh.contracts.feed_retirement import FeedRetirementRow
-from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.similarity_holdout_pair import SimilarityHoldoutPair
 from utilities.check_seeded_stores import audit, main, report, seeded_stores
 
@@ -47,7 +46,6 @@ def test_the_audit_names_every_store_whose_header_ships_with_the_contract() -> N
     declared = {store.relpath: store.columns for store in seeded_stores()}
 
     assert declared == {
-        ledger.runtime_counters_relpath(): RuntimeCountersRow.csv_columns(),
         ledger.feed_retirements_relpath(): FeedRetirementRow.csv_columns(),
         ledger.similarity_holdout_relpath(): SimilarityHoldoutPair.csv_columns(),
     }
@@ -60,7 +58,7 @@ def test_a_checkout_carrying_every_store_passes(tmp_path: Path) -> None:
         store.relpath for store in seeded_stores()
     ]
     assert all(finding.ok for finding in findings)
-    assert "3 of 3 seeded stores" in report(findings)
+    assert "2 of 2 seeded stores" in report(findings)
 
 
 def test_a_missing_store_is_named_rather_than_counted(tmp_path: Path) -> None:
@@ -88,13 +86,13 @@ def test_a_store_under_an_older_header_is_a_fault_and_not_a_pass(tmp_path: Path)
     tuple exactly. The audit has to say so before the run does.
     """
     a_seeded_checkout(tmp_path)
-    narrow = RuntimeCountersRow.csv_columns()[:-1]
-    write_header(tmp_path / ledger.runtime_counters_relpath(), narrow)
+    narrow = SimilarityHoldoutPair.csv_columns()[:-1]
+    write_header(tmp_path / ledger.similarity_holdout_relpath(), narrow)
 
     findings = audit(tmp_path)
 
     broken = [finding for finding in findings if not finding.ok]
-    assert [finding.store.relpath for finding in broken] == [ledger.runtime_counters_relpath()]
+    assert [finding.store.relpath for finding in broken] == [ledger.similarity_holdout_relpath()]
     assert broken[0].fault is not None
     assert str(len(narrow)) in broken[0].fault
 
@@ -103,6 +101,6 @@ def test_the_exit_code_is_what_a_shell_gates_on(tmp_path: Path) -> None:
     """Zero on a whole checkout, one on a broken one."""
     assert main(["--repo-root", str(a_seeded_checkout(tmp_path))]) == 0
 
-    (tmp_path / ledger.runtime_counters_relpath()).unlink()
+    (tmp_path / ledger.similarity_holdout_relpath()).unlink()
 
     assert main(["--repo-root", str(tmp_path)]) == 1

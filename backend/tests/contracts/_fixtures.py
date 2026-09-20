@@ -87,43 +87,6 @@ CONFIG_NOT_OWNED: dict[str, frozenset[str]] = {
 HEX_DIGEST = re.compile(r"(?<![0-9a-z])(?:[0-9a-f]{64}|[0-9a-f]{32})(?![0-9a-z])")
 
 
-#: Four real `GET /metrics` bodies, one per work shard of run `2026-08-26-5`,
-#: pulled from that run's `runtime-log-*` artifacts before they expired. Real
-#: captures rather than hand-written text (Guardrail #7): the upstream README at tag
-#: b10598 lists neither `prompt_tokens_cached_total` nor the wording that says
-#: what `prompt_tokens_total` counts, so only the binary's own output settles it.
-METRICS_CAPTURES = sorted((FIXTURES_DIR / "runtime").glob("2026-08-26-5-shard-*.prom"))
-
-
-#: The memory sampler's own files and the head of llama-server's own log, one
-#: pair per work shard of run `2026-08-29-3`, pulled from that run's
-#: `runtime-log-*` artifacts before they expired. Real captures for the same
-#: reason the metrics bodies are: the timestamp llama.cpp stamps a log line with
-#: is four dot-separated numbers whose units no page states, and only a real
-#: capture of a job whose length is known settles which is which.
-RSS_CAPTURES = sorted((FIXTURES_DIR / "runtime").glob("2026-08-29-3-shard-*.rss-samples.tsv"))
-
-SERVER_LOG_CAPTURES = sorted((FIXTURES_DIR / "runtime").glob("2026-08-29-3-shard-*.server-head.txt"))
-
-
-#: One real `/proc/stat` pair, twenty seconds apart, captured on a GitHub-hosted
-#: `ubuntu-latest` runner on 2026-08-30. The gap is what makes it an oracle: the
-#: tick delta has to reproduce twenty seconds of four processors at 100 Hz, and
-#: no hand-written file can be checked that way.
-PROC_STAT_AT_START = FIXTURES_DIR / "runtime" / "2026-08-30-probe-proc-stat-at-start.txt"
-
-PROC_STAT_AT_END = FIXTURES_DIR / "runtime" / "2026-08-30-probe-proc-stat-at-end.txt"
-
-
-#: What the probe slept for, what the runner reported to `nproc`, and the
-#: kernel's tick rate. Guardrail #2 fixes the second at 4.
-PROBE_SECONDS = 20
-
-PROBE_PROCESSORS = 4
-
-USER_HZ = 100
-
-
 #: The two pages that spell the item-health failure vocabulary out by hand.
 DOC_ITEM_HEALTH = REPO_ROOT / "docs" / "architecture" / "sources" / "item-health.md"
 

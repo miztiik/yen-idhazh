@@ -19,20 +19,21 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import statistics
 import time
 import urllib.error
 import urllib.request
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
 from idhazh import ledger, run_context
-from idhazh.contracts import runtime_counters
+from idhazh.contracts.base import WORK_JOB, ServerJob
 from idhazh.contracts.host_fingerprint import WATCHED_FLAGS, HostFingerprintRow
 from idhazh.contracts.run_plan import RunPlan
-from idhazh.contracts.runtime_counters import WORK_JOB, ServerJob
 from idhazh.telemetry.host import runner_name
 
 if TYPE_CHECKING:  # pragma: no cover - a type, not a runtime dependency
@@ -42,6 +43,36 @@ LOG: Final = logging.getLogger("idhazh")
 
 CPUINFO: Final = Path("/proc/cpuinfo")
 UPTIME: Final = Path("/proc/uptime")
+
+#: The one spelling a payload timestamp leaves the process in, as `strptime`
+#: reads it. `Timestamp` pins the same shape as a regex; this turns it back into
+#: an instant so the job's own clock can be measured against its own scrape.
+_SCRAPED_AT_FORMAT: Final = "%Y-%m-%dT%H:%M:%SZ"
+
+#: The two lines llama-server brackets its own model load with, on llama.cpp
+#: `b10598`. Read from a real capture. A rename leaves the cell empty, which
+#: reads as unknown - never as a load that took no time.
+_LOAD_STARTED: Final = "load_model: loading model"
+_LOAD_FINISHED: Final = "llama_server: model loaded"
+
+#: How llama-server stamps a log line: minutes, seconds, milliseconds and
+#: microseconds since its own process started. Decoded from a real capture
+#: rather than from the source - the last field steps by 15 between two lines
+#: printed back to back, which only works if it is microseconds.
+_LOG_INSTANT: Final = re.compile(r"^(\d+)\.(\d{2})\.(\d{3})\.(\d{3}) ")
+
+#: The Prometheus series each prompt cell is read from, on llama.cpp `b10598`.
+#: The names are the wire format and the field names are ours, so a llama.cpp
+#: rename is one edit here and shows up as an empty column rather than as a
+#: wrong number. Read from a real capture, not from the upstream README.
+_SERIES: Final[Mapping[str, str]] = {
+    "llamacpp:prompt_tokens_total": "prompt_tokens_total",
+    "llamacpp:prompt_seconds_total": "prompt_seconds_total",
+}
+
+#: The one of those two whose series is a whole count. A value that is not whole
+#: is a rename or a format change, and it raises rather than truncate.
+_WHOLE: Final = frozenset({"prompt_tokens_total"})
 
 #: Every level of every cache the kernel publishes, one directory a level.
 CACHE_ROOT: Final = Path("/sys/devices/system/cpu/cpu0/cache")
@@ -399,17 +430,15 @@ def stage_job_clock(
         LOG.info("job clock off job=%s shard=%s run=%s", job, shard, plan.run_id)
         return None
     scraped_at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    prompt_tokens, prompt_seconds = runtime_counters.server_prompt_totals(
-        _text_if_readable(metrics_path)
-    )
+    prompt_tokens, prompt_seconds = server_prompt_totals(_text_if_readable(metrics_path))
     row = HostFingerprintRow(
         version=HostFingerprintRow.schema_version(),
         date=plan.date,
         run_id=plan.run_id,
         job=job,
         shard=shard,
-        model_load_ms=runtime_counters.model_load_ms(_text_if_readable(server_log_path)),
-        job_seconds=runtime_counters.job_seconds(scraped_at, job_started_at),
+        model_load_ms=model_load_ms(_text_if_readable(server_log_path)),
+        job_seconds=job_seconds(scraped_at, job_started_at),
         server_prompt_tokens=prompt_tokens,
         server_prompt_seconds=prompt_seconds,
     )
@@ -450,3 +479,80 @@ def _text_if_readable(path: Path | None) -> str | None:
     if path is None:
         return None
     return _text(path)
+
+
+def _log_microseconds(line: str) -> int | None:
+    """A llama-server log stamp, in microseconds since its process started."""
+    found = _LOG_INSTANT.match(line)
+    if found is None:
+        return None
+    minutes, seconds, milliseconds, microseconds = (int(part) for part in found.groups())
+    return (((minutes * 60) + seconds) * 1000 + milliseconds) * 1000 + microseconds
+
+
+def model_load_ms(text: str | None) -> float | None:
+    """Milliseconds between the two lines llama-server brackets its load with.
+
+    Both ends have to be present and stamped. A build that renames either line,
+    or one that logs without timestamps, leaves the cell empty - which reads as
+    unknown, and is the same failure `_SERIES` is written for.
+    """
+    if not text:
+        return None
+    instants: dict[str, int] = {}
+    for line in text.splitlines():
+        for marker in (_LOAD_STARTED, _LOAD_FINISHED):
+            if marker in line and marker not in instants:
+                stamped = _log_microseconds(line)
+                if stamped is not None:
+                    instants[marker] = stamped
+    if len(instants) != 2:
+        return None
+    return (instants[_LOAD_FINISHED] - instants[_LOAD_STARTED]) / 1000
+
+
+def job_seconds(scraped_at: str, job_started_at: int | None) -> int | None:
+    """Job start to scrape, in seconds. A stamp in the future fails `ge=0` loudly."""
+    if job_started_at is None:
+        return None
+    scraped = datetime.strptime(scraped_at, _SCRAPED_AT_FORMAT).replace(tzinfo=UTC)
+    return int(scraped.timestamp()) - job_started_at
+
+
+def server_prompt_totals(text: str | None) -> tuple[int | None, float | None]:
+    """The two prompt counters the server itself kept, as (tokens, seconds).
+
+    These two are the second instrument. The item ledger's own answer to the same
+    question is arithmetic over that ledger, and arithmetic over a ledger cannot
+    check it, so the only reading that can disagree is the server's own.
+
+    A llama.cpp rename leaves both cells empty rather than inventing a zero, and
+    a count that arrives fractional raises instead of being truncated into a
+    number a later reader would average. Text nobody could read is two empty
+    cells, which says the reading was not taken.
+    """
+    if not text:
+        return None, None
+    found: dict[str, float | int] = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        name, _, raw = line.partition(" ")
+        field = _SERIES.get(name)
+        if field is not None:
+            found[field] = _number(name, field, raw.strip())
+    tokens = found.get("prompt_tokens_total")
+    seconds = found.get("prompt_seconds_total")
+    return (None if tokens is None else int(tokens)), (
+        None if seconds is None else float(seconds)
+    )
+
+
+def _number(series: str, field: str, raw: str) -> float | int:
+    value = float(raw)
+    if field not in _WHOLE:
+        return value
+    if not value.is_integer():
+        raise ValueError(f"{series} is a count and reported {raw!r}")
+    return int(value)

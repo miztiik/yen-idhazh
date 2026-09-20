@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import csv
 import json
-import re
 from pathlib import Path
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
+from conftest import CONTRACT_FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
 from idhazh import day_partition, ledger
@@ -16,7 +15,6 @@ from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.item_health import CALL_SLOTS, RETIRED_CELLS, ItemHealthRow
 from idhazh.contracts.public_telemetry import PublicTelemetryRow
-from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.summary import Summary
 from utilities import build_canary_day
 
@@ -232,23 +230,6 @@ def test_a_shard_written_under_the_retired_headings_still_reads() -> None:
     # By its cells rather than by the model: a shard carries no version cell, so
     # the reader stamps the row with the current one on the way back in.
     assert PublicTelemetryRow.from_csv_row(shard).csv_row() == published.csv_row()
-
-
-def test_the_canary_writes_every_column_the_counters_ledger_defines() -> None:
-    """The same guard, over the second header the canary restates.
-
-    The canary gained a `state/runtime-counters.csv` on 2026-08-31, because
-    without one the Machine route draws every panel in its empty state and the
-    browser suite can assert nothing else. That file is written by hand in
-    JavaScript for the same reason the item-health one is, so it needs the same
-    guard: a column added to `RuntimeCountersRow` and not to that array writes a
-    canary whose cells sit one place to the left, and every backend gate stays
-    green while the console reads the wrong number.
-    """
-    source = read_text(REPO_ROOT / "frontend" / "scripts" / "build-canary.mjs")
-    declared = re.search(r"const COUNTER_COLUMNS = \[(.*?)\];", source, re.DOTALL)
-    assert declared is not None, "build-canary.mjs no longer declares a COUNTER_COLUMNS array"
-    assert tuple(re.findall(r"'([^']+)'", declared.group(1))) == RuntimeCountersRow.csv_columns()
 
 
 def test_the_canary_writes_every_column_the_feed_health_ledger_defines(tmp_path: Path) -> None:

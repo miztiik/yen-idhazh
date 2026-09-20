@@ -19,7 +19,6 @@ from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, TimeSource
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan, VerticalPlan
-from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
 from idhazh.contracts.visual_decision import VisualDecision
@@ -31,7 +30,7 @@ from idhazh.stages.compact import stage_compact
 from idhazh.stages.plan import _next_run_n, stage_plan
 from idhazh.stages.record import stage_record
 from idhazh.stages.work import stage_work
-from idhazh.telemetry.host import stage_counters
+from idhazh.telemetry.silicon import stage_job_clock
 
 from ._builders import (
     FULL_TEXT,
@@ -652,65 +651,10 @@ def test_an_item_whose_summary_is_not_written_yet_is_not_recorded(
     assert telemetry.is_final(None, None) is False
 
 
-def test_a_shard_commits_what_its_model_server_counted(
-    tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
-    """The second instrument survives the job that read it.
-
-    Every timing on the item-health ledger is a field copied out of one model
-    reply. The server counts the same work for itself, and until this stage
-    existed those counters reached only a job log with two days of retention -
-    so the read rate two published surfaces quote could be reported and never
-    reconciled (Guardrail #10).
-
-    The stage writes this shard's own segment and the fold is what puts it in
-    the head, so both run here: what a reader opens is the head, and a stage
-    that filled a segment nothing drained would still have lost the row.
-    """
-    run_plan = plan()
-    isolate_ledgers(tmp_path, monkeypatch)
-    capture = FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-3.prom"
-
-    row = stage_counters(
-        run_plan, state_root=common.STATE_ROOT, metrics_path=capture, shard=0, shards=1
-    )
-    stage_compact(tmp_path / "state")
-
-    assert row.prompt_tokens_total == 23411
-    assert row.prompt_seconds_total == 2128.08
-    committed = ledger.load_runtime_counters(tmp_path / "state", run_id=run_plan.run_id)
-    assert committed == [row]
-    assert ledger.read_header(ledger.runtime_counters_path(tmp_path / "state")) == (
-        RuntimeCountersRow.csv_columns()
-    )
-
-
-def test_a_shard_whose_server_died_still_files_a_row(
-    tmp_path: Path, monkeypatch: MonkeyPatch
-) -> None:
-    """No file at all is a fact about the shard, not an absence of one.
-
-    Pooling a run has to see the shard that contributed nothing, or three
-    shards' tokens get quoted as a four-shard run. The cells are null rather
-    than zero: the server did not answer, it did not read nothing.
-    """
-    run_plan = plan()
-    isolate_ledgers(tmp_path, monkeypatch)
-
-    row = stage_counters(
-        run_plan, state_root=common.STATE_ROOT, metrics_path=tmp_path / "never-written.prom"
-    )
-    stage_compact(tmp_path / "state")
-
-    assert row.prompt_tokens_total is None
-    assert row.run_id == run_plan.run_id
-    assert ledger.load_runtime_counters(tmp_path / "state", run_id=run_plan.run_id) == [row]
-
-
 def test_the_two_ledgers_agree_about_which_shards_ran(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    """The Oracle for the shard column: the per-item file joins the per-run file.
+    """The Oracle for the shard column: the per-item file joins the per-job file.
 
     Read speed varied 1.10x to 4.19x between the shards of one run over the seven
     runs committed on 2026-08-30, so a rate pooled over a run averages away the
@@ -735,15 +679,24 @@ def test_the_two_ledgers_agree_about_which_shards_ran(
             model_endpoint=closed_loopback_endpoint(),
         )
         stage_record(run_plan, settings=settings, shard=shard, shards=2)
-        stage_counters(
-            run_plan, state_root=common.STATE_ROOT, metrics_path=capture, shard=shard, shards=2
+        stage_job_clock(
+            run_plan,
+            settings=settings,
+            state_root=common.STATE_ROOT,
+            shard=shard,
+            metrics_path=capture,
         )
 
     stage_compact(state)
     rows = health_rows(state, run_plan.date)
-    counted = ledger.load_runtime_counters(state, run_id=run_plan.run_id)
+    counted = ledger.load_host_fingerprint_shard(
+        ledger.host_fingerprint_path(state, run_plan.date)
+    )
 
     assert {row.shard for row in rows} == {row.shard for row in counted} == {0, 1}
+    assert [row.server_prompt_tokens for row in counted] == [23411, 23411], (
+        "each shard files what its own server counted"
+    )
     assert len(rows) == len(run_plan.items)
     for shard in (0, 1):
         mine = {item.item_id for item in shard_of(run_plan, shard=shard, shards=2)}

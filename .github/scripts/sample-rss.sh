@@ -4,9 +4,9 @@
 #
 # One job of the daily run stands a llama-server up - `work` serves the
 # summarizer. The reading is written once here rather than pasted into a `run:`
-# body (`CLAUDE.md` section 3). Everything it writes is read back by
-# `RuntimeCountersRow.from_metrics_text`, which finds each column by name off
-# this file's own header.
+# body (`CLAUDE.md` section 3). What it writes is read back by the summary step
+# at the end of the same job and kept as a run artifact, both of which find a
+# column by name off this file's own header.
 #
 # `set -u` and not `set -e`: a /proc entry that vanishes between the glob and
 # the read is the normal case on a busy host, and the sampler has to outlive it.

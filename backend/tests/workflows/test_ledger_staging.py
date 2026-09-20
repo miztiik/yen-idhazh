@@ -40,7 +40,7 @@ from typing import Any, Final
 import pytest
 
 from idhazh import cli, ledger
-from idhazh.contracts.runtime_counters import ServerJob
+from idhazh.contracts.base import ServerJob
 from idhazh.stages import compact as compact_stage
 from idhazh.telemetry import sinks, traces
 

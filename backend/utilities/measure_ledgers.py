@@ -88,6 +88,7 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import config, ledger
+from idhazh.contracts.base import WORK_JOB
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.day_partition import day_files
 from idhazh.extract import TOKENS_PER_WORD
@@ -167,7 +168,7 @@ class ShardClock:
 
     run_id: str
     shard: str | None
-    counter_rows: int
+    clock_rows: int
     distinct_shards: int
     job_seconds: int
     fetch_ms: int
@@ -199,19 +200,19 @@ class ShardClock:
     def joinable(self) -> bool:
         """Whether the two ledgers cover the same work in this scope.
 
-        A scope holding more counter rows than shards had a shard re-run. Both
-        ledgers are appended by the shard itself and merged line by line, so
-        neither execution can see the other's rows and each files its own. The
-        two then cover different sets of executions, and their difference is not
-        a measurement of anything.
+        A scope holding more clock rows than shards had a shard re-run. Both
+        ledgers are written by the shard itself, so neither execution can see
+        the other's rows and each files its own. The two then cover different
+        sets of executions, and their difference is not a measurement of
+        anything.
         """
-        return self.counter_rows == self.distinct_shards and self.unaccounted_seconds >= 0
+        return self.clock_rows == self.distinct_shards and self.unaccounted_seconds >= 0
 
     @property
     def verdict(self) -> str:
-        if self.counter_rows != self.distinct_shards:
+        if self.clock_rows != self.distinct_shards:
             return (
-                f"NOT JOINABLE: {self.counter_rows} counter rows for "
+                f"NOT JOINABLE: {self.clock_rows} clock rows for "
                 f"{self.distinct_shards} shards, so a shard was re-run and the two ledgers "
                 "cover different sets of executions"
             )
@@ -235,10 +236,10 @@ def shard_clocks(state_dir: Path, items: Sequence[Item]) -> list[ShardClock]:
     2026-08-30 and is empty on every row written before it, so a ledger can hold
     both kinds of run at once.
     """
-    counters = _counter_rows(state_dir)
+    clocks_read = _job_clock_rows(state_dir)
     clocks: list[ShardClock] = []
-    for run_id in sorted({row["run_id"] for row in counters if row["job_seconds"]}):
-        rows = [r for r in counters if r["run_id"] == run_id and r["job_seconds"]]
+    for run_id in sorted({row["run_id"] for row in clocks_read if row["job_seconds"]}):
+        rows = [r for r in clocks_read if r["run_id"] == run_id and r["job_seconds"]]
         mine = [item for item in items if item.run_id == run_id]
         if mine and all(item.shard is not None for item in mine):
             for shard in sorted({item.shard for item in mine if item.shard is not None}):
@@ -257,7 +258,7 @@ def _clock(
     return ShardClock(
         run_id=run_id,
         shard=shard,
-        counter_rows=len(rows),
+        clock_rows=len(rows),
         distinct_shards=len({r["shard"] for r in rows}),
         job_seconds=sum(int(r["job_seconds"]) for r in rows),
         fetch_ms=sum(i.fetch_ms or 0 for i in mine),
@@ -266,17 +267,21 @@ def _clock(
     )
 
 
-def _counter_rows(state_dir: Path) -> list[dict[str, str]]:
-    """`state/runtime-counters.csv` as raw cells.
+def _job_clock_rows(state_dir: Path) -> list[dict[str, str]]:
+    """Every committed `work` host row, as raw cells.
 
-    Read as text rather than through `load_runtime_counters`, which filters to
-    one run and so cannot say which runs exist.
+    The `work` job is the only one this report is about: the plan and assemble
+    jobs run one shard each and serve different weights, so their clocks cannot
+    be read against a shard board. Raw cells rather than the contract, because
+    the question is which runs filed a clock at all and a row that no longer
+    parses still answers it.
     """
-    path = ledger.runtime_counters_path(state_dir)
-    if not path.exists():
-        return []
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return list(csv.DictReader(handle))
+    directory = state_dir / ledger.HOST_FINGERPRINT_DIRNAME
+    rows: list[dict[str, str]] = []
+    for path in day_files(directory):
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            rows.extend(row for row in csv.DictReader(handle) if row.get("job") == WORK_JOB.value)
+    return rows
 
 
 def percentile(values: Sequence[int], share: float) -> int:
@@ -454,7 +459,7 @@ def report(state_dir: Path, *, cap_tokens: int, context_tokens: int, output_toke
         lines.append("   no run has committed a job clock yet")
     for clock in clocks:
         lines.append(
-            f"   {clock.scope}: {clock.job_seconds} s over {clock.counter_rows} counter rows; "
+            f"   {clock.scope}: {clock.job_seconds} s over {clock.clock_rows} clock rows; "
             f"fetch {clock.fetch_ms / 1000:.1f} s, extract {clock.extract_ms / 1000:.1f} s, "
             f"summarize {clock.summarize_ms / 1000:.1f} s"
         )

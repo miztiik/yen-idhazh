@@ -198,7 +198,7 @@ def test_the_alarm_point_and_the_pages_cap_stay_two_knobs() -> None:
     assert (tuned.site_budget_mb, tuned.pages_hard_cap_mb) == (600, 900)
 
 
-def test_the_runtime_counters_are_on_without_being_asked_for() -> None:
+def test_the_model_server_publishes_its_counters_without_being_asked_for() -> None:
     """A run that did not count is a run that cannot say how close it came.
 
     llama-server publishes the context high watermark only under `--metrics`.
@@ -867,7 +867,6 @@ def test_a_fresh_clone_measures_itself_and_the_committed_config_agrees() -> None
     assert committed.observability.host_fingerprint_keep_months is not None
     assert fresh.observability.evaluation_enabled
     assert fresh.observability.telemetry_publish
-    assert fresh.observability.runtime_counters_scrape
     assert fresh.observability.tracing_enabled
 
 
@@ -879,14 +878,14 @@ def test_the_item_health_census_is_not_switchable() -> None:
     is the exact defect the census exists to prevent. The guard is the switch
     list itself, so adding a fifth boolean fails here and has to be argued for.
 
-    `tracing_enabled` was the fourth, added 2026-08-30 and turned on by default
+    `tracing_enabled` was the third, added 2026-08-30 and turned on by default
     2026-09-06. The argument it had to make: it switches an instrument nothing
     else divides by. No page reads a span, no gate consults one, and every rate
     the console prints keeps its denominator whether tracing is on or off - which
     is not true of any of the other three in the same way, and is why it is
     allowed to be a switch at all.
 
-    `host_fingerprint` is the fifth, added 2026-09-16, and it makes the same
+    `host_fingerprint` is the fourth, added 2026-09-16, and it makes the same
     argument. It records what silicon a job drew; nothing divides by it, no
     published page reads it, and every rate keeps its denominator with it off.
     What it costs to switch off is comparability rather than a measurement: a
@@ -902,7 +901,6 @@ def test_the_item_health_census_is_not_switchable() -> None:
     assert switches == {
         "evaluation_enabled",
         "telemetry_publish",
-        "runtime_counters_scrape",
         "tracing_enabled",
         "host_fingerprint",
     }

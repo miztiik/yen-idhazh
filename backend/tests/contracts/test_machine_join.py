@@ -6,9 +6,9 @@ from typing import Any
 
 import pytest
 
+from idhazh.contracts.base import ServerJob
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
-from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.ledger import HOST_FINGERPRINT_KEY
 
 pytestmark = pytest.mark.contract

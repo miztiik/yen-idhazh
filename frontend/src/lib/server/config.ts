@@ -119,8 +119,6 @@ export interface ObservabilityConfig {
 	cost_output_per_million: number;
 	/** Whether the faithfulness scorer runs at all. */
 	evaluation_enabled: boolean;
-	/** Whether a work shard scrapes the model server's own counters. */
-	runtime_counters_scrape: boolean;
 	/** Whether a job records what machine it drew. False is why three panels have
 	 * nothing, and each says so in words that never name the setting. */
 	host_fingerprint: boolean;
@@ -434,7 +432,6 @@ const OBSERVABILITY_DEFAULTS: ObservabilityConfig = {
 	cost_input_per_million: 0.2,
 	cost_output_per_million: 0.6,
 	evaluation_enabled: true,
-	runtime_counters_scrape: true,
 	host_fingerprint: true,
 	sample_rate: 1
 };

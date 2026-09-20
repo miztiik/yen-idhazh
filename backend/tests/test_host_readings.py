@@ -9,7 +9,7 @@ weather.
 
 Sibling question, sibling module: `backend/tests/pipeline/test_work_health_payload.py`
 asks whether the cells reach the row a shard leaves on disk. This one asks
-whether the readings are right, and whether the two consumers can disagree.
+whether the readings are right, and whether two rows of one shard can disagree.
 """
 
 from __future__ import annotations
@@ -19,29 +19,28 @@ from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
-from conftest import REPO_ROOT, read_text
+from conftest import FIXTURES_DIR, REPO_ROOT, read_text
 from pytest import MonkeyPatch
 
 from idhazh.contracts.item_health import ItemHealthRow
-from idhazh.contracts.run_plan import RunPlan
 from idhazh.telemetry import host
 
-#: A processor name and a kernel peak the test chooses, so the assertion is
-#: against a known answer and never against whatever host ran the suite.
-A_PROCESSOR = "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz"
+#: A kernel peak the test chooses, so the assertion is against a known answer
+#: and never against whatever host ran the suite.
 A_KERNEL_PEAK = 15_032_385_536
 
+#: Two real `/proc/stat` reads twenty seconds apart, taken by the probe on a
+#: `ubuntu-latest` runner on 2026-08-30. The gap is what makes it an oracle: the
+#: tick delta has to reproduce twenty seconds of four processors at 100 Hz, and
+#: no hand-written file can be checked that way.
+PROC_STAT_AT_START = FIXTURES_DIR / "runtime" / "2026-08-30-probe-proc-stat-at-start.txt"
+PROC_STAT_AT_END = FIXTURES_DIR / "runtime" / "2026-08-30-probe-proc-stat-at-end.txt"
 
-def a_plan() -> RunPlan:
-    """The smallest plan the counters stage needs: a date and a run id."""
-    return RunPlan.model_validate(
-        {
-            "date": "2026-09-16",
-            "run_id": "2026-09-16-1",
-            "generated_at": "2026-09-16T00:00:00Z",
-            "items": [],
-        }
-    )
+#: What the probe slept for, what the runner reported to `nproc`, and the
+#: kernel's tick rate. Guardrail #2 fixes the second at 4.
+PROBE_SECONDS = 20
+PROBE_PROCESSORS = 4
+USER_HZ = 100
 
 
 def test_a_machine_with_no_proc_records_empty_and_never_raises() -> None:
@@ -313,91 +312,148 @@ def test_a_process_table_this_machine_will_not_open_reports_nothing(
     assert host.llama_server_pid() is None
 
 
+def _aggregate_cpu_line(text: str) -> list[int]:
+    """The ten counters on the one `cpu ` line of a /proc/stat capture."""
+    aggregate = [line for line in text.splitlines() if line.split()[:1] == ["cpu"]]
+    assert len(aggregate) == 1, "a /proc/stat capture has exactly one aggregate cpu line"
+    return [int(cell) for cell in aggregate[0].split()[1:]]
+
+
+def test_the_two_proc_stat_captures_an_oracle_reads_are_committed() -> None:
+    """A test over a fixture that is not there proves nothing and still passes.
+
+    `.gitignore` carries `*.log`, and a capture named after the file it came
+    from has been silently ignored before - so the files are asserted present
+    rather than assumed.
+    """
+    for path in (PROC_STAT_AT_START, PROC_STAT_AT_END):
+        assert path.is_file(), path.name
+
+
+def test_the_processor_busy_share_is_read_from_a_real_proc_stat_pair() -> None:
+    """The Oracle for `cpu_busy_pct_between`: the capture proves its own window.
+
+    Twenty seconds of four processors at 100 Hz is 8,000 ticks. A real pair
+    reproduces that, and a hand-written pair only does so by arithmetic somebody
+    already did - which is the same arithmetic under test. The busy share itself
+    is worked out here from the raw text, field by field, so this cannot pass by
+    agreeing with the function about a mistake.
+
+    The reading is near zero because the probe slept through its own window. The
+    shape is what is under test; the expected value on a work shard is near 100.
+    """
+    at_start = read_text(PROC_STAT_AT_START)
+    at_end = read_text(PROC_STAT_AT_END)
+    start = _aggregate_cpu_line(at_start)
+    end = _aggregate_cpu_line(at_end)
+    # guest sits inside user and guest_nice inside nice, so a plain sum of the
+    # line counts both twice. idle and iowait are the processors standing free.
+    available = (sum(end) - end[8] - end[9]) - (sum(start) - start[8] - start[9])
+    idle = (end[3] + end[4]) - (start[3] + start[4])
+
+    assert available == pytest.approx(PROBE_SECONDS * PROBE_PROCESSORS * USER_HZ, rel=0.01)
+    assert host.cpu_busy_pct_between(at_start, at_end) == pytest.approx(
+        100 * (available - idle) / available, abs=0.005
+    )
+
+
+def test_a_capture_nobody_took_is_absent_rather_than_a_share_of_zero() -> None:
+    """An empty variable and a truncated read are both unknown, and unknown is not zero."""
+    at_start = read_text(PROC_STAT_AT_START)
+
+    assert host.cpu_ticks(None) is None
+    assert host.cpu_ticks("") is None
+    assert host.cpu_ticks("cpu\n") is None
+    assert host.cpu_ticks("cpu not a number\n") is None
+    assert host.cpu_busy_pct_between(at_start, None) is None
+    assert host.cpu_busy_pct_between(None, at_start) is None
+    assert host.cpu_busy_pct_between(at_start, at_start) is None, (
+        "a window of no elapsed ticks has no share to report"
+    )
+
+
+def test_the_aggregate_line_is_read_out_of_a_whole_capture_or_out_of_the_line_alone() -> None:
+    """The workflow used to pass one line and the sampler passes the whole file.
+
+    Both are the same fact with the per-processor lines attached or not, so one
+    reader takes both rather than two readers taking one each.
+    """
+    whole = read_text(PROC_STAT_AT_START)
+    aggregate = next(line for line in whole.splitlines() if line.split()[:1] == ["cpu"])
+
+    assert host.cpu_ticks(whole) == host.cpu_ticks(aggregate)
+    assert host.cpu_ticks(aggregate) is not None
+
+
 def test_the_kernel_peak_reads_the_file_and_the_line_the_shard_job_copies_it_into(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
-    """The Oracle for `cgroup_peak_bytes`: one fact, two shapes, one reader.
+    """The Oracle for `cgroup_peak_bytes`: the kernel's own file, and nothing else.
 
-    The kernel writes a bare count. The shard job copies that count into
-    `memory-peak.txt` under a key, and writes the word `unavailable` where the
-    kernel file is not there - which is what a GitHub-hosted runner has measured
-    every time this project has looked. Both shapes go through this one function,
-    so the item row and the shard row cannot parse the same number differently.
+    The kernel writes a bare count. Anything else is unknown, and unknown is not
+    zero - which is what a GitHub-hosted runner has measured every time this
+    project has looked, because the file is not there at all.
 
-    The workflow half is asserted against the step that writes the file, because
-    a reader that agrees with nobody is a reader of a format nobody produces.
+    The shard job copies the same count into `memory-peak.txt` for the run
+    artifact and the operator's own read of the job log. Nothing parses that
+    copy, so the workflow half is asserted here only to prove the number a
+    person reads and the number this function reads come from one file.
     """
     workflow = read_text(REPO_ROOT / ".github" / "workflows" / "digest.yml")
     assert "cgroup_memory_peak_bytes=$(cat /sys/fs/cgroup/memory.peak)" in workflow
     assert "cgroup_memory_peak_bytes=unavailable" in workflow
 
-    assert host.cgroup_peak_bytes(f"cgroup_memory_peak_bytes={A_KERNEL_PEAK}\n") == A_KERNEL_PEAK
-    assert host.cgroup_peak_bytes("cgroup_memory_peak_bytes=unavailable\n") is None
-    assert host.cgroup_peak_bytes("") is None
-
-    # The kernel's own shape, from the file this module opens when nobody hands
-    # it a copy. Built here: the path is absent on every machine that runs this.
+    # The kernel's own shape, from the file this module opens. Built here: the
+    # path is absent on every machine that runs this.
     kernel_file = tmp_path / "memory.peak"
     kernel_file.write_text(f"{A_KERNEL_PEAK}\n", encoding="utf-8")
     monkeypatch.setattr(host, "CGROUP_PEAK", kernel_file)
 
     assert host.cgroup_peak_bytes() == A_KERNEL_PEAK
 
+    kernel_file.write_text("unavailable\n", encoding="utf-8")
+
+    assert host.cgroup_peak_bytes() is None, "anything that is not a count is unknown"
+
     monkeypatch.setattr(host, "CGROUP_PEAK", tmp_path / "absent")
 
     assert host.cgroup_peak_bytes() is None
 
 
-def test_the_processor_reported_by_the_job_wins_and_an_unreported_one_is_read_here() -> None:
-    """One reader for one fact, whichever of the two callers asks.
+def test_the_processor_is_read_once_here_and_never_reported_in(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """One reader for one fact, so two rows of one shard cannot name two parts.
 
-    The shard job reads `/proc/cpuinfo` in its first step, before a checkout
-    exists. A stage run anywhere else has no such string and reads the same file
-    itself rather than recording nothing.
+    It answers on every machine this suite runs on, so what is asserted is that
+    it answered rather than what it said - and that a host with nothing to say
+    records nothing instead of an empty string.
     """
-    assert host.cpu_model(f"  {A_PROCESSOR}  ") == A_PROCESSOR
-    # No reported string falls back to the in-process read, which answers on
-    # every machine this suite runs on - so what is asserted is that it answered,
-    # not what it said.
-    assert host.cpu_model("") is not None
     assert host.cpu_model() is not None
 
+    monkeypatch.setattr(host, "host_cpu", lambda: "   ")
 
-def test_one_sampler_call_reaches_both_consumers_and_they_cannot_disagree(
-    tmp_path: Path,
-) -> None:
-    """The item row and that shard's counters row are one reading.
+    assert host.cpu_model() is None, "a probe that said nothing is not a part with no name"
 
-    Two stores carry a `cpu_model` and a `cgroup_peak_bytes` column - the item
-    row and `state/runtime-counters.csv`. They are separate stores on purpose:
-    the counters row is the independent check on the census's own timings, and a
-    check folded into the thing it checks stops being a check (Guardrail #10).
-    What must never differ is the machine they name, so both take it from one
-    `host_facts` call and this asserts they land the same value.
+
+def test_one_sampler_call_reaches_every_row_and_they_cannot_disagree() -> None:
+    """Every row one shard writes names one machine, because one call read it.
+
+    The processor cannot change inside a job, so a second reading per item is an
+    extra `/proc/cpuinfo` open for an answer already taken - and two readings are
+    two answers nobody can reconcile (Guardrail #10).
 
     **What it cannot settle.** Whether either sample is representative of the
     item's whole run - a single point sample never is - and it says nothing
-    about `cpu_busy_pct`, which is one item's window on the item row and the
-    whole job's on the shard row. Those two are SUPPOSED to differ; an item row
-    that agreed with its shard about how busy the host was would have measured
-    the wrong window.
+    about `cpu_busy_pct`, which is one item's window and is SUPPOSED to differ
+    between two items of one shard.
     """
-    once = host.host_facts(
-        reported_cpu_model=A_PROCESSOR,
-        reported_cgroup_peak=f"cgroup_memory_peak_bytes={A_KERNEL_PEAK}\n",
-        environ={"RUNNER_NAME": "ubuntu-4core-3"},
-    )
+    once = host.host_facts(environ={"RUNNER_NAME": "ubuntu-4core-3"})
 
     item_cells = host.Watch(interval_s=0, facts=once).close().cells()
-    shard_row = host.stage_counters(
-        a_plan(),
-        state_root=tmp_path / "state",
-        metrics_path=tmp_path / "never-written.prom",
-        facts=once,
-    )
 
-    assert item_cells["cgroup_peak_bytes"] == shard_row.cgroup_peak_bytes == A_KERNEL_PEAK
-    assert once.shard_cells()["cpu_model"] == shard_row.cpu_model == A_PROCESSOR
+    assert item_cells["cgroup_peak_bytes"] == once.cgroup_peak_bytes
+    assert once.shard_cells()["cpu_model"] == once.cpu_model
     assert once.runner_name == "ubuntu-4core-3", (
         "the label is still read here, and `state/host-fingerprint/` is what writes it down"
     )

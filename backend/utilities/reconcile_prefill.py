@@ -2,10 +2,11 @@
 
 Two instruments measure the same thing and neither knows about the other. The
 item-health ledger sums a field the summarize stage copied out of each model
-reply; `state/runtime-counters.csv` carries what llama-server counted for the
-whole shard. `docs/architecture/summarize/throughput.md` and the console both
-publish rates derived from the first one, so the second one is what makes those
-rates checkable rather than merely reported (Guardrail #10).
+reply; `state/host-fingerprint/` carries what llama-server itself counted for
+the whole shard, on the same row that says which machine the shard drew.
+`docs/architecture/summarize/throughput.md` and the console both publish rates
+derived from the first one, so the second one is what makes those rates
+checkable rather than merely reported (Guardrail #10).
 
 This is an audit and not a stage. It runs when somebody doubts a published
 number, never on the daily pipeline's critical path, because a check that can
@@ -30,8 +31,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from idhazh.contracts.runtime_counters import WORK_JOB, RuntimeCountersRow
-from idhazh.ledger import item_health_path, load_runtime_counters
+from idhazh.contracts.base import WORK_JOB
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.ledger import host_fingerprint_path, item_health_path, load_host_fingerprint_shard
 
 #: How far apart the two instruments may be before one of them is wrong.
 #:
@@ -72,12 +74,12 @@ class Pooled:
         return self.tokens / self.seconds if self.seconds > 0 else 0.0
 
 
-def pool_counters(rows: list[RuntimeCountersRow]) -> Pooled:
+def pool_counters(rows: list[HostFingerprintRow]) -> Pooled:
     """One run's shards, summed. A shard whose scrape came back empty is counted
     as a part and contributes nothing, so a caller can see it was there."""
     return Pooled(
-        tokens=sum(row.prompt_tokens_total or 0 for row in rows),
-        seconds=sum(row.prompt_seconds_total or 0.0 for row in rows),
+        tokens=sum(row.server_prompt_tokens or 0 for row in rows),
+        seconds=sum(row.server_prompt_seconds or 0.0 for row in rows),
         parts=len(rows),
     )
 
@@ -162,19 +164,23 @@ class Reconciliation:
 def reconcile(state_dir: Path, *, run_id: str) -> Reconciliation:
     """Both sides of one run, pooled the same way.
 
+    Both sides file by day and a run id opens with its date, so each side reads
+    one day file however long the ledgers get.
+
     The `work` rows only. The other side of this comparison is
     `state/item-health/`, which is one row per summarized item, so the visual
     planner's server has nothing to reconcile against and pooling it in would
     add a second model's tokens to the first model's seconds.
     """
+    date = run_id[:10]
     return Reconciliation(
         run_id=run_id,
-        ledger=pool_ledger(item_health_path(state_dir, run_id[:10]), run_id=run_id),
+        ledger=pool_ledger(item_health_path(state_dir, date), run_id=run_id),
         server=pool_counters(
             [
                 row
-                for row in load_runtime_counters(state_dir, run_id=run_id)
-                if row.job == WORK_JOB
+                for row in load_host_fingerprint_shard(host_fingerprint_path(state_dir, date))
+                if row.run_id == run_id and row.job == WORK_JOB
             ]
         ),
     )

@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-20
 
 Every column of the host fingerprint, what it means, and what it is for. One row
 a job, by every job that draws its own runner - written in two halves, one at job
@@ -63,19 +63,16 @@ could differ in. They are two rows of the file that job owns.
 whole state root with `run.trial_state_dirname`, so its rows land under
 `state/pipeline-tests/`. The reason is in the design rationale below.
 
-**It is finer grained than `state/runtime-counters.csv` and it is partitioned
-differently on purpose.** The counters file is one flat file the console reads
-whole. This is a day tree, because it only earns its keep when somebody counts
-across many days, and a day tree is the shape a bounded window can read
-(Guardrail #12).
+**It files by day, and that is the shape the read wants.** A host record only
+earns its keep when somebody counts across many days, and a day tree is the
+shape a bounded window can read (Guardrail #12).
 
-**Three tables join on the key, and no column is duplicated to make that work.**
-This table, `state/runtime-counters.csv` and
-`state/item-health/<YYYY>/<MM>/<DD>.csv` all carry `date`, `run_id`, `job` and
-`shard`, and a job runs on one machine, so the key is the join. There is
-deliberately no `host_fingerprint` column on the counters row and none on the
-item row: it would be a second copy of a value this table already holds, and a
-second copy is a thing that can disagree.
+**Two tables join on the key, and no column is duplicated to make that work.**
+This table and `state/item-health/<YYYY>/<MM>/<DD>.csv` both carry `date`,
+`run_id`, `job` and `shard`, and a job runs on one machine, so the key is the
+join. There is deliberately no `host_fingerprint` column on the item row: it
+would be a second copy of a value this table already holds, and a second copy is
+a thing that can disagree.
 
 **The item row is the third from 2026-09-17, and it is the one that answers per
 item.** It carried `shard` from 2026-08-30 and could spell three of the four
@@ -233,11 +230,12 @@ what let a 0.746 percent drift on one article be seen at all. The bound is 5
 percent and it is not a `config/` knob: tuning it is how a failing check is made
 to pass.
 
-**The same cells sit on `state/runtime-counters.csv`, and that is on purpose.**
-The arithmetic and the wire-name table behind them live once, in
-[`backend/idhazh/contracts/runtime_counters.py`](../../backend/idhazh/contracts/runtime_counters.py),
-and both writers call it - two subtractions of one pair of instants, or two
-readings of one counter, are two things that can disagree.
+**These cells sit here and nowhere else, and that is on purpose.**
+`state/runtime-counters.csv` carried a second copy of them until 2026-09-19. The
+arithmetic and the wire-name table behind them now live once, in
+[`backend/idhazh/telemetry/silicon.py`](../../backend/idhazh/telemetry/silicon.py),
+beside the stage that writes the row - two subtractions of one pair of instants,
+or two readings of one counter, are two things that can disagree.
 
 ## Why almost nothing here is an enum
 

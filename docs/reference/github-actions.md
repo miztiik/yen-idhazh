@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-20
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
 
@@ -247,7 +247,7 @@ flowchart TB
 
  subgraph MOD["Summarize - what the model is asked"]
   FETCH --> CALLS["two calls an item<br/>summary, then the visual plan"]
-  CALLS --> ROWS[("item health, eval rows,<br/>runtime counters")]
+  CALLS --> ROWS[("item health, eval rows,<br/>host records")]
  end
 
  subgraph PUB["Publishing - what a reader gets"]
@@ -279,18 +279,17 @@ artifact, which expires and is never committed.
 
 A worker commits a third row in the same step: what its model server counted for
 the whole shard, read once from `/metrics` at job end and filed into this
-shard's own segment, which `assemble` folds into `state/runtime-counters.csv`.
+shard's own segment, which `assemble` folds into `state/host-fingerprint/`.
 The raw body still ships in `runtime-log-<shard>`, which keeps it for two days -
 long enough to read a failure, far too short to hold a published rate to
 account. The committed row is what lets
 `backend/utilities/reconcile_prefill.py` check the item-health ledger's read rate
 against a second instrument (Guardrail #10).
 
-The same row carries two facts about the job rather than about its server: how
-long the shard took, and which processor it drew. The `work` job's first step -
-ahead of the checkout, so the clock covers the cache restore and the weight load
-- writes an epoch second and the `/proc/cpuinfo` `model name` line to
-`$GITHUB_ENV`, and the counters step passes both to `python -m idhazh counters`.
+The same row carries a fact about the job rather than about its server: how long
+the shard took. The `work` job's first step - ahead of the checkout, so the clock
+covers the cache restore and the weight load - writes an epoch second to
+`$GITHUB_ENV`, and the job-clock step passes it to `python -m idhazh job-clock`.
 The rollback rule for the truncation cap reads that clock, and the only other
 place it exists is the jobs API, which drops a job record when the run ages out.
 

@@ -12,14 +12,13 @@ from idhazh import (
     ledger,
     run_context,
 )
-from idhazh.contracts.base import fit_field
+from idhazh.contracts.base import ServerJob, fit_field
 from idhazh.contracts.qualification import (
     GateStatus,
     QualificationReport,
     QualificationShard,
     corpus_digest,
 )
-from idhazh.contracts.runtime_counters import ServerJob
 from idhazh.contracts.validation_row import (
     LeaderboardProvenance,
     ValidationRow,
