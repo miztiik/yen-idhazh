@@ -3,7 +3,7 @@
 **Last Updated**: 2026-09-20
 **Level**: 5 (a persisted contract, a published payload, and the operator's primary surface)
 
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0.
 
 ## 0 - Operating contract
 
@@ -16,7 +16,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Chosen strategy | Correct the instruments before redrawing the surface that reads them. Carmack ruled which machine readings are reachable and which are noise; Fowler ruled the grain, the seam and what to delete; Susan ruled the page. |
 | Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4. |
 | Rollback | None. Git is the backup. A row that replaces a thing deletes that thing in the same commit. |
-| The price, stated here rather than discovered at row ten | Fourteen rows name `frontend/src/routes/console/machine/+page.svelte`. Plan 33 group I already paid this as a serial chain and priced the alternative in its Row #27 without taking it. This plan takes it: Row #7 extracts the panels into a file each, which converts a fourteen-link chain into a fan-out and is the reason the console half is not the critical path a second time. Row #7's own cost is one Level 3 refactor that must change no rendered byte. |
+| The price, stated here rather than discovered at row ten | Fourteen rows name `frontend/src/routes/console/machine/+page.svelte`, measured at 72,099 bytes. Plan 33 group I already paid this as a serial chain and priced the alternative in its Row #27 without taking it. This plan takes it: Row #7 extracts the panels into a file each, which converts a fourteen-link chain into a fan-out and is the reason the console half is not the critical path a second time. Row #7's own cost is one Level 3 refactor that must change no rendered byte. |
 
 ### The correction this plan is built on
 
@@ -68,16 +68,18 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 
 **Part A corrects the instruments. Part B redraws the surface. Part C closes.** Part B's panel rows depend on Part A only where a panel draws a column Part A creates - Rows #10 and #11 - so the two halves overlap rather than queue.
 
-**Row #7 is the row that makes the rest parallel.** Ten rows name one 64 KB Svelte route. Extracting the panels into a file each is what turns that chain into a fan-out, and it must change no rendered byte.
+**Row #7 is the row that makes the rest parallel.** Fourteen rows name one Svelte route of 72,099 bytes. Extracting the panels into a file each is what turns that chain into a fan-out, and it must change no rendered byte.
+
+**Three `Depends-on` edges are file overlaps, not logic.** Rows #1, #2 and #6 all write `docs/reference/host-metrics.md`; rows #3 and #6 both write `backend/tests/telemetry/`; rows #6 and #8 both write `backend/idhazh/contracts/knobs/` and `schemas/`. The edges below serialise them so the next dispatch reads the answer rather than re-deriving it.
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Does this runner expose a hardware PMU | - | A | PENDING | - | - | - |
-| 2 | Settle the peak that falls | - | A | PENDING | - | - | - |
-| 3 | One status read a tick, not two | - | A | PENDING | - | - | - |
-| 6 | The bandwidth probe sizes itself against the cache | - | A | PENDING | - | - | - |
-| 7 | One file a panel | - | A | PENDING | - | - | - |
-| 8 | The rare-event thresholds become knobs | - | A | PENDING | - | - | - |
+| 1 | Does this runner expose a hardware PMU | - | A | IN-FLIGHT | p37r1 | - | - |
+| 3 | One status read a tick, not two | - | A | IN-FLIGHT | p37r3 | - | - |
+| 7 | One file a panel | - | A | IN-FLIGHT | p37r7 | - | - |
+| 8 | The rare-event thresholds become knobs | - | A | IN-FLIGHT | p37r8 | - | - |
+| 2 | Settle the peak that falls | 1 | A | PENDING | - | - | - |
+| 6 | The bandwidth probe sizes itself against the cache | 1, 3, 8 | A | PENDING | - | - | - |
 | 4 | The sampler stops calling theft our work | 2, 3 | B | PENDING | - | - | - |
 | 9 | Panels grouped by the decision they serve | 7 | B | PENDING | - | - | - |
 | 5 | `ItemHealthRow` gains three columns and loses one | 4 | C | PENDING | - | - | - |
@@ -127,8 +129,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 
 - **Scope:** find out why a high-water mark that cannot fall for a live process falls between items in every shard, then correct the column's description to say what it measures.
 - **Files touched:** `backend/utilities/` (a new operator script), `backend/idhazh/contracts/item_health.py` (description only), `schemas/item-health-row.schema.json` (generated), `docs/reference/host-metrics.md`
-- **Acceptance gates:** local - ruff, mypy, `python -m idhazh.contracts.export` then `git status --porcelain -- schemas/` empty. CI - full suite, drift gate.
-- **Oracle:** the script names, for one shard, whether the server process identity changed between two items whose recorded peak fell; the corrected description states what the column measures in terms a reader can check against the code. **What it cannot settle:** whether rows already committed are wrong or merely mis-described - if they are wrong, that is ESCALATE 0b2 and a person decides what happens to them.
+- **Acceptance gates:** local - ruff, mypy, `python -m idhazh.contracts.export` then `git status --porcelain -- schemas/` empty. CI - full suite, drift gate.- **Oracle:** the script names, for one shard, whether the server process identity changed between two items whose recorded peak fell; the corrected description states what the column measures in terms a reader can check against the code. **What it cannot settle:** whether rows already committed are wrong or merely mis-described - if they are wrong, that is ESCALATE 0b2 and a person decides what happens to them.
 - **Decisions:**
 
 | # | Decision | Authority |
@@ -147,8 +148,8 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 ## Row #3 - One status read a tick, not two
 
 - **Scope:** the sampler opens the server process status file once a tick and reads both lines from it, the way it already reads five keys from one memory file.
-- **Files touched:** `backend/idhazh/telemetry/host.py`, `backend/tests/telemetry/`
-- **Acceptance gates:** local - ruff, mypy, `pytest backend/tests/telemetry -n auto`. CI - full suite.
+- **Files touched:** `backend/idhazh/telemetry/host.py`, `backend/tests/test_host_readings.py`
+- **Acceptance gates:** local - ruff, mypy, `pytest backend/tests/test_host_readings.py -n auto`. CI - full suite.
 - **Oracle:** a fixture status file is opened exactly once per tick and both values are recovered from it, asserted by counting opens rather than by reading the values back. **What it cannot settle:** nothing material - the values are unchanged by construction.
 - **Decisions:**
 
@@ -166,8 +167,8 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 ## Row #4 - The sampler stops calling theft our work
 
 - **Scope:** the sampler counts hypervisor steal separately from our own busy time, and reads the model server's major page faults across the item.
-- **Files touched:** `backend/idhazh/telemetry/host.py`, `backend/idhazh/stages/work.py`, `backend/tests/telemetry/`
-- **Acceptance gates:** local - ruff, mypy, `pytest backend/tests/telemetry -n auto`. CI - full suite.
+- **Files touched:** `backend/idhazh/telemetry/host.py`, `backend/idhazh/stages/work.py`, `backend/tests/test_host_readings.py`, `backend/tests/test_telemetry.py`
+- **Acceptance gates:** local - ruff, mypy, `pytest backend/tests/test_host_readings.py backend/tests/test_telemetry.py -n auto`. CI - full suite.
 - **Oracle:** a fixture processor-time pair with a known steal component yields a busy figure that excludes it and a steal figure that equals it, and the two plus idle and iowait sum to the whole interval; a fixture process status with a known major-fault count at open and at close yields exactly their difference. **What it cannot settle:** whether the hypervisor's steal accounting is itself accurate - that is the platform's contract, not ours.
 - **Decisions:**
 
@@ -190,8 +191,8 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 ## Row #5 - `ItemHealthRow` gains three columns and loses one
 
 - **Scope:** one contract commit adds the steal figure, the major-fault count, a flag recording whether the weights were pinned and the two anonymous-memory readings the fill bar needs; corrects two descriptions; and removes the column that has never held a value.
-- **Files touched:** `backend/idhazh/contracts/item_health.py`, `backend/idhazh/contracts/machine_shard.py`, `schemas/item-health-row.schema.json` and `schemas/machine-shard-row.schema.json` (generated), `frontend/src/contracts/` (generated), `backend/idhazh/telemetry/publish/machine.py`, `frontend/scripts/build-canary.mjs`, `backend/tests/contracts/`, `backend/tests/telemetry/`
-- **Acceptance gates:** local - ruff, mypy, `pytest backend/tests/contracts backend/tests/telemetry -n auto`, `python -m idhazh.contracts.export` then `git status --porcelain -- schemas/` empty. CI - full suite, drift gate, and the `site` and `browser` jobs, which are the only gates that see the canary builder.
+- **Files touched:** `backend/idhazh/contracts/item_health.py`, `backend/idhazh/contracts/machine_shard.py`, `schemas/item-health-row.schema.json` and `schemas/machine-shard-row.schema.json` (generated), `frontend/src/contracts/` (generated), `backend/idhazh/telemetry/publish/machine.py`, `frontend/scripts/build-canary.mjs`, `backend/tests/contracts/`, `backend/tests/test_item_records.py`
+- **Acceptance gates:** local - ruff, mypy, `pytest backend/tests/contracts backend/tests/test_item_records.py -n auto`, `python -m idhazh.contracts.export` then `git status --porcelain -- schemas/` empty. CI - full suite, drift gate, and the `site` and `browser` jobs, which are the only gates that see the canary builder.
 - **Oracle:** every committed day file migrates without raising, proved by driving the header migration over the canary day plus a fixture carrying the removed column; a built sampler over a fixture item produces the three new columns with the expected values and produces nulls rather than zeros where no reading was taken. **What it cannot settle:** whether the published machine payload's consumers survive the removed column - that is Row #17's gate and the browser job.
 - **Decisions:**
 
@@ -218,8 +219,8 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 ## Row #6 - The bandwidth probe sizes itself against the cache
 
 - **Scope:** the memory-bandwidth probe derives its buffer from the machine's own reported cache size instead of a configured constant, so it cannot silently become a cache reading.
-- **Files touched:** `backend/idhazh/telemetry/silicon.py`, `config/idhazh.json`, `backend/idhazh/contracts/knobs/`, `schemas/` (generated), `backend/tests/telemetry/`, `docs/reference/host-metrics.md`
-- **Acceptance gates:** local - ruff, mypy, `pytest backend/tests/telemetry -n auto`, `python -m idhazh.contracts.export` then `git status --porcelain -- schemas/` empty. CI - full suite, drift gate.
+- **Files touched:** `backend/idhazh/telemetry/silicon.py`, `config/idhazh.json`, `backend/idhazh/contracts/knobs/`, `schemas/` (generated), `backend/tests/test_silicon.py`, `docs/reference/host-metrics.md`
+- **Acceptance gates:** local - ruff, mypy, `pytest backend/tests/test_silicon.py backend/tests/test_host_readings.py -n auto`, `python -m idhazh.contracts.export` then `git status --porcelain -- schemas/` empty. CI - full suite, drift gate.
 - **Oracle:** a fixture machine reporting a cache larger than the configured floor produces a probe buffer at least twice that cache; a fixture reporting a small cache keeps the configured floor. **What it cannot settle:** whether the resulting figure is accurate on silicon nobody has drawn yet.
 - **Decisions:**
 
