@@ -332,7 +332,7 @@ test.describe('what the machine was doing when we asked', () => {
 		expect(clockSentence(card)).toBe('Clock speed was not recorded on this job.');
 	});
 
-	test('a card off the counters alone carries neither, and states both absences', () => {
+	test('a machine the record never reached carries neither, and both say so', () => {
 		const named = cardsFor([fingerprint({ job: 'work', shard: 0 })]).cards.find(
 			(card) => card.source === 'name-only'
 		);

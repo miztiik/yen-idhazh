@@ -106,11 +106,11 @@
 		<p class="note" data-machine-flags="none" data-machine-flags-why={lost ? 'lost' : 'not-started'}>
 			{#if lost}
 				Only the processor name survived for this run. The machine record ran on this day and the
-				rows it wrote are gone, so the instruction-set flags, the cache and the bandwidth it measured
-				cannot be recovered.
+				rows it wrote are gone, so the instruction-set flags, the cache, the clock, the uptime and
+				the copy speed it measured cannot be recovered.
 			{:else}
-				Only the processor name was recorded for this run. Instruction-set flags, cache and bandwidth
-				start on the day the machine record ran.
+				Only the processor name was recorded for this run. Instruction-set flags, cache, clock,
+				uptime and copy speed start on the day the machine record ran.
 			{/if}
 		</p>
 	{/if}
