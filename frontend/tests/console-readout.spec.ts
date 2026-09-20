@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { columnStrip } from '../src/lib/charts/frame';
-import { clocksChart, percentileChart } from '../src/lib/charts/machine';
+import { clocksChart } from '../src/lib/charts/machine';
 import { stacked } from '../src/lib/charts/stacked';
 
 /**
@@ -471,18 +471,6 @@ test.describe('the strip is the key', () => {
 			{ label: 'shard 1', ledger: 9.5, server: 9.9, gapPct: 4.0, agrees: true }
 		]);
 		expect(clocks.option.legend, 'the clock chart draws a legend').toBeUndefined();
-
-		const percentiles = percentileChart([
-			{
-				runId: '2026-08-30-1',
-				items: 120,
-				points: [
-					{ percentile: 50, ms: 1000 },
-					{ percentile: 99, ms: 9000 }
-				]
-			}
-		]);
-		expect(percentiles.option.legend, 'the percentile chart draws a legend').toBeUndefined();
 	});
 
 	test('a strip is built from the labels, so it cannot be a different length', () => {

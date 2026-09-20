@@ -5,9 +5,7 @@ import {
 	clockAgreement,
 	clocksChart,
 	contextHeadroom,
-	curveOf,
 	memoryBoard,
-	percentileChart,
 	percentileHistory,
 	readAgainstWritten,
 	shardBoard,
@@ -89,12 +87,7 @@ export interface MachineWindow {
 	 * the counters above and can be in a different state on the same day. */
 	machineRecord: RecordingNotes;
 	cacheDays: CacheDay[];
-	/** The most parallel slots any item's server was started with, over the
-	 * items that recorded the cell. */
-	parallelSlots: { highest: number | null; from: number; outOf: number };
-	cpuBusySpan: FigureSpan;
 	peakRssSpan: FigureSpan;
-	modelLoadSpan: FigureSpan;
 	/** What kinds of machine the platform gave us over this span, and how often. */
 	fleet: FleetView;
 	tokens: RunWork[];
@@ -139,9 +132,7 @@ const DRAWN_PANELS = [
 	'two-clocks',
 	'machine-cards',
 	'platform-mix',
-	'outside-the-model-call',
 	'tail-trend',
-	'newest-run-tail',
 	'read-against-written',
 	'counterfactual-cost'
 ] as const;
@@ -160,9 +151,9 @@ const DRAWN_PANELS = [
  * slow day across Pipelines and Hardware sees both on one span.
  *
  * **A panel about one run does not follow the window.** The shard board, the
- * reading/writing split, the peak-memory bars, the clock check and the newest
- * run's own latency curve are snapshots: a window is a span, and a span cannot
- * narrow a single run. Each names the run or the day it is about instead.
+ * reading/writing split, the peak-memory bars and the clock check are
+ * snapshots: a window is a span, and a span cannot narrow a single run. Each
+ * names the run or the day it is about instead.
  */
 export async function load() {
 	const console_ = consoleConfig();
@@ -236,12 +227,6 @@ export async function load() {
 		// and its durations are summed over exactly those rows, so the two grains
 		// can never cover different runs.
 		const { runs: tokens, ...work } = readAgainstWritten(healthRows);
-		// One line of text and not a chart. It reads 1 on every row the ledger
-		// holds, because `models.summarize.inference.n_parallel` is 1, and it earns
-		// a chart the day that knob moves.
-		const slots = healthRows
-			.map((row) => Number(row.n_parallel))
-			.filter((value) => Number.isFinite(value));
 
 		return {
 			days,
@@ -278,16 +263,9 @@ export async function load() {
 				figures: 'machine record'
 			}),
 			cacheDays: cacheByDay(runs),
-			parallelSlots: {
-				highest: slots.length === 0 ? null : Math.max(...slots),
-				from: slots.length,
-				outOf: healthRows.length
-			},
-			// The newest run's own reading is a snapshot and sits below; these three
-			// say whether that reading was unusual over the span.
-			cpuBusySpan: spanOf(runs.map((run) => run.lowestCpuBusyPct.value)),
+			// The newest run's own reading is a snapshot and sits on the memory
+			// board; this says whether that reading was unusual over the span.
 			peakRssSpan: spanOf(runs.map((run) => run.peakRssBytes.value)),
-			modelLoadSpan: spanOf(runs.map((run) => run.slowestModelLoadMs.value)),
 			// Counted once a preset here rather than in a browser, which holds no
 			// ledger to count. At most eight kinds a span, so five presets is forty
 			// small objects.
@@ -385,13 +363,6 @@ export async function load() {
 	const clocks = clockAgreement(newest, health, CLOCKS_AGREE_WITHIN_PCT);
 	const clocksPlot = clocksChart(clocks.pairs);
 
-	// The newest run the item ledger timed enough items on, which is not always
-	// the newest run the counters reached: a run can publish before its shards
-	// scrape. It is the last entry of the same array the multiples draw, so
-	// "the tail today" and "the newest mark on the p99 chart" are one number.
-	const newestTail = series.latency.at(-1) ?? null;
-	const percentilePlot = percentileChart(newestTail === null ? [] : [curveOf(newestTail)]);
-
 	const rate: CostRate = {
 		currency: observability.cost_currency,
 		inputPerMillion: observability.cost_input_per_million,
@@ -409,17 +380,6 @@ export async function load() {
 	// The fleet trend at the span the page opens on. It is drawn only where the
 	// count cleared the list floor, because under it the panel is a list.
 	const fleetPlot = fleetChart(opening.fleet.trend);
-
-	// Three cells that landed on 2026-08-30 and that no page had printed. The
-	// newest run's own reading; the span across the open window sits beside it on
-	// the page, from the object above. The processors the run drew left this
-	// object on 2026-09-17: a run is not a machine, so they are cards of their own.
-	const host = {
-		runId: newest?.runId ?? null,
-		cpuBusy: newest?.lowestCpuBusyPct ?? null,
-		peakRss: newest?.peakRssBytes ?? null,
-		modelLoad: newest?.slowestModelLoadMs ?? null
-	};
 
 	// Drawn on the server so every mark is on the page before a script runs, and
 	// stays there if none ever does. Colour leaves as a custom-property
@@ -460,17 +420,12 @@ export async function load() {
 		cacheGrid: cache.grid,
 		clocks,
 		clocksSvg: await draw(clocksPlot, chart.height_px),
-		host,
 		latency: {
 			floor: latency.floor,
 			// Runs the item ledger timed too few items on to quote a p99. Bounded to
 			// the widest preset for the same reason the series above is.
-			tooFew: inWindow(latency.tooFew, bound),
-			shardRows: latency.shardRows,
-			itemRows: latency.itemRows
+			tooFew: inWindow(latency.tooFew, bound)
 		},
-		newestTail,
-		percentileSvg: await draw(percentilePlot, chart.height_px),
 		workSvg: await draw(workPlot, chart.height_px),
 		workGrid: workPlot.grid,
 		workUnit: DEFAULT_WORK_UNIT,

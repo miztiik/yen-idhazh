@@ -1178,17 +1178,6 @@ export function clockColumns(pairs: readonly ClockPair[]): DayReadout[] {
 		}));
 }
 
-export interface PercentilePoint {
-	percentile: number;
-	ms: number;
-}
-
-export interface PercentileCurve {
-	runId: string;
-	items: number;
-	points: PercentilePoint[];
-}
-
 /** One run's whole distribution, as the small multiples draw it.
  *
  * `ms` is one entry per `PERCENTILES`, in that order. An array rather than an
@@ -1209,9 +1198,6 @@ export interface LatencyHistory {
 	 * drawn: a p99 over four items is the fourth item. */
 	tooFew: { runId: string; date: string; items: number }[];
 	floor: number;
-	/** Item rows carrying a shard, and item rows in the set. */
-	shardRows: number;
-	itemRows: number;
 }
 
 /** Every run's distribution, across every day the ledger holds.
@@ -1220,10 +1206,6 @@ export interface LatencyHistory {
  * the whole reason to plot a distribution rather than quote a p95 is that a tail
  * can change shape while every headline number holds still. The value is
  * `summarize_ms`, which is the whole model call for one item.
- *
- * This is the one derivation behind both halves of the panel. The small
- * multiples draw every run in the window and the aggregate draws the newest,
- * so a figure that differed between them would be two readings of one run.
  */
 export function percentileHistory(
 	health: readonly Record<string, string>[],
@@ -1264,22 +1246,7 @@ export function percentileHistory(
 	return {
 		runs,
 		tooFew,
-		floor,
-		shardRows: health.filter((row) => (row.shard ?? '') !== '').length,
-		itemRows: health.length
-	};
-}
-
-/** One run's distribution as the curve the aggregate chart draws.
- *
- * The aggregate and the small multiples read one array, so "the tail today" and
- * "the newest mark on the p99 chart" cannot be two different numbers.
- */
-export function curveOf(run: LatencyRun): PercentileCurve {
-	return {
-		runId: run.runId,
-		items: run.items,
-		points: PERCENTILES.map((percentile, at) => ({ percentile, ms: run.ms[at] ?? 0 }))
+		floor
 	};
 }
 
@@ -1304,83 +1271,9 @@ export function latencyColumns(runs: readonly LatencyRun[]): DayReadout[] {
 	}));
 }
 
-/** Every point labelled with its value. A curve with unlabelled points is a
- * shape nobody can quote.
- *
- * No legend: the strip under the plot names every run in the colour its curve
- * is drawn in. The top inset is the room a point's own label needs, not the
- * room a legend took. */
-export function percentileChart(curves: readonly PercentileCurve[]): {
-	option: EChartsOption;
-	empty: boolean;
-} {
-	if (curves.length === 0) return { option: {}, empty: true };
-	const tokens: ChartToken[] = ['--chart-1', '--chart-2', '--chart-3', '--chart-4', '--chart-5'];
-	return {
-		empty: false,
-		option: {
-			animation: false,
-			// 30 at the top, not 20: the axis name sits above the plot and the
-			// point labels sit above the marks, and measured 2026-09-01 at 1440 the
-			// word `seconds` was drawn 7.7px outside the chart's own box.
-			grid: { left: 60, right: 44, top: 30, bottom: 26, containLabel: false },
-			tooltip: { trigger: 'axis' },
-			xAxis: {
-				type: 'category',
-				data: PERCENTILES.map((percentile) => `p${percentile}`),
-				axisLine: { lineStyle: { color: paint('--chart-axis') } },
-				axisTick: { show: false },
-				axisLabel: { color: paint('--color-text-tertiary'), fontSize: 11 }
-			},
-			yAxis: {
-				type: 'value',
-				name: 'seconds',
-				nameTextStyle: { color: paint('--color-text-tertiary'), fontSize: 11 },
-				axisLabel: { color: paint('--color-text-tertiary'), fontSize: 11 },
-				splitLine: { lineStyle: { color: paint('--chart-grid') } }
-			},
-			series: curves.map((curve, index) => ({
-				name: curve.runId,
-				type: 'line' as const,
-				symbolSize: 7,
-				lineStyle: { color: paint(tokens[index % tokens.length]), width: 2 },
-				itemStyle: { color: paint(tokens[index % tokens.length]) },
-				label: {
-					show: true,
-					position: 'top' as const,
-					fontSize: 10,
-					color: paint('--color-text-tertiary'),
-					// A template rather than a callback: the value is already in seconds
-					// and one decimal, so there is nothing left to compute.
-					formatter: '{c}s'
-				},
-				data: curve.points.map((point) => Number((point.ms / 1000).toFixed(1)))
-			}))
-		}
-	};
-}
-
 // ---------------------------------------------------------------------------
 // What a run reads against what it writes, and what it would have cost
 // ---------------------------------------------------------------------------
-
-/** Every run's reading at one percentile, for the strip under the curves.
- *
- * Two curves that cross are the fact this panel was drawn for, and a crossing
- * is exactly where reading one curve at a time stops working.
- */
-export function percentileColumns(curves: readonly PercentileCurve[]): DayReadout[] {
-	const tokens: ChartToken[] = ['--chart-1', '--chart-2', '--chart-3', '--chart-4', '--chart-5'];
-	return PERCENTILES.map((percentile, at) => ({
-		x: 0,
-		date: `p${percentile}`,
-		rows: curves.map((curve, index) => ({
-			label: curve.runId,
-			value: seconds(curve.points[at]?.ms === undefined ? null : curve.points[at].ms / 1000),
-			colour: `var(${tokens[index % tokens.length]})`
-		}))
-	}));
-}
 
 /** The two currencies a run's model work can be counted in. */
 export type WorkUnit = 'tokens' | 'seconds';
