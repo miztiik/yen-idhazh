@@ -24,6 +24,16 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 A drawn figure that changes meaning says so on the surface that drew it. Row #10 carries that sentence to the page; it is not optional decoration on the row.
 
+### The standing rule: nothing is keyed to how many calls the pipeline makes
+
+**No column, no panel, no track and no title in this plan is shaped by the number of model calls an item makes.** Owner ruling, 2026-09-20, and it is the rule two plan-docs have already broken.
+
+The count is not a property of the pipeline. It is a config value. `_ask_the_model` in `backend/idhazh/stages/common.py` runs `_two_spans` when `turns.thinks` is true and a single request otherwise, `thinks` is true exactly when the model's `turns.thinking_close` is set, and both call sites in `backend/idhazh/stages/two_calls.py` pass the same `model.turns`. The active model sets that marker, so **every logical call is two requests today and an item is four requests - eight alternating read-and-write phases.** Clear one config value and it is four phases, with no code changed.
+
+So every fixed count written about this pipeline has been wrong. Plan 33 said four phases. This plan's first draft said six. The ledger's own `model_calls` says two, and it is right about logical calls and says nothing about phases. **A design that needs the number is a design that breaks on a config edit**, which is why the rule is stated here rather than discovered at a row.
+
+What is allowed: phases, because read-then-write is a property of a transformer; totals over whatever calls happened; and distributions whose track count comes from the data. What is not: a column named for a call, a panel with one track per call, or any arithmetic that assumes a number.
+
 ### Table 0a - out of scope
 
 | id | What is out | What it costs to leave out | What would bring it in |
@@ -50,6 +60,7 @@ An escalation STOPS that row and reports. It does not stop the plan; other rows 
 | 0b4 | Row #7's extraction changes any rendered byte. | It is a pure move. A move that changes output is a rewrite nobody reviewed. |
 | 0b5 | A console row cannot be built without raising the route's byte budget. | The design is costed at fewer bytes than the page ships today. If that is false, the premise the ordering rests on is false. |
 | 0b6 | Any row needs a second memory instrument on `ItemHealthRow` before Row #2 closes. | A new memory column beside a disputed one inherits the dispute, and the reader cannot tell which figure to believe. |
+| 0b7 | A row needs a column, a track, a title or an arithmetic step keyed to the number of model calls. | The standing rule above. The count is a config value, so a design that needs it breaks on a config edit rather than on a code change, and nothing will fail to warn the person who makes it. |
 
 Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.md, converge to one written ruling, bake it into the row, move on.
 
@@ -77,12 +88,12 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 14 | The memory board drops the disputed mark | 2, 9 | C | PENDING | - | - | - |
 | 15 | The shard board gains the clocks nobody reads | 9 | C | PENDING | - | - | - |
 | 16 | Machine cards gain uptime, clock speed, cache size and copy speed | 6, 9 | C | PENDING | - | - | - |
-| 19 | Prompt reuse and reading speed, call by call | 9 | C | PENDING | - | - | - |
+| 19 | Which prompts get re-read, and how fast | 9 | C | PENDING | - | - | - |
 | 20 | What is holding the runner's memory | 5, 9 | C | PENDING | - | - | - |
 | 21 | What the context window actually costs | 9 | C | PENDING | - | - | - |
 | 22 | Dotted rules where a setting moved | 9, 21 | C | PENDING | - | - | - |
 | 17 | Every published column names its reader | 5, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22 | D | PENDING | - | - | - |
-| 18 | Docs, the plan 33 correction, and the orphan sweep | all | E | PENDING | - | - | - |
+| 18 | Docs, the living-page corrections, and the orphan sweep | all | E | PENDING | - | - | - |
 
 **Rows are listed in dispatch order, not numeric order.** A row number records when it was written; the `Depends-on` column records when it runs.
 
@@ -446,27 +457,29 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 1 | A separate panel for clock speed or for cache size | Two figures about one machine, on a route fourteen rows already serialise over | A card the reader has to hold in their head while looking at a panel | Susan |
 | 2 | Draw the four suspect copy figures with a footnote | A footnote under a number does not stop the number being compared, and these four sit at the top of any ranking | The ranking, quietly wrong at its head | Susan |
 
-## Row #19 - Prompt reuse and reading speed, call by call
+## Row #19 - Which prompts get re-read, and how fast
 
-- **Scope:** the cache panel is rebuilt to show each model call separately - how much of its prompt each one reused and how fast each one read - because the two calls behave nothing alike and one number over both describes neither.
+- **Scope:** one panel showing the spread of prompt reuse and reading speed across the model requests an item makes, so the requests that re-read their whole prompt are visible however many requests there are.
 - **Files touched:** a panel component, `frontend/src/lib/charts/machine.ts`, `frontend/src/lib/server/payload.ts`, `frontend/src/routes/console/machine/+page.svelte`, `frontend/tests/`
 - **Acceptance gates:** as Row #9.
-- **Oracle:** each of the four tracks is built from its own column and a test asserts the two calls are never averaged into one figure anywhere on the panel; a fixture where the first call reuses nothing and the second reuses nearly everything renders two visibly different tracks rather than one middle value. **What it cannot settle:** why the first call's reuse is low - the panel locates the defect and the prompt is where the answer is.
+- **Oracle:** the panel is built by iterating whatever reuse columns the row carries, and a test proves it by rendering a fixture with a different number of them and asserting the track count follows the fixture rather than a constant; a fixture whose reuse spans nothing to nearly everything renders that spread rather than its mean. **What it cannot settle:** why a given prompt reuses nothing - the panel locates it and the prompt is where the answer is.
 - **Decisions:**
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Four tracks in two pairs - reuse for each call, then reading speed for each call | Susan - measured over 1,161 committed item rows, the first call's reuse runs a median 53.00 percent with a floor of 0.00, and the second call's runs a median 98.73 percent with a floor of 65.21. Today's panel prints one figure a day, which is the mean of those two and describes neither |
-| 2 | Reading speed is the variable half and that is why it is drawn | Susan - the first call's reading speed spans 9.13 to 42.03 tokens a second across the fleet, a 4.3-fold range, while writing speed sits between 2.76 and 7.49 and barely moves. Reading is 60.3 percent of model time at the median, so the variable half is also the expensive half |
-| 3 | The distribution is taken at item grain and drawn as four spans, never as one mark an item | Susan and Carmack - item grain is the finest the ledger holds, and 1,161 items times six columns in the payload would spend the whole byte saving on a chart nobody can read |
-| 4 | This row cancels Row #13's fold | Susan, 2026-09-20 - folding this panel into the run-grain panel would have carried the averaged figure into a new location |
+| 1 | **The panel is never shaped by the number of calls** | Owner, 2026-09-20 - the standing rule in section 0. The track count is read off the data, so merging two requests into one or splitting into three changes the drawing and breaks nothing |
+| 2 | The finding is the SPREAD, not which request owns which end | Susan, amended 2026-09-20 - measured over 1,161 committed item rows, reuse runs from a floor of **0.00 percent** to a ceiling of **98.73**, and the mean of that range describes nothing. A request that re-reads its whole prompt is the defect whatever it was for, and the readout names it from the data |
+| 3 | Reading speed is drawn because it is the variable half | Susan - reading speed spans 9.13 to 42.03 tokens a second across the fleet, a 4.3-fold range, while writing speed sits between 2.76 and 7.49 and barely moves. Reading is 60.3 percent of model time at the median, so the variable half is also the expensive half |
+| 4 | The distribution is taken at item grain and drawn as spans, never as one mark a request | Susan and Carmack - item grain is the finest the ledger holds, and over a thousand marks in the payload would spend the whole byte saving on a chart nobody can read |
+| 5 | This row cancels Row #13's fold | Susan, 2026-09-20 - the fold target is day grain, and a day figure averages a request that reused nothing with one that reused nearly everything |
 
 - **Rejected alternatives:**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | Keep one reuse figure a day | It is the mean of a 53 and a 98.73 and describes neither call, so it cannot move when either one does | The one asymmetry on this page that names a fixable defect | Susan |
-| 2 | One mark an item rather than a span | Over a thousand marks answer no question a span does not, and the payload cost is the whole saving this design claims | A chart that is a texture | Susan |
+| 1 | Four tracks, two per named call, as first drafted | It is the design the standing rule forbids. It reads as two facts about two fixed things, and the number of those things is a config value | A panel that silently becomes wrong the day somebody clears one config marker, with no test and no gate to catch it | Owner, 2026-09-20 |
+| 2 | Keep one reuse figure a day | It is the mean of a floor near zero and a ceiling near 99, so it cannot move when either end does | The one asymmetry on this page that names a fixable defect | Susan |
+| 3 | One mark a request rather than a span | Over a thousand marks answer no question a span does not, and the payload cost is the whole saving this design claims | A chart that is a texture | Susan |
 
 ## Row #20 - What is holding the runner's memory
 
@@ -565,25 +578,27 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | --- | --- | --- | --- | --- |
 | 1 | A column-count budget on the row | Width is not the test. A row with one key answers one question at any width, and a count would block a column that earns its place while permitting one that does not | A gate that fires on the wrong thing, which teaches people to raise it | Fowler |
 
-## Row #18 - Docs, the plan 33 correction, and the orphan sweep
+## Row #18 - Docs, the living-page corrections, and the orphan sweep
 
-- **Scope:** the living docs record what this plan decided, plan 33's escalated row is corrected to say what is actually true of it, and every doc, test and surface the deletions orphaned is removed.
-- **Files touched:** `docs/reference/host-metrics.md`, `docs/architecture/publishing/console.md`, `docs/concepts/console-design.md`, `docs/architecture/publishing/telemetry-series.md`, `TODO/20260917-33-collision-free-telemetry-plan.md`, any page the sweep finds
+- **Scope:** the living docs record what this plan decided, the phase-split ruling lands on the page that owns the item row rather than in a plan-doc, and every doc, test and surface the deletions orphaned is removed.
+- **Files touched:** `docs/reference/host-metrics.md`, `docs/architecture/sources/item-health.md`, `docs/architecture/publishing/console.md`, `docs/concepts/console-design.md`, `docs/architecture/publishing/telemetry-series.md`, any page the sweep finds
 - **Acceptance gates:** local - `python backend/utilities/doc_load.py` before and after, and every link resolves. CI - full suite.
-- **Oracle:** no page names a deleted column, no page claims the busy figure excludes steal for a period when it did not, and the doc-load report shows the split test was applied to every page that gained a section. **What it cannot settle:** whether a reader finds the new grouping clearer - that is a design finding.
+- **Oracle:** no page names a deleted column, no page claims the busy figure excludes theft for a period when it did not, no page states a fixed number of model calls or phases, and the doc-load report shows the split test was applied to every page that gained a section. **What it cannot settle:** whether a reader finds the new grouping clearer - that is a design finding.
 - **Decisions:**
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Plan 33 Row #8 is corrected rather than deleted | It stays so nobody re-derives it, but three of its statements are wrong: it calls the row unbuildable when the instant exists in-process, it states four alternating segments where the code makes three calls and therefore six, and it names two task-specific timestamp columns as the unblock when those hard-code the current call shape into a persisted contract |
-| 2 | The rejected unblock moves into that row's rejected-alternatives table with its price | CLAUDE.md section 0d - a rejection with no price is indistinguishable from a prohibition, and the row after it inherits the prohibition |
-| 3 | Plan 33 Row #21's sentence about what the memory panel cannot separate stays, with its reason repointed | Susan - the panel genuinely cannot separate the phases today, but a reader should not inherit the word never |
-| 4 | The probe result is written as a dated reading with its runner | Guardrail #10 - the next person asking about cache counters reads a measurement instead of repeating an estimate |
-| 5 | The rare-event strip doctrine is written into the design page once | Guardrail #4 - so no later panel row re-argues why a rare event is a strip rather than a line |
+| 1 | **No plan-doc is edited by this row.** Plan 33 is being distilled and deleted, so a correction written into it would be deleted with it | Guardrail #4 - a plan-doc is a cache and `docs/` is the memory. Git holds every plan that ever existed, and a worker who needs the original reads it there rather than expecting a file |
+| 2 | The phase-split ruling lands as a `## Design rationale` entry on the page that owns the item row | Guardrail #4 - a decision is recorded in the living doc it impacts, never as a standalone record. That entry is what stops the brittle design being re-derived once the plan-doc is gone |
+| 3 | **That entry states no number.** It says the phase count is set by the model's thinking marker in config and gives the rule for deriving it | Owner, 2026-09-20. Every fixed count written about this pipeline has been wrong - plan 33 said four, this plan's own first draft said six, and the code plus the active config say eight today. A number written down here is a number that rots on a config edit |
+| 4 | The rejected unblock is recorded with its price, not merely as a refusal | CLAUDE.md section 0d - a rejection with no price is indistinguishable from a prohibition, and the next reader inherits the prohibition. The price is that task-named timestamp columns hard-code a call shape a config value controls |
+| 5 | The probe result is written as a dated reading with its runner | Guardrail #10 - the next person asking about cache counters reads a measurement instead of repeating an estimate |
+| 6 | The rare-event strip doctrine is written into the design page once | Guardrail #4 - so no later panel row re-argues why a rare event is a strip rather than a line |
 
 - **Rejected alternatives:**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | Leave plan 33 Row #8 as written | It is the record that stops the idea being re-derived, and three of its statements would send the next person down the path that was already rejected | The next worker rebuilding the brittle design the owner refused on 2026-09-20 | Fowler |
-| 2 | Record this plan's decisions only here | A plan-doc is a cache, not the memory. A decision is recorded in the living doc it impacts | The decisions vanish when the plan is distilled | Guardrail #4 |
+| 1 | Edit plan 33's escalated row in place | It is being distilled and deleted, so the edit would be reverted by the deletion, and a row that depends on another plan-doc still existing is a row that fails for a reason nobody can see | A conflict against a sibling's distillation, and a correction that vanishes | Fowler |
+| 2 | Record this plan's decisions only in this plan | A plan-doc is a cache, not the memory | The decisions vanish when this plan is distilled in turn | Guardrail #4 |
+| 3 | State the current phase count in the docs so a reader knows what is true today | It is true today and false after one config edit, with no test and no reviewer able to see the change | A rotting number in a living doc, which is the defect this row exists to remove from two other pages | Owner, 2026-09-20 |
