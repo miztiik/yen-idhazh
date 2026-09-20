@@ -184,6 +184,37 @@ def test_a_placeholder_in_a_worked_example_names_no_page(tmp_path: Path) -> None
     assert doc_load.faults(tmp_path) == {}
 
 
+def test_a_link_to_a_section_that_is_not_there_is_found(tmp_path: Path) -> None:
+    """The file surviving proves nothing about the heading somebody meant."""
+    page(tmp_path, "docs/reference/target.md", WELL_FORMED + "\n## The Real Heading\n\nHere.\n")
+    page(
+        tmp_path,
+        "docs/reference/source.md",
+        WELL_FORMED.replace(
+            "- nothing",
+            "- [good](target.md#the-real-heading) and [gone](target.md#a-deleted-heading)",
+        ),
+    )
+
+    found = doc_load.faults(tmp_path)["docs/reference/source.md"]
+
+    assert found == ["links to a section that is not there: target.md#a-deleted-heading"]
+
+
+def test_a_heading_becomes_the_anchor_github_would_give_it(tmp_path: Path) -> None:
+    """Punctuation and formatting drop out, so a styled heading still resolves."""
+    got = doc_load.anchors("# Title\n\n## What the grader's bias **is**, at `4 vCPU`\n")
+
+    assert "what-the-graders-bias-is-at-4-vcpu" in got
+
+
+def test_a_heading_inside_a_code_fence_is_not_an_anchor(tmp_path: Path) -> None:
+    """Otherwise a shell comment makes a dangling link look like a good one."""
+    got = doc_load.anchors("# Title\n\n```sh\n## not a heading\n```\n")
+
+    assert got == {"title"}
+
+
 def test_a_page_nested_too_deep_is_two_topics(tmp_path: Path) -> None:
     """The depth rule is the split test made mechanical, so the tool can see it."""
     page(tmp_path, "docs/architecture/publishing/console/charts.md", WELL_FORMED)

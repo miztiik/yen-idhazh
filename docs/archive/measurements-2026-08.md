@@ -1,6 +1,6 @@
 # Retired measurements, August 2026
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-20
 Moved out of [../reference/pipeline-cost.md](../reference/pipeline-cost.md). Every
 number here was true when it was taken, on the hardware and date its own section
 names. Several sections measure a gate or a cap that no longer exists.
@@ -10,133 +10,16 @@ rule: a section stays while something still links it, and goes when nothing does
 Nothing here is read by `config/` or by a test, so a section that loses its last
 inbound link is deleted rather than kept - git holds the bytes, and
 `git log -p config/idhazh.json` holds the value that was in force, which is the
-better record because it cannot disagree with the running system.
+better record because it cannot disagree with the running system. **A citation
+of a subsection is a citation of its section**, so check the rule with
+`git grep -o 'measurements-2026-08.md#[a-z0-9-]*'` and not by eye - a heading
+nobody names directly is usually reached through one of its own.
 
 **An older reading of a quantity the live page still carries never lands here.**
 That is deleted at the point the new reading replaces it (Guardrail #10).
 
 **Do not size anything against a figure on this page without re-measuring.**
 That is true of the live page too, and more so here.
-
-## Prompt cache reuse
-
-**Measured 2026-08-23** on GitHub-hosted `ubuntu-latest`, 4 vCPU, run
-`32648218952`, job `work (3)`. The job log did not name the CPU model or the
-llama.cpp build. It used `Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record) through `llama-server` with
-`--ctx-size 8192 --batch-size 512 --ubatch-size 512 --threads 4 --no-warmup`.
-
-The run refutes the suspected context-splitting defect for this build. The log
-said:
-
-```text
-srv load_model: initializing, n_slots = 4, n_ctx_slot = 8192, kv_unified = 'true'
-```
-
-Current llama.cpp source names the same quantity `n_ctx_seq`: when `kv_unified`
-is true, `n_ctx_seq = n_ctx`; when it is false, `n_ctx_seq = n_ctx / n_seq_max`.
-This log uses the older `n_ctx_slot` name. The value is 8192 per slot, so the run
-refutes context splitting. It does not prove the maximum complete request fits;
-that request has not been tokenized end to end.
-
-The run does **not** settle whether the prompt prefix was reused. The grep
-emitted no `kv cache rm [p0, end)` line. The only emitted instrument was
-`prompt eval time = X ms / N tokens`, and `N` varies with article length and
-band. Because `band_for` changes the rendered prompt, only the roughly
-315-token head is invariant across all bands. A same-band hit could reuse more,
-but the log did not print the band or article token count beside each timing
-line.
-
-**Superseded 2026-08-24.** The log did carry the proof; the workflow's summary
-step was not grepping for it. See "Reuse settled" below.
-
-| Slot | Prompt-eval tokens, in task order |
-| --- | --- |
-| 2 | 2441, 580, 654, 781, 862, 621, 738, 1195, 1064, 1883 |
-| 3 | 2485, 2545, 1146, 2284, 1035, 1423, 1945, 850, 373, 1260, 1015, 1131, 440, 1136, 636, 888, 572, 444, 1179, 1426, 485, 1380, 2565, 1687, 607, 730 |
-
-No fixed subtraction of about 315 or 801 tokens is visible within either slot.
-That is evidence that the current log cannot prove reuse, not evidence that a
-cache miss happened. To settle it, log the slot id, item id, band id, rendered
-system-prompt tokens, article tokens, full prompt tokens, evaluated prompt tokens
-and any llama.cpp reused-prefix field such as `p0` or `n_past`.
-
-| Quantity | Value |
-| --- | --- |
-| Sample | 36 `print_timing` lines from `work (3)` |
-| Prefill throughput | min 29.24 tok/s, max 37.92 tok/s, median 34.23 tok/s |
-| Spread | 8.68 tok/s |
-| 801-token re-prefill cost | 23.4 s median; observed range 21.1-27.4 s |
-| 315-token invariant-head cost | 9.2 s median; observed range 8.3-10.8 s |
-
-This supersedes the derived 66.2 s per 801-token re-prefill above for live
-`digest` runs. That older number came from `llama-bench` on an EPYC 9V74 runner
-and remains useful history. This run measured the actual `digest` path on a
-GitHub-hosted `ubuntu-latest` runner, and it was about 2.8x faster at the median.
-
-The row 9 prize changes. The old arithmetic was `13 x 66.2 s = 14.4 min` of CPU,
-or about 4.4 min wall clock across four shards. This run says `13 x 23.4 s =
-5.1 min` of CPU for a full 801-token prefix, or about 1.3 min wall clock across
-four shards. For the invariant head, the ceiling is `13 x 9.2 s = 2.0 min` of
-CPU, or about 0.5 min wall clock. Row 9 should not reorder the prompt on the old
-66.2 s premise. It should first add the instrumentation above, then run an A/B
-measurement on the runner and keep the change only if the measured wall-clock
-gain pays for the prompt risk.
-
-Row 9 collapsed the prompt reorder on this measurement. It did not move the
-band-varying numbers to the tail of the system prompt, because the live runner
-showed a 1-2% wall-clock ceiling, and the existing log cannot prove the reuse
-the change was meant to buy. Reopen the reorder only with runner A/B evidence
-that logs slot id, item id, band id, rendered system-prompt tokens, article
-tokens, full prompt tokens, evaluated prompt tokens, and a reused-prefix field
-such as `p0` or `n_past`; the golden set's `output_digest` values must stay
-unchanged.
-
-### Reuse settled: the log did prove it, the grep hid it
-
-**Measured 2026-08-24** on GitHub-hosted `ubuntu-latest`, 4 vCPU, run
-`32742672105`, job `work (0)`, `Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record) through `llama-server`
-with `--ctx-size 8192 --batch-size 512 --ubatch-size 512 --threads 4`. The job
-log did not name the CPU model or the llama.cpp build.
-
-The section above concluded the log could not prove prefix reuse. That was a
-reading of the workflow's summary step, not of the log. The step greps for
-`kv cache rm [`, which this build never emits. The uploaded `runtime-log-0`
-artifact carries the line that settles it:
-
-```text
-slot get_availabl: id 3 | task -1 | selected slot by LRU, t_last = -1
-slot get_availabl: id 3 | task -1 | selected slot by LCP similarity, f_sim_best = 0.923 (> 0.100 thold), f_keep = 0.811
-slot print_timing: id 3 | task 172 | prompt eval time = 7119.70 ms / 75 tokens
-```
-
-`f_sim_best` is the longest common prefix divided by the incoming prompt, and
-`f_keep` is the same prefix divided by what the slot already held. On that
-request about 900 of roughly 975 prompt tokens were reused and 75 were
-evaluated: 7.1 s instead of about 88 s.
-
-| Quantity | `work (0)` |
-| --- | --- |
-| Requests | 34 |
-| Cold, selected by LRU | 1 |
-| Selected by LCP similarity | 33 |
-| Prompt tokens evaluated | 31,714 |
-| Prompt tokens reused (approx.) | 28,700 |
-
-Two requests fell to `f_sim_best` 0.29 and 0.14. Both sit where the worker
-crosses a prompt band, which is the reorder question above seen from the other
-side: the band-varying numbers sit early in the system prompt, so a band change
-truncates the shared prefix. That is now a measured cost, not a suspicion.
-
-Only one of the four slots was ever used. That run passed no `-np`, so
-llama.cpp built its default four, and the worker sends one request at a time.
-`n_parallel` is 1 from 2026-08-24, so later runs stand up one slot and the
-`selected slot by LRU` line no longer has a choice to make. Prefix reuse is
-unaffected: it is a property of the slot's retained prompt, not of how many
-slots exist.
-
-Correction to record: only the workflow's summary step was blind. Nothing about
-the earlier `32648218952` throughput figures changes.
-
 
 ## Parallel decode on 4 vCPU
 
@@ -595,74 +478,6 @@ bytes on the wire, inferred from how much the whole prerendered page grew when
 same base64-in-JSON shape - 2.4 percent apart, which is the page's own markup
 between them. Use 322.55 for a JSON shape and 249.82 for a `.bin`; the 315 was
 a good indirect read and is not the one to quote.
-
-
-## What a job log names
-
-Every `work` shard and the `route` job print six identifying lines before the
-stage starts, under `if: always` so a job that was cancelled or that failed
-still names the machine it drew. Until 2026-08-25 `work` printed none of them
-and `route` printed the first three, which is why several tables above have to
-say the job log did not name the CPU model or the build.
-
-| Line | Answers |
-| --- | --- |
-| `model name` from `/proc/cpuinfo` | which CPU the job drew |
-| `nproc` | how many logical CPUs it saw |
-| llama-server `system_info` | the instruction sets the build uses |
-| `llama-server --version` | the build the binary reports about itself |
-| `sha256sum backend/bin/llama-server` | the exact binary bytes |
-| `sha256sum` of the weights file | the exact weight bytes |
-
-**Five of the six print. `system_info` does not.** Measured 2026-08-27 over the
-nine `route` jobs that carry the step: `grep -m1 'system_info' router.log`
-matched **zero times in nine runs**, because llama.cpp `b10598` writes no line
-holding that string. The row is kept in the table because the question it
-answers - which instruction sets the build uses - is still the open one, and
-because an instrument that silently returns nothing is worth naming. See
-[The CPU model does not sort the route job's per-item cost](#the-cpu-model-does-not-sort-the-per-item-cost-of-the-visuals-job)
-for what that costs.
-
-The step also echoes `LLAMA_CPP_BUILD`, so a disagreement between the pin and
-what the binary says about itself is visible on one screen. The two digests are
-what let a number on this page name the bytes that produced it (Guardrail #10); the
-run manifest still records `runtime_build` as a fixed string and does not.
-
-Three more instruments landed beside them.
-
-**The log summary greps `^(srv|slot) `, not a list of expected lines**, plus
-both the `n_ctx_slot` and `n_ctx_seq` spellings of the one field llama.cpp has
-renamed. A fixed list reports what it expects: the old one looked for a
-`kv cache rm` line this build never emits, and that is exactly what hid the
-prefix-reuse proof described under
-[Reuse settled](#reuse-settled-the-log-did-prove-it-the-grep-hid-it) for two
-runs. The step also prints the `f_sim_best` and `f_keep` distribution - n, min,
-median, max and ten buckets - because under one slot a reuse loss shows in the
-spread rather than in whether the line was printed at all.
-
-**Every `work` shard now samples memory.** `VmRSS` and `VmHWM` for llama-server
-and the summed `VmRSS` of every python process, every 15 s, plus
-`/sys/fs/cgroup/memory.peak` read at job end. `measure.yml` already recorded
-exactly this and the daily path did not, so no run behind any table above says
-how close a 16 GB runner came to its limit. The samples upload inside
-`runtime-log-<shard>` beside the server log.
-
-The sampler's artifact cost is bounded, not estimated: a row is five
-tab-separated fields and at most about 60 bytes. The `work` job's configured
-bound is 150 minutes, so one shard writes at most 600 rows, about 36 KB; four
-shards at most about 144 KB and eight at most about 288 KB - 0.03% and 0.06% of
-the 500 MB artifact budget (Guardrail #2). A 105-minute shard writes about two thirds
-of that. Raising the shard ceiling scales this term with the shard count and
-leaves the `items-*` total flat, because the plan is divided between workers
-rather than copied to each of them.
-
-**And the server's own counters stopped expiring with the log.** The `/metrics`
-scrape has printed `llamacpp:` lines into the job log since 2026-08-25, and the
-raw body has ridden in `runtime-log-<shard>` for two days. From 2026-08-27 each
-shard also files the counters as one row of `state/runtime-counters.csv`, which
-is what turned the read rate from a reported number into a checked one - see
-[The ledger and the server agree about the read rate](../reference/pipeline-cost.md#the-ledger-and-the-server-agree-about-the-read-rate)
-for the arithmetic, the reconciliation and the storage cost.
 
 
 ## The first run at cap 5000, and the two triggers that revert it
@@ -2064,8 +1879,7 @@ runs:
  llama.cpp `b10598` writes no line containing that string, so the one line that
  names the instruction sets - AVX2 against AVX-512, the obvious way two hosts
  sharing a CPU model string could differ 3x on prefill - has never been
- captured. The other five lines under
- [What a job log names](../archive/measurements-2026-08.md#what-a-job-log-names) do print. **This was never a
+ captured. The other five lines the job log carries do print. **This was never a
  grep fault**: the line is not printed at all below verbosity 4, so the pattern
  was right and the line was not there
  ([What llama-server reports about its own runtime settings](../reference/pipeline-cost.md#what-llama-server-reports-about-its-own-runtime-settings-2026-09-09)).

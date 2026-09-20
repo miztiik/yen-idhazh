@@ -312,6 +312,11 @@ target is not there. The last one is the reason the check exists at all - a wron
 number of `../` resolves to a path that looks real, so nothing complains until a
 reader clicks it.
 
+**A fragment is half a link, so the anchor is checked too.** A section gets
+renamed or retired and the file it was in survives, so a deep link into it keeps
+resolving to the top of a page that may be thousands of lines long - the reader
+lands somewhere plausible and never learns what they were meant to read.
+
 **A `#` inside a code fence is a shell comment, and the tool knows that.** This
 is the one place a hand-rolled `grep` for the same rules reliably lies, which is
 why the check lives in the tool rather than in anybody's shell history.
