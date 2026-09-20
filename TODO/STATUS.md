@@ -35,7 +35,6 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260910-23-article-classification-plan.md](20260910-23-article-classification-plan.md) | 28 | 16 | 12 | 2 |
 | [20260910-25-placement-plan.md](20260910-25-placement-plan.md) | 16 | 10 | 5 | 4 |
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 4 |
-| [20260917-33-collision-free-telemetry-plan.md](20260917-33-collision-free-telemetry-plan.md) | 29 | 26 | 2 | 0 |
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 | [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 0 | 22 | 6 |
@@ -88,7 +87,7 @@ section 3 is where it is answered.
 | #7 | 37 | A | One file a panel | - |
 | #8 | 37 | A | The rare-event thresholds become knobs | - |
 
-## Waiting on another row - 90
+## Waiting on another row - 88
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -147,8 +146,6 @@ section 3 is where it is answered.
 | #8 | 27 | C | What the model saw, kept for 90 days | 4 is PENDING |
 | #9 | 27 | D | A cut reply keeps its summary | 1 is PENDING |
 | #11 | 27 | E | Two articles, three arms, one runner | 4 is PENDING |
-| #14 | 33 | - | The per-item machine load panel | - |
-| #8 | 33 | - | Memory split by prefill and decode | - |
 | #6 | 35 | A / eval-core | Remove `new_fact_rate` + `key_point_weight` (+#34 field, judge stages, C3) | #34 names no row |
 | #2 | 35 | B / chart | Redesign + re-label the faithfulness chart; docs glyph-link | 8 is PENDING |
 | #3 | 35 | B / chart | Reword recorded-only copy; relabel `compression` | 8 is PENDING |
