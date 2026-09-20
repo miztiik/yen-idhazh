@@ -312,6 +312,6 @@ counterweights.
 
 - [evaluation.md](evaluation.md) - how a published summary is judged, and how the judgement is kept honest. Faithfulness, the bands, the human labels and the ledger these columns are written to.
 - [qualification.md](qualification.md) - the gates a candidate model must clear. Several read a threshold stated in a column defined here.
-- [summary-quality-autotune.md](summary-quality-autotune.md) - the target design in which these thresholds move themselves, with no human in the loop. This page says what a number means; that one says what makes it change.
+- [autotune-summary-quality.md](autotune-summary-quality.md) - the target design in which these thresholds move themselves, with no human in the loop. This page says what a number means; that one says what makes it change.
 - [../architecture/publishing/console.md](../architecture/publishing/console.md) - the panels that draw these columns.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #10 (a number carries its hardware, date and spread).
