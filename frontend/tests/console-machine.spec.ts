@@ -224,6 +224,128 @@ test.describe('the shard board', () => {
 	});
 });
 
+/** The three clocks the board draws that nothing on the site read before.
+ *
+ * The unclaimed figure is the one that matters. It is `stage_gap_ms` added over
+ * the shard's items and nothing else - a page that worked it out from the stage
+ * clocks would agree with them by construction, so it could never flag the one
+ * thing the column exists to flag. The rows below carry NO stage clocks at all,
+ * only the stored column, so an implementation that recomputed would have
+ * nothing to recompute from and would draw an absence.
+ */
+test.describe('where a shard\u2019s clock went', () => {
+	/** Two items on one shard, one of them with its clocks in disagreement. */
+	const CLOCKED: ShardReading[] = [
+		{
+			shard: 0,
+			itemId: 'item-0-a',
+			serverPromptTokens: 8000,
+			serverPromptSeconds: 200,
+			cachedTokens: 2000,
+			writtenTokens: 1000,
+			writeSeconds: 200,
+			jobSeconds: 600,
+			modelLoadMs: 3000,
+			unclaimedMs: 4321,
+			queueWaitMs: 1000
+		},
+		{
+			shard: 0,
+			itemId: 'item-0-b',
+			cachedTokens: 2000,
+			writtenTokens: 1000,
+			unclaimedMs: -2500,
+			queueWaitMs: 5000
+		},
+		{
+			shard: 1,
+			itemId: 'item-1-a',
+			serverPromptTokens: 2000,
+			serverPromptSeconds: 200,
+			cachedTokens: 2000,
+			writtenTokens: 1000,
+			writeSeconds: 100,
+			jobSeconds: 1200,
+			unclaimedMs: -9000,
+			queueWaitMs: 60000
+		}
+	];
+
+	const board = shardBoard(onlyRun(CLOCKED), LIMITS.jobTimeoutSeconds, CHART_WIDTH);
+	const rowFor = (shard: number) => board.rows.find((row) => row.shard === shard)!;
+
+	test('the unclaimed figure is the stored column added up, and never a difference', () => {
+		// 4,321 ms and -2,500 ms are the two cells the fixture wrote. Their sum is
+		// 1,821 ms, which is 1.821 seconds - and no arithmetic over the rest of
+		// these rows produces it, because they carry no stage clock to subtract.
+		expect(rowFor(0).unclaimedSeconds).toBeCloseTo(1.821, 6);
+		expect(rowFor(1).unclaimedSeconds).toBeCloseTo(-9, 6);
+	});
+
+	test('a shard below zero reads as a disagreement and not as a zero', () => {
+		// The one state the committed archive has never held. Clamping it would
+		// hide the fault the signed column exists to show.
+		const row = rowFor(1);
+		expect(row.unclaimedSeconds).toBeLessThan(0);
+		expect(row.clocksDisagreed).toBe(1);
+		expect(row.clockedItems).toBe(1);
+	});
+
+	test('the count of disagreements survives a sum that cancels', () => {
+		// Shard 0 adds to a positive 1.821 seconds, and one of its two items is
+		// still below zero. A page that only carried the sum would print a healthy
+		// shard and lose the item that disagreed.
+		const row = rowFor(0);
+		expect(row.unclaimedSeconds).toBeGreaterThan(0);
+		expect(row.clocksDisagreed).toBe(1);
+		expect(row.clockedItems).toBe(2);
+	});
+
+	test('a shard that recorded no unclaimed time draws an absence, not a zero', () => {
+		const view = shardBoard(
+			onlyRun([{ shard: 0, jobSeconds: 600 }, { shard: 1, jobSeconds: 300 }]),
+			LIMITS.jobTimeoutSeconds,
+			CHART_WIDTH
+		);
+		expect(view.rows[0].unclaimedSeconds).toBeNull();
+		expect(view.rows[0].clockedItems).toBe(0);
+		expect(view.rows[0].queue.empty).toBe(true);
+		expect(view.rows[0].queueMaxSeconds).toBeNull();
+	});
+
+	test('the queue is a typical item and the worst one, never the two added up', () => {
+		// Each item's wait covers the queue ahead of it, so 1 s + 5 s is not 6 s of
+		// shard time - it is one item that waited a second and one that waited five.
+		const row = rowFor(0);
+		expect(row.queueMedianSeconds).toBeCloseTo(3, 6);
+		expect(row.queueMaxSeconds).toBeCloseTo(5, 6);
+		expect(row.queue.median).toBeCloseTo(3, 6);
+		expect(row.queue.max).toBeCloseTo(5, 6);
+	});
+
+	test('the queue bars are on the clock scale, so their lengths compare with it', () => {
+		// Shard 0 spent 400 seconds in the model and shard 1 spent 300, so the
+		// model clocks alone would scale to 400. Shard 1 waited 60 seconds at
+		// worst, which is inside that - the scale stays the heaviest clock.
+		expect(board.scaleSeconds).toBe(400);
+		expect(Number(rowFor(1).queue.notchWidth.replace('%', ''))).toBeCloseTo((60 / 400) * 100, 3);
+
+		// A shard that queued longer than anything computed widens the scale rather
+		// than being clipped at the end of the track.
+		const queued = shardBoard(
+			onlyRun([
+				{ ...CLOCKED[0], queueWaitMs: 900_000 },
+				CLOCKED[1],
+				CLOCKED[2]
+			]),
+			LIMITS.jobTimeoutSeconds,
+			CHART_WIDTH
+		);
+		expect(queued.scaleSeconds).toBe(900);
+		expect(queued.rows.find((row) => row.shard === 0)?.queue.notchWidth).toBe('100.0000%');
+	});
+});
+
 /** The one question this panel exists to answer: was the slow shard slow
  * because of the WORK it was handed, or because of the HOST it landed on?
  *
