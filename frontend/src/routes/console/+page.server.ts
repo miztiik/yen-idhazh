@@ -5,6 +5,8 @@ import type { ExtractionDay } from '$lib/charts/extraction-trend';
 import { itemCost, type ItemCost } from '$lib/console/item-cost';
 import { extraction, type Extraction } from '$lib/console/extraction';
 import { pipelineChanges, wasCut } from '$lib/server/model-work';
+import { loadRunTimeline, runTimelineView } from '$lib/server/run-timeline';
+import { loadSpanRollup, subStepReadout } from '$lib/server/span-rollup';
 import { chartConfig, consoleConfig, retentionConfig, runConfig, summarizeConfig, visualsConfig } from '$lib/server/config';
 import {
 	dayMetrics,
@@ -209,6 +211,9 @@ function cutsByRun(rows: Record<string, string>[]): Map<string, number> {
  */
 export async function load() {
 	const console = consoleConfig();
+	// Read once. It decides how a chart labels its axis AND, through `width_px`,
+	// whether a band is wide enough for a browser to paint at all.
+	const chart = chartConfig();
 	// The widest span the control can reach. Nothing older than this can be drawn
 	// whatever the operator does, so every read below is covered by it and no
 	// panel loses a day (`CLAUDE.md` Guardrail #12). Read from `console.window_presets`
@@ -313,6 +318,17 @@ export async function load() {
 	return {
 		timingDays,
 		manifests,
+		// Where the newest published run's time actually went, one bar an item or one
+		// bar a shard. A snapshot and not a window: a bar's position is measured from
+		// its own run's start, and a span cannot narrow one run, so the panel names
+		// the run it drew. It reads one published directory bounded to two months,
+		// which is the whole series (`CLAUDE.md` Guardrail #12).
+		runTimeline: runTimelineView(loadRunTimeline()[0] ?? null, console.timeline_bars),
+		// The four steps that nest inside those steps, printed rather than drawn: at
+		// the configured track they are far under a pixel wide, and a band that small
+		// is a legend entry with no mark. It reads its own `state/` ledger, so it is
+		// often a different run again and carries its own empty state.
+		subSteps: subStepReadout(loadSpanRollup()[0] ?? null, chart.width_px),
 		// What one item cost the model, one entry per span the control offers. The
 		// browser picks the open one; nothing re-reads a ledger to change window.
 		itemCostByWindow,
@@ -364,7 +380,7 @@ export async function load() {
 		visuals: visualsConfig(),
 		// How a chart labels its axis and how wide its readout may be. Two knobs an
 		// operator moves without editing a component.
-		chart: chartConfig(),
+		chart,
 		summarizeBands: summarize.bands,
 		today
 	};

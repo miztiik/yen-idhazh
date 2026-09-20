@@ -7,7 +7,7 @@ that one question. The shape landed before any producer so the writers produce
 what the chart reads rather than a shape the chart has to migrate (Guardrail #3);
 since 2026-09-16 both exist.
 [`backend/idhazh/telemetry/publish/run_timeline.py`](../../../backend/idhazh/telemetry/publish/run_timeline.py)
-is the writer and the panel on `/console/machine/` is the reader. **How it is
+is the writer and the panel on `/console/` is the reader. **How it is
 drawn is not on this page** -
 [`../../concepts/console-design.md`](../../concepts/console-design.md) owns that,
 because a drawing is not a contract and a person arrives holding one question or
