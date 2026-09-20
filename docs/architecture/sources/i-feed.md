@@ -907,6 +907,7 @@ to rerun live feed probes or the application suite to edit these documents.
 ## See also
 
 - [../../concepts/feed.md](../../concepts/feed.md) - the earned-feed concept.
+- [../publishing/autotune-feed-reliability.md](../publishing/autotune-feed-reliability.md) - **a feed's `tier` and `weight` are set by hand when it is added, and nothing re-reads them against how it has since behaved.** That page is where the automatic-tuning row above would be argued; it is a stub today.
 - [../../concepts/config.md](../../concepts/config.md) - configuration and generated contracts.
 - [../../concepts/evaluation.md](../../concepts/evaluation.md) - existing article and summary measurements.
 - [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - bounded observations and retained state.

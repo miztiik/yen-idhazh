@@ -477,6 +477,7 @@ The lifecycle rules exist because the alternative was discovered the expensive w
 ## See also
 
 - [freshness.md](freshness.md) - the run cadence, how age is scored, and what stops an article publishing twice.
+- [../publishing/autotune-entity-linking.md](../publishing/autotune-entity-linking.md) - **the watchlist is a term list a person writes, so an alias nobody wrote down is an entity nobody finds.** That page is where a fitted match would be argued, and it records that relationships between entities have no definition yet; it is a stub today.
 - [../../concepts/placement.md](../../concepts/placement.md) - what the day does with these scores: one order over every story, and the frame over its head.
 - [health.md](health.md) - what every feed did on every run, and the quarantine that reads it.
 - [trust-boundary.md](trust-boundary.md) - what happens to the text once a discovered link is fetched.

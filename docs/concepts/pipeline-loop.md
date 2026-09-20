@@ -208,6 +208,7 @@ with no reader on the other end.
 ## See also
 
 - [../architecture/sources/discovery.md](../architecture/sources/discovery.md) - what Collect consults, and how the source set changes over time.
+- [../architecture/publishing/llm-council.md](../architecture/publishing/llm-council.md) - the second loop above: what the venue is, why it has its own clock, and what is heard in it.
 - [../architecture/sources/freshness.md](../architecture/sources/freshness.md) - the run cadence, how age is scored, and what stops an article publishing twice.
 - [../reference/github-actions.md](../reference/github-actions.md) - workflow names and exact triggers.
 - [../architecture/sources/health.md](../architecture/sources/health.md) - what every feed did on every run, and the quarantine that reads it.

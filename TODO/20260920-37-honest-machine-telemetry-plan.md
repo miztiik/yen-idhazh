@@ -80,7 +80,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 8 | The rare-event thresholds become knobs | - | A | DONE | p37r8 | #976 | worker |
 | 2 | Settle the peak that falls | 1 | A | DONE | p37r2 | #979 | worker |
 | 6 | The bandwidth probe sizes itself against the cache | 1, 3, 8 | A | DONE | p37r6 | #978 | worker |
-| 4 | The sampler stops calling theft our work | 2, 3 | B | PENDING | - | - | - |
+| 4 | The sampler stops calling theft our work | 2, 3 | B | DONE | p37r4 | - | worker |
 | 9 | Panels grouped by the decision they serve | 7 | B | DONE | p37r9 | - | worker |
 | 5 | `ItemHealthRow` gains three columns and loses one | 4 | C | PENDING | - | - | - |
 | 10 | Did another tenant take the processor | 5, 8, 9 | C | PENDING | - | - | - |

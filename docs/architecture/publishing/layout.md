@@ -746,6 +746,7 @@ A megabyte figure and a headroom figure are both levels. **Neither is a rate, so
 
 - [retention.md](retention.md) - the other half: what may be deleted, when, and what bounds every collection a run appends to.
 - [autotune-content-similarity.md](autotune-content-similarity.md) - when two items are one story, and what the page does about it.
+- [autotune-story-prominence.md](autotune-story-prominence.md) - **every weight in the leading block above is a number a person chose, and nothing re-reads it.** That page is where a fitted version would be argued; it is a stub today.
 - [../../concepts/placement.md](../../concepts/placement.md) - the one order this payload carries, and the frame a person set over its head.
 - [../../concepts/digest.md](../../concepts/digest.md) - what a reader gets and the visual rule this layout serves.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the Assemble stage that writes all of this.
