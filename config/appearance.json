@@ -39,26 +39,30 @@
     "panel_groups": {
       "machine": [
         {
-          "id": "the-newest-run",
-          "panels": ["two-clocks", "shard-board", "memory-board", "newest-run-tail"],
-          "title": "The newest run"
-        },
-        {
-          "id": "the-open-window",
+          "id": "what-the-machine-was-doing",
           "panels": [
-            "prompt-cache",
-            "context-headroom",
-            "outside-the-model-call",
-            "tail-trend",
-            "read-against-written",
-            "counterfactual-cost"
+            "two-clocks",
+            "machine-cards",
+            "reading-against-writing",
+            "platform-mix",
+            "outside-the-model-call"
           ],
-          "title": "The open window"
+          "title": "What the machine was doing"
         },
         {
-          "id": "the-machines",
-          "panels": ["machine-cards", "reading-against-writing", "platform-mix"],
-          "title": "The machines"
+          "id": "where-the-time-went",
+          "panels": ["shard-board", "newest-run-tail", "tail-trend"],
+          "title": "Where the time went"
+        },
+        {
+          "id": "how-close-to-the-limits",
+          "panels": ["memory-board", "context-headroom"],
+          "title": "How close we are to the limits"
+        },
+        {
+          "id": "what-the-model-spends",
+          "panels": ["prompt-cache", "read-against-written", "counterfactual-cost"],
+          "title": "What the model spends"
         }
       ],
       "pipelines": [
@@ -171,5 +175,5 @@
     "movement_good_light": "#2f6f5e",
     "surface_tint_alpha": 0.07
   },
-  "version": "2026-09-20T13:00"
+  "version": "2026-09-20T14:00"
 }

@@ -9,7 +9,7 @@ two questions every panel names, the five routes and the strip, the standing ban
 and the one window that governs every page. How any figure here is allowed to
 read is [../../concepts/console-design.md](../../concepts/console-design.md), and
 the machinery every chart shares is [console-charts.md](console-charts.md).
-Thirteen panels under **three headings**. Eleven read `state/item-health/` and
+Thirteen panels under **four headings**. Eleven read `state/item-health/` and
 `state/host-fingerprint/`, which are the two instruments this route puts beside
 each other; three - the two machine panels and the split - read the machine
 record for the processor and the flags as well. All three are read at
@@ -19,40 +19,63 @@ ledgers add no telemetry column and no reader sees a cell of any of them.
 
 | Group | Panel | Grain | The sentence it is for |
 | --- | --- | --- | --- |
-| The newest run | The two clocks, compared | one bar a shard | Whether the day's rates can be trusted at all. |
-| The newest run | Shards of the newest run | one row a shard | Was the day slow because of the work or because of the machine. |
-| The newest run | How near the runner's ceiling this run got, item by item | one mark an item, with a shard grain and a window grain | Which item took the machine nearest its limit, whether it gave the memory back, and how long the queue was. |
-| The newest run | How long the newest run's tail was | the newest run | What the whole distribution of one run looks like at once. |
-| The open window | Prompt cache | one column a day | Whether a bigger cache would save wall clock. |
-| The open window | Context headroom | one mark a run | Whether raising the truncation cap is even possible. |
-| The open window | What the server did outside the model call | one track a figure, over the window | How busy the machine was, and how long the weights took to open, each against the window that measured it. |
-| The open window | How the tail moved | one plot a percentile, one mark a run | Whether the slow end of a run is moving. |
-| The open window | What a run reads against what it writes | one group a run, in either unit | Which half of the model call the run actually spent itself on. |
-| The open window | What this would have cost somewhere else | four figures over the whole span, and one column a day or one running line | Whether the runner time was a good trade, and whether the trade is getting worse. |
-| The machines | The machines this run drew | one card a machine | What machine this is, what it can do against the others this run drew, and whether its record survived the day. |
-| The machines | Reading against writing, machine by machine | one group a machine | What a written token costs against a read one, on the machine that paid it. |
-| The machines | What the platform has been giving us | one group a day, one bar a machine kind | What kinds of machine we keep being handed, and whether that is changing. |
+| What the machine was doing | Whether the speed numbers can be trusted | one bar a shard | Whether the day's rates can be trusted at all. |
+| What the machine was doing | Which machines this run was given | one card a machine | What machine this is, what it can do against the others this run drew, and whether its record survived the day. |
+| What the machine was doing | Whether some machines do the same work slower | one group a machine | What a written token costs against a read one, on the machine that paid it. |
+| What the machine was doing | What kinds of machine we keep being given | one group a day, one bar a machine kind | What kinds of machine we keep being handed, and whether that is changing. |
+| What the machine was doing | Where the machine's time went besides the model | one track a figure, over the window | How busy the machine was, and how long the weights took to open, each against the window that measured it. |
+| Where the time went | Which parts of the last run took longest | one row a shard | Was the day slow because of the work or because of the machine. |
+| Where the time went | How far the slowest articles ran behind the rest | the newest run | What the whole distribution of one run looks like at once. |
+| Where the time went | Whether the slowest articles are getting slower | one plot a percentile, one mark a run | Whether the slow end of a run is moving. |
+| How close we are to the limits | How close an article came to using up the machine's memory | one mark an item, with a shard grain and a window grain | Which item took the machine nearest its limit, whether it gave the memory back, and how long the queue was. |
+| How close we are to the limits | How close the longest text came to the model's limit | one mark a run | Whether raising the truncation cap is even possible. |
+| What the model spends | How much text the model has to read again each time | one column a day | Whether a bigger cache would save wall clock. |
+| What the model spends | How much of a run is reading and how much is writing | one group a run, in either unit | Which half of the model call the run actually spent itself on. |
+| What the model spends | What this would have cost somewhere else | four figures over the whole span, and one column a day or one running line | Whether the runner time was a good trade, and whether the trade is getting worse. |
 
-**The three headings are what the route answers, and they are a knob rather
-than markup order.** Until 2026-09-20 this was fifteen flat siblings down one
-column, every title at one weight, and the sufficiency check an operator surface
-fails first is the one that asks what the eye lands on
-([../../concepts/design-system.md](../../concepts/design-system.md)). Three
-headings give the column three stops: the run that has just finished, the span
-the window control is open on, and the machines the platform handed us. The
-order and the membership live in `console.panel_groups` in
-`config/appearance.json`, so a re-grouping is a config edit rather than a
-markup move; the route's own `load` refuses a list that names a panel it does
-not draw, or leaves one out, so a typo fails the build rather than dropping a
-panel off the page in silence. A titled group steps its panels' titles to an
-`h3` under its own `h2`, which is what makes the grouping a document outline and
-not a row of dividers. Authority: Susan, decision 2 of Row #27 -
-three headings, not more.
+**Each heading names a decision an operator takes, and they run in the order he
+takes them.** Until 2026-09-20 the three headings were `The newest run`, `The
+open window` and `The machines` - which sort by time grain, a fact about the
+instrument rather than a question anybody arrives with. An operator who wants to
+know whether a slow morning was his work or the box had to scan the whole column
+to find where that question lived. Four headings now: what the machine was
+doing, where the time went, how close we are to the limits, and what the model
+spends. Each group's answer decides whether the next is worth reading - triage,
+then locate, then project, then tune. The order and the membership live in
+`console.panel_groups` in `config/appearance.json`, so a re-grouping is a config
+edit rather than a markup move; the route's own `load` refuses a list that names
+a panel it does not draw, or leaves one out, so a typo fails the build rather
+than dropping a panel off the page in silence. A titled group steps its panels'
+titles to an `h3` under its own `h2`, which is what makes the grouping a
+document outline and not a row of dividers. Authority: Susan, rulings A and B of
+Row #9 of `TODO/20260920-37-honest-machine-telemetry-plan.md`.
 
-**The verdict panel goes first**, so `The two clocks, compared` opens the route
-rather than sitting seventh. It is the panel that says whether the other twelve
-can be believed, and an operator who reads it last has read twelve readings he
-had no reason to trust yet.
+**The grain moved off the heading and onto the panel.** A group used to carry
+it: everything under `The open window` followed the span control and everything
+under `The newest run` held still, and the route spent a paragraph above the
+panels explaining which was which. A decision group mixes the two on purpose -
+`What the machine was doing` holds a snapshot of one run beside a count over the
+open span - so the carrier has to move. Every panel's subtitle ends by naming
+its own grain, and `frontend/tests/console-frame.spec.ts` holds it there. What
+is left of the old paragraph is the one fact no panel can state for itself:
+which run the newest one currently is.
+
+**A title states the question the panel answers, and a subtitle says why the
+answer changes what you do.** Neither prints the words question or answer, and a
+title borrows no word from how the thing is built - no column name, no subsystem
+term, no vendor. `Prompt cache` and `Context headroom` were the two worst: both
+named a mechanism and neither said what a reader would learn. The mechanical
+half of the rule - no trailing question mark, no opening auxiliary verb, no
+column name or vendor - is asserted in
+`frontend/tests/console-title.spec.ts`; what it cannot check is whether a title
+is *plain*, and Reader ruled all thirteen of the current ones on 2026-09-20.
+Authority: owner for the title-and-subtitle split, CLAUDE.md section 0b for the
+vocabulary, Reader for the wording.
+
+**The verdict panel goes first**, so `Whether the speed numbers can be trusted`
+opens the route rather than sitting seventh. It is the panel that says whether
+the other twelve can be believed, and an operator who reads it last has read
+twelve readings he had no reason to trust yet.
 
 **A run is not a machine, and three of those panels exist because the route said
 otherwise for weeks.** Measured 2026-09-17 over the committed counters ledger -

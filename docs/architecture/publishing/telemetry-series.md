@@ -597,8 +597,8 @@ ledger had been committed for four days with no page reading a cell of it.
 | Seconds reading, seconds writing | the machine record's `server_prompt_seconds`, and the item ledger's `decode_ms` | summed over shards, and never added together into one "model seconds" |
 | Read and write speed | `server_prompt_tokens` over `server_prompt_seconds`, and the item ledger's `output_tokens` over its summed `decode_ms` | sum over sum, never a mean of per-shard rates |
 | Read spread | the fastest shard's read rate over the slowest | one run only; a run of one shard reports nothing |
-| Prompt cache | the item ledger's `input_tokens` against its `cached_tokens` | share of every token the prompt needed, read or reused |
-| Context headroom | the largest `input_tokens + output_tokens` any item recorded, against `models.summarize.inference.n_ctx` | the longest sequence any shard saw. A maximum, not a sum |
+| How much text the model has to read again each time | the item ledger's `input_tokens` against its `cached_tokens` | share of every token the prompt needed, read or reused |
+| How close the longest text came to the model's limit | the largest `input_tokens + output_tokens` any item recorded, against `models.summarize.inference.n_ctx` | the longest sequence any shard saw. A maximum, not a sum |
 | Job clock | the machine record's `job_seconds` against `run.shard_timeout_minutes` | the slowest shard. A run's wall clock is its slowest shard |
 | The processor | the machine record's `cpu_model` | text, per shard, and never averaged |
 | Busy and load | the item ledger's `cpu_busy_pct`, the machine record's `model_load_ms` | lowest, slowest |
@@ -607,7 +607,7 @@ ledger had been committed for four days with no page reading a cell of it.
 | What one item left the kernel | `os_mem_available_min_bytes` to `os_mem_available_bytes` | one range mark an item, floor to recovery - a floor that falls with an end that falls is a leak, a floor that falls with an end that recovers is hard work |
 | The queue behind an item | `load_1m` against the host's `cores`, with `cpu_busy_min` to `cpu_busy_max` | one mark an item. Busy and queued are different facts and neither implies the other, so both are drawn |
 | The shape of a run | the item ledger's `summarize_ms` | one ladder a run at the five configured percentiles, interpolated between the two nearest ranks, never pooled between runs |
-| The two clocks, compared | the item ledger's `prefill_ms` and `input_tokens - cached_tokens` against the server's own totals | the same pooling and the same 5 percent bound `backend/utilities/reconcile_prefill.py` gates on |
+| Whether the speed numbers can be trusted | the item ledger's `prefill_ms` and `input_tokens - cached_tokens` against the server's own totals | the same pooling and the same 5 percent bound `backend/utilities/reconcile_prefill.py` gates on |
 
 Both ceilings come from `config/idhazh.json` through
 [frontend/src/lib/server/config.ts](../../../frontend/src/lib/server/config.ts)

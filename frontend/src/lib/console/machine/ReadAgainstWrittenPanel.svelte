@@ -97,8 +97,9 @@
 >
 	<Panel
 		heading="h3"
-		title="What a run reads against what it writes"
-		note="One group per run over the last {windowDays} days, a read bar beside a written bar on one axis. The switch changes the unit: the tokens each half counted, or the seconds the model server spent on it."
+		id="read-against-written"
+		title="How much of a run is reading and how much is writing"
+		note="Cutting what we send and cutting what we ask for are different edits, and only the split says which one pays - one group a run, over the last {windowDays} days."
 	>
 		{#if runs.length === 0}
 			<p class="empty" data-machine-panel-empty="tokens">

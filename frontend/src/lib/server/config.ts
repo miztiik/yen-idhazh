@@ -509,10 +509,11 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	model_disk_reads_named: 1
 };
 /** The running order a fresh clone draws, and the one the committed config
- * repeats. Three headings on Hardware, because fifteen equal siblings down one
- * column gave the eye nothing to land on first; one untitled group on
- * Pipelines, because what that route needed was an order rather than headings.
- * The first panel of the first group is the one that verdicts the rest. */
+ * repeats. Four headings on Hardware, each naming a decision an operator takes
+ * rather than a time grain, because a grain is a fact about one panel and the
+ * panel says it; one untitled group on Pipelines, because what that route
+ * needed was an order rather than headings. The first panel of the first group
+ * is the one that verdicts the rest. */
 const PANEL_GROUP_DEFAULTS: PanelGroups = {
 	pipelines: [
 		{
@@ -535,26 +536,30 @@ const PANEL_GROUP_DEFAULTS: PanelGroups = {
 	],
 	machine: [
 		{
-			id: 'the-newest-run',
-			title: 'The newest run',
-			panels: ['two-clocks', 'shard-board', 'memory-board', 'newest-run-tail']
-		},
-		{
-			id: 'the-open-window',
-			title: 'The open window',
+			id: 'what-the-machine-was-doing',
+			title: 'What the machine was doing',
 			panels: [
-				'prompt-cache',
-				'context-headroom',
-				'outside-the-model-call',
-				'tail-trend',
-				'read-against-written',
-				'counterfactual-cost'
+				'two-clocks',
+				'machine-cards',
+				'reading-against-writing',
+				'platform-mix',
+				'outside-the-model-call'
 			]
 		},
 		{
-			id: 'the-machines',
-			title: 'The machines',
-			panels: ['machine-cards', 'reading-against-writing', 'platform-mix']
+			id: 'where-the-time-went',
+			title: 'Where the time went',
+			panels: ['shard-board', 'newest-run-tail', 'tail-trend']
+		},
+		{
+			id: 'how-close-to-the-limits',
+			title: 'How close we are to the limits',
+			panels: ['memory-board', 'context-headroom']
+		},
+		{
+			id: 'what-the-model-spends',
+			title: 'What the model spends',
+			panels: ['prompt-cache', 'read-against-written', 'counterfactual-cost']
 		}
 	]
 };

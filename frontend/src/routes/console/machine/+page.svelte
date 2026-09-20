@@ -188,21 +188,22 @@
 		</div>
 	{/if}
 
-	<!-- The panels below are one run or one day, so the control above does not
-	     reach them. A window is a span; a snapshot is not something a span can
-	     narrow, and a board that emptied at 7 days would say the run had stopped
-	     existing. -->
-	<p class="mt-4 text-[0.8125rem] text-text-tertiary" data-window-exempt="newest-run">
-		{data.newestRunId === null
-			? 'The panels below read the newest run each ledger holds, and do not follow the window. No run has committed a counters row yet.'
-			: `The panels below do not follow the window; each reads one run or one day, because a span cannot narrow a single run. The hardware panels read the newest run the counters hold, ${data.newestRunId}.`}
-	</p>
+	<!-- The panels each name their own grain in their own subtitle, so the page
+	     no longer explains which of them the control above reaches. What is left
+	     is the one fact a panel cannot state for itself: which run "the newest
+	     run" currently is. -->
+	{#if data.newestRunId !== null}
+		<p class="mt-4 text-[0.8125rem] text-text-tertiary" data-window-exempt="newest-run">
+			The newest run the counters hold is {data.newestRunId}.
+		</p>
+	{/if}
 
 	<!-- The route's own running order lives in `config/appearance.json`, not in
-	     the order these panels happen to be imported in. Thirteen equal
-	     siblings down one column gave the eye nothing to land on first; three
-	     headings give it three stops, and the first panel of the first group is
-	     the one that says whether the rest can be trusted. -->
+	     the order these panels happen to be imported in. Each heading names a
+	     decision an operator takes rather than a time grain: a grain is a fact
+	     about one panel, and a heading that carries it answers no question
+	     anybody arrives with. The first panel of the first group is the one that
+	     says whether the rest can be trusted. -->
 	{#snippet panelFor(id: string)}
 		{#if id === 'shard-board'}
 			<ShardBoardPanel board={data.board} timeoutMinutes={data.shardTimeoutMinutes} />

@@ -1,9 +1,9 @@
 <script lang="ts">
 	/** What a written token cost against a read one, on the machine that paid it.
 	 *
-	 * One group a machine, never one figure over all of them: 86 of the last 90
-	 * runs that named a processor drew more than one kind, so a pooled rate is a
-	 * number about neither.
+	 * One group a machine, never one figure over all of them: 86 of the 90 runs
+	 * that name a processor drew more than one kind, so a pooled rate is a number
+	 * about neither.
 	 */
 	import MachineSplitGroup from '$lib/components/MachineSplitGroup.svelte';
 	import Panel from '$lib/components/Panel.svelte';
@@ -15,8 +15,9 @@
 <div data-readout-none="one row per machine, no shared column" data-machine-split={split.runId}>
 	<Panel
 		heading="h3"
-		title="Reading against writing, machine by machine"
-		note="Two rows per machine: how the model server's seconds split on that machine, and how its tokens split. Read the mismatch between them - that is the price of a written token, on the machine that paid it."
+		id="reading-against-writing"
+		title="Whether some machines do the same work slower"
+		note="Where one machine reads or writes far slower than its neighbour, the fix is the draw rather than the prompt - one group a machine of the newest run."
 	>
 		{#if split.empty}
 			<p class="empty" data-machine-panel-empty="reading-writing">
@@ -32,7 +33,7 @@
 			{#if split.noMachineNamed}
 				<p class="reads" data-machine-split-note="pooled">
 					No shard of this run recorded what machine it was on, so this is one figure over every
-					shard. Where a run drew more than one machine - 86 of the last 90 did - a pooled figure
+					shard. Where a run drew more than one machine - 86 of the 90 did - a pooled figure
 					averages two different machines.
 				</p>
 			{:else if split.oneMachine}

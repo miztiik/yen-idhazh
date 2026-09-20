@@ -40,8 +40,9 @@
 >
 	<Panel
 		heading="h3"
-		title="What the platform has been giving us"
-		note="How often each kind of machine turned up over the last {windowDays} days, day by day. A count of what happened, never a rate: what the next job will draw is the one thing this cannot say."
+		id="platform-mix"
+		title="What kinds of machine we keep being given"
+		note="A slow week explained by the draw is a week to re-run rather than to tune, and this counts what happened rather than predicting the next job - one bar a machine kind a day, over the last {windowDays} days."
 	>
 		{#if fleet.nothing === 'recording-off'}
 			<p class="empty" data-machine-panel-empty="fleet-off">

@@ -407,13 +407,19 @@ test('the panels about one run say so, and hold still while the window moves', a
 	// Decision #2 of the row: a window is a span, and a span cannot narrow a
 	// single run. The shard board, the split, the clock check and the latency
 	// curves are snapshots, so they name the run they are about rather than
-	// emptying out when an operator picks seven days.
+	// emptying out when an operator picks seven days. Since 2026-09-20 each says
+	// it in its own subtitle instead of in a paragraph above all of them: the
+	// groups name a decision now, so one group holds a snapshot beside a reading
+	// over the span and no heading can carry the grain for its panels.
 	await page.goto('/console/machine/');
 	await hydrated(page);
 
 	const exempt = page.locator('[data-window-exempt="newest-run"]');
-	await expect(exempt).toContainText('do not follow the window');
+	await expect(exempt).toContainText('newest run');
 	await expect(exempt).not.toHaveAttribute('data-window-days', /.*/);
+	await expect(page.locator('[data-console-panel-id="shard-board"] > header > p')).toContainText(
+		'the newest run'
+	);
 
 	const board = page.locator('[data-shard-board]');
 	const before = await board.innerText();

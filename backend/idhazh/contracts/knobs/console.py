@@ -409,34 +409,40 @@ class ConsoleConfig(Model):
             ],
             "machine": [
                 ConsolePanelGroup(
-                    id="the-newest-run",
-                    title="The newest run",
+                    id="what-the-machine-was-doing",
+                    title="What the machine was doing",
                     panels=[
                         "two-clocks",
-                        "shard-board",
-                        "memory-board",
-                        "newest-run-tail",
-                    ],
-                ),
-                ConsolePanelGroup(
-                    id="the-open-window",
-                    title="The open window",
-                    panels=[
-                        "prompt-cache",
-                        "context-headroom",
-                        "outside-the-model-call",
-                        "tail-trend",
-                        "read-against-written",
-                        "counterfactual-cost",
-                    ],
-                ),
-                ConsolePanelGroup(
-                    id="the-machines",
-                    title="The machines",
-                    panels=[
                         "machine-cards",
                         "reading-against-writing",
                         "platform-mix",
+                        "outside-the-model-call",
+                    ],
+                ),
+                ConsolePanelGroup(
+                    id="where-the-time-went",
+                    title="Where the time went",
+                    panels=[
+                        "shard-board",
+                        "newest-run-tail",
+                        "tail-trend",
+                    ],
+                ),
+                ConsolePanelGroup(
+                    id="how-close-to-the-limits",
+                    title="How close we are to the limits",
+                    panels=[
+                        "memory-board",
+                        "context-headroom",
+                    ],
+                ),
+                ConsolePanelGroup(
+                    id="what-the-model-spends",
+                    title="What the model spends",
+                    panels=[
+                        "prompt-cache",
+                        "read-against-written",
+                        "counterfactual-cost",
                     ],
                 ),
             ],
@@ -444,14 +450,19 @@ class ConsoleConfig(Model):
         description=(
             "The order the panels of a console route are drawn in, and the "
             "headings they group under. Keyed by route id. Thirteen equal "
-            "siblings down one column give the eye nothing to land on first, so "
-            "the Hardware route reads as three questions - the run that just "
-            "finished, the span the control is open on, and the machines the "
-            "platform handed us - and the first panel of the first group is the "
-            "one that verdicts the rest. The Pipelines route takes one untitled "
-            "group, because what it needed was an order rather than a grouping. "
-            "An id here is a panel the route implements, and the route refuses a "
-            "list that names one it does not."
+            "siblings down one column give the eye nothing to land on first, and "
+            "a heading naming a time grain answers no question anybody arrives "
+            "with - so each Hardware heading names a decision instead, in the "
+            "order an operator takes them: what the machine was doing, where the "
+            "time went, how close we are to the limits, and what the model "
+            "spends. Each group's answer decides whether the next is worth "
+            "reading. A grain is a fact about one panel and is stated on that "
+            "panel, which is what lets one group hold a snapshot of a run beside "
+            "a reading over the open span. The first panel of the first group is "
+            "the one that verdicts the rest. The Pipelines route takes one "
+            "untitled group, because what it needed was an order rather than a "
+            "grouping. An id here is a panel the route implements, and the route "
+            "refuses a list that names one it does not."
         ),
     )
 

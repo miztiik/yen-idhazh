@@ -452,9 +452,10 @@ and a rising published count are the same shape, and green on the first would be
 a verdict the page never measured.
 
 ## A machine is a colour and a name, and no rate is pooled across two of them
-The Hardware route draws three panels about the machine a job drew: **Reading
-against writing, machine by machine**, **The machines this run drew**, and **What
-the platform has been giving us**. One measurement shapes all three.
+The Hardware route draws three panels about the machine a job drew: **Whether
+some machines do the same work slower**, **Which machines this run was given**,
+and **What kinds of machine we keep being given**. One measurement shapes all
+three.
 
 Measured 2026-09-17 over the committed shard records - 380 rows, 95 runs, 19
 dates - **86 of the 90 runs that name a processor drew more than one kind of
@@ -478,8 +479,8 @@ quotable number on the route.
  folding them into a machine attributes somebody else's seconds to it.
 - **The one case where pooling is allowed carries its own sentence.** Where no
  shard of a run named a machine at all, the single group IS the pooled split,
- and the panel says so: a run that drew more than one machine - 86 of the last
- 90 did - would have had two machines averaged into it.
+ and the panel says so: a run that drew more than one machine - 86 of the 90
+ did - would have had two machines averaged into it.
 - **A run that drew one machine says so too.** That is a good state, 4 of 90,
  and the panel reads as one rather than as a panel with a missing spread.
 - **Colour is assigned ascending by key, and the key is the machine's digest
@@ -964,8 +965,8 @@ read. Whether that run was unusual is then one look, rather than three numbers a
 reader converts and subtracts.
 
 **Why it exists: a sentence cannot be compared with the sentence beside it.**
-`What the server did outside the model call` on `/console/machine/` carries a
-processor share and a weight-opening time. Each was a reading followed by its
+`Where the machine's time went besides the model` on `/console/machine/` carries
+a processor share and a weight-opening time. Each was a reading followed by its
 span in prose, in a different unit from its neighbour and with its ends buried
 mid-paragraph, so a reader who wanted to know which of the two was the odd one
 this run had to do the conversion by hand. Two tracks make that comparison free,
@@ -982,8 +983,9 @@ two places until the memory panel becomes a caller.
 **What the reader loses, named.** A span track says nothing about the shape
 between its ends, and nothing about when in the window each end fell: a figure
 that drifted steadily and one that jumped once and held draw identically. That
-is a question for a series over runs, which is a different grain - `How the tail
-moved` on the same route is the panel built for it, for a different figure.
+is a question for a series over runs, which is a different grain - `Whether the
+slowest articles are getting slower` on the same route is the panel built for
+it, for a different figure.
 
 **An absent span is said, never drawn.** Where no run in the window recorded the
 figure the panel says so in words and draws nothing, because a band of no length
@@ -1024,7 +1026,7 @@ tokens they are one quantity in two directions and the fourth rule above binds;
 so are they counted in seconds. What the two counts do not have to agree about
 is which side is bigger, and where they disagree the unit is the whole answer.
 
-The shipped case is `What a run reads against what it writes` on
+The shipped case is `How much of a run is reading and how much is writing` on
 `/console/machine/`. A run reads far more tokens than it writes, so in tokens the
 read bar towers. **Reading is batched prefill and writing is sequential decode,
 so a tall read bar is not a run that spent itself reading.** A panel that offers
@@ -1064,7 +1066,8 @@ engine the identical `data` list in both shapes and change only `type` and
 `stack`. The presence of a transform is the definition of "not cheap", and a
 chart that needs its data massaged to fit the second shape gets no switch at
 all. Owner, 2026-08-30. Two charts qualify today - `What is failing, by stage`
-and `Prompt cache`, both callers of `stacked` - and
+and `How much text the model has to read again each time`, both callers of
+`stacked` - and
 `console-chrome.spec.ts` fails the build if their two shapes ever draw different
 numbers.
 

@@ -146,8 +146,9 @@
 >
 	<Panel
 		heading="h3"
-		title="How the tail moved"
-		note="One plot a percentile, one mark a run, over the last {windowDays} days. Five lines on one chart is a bundle a reader has to untangle by colour; separated, each is a trend read in one look. All five share one scale, which is the point of the arrangement - a p99 twenty times its own p50 has to look twenty times taller, and five plots on five scales would draw the same shape five times."
+		id="tail-trend"
+		title="Whether the slowest articles are getting slower"
+		note="A slow end that keeps drifting is the one that eventually runs a job past its limit - one mark a run, over the last {windowDays} days."
 	>
 		{#if tailRuns.length === 0}
 			<p class="empty" data-machine-panel-empty="latency">

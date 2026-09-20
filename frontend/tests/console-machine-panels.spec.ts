@@ -127,7 +127,7 @@ test.describe('reading against writing, machine by machine', () => {
 		page
 	}) => {
 		await page.goto('/console/machine/');
-		const panel = page.locator('[data-console-panel="Reading against writing, machine by machine"]');
+		const panel = page.locator('[data-console-panel-id="reading-against-writing"]');
 		await expect(panel).toBeVisible();
 
 		const rows = newestDrawnRun();
@@ -153,7 +153,7 @@ test.describe('reading against writing, machine by machine', () => {
 
 	test('every rate in a group recomputes from that machine shards alone', async ({ page }) => {
 		await page.goto('/console/machine/');
-		const panel = page.locator('[data-console-panel="Reading against writing, machine by machine"]');
+		const panel = page.locator('[data-console-panel-id="reading-against-writing"]');
 		const shards = canaryShards();
 		const newestRun = await panel.evaluate(
 			(node) => node.closest('[data-machine-split]')?.getAttribute('data-machine-split') ?? ''
@@ -262,7 +262,7 @@ test.describe('the machines this run drew', () => {
 		page
 	}) => {
 		await page.goto('/console/machine/');
-		const panel = page.locator('[data-console-panel="The machines this run drew"]');
+		const panel = page.locator('[data-console-panel-id="machine-cards"]');
 		await expect(panel).toBeVisible();
 		const cards = panel.locator('[data-machine-card]');
 		const count = await cards.count();
@@ -293,7 +293,7 @@ test.describe('the machines this run drew', () => {
 		page
 	}) => {
 		await page.goto('/console/machine/');
-		const panel = page.locator('[data-console-panel="The machines this run drew"]');
+		const panel = page.locator('[data-console-panel-id="machine-cards"]');
 		const readings = panel.locator('[data-machine-bandwidth]');
 		const count = await readings.count();
 		expect(count).toBeGreaterThan(0);
@@ -320,7 +320,7 @@ test.describe('the machines this run drew', () => {
 
 	test('two cards with different L3 draw bars in the ratio of their bytes', async ({ page }) => {
 		await page.goto('/console/machine/');
-		const panel = page.locator('[data-console-panel="The machines this run drew"]');
+		const panel = page.locator('[data-console-panel-id="machine-cards"]');
 		const bars = panel.locator('[data-machine-bar="l3"]');
 		const count = await bars.count();
 		expect(count, 'the fixture drew fewer than two machines').toBeGreaterThan(1);
@@ -359,7 +359,7 @@ test.describe('the machines this run drew', () => {
 
 	test('a reading with nothing to draw names its state and draws no track', async ({ page }) => {
 		await page.goto('/console/machine/');
-		const panel = page.locator('[data-console-panel="The machines this run drew"]');
+		const panel = page.locator('[data-console-panel-id="machine-cards"]');
 		const bars = panel.locator('[data-machine-bar]');
 		const count = await bars.count();
 		expect(count).toBeGreaterThan(0);
@@ -446,7 +446,7 @@ test.describe('the machine record names which state it is in', () => {
 test.describe('what the platform has been giving us', () => {
 	test('under the threshold it lists the counts and draws no bar', async ({ page }) => {
 		await page.goto('/console/machine/');
-		const panel = page.locator('[data-console-panel="What the platform has been giving us"]');
+		const panel = page.locator('[data-console-panel-id="platform-mix"]');
 		await expect(panel).toBeVisible();
 		const list = panel.locator('[data-fleet-list]');
 		if ((await list.count()) === 0) {
@@ -476,14 +476,14 @@ test.describe('what the platform has been giving us', () => {
 
 	test('nothing in the panel is a share, a rate or a probability', async ({ page }) => {
 		await page.goto('/console/machine/');
-		const panel = page.locator('[data-console-panel="What the platform has been giving us"]');
+		const panel = page.locator('[data-console-panel-id="platform-mix"]');
 		const text = await panel.innerText();
 		expect(text).not.toMatch(/\d\s*%|percent|probability|chance of/i);
 	});
 });
 
 test.describe('what a run reads against what it writes', () => {
-	const PANEL = '[data-console-panel="What a run reads against what it writes"]';
+	const PANEL = '[data-console-panel-id="read-against-written"]';
 
 	test('one chart, two series, and one axis per unit', async ({ page }) => {
 		await page.goto('/console/machine/');
@@ -547,7 +547,7 @@ test.describe('what a run reads against what it writes', () => {
 });
 
 test.describe('what this would have cost somewhere else', () => {
-	const PANEL = '[data-console-panel="What this would have cost somewhere else"]';
+	const PANEL = '[data-console-panel-id="counterfactual-cost"]';
 
 	test('one chart beside the four numbers, and the switch opens where the server drew', async ({
 		page

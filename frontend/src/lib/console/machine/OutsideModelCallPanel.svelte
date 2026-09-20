@@ -55,8 +55,9 @@
 <div data-windowed="machine-host" data-window-days={windowDays}>
 	<Panel
 		heading="h3"
-		title="What the server did outside the model call"
-		note="What the machine and the server spent outside the model call itself. Each figure carries its ceiling: a counter without one is not a measurement. A figure with a span is one track - the band is what the last {windowDays} days read, the upright is this run's own mark on it, and that is what says whether the newest run was unusual."
+		id="outside-the-model-call"
+		title="Where the machine's time went besides the model"
+		note="Time spent away from the model is time a faster model would not buy back, and each figure carries the ceiling it is read against - one track a figure, over the last {windowDays} days."
 	>
 		<dl class="host">
 			<!-- Two figures, one shape. Each was a reading and a span written as

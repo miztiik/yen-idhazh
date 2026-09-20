@@ -502,11 +502,14 @@ test.describe('a route that draws what the server counted', () => {
 		await expect(control).toHaveCount(1);
 		await expect(control).toHaveAttribute('data-window-days', /\d+/);
 		await expect(page.locator('[data-band-window="none"]')).toHaveCount(0);
-		// And the four panels a span cannot narrow say so where the sentence used
-		// to be. A window is a span; a snapshot of one run is not.
-		await expect(page.locator('[data-window-exempt="newest-run"]')).toContainText(
-			'do not follow the window'
-		);
+		// And the panels a span cannot narrow say so where the sentence used to be.
+		// A window is a span; a snapshot of one run is not. Each says it in its own
+		// subtitle since 2026-09-20, and the line above them carries the one fact no
+		// panel can state for itself: which run the newest one is.
+		await expect(page.locator('[data-window-exempt="newest-run"]')).toContainText('newest run');
+		await expect(
+			page.locator('[data-console-panel-id="two-clocks"] > header > p')
+		).toContainText('the newest run');
 	});
 });
 

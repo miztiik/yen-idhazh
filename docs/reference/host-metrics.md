@@ -10,9 +10,9 @@ Read this when a number surprises you and you want to know which machine
 produced it. Why the record exists at all, and what the fleet does to a reading,
 is [the processor lottery](benchmarks/the-processor-lottery.md).
 
-**Three panels on the operator console read it, from 2026-09-17.** The machines
-one run drew, the reading-against-writing split repeated once per machine, and
-the count of what the platform has been giving us over a window. What each may
+**Three panels on the operator console read it, from 2026-09-17.** Which
+machines one run was given, whether some machines do the same work slower, and
+what kinds of machine we keep being given over a window. What each may
 draw and what it may never draw is
 [../concepts/console-design.md](../concepts/console-design.md). The whole column
 set is still operator-only: the console reads it at build time under
