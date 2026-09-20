@@ -1062,7 +1062,7 @@
 	     span and a span cannot narrow a single run. It names the run it drew. -->
 	<Panel
 		title="Where the run's time went, on the run's own clock"
-		note="Is it working. Where each item's work sits against every other item's, on one clock - so a wide staircase is a run that queued and a solid block is a run that worked in parallel. The newest published run, one bar an item or one bar a shard. The four steps that nest inside those steps are printed under the bars, because at this track width none of them is wide enough to paint."
+		note="Is it working. Where each item's work sits against every other item's, on one clock - so a wide staircase is a run that queued and a solid block is a run that worked in parallel. The newest published run, one bar an item or one bar a shard. The four steps that nest inside those steps are printed under the bars rather than drawn: each runs inside a step a bar already draws, and the readout prints how wide it would have been."
 		wide
 	>
 		<RunTimelinePanel view={data.runTimeline} subSteps={data.subSteps} />

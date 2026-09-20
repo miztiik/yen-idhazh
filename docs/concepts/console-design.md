@@ -1170,7 +1170,7 @@ Five rules hold under that table.
 
 Authority: Susan and Fowler, plan row #12.
 
-## A run's time is drawn one bar an item, on a real clock
+## A run's time is drawn on a real clock, at the grain the reader picks
 
 > **The shape of the run is legible before a single number is.** A wide staircase is a run that queued; a solid block is a run that worked in parallel.
 

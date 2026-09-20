@@ -1,4 +1,4 @@
-/** Where one run's time went, item by item, read at build time from the published mirror.
+/** Where one run's time went, by item and by shard, read at build time from the published mirror.
  *
  * `frontend/public/run-timeline/<YYYY-MM>.csv` holds one row per item of one run:
  * where the item's own work began on the run's clock, how long it took, and what
