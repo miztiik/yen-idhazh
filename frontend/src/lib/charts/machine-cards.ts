@@ -16,6 +16,11 @@
  * facts.** The first draws no chips and says so; the second draws twelve
  * outlines. Twelve outlines for the first would publish a guess as a reading.
  *
+ * **L3 and the copy rate are lengths on a track every card shares.** Two
+ * numbers in two sentences on two cards is a subtraction the reader performs;
+ * two bars on one domain is a difference the eye reads. The domain comes from
+ * the cards drawn, because no runner model publishes a ceiling for either.
+ *
  * Pure. The flag vocabulary, the colour ramp and the switch all arrive as
  * arguments, so a test drives them and Guardrail #6 keeps the knobs in `config/`.
  */
@@ -23,6 +28,8 @@
 import type { HostFingerprint } from '$lib/server/host-fingerprint';
 import type { MachineRun } from '$lib/server/machine-counters';
 import { recordDestroyed, type LostDay } from '$lib/console/recording';
+import { linearAxis } from './frame';
+import { percentOf } from './rank';
 import {
 	machineKeys,
 	machineRamp,
@@ -32,10 +39,43 @@ import {
 	type MachineSeen
 } from './machine-colour';
 
+const MIB = 1024 * 1024;
+
 /** One chip: a watched flag, and whether this machine reported it. */
 export interface FlagChip {
 	name: string;
 	present: boolean;
+}
+
+/** Whether a reading is drawn against the other cards, and why not where it is
+ * not.
+ *
+ * `absent` - nothing read it, so there is no length to draw. `alone` - under two
+ * cards carry a reading of this kind, and a bar whose domain is its own value
+ * fills its track whatever it says, which reads as a maximum rather than as the
+ * only one. `cache` - the bandwidth probe never left L3, so that reading is
+ * several times a memory one and shares no track with it
+ * (`docs/reference/host-metrics.md`).
+ */
+export type CardBarState = 'drawn' | 'absent' | 'alone' | 'cache';
+
+/** One reading on the track every card of this panel shares. */
+export interface CardBar {
+	/** Where the fill ends along the track, 0 to 1. Zero unless drawn. */
+	fraction: number;
+	/** The same fraction as a CSS length, so the card does no arithmetic. */
+	percent: string;
+	/** The top of the shared domain, in the reading's own unit. Zero unless
+	 * drawn, and the same number on every card of one panel by construction. */
+	top: number;
+	/** How many cards the domain was built from. */
+	of: number;
+	state: CardBarState;
+	/** The reading, and the top of its track, in one unit. One formatter builds
+	 * both, so a label and the track it labels cannot disagree about the unit.
+	 * Empty where there is nothing drawn. */
+	valueWords: string;
+	topWords: string;
 }
 
 /** Where the platform put a machine, and which microcode it was running. */
@@ -64,6 +104,11 @@ export interface MachineCard {
 	memcpyProbeMib: number | null;
 	/** True where the probe buffer was at or below L3, so it measured cache. */
 	measuredCache: boolean;
+	/** This card's L3 on the track every card of this panel shares, in MiB. */
+	l3Bar: CardBar;
+	/** This card's copy rate on the shared track, in GiB/s. Memory readings
+	 * only - a cache reading is refused rather than pooled with them. */
+	bandwidthBar: CardBar;
 	/** Jobs of this run that drew this machine, and jobs that recorded one. */
 	jobsDrawn: number;
 	jobsTotal: number;
@@ -115,6 +160,10 @@ interface Placement {
 	row: HostFingerprint | null;
 }
 
+/** A card before its bars. The tracks are built over every card, so no card
+ * can carry one until all of them exist. */
+type CardParts = Omit<MachineCard, 'l3Bar' | 'bandwidthBar'>;
+
 function part(row: HostFingerprint): string | null {
 	const cells = [row.cpu_family, row.cpu_model_number, row.cpu_stepping];
 	if (cells.some((cell) => cell === null)) return null;
@@ -127,6 +176,67 @@ function chips(row: HostFingerprint | null, watched: readonly string[]): FlagChi
 	// the reader: that module is server-only and this one is bundled for a browser.
 	const present = new Set(row.flags.split(/\s+/).filter((flag) => flag !== ''));
 	return watched.map((name) => ({ name, present: present.has(name) }));
+}
+
+/** Where a fraction of the shared track falls, and how far the track runs. */
+interface SharedTrack {
+	top: number;
+	of: number;
+	at: (value: number) => number;
+	words: (value: number) => string;
+}
+
+/** One measure's track, built once and shared by every card the panel draws.
+ *
+ * The domain is the readings drawn, anchored at zero and niced by the scale
+ * library. Neither L3 nor a copy rate has a ceiling across the machines a
+ * runner pool hands out - the record holds 32, 260 and 480 MiB of L3 - so there
+ * is no limit to measure distance from, and a fixed maximum would clip the next
+ * bigger machine or spend the track on room nothing reaches
+ * (`docs/concepts/console-design.md`).
+ *
+ * Under two readings the track is refused. A lone bar's domain is its own
+ * value, so it fills the track whatever it says, and a full bar reads as a
+ * maximum rather than as the only one this run drew.
+ */
+function sharedTrack(
+	values: readonly (number | null)[],
+	words: (value: number) => string
+): SharedTrack {
+	const kept = values.filter(
+		(value): value is number => value !== null && Number.isFinite(value) && value > 0
+	);
+	if (kept.length < 2) return { top: 0, of: kept.length, at: () => 0, words };
+	const axis = linearAxis(kept, [0, 1]);
+	return { top: axis.domain[1], of: kept.length, at: axis.scale, words };
+}
+
+/** One card's reading on that track, or the name of why it is not on it.
+ *
+ * `refuse` is the reading this domain will not hold. A non-positive reading has
+ * no length to draw and is named absent; the sentence beside it still prints
+ * what was read.
+ */
+function cardBar(
+	value: number | null,
+	track: SharedTrack,
+	refuse: CardBarState | null = null
+): CardBar {
+	const state: CardBarState =
+		value === null || !Number.isFinite(value) || value <= 0
+			? 'absent'
+			: (refuse ?? (track.of < 2 ? 'alone' : 'drawn'));
+	const drawn = state === 'drawn' && value !== null;
+	const fraction = drawn ? track.at(value) : 0;
+	return {
+		fraction,
+		percent: percentOf(fraction),
+		top: track.top,
+		of: track.of,
+		state,
+		valueWords: drawn && value !== null ? track.words(value) : '',
+		topWords: drawn ? track.words(track.top) : ''
+	};
 }
 
 /** The machines the newest run drew, one card each.
@@ -209,7 +319,7 @@ export function machineCards(
 		else held.push(placement);
 	}
 
-	const cards: MachineCard[] = [];
+	const cards: CardParts[] = [];
 	for (const identity of ramp.rows) {
 		const drawn = byIdentity.get(identity.key) ?? [];
 		if (drawn.length === 0) continue;
@@ -230,7 +340,7 @@ export function machineCards(
 			memcpyGibPerSecond: row?.memcpy_gib_s ?? null,
 			memcpyProbeMib: buffer,
 			measuredCache:
-				buffer !== null && buffer > 0 && l3 !== null && buffer * 1024 * 1024 <= l3,
+				buffer !== null && buffer > 0 && l3 !== null && buffer * MIB <= l3,
 			jobsDrawn: drawn.length,
 			jobsTotal: placements.length,
 			where:
@@ -247,10 +357,31 @@ export function machineCards(
 		});
 	}
 
+	// Both tracks are built over every card first, so the same domain reaches
+	// each of them. A per-card domain would delete the one comparison the bars
+	// exist for (`docs/concepts/console-design.md`).
+	const l3Track = sharedTrack(
+		cards.map((card) => cacheMib(card.l3CacheBytes)),
+		(mib) => cacheWords(mib * MIB)
+	);
+	const rateTrack = sharedTrack(
+		cards.map((card) => (card.measuredCache ? null : card.memcpyGibPerSecond)),
+		rateWords
+	);
+	const drawnCards: MachineCard[] = cards.map((card) => ({
+		...card,
+		l3Bar: cardBar(cacheMib(card.l3CacheBytes), l3Track),
+		bandwidthBar: cardBar(
+			card.memcpyGibPerSecond,
+			rateTrack,
+			card.measuredCache ? 'cache' : null
+		)
+	}));
+
 	return {
 		runId,
 		date,
-		cards,
+		cards: drawnCards,
 		nothing: null,
 		recording: options.recording,
 		nameOnly: cards.every((card) => card.source === 'name-only'),
@@ -274,7 +405,17 @@ function recordState(
 	return anyRecorded ? 'recorded' : 'none';
 }
 
-const MIB = 1024 * 1024;
+/** A cache size in MiB, the unit its track and its words are both in. Null in,
+ * null out - an absent cache is not a cache of zero. */
+function cacheMib(bytes: number | null): number | null {
+	return bytes === null ? null : bytes / MIB;
+}
+
+/** A copy rate in the unit the probe reports it in. The bar's label and the
+ * sentence under it both come through here, so they cannot round differently. */
+function rateWords(rate: number): string {
+	return `${rate.toFixed(1)} GiB/s`;
+}
 
 /** A cache size in the unit this fleet's caches are actually quoted in.
  *
@@ -302,7 +443,7 @@ export function bandwidthSentence(card: MachineCard): string {
 	if (card.memcpyGibPerSecond === null) {
 		return 'Bandwidth was not measured on this job.';
 	}
-	const rate = `${card.memcpyGibPerSecond.toFixed(1)} GiB/s`;
+	const rate = rateWords(card.memcpyGibPerSecond);
 	if (card.memcpyProbeMib === null) return `${rate}. The buffer it used was not recorded.`;
 	const against =
 		card.l3CacheBytes === null

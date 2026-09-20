@@ -317,6 +317,72 @@ test.describe('the machines this run drew', () => {
 		expect(await where.evaluate((node) => (node as HTMLDetailsElement).open)).toBe(false);
 		await expect(where.locator('summary')).toHaveText('Where the platform put this');
 	});
+
+	test('two cards with different L3 draw bars in the ratio of their bytes', async ({ page }) => {
+		await page.goto('/console/machine/');
+		const panel = page.locator('[data-console-panel="The machines this run drew"]');
+		const bars = panel.locator('[data-machine-bar="l3"]');
+		const count = await bars.count();
+		expect(count, 'the fixture drew fewer than two machines').toBeGreaterThan(1);
+
+		const drawn: { bytes: number; fraction: number }[] = [];
+		for (let index = 0; index < count; index += 1) {
+			const bar = bars.nth(index);
+			if ((await bar.getAttribute('data-machine-bar-state')) !== 'drawn') continue;
+			const bytes = Number(
+				await bar.locator('[data-machine-cache]').getAttribute('data-machine-cache')
+			);
+			const fraction = Number(
+				await bar
+					.locator('[data-machine-bar-cell="track"]')
+					.getAttribute('data-machine-bar-fraction')
+			);
+			drawn.push({ bytes, fraction });
+		}
+		expect(drawn.length, 'fewer than two L3 bars were drawn').toBeGreaterThan(1);
+
+		// The bytes the page drew are the ledger's, so the ratio below is the
+		// fixture's rather than the panel's own arithmetic restated.
+		const ledger = new Set(
+			canaryRows('host-fingerprint')
+				.map((row) => Number(row.l3_cache_bytes))
+				.filter((bytes) => Number.isFinite(bytes) && bytes > 0)
+		);
+		for (const { bytes } of drawn) expect(ledger.has(bytes)).toBe(true);
+
+		const [low, high] = [...drawn].sort((a, b) => a.bytes - b.bytes);
+		expect(high.bytes, 'both machines report the same L3').toBeGreaterThan(low.bytes);
+		// One zero-anchored domain over both cards, so two lengths are two
+		// readings. Whatever the track runs to divides out of this.
+		expect(high.fraction / low.fraction).toBeCloseTo(high.bytes / low.bytes, 4);
+	});
+
+	test('a reading with nothing to draw names its state and draws no track', async ({ page }) => {
+		await page.goto('/console/machine/');
+		const panel = page.locator('[data-console-panel="The machines this run drew"]');
+		const bars = panel.locator('[data-machine-bar]');
+		const count = await bars.count();
+		expect(count).toBeGreaterThan(0);
+
+		const states = new Set<string>();
+		for (let index = 0; index < count; index += 1) {
+			const bar = bars.nth(index);
+			const state = (await bar.getAttribute('data-machine-bar-state')) ?? '';
+			states.add(state);
+			const tracks = await bar.locator('[data-machine-bar-cell="track"]').count();
+			// An empty track reads as a reading of zero. A bar with nothing to
+			// draw, or nothing to draw against, says which and draws nothing.
+			expect(tracks, `state ${state} drew ${tracks} tracks`).toBe(state === 'drawn' ? 1 : 0);
+			if (state !== 'drawn') {
+				await expect(bar.locator('[data-machine-bar-why]')).toHaveCount(
+					state === 'absent' ? 0 : 1
+				);
+			}
+		}
+		// The canary's second machine probed a buffer under its own L3, so its
+		// rate is a cache reading and shares no track with the memory ones.
+		expect([...states].sort()).toEqual(['alone', 'cache', 'drawn']);
+	});
 });
 
 /** Which of the record's states the page is in, said in an attribute.
