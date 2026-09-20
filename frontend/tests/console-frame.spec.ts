@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { cellFor, CELL_PX, GAP_PX } from '../src/lib/charts/run-history';
 
 /**
@@ -12,6 +15,26 @@ import { cellFor, CELL_PX, GAP_PX } from '../src/lib/charts/run-history';
  */
 
 const DESKTOP = { width: 1440, height: 900 };
+
+const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+interface PanelGroup {
+	id: string;
+	title: string;
+	panels: string[];
+}
+
+/** What `config/appearance.json` says the Hardware route draws, and in what
+ * order. Read inside each test rather than at module scope, so a malformed
+ * config fails the one test that wanted it instead of the whole file. */
+function machineGroups(): PanelGroup[] {
+	const parsed = JSON.parse(readFileSync(join(REPO, 'config', 'appearance.json'), 'utf8')) as {
+		console?: { panel_groups?: Record<string, PanelGroup[]> };
+	};
+	const groups = parsed.console?.panel_groups?.machine ?? [];
+	expect(groups.length, 'config/appearance.json declares no Hardware groups').toBeGreaterThan(0);
+	return groups;
+}
 
 test.describe('the run strip uses the room it has', () => {
 	test('an unmeasured strip still draws at the fixed pair', () => {
@@ -182,25 +205,45 @@ test.describe('the console frame', () => {
 		// document structure - a group element, its own heading, and the panels
 		// underneath it stepped down a level - read off the DOM rather than off
 		// what any paragraph says.
+		//
+		// It is read against `console.panel_groups` rather than against itself.
+		// A page that agreed with its own markup would pass with every panel in
+		// the wrong group, which is exactly what a regrouping row can get wrong.
 		await page.setViewportSize(DESKTOP);
 		await page.goto('/console/machine/');
 
+		const declared = machineGroups();
 		const groups = await page.locator('[data-console-group]').evaluateAll((nodes) =>
 			nodes.map((node) => ({
 				id: node.getAttribute('data-console-group') ?? '',
 				declared: Number(node.getAttribute('data-console-group-panels')),
 				heading: node.querySelector(':scope > h2')?.textContent?.trim() ?? '',
 				held: node.querySelectorAll('[data-console-panel]').length,
+				panels: [...node.querySelectorAll('[data-console-panel-id]')].map(
+					(panel) => panel.getAttribute('data-console-panel-id') ?? ''
+				),
 				stepped: node.querySelectorAll('[data-console-panel] > header > h3').length
 			}))
 		);
 
-		expect(groups.length, 'the Hardware route draws no groups at all').toBe(3);
-		for (const group of groups) {
-			expect(group.heading.length, `${group.id} draws no heading of its own`).toBeGreaterThan(0);
+		expect(
+			groups.map((group) => group.id),
+			'the route draws groups the config did not declare, or in another order'
+		).toEqual(declared.map((group) => group.id));
+
+		for (const [index, group] of groups.entries()) {
+			expect(group.heading, `${group.id} does not draw its configured heading`).toBe(
+				declared[index].title
+			);
 			expect(group.declared, `${group.id} declares no panel count`).toBeGreaterThan(0);
 			expect(group.held, `${group.id} holds a different count from the one it declares`).toBe(
 				group.declared
+			);
+			// The row's own oracle: every panel resolves to exactly one group, and
+			// every group carries at least one panel. Read off the panel id rather
+			// than the title, because the title is prose this row rewrote.
+			expect(group.panels, `${group.id} does not hold the panels the config put in it`).toEqual(
+				declared[index].panels
 			);
 			// A panel title still at h2 would sit beside the group heading in the
 			// outline rather than under it, which is the flat page this row closed.
@@ -215,6 +258,41 @@ test.describe('the console frame', () => {
 		expect(loose, 'a Hardware panel sits outside every group').toBe(
 			groups.reduce((sum, group) => sum + group.held, 0)
 		);
+	});
+
+	test('THE ORACLE: every Hardware subtitle ends by naming its own grain', async ({ page }) => {
+		// Group membership used to carry the grain - a panel under `The open
+		// window` followed the span control and one under `The newest run` did
+		// not - and the page spent a paragraph above the panels explaining it.
+		// Groups now name a decision instead, so one group holds a snapshot of a
+		// run beside a reading over the span, and the carrier has to move onto
+		// the panel. A subtitle whose last clause names no grain leaves a reader
+		// guessing which of the two a figure is.
+		await page.setViewportSize(DESKTOP);
+		await page.goto('/console/machine/');
+
+		const notes = await page
+			.locator('[data-console-panel-id]')
+			.evaluateAll((nodes) =>
+				nodes.map((node) => ({
+					id: node.getAttribute('data-console-panel-id') ?? '',
+					note: (node.querySelector(':scope > header > p')?.textContent ?? '')
+						.replace(/\s+/g, ' ')
+						.trim()
+				}))
+			);
+
+		expect(notes.length, 'the route drew no panels to read').toBe(machineGroups().flatMap((group) => group.panels).length);
+		for (const panel of notes) {
+			expect(panel.note.length, `${panel.id} carries no subtitle at all`).toBeGreaterThan(20);
+			// One sentence. A subtitle that grew into a paragraph is the wall of
+			// small grey type the grouping was opened to cut through.
+			expect(panel.note, `${panel.id}'s subtitle is more than one sentence`).not.toMatch(/\.\s+\S/);
+			const last = panel.note.split(' - ').at(-1) ?? '';
+			expect(last, `${panel.id}'s last clause names no grain`).toMatch(
+				/newest run|last \d+ days/
+			);
+		}
 	});
 
 	test('THE ORACLE: a group heading outweighs the panel titles under it', async ({ page }) => {

@@ -42,8 +42,9 @@
 >
 	<Panel
 		heading="h3"
-		title="Prompt cache"
-		note="Prompt tokens the server read, against the ones it reused instead of reading, over the last {windowDays} days. Read whether a bigger cache would save wall clock."
+		id="prompt-cache"
+		title="How much text the model has to read again each time"
+		note="Text the model reads again is time a larger memory would give back - one column a day, over the last {windowDays} days."
 	>
 		{#if cacheDays.length === 0}
 			<p class="empty" data-machine-panel-empty="cache">

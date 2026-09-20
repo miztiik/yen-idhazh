@@ -29,8 +29,9 @@
 <Panel
 	heading="h3"
 	verdict
-	title="The two clocks, compared"
-	note="Prompt tokens a second, counted twice: once by the item ledger and once by the model server itself. The runtime ledger was created for this check and nothing performed it on a screen. A day where the two disagree is a day whose rates cannot be trusted."
+	id="two-clocks"
+	title="Whether the speed numbers can be trusted"
+	note="Two instruments count the same speed, and a day where they disagree is a day whose figures cannot be quoted - one bar a shard of the newest run."
 >
 	{#if svg === null}
 		<p class="empty" data-machine-panel-empty="clocks">

@@ -14,6 +14,7 @@
 
 	let {
 		title,
+		id = null,
 		note = null,
 		tone = 'neutral',
 		wide = false,
@@ -22,6 +23,10 @@
 		children
 	}: {
 		title: string;
+		/** The id `console.panel_groups` places this panel under. It is what a
+		 * check holds the page to: the title is prose, and a row that rewrites
+		 * prose would otherwise move every address with it. */
+		id?: string | null;
 		note?: string | null;
 		/** The hue of what the panel means, never of how important it looks. */
 		tone?: 'neutral' | 'info' | 'good' | 'warn' | 'bad';
@@ -42,6 +47,7 @@
 <section
 	class="panel-block"
 	data-console-panel={title}
+	data-console-panel-id={id ?? undefined}
 	data-tone={tone}
 	data-panel-verdict={verdict ? 'route' : undefined}
 	data-panel-question={verdict ? 'is it working' : undefined}

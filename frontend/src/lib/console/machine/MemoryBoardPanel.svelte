@@ -22,8 +22,9 @@
 
 <Panel
 	heading="h3"
-	title="How near the runner's ceiling this run got, item by item"
-	note="What the model server held, what it left the kernel, and how long the queue was - one mark an item, with the per-shard maxima and the window's span a grain switch away. The item grain is the one a per-shard maximum cannot show: one item can take the machine most of the way to its ceiling while its shard's figure reads as a normal run."
+	id="memory-board"
+	title="How close an article came to using up the machine's memory"
+	note="One article can take the machine to its ceiling while the part of the run it sits in reads as normal, which is what decides whether a bigger model fits - one mark an item of the newest run."
 	wide
 >
 	<MemoryBoard {board} {span} {windowDays} />
