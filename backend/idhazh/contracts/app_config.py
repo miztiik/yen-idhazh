@@ -85,6 +85,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21",
+            change="observability.host_fingerprint_bandwidth_cache_multiple, additive, default 2.",
+            why="The probe and the console grade a row by it, so it cannot be two numbers.",
+        ),
+        ChangelogEntry(
             version="2026-09-20T01:00",
             change="observability.host_fingerprint_bandwidth_mib renamed to ..._floor_mib.",
             why="The probe now derives its buffer from the cache, so the value is a floor.",
@@ -98,11 +103,6 @@ class AppConfig(Contract):
             version="2026-09-19T09:00",
             change="observability.host_fingerprint_keep_months, additive, default null.",
             why="state/host-fingerprint/ was the one committed ledger with no age at all.",
-        ),
-        ChangelogEntry(
-            version="2026-09-19T01:00",
-            change="adaptive_dedup_threshold: caps in slots, a rise cap, two damping weights.",
-            why="The line falls fast and rises slow, and a slot count is checkable.",
         ),
         ChangelogEntry(
             version="2026-08-21",

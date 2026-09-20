@@ -21,14 +21,26 @@
  * two bars on one domain is a difference the eye reads. The domain comes from
  * the cards drawn, because no runner model publishes a ceiling for either.
  *
- * Pure. The flag vocabulary, the colour ramp and the switch all arrive as
- * arguments, so a test drives them and Guardrail #6 keeps the knobs in `config/`.
+ * **A copy rate the probe could not grade is withheld, not footnoted.** The
+ * buffer has to clear the cache by the same margin the probe sizes itself with,
+ * or nobody can say whether the copy left the cache. Measured 2026-09-21 over
+ * the 65 committed host rows, nine fall short of it.
+ *
+ * **Uptime and the probe clock are sentences, not bars.** Uptime is here
+ * because a freshly started machine has a cold page cache, and the clock prints
+ * alone because the ceiling column it would be measured against is empty on
+ * every row anybody has committed.
+ *
+ * Pure. The flag vocabulary, the colour ramp, the cache margin and the switch
+ * all arrive as arguments, so a test drives them and Guardrail #6 keeps the
+ * knobs in `config/`.
  */
 
 import type { HostFingerprint } from '$lib/server/host-fingerprint';
 import type { MachineRun } from '$lib/server/machine-counters';
 import { recordDestroyed, type LostDay } from '$lib/console/recording';
 import { linearAxis } from './frame';
+import { seconds } from './machine';
 import { percentOf } from './rank';
 import {
 	machineKeys,
@@ -53,11 +65,11 @@ export interface FlagChip {
  * `absent` - nothing read it, so there is no length to draw. `alone` - under two
  * cards carry a reading of this kind, and a bar whose domain is its own value
  * fills its track whatever it says, which reads as a maximum rather than as the
- * only one. `cache` - the bandwidth probe never left L3, so that reading is
- * several times a memory one and shares no track with it
+ * only one. `ungraded` - the probe buffer did not clear the cache by the margin
+ * that proves the copy left it, so nobody can say what the reading measured
  * (`docs/reference/host-metrics.md`).
  */
-export type CardBarState = 'drawn' | 'absent' | 'alone' | 'cache';
+export type CardBarState = 'drawn' | 'absent' | 'alone' | 'ungraded';
 
 /** One reading on the track every card of this panel shares. */
 export interface CardBar {
@@ -102,12 +114,27 @@ export interface MachineCard {
 	l3CacheBytes: number | null;
 	memcpyGibPerSecond: number | null;
 	memcpyProbeMib: number | null;
-	/** True where the probe buffer was at or below L3, so it measured cache. */
-	measuredCache: boolean;
+	/** How long the machine had been up when the probe ran, in seconds.
+	 *
+	 * A freshly started machine has a cold page cache, which is one of the two
+	 * explanations for a run that read its weights back off disk - so a card
+	 * without it leaves the fault strip with one cause instead of two. */
+	bootSeconds: number | null;
+	/** The mean clock across processors when the probe ran, in MHz. Idle rather
+	 * than under load: the probe runs before the job's heaviest step. Printed
+	 * alone, because the ceiling column the host would be measured against is
+	 * empty on every row anybody has committed. */
+	mhzAtProbe: number | null;
+	/** True where the probe buffer cleared the cache by the configured margin, so
+	 * the copy rate is a memory reading somebody can compare. */
+	bufferClearedCache: boolean;
+	/** The margin it had to clear, carried so the card's sentence states it
+	 * without reading config (Guardrail #6). */
+	cacheMargin: number;
 	/** This card's L3 on the track every card of this panel shares, in MiB. */
 	l3Bar: CardBar;
-	/** This card's copy rate on the shared track, in GiB/s. Memory readings
-	 * only - a cache reading is refused rather than pooled with them. */
+	/** This card's copy rate on the shared track, in GiB/s. Graded readings only -
+	 * one whose buffer did not clear the cache is withheld rather than pooled. */
 	bandwidthBar: CardBar;
 	/** Jobs of this run that drew this machine, and jobs that recorded one. */
 	jobsDrawn: number;
@@ -254,6 +281,10 @@ export function machineCards(
 		colourStops: number;
 		/** False where the machine record is switched off. */
 		recording: boolean;
+		/** How many times a machine's cache the probe buffer has to be before its
+		 * copy rate is a memory reading. The same value the probe sizes its buffer
+		 * with, so a row this build grades is graded by the rule that wrote it. */
+		cacheMargin: number;
 		ramp?: MachineRamp;
 		/** The page's own key resolver, built over the same population as the ramp. */
 		keys?: (seen: MachineSeen) => MachineKey;
@@ -339,8 +370,17 @@ export function machineCards(
 			l3CacheBytes: l3,
 			memcpyGibPerSecond: row?.memcpy_gib_s ?? null,
 			memcpyProbeMib: buffer,
-			measuredCache:
-				buffer !== null && buffer > 0 && l3 !== null && buffer * MIB <= l3,
+			bootSeconds: row?.boot_seconds ?? null,
+			mhzAtProbe: row?.mhz_at_probe ?? null,
+			// A machine that reported no cache cannot be graded either way, and an
+			// ungradeable reading is withheld rather than drawn on somebody's track.
+			bufferClearedCache:
+				buffer !== null &&
+				buffer > 0 &&
+				l3 !== null &&
+				l3 > 0 &&
+				buffer * MIB >= options.cacheMargin * l3,
+			cacheMargin: options.cacheMargin,
 			jobsDrawn: drawn.length,
 			jobsTotal: placements.length,
 			where:
@@ -365,7 +405,7 @@ export function machineCards(
 		(mib) => cacheWords(mib * MIB)
 	);
 	const rateTrack = sharedTrack(
-		cards.map((card) => (card.measuredCache ? null : card.memcpyGibPerSecond)),
+		cards.map((card) => (card.bufferClearedCache ? card.memcpyGibPerSecond : null)),
 		rateWords
 	);
 	const drawnCards: MachineCard[] = cards.map((card) => ({
@@ -374,7 +414,7 @@ export function machineCards(
 		bandwidthBar: cardBar(
 			card.memcpyGibPerSecond,
 			rateTrack,
-			card.measuredCache ? 'cache' : null
+			card.bufferClearedCache ? null : 'ungraded'
 		)
 	}));
 
@@ -430,26 +470,61 @@ export function cacheWords(bytes: number | null): string {
 
 /** The bandwidth reading and the buffer it was taken with, in one sentence.
  *
- * They are one sentence because they are one fact. A buffer smaller than L3
- * never leaves cache and reads several times higher than memory, so a rate
- * printed without its buffer is a number a reader will take for a memory figure
- * (`docs/reference/host-metrics.md`).
+ * They are one sentence because they are one fact. A buffer that does not clear
+ * the cache by `cacheMargin` cannot be told apart from a cache reading, and a
+ * rate printed without its buffer is a number a reader will take for a memory
+ * figure (`docs/reference/host-metrics.md`).
+ *
+ * **An ungraded rate is withheld rather than footnoted.** Measured 2026-09-21
+ * over the 65 committed host rows, nine carry a buffer under twice their cache
+ * and those nine are the slowest in the fleet - so the short buffer is a reason
+ * to distrust them rather than evidence they read high. Printed with a caveat
+ * the number still gets compared, and it sits at one end of any ranking.
  *
  * **No reading is a different fact from a rate of zero**, and it gets its own
  * sentence rather than a dash: the probe can be switched off, and a job that was
- * never asked did not measure slowly.
+ * never asked did not copy slowly.
  */
-export function bandwidthSentence(card: MachineCard): string {
+export function copySpeedSentence(card: MachineCard): string {
 	if (card.memcpyGibPerSecond === null) {
-		return 'Bandwidth was not measured on this job.';
+		return 'Copy speed was not measured on this job.';
 	}
-	const rate = rateWords(card.memcpyGibPerSecond);
-	if (card.memcpyProbeMib === null) return `${rate}. The buffer it used was not recorded.`;
-	const against =
-		card.l3CacheBytes === null
-			? `over a ${card.memcpyProbeMib} MiB buffer`
-			: `over a ${card.memcpyProbeMib} MiB buffer against ${cacheWords(card.l3CacheBytes)} of L3`;
-	return card.measuredCache
-		? `${rate}, ${against} - this measured cache, not memory.`
-		: `${rate}, ${against}.`;
+	if (card.memcpyProbeMib === null) {
+		return 'No copy speed: the probe did not record the buffer it used, so nothing says whether the copy left the cache.';
+	}
+	if (card.l3CacheBytes === null || card.l3CacheBytes <= 0) {
+		return `No copy speed: the probe used a ${card.memcpyProbeMib} MiB buffer and this machine reported no cache size, so nothing says whether the copy left the cache.`;
+	}
+	const against = `a ${card.memcpyProbeMib} MiB buffer against ${cacheWords(card.l3CacheBytes)} of L3`;
+	const times = ((card.memcpyProbeMib * MIB) / card.l3CacheBytes).toFixed(2);
+	if (!card.bufferClearedCache) {
+		return `No copy speed: the probe used ${against}, ${times} times it, and a reading has to clear ${card.cacheMargin} times to be sure the copy left the cache.`;
+	}
+	return `${rateWords(card.memcpyGibPerSecond)}, over ${against} - ${times} times it.`;
+}
+
+/** How long the machine had been up when the probe ran, in words.
+ *
+ * On the card because a freshly started machine has a cold page cache, which is
+ * one of the two reasons a run reads its weights back off disk. Without it the
+ * fault strip has one explanation instead of two.
+ */
+export function uptimeSentence(card: MachineCard): string {
+	if (card.bootSeconds === null) return 'Uptime was not recorded on this job.';
+	return `Up ${seconds(card.bootSeconds)} when we measured it.`;
+}
+
+/** What clock the machine was running when the probe ran, in words.
+ *
+ * The probe clock alone. The ceiling the host publishes is empty on every row
+ * anybody has committed - 0 of 65 on 2026-09-21 - so a card that printed a share
+ * of it would divide by a column nothing writes.
+ *
+ * Not a reading under load either: the probe runs before the job's heaviest
+ * step, so the sentence says when it was taken rather than leaving a reader to
+ * assume it is the decode clock.
+ */
+export function clockSentence(card: MachineCard): string {
+	if (card.mhzAtProbe === null) return 'Clock speed was not recorded on this job.';
+	return `${Math.round(card.mhzAtProbe)} MHz when the probe ran, before the job's heaviest step.`;
 }

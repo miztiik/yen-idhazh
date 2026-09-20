@@ -24,9 +24,11 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import {
-	bandwidthSentence,
 	cacheWords,
-	machineCards
+	clockSentence,
+	copySpeedSentence,
+	machineCards,
+	uptimeSentence
 } from '../src/lib/charts/machine-cards';
 import { UNRECORDED_STOP } from '../src/lib/charts/machine-colour';
 import { hostFingerprints, machineRecordDays, watchedFlags } from '../src/lib/server/host-fingerprint';
@@ -37,9 +39,18 @@ import {
 	type MachineRun
 } from '../src/lib/server/machine-counters';
 import { ledgers, plan, type ShardReading } from './support/machine-rows';
+import { observabilityConfig } from '../src/lib/server/config';
 
 const LIMITS: MachineLimits = { contextWindow: 8192, jobTimeoutSeconds: 21_600 };
 const STOPS = 7;
+
+/** The margin these cases drive the pure function with.
+ *
+ * An input to the function under test, never a copy of the shipped default -
+ * the last case in this file reads that default out of the generated schema and
+ * checks the page reads the same one.
+ */
+const MARGIN = 2;
 
 /** The twelve, read where the page reads them: the generated contract. */
 const FLAGS = watchedFlags();
@@ -69,9 +80,9 @@ function fingerprint(over: Partial<HostFingerprint>): HostFingerprint {
 		threads: 4,
 		l3_cache_bytes: 32 * MIB,
 		mhz_max: null,
-		mhz_at_probe: null,
+		mhz_at_probe: 2664.85,
 		flags: 'avx2 f16c fma sse4_2',
-		boot_seconds: null,
+		boot_seconds: 226.59,
 		memcpy_gib_s: 12.4,
 		memcpy_probe_mib: 512,
 		vm_size: 'Standard_D4ads_v5',
@@ -110,6 +121,7 @@ function cardsFor(rows: HostFingerprint[], recording = true) {
 	return machineCards(RUN, rows, {
 		watchedFlags: FLAGS,
 		colourStops: STOPS,
+		cacheMargin: MARGIN,
 		recording
 	});
 }
@@ -187,31 +199,148 @@ test.describe('what a card says a machine can do', () => {
 	});
 });
 
-test.describe('the bandwidth reading and the buffer it was taken with', () => {
-	test('the rate, the buffer and the cache are one sentence', () => {
+test.describe('the copy speed and the buffer it was taken with', () => {
+	test('a buffer that clears the cache prints the rate, the buffer and the margin', () => {
+		// 512 MiB against 32 MiB is 16 times the cache, eight times what it takes
+		// to be sure the copy left it. This is the clean reading.
 		const [card] = cardsFor([fingerprint({})]).cards;
-		expect(bandwidthSentence(card)).toBe(
-			'12.4 GiB/s, over a 512 MiB buffer against 32 MiB of L3.'
+		expect(copySpeedSentence(card)).toBe(
+			'12.4 GiB/s, over a 512 MiB buffer against 32 MiB of L3 - 16.00 times it.'
 		);
-		expect(card.measuredCache).toBe(false);
+		expect(card.bufferClearedCache).toBe(true);
 	});
 
-	test('a buffer at or below L3 says it measured cache, not memory', () => {
-		const [card] = cardsFor([fingerprint({ l3_cache_bytes: 480 * MIB, memcpy_probe_mib: 480 })]).cards;
-		expect(card.measuredCache).toBe(true);
-		expect(bandwidthSentence(card)).toContain('this measured cache, not memory');
+	test('a buffer under twice the cache withholds the rate and says why', () => {
+		// The shape nine of the 65 committed rows carry, measured 2026-09-21: a
+		// 512 MiB buffer against 260 MiB of L3 is 1.97 times it. Those nine are
+		// the SLOWEST rates in the fleet, so the short buffer is a reason to
+		// distrust them rather than evidence they read high - and a caveat under
+		// a number does not stop the number being compared.
+		const [card] = cardsFor([
+			fingerprint({ l3_cache_bytes: 260 * MIB, memcpy_probe_mib: 512, memcpy_gib_s: 21.96 })
+		]).cards;
+		expect(card.bufferClearedCache).toBe(false);
+		const said = copySpeedSentence(card);
+		expect(said).toBe(
+			'No copy speed: the probe used a 512 MiB buffer against 260 MiB of L3, 1.97 times it, ' +
+				'and a reading has to clear 2 times to be sure the copy left the cache.'
+		);
+		// The refused figure is nowhere in the sentence, at any rounding.
+		expect(said).not.toContain('21.9');
+		expect(said).not.toContain('GiB/s');
+	});
+
+	test('the margin is the knob, and moving it moves which readings are graded', () => {
+		// The substitution test (CLAUDE.md Guardrail #6). One machine, one record,
+		// one input changed.
+		const row = fingerprint({ l3_cache_bytes: 260 * MIB, memcpy_probe_mib: 512 });
+		const strict = machineCards(RUN, [row], {
+			watchedFlags: FLAGS,
+			colourStops: STOPS,
+			cacheMargin: 2,
+			recording: true
+		}).cards[0];
+		const loose = machineCards(RUN, [row], {
+			watchedFlags: FLAGS,
+			colourStops: STOPS,
+			cacheMargin: 1,
+			recording: true
+		}).cards[0];
+		expect(strict.bufferClearedCache).toBe(false);
+		expect(loose.bufferClearedCache).toBe(true);
+		expect(copySpeedSentence(loose)).toContain('12.4 GiB/s');
+		expect(copySpeedSentence(strict)).toContain('No copy speed');
+	});
+
+	test('the page grades a row by the same margin the probe sized its buffer with', () => {
+		// Two numbers in two languages would let the page refuse a row the probe
+		// wrote correctly. Read inside the test, so one unexpected shape fails
+		// this case rather than the module (CLAUDE.md section 13).
+		const schema = JSON.parse(
+			readFileSync(resolve(process.cwd(), '..', 'schemas', 'app-config.schema.json'), 'utf8')
+		) as {
+			$defs: {
+				ObservabilityConfig: {
+					properties: { host_fingerprint_bandwidth_cache_multiple: { default: number } };
+				};
+			};
+		};
+		const shipped =
+			schema.$defs.ObservabilityConfig.properties.host_fingerprint_bandwidth_cache_multiple
+				.default;
+		expect(observabilityConfig().host_fingerprint_bandwidth_cache_multiple).toBe(shipped);
+		expect(MARGIN).toBe(shipped);
+	});
+
+	test('a machine that reported no cache cannot be graded either way', () => {
+		const [card] = cardsFor([fingerprint({ l3_cache_bytes: null })]).cards;
+		expect(card.bufferClearedCache).toBe(false);
+		expect(copySpeedSentence(card)).toBe(
+			'No copy speed: the probe used a 512 MiB buffer and this machine reported no cache size, ' +
+				'so nothing says whether the copy left the cache.'
+		);
+	});
+
+	test('a buffer nobody recorded cannot be graded either', () => {
+		const [card] = cardsFor([fingerprint({ memcpy_probe_mib: null })]).cards;
+		expect(card.bufferClearedCache).toBe(false);
+		expect(copySpeedSentence(card)).toBe(
+			'No copy speed: the probe did not record the buffer it used, so nothing says whether the ' +
+				'copy left the cache.'
+		);
 	});
 
 	test('a probe that was switched off is a sentence, never a rate of zero', () => {
 		const [card] = cardsFor([fingerprint({ memcpy_gib_s: null, memcpy_probe_mib: 0 })]).cards;
 		expect(card.memcpyGibPerSecond).toBeNull();
-		expect(bandwidthSentence(card)).toBe('Bandwidth was not measured on this job.');
+		expect(copySpeedSentence(card)).toBe('Copy speed was not measured on this job.');
 		// The cache still prints: one reading being absent does not remove another.
 		expect(cacheWords(card.l3CacheBytes)).toBe('32 MiB');
 	});
 
 	test('a cache nothing recorded prints a dash rather than nothing at all', () => {
 		expect(cacheWords(null)).toBe('-');
+	});
+});
+
+test.describe('what the machine was doing when we asked', () => {
+	test('uptime is on the card, in a clock a person reads', () => {
+		const [card] = cardsFor([fingerprint({ boot_seconds: 226.59 })]).cards;
+		expect(card.bootSeconds).toBe(226.59);
+		expect(uptimeSentence(card)).toBe('Up 3 m 47 s when we measured it.');
+	});
+
+	test('uptime nobody recorded is a sentence, never an uptime of zero', () => {
+		// A machine nobody asked did not just boot, and a freshly booted machine
+		// is the reading this column exists for.
+		const [card] = cardsFor([fingerprint({ boot_seconds: null })]).cards;
+		expect(uptimeSentence(card)).toBe('Uptime was not recorded on this job.');
+	});
+
+	test('the clock prints alone, never as a share of a ceiling nothing writes', () => {
+		// `mhz_max` is empty on all 65 committed rows, measured 2026-09-21. A card
+		// that divided by it would draw the empty-column defect a second time.
+		const [card] = cardsFor([fingerprint({ mhz_at_probe: 2664.85, mhz_max: null })]).cards;
+		expect(card.mhzAtProbe).toBe(2664.85);
+		const said = clockSentence(card);
+		expect(said).toBe("2665 MHz when the probe ran, before the job's heaviest step.");
+		expect(said).not.toContain('%');
+	});
+
+	test('a clock nobody recorded is a sentence, never a clock of zero', () => {
+		const [card] = cardsFor([fingerprint({ mhz_at_probe: null })]).cards;
+		expect(clockSentence(card)).toBe('Clock speed was not recorded on this job.');
+	});
+
+	test('a card off the counters alone carries neither, and states both absences', () => {
+		const named = cardsFor([fingerprint({ job: 'work', shard: 0 })]).cards.find(
+			(card) => card.source === 'name-only'
+		);
+		if (named === undefined) throw new Error('the fixture drew no name-only card');
+		expect(named.bootSeconds).toBeNull();
+		expect(named.mhzAtProbe).toBeNull();
+		expect(uptimeSentence(named)).toContain('not recorded');
+		expect(clockSentence(named)).toContain('not recorded');
 	});
 });
 
@@ -273,16 +402,17 @@ test.describe('L3 and the copy rate as lengths on one track', () => {
 		expect(epyc.bandwidthBar.valueWords).toBe('12.4 GiB/s');
 	});
 
-	test('a cache reading is refused rather than pooled with the memory ones', () => {
-		// A buffer at or below L3 never left cache and reads several times a
-		// memory rate. On one track it would draw the fastest machine of the run.
+	test('an ungraded reading is refused rather than pooled with the graded ones', () => {
+		// A buffer 1.97 times the cache cannot be told apart from a cache reading,
+		// and on one track it would take a length nobody can justify. Nine of the 65
+		// committed rows are this shape.
 		const { epyc, xeon } = twoMachines({
 			l3_cache_bytes: 260 * MIB,
-			memcpy_probe_mib: 256,
-			memcpy_gib_s: 96.0
+			memcpy_probe_mib: 512,
+			memcpy_gib_s: 21.96
 		});
-		expect(xeon.measuredCache).toBe(true);
-		expect(xeon.bandwidthBar.state).toBe('cache');
+		expect(xeon.bufferClearedCache).toBe(false);
+		expect(xeon.bandwidthBar.state).toBe('ungraded');
 		expect(xeon.bandwidthBar.fraction).toBe(0);
 		// And the one memory reading left has nothing to compare against.
 		expect(epyc.bandwidthBar.state).toBe('alone');
@@ -360,6 +490,7 @@ test.describe('when there is nothing to draw', () => {
 		const nowhere = machineCards(null, [], {
 			watchedFlags: FLAGS,
 			colourStops: STOPS,
+			cacheMargin: MARGIN,
 			recording: false
 		});
 		expect(nowhere.nothing).toBe('recording-off');
@@ -367,6 +498,7 @@ test.describe('when there is nothing to draw', () => {
 		const nothing = machineCards(null, [], {
 			watchedFlags: FLAGS,
 			colourStops: STOPS,
+			cacheMargin: MARGIN,
 			recording: true
 		});
 		expect(nothing.nothing).toBe('no-machine');
@@ -379,6 +511,7 @@ test.describe('when there is nothing to draw', () => {
 		const view = machineCards(RUN, [], {
 			watchedFlags: FLAGS,
 			colourStops: STOPS,
+			cacheMargin: MARGIN,
 			recording: false
 		});
 		expect(view.cards.length).toBeGreaterThan(0);
@@ -391,6 +524,7 @@ test.describe('when there is nothing to draw', () => {
 		const view = machineCards(blank, [], {
 			watchedFlags: FLAGS,
 			colourStops: STOPS,
+			cacheMargin: MARGIN,
 			recording: true
 		});
 		// No shard named a machine and no machine row exists, so there is no
@@ -415,11 +549,13 @@ test.describe('a day that published and kept no machine row', () => {
 		const quiet = machineCards(RUN, [], {
 			watchedFlags: FLAGS,
 			colourStops: STOPS,
+			cacheMargin: MARGIN,
 			recording: true
 		});
 		const lost = machineCards(RUN, [], {
 			watchedFlags: FLAGS,
 			colourStops: STOPS,
+			cacheMargin: MARGIN,
 			recording: true,
 			lost: LOST
 		});
@@ -436,12 +572,13 @@ test.describe('a day that published and kept no machine row', () => {
 	test('a run with no placement at all names the loss before the quiet day', () => {
 		const blank = onlyRun([{ shard: 0 }, { shard: 1 }]);
 		expect(
-			machineCards(blank, [], { watchedFlags: FLAGS, colourStops: STOPS, recording: true }).nothing
+			machineCards(blank, [], { watchedFlags: FLAGS, colourStops: STOPS, cacheMargin: MARGIN, recording: true }).nothing
 		).toBe('no-machine');
 		expect(
 			machineCards(blank, [], {
 				watchedFlags: FLAGS,
 				colourStops: STOPS,
+				cacheMargin: MARGIN,
 				recording: true,
 				lost: LOST
 			}).nothing
@@ -452,6 +589,7 @@ test.describe('a day that published and kept no machine row', () => {
 		const view = machineCards(RUN, [], {
 			watchedFlags: FLAGS,
 			colourStops: STOPS,
+			cacheMargin: MARGIN,
 			recording: false,
 			lost: LOST
 		});

@@ -21,7 +21,7 @@
 		heading="h3"
 		id="machine-cards"
 		title="Which machines this run was given"
-		note="A run is not a machine and most runs draw more than one kind, so a rate quoted for the whole run belongs to none of them - one card a machine of the newest run."
+		note="A run is not a machine and most runs draw more than one kind, so a rate quoted for the whole run belongs to none of them - one card a machine of the newest run. Uptime is on each card because a machine started minutes ago still has an empty page cache, which is one of the two reasons a run reads its weights back off disk."
 	>
 		{#if machines.nothing === 'recording-off'}
 			<p class="empty" data-machine-panel-empty="machines-off">

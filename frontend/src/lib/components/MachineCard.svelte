@@ -18,13 +18,25 @@
 	 * than drawn empty where there is nothing to draw or nothing to draw it
 	 * against, and `data-machine-bar-state` says which.
 	 *
+	 * **Uptime and the probe clock are sentences.** One reading each about this
+	 * machine and nothing to compare them against, so a bar would be a track with
+	 * one mark on it. Uptime is on the card because a freshly started machine has
+	 * a cold page cache, which is one of the two reasons a run reads its weights
+	 * back off disk.
+	 *
 	 * The disclosure holds where the platform put the machine, and the microcode
 	 * revision - the cell that moves without anything else moving, so it is the
 	 * only explanation left for a speed change with no other change. A native
 	 * `<details>`, which is keyboard-reachable for free and says which state it
 	 * is in without a second label.
 	 */
-	import { bandwidthSentence, cacheWords, type MachineCard } from '$lib/charts/machine-cards';
+	import {
+		cacheWords,
+		clockSentence,
+		copySpeedSentence,
+		uptimeSentence,
+		type MachineCard
+	} from '$lib/charts/machine-cards';
 	import { isUnrecorded, machineColour } from '$lib/charts/machine-colour';
 
 	/** True where this run's day published articles and the record kept no row.
@@ -133,14 +145,14 @@
 			{/if}
 		</div>
 
-		<div class="bar" data-machine-bar="bandwidth" data-machine-bar-state={card.bandwidthBar.state}>
+		<div class="bar" data-machine-bar="copy-speed" data-machine-bar-state={card.bandwidthBar.state}>
 			{#if card.bandwidthBar.state === 'drawn'}
 				<div
 					class="bar-track"
 					data-machine-bar-cell="track"
 					data-machine-bar-fraction={card.bandwidthBar.fraction.toFixed(6)}
 					role="img"
-					aria-label="Read rate {card.bandwidthBar.valueWords}, against {card.bandwidthBar
+					aria-label="Copy speed {card.bandwidthBar.valueWords}, against {card.bandwidthBar
 						.topWords} - the fastest of the {card.bandwidthBar.of} machines this run measured against memory."
 				>
 					<span
@@ -150,17 +162,20 @@
 					></span>
 				</div>
 			{/if}
-			<p class="reading" data-machine-bandwidth={card.memcpyGibPerSecond ?? ''}>
-				{bandwidthSentence(card)}
+			<p class="reading" data-machine-copy-speed={card.memcpyGibPerSecond ?? ''}>
+				{copySpeedSentence(card)}
 			</p>
 			{#if card.bandwidthBar.state === 'alone'}
 				<p class="note" data-machine-bar-why="alone">{ALONE}</p>
-			{:else if card.bandwidthBar.state === 'cache'}
-				<p class="note" data-machine-bar-why="cache">
-					Not drawn against the others: this reading is cache, not memory.
+			{:else if card.bandwidthBar.state === 'ungraded'}
+				<p class="note" data-machine-bar-why="ungraded">
+					Not drawn against the others: nothing says what this reading measured.
 				</p>
 			{/if}
 		</div>
+
+		<p class="reading" data-machine-clock={card.mhzAtProbe ?? ''}>{clockSentence(card)}</p>
+		<p class="reading" data-machine-uptime={card.bootSeconds ?? ''}>{uptimeSentence(card)}</p>
 	{/if}
 
 	<p class="drawn" data-machine-jobs="{card.jobsDrawn}/{card.jobsTotal}">
