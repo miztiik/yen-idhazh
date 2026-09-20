@@ -450,14 +450,25 @@ test.describe('what the platform has been giving us', () => {
 		await expect(panel).toBeVisible();
 		const list = panel.locator('[data-fleet-list]');
 		if ((await list.count()) === 0) {
-			// At or above the threshold the panel draws bars instead, which is the
-			// other arm and is asserted over built rows in `console-fleet.spec.ts`.
-			await expect(panel.locator('[data-ranked="rows"]')).toBeVisible();
+			// At or above the threshold the panel draws a trend instead. The fold
+			// arithmetic is asserted over built rows in `console-fleet.spec.ts`;
+			// what is asserted here is that the drawn bar and the counts it was
+			// folded from are the same figure.
+			const board = panel.locator('[data-fleet-series]');
+			await expect(board).toBeVisible();
+			await expect(panel.locator('[data-chart]')).toHaveCount(1);
+			await expect(board).toHaveAttribute('data-panel-question', 'is it working');
+			const kept = Number(await board.getAttribute('data-fleet-top-kinds'));
+			const drawn = Number(await board.getAttribute('data-fleet-series'));
+			expect(drawn).toBeLessThanOrEqual(kept + 1);
+			expect(await board.getAttribute('data-fleet-other')).toBe(
+				await board.getAttribute('data-fleet-outside-top')
+			);
 			return;
 		}
 		const placements = Number(await list.getAttribute('data-fleet-list'));
 		expect(placements).toBeLessThan(APPEARANCE.console.fleet_min_rows);
-		await expect(panel.locator('[data-ranked-cell="bar"]')).toHaveCount(0);
+		await expect(panel.locator('[data-chart]')).toHaveCount(0);
 		await expect(panel.locator('[data-fleet-under]')).toContainText(
 			String(APPEARANCE.console.fleet_min_rows)
 		);
@@ -468,5 +479,160 @@ test.describe('what the platform has been giving us', () => {
 		const panel = page.locator('[data-console-panel="What the platform has been giving us"]');
 		const text = await panel.innerText();
 		expect(text).not.toMatch(/\d\s*%|percent|probability|chance of/i);
+	});
+});
+
+test.describe('what a run reads against what it writes', () => {
+	const PANEL = '[data-console-panel="What a run reads against what it writes"]';
+
+	test('one chart, two series, and one axis per unit', async ({ page }) => {
+		await page.goto('/console/machine/');
+		const panel = page.locator(PANEL);
+		await expect(panel).toBeVisible();
+		// One drawing, not two panes. The predecessor drew a chart each for the
+		// two series and neither could be compared to the other.
+		await expect(panel.locator('[data-chart]')).toHaveCount(1);
+		const board = panel.locator('[data-read-write-unit]');
+		await expect(board).toHaveAttribute('data-panel-question', 'is it working');
+		// The shape is picked from a measurement, and the measurement is printed.
+		await expect(board).toHaveAttribute('data-read-write-split', 'no');
+		await expect(panel.locator('[data-read-write-measured]')).toContainText(
+			(await board.getAttribute('data-read-write-ratio')) ?? 'no ratio'
+		);
+	});
+
+	test('the switch moves the unit, and both units read the same runs', async ({ page }) => {
+		await page.goto('/console/machine/');
+		const board = page.locator(PANEL).locator('[data-read-write-unit]');
+		await expect(board).toBeVisible();
+		// The server drew one unit and the radio for it is already checked, so the
+		// first paint and the control agree before a script has run.
+		const opened = await board.getAttribute('data-read-write-unit');
+		await expect(page.locator('[data-shape-switch="work-unit"]')).toHaveAttribute(
+			'data-shape',
+			opened ?? ''
+		);
+
+		const runs = await board.getAttribute('data-read-write-runs');
+		const other = opened === 'seconds' ? 'tokens' : 'seconds';
+		await page.locator(`[data-shape-switch="work-unit"] [data-shape-option="${other}"]`).click();
+		await expect(board).toHaveAttribute('data-read-write-unit', other);
+		// One row set answers both units, so the run count cannot move with the
+		// switch. A count that moved would mean the two grains covered different
+		// runs, and nothing on the page could say which.
+		await expect(board).toHaveAttribute('data-read-write-runs', runs ?? '');
+	});
+
+	test('the seconds grain states its absence rather than drawing an empty chart', async ({
+		page
+	}) => {
+		await page.goto('/console/machine/');
+		const board = page.locator(PANEL).locator('[data-read-write-unit]');
+		const units = page.locator('[data-shape-switch="work-unit"]');
+		await units.locator('[data-shape-option="seconds"]').click();
+		await expect(board).toHaveAttribute('data-read-write-unit', 'seconds');
+		const timed = Number(await board.getAttribute('data-read-write-timed-runs'));
+		if (timed === 0) {
+			await expect(board.locator('[data-work-absent="seconds"]')).toBeVisible();
+			await expect(board.locator('[data-chart]')).toHaveCount(0);
+			return;
+		}
+		// The other arm: a run the ledger timed draws, and the count grain is
+		// never taken down with the clock.
+		await expect(board.locator('[data-work-absent="seconds"]')).toHaveCount(0);
+		await expect(board.locator('[data-chart]')).toHaveCount(1);
+		await units.locator('[data-shape-option="tokens"]').click();
+		await expect(board.locator('[data-chart]')).toHaveCount(1);
+	});
+});
+
+test.describe('what this would have cost somewhere else', () => {
+	const PANEL = '[data-console-panel="What this would have cost somewhere else"]';
+
+	test('one chart beside the four numbers, and the switch opens where the server drew', async ({
+		page
+	}) => {
+		await page.goto('/console/machine/');
+		const panel = page.locator(PANEL);
+		await expect(panel).toBeVisible();
+		const board = panel.locator('[data-cost-shape]');
+		await expect(board).toHaveAttribute('data-panel-question', 'is it working');
+		await expect(panel.locator('[data-chart]')).toHaveCount(1);
+		// The four figures stay. A chart that replaced them would have taken the
+		// per-article reading, which no shape of the chart carries.
+		expect(
+			await panel.locator('[data-cost-figures] [data-cost]').evaluateAll((nodes) =>
+				nodes.map((node) => node.getAttribute('data-cost') ?? '').sort()
+			)
+		).toEqual(['input', 'output', 'per-article', 'total']);
+		// The server drew one shape and the radio for it is already checked, so
+		// the first paint and the control agree before a script has run.
+		const opened = await board.getAttribute('data-cost-shape');
+		await expect(page.locator('[data-shape-switch="cost-shape"]')).toHaveAttribute(
+			'data-shape',
+			opened ?? ''
+		);
+	});
+
+	test('the switch moves the shape and never the days it was taken over', async ({ page }) => {
+		await page.goto('/console/machine/');
+		const board = page.locator(PANEL).locator('[data-cost-shape]');
+		await expect(board).toBeVisible();
+		const days = await board.getAttribute('data-cost-days');
+		const total = await board.getAttribute('data-cost-running-total');
+		expect(Number(days)).toBeGreaterThan(0);
+
+		const opened = await board.getAttribute('data-cost-shape');
+		const other = opened === 'running' ? 'daily' : 'running';
+		await page.locator(`[data-shape-switch="cost-shape"] [data-shape-option="${other}"]`).click();
+		await expect(board).toHaveAttribute('data-cost-shape', other);
+		// One builder call answers both shapes, so neither the day count nor the
+		// total can move with the switch. A total that moved would mean two
+		// derivations of one quantity, with nothing on screen saying which to
+		// believe.
+		await expect(board).toHaveAttribute('data-cost-days', days ?? '');
+		await expect(board).toHaveAttribute('data-cost-running-total', total ?? '');
+	});
+
+	test('the line ends where the four numbers above it say it should', async ({ page }) => {
+		await page.goto('/console/machine/');
+		const panel = page.locator(PANEL);
+		const board = panel.locator('[data-cost-shape]');
+		// A typed rate, because the committed one puts the window total under the
+		// two decimals the headline figure prints, and a comparison taken across
+		// that floor would be decided by the rounding.
+		for (const [which, value] of [
+			['input', '100'],
+			['output', '300']
+		] as const) {
+			const field = page.locator(`[data-rate-input="${which}"]`);
+			await expect(field).toBeEnabled();
+			await field.fill(value);
+			await field.blur();
+		}
+		await expect(panel.locator('[data-cost-figures]')).toHaveAttribute('data-cost-source', 'yours');
+
+		const running = Number(await board.getAttribute('data-cost-running-total'));
+		const printed = Number(
+			(await panel.locator('[data-cost="total"] dd').innerText()).replace(/[^0-9.]/g, '')
+		);
+		expect(running).toBeGreaterThan(0.1);
+		// The sum of the bars and the sum of the tokens are the same arithmetic,
+		// reached two ways. The printed figure carries two decimals, so that is
+		// the precision the comparison is owed.
+		expect(running).toBeCloseTo(printed, 2);
+	});
+
+	test('the split is drawn as bands or printed as a figure, and the panel says which', async ({
+		page
+	}) => {
+		await page.goto('/console/machine/');
+		const board = page.locator(PANEL).locator('[data-cost-shape]');
+		const split = await board.getAttribute('data-cost-split');
+		expect(['drawn', 'printed']).toContain(split);
+		// Whichever arm it took, the measurement it took it on is on the page.
+		const measured = await board.getAttribute('data-cost-thinnest-pct');
+		expect(Number(measured)).toBeGreaterThan(0);
+		await expect(board.locator('[data-cost-measured]')).toContainText(measured ?? 'no measurement');
 	});
 });

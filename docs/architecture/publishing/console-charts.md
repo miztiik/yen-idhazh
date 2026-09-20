@@ -1,6 +1,6 @@
 # Console Charts
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-20
 What a chart on the operator console has to conform to: the one coordinate
 frame every chart draws through, the pointer readout every chart with a shared
 column carries, how a missing number is marked rather than drawn as a zero, and
@@ -500,7 +500,7 @@ an answer. Where a drawing chart's span holds no boundary it says so in type
 | Time to write one summary | Summaries | no | A change moves every bar on it. The axis is seconds, so the window is pooled into one distribution and a day has no position to draw at. |
 | Prompt cache | Hardware | no | A change moves it - the prompt is in the stamp - and its engine-drawn axis carries no rule yet. |
 | Context headroom | Hardware | no | One bar a run, so there is no day edge to draw between. |
-| Tokens per run | Hardware | no | One bar a run, so there is no day edge to draw between. |
+| What a run reads against what it writes | Hardware | no | One group a run, so there is no day edge to draw between. |
 
 The last three are the honest edge of this rule and are recorded rather than
 hidden: two of them are charts a change **does** move, and neither draws,

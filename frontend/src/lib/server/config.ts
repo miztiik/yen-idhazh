@@ -257,6 +257,10 @@ export interface ConsoleConfig {
 	 * Under it the panel lists them in words rather than drawing a distribution
 	 * that is not one. A declared estimate - see `console.py`. */
 	fleet_min_rows: number;
+	/** Machine kinds that keep a bar of their own on the fleet trend before the
+	 * rest fold into one named row. Four, because a fifth bar in a day band goes
+	 * under a pixel at the widest span the control offers - see `console.py`. */
+	fleet_top_kinds: number;
 	/** Distinct machine kinds that must carry a bandwidth reading before bandwidth
 	 * may be plotted against decode speed. Nothing plots it today. */
 	bandwidth_min_kinds: number;
@@ -472,6 +476,7 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	chart_minutes_target: 6,
 	chart_coverage_pct: 5,
 	fleet_min_rows: 160,
+	fleet_top_kinds: 4,
 	bandwidth_min_kinds: 3,
 	machine_colour_stops: 7
 };

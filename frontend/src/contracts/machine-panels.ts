@@ -14,7 +14,14 @@ export const CARD_SOURCE = ['fingerprint', 'counters'] as const;
 
 export type CardSource = (typeof CARD_SOURCE)[number];
 
-/** One kind of machine, counted over the window. */
+/**
+ * One kind of machine, counted over the window.
+ *
+ * The panel also draws this count day by day. That grain is DERIVED from the
+ * `date` every fingerprint row already carries, and is declared nowhere: a
+ * field for it would be a second place for the day grain to disagree with
+ * itself, written by nothing.
+ */
 export interface FleetKind {
 	identity: MachineIdentity;
 

@@ -25,11 +25,24 @@ import {
 	percentileHistory,
 	pooledReadRate,
 	quantile,
+	readAgainstWritten,
 	shardBoard,
-	tokensByRun,
+	workChart,
+	workValues,
+	DEFAULT_WORK_UNIT,
 	PERCENTILES,
-	RUNNER_MEMORY_BYTES
+	RUNNER_MEMORY_BYTES,
+	SHARED_AXIS_LIMIT,
+	type RunWork
 } from '../src/lib/charts/machine';
+import {
+	costChart,
+	costColumns,
+	costLabel,
+	costOverDays,
+	COST_SHAPES,
+	DEFAULT_COST_SHAPE
+} from '../src/lib/charts/cost';
 import {
 	machineCounters,
 	machineLimits,
@@ -61,6 +74,13 @@ const CHART_WIDTH = (
 		readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
 	) as { console: { chart_width: number } }
 ).console.chart_width;
+
+/** `chart.height_px`, which is what a stacked band's height is a share of. */
+const CHART_HEIGHT = (
+	JSON.parse(
+		readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
+	) as { chart: { height_px: number } }
+).chart.height_px;
 
 /** The active model, reached through the pointer and never by filename. */
 const MODELS = JSON.parse(
@@ -631,25 +651,144 @@ test.describe('the percentile curve', () => {
 	});
 });
 
-test.describe('tokens, and what they would have cost somewhere else', () => {
+test.describe('what a run reads against what it writes', () => {
 	const health = [
-		healthRow({ item_id: 'x', input_tokens: 1_000_000, output_tokens: 200_000 }),
-		healthRow({ item_id: 'y', input_tokens: 500_000, output_tokens: 100_000 }),
-		healthRow({ item_id: 'z', run_id: '2026-09-04-2', input_tokens: 2000, output_tokens: 400 }),
+		healthRow({
+			item_id: 'x',
+			input_tokens: 1_000_000,
+			output_tokens: 200_000,
+			prefill_ms: 40_000,
+			decode_ms: 120_000
+		}),
+		healthRow({
+			item_id: 'y',
+			input_tokens: 500_000,
+			output_tokens: 100_000,
+			prefill_ms: 20_000,
+			decode_ms: 60_000
+		}),
+		healthRow({
+			item_id: 'z',
+			run_id: '2026-09-04-2',
+			input_tokens: 2000,
+			output_tokens: 400,
+			prefill_ms: 100,
+			decode_ms: 300
+		}),
 		healthRow({ item_id: 'w', input_tokens: 999, output_tokens: '' })
 	];
 
 	test('a run is the sum of the items that reported both counts', () => {
-		const runs = tokensByRun(health);
-		expect(runs.map((run) => run.runId)).toEqual(['2026-09-04-1', '2026-09-04-2']);
+		const view = readAgainstWritten(health);
+		expect(view.runs.map((run) => run.runId)).toEqual(['2026-09-04-1', '2026-09-04-2']);
 		// `w` reported no output, so it is not an item that wrote nothing.
-		expect(runs[0]).toEqual({
+		expect(view.runs[0]).toEqual({
 			runId: '2026-09-04-1',
 			date: '2026-09-04',
 			input: 1_500_000,
 			output: 300_000,
-			items: 2
+			prefillMs: 60_000,
+			decodeMs: 180_000,
+			items: 2,
+			timed: 2
 		});
+	});
+
+	test('both units are summed over one row set, and the row set is the token one', () => {
+		// The same two rows answer both grains. A row admitted by one and refused
+		// by the other would let the panel's two grains cover different runs.
+		const view = readAgainstWritten(health);
+		expect(view.runs.map((run) => run.items)).toEqual([2, 1]);
+		expect(view.runs.map((run) => run.timed)).toEqual([2, 1]);
+		// `w` is outside both: it is refused on its token counts, and its
+		// durations are never reached.
+		const untimed = readAgainstWritten([
+			...health,
+			healthRow({ item_id: 'v', input_tokens: 7, output_tokens: 3 })
+		]);
+		expect(untimed.runs[0].items).toBe(3);
+		expect(untimed.runs[0].timed).toBe(2);
+		// The extra row moves the count grain and leaves the clock alone, because
+		// it carried tokens and no clock.
+		expect(untimed.runs[0].input).toBe(1_500_007);
+		expect(untimed.runs[0].prefillMs).toBe(60_000);
+	});
+
+	test('the taller bar inverts between the two units, and that is the finding', () => {
+		// Reads outnumber writes 5 to 1; decode outlasts prefill 3 to 1.
+		const view = readAgainstWritten(health);
+		expect(view.taller.tokens).toBe('read');
+		expect(view.taller.seconds).toBe('written');
+		expect(view.ratio.tokens).toBeCloseTo(5.0, 12);
+		expect(view.ratio.seconds).toBeCloseTo(3.0, 12);
+	});
+
+	test('a run nobody timed draws no seconds and still draws its tokens', () => {
+		const view = readAgainstWritten([
+			healthRow({ item_id: 'x', input_tokens: 1000, output_tokens: 200 })
+		]);
+		expect(view.runs[0].input).toBe(1000);
+		expect(view.runs[0].prefillMs).toBeNull();
+		expect(view.runs[0].decodeMs).toBeNull();
+		// Zero timed runs is the seconds grain's absent state, and it is the
+		// figure the page branches on.
+		expect(view.timedRuns).toBe(0);
+		expect(view.ratio.seconds).toBeNull();
+		expect(view.taller.seconds).toBeNull();
+		expect(workChart(view.runs, view, 'seconds').empty).toBe(true);
+		expect(workChart(view.runs, view, 'tokens').empty).toBe(false);
+	});
+
+	test('milliseconds reach the drawing as seconds, and absence stays absence', () => {
+		const view = readAgainstWritten(health);
+		expect(workValues(view.runs[0], 'tokens')).toEqual({ read: 1_500_000, written: 300_000 });
+		expect(workValues(view.runs[0], 'seconds')).toEqual({ read: 60, written: 180 });
+		const untimed = readAgainstWritten([
+			healthRow({ item_id: 'x', input_tokens: 1000, output_tokens: 200 })
+		]);
+		expect(workValues(untimed.runs[0], 'seconds')).toEqual({ read: null, written: null });
+	});
+
+	test('one axis under the measured limit, and the smaller series takes a row past it', () => {
+		const view = readAgainstWritten(health);
+		expect(view.split.tokens).toBe(false);
+		expect(view.split.seconds).toBe(false);
+		const shared = workChart(view.runs, view, 'tokens').option;
+		expect(Array.isArray(shared.grid)).toBe(false);
+		expect(shared.series).toHaveLength(2);
+
+		// Past the limit the smaller side draws under 5 percent of a shared axis
+		// and reads as zero, so it gets its own row on the same categories.
+		const lopsided = readAgainstWritten([
+			healthRow({
+				item_id: 'x',
+				input_tokens: 1_000_000,
+				output_tokens: 1000,
+				prefill_ms: 10,
+				decode_ms: 20
+			})
+		]);
+		expect(lopsided.ratio.tokens).toBeGreaterThan(SHARED_AXIS_LIMIT);
+		expect(lopsided.split.tokens).toBe(true);
+		expect(lopsided.split.seconds).toBe(false);
+		const rows = workChart(lopsided.runs, lopsided, 'tokens').option;
+		expect(Array.isArray(rows.grid)).toBe(true);
+		expect((rows.grid as unknown[]).length).toBe(2);
+		// Larger on top, smaller below, on one set of categories.
+		expect((rows.series as { name: string }[]).map((series) => series.name)).toEqual([
+			'Read',
+			'Written'
+		]);
+		expect((rows.xAxis as { data: string[] }[])[0].data).toEqual(
+			(rows.xAxis as { data: string[] }[])[1].data
+		);
+	});
+
+	test('the unit the panel opens on is named once, and both readers take it from there', () => {
+		// The server draws this unit and the page checks its radio at it. Two
+		// literals would eventually be two units.
+		expect(['tokens', 'seconds']).toContain(DEFAULT_WORK_UNIT);
+		expect(DEFAULT_WORK_UNIT).toBe('seconds');
 	});
 
 	test('input and output are priced apart, at the rate per million', () => {
@@ -679,6 +818,177 @@ test.describe('tokens, and what they would have cost somewhere else', () => {
 		expect(money(0, 'EUR', 2)).toBe('0.00 EUR');
 		// A real cost never prints as zero. The work was not free.
 		expect(money(0.0027, 'USD', 2)).toBe('<0.01 USD');
+	});
+});
+
+test.describe('the counterfactual cost, once it has a shape', () => {
+	const RATE = { currency: 'USD', inputPerMillion: 0.2, outputPerMillion: 0.6 };
+	const SIZE = { heightPx: CHART_HEIGHT };
+
+	function work(date: string, input: number, output: number, items = 1): RunWork {
+		return {
+			runId: `${date}-1`,
+			date,
+			input,
+			output,
+			prefillMs: null,
+			decodeMs: null,
+			items,
+			timed: 0
+		};
+	}
+
+	/** Three days, the middle one twice the first and the last one half of it. */
+	const RUNS = [
+		work('2026-09-01', 1_000_000, 200_000, 4),
+		work('2026-09-02', 2_000_000, 400_000, 8),
+		work('2026-09-03', 500_000, 100_000, 2)
+	];
+
+	test('one call returns both shapes, and the line ends where the bars add up', () => {
+		// The oracle of this panel. Two builder calls could hand a reader a line
+		// and a stack that disagree, with nothing on screen saying which to
+		// believe - which is the whole reason the no-re-shaping rule exists.
+		const shapes = costOverDays(RUNS, RATE, SIZE);
+		const bars = shapes.days.reduce((carry, day) => carry + day.read + day.written, 0);
+		expect(shapes.runningTotal).toBeCloseTo(bars, 12);
+
+		// And the same figure the four numbers above the chart print, which is the
+		// second way the two could have drifted.
+		const totals = RUNS.reduce(
+			(carry, run) => ({ input: carry.input + run.input, output: carry.output + run.output }),
+			{ input: 0, output: 0 }
+		);
+		expect(shapes.runningTotal).toBeCloseTo(costOf(totals, RATE), 12);
+
+		// Recomputed by hand rather than from the module: 3.5 million prompt tokens
+		// at 0.20 is 0.70, and 0.7 million written at 0.60 is 0.42.
+		expect(shapes.runningTotal).toBeCloseTo(1.12, 12);
+	});
+
+	test('the line is the bars added up in order, point by point', () => {
+		const shapes = costOverDays(RUNS, RATE, SIZE);
+		let carry = 0;
+		for (const day of shapes.days) {
+			carry += day.read + day.written;
+			expect(day.running).toBeCloseTo(carry, 12);
+			expect(day.total).toBeCloseTo(day.read + day.written, 12);
+		}
+		// A running total never falls, because a day cannot cost less than nothing.
+		const climbs = shapes.days.map((day) => day.running);
+		expect(climbs).toEqual([...climbs].sort((left, right) => left - right));
+	});
+
+	test('two runs on one date are one column, because the panel asks what a day cost', () => {
+		const shapes = costOverDays(
+			[
+				work('2026-09-01', 1_000_000, 200_000, 4),
+				{ ...work('2026-09-01', 500_000, 100_000, 2), runId: '2026-09-01-2' }
+			],
+			RATE,
+			SIZE
+		);
+		expect(shapes.days).toHaveLength(1);
+		expect(shapes.days[0].items).toBe(6);
+		expect(shapes.days[0].read).toBeCloseTo(0.3, 12);
+		expect(shapes.days[0].written).toBeCloseTo(0.18, 12);
+	});
+
+	test('reading is the bottom band and writing the top, in the drawing and in the key', () => {
+		const shapes = costOverDays(RUNS, RATE, SIZE);
+		const drawn = costChart(shapes, 'daily', RATE.currency).option;
+		// A stack draws its first series at the bottom. Read below, write above,
+		// on every stacked chart on this console.
+		expect((drawn.series as { name: string; stack?: string }[]).map((one) => one.name)).toEqual([
+			'Reading the prompts',
+			'Writing the answers'
+		]);
+		expect((drawn.series as { stack?: string }[]).every((one) => one.stack === 'cost')).toBe(true);
+		// The strip is the key, so it carries the same two in the same order.
+		expect(costColumns(shapes, 'daily', RATE.currency)[0].rows.map((row) => row.label)).toEqual([
+			'Reading the prompts',
+			'Writing the answers'
+		]);
+	});
+
+	test('the axis names the counterfactual, never the currency on its own', () => {
+		// A currency code alone on an axis is the shape a bill takes. The word is
+		// on the label a reader meets before any of the numbers, so it travels
+		// with the drawing rather than sitting in a sentence near it.
+		const shapes = costOverDays(RUNS, RATE, SIZE);
+		for (const shape of ['daily', 'running'] as const) {
+			const name = (costChart(shapes, shape, RATE.currency).option.yAxis as { name: string })
+				.name;
+			expect(name).toContain('Counterfactual cost');
+			expect(name).toContain(RATE.currency);
+			expect(name).not.toMatch(/[$\u00a3\u20ac]/);
+			// And again for a reader who gets the description rather than the axis.
+			const spoken = costLabel(shape, 30);
+			expect(spoken).toContain('counterfactual cost');
+			expect(spoken).toContain('never an amount owed');
+		}
+		expect(costChart(shapes, 'running', RATE.currency).option.yAxis).toHaveProperty(
+			'name',
+			`Counterfactual cost so far, ${RATE.currency}`
+		);
+		// Two named states a reader can see both of, and the default is one of them.
+		expect(COST_SHAPES.map((one) => one.value)).toContain(DEFAULT_COST_SHAPE);
+	});
+
+	test('the running shape is one line over the same days the bars drew', () => {
+		const shapes = costOverDays(RUNS, RATE, SIZE);
+		const line = costChart(shapes, 'running', RATE.currency).option;
+		const series = line.series as { type: string; data: number[] }[];
+		expect(series).toHaveLength(1);
+		expect(series[0].type).toBe('line');
+		expect(series[0].data.at(-1)).toBeCloseTo(shapes.runningTotal, 12);
+		// Same categories in both shapes, so the switch moves the reading and not
+		// the days it is taken over.
+		const bars = costChart(shapes, 'daily', RATE.currency).option;
+		expect((line.xAxis as { data: string[] }).data).toEqual(
+			(bars.xAxis as { data: string[] }).data
+		);
+	});
+
+	test('a band under a pixel is printed rather than drawn as a band', () => {
+		// Measured against the tallest column, because that is what sets the axis.
+		// The committed rate leaves the writing half above a quarter of every day,
+		// so this arm is reached by an operator who prices writing at almost
+		// nothing - which the rate control allows.
+		const thin = costOverDays(RUNS, { ...RATE, outputPerMillion: 0.000_01 }, SIZE);
+		expect(thin.splitTooThin).toBe(true);
+		const whole = costChart(thin, 'daily', RATE.currency).option;
+		expect((whole.series as unknown[]).length).toBe(1);
+		expect((whole.series as { name: string }[])[0].name).toBe('Counterfactual, that day');
+		// The split does not vanish with the band: it is a measured figure the
+		// panel prints, and the number is on the view for the page to print it.
+		const plot = CHART_HEIGHT - 30 - 26;
+		expect(thin.thinnestShare ?? 0).toBeGreaterThan(0);
+		expect((thin.thinnestShare ?? 0) * plot).toBeLessThan(1);
+
+		// At the committed rate both halves are bands, and the measurement says so.
+		const drawn = costOverDays(RUNS, RATE, SIZE);
+		expect(drawn.splitTooThin).toBe(false);
+		expect((drawn.thinnestShare ?? 0) * plot).toBeGreaterThan(1);
+	});
+
+	test('no day is an absence, not an empty plot', () => {
+		const nothing = costOverDays([], RATE, SIZE);
+		expect(nothing.days).toEqual([]);
+		expect(nothing.runningTotal).toBe(0);
+		expect(nothing.thinnestShare).toBeNull();
+		expect(costChart(nothing, 'daily', RATE.currency).empty).toBe(true);
+		expect(costChart(nothing, 'running', RATE.currency).empty).toBe(true);
+		// A run with no date cannot be laid on a time axis and is not a day.
+		const undated = costOverDays([work('', 1_000, 200)], RATE, SIZE);
+		expect(undated.days).toEqual([]);
+	});
+
+	test('the shape the panel opens on is named once, and both readers take it from there', () => {
+		// The server draws this shape and the page checks its radio at it. Two
+		// literals would eventually be two shapes.
+		expect(['daily', 'running']).toContain(DEFAULT_COST_SHAPE);
+		expect(DEFAULT_COST_SHAPE).toBe('daily');
 	});
 });
 
