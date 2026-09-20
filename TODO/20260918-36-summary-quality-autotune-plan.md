@@ -120,7 +120,7 @@ runs), [`docs/agents/bootstrap.md`](../docs/agents/bootstrap.md) (which page own
 touches), and [`docs/how-to/run-the-gates.md`](../docs/how-to/run-the-gates.md) (the gate commands). The
 design of record is [`docs/concepts/summary-quality-autotune.md`](../docs/concepts/summary-quality-autotune.md)
 (the four metrics, the fold-fit loop, the publish gate). The loop this plan mirrors is the adaptive
-merge line in [`docs/architecture/publishing/same-story.md`](../docs/architecture/publishing/same-story.md)
+merge line in [`docs/architecture/publishing/auto-tune-content-similarity.md`](../docs/architecture/publishing/auto-tune-content-similarity.md)
 - Row 1 extracts its fit core from `backend/idhazh/similarity/fit.py`. Owning pages per surface:
 contracts + schema versioning ->
 [`docs/architecture/contracts/schemas.md`](../docs/architecture/contracts/schemas.md); evaluation + the
@@ -651,7 +651,7 @@ removed in the same commit.
 
 ## See also
 
-- [`docs/architecture/publishing/same-story.md`](../docs/architecture/publishing/same-story.md) - the
+- [`docs/architecture/publishing/auto-tune-content-similarity.md`](../docs/architecture/publishing/auto-tune-content-similarity.md) - the
   merge line that fits itself: the loop this plan mirrors, and the fit core Row 1 extracts.
 - [`20260918-35-search-eval-key-points-plan.md`](20260918-35-search-eval-key-points-plan.md) - the
   cleanup and the recorded-only scorers this plan consumes.

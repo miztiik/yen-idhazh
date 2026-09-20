@@ -19,7 +19,7 @@ Then read the one page that owns the thing you are changing.
 | --- | --- |
 | A persisted shape - a payload, a ledger, a config, a schema | `CLAUDE.md` section 11, then the model under `backend/idhazh/contracts/` |
 | A published page | [`../concepts/design-system.md`](../concepts/design-system.md), and the surface's own code |
-| Whether two items are the same story, or why one ran twice | [`../architecture/publishing/same-story.md`](../architecture/publishing/same-story.md) - the flowchart near the top is the whole rule |
+| Whether two items are the same story, or why one ran twice | [`../architecture/publishing/auto-tune-content-similarity.md`](../architecture/publishing/auto-tune-content-similarity.md) - the flowchart near the top is the whole rule |
 | A prompt, or anything fetched text reaches | `CLAUDE.md` Guardrail #11, then `docs/architecture/summarize/` |
 | Which model runs, or a figure that belongs to one | [`../reference/models.md`](../reference/models.md) - one row a model, pointing at its dossier |
 | What a column on the eval row means | [`../concepts/summary-metrics.md`](../concepts/summary-metrics.md) - arrive holding the column name |
