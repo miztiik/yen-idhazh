@@ -192,8 +192,7 @@ both ages are fourteen months.
 The telemetry projection `frontend/public/telemetry/<YYYY-MM>.csv` was the one
 place in the tree where the layout existed and the rule did not:
 `public_telemetry.publish` globbed `state/item-health/` and rewrote every month
-it found, on every run, for an answer it already had. That was
-[audit finding 11](../reference/data-growth-audit.md), and row 19 of the
+it found, on every run, for an answer it already had. Row 19 of the
 [constant-cost-reads plan](../../TODO/20260906-constant-cost-reads-plan.md)
 closed it in #484: the writer now takes the row above, writing only the months a
 caller names as changed and rewriting a named month only when its bytes differ.
@@ -312,7 +311,7 @@ commitment to convert any of them.
 | --- | --- | --- | --- |
 | Feed retirements | `state/feed-retirements.csv` | `ledger.append_retirements` | A retirement is permanent for one address. A run that forgot one would start asking a dead server again. |
 | Day validations | `state/day-validations.csv` | `stages.validate_days.stage_validate_days`, through `stages.validate_days._record_receipts` | A receipt file, read once a run. No window, so a partition would open every file anyway. |
-| Source health view | `frontend/public/source-health.json` | `telemetry.publish.source_health` | One document, rewritten whole each run. The read behind it was [audit finding 12](../reference/data-growth-audit.md); row 20 of the constant-cost-reads plan bounded it to the recorded dates it needs (#485), so it no longer walks all history to write the same document. |
+| Source health view | `frontend/public/source-health.json` | `telemetry.publish.source_health` | One document, rewritten whole each run. Row 20 of the constant-cost-reads plan bounded the read behind it to the recorded dates it needs (#485), so it no longer walks all history to write the same document. |
 | Training corpus | `corpus/corpus.jsonl`, `corpus/corpus.meta.json`, `corpus/holdout.txt` | `idhazh.corpus`, rolled by `backend/utilities/data_wrangler.py` | A rolling training window bounded by `finetune.corpus_rows` and by `prune.yml`, not by a calendar. Deliberately given no union merge driver, because the union of two rolls holds evicted rows again. |
 | Published days | `frontend/public/digest/<YYYY>/<MM>/<DD>/` | `stages.assemble.stage_assemble` | Partitioned by **day**, and listed here because it is the tree the day grain came from rather than because it is unpartitioned. A day is frozen the moment it is written. The month partitions above are keyed off this tree, and so is `state/published/`. |
 
@@ -340,4 +339,5 @@ Authority: `CLAUDE.md` section 5, 2026-09-11.
 - [../architecture/publishing/layout.md](../architecture/publishing/layout.md#the-month-search-index) - the month search index, its ceilings, and what an unpublish owes each grain.
 - [../architecture/sources/item-health.md](../architecture/sources/item-health.md) - the fastest-growing collection, and what would move it to a shorter period.
 - [../reference/repository-layout.md](../reference/repository-layout.md) - what each top-level directory holds and who writes it.
+- [../reference/data-growth.md](../reference/data-growth.md) - where growing work is heading, what a replacement owes before the old path goes, and the shortcuts that are not answers.
 - [../../CLAUDE.md](../../CLAUDE.md) - Guardrail #12 (nothing costs more as the repository grows) and section 11 (schema versioning).

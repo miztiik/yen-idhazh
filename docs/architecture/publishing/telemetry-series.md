@@ -31,11 +31,9 @@ month outside that set is skipped without being read, unless its shard is missin
 on a fresh checkout - and `_write_if_changed` then writes a named month only when
 its projected bytes differ from the committed shard. So a re-run with no new data
 writes no shard, and a run that adds one day rewrites that day's month and no
-other. That closed finding 11 of
-[../../reference/data-growth-audit.md](../../reference/data-growth-audit.md) (row
-19 of the constant-cost-reads plan, #484); before it, `publish` globbed
-`state/item-health/` and rewrote every month it found on every run, so an
-ordinary run paid for every month the project had ever published. The shard is
+other. Row 19 of the constant-cost-reads plan closed it in #484; before that,
+`publish` globbed `state/item-health/` and rewrote every month it found on every
+run, so an ordinary run paid for every month the project had ever published. The shard is
 still a full rewrite of the source month, never an append - a stacked pair of
 rewrites is a file with every row twice.
 
