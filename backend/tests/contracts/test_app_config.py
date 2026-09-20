@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import re
+from pathlib import Path
 from typing import Final
 
 import pytest
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
+from idhazh import config
 from idhazh.classify import dag
 from idhazh.classify.calls import label_budget_tokens, summarize_and_plan_budget_tokens
 from idhazh.contracts import story_similarity_distribution
@@ -49,6 +51,7 @@ from ._fixtures import (
     CONFIG_FILES,
     CONFIG_NOT_OWNED,
     committed_models,
+    copy_config,
 )
 
 pytestmark = pytest.mark.contract
@@ -558,6 +561,115 @@ def test_the_console_window_presets_are_a_knob_the_frontend_agrees_with() -> Non
     mirrored = re.search(r"window_presets:\s*\[([\d,\s]+)\]", reader)
     assert mirrored is not None, "the frontend console defaults dropped window_presets"
     assert [int(part) for part in mirrored.group(1).split(",")] == offered.window_presets
+
+
+#: The four thresholds that decide when a quiet day is drawn as a loud one, and
+#: what the pair means: crossing the first fills that day's tile, crossing the
+#: second puts the day in the panel's headline sentence.
+RARE_EVENT_THRESHOLDS: Final = (
+    "processor_lost_pct_marked",
+    "processor_lost_pct_named",
+    "model_disk_reads_marked",
+    "model_disk_reads_named",
+)
+
+#: A setting for each, chosen to differ from every committed value, so a load
+#: that ignored the file resolves something this cannot mistake for a pass.
+THRESHOLDS_MOVED: Final = {
+    "processor_lost_pct_marked": 2.5,
+    "processor_lost_pct_named": 40.0,
+    "model_disk_reads_marked": 500,
+    "model_disk_reads_named": 9000,
+}
+
+
+def test_moving_a_rare_event_threshold_in_the_config_moves_what_resolves(
+    tmp_path: Path,
+) -> None:
+    """Guardrail #6's substitution test: edit the file, and the value moves with it.
+
+    Both sides go through the same loader, so the only difference between them
+    is the file on disk. A threshold held as a literal in the module that draws
+    the strip would resolve the same on both sides, which is the defect this
+    row exists to prevent and the one thing this check can fail for.
+
+    What it cannot settle: whether the resolved number reaches a drawn tile.
+    The two panels that read these four are not written yet, and the parity
+    check below is as far as the value can be followed today.
+    """
+    copy_config(tmp_path)
+    appearance = json.loads(read_text(tmp_path / "config" / "appearance.json"))
+    appearance["console"] |= THRESHOLDS_MOVED
+    (tmp_path / "config" / "appearance.json").write_text(
+        AppearanceConfig.model_validate(appearance).to_json(), encoding="utf-8", newline="\n"
+    )
+
+    committed = config.load(CONFIG_DIR).appearance.console
+    moved = config.load(tmp_path / "config").appearance.console
+    for field, value in THRESHOLDS_MOVED.items():
+        assert getattr(committed, field) != value, (
+            f"console.{field} already ships at {value}, so this case no longer asks "
+            "whether the file decides it - pick another value"
+        )
+        assert getattr(moved, field) == value, (
+            f"console.{field} did not follow config/appearance.json, so something "
+            "other than the config file decides when a day is drawn as loud"
+        )
+
+
+def test_the_rare_event_thresholds_are_knobs_the_frontend_agrees_with() -> None:
+    """The same three-copies problem the chart size has, four fields along.
+
+    `frontend/src/contracts/appearance-config.ts` is generated and the drift
+    gate holds it. The `ConsoleConfig` interface in `config.ts` is not: it is
+    what a clone with no `config/` renders from, so a field missing there is a
+    console drawing a threshold nobody set.
+    """
+    drawn = AppearanceConfig.from_json(read_text(CONFIG_DIR / "appearance.json")).console
+    fresh = ConsoleConfig()
+    reader = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "server" / "config.ts")
+
+    for field in RARE_EVENT_THRESHOLDS:
+        shipped = getattr(drawn, field)
+        assert getattr(fresh, field) == shipped, (
+            f"config/appearance.json sets {field}={shipped} and a clone with no "
+            f"config/ would use {getattr(fresh, field)}"
+        )
+        mirrored = re.search(rf"{field}: ([\d.]+)", reader)
+        assert mirrored is not None, f"the frontend console defaults dropped {field}"
+        assert float(mirrored.group(1)) == float(shipped), (
+            f"the frontend's own {field} fallback is {mirrored.group(1)} and the "
+            f"console resolves {shipped}"
+        )
+
+
+def test_a_threshold_that_names_a_day_the_strip_never_marked_is_refused() -> None:
+    """Two thresholds a signal only work in one order.
+
+    Equal is allowed, and the committed disk-read pair ships equal: a signal
+    whose expected value is zero has no distribution to separate the two, so
+    every day worth marking is worth naming.
+    """
+    with pytest.raises(ValidationError, match="processor_lost_pct_marked"):
+        ConsoleConfig(processor_lost_pct_marked=20.0, processor_lost_pct_named=10.0)
+    with pytest.raises(ValidationError, match="model_disk_reads_marked"):
+        ConsoleConfig(model_disk_reads_marked=100, model_disk_reads_named=1)
+
+    equal = ConsoleConfig(model_disk_reads_marked=7, model_disk_reads_named=7)
+    assert equal.model_disk_reads_marked == equal.model_disk_reads_named
+
+
+def test_a_threshold_that_would_mark_a_day_where_nothing_happened_is_refused() -> None:
+    """The floor is what keeps a rare-event strip rare.
+
+    A threshold of zero fills every tile of every day, including the days the
+    host took nothing and the kernel reclaimed nothing - which is the cry-wolf
+    failure the strip replaced a line chart to avoid.
+    """
+    with pytest.raises(ValidationError, match="processor_lost_pct_marked"):
+        ConsoleConfig(processor_lost_pct_marked=0.0)
+    with pytest.raises(ValidationError, match="model_disk_reads_marked"):
+        ConsoleConfig(model_disk_reads_marked=0)
 
 
 def test_the_windows_and_the_reading_marks_are_the_spans_the_committed_config_names() -> None:

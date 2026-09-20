@@ -173,6 +173,18 @@ export interface ConsoleConfig {
 	/** How many machines get a colour of their own before the rest fold into one row named in words. Seven, because the chart ramp holds eight stops and the eighth is reserved for shards that recorded no machine at all - an absence is not a machine and must not take a machine's hue. Folding is what keeps the assignment bounded: without it a seventh kind would either collide with a sixth or need a ninth stop nobody has drawn. */
 	machine_colour_stops?: number;
 
+	/** The share of an interval the host gave to another tenant's machine at which that day is drawn as a filled tile rather than an outlined one. One percent is where a reading stops rounding to zero, which is a statement about the platform's own accounting rather than about this design. A floor above zero, because a threshold of zero would mark a day on which nothing was taken. A DECLARED ESTIMATE and not a measurement (CLAUDE.md Guardrail #10): no committed row separates what the host took from what we spent, because the busy figure holds both. What replaces it is the distribution of the separated reading over the first day that records one. */
+	processor_lost_pct_marked?: number;
+
+	/** The share at which the panel's headline sentence names that day as its worst case, instead of leaving the tiles to speak for themselves. Ten percent is anchored on the work shard's own budget: a tenth of run.shard_timeout_minutes is the size of loss that turns a shard which fits into one which does not. A DECLARED ESTIMATE on the same footing as the mark above it, and the same reading replaces both. */
+	processor_lost_pct_named?: number;
+
+	/** How many times the model server had to go to disk for memory it expected to be resident before that day is drawn as a filled tile. Counted over the items that are NOT first in their shard: the server maps its weights, so the first touch of each page is itself a read from disk, and item_index 0 records a server starting rather than a kernel taking pages back. What that exclusion costs, stated rather than implied: a reclaim inside the first item of a shard is invisible, and the panel says so. One, because with the exclusion the honest expected value is zero and the first recorded read is the finding. A DECLARED ESTIMATE and not a measurement (CLAUDE.md Guardrail #10); what replaces it is the first day recording a non-zero count away from index 0. */
+	model_disk_reads_marked?: number;
+
+	/** How many such reads put that day in the panel's headline sentence. Equal to the mark, and deliberately: a signal whose expected value is zero has no distribution to separate the two, so every day worth marking is worth naming. The pair is two knobs rather than one so that the day a steady background appears, somebody raises this number in the config file instead of editing a chart. */
+	model_disk_reads_named?: number;
+
 	/** The order the panels of a console route are drawn in, and the headings they group under. Keyed by route id. Thirteen equal siblings down one column give the eye nothing to land on first, so the Hardware route reads as three questions - the run that just finished, the span the control is open on, and the machines the platform handed us - and the first panel of the first group is the one that verdicts the rest. The Pipelines route takes one untitled group, because what it needed was an order rather than a grouping. An id here is a panel the route implements, and the route refuses a list that names one it does not. */
 	panel_groups?: Record<string, ConsolePanelGroup[]>;
 }

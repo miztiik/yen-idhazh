@@ -499,6 +499,11 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-20T13:00",
+            change="Four console thresholds, additive: lost processor time and model disk reads.",
+            why="Whether a day is marked or named is a setting, not a literal in a chart.",
+        ),
+        ChangelogEntry(
             version="2026-09-20T12:00",
             change="console.panel_groups, additive, default three groups on Hardware.",
             why="Panel order and grouping were markup order, which no config could move.",
@@ -512,11 +517,6 @@ class AppearanceConfig(Contract):
             version="2026-09-18",
             change="console.precision_axis_multiple, additive, default 10.0.",
             why="The precision line needed a fixed axis, and a bare 10 is a hard-coded one.",
-        ),
-        ChangelogEntry(
-            version="2026-09-16T00:40",
-            change="digest.draw_same_story, additive, default true.",
-            why="The page folds a group into one card, and this is the one-edit revert.",
         ),
         ChangelogEntry(
             version="2026-08-29",
