@@ -20,7 +20,7 @@ ledgers add no telemetry column and no reader sees a cell of any of them.
 | Group | Panel | Grain | The sentence it is for |
 | --- | --- | --- | --- |
 | What the machine was doing | Whether the speed numbers can be trusted | one bar a shard | Whether the day's rates can be trusted at all. |
-| What the machine was doing | Which machines this run was given | one card a machine | What machine this is, what it can do against the others this run drew, and whether its record survived the day. |
+| What the machine was doing | Which machines this run was given | one card a machine | What machine this is, what it can do against the others this run drew, what clock and uptime it had when we got it, and whether its record survived the day. |
 | What the machine was doing | Whether some machines do the same work slower | one group a machine | What a written token costs against a read one, on the machine that paid it. |
 | What the machine was doing | What kinds of machine we keep being given | one group a day, one bar a machine kind | What kinds of machine we keep being handed, and whether that is changing. |
 | What the machine was doing | Where the machine's time went besides the model | one track a figure, over the window | How busy the machine was, and how long the weights took to open, each against the window that measured it. |
