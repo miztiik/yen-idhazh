@@ -24,7 +24,14 @@
 						"jobUsedPct": 37,
 						"cpuModel": "AMD EPYC 9V45",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 4070
 					},
 					{
@@ -45,7 +52,14 @@
 						"jobUsedPct": 32,
 						"cpuModel": "AMD EPYC 9V74",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 3788
 					},
 					{
@@ -66,7 +80,14 @@
 						"jobUsedPct": 27,
 						"cpuModel": "AMD EPYC 9V45",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 3573
 					},
 					{
@@ -87,7 +108,14 @@
 						"jobUsedPct": 32,
 						"cpuModel": "AMD EPYC 9V74",
 						"cpuBusyPct": 85,
+						"cores": null,
+						"cpuBusyMedianPct": 89.5,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": 12843735542,
+						"rssMedianBytes": 12274406735.5,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 3808
 					}
 				],
@@ -219,7 +247,14 @@
 						"jobUsedPct": 39,
 						"cpuModel": "AMD EPYC 9V45",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 3683
 					},
 					{
@@ -240,7 +275,14 @@
 						"jobUsedPct": 28,
 						"cpuModel": "AMD EPYC 9V74",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 4047
 					},
 					{
@@ -261,7 +303,14 @@
 						"jobUsedPct": 34,
 						"cpuModel": "AMD EPYC 9V45",
 						"cpuBusyPct": 85,
+						"cores": null,
+						"cpuBusyMedianPct": 89,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": 12940139364,
+						"rssMedianBytes": 12456037942,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 4033
 					},
 					{
@@ -282,7 +331,14 @@
 						"jobUsedPct": 39,
 						"cpuModel": "AMD EPYC 9V74",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 4002
 					}
 				],
@@ -414,7 +470,14 @@
 						"jobUsedPct": 37,
 						"cpuModel": "AMD EPYC 9V45",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 3773
 					},
 					{
@@ -435,7 +498,14 @@
 						"jobUsedPct": 34,
 						"cpuModel": "AMD EPYC 9V74",
 						"cpuBusyPct": 85,
+						"cores": null,
+						"cpuBusyMedianPct": 90.5,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": 12939000538,
+						"rssMedianBytes": 12735120204,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 4062
 					},
 					{
@@ -456,7 +526,14 @@
 						"jobUsedPct": 35,
 						"cpuModel": "AMD EPYC 9V45",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 3805
 					},
 					{
@@ -477,7 +554,14 @@
 						"jobUsedPct": 39,
 						"cpuModel": "AMD EPYC 9V74",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 3888
 					}
 				],
@@ -609,7 +693,14 @@
 						"jobUsedPct": 30,
 						"cpuModel": "AMD EPYC 9V45",
 						"cpuBusyPct": 86,
+						"cores": null,
+						"cpuBusyMedianPct": 89.5,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": 12943712211,
+						"rssMedianBytes": 12594741538.5,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 3759
 					},
 					{
@@ -630,7 +721,14 @@
 						"jobUsedPct": 29,
 						"cpuModel": "AMD EPYC 9V74",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 3934
 					},
 					{
@@ -651,7 +749,14 @@
 						"jobUsedPct": 32,
 						"cpuModel": "AMD EPYC 9V45",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 3619
 					},
 					{
@@ -672,7 +777,14 @@
 						"jobUsedPct": 40,
 						"cpuModel": "AMD EPYC 9V74",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 3521
 					}
 				],
@@ -804,7 +916,14 @@
 						"jobUsedPct": 30,
 						"cpuModel": "AMD EPYC 9V45",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 3994
 					},
 					{
@@ -825,7 +944,14 @@
 						"jobUsedPct": 37,
 						"cpuModel": "AMD EPYC 9V74",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 3610
 					},
 					{
@@ -846,7 +972,14 @@
 						"jobUsedPct": 32,
 						"cpuModel": "AMD EPYC 9V45",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 3966
 					},
 					{
@@ -867,7 +1000,14 @@
 						"jobUsedPct": 29,
 						"cpuModel": "AMD EPYC 9V74",
 						"cpuBusyPct": 85,
+						"cores": null,
+						"cpuBusyMedianPct": 91.5,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": 12981066495,
+						"rssMedianBytes": 12532599167.5,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 3632
 					}
 				],
@@ -999,7 +1139,14 @@
 						"jobUsedPct": 32,
 						"cpuModel": "AMD EPYC 9V45",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 4120
 					},
 					{
@@ -1020,7 +1167,14 @@
 						"jobUsedPct": 38,
 						"cpuModel": "AMD EPYC 9V74",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 3641
 					},
 					{
@@ -1041,7 +1195,14 @@
 						"jobUsedPct": 37,
 						"cpuModel": "AMD EPYC 9V45",
 						"cpuBusyPct": 85,
+						"cores": null,
+						"cpuBusyMedianPct": 88.5,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": 12888689111,
+						"rssMedianBytes": 12593917785,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 4250
 					},
 					{
@@ -1062,7 +1223,14 @@
 						"jobUsedPct": 33,
 						"cpuModel": "AMD EPYC 9V74",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 3975
 					}
 				],
@@ -1194,7 +1362,14 @@
 						"jobUsedPct": 36,
 						"cpuModel": "AMD EPYC 9V45",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 3819
 					},
 					{
@@ -1215,7 +1390,14 @@
 						"jobUsedPct": 37,
 						"cpuModel": "AMD EPYC 9V74",
 						"cpuBusyPct": 85,
+						"cores": null,
+						"cpuBusyMedianPct": 88.5,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": 12961785736,
+						"rssMedianBytes": 12586207787.5,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 3529
 					},
 					{
@@ -1236,7 +1418,14 @@
 						"jobUsedPct": 34,
 						"cpuModel": "AMD EPYC 9V45",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 3540
 					},
 					{
@@ -1257,7 +1446,14 @@
 						"jobUsedPct": 37,
 						"cpuModel": "AMD EPYC 9V74",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 4083
 					}
 				],
@@ -1389,7 +1585,14 @@
 						"jobUsedPct": 31,
 						"cpuModel": "AMD EPYC 9V45",
 						"cpuBusyPct": 86,
+						"cores": null,
+						"cpuBusyMedianPct": 88.5,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": 12796443597,
+						"rssMedianBytes": 12483053234.5,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 3560
 					},
 					{
@@ -1410,7 +1613,14 @@
 						"jobUsedPct": 28,
 						"cpuModel": "AMD EPYC 9V74",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 4074
 					},
 					{
@@ -1431,7 +1641,14 @@
 						"jobUsedPct": 37,
 						"cpuModel": "AMD EPYC 9V45",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 3716
 					},
 					{
@@ -1452,7 +1669,14 @@
 						"jobUsedPct": 34,
 						"cpuModel": "AMD EPYC 9V74",
 						"cpuBusyPct": null,
+						"cores": null,
+						"cpuBusyMedianPct": null,
+						"cpuBusyMaxPct": null,
 						"peakRssBytes": null,
+						"rssMedianBytes": null,
+						"loadMax": null,
+						"swapFreeMinBytes": null,
+						"swapTotalBytes": null,
 						"modelLoadMs": 4013
 					}
 				],

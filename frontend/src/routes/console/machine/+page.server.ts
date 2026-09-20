@@ -317,7 +317,7 @@ export async function load() {
 	// control says - a window is a span, and narrowing a span cannot narrow a
 	// single run into something smaller.
 	const newest: MachineRun | null = counters.runs[0] ?? null;
-	const board = shardBoard(newest, limits.jobTimeoutSeconds);
+	const board = shardBoard(newest, limits.jobTimeoutSeconds, console_.chart_width);
 	const memory = peakMemory(newest);
 	// One group a machine, never one figure over all of them. Measured 2026-09-17
 	// over the committed counters ledger, 86 of the 90 runs that name a processor
