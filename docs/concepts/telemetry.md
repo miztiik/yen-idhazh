@@ -275,8 +275,8 @@ payloads can say and no more.
 **A row is one planned item on one run**: `(date, run_id, item_id)`. The ledger
 filters on that identity before it writes, so assemble's copy of a row the worker
 already committed is the same row and lands once. That filter is what makes a
-second writer safe: `merge=union` keeps the lines from both sides rather than
-collapsing them, the published projection copies every row into the file the
+second writer safe: nothing collapses two identical lines after the fact,
+the published projection copies every row into the file the
 console reads, and an append-only ledger cannot correct a row afterwards.
 
 The filter reads the file the job checked out, and a checkout is pinned to the
@@ -348,7 +348,7 @@ one item are one record to the fold, and `ledger.ITEM_HEALTH_RULE` keeps the row
 that names a job over the row that does not.
 
 `state/runtime-counters.csv` was the last store to join them, on the same day,
-and it was deleted on 2026-09-19 rather than moved. It held what each
+and it was deleted on 2026-09-20 rather than moved. It held what each
 model-server job's llama-server counted for a whole shard, in one flat file every
 work shard appended to. Four of its cells had a reader and all four now sit on
 the host row, which is already filed by day and already keyed
@@ -472,7 +472,7 @@ Read this table before proposing a merge. A store folds only when it fails **eve
 | --- | --- | --- | --- |
 | `item-health` | an item | 14 months | **the census.** Whatever folds, folds here |
 | `visual-prunes` | a run | with the pictures | **FOLD** into a run-grain ledger. 41 rows, and a run is not an item |
-| `validation-<date>.csv` | a model | never | **RETIRE.** Four rows with a date in the filename. The numbers belong in the measurement record |
+| `<trial>/validation` | a model | never | **MOVED 2026-09-18** to `state/<run.trial_state_dirname>/validation/<YYYY>/<MM>/<DD>.csv`, where it was `state/validation-<date>.csv` at the root of `state/`. A date in a filename is not a partition, and a hardcoded path let a trial dispatch write production state |
 | `day-validations.csv` | a day | with the day | **KEEP**, move to day files. A receipt is not an item |
 | `scores` | an observation | 14 months | **KEEP.** One item holds several rows - re-measurement is the point, and an item key allows only one |
 | `score-index` | a digest | with the scores | **KEEP.** 76 bytes an observation against 819 for a census row. Reading the wide store to answer a narrow question costs 10.8 times more |
@@ -480,7 +480,7 @@ Read this table before proposing a merge. A store folds only when it fails **eve
 | `counterfactual-scores` | a candidate | with the scores | **KEEP.** The refused candidates are the point, and a refused candidate is never planned |
 | `feed-health` | a feed | with the feeds | **KEEP.** A feed that returned nothing has no items, and that is the case it exists for |
 | `feed-retirements.csv` | a feed | never | **KEEP flat.** A fact with no day does not belong in a day tree |
-| `runtime-counters.csv` | a shard | 14 months | **RETIRED 2026-09-19.** It was the independent check on the census's own timings; the four cells that carried that check moved onto `host-fingerprint`, which keys the same four cells and already files by day |
+| `runtime-counters.csv` | a shard | 14 months | **RETIRED 2026-09-20.** It was the independent check on the census's own timings; the four cells that carried that check moved onto `host-fingerprint`, which keys the same four cells and already files by day |
 | `span-rollup` | a shard and a span | 14 months | **KEEP.** Its columns are held disjoint from every ledger's by a contract test, which is what lets a fold of spans be committed at all |
 | `traces` | a shard | 7 days | **KEEP.** Evidence, not a record. Deleted rather than folded |
 | `published` | an address | never | **KEEP - see below.** The one that looks foldable and is not |
@@ -529,7 +529,7 @@ Treating the Actions run log as the log store, rather than shipping logs anywher
 
 **The host fingerprint was the same failure and it had run longer, because the guard above could not see it.** The probe writes one row a job into `state/host-fingerprint/<YYYY>/<MM>/<DD>.csv` before the model server starts, and no commit step had ever named that path - `git ls-files state/host-fingerprint*` returned nothing, so every fingerprint this project had taken was deleted with its runner. The test that caught the rollup reads `ledger.append_*` calls out of `stages/work.py`, and this probe is not in `stages/work.py`: it runs from `cli.py` as its own subcommand, early on purpose, because the bandwidth reading wants an idle host. **A guard scoped to one source file cannot see a second writer**, which is the part worth remembering rather than the path. The fix is the same three moves - the path in the work job's commit step, a header-only day file seeded so `git add` cannot abort the step on a fresh clone, and the path in assemble's refresh set. A second guard reading the probe's own source shipped beside it and was retired on 2026-09-17: a second file-scoped guard is the same defect a second time. **What replaced both names no file.** It takes the stores from the path helpers the store modules export, counts a file sink as a write beside an `append_*` call, and charges each store to the job whose `python -m idhazh <verb>` step reaches its writer - so a third writer in a third file is covered the day it lands. Authority: Carmack's rule applied to a second writer, 2026-09-16; the general derivation, 2026-09-17.
 
-**Two ledgers declared what makes two of their rows one record and nothing applied it.** `ledger.keyed_paths` is the registry that pairs each ledger with its key, and neither `state/host-fingerprint/` nor `state/span-rollup/` was in it. For the fingerprint that cost nothing yet, because nothing was committed for a repeat to be in. For the fold it was live: the work job staged it, and `state/**/*.csv` was `merge=union` then - so a second attempt at one shard would have left two rows folding the same spans, and `SPAN_ROLLUP_KEY`'s own comment says a second row adds a count to itself rather than recording a new fact. **A key written down is not a rule applied.** Both joined the registry on 2026-09-16, and the registry's one deliberate absence is still `state/seen/`, which declares no key at all. The key is what `idhazh compact` merges a segment into a head by. Authority: Fowler on the registry, 2026-09-16.
+**Two ledgers declared what makes two of their rows one record and nothing applied it.** `ledger.keyed_paths` is the registry that pairs each ledger with its key, and neither `state/host-fingerprint/` nor `state/span-rollup/` was in it. For the fingerprint that cost nothing yet, because nothing was committed for a repeat to be in. For the fold it was live: the work job staged it, and `state/**/*.csv` carried a union merge driver then - so a second attempt at one shard would have left two rows folding the same spans, and `SPAN_ROLLUP_KEY`'s own comment says a second row adds a count to itself rather than recording a new fact. **A key written down is not a rule applied.** Both joined the registry on 2026-09-16, and the registry's one deliberate absence is still `state/seen/`, which declares no key at all. The key is what `idhazh compact` merges a segment into a head by. Authority: Fowler on the registry, 2026-09-16.
 
 **One ledger for everything was proposed on 2026-09-15 and narrowed to one write path.** The owner's case was that the sprawl is real and that item-grain, day-filed data is the right shape for this project - which is correct, and is why `item-health` is the census. What the measurement refused was folding the other stores into it: three of them key on something that was never an item, and three more carry a different retention, so a single store would have to keep one window and lose the questions the others answer. The part of the intent that survives whole is the part that was costing something - one constructor per grain instead of two, one publisher instead of seven, and the ladder written down so a later rung is a decision rather than a discovery. Authority: owner set the intent; Fowler ruled the grains; Carmack priced the windows. 2026-09-15.
 

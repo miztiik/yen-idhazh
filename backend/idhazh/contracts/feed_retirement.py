@@ -41,7 +41,7 @@ from idhazh.contracts.base import (
 )
 
 #: What separates two run ids inside the one evidence cell. A space, because a
-#: comma would need quoting in a file `merge=union` settles line by line, and a
+#: comma would need quoting in a file that is settled a line at a time, and a
 #: run id can never contain one.
 EVIDENCE_SEPARATOR = " "
 

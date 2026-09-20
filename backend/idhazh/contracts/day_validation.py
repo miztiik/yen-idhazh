@@ -36,11 +36,12 @@ edited outside the pipeline to exactly its old length. Everything a producer
 does either moves the length or is validated head-on - a run names the day it
 wrote, and a named day is always opened.
 
-CSV rather than one JSON document, because `.gitattributes` marks
-`state/*.csv` `merge=union`. Two runs appending rows are merged by a machine
-that has never read this file, and a union over independent rows is exactly
-right here. It also makes the file append-only: a rewrite that dropped a
-superseded row would be resolved by a union that puts it back. The file
+CSV rather than one JSON document, because every row is independent of every
+other row, so two runs that both appended are settled a line at a time by a
+machine that has never read this file. A JSON document would have to be merged
+whole. The file is append-only: a rewrite that dropped a superseded row, rebased
+onto a tip that appended one, is a rebase git cannot apply, so the removal would
+cost the push rather than land. The file
 therefore grows by one row a day, plus one a day for each time the validator
 moves, at about 155 bytes a row. **Deleting it is always safe** - a missing
 receipt costs one full sweep and never a wrong answer - so an operator who

@@ -212,7 +212,7 @@ def _receipts_for(state_dir: Path, identity: str) -> dict[str, tuple[DayValidati
 
     A day can carry more than one row and both readings are legitimate. A closed
     day that `backfill.yml` re-encoded leaves a truthful new row beside a row
-    about the payload that used to be there, and `merge=union` concatenates, so
+    about the payload that used to be there, and nothing removes the old row, so
     two branches that each validated one day leave two rows as well. The file
     cannot tell those apart and does not try - `_proved` asks the only question
     that settles it, which is what is on disk now.
@@ -264,9 +264,9 @@ def _proved(held: Sequence[DayValidationReceipt], payload_bytes: int) -> bool:
 def _record_receipts(state_dir: Path, earned: list[DayValidationReceipt]) -> int:
     """Append what this run proved, skipping any row the file already carries.
 
-    Append-only because `state/*.csv` is `merge=union` (`.gitattributes`): a
-    rewrite that removed rows would be resolved by a union that puts them back,
-    so the removal would silently not happen.
+    Append-only because a rewrite of a committed ledger loses the race it is in:
+    rebased onto a tip that appended, a commit that removed rows is a rebase git
+    cannot apply, so the removal stops the push rather than landing half-done.
     """
     if not earned:
         return 0

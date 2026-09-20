@@ -1,6 +1,6 @@
 # Freshness and Identity
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-20
 
 How often the pipeline runs, what makes an article worth today's slot, what stops the same article being published twice, and how an item keeps its name across the runs of one day. This page owns the decisions the planning step makes before any model loads.
 
@@ -56,7 +56,7 @@ Plenty of feeds carry no publish date, and the ones that omit it omit it consist
 
 The file is one day and the lookback is `seen_window_days` (90). An address older than the window is not worth a lookup - it is past the gate several times over. A day file below that window is therefore deleted rather than kept: `retention.prune_seen` takes its floor from `day_partition.days_in_window`, the same function the read uses, so the two cannot drift. It deletes what is *older* than the oldest day that helper names and never merely what is outside the window - the window is drawn around whatever date the prune is handed, and a run given a date in the past would otherwise delete the live file.
 
-**The grain moved on 2026-09-13 and the margin went with it.** At month grain a whole shard survived if any of its days was in range, so what the prune kept reached back 90 to 120 days for a 90-day read - measured over 366 anchor dates. At day grain the two are the same unit and the retained span is exactly the window on every date. What that costs is file handles: a 90-day read opens at most 91 files where it opened at most 4. What it buys is fewer rows, a removal that is one `rm`, and a first-sight record two runs collide on only when they are the same day - which `merge=union` cannot express inside a shared shard. It also means a day leaves 8 days earlier than it used to: the first file this store loses is `state/seen/2026/08/23.csv` on 2026-11-22, where the month rule took `2026-08.csv` whole on 2026-11-30.
+**The grain moved on 2026-09-13 and the margin went with it.** At month grain a whole shard survived if any of its days was in range, so what the prune kept reached back 90 to 120 days for a 90-day read - measured over 366 anchor dates. At day grain the two are the same unit and the retained span is exactly the window on every date. What that costs is file handles: a 90-day read opens at most 91 files where it opened at most 4. What it buys is fewer rows, a removal that is one `rm`, and a first-sight record two runs collide on only when they are the same day - which an append-only ledger cannot express inside a shared shard. It also means a day leaves 8 days earlier than it used to: the first file this store loses is `state/seen/2026/08/23.csv` on 2026-11-22, where the month rule took `2026-08.csv` whole on 2026-11-30.
 
 ## A date in the future is ignored
 
@@ -113,7 +113,7 @@ month files for a 120-day window, and after packing they leave the largest
 `.git`. Three reasons survive. The digest tree is already day-partitioned and
 every published row is derived from one of those days, so one partition rule
 covers both. Taking a day off the site becomes one `rm`, where a month file
-would need a row deleted inside it and `merge=union` cannot express a deletion.
+would need a row deleted inside it and an append-only ledger cannot express a deletion.
 And two runs collide on a file only when they are the same day, where a month
 file is shared by about 150 runs.
 

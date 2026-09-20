@@ -715,7 +715,7 @@ def _elapsed_ms(row: ItemHealthRow) -> int | None:
     return sum(timed) if timed else None
 
 
-def fold_month(rows: list[ItemHealthRow]) -> list[TelemetryAggregateRow]:
+def compact_month(rows: list[ItemHealthRow]) -> list[TelemetryAggregateRow]:
     """One month of full-grain rows, as one row per (date, stage).
 
     Ordered by date and then by the stage's own pipeline order, so the file a
@@ -837,7 +837,7 @@ def prune_telemetry(
             continue
         days = by_month[month]
         rows = [row for day in days for row in ledger.load_item_health_shard(day)]
-        summary = fold_month(rows)
+        summary = compact_month(rows)
         folded.append(month)
         # Named before anything is written, so the dry run prints the same list
         # the live run removes.
@@ -962,7 +962,7 @@ def fold_visual_month(rows: Sequence[VisualAttemptRow]) -> list[VisualAggregateR
     """One month of visual attempts, as one row per `FOLD_KEY` group.
 
     Cover: the rows of one month's shard, handed in rather than read here - the
-    same shape `fold_month` above takes, and for the same reason. The cost
+    same shape `compact_month` above takes, and for the same reason. The cost
     follows the month being folded and never the months behind it
     (Guardrail #12), so a fold in year three costs what a fold in year one did.
 

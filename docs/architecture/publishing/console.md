@@ -217,7 +217,7 @@ the page really had beside every figure, and fails on a row too many or on any
 two boxes that overlap.
 
 **Every label carries its own worst state**, computed at build time from the
-committed ledger - `Machine - shards read 4.31x apart`, not `Machine`.
+committed ledger - `Machine - 4 shards read 4.31x apart`, not `Machine`.
 Without it a route is where a metric goes to die: nobody opens a page to find
 out whether it was worth opening. Machine's candidates are a run the machine
 record refused, a shard that committed no row, and the newest run's read spread.
@@ -532,7 +532,7 @@ in the dark theme to buy a tint. Both bars in a row are drawn on
 
 **A run whose rows cannot be made into one run is named on the page.** The
 reader refuses a run where one shard index committed two different scrapes -
-two workflow runs computed the same run id and `merge=union` concatenated both -
+two workflow runs computed the same run id and a union merge concatenated both -
 and the route prints the run id and the reason rather than quietly excluding it
 from a count nobody can then check. Both halves of that cause are closed on the
 writer's side since 2026-08-31 and the committed file was settled with them, so

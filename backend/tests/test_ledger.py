@@ -2073,7 +2073,7 @@ def test_a_repeated_span_fold_is_settled_inside_the_month_that_holds_it(
     assert path.read_text(encoding="utf-8") == clean
 
 
-def test_the_full_pass_reaches_a_fingerprint_day_and_a_fold_month_no_run_named(
+def test_the_full_pass_reaches_a_fingerprint_day_and_an_aggregate_month_no_run_named(
     tmp_path: Path,
 ) -> None:
     """What the operator's pass buys: a repeat a run's own settle step never cleared.

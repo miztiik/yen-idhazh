@@ -15,7 +15,7 @@ from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.telemetry_aggregate import percentile
 from idhazh.evals import archive as score_archive
-from idhazh.retention import fold_month, month_shards, oldest_month_kept, prune_telemetry
+from idhazh.retention import compact_month, month_shards, oldest_month_kept, prune_telemetry
 from idhazh.telemetry.publish import public_telemetry
 
 from ._trees import (
@@ -107,7 +107,7 @@ def test_the_fold_keeps_a_repeated_row_rather_than_deciding_for_a_reader(
     rows = [health_row(day=day, run=run, number=7, stage=ItemStage.PUBLISH) for run in (1, 2)]
     seed_item_health(state, day, rows)
 
-    folded = fold_month(ledger.load_item_health_shard(ledger.item_health_path(state, day)))
+    folded = compact_month(ledger.load_item_health_shard(ledger.item_health_path(state, day)))
 
     assert [row.items for row in folded] == [2]
     assert folded[0].timed == 2
@@ -124,7 +124,7 @@ def test_a_group_that_timed_nothing_says_so_rather_than_saying_zero(tmp_path: Pa
         state, day, [health_row(day=day, run=1, number=1, stage=ItemStage.PLAN)]
     )
 
-    folded = fold_month(ledger.load_item_health_shard(ledger.item_health_path(state, day)))
+    folded = compact_month(ledger.load_item_health_shard(ledger.item_health_path(state, day)))
 
     assert [row.stage for row in folded] == [ItemStage.PLAN]
     assert folded[0].items == 1

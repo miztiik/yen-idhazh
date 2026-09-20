@@ -39,11 +39,10 @@ reproduces `ledger.append_seen`'s own filing exactly. A wall-clock stamp is
 independently of the run the row belongs to, so a tree filed by it would
 disagree with the writer that built it.
 
-**Run it when no scheduled digest is in flight.** `state/**/*.csv` is
-`merge=union` in `.gitattributes`. Union merge keeps every line from both sides,
-which is right for an append and wrong for a file whose every line moved - and
-it has no conflict state, so a merge over a migrated tree exits 0 and leaves a
-directory holding both grains. Restore from the trunk and run this again.
+**Run it when no scheduled digest is in flight.** A migration moves every line of
+every file it touches, so a run that appends while this is in review leaves the
+trunk and the migrated tree disagreeing about every row of a shard rather than
+about one appended line. Restore from the trunk and run this again.
 
 This reads one whole ledger, which is the growing cost Guardrail #12 is about.
 It is allowed here on the narrow ground the other one-shot utilities stand on:

@@ -36,7 +36,7 @@ other. That closed finding 11 of
 19 of the constant-cost-reads plan, #484); before it, `publish` globbed
 `state/item-health/` and rewrote every month it found on every run, so an
 ordinary run paid for every month the project had ever published. The shard is
-still a full rewrite of the source month, never `merge=union` - a union of two
+still a full rewrite of the source month, never an append - a stacked pair of
 rewrites is a file with every row twice.
 
 The published columns are exactly:
@@ -596,15 +596,15 @@ ledger had been committed for four days with no page reading a cell of it.
 
 | Figure | Made from | Composed as |
 | --- | --- | --- |
-| Seconds reading, seconds writing | `prompt_seconds_total`, `tokens_predicted_seconds_total` | summed over shards, and never added together into one "model seconds" |
-| Read and write speed | those seconds against `prompt_tokens_total` and `tokens_predicted_total` | sum over sum, never a mean of per-shard rates |
+| Seconds reading, seconds writing | the machine record's `server_prompt_seconds`, and the item ledger's `decode_ms` | summed over shards, and never added together into one "model seconds" |
+| Read and write speed | `server_prompt_tokens` over `server_prompt_seconds`, and the item ledger's `output_tokens` over its summed `decode_ms` | sum over sum, never a mean of per-shard rates |
 | Read spread | the fastest shard's read rate over the slowest | one run only; a run of one shard reports nothing |
-| Prompt cache | `prompt_tokens_total` against `prompt_tokens_cached_total` | share of every token the prompt needed, read or reused |
-| Context headroom | `n_tokens_max` against `models.summarize.inference.n_ctx` | the longest sequence any shard saw. A maximum, not a sum |
-| Job clock | `job_seconds` against `run.shard_timeout_minutes` | the slowest shard. A run's wall clock is its slowest shard |
-| The processor | `cpu_model` | text, per shard, and never averaged |
-| Busy and load | `cpu_busy_pct`, `model_load_ms` | lowest, slowest |
-| Peak memory | `peak_rss_bytes` against the runner's 16 GB | the LARGEST shard, never their sum - shards are separate jobs on separate hosts |
+| Prompt cache | the item ledger's `input_tokens` against its `cached_tokens` | share of every token the prompt needed, read or reused |
+| Context headroom | the largest `input_tokens + output_tokens` any item recorded, against `models.summarize.inference.n_ctx` | the longest sequence any shard saw. A maximum, not a sum |
+| Job clock | the machine record's `job_seconds` against `run.shard_timeout_minutes` | the slowest shard. A run's wall clock is its slowest shard |
+| The processor | the machine record's `cpu_model` | text, per shard, and never averaged |
+| Busy and load | the item ledger's `cpu_busy_pct`, the machine record's `model_load_ms` | lowest, slowest |
+| Peak memory | the item ledger's `llama_rss_peak_bytes` against the runner's 16 GB | the LARGEST shard, never their sum - shards are separate jobs on separate hosts |
 | What one item cost the machine | the item ledger's `llama_rss_peak_bytes` and `python_rss_bytes` against `os_mem_total_bytes` | one mark an item in run order, the maximum named with the item that owns it. The two maxima added are an UPPER BOUND unless one item held both |
 | What one item left the kernel | `os_mem_available_min_bytes` to `os_mem_available_bytes` | one range mark an item, floor to recovery - a floor that falls with an end that falls is a leak, a floor that falls with an end that recovers is hard work |
 | The queue behind an item | `load_1m` against the host's `cores`, with `cpu_busy_min` to `cpu_busy_max` | one mark an item. Busy and queued are different facts and neither implies the other, so both are drawn |
@@ -657,7 +657,7 @@ under `state/segments/`, so no two writers open one file. `stage_compact` folds
 those segments by key and the later attempt wins, so a re-run corrects its first
 try instead of adding a second row. The union driver that made the repeat
 possible came off every head under `state/` on 2026-09-19, and
-`state/runtime-counters.csv` itself was deleted the same day - the four cells a
+`state/runtime-counters.csv` itself was deleted the day after - the four cells a
 reader still wanted moved onto `state/host-fingerprint/`, whose key is
 `(date, run_id, job, shard)`. See
 [../sources/item-health.md](../sources/item-health.md#the-structure).

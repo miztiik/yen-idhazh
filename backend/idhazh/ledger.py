@@ -55,7 +55,7 @@ files.
 
 `state/telemetry-aggregate/<YYYY-MM>.csv` is what is left of an item-health
 month once `observability.item_health_full_grain_months` has passed: one row per
-(date, stage), folded by `retention.fold_month`. It files by month because it
+(date, stage), folded by `retention.compact_month`. It files by month because it
 summarises a month - a day file of a month's totals is a shape nothing consumes.
 It is the one file here that is rewritten rather than appended, because every row
 in it is derived from the days it summarises.
@@ -71,8 +71,8 @@ time bound - and it files by day even so. That is the exception named above: the
 read will never carry a window, so the layout buys this ledger no read time at
 all. What it buys is the two things it buys for `state/published/` - two runs
 collide on a file only when they are the same day, and taking a day back off the
-record is one `rm` rather than an edit inside a shared file, which `merge=union`
-cannot express. Five rows a day for ever is a collection that grows, and a
+record is one `rm` rather than an edit inside a shared file, which an
+append-only ledger cannot express. Five rows a day for ever is a collection that grows, and a
 collection that grows here takes the layout every other growing one has. A row
 is written on every run, including the runs where the policy is switched off and
 there is nothing to clean, because a report of "nothing to do" is what makes the
@@ -387,7 +387,7 @@ def seen_path(state_dir: Path, date: str) -> Path:
     A day rather than a month, for the reason `published_path` gives: a run
     writes one day, two runs collide on a file only when they are the same day,
     and taking a day back is one `rm` rather than an edit inside a shared shard,
-    which `merge=union` cannot express. The caller hands the run's own digest
+    which an append-only ledger cannot express. The caller hands the run's own digest
     date, so `first_seen_run[:10]` names this file for every row inside it - see
     `docs/concepts/partitions.md`.
     """
@@ -405,7 +405,7 @@ def health_path(state_dir: Path, date: str) -> Path:
     A day rather than a month, for the reason `item_health_path` gives: a run
     writes one day, two runs collide on a file only when they are the same day,
     and taking a day back is one `rm` rather than an edit inside a shared shard,
-    which `merge=union` cannot express. Nothing mirrors this store into
+    which an append-only ledger cannot express. Nothing mirrors this store into
     `frontend/public/`.
     """
     return state_dir / HEALTH_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
@@ -422,7 +422,7 @@ def item_health_path(state_dir: Path, date: str) -> Path:
     A day rather than a month, for the reason `published_path` gives: a run
     writes one day, two runs collide on a file only when they are the same day,
     and taking a day back is one `rm` rather than an edit inside a shared shard,
-    which `merge=union` cannot express. The mirror under
+    which an append-only ledger cannot express. The mirror under
     `frontend/public/telemetry/` stays monthly, because its grain follows what a
     browser fetches - see `docs/concepts/partitions.md`.
     """
@@ -461,7 +461,7 @@ def scores_path(state_dir: Path, date: str) -> Path:
     A day rather than a month, for the reason `published_path` gives: a run
     writes one day, two runs collide on a file only when they are the same day,
     and taking a day back is one `rm` rather than an edit inside a shared shard,
-    which `merge=union` cannot express. Nothing mirrors this store into
+    which an append-only ledger cannot express. Nothing mirrors this store into
     `frontend/public/`.
 
     Two jobs of one run measure items - a work shard as each item settles, and
@@ -503,8 +503,8 @@ def validation_path(state_dir: Path, date: str) -> Path:
 
     Two candidates can be dispatched at once and both judge the same day, so
     neither opens this file. Each writes its own segment and the compaction folds
-    them in - the filename is what keeps the pair apart, and `merge=union` was
-    the only thing doing that before.
+    them in - the filename is what keeps the pair apart, and before the segment
+    store nothing else did.
     """
     return state_dir / VALIDATION_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
 
@@ -553,7 +553,7 @@ def published_path(state_dir: Path, date: str) -> Path:
     `frontend/public/digest/YYYY/MM/DD/` and every row in it is derived from one
     of those days. Two runs collide on a file only when they are the same day,
     and taking a day back off the site is one `rm` rather than an edit inside a
-    shared shard - which `merge=union` cannot express.
+    shared shard - which an append-only ledger cannot express.
     """
     return state_dir / PUBLISHED_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
 
@@ -771,7 +771,7 @@ def refiler(model: type[CsvContract]) -> Callable[[dict[str, str]], dict[str, st
 def _headings(lines: list[str], first_column: str) -> set[str]:
     """Every column name the file names anywhere, header blocks included.
 
-    A `merge=union` resolve can leave two header lines in one file, and the
+    A file that two appends were stacked into carries two header lines, and the
     second one is the only place the other side's column names appear. Reading
     line 1 alone would therefore miss exactly the generation this is asked about.
     """
@@ -921,8 +921,9 @@ def settle_header(
     """Fold a file carrying more than one header back onto one. Never raises.
 
     The scan `migrate_header` stopped doing, moved to the one place that can see
-    what it is looking for. Every head under `state/` was `merge=union` until
-    2026-09-19, which resolves one physical line at a time: two runs appending
+    what it is looking for. Every head under `state/` carried a union merge
+    driver until 2026-09-19 (`.gitattributes`), and that driver resolved one
+    physical line at a time: two runs appending
     different rows merge correctly, and two runs appending under different
     headings leave both header blocks in the file while git calls the merge
     clean. Measured on this repository
@@ -1258,7 +1259,9 @@ def append_retirements(state_dir: Path, rows: Iterable[FeedRetirementRow]) -> in
     Settled against `FEED_RETIREMENT_KEY` straight after the write, the way
     `append_health` is, because the two runs that can write one address are two
     stale checkouts rather than two decisions: each reads the same five `410`
-    results, each files the same row, and `merge=union` keeps both lines. The
+    results and each files the same row. The settle catches the repeat inside one
+    checkout; a second attempt that races its own first stops at the rebase
+    rather than landing a second line. The
     first row wins - there is nothing for a preference rule to choose between,
     because a retirement is permanent and a second row for one address says
     nothing the first did not.
@@ -2028,9 +2031,12 @@ def drop_repeated_rows(path: Path, key: tuple[str, ...]) -> int:
     reads the committed file the job checked out, and `actions/checkout` pins a
     job to the commit its run was triggered at - so a second execution of the
     same work cannot see rows the first one pushed after that commit. Its append
-    lands them again, and `merge=union` then concatenates both sides line by
-    line, which is the right answer for two runs writing different rows and
-    exactly the wrong one for two attempts writing the same row. Measured on this
+    lands them again. On the two day trees that still carry a union merge driver
+    - `state/published/` and `state/visual-prunes/` - git then concatenates both
+    sides line by line, which is the right answer for two runs writing different
+    rows and exactly the wrong one for two attempts writing the same row.
+    Everywhere else under `state/` that driver went on 2026-09-19 and the second
+    push conflicts at the rebase instead. Measured on this
     repository 2026-08-31: run `2026-08-29-3` holds six counter rows for four
     shards and 44 repeated `(date, run_id, item_id)` item-health keys.
 
@@ -2159,8 +2165,7 @@ def write_telemetry_aggregate(path: Path, rows: list[TelemetryAggregateRow]) -> 
     The only writer here that rewrites rather than appends, and the reason is
     that this file is derived: every row is a function of the shard it was folded
     from, so writing it twice writes the same bytes twice. Appending would double
-    a month whenever the fold ran again over a shard a lost race had restored,
-    and `merge=union` could not tell the copy from the original.
+    a month whenever the fold ran again over a shard a lost race had restored.
 
     Returns how many rows landed, so a caller can log the count.
     """

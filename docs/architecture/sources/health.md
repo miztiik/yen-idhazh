@@ -1,6 +1,6 @@
 # Feed Health and Quarantine
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-20
 What every feed did on every run, where that record lives, and how a run decides on its own to stop asking a dead source. Nothing on this page ever edits `config/sources.json`: a person owns the source list, and a run owns the evidence about it.
 
 ## From item outcome to feed rest or retirement
@@ -68,7 +68,7 @@ Monthly shards, because a read looks back 31 days - just enough that a quarantin
 
 `(run_id, feed_id)` is what makes two rows the same record - `ledger.FEED_HEALTH_KEY`. A feed is read once in a run, so two rows under one key are two accounts of one event.
 
-**Two runs are entitled to a row each and always get one**, because a run id carries the identity of the execution that made it. What repeats the key is one execution attempted twice: the second attempt appends against a checkout frozen at the commit its run was triggered at, so it cannot see what the first attempt pushed. Until 2026-09-19 `merge=union` on `state/**/*.csv` then concatenated the two rather than conflicting, and counted raw, one bad run read as two failures and a five-strike rest arrived in three runs.
+**Two runs are entitled to a row each and always get one**, because a run id carries the identity of the execution that made it. What repeats the key is one execution attempted twice: the second attempt appends against a checkout frozen at the commit its run was triggered at, so it cannot see what the first attempt pushed. Until 2026-09-19 a union merge driver on `state/**/*.csv` then concatenated the two rather than conflicting, and counted raw, one bad run read as two failures and a five-strike rest arrived in three runs.
 
 `ledger.append_health` settles the shard it just wrote, which catches a repeat inside one checkout. That is now the only settlement this ledger gets, and it is enough because the union driver is gone: a second attempt that races its own first attempt stops at the rebase instead of landing a second row. A repeat already in committed history is data this change does not touch - `idhazh rebuild-score-index` is the shape an operator's repair takes, and there is no equivalent verb for this file.
 
@@ -118,7 +118,8 @@ commit as the contract change because `ledger.require_matching_header` compares
 the committed header to the contract's column list exactly - a widened contract
 against an unmigrated shard stops the next scheduled run at its first append. It
 was safe to re-run: a shard already on the wide header was reported and skipped.
-That was not a nicety. `state/**/*.csv` is `merge=union`, so an append that landed
+That was not a nicety. `state/**/*.csv` carried a union merge driver then, so an
+append that landed
 while the migration was in review did not conflict - it concatenated, and the
 result was one file with two headers. Taking the upstream shards whole and running
 the utility over them again was the resolution.

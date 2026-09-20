@@ -187,7 +187,7 @@ cannot say which machine an item was for.
 **That filter reads a frozen file, and until 2026-09-18 that was only half the
 guarantee.** `actions/checkout` pins a job to the commit its run was triggered
 at, so a second attempt at the same work could not see the rows the first attempt
-pushed afterwards and appended them again; `merge=union` then kept the lines from
+pushed afterwards and appended them again; a union merge driver then kept the lines from
 both sides rather than collapsing them. The other half ran after that merge, on
 the merged file, and kept the first row for each key. Measured 2026-08-31,
 `2026-08-29-3` held 44 repeated keys here because only the first half existed.
@@ -607,10 +607,10 @@ Three things follow, and the first is the one most often got wrong:
  `runner_name` is in that set for exactly this reason.
 
 **The committed day files are not rewritten by the pull request.** Each one is
-re-filed by the first run that appends to it. `state/**/*.csv` is `merge=union`
-in `.gitattributes`, so a branch that rewrote a day file whole would have every
-line of it stacked against the lines the pipeline wrote while the branch was
-open - a clean merge and a doubled file.
+re-filed by the first run that appends to it. A branch that rewrote a day file
+whole would be rebasing that rewrite onto the lines the pipeline wrote while the
+branch was open, which is a conflict somebody has to resolve by hand over
+machine output nobody should be editing.
 
 **A check on the migration reads rows, never day files.** A day file the
 pipeline opens after the migration holds no pre-migration row at all, and it
@@ -861,10 +861,12 @@ rows live in between: a shard's verdicts leave the runner only inside its
 `items-<shard>` artifact, which expires and is never committed. A run stopped
 between the workers and the publish had measured every item and recorded none of
 it - and a bad day is exactly the day worth measuring. The race the old rule
-avoided is answered instead by the two things that already existed for it:
-`merge=union` on `state/**/*.csv`, and the
+avoided is answered instead by the two things that already existed for it: a
+union merge driver on `state/**/*.csv` at the time, and the
 rebase loop in `.github/scripts/commit-and-push.sh` that the plan job has always
-used for the same reason. The double-write the old rule also avoided is answered
+used for the same reason. The driver went on 2026-09-19 and the segment store
+took its place, so the shard and assemble no longer write one path at all. The
+double-write the old rule also avoided is answered
 by the row identity above. Authority: Fowler, over Carmack's original ruling.
 
 ## Rejected alternatives

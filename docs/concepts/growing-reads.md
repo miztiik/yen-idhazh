@@ -252,7 +252,6 @@ listed: its cover is its argument. These are `backend/`'s;
 | `ledger.load_story_similarity_pairs` | one day file of `state/story-similarity/scored-pairs/` | one date. The fold counts a date into `score-distribution.json` once and the fit then reads only that record, so the day tree is opened by name and never walked. It costs the same on the thousandth day as on the third |
 | `ledger.load_source_counts` | one item-health day file | one date |
 | `ledger.load_host_fingerprint_shard` | one host-fingerprint day file | one date |
-| `fingerprint.append_new` | streams `state/fingerprints.csv` | the identities on record, not the file |
 | `corpus.scored_from_items` | one run's items directory | one run |
 
 ### Unbounded, and it says so
@@ -329,7 +328,7 @@ nothing at all for a tree whose last run was two months ago - the same reason
 **None is unbounded any more.** `machine.months_on_file` was the last, and it
 streamed `state/runtime-counters.csv` - one appended file with no shards and no
 prune, so a run that wanted September's rows walked every row ever appended to
-find them. That store was deleted on 2026-09-19 and the machine series is folded
+find them. That store was deleted on 2026-09-20 and the machine series is folded
 from two day trees instead, so the read is now the months `series.months_to_write`
 names and the day files inside them.
 

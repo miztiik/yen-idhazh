@@ -82,7 +82,8 @@ export interface RunConfig {
 /** What the console needs to say how much room a prompt had left.
  *
  * One knob of the summarizer entry's `inference` block, not the whole of it:
- * the machine page reads `n_tokens_max` against the window, and a counter
+ * the machine page reads the longest sequence any item recorded against the
+ * window, and a counter
  * without its ceiling is not a measurement. It is the summarizer's window
  * because the summarizer is what those shards ran; the visual planner carries
  * its own block and nothing here draws it.

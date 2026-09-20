@@ -379,7 +379,7 @@ def retirement(feed_id: str = "trade-press", key: str = KEY) -> FeedRetirementRo
 
 
 def test_two_stale_checkouts_filing_one_address_settle_to_one_row(tmp_path: Path) -> None:
-    """`state/**/*.csv` is `merge=union`, so this never conflicts - it concatenates.
+    """One address filed twice settles to one row, whatever stacked the second line.
 
     Both jobs read a checkout frozen at the commit their run was triggered at,
     so neither can see the row the other pushed, and both file the same address.
@@ -390,8 +390,8 @@ def test_two_stale_checkouts_filing_one_address_settle_to_one_row(tmp_path: Path
     path = ledger.feed_retirements_path(tmp_path)
     assert ledger.append_retirements(tmp_path, [retirement()]) == 1
 
-    # The merge, spelled the way `merge=union` spells it: the other side's line
-    # appended to ours, header and all already agreed.
+    # The stacked copy, spelled the way a line-wise concatenation makes it: the
+    # other side's line appended to ours, header and all already agreed.
     merged = path.read_text(encoding="utf-8")
     path.write_text(merged + merged.splitlines()[1] + "\n", encoding="utf-8")
     assert len(path.read_text(encoding="utf-8").splitlines()) == 3

@@ -23,7 +23,7 @@ def stage_rebuild_score_index(
     """Write `state/score-index/` again from the rows it indexes, and say what drifted.
 
     The operator's repair for an index that stopped describing the rows beside
-    it. A fill a crash cut short, a day file a `merge=union` grew behind the
+    it. A fill a crash cut short, a day file that grew behind the
     index's back, or an index left at a grain the ledger no longer uses all read
     as a success today: `evals.writer.refresh_index` only fills a partition with
     no index at all, so a wrong one is never compared against anything and the

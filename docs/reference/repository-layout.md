@@ -87,9 +87,10 @@ file is that no machine wrote it (`CLAUDE.md` section 0a). See
 exception for the same reason: a labeller reads two articles and marks them one
 story or two, and that mark is the fixed floor the fitted merge line has to stay
 above. No run writes it - an operator harvests the marks into it by hand, and
-`note` says who made each one. It is the one `state/` CSV that is `merge=text`
-rather than `merge=union`, because two people editing it are disagreeing about
-the same rows rather than appending independent ones. See
+`note` says who made each one. `.gitattributes` names it `merge=text` in its own
+line rather than letting it inherit: two people editing it are disagreeing about
+the same rows rather than appending independent ones, and a reason worth reading
+is worth writing down. See
 [../how-to/label-the-similarity-holdout.md](../how-to/label-the-similarity-holdout.md).
 
 **The text those labels judge lives under `backend/var/evidence/`, not under

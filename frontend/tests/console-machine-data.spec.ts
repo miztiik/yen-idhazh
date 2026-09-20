@@ -431,7 +431,7 @@ test.describe('an empty cell is unknown and never zero', () => {
 
 test.describe('a shard is a set and never a count', () => {
 	/** Two workflow runs computed the same `run_id`, `actions/checkout` pinned
-	 * each to a frozen SHA, and `merge=union` concatenated both. */
+	 * each to a frozen SHA, and a union merge concatenated both. */
 	const twice = [
 		row({ runId: '2026-09-02-3', shard: 0, serverPromptSeconds: 100, serverPromptTokens: 1000 }),
 		row({ runId: '2026-09-02-3', shard: 0, serverPromptSeconds: 100, serverPromptTokens: 1000 }),

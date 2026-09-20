@@ -1,6 +1,6 @@
 # The summarizer prompt
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-20
 What the Summarize stage asks a model for, and where every number in that ask
 comes from.
 
@@ -199,8 +199,8 @@ like any other (Guardrail #11), so what makes a break is
 `contracts.base.normalize_prose`, which runs on the reply at `parse_draft`. A
 lone newline rejoins its lines, because a model that wrapped its prose at some
 width meant one paragraph. A run of blank lines is one break. Every other control
-character becomes a space - a tab in a published field breaks a CSV cell, a
-`merge=union` day file and the reader's line box, and no paragraph break is worth
+character becomes a space - a tab in a published field breaks a CSV cell, the
+day file that holds it and the reader's line box, and no paragraph break is worth
 those three.
 
 **The rule the model is given names a number, not a band.** The two-call path

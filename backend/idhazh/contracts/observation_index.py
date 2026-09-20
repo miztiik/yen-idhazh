@@ -31,11 +31,11 @@ this repository on 2026-09-07 over its 7,636 measurements, that is 566.8 KB
 against 6,111.8 KB of rows - 10.8 times smaller, and no spread, because both
 figures are file sizes rather than timings.
 
-CSV rather than one JSON document a partition, because `.gitattributes` marks
-`state/**/*.csv` `merge=union`: four to eight work shards append in parallel and
-their results are merged by a machine that has never read this file. A union
-merge collapses identical lines and concatenates the rest, and a digest set does
-not care if a line survives twice. A JSON index would conflict instead.
+CSV rather than one JSON document a partition, because four to eight work shards
+write in parallel: each files its own segment and `idhazh compact` merges them
+into the head a row at a time, and a digest set does not care if a line survives
+twice. A JSON index would have to be merged as one document, which no row-wise
+merge can do.
 """
 
 from __future__ import annotations

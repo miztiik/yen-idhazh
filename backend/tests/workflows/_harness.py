@@ -1968,9 +1968,9 @@ def _seed_scripted_origin(root: Path, staged_paths: Sequence[str]) -> None:
         _write(seed / _seed_ledger(staged), f"header\nrow-{index}\n")
     _write(seed / "docs" / "unrelated.md", "seed\n")
     _write(seed / "runner-noise.txt", "clean\n")
-    # This repository's own attributes file. `merge=union` on the ledgers is
-    # what decides whether two runs that both appended are in conflict, so a
-    # scripted origin without it would test a different repository.
+    # This repository's own attributes file. The merge drivers it sets decide
+    # whether two runs that both appended are in conflict, so a scripted origin
+    # without it would test a different repository.
     _write(seed / ".gitattributes", read_text(REPO_ROOT / ".gitattributes"))
     _git(seed, env, "add", ".gitattributes", "docs", "runner-noise.txt", *staged_paths)
     _git(seed, env, "commit", "-m", "seed")
