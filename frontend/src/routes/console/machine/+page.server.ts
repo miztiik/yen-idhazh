@@ -6,7 +6,7 @@ import {
 	clocksChart,
 	contextHeadroom,
 	curveOf,
-	peakMemory,
+	memoryBoard,
 	percentileChart,
 	percentileHistory,
 	shardBoard,
@@ -318,7 +318,11 @@ export async function load() {
 	// single run into something smaller.
 	const newest: MachineRun | null = counters.runs[0] ?? null;
 	const board = shardBoard(newest, limits.jobTimeoutSeconds, console_.chart_width);
-	const memory = peakMemory(newest);
+	// Item grain and shard grain from one call, because a panel that offers two
+	// grains built from two derivations can show two answers to one question. The
+	// window grain is the span the loop above already derived for every preset,
+	// which this panel reads rather than deriving a second time.
+	const memory = memoryBoard(newest, health);
 	// One group a machine, never one figure over all of them. Measured 2026-09-17
 	// over the committed counters ledger, 86 of the 90 runs that name a processor
 	// drew more than one kind, so a pooled rate was a number about neither.

@@ -1,43 +1,48 @@
-<script lang="ts">
-	/** Stacked bars or lines, for a chart whose data already draws both.
+<script lang="ts" generics="T extends string">
+	/** Two or three named states of one panel, for data that already draws them all.
 	 *
 	 * One control for the panel, never one per series and never a preference
-	 * that follows the reader across the site. The two shapes answer two
+	 * that follows the reader across the site. The default pair answers two
 	 * questions off one array: stacked says what the mix is and how big the
 	 * total got, lines say what each series did on its own. A stack hides a
 	 * series that halved while its neighbour doubled; lines hide the total.
 	 *
 	 * **It ships only where no re-shaping is needed.** The values handed to the
-	 * engine are the same list in both shapes - see `StackShape` in
-	 * `$lib/charts/stacked` - and a chart that would need its data massaged to
-	 * fit the second shape gets no switch at all.
+	 * engine are the same list in every state - see `StackShape` in
+	 * `$lib/charts/stacked` - and a panel that would need its data massaged to
+	 * fit a second state gets no switch at all. A grain switch qualifies on the
+	 * same terms: one builder call returns every grain it offers.
 	 *
 	 * Radio inputs, not a button that toggles: two named states a reader can see
 	 * both of beats one state and a verb. It is the same shape `WindowControl`
 	 * uses, and it needs no script to be readable - only to act.
 	 */
-	import type { StackShape } from '$lib/charts/stacked';
+
+	/** Stacked against lines, which is what every call site wanted until a panel
+	 * needed a grain switch. Cast because a default cannot be written in the
+	 * caller's own type; a caller with other states passes `options`. */
+	const SHAPES = [
+		{ value: 'bars', text: 'Stacked' },
+		{ value: 'lines', text: 'Lines' }
+	] as { value: T; text: string }[];
 
 	let {
-		shape = $bindable('bars'),
+		shape = $bindable(),
 		name,
-		label = 'Shape'
+		label = 'Shape',
+		options = SHAPES
 	}: {
-		shape?: StackShape;
+		shape: T;
 		/** Unique per panel: two radio groups sharing a name are one group. */
 		name: string;
 		label?: string;
+		options?: { value: T; text: string }[];
 	} = $props();
-
-	const OPTIONS: { value: StackShape; text: string }[] = [
-		{ value: 'bars', text: 'Stacked' },
-		{ value: 'lines', text: 'Lines' }
-	];
 </script>
 
 <fieldset class="switch" data-shape-switch={name} data-shape={shape}>
 	<legend class="sr-only">{label}</legend>
-	{#each OPTIONS as option (option.value)}
+	{#each options as option (option.value)}
 		<label class="segment" data-shape-option={option.value}>
 			<input type="radio" name="shape-{name}" value={option.value} bind:group={shape} />
 			<span>{option.text}</span>
