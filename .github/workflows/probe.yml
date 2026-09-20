@@ -35,12 +35,17 @@ jobs:
       # cache counter can be read here at all, and the cache-utilization
       # question is closed without a profiling toolchain. `perf_event_paranoid`
       # is recorded beside it but is not the blocker - a sysctl is adjustable
-      # and a missing unit is not. No `set -e`: every read below can fail, and
-      # a read that fails is the answer rather than an error. What one dispatch
-      # found, and on which runner, is docs/reference/host-metrics.md.
+      # and a missing unit is not. What one dispatch found, and on which
+      # runner, is docs/reference/host-metrics.md.
+      #
+      # `set +e` is the load-bearing line. The platform runs every `run:` block
+      # under `bash -e`, so the first absent path ends the step - and here an
+      # absent path is the answer. Without it this step exits 2 on the runner
+      # it was written to describe, having printed half the reading.
       - name: Say what a hardware profiler could read here
         run: |
-          set -uo pipefail
+          set +e
+          set -u
           events=/sys/bus/event_source/devices/cpu/events
           {
             echo "## What a hardware profiler could read on this runner"
@@ -56,8 +61,12 @@ jobs:
             ls /sys/bus/event_source/devices/ || echo 'no event_source directory'
             echo
             echo "\$ ls ${events}/ | head -40"
-            ls "${events}/" 2>/dev/null | head -40
-            echo "-> $(ls -A "${events}" 2>/dev/null | wc -l) entries"
+            if [ -d "${events}" ]; then
+              ls "${events}/" | head -40
+              echo "-> $(ls -A "${events}" | wc -l) entries"
+            else
+              echo '-> no such directory'
+            fi
             echo
             echo '$ ls -d /sys/fs/resctrl'
             ls -d /sys/fs/resctrl 2>/dev/null || echo 'no resctrl'
