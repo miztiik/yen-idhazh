@@ -37,7 +37,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 4 |
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
-| [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 6 | 16 | 2 |
+| [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 7 | 15 | 2 |
 | [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 19 | 0 | 19 | 1 |
 
 ## In flight - 0
@@ -81,11 +81,11 @@ section 3 is where it is answered.
 | #5 | 35 | A / search | Live-day search - instant + semantic (+ frontend `key_points` owner, C2) | - |
 | #7 | 35 | A / eval-core | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - |
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
-| #4 | 37 | B | The sampler stops calling theft our work | 2, 3 |
 | #9 | 37 | B | Panels grouped by the decision they serve | 7 |
+| #5 | 37 | C | `ItemHealthRow` gains three columns and loses one | 4 |
 | #1 | 38 | A | A leg survives its own clock | - |
 
-## Waiting on another row - 104
+## Waiting on another row - 103
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -161,7 +161,6 @@ section 3 is where it is answered.
 | #8 | 36 | W4 / apply-gate (alone) | Flip the flag: withhold = absent + item-health telemetry (E7 placement) | 7 is PENDING |
 | #12 | 36 | W3 / rejects-store | The rejects store + corpus fence (`state/rejects/`, 30-day prune) | 3 is PENDING; 7 is PENDING |
 | #13 | 36 | W4 / plan34-gaps | Retro: plan-34 latent gaps + the shared space-trap guard | 34 landed names no row; 6 is PENDING |
-| #5 | 37 | C | `ItemHealthRow` gains three columns and loses one | 4 is PENDING |
 | #10 | 37 | C | Did another tenant take the processor | 5 is PENDING; 9 is PENDING |
 | #11 | 37 | C | Is the kernel taking the model's weights back | 5 is PENDING; 9 is PENDING |
 | #12 | 37 | C | What one article costs the machine | 9 is PENDING |
