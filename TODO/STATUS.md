@@ -39,7 +39,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 
-## In flight - 19
+## In flight - 20
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
@@ -52,6 +52,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | #13 | 33 | D | Compaction lag and free swap on the console band | p33d13 |
 | #11 | 33 | E | Delete `runtime-counters` and everything that reads it | p33e11p3b |
 | #15 | 33 | F | Generated TypeScript contracts replace the hand-written ones | p33f15 |
+| #16 | 33 | G | Docs, and the orphan sweep | p33i16 |
 | #19 | 33 | I | The shard board | p33i19 |
 | #21 | 33 | I | Memory and load, three grains - ABSORBS Row #14 | p33i21 |
 | #23 | 33 | I | What a run reads against what it writes, in tokens and in seconds | p33i23 |
@@ -100,7 +101,7 @@ section 3 is where it is answered.
 | #7 | 35 | A / eval-core | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - |
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
 
-## Waiting on another row - 75
+## Waiting on another row - 74
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -159,7 +160,6 @@ section 3 is where it is answered.
 | #8 | 27 | C | What the model saw, kept for 90 days | 4 is PENDING |
 | #9 | 27 | D | A cut reply keeps its summary | 1 is PENDING |
 | #11 | 27 | E | Two articles, three arms, one runner | 4 is PENDING |
-| #16 | 33 | G | Docs, and the orphan sweep | all names no row |
 | #14 | 33 | - | The per-item machine load panel | - |
 | #8 | 33 | - | Memory split by prefill and decode | - |
 | #6 | 35 | A / eval-core | Remove `new_fact_rate` + `key_point_weight` (+#34 field, judge stages, C3) | #34 names no row |
