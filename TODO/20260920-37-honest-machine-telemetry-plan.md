@@ -70,7 +70,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 
 **Row #7 is the row that makes the rest parallel.** Fourteen rows name one Svelte route of 72,099 bytes. Extracting the panels into a file each is what turns that chain into a fan-out, and it must change no rendered byte.
 
-**Three `Depends-on` edges are file overlaps, not logic.** Rows #1, #2 and #6 all write `docs/reference/host-metrics.md`; rows #3 and #6 both write `backend/tests/telemetry/`; rows #6 and #8 both write `backend/idhazh/contracts/knobs/` and `schemas/`. The edges below serialise them so the next dispatch reads the answer rather than re-deriving it.
+**Three `Depends-on` edges are file overlaps, not logic.** Rows #1, #2 and #6 all write `docs/reference/host-metrics.md`; rows #3 and #6 both write `backend/tests/test_host_readings.py`; rows #6 and #8 both write `backend/idhazh/contracts/knobs/` and `schemas/`. The edges below serialise them so the next dispatch reads the answer rather than re-deriving it.
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
