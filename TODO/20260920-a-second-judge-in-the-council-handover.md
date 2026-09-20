@@ -8,7 +8,7 @@ execution-ready plan-doc under `TODO/`, not code.
 ## The decision that produced this
 
 The merge line now fits itself against judge verdicts
-([`docs/architecture/publishing/Autotune-content-similarity.md`](../docs/architecture/publishing/Autotune-content-similarity.md)).
+([`docs/architecture/publishing/autotune-content-similarity.md`](../docs/architecture/publishing/autotune-content-similarity.md)).
 The owner was asked how the holdout benchmark stays current as content drifts,
 and chose: **the pipeline surfaces candidate pairs automatically, and a
 different authority labels them.** The rejected option was letting the council
@@ -153,7 +153,7 @@ Delete this handover when that plan-doc exists.
 
 ## See also
 
-- [`docs/architecture/publishing/Autotune-content-similarity.md`](../docs/architecture/publishing/Autotune-content-similarity.md) - the merge line, its rationale and the alternatives already rejected.
+- [`docs/architecture/publishing/autotune-content-similarity.md`](../docs/architecture/publishing/autotune-content-similarity.md) - the merge line, its rationale and the alternatives already rejected.
 - [`docs/how-to/label-the-similarity-holdout.md`](../docs/how-to/label-the-similarity-holdout.md) - how the benchmark is drawn and labelled today.
 - [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md) - where LLM-as-judge sits in this project.
 - [`docs/concepts/growing-reads.md`](../docs/concepts/growing-reads.md) - Guardrail #12's escape hatch, which a pair-harvesting path will meet.

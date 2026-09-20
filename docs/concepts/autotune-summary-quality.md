@@ -3,7 +3,7 @@
 **Last Updated**: 2026-09-20
 
 How yen-idhazh measures whether a summary is good, and how the thresholds tune themselves with no human
-in the loop. Faithfulness (HHEM) ships today; coverage, coherence, fluency and the Autotuning loop
+in the loop. Faithfulness (HHEM) ships today; coverage, coherence, fluency and the autotuning loop
 below are the target design, implemented by a feedback-loop plan under `TODO/` that reuses the
 `LLM-JUDGES` workflow and the `Fit` pattern from the same-story similarity judge.
 
@@ -56,7 +56,7 @@ thinks exists is worse than leaving the axis unnamed.
   coherence is already measured for free, and a holistic "good summary" score collapses dimensions
   and games easily.
 
-## The Autotuning loop
+## The autotuning loop
 
 No human labels. Each metric gets an adaptive floor - a percentile of its own rolling distribution,
 folded and fitted daily exactly like the same-story similarity line, flipped to the low tail because
@@ -167,6 +167,6 @@ sample.
 ## See also
 
 - `docs/concepts/evaluation.md` - the eval ledger, HHEM, and the metrics that ship today.
-- `docs/architecture/publishing/Autotune-content-similarity.md` - the merge line that already fits itself: the
+- `docs/architecture/publishing/autotune-content-similarity.md` - the merge line that already fits itself: the
   `LLM-COUNCIL` workflow and the fold-fit pattern this loop reuses.
 - `TODO/20260918-35-search-eval-key-points-plan.md` - the cleanup that precedes this loop.

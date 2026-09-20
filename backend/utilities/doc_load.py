@@ -79,6 +79,20 @@ def prose(text: str) -> list[str]:
     return out
 
 
+def is_there(target: Path) -> bool:
+    """Does this path exist, spelled exactly like this?
+
+    `Path.exists()` is case-insensitive on Windows and on macOS, so a link whose
+    capitals are wrong passes on the machine that wrote it and 404s on GitHub -
+    a break nobody local can see. Matching the name against what the directory
+    actually holds is the only answer that agrees on every platform.
+    """
+    try:
+        return target.name in {entry.name for entry in target.parent.iterdir()}
+    except OSError:
+        return False
+
+
 def anchors(text: str) -> set[str]:
     """Every heading on a page, as the fragment a link would have to name."""
     out = set()
@@ -219,7 +233,7 @@ def faults(root: Path) -> dict[str, list[str]]:
         for href in sorted(set(LINK.findall(body))):
             if "<" in href:
                 continue  # a placeholder in a worked example names no page
-            if not (page.parent / href).exists():
+            if not is_there(page.parent / href):
                 found.append(f"links to a page that is not there: {href}")
         for href, fragment in sorted(set(ANCHORED.findall(body))):
             if "<" in href:

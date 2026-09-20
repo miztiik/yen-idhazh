@@ -184,6 +184,20 @@ def test_a_placeholder_in_a_worked_example_names_no_page(tmp_path: Path) -> None
     assert doc_load.faults(tmp_path) == {}
 
 
+def test_a_link_whose_capitals_are_wrong_is_found(tmp_path: Path) -> None:
+    """Windows and macOS say yes to it. GitHub serves a 404, and nobody local sees it."""
+    page(tmp_path, "docs/reference/target.md", WELL_FORMED)
+    page(
+        tmp_path,
+        "docs/reference/source.md",
+        WELL_FORMED.replace("- nothing", "- [shouty](Target.md)"),
+    )
+
+    found = doc_load.faults(tmp_path)["docs/reference/source.md"]
+
+    assert found == ["links to a page that is not there: Target.md"]
+
+
 def test_a_link_to_a_section_that_is_not_there_is_found(tmp_path: Path) -> None:
     """The file surviving proves nothing about the heading somebody meant."""
     page(tmp_path, "docs/reference/target.md", WELL_FORMED + "\n## The Real Heading\n\nHere.\n")
