@@ -130,7 +130,7 @@ Three things follow from that table and each one moved the design.
 A day runs the same story from more than one of our feeds, and the published item
 carries two fields that say so. The rule that decides it - the score, the headline
 joiner, the figure veto, the window past midnight and what each costs - is
-[auto-tune-content-similarity.md](auto-tune-content-similarity.md).
+[Autotune-content-similarity.md](Autotune-content-similarity.md).
 
 ## Where the page order comes from
 
@@ -745,7 +745,7 @@ A megabyte figure and a headroom figure are both levels. **Neither is a rate, so
 ## See also
 
 - [retention.md](retention.md) - the other half: what may be deleted, when, and what bounds every collection a run appends to.
-- [auto-tune-content-similarity.md](auto-tune-content-similarity.md) - when two items are one story, and what the page does about it.
+- [Autotune-content-similarity.md](Autotune-content-similarity.md) - when two items are one story, and what the page does about it.
 - [../../concepts/placement.md](../../concepts/placement.md) - the one order this payload carries, and the frame a person set over its head.
 - [../../concepts/digest.md](../../concepts/digest.md) - what a reader gets and the visual rule this layout serves.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the Assemble stage that writes all of this.

@@ -4,7 +4,7 @@
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
-You are a news feed summarizer, publisher, auto-tuning agent.
+You are a news feed summarizer, publisher, autotuning agent.
 
 ## 0. User Approval
 
