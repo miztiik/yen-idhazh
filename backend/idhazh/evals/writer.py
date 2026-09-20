@@ -29,8 +29,8 @@ file it describes. Over the same 7,636 measurements that is 566.8 KB against
 
 **Both file by day, and they file by the same day.** A run writes one day, two
 runs collide on a file only when they are the same day, and taking a day back is
-one `rm` rather than an edit inside a shared shard - which `merge=union` cannot
-express. The index follows the ledger rather than keeping a grain of its own,
+one `rm` rather than an edit inside a shared shard - which an append-only ledger
+cannot express. The index follows the ledger rather than keeping a grain of its own,
 because `refresh_index` fills a partition with no index from the rows beside it
 and two grains in one relationship is a mapping somebody has to maintain
 (`docs/concepts/partitions.md`).
@@ -269,7 +269,7 @@ def rebuild_index(state_dir: Path, days: Iterable[str]) -> dict[str, IndexDrift]
     with **no** index and never compares one that exists against the rows beside
     it, because comparing means reading the rows and reading the rows is the bill
     the index exists to remove. So an index that drifted - a fill a crash cut
-    short, a day file a `merge=union` grew behind its back - stands for ever, and
+    short, a day file that grew behind its back - stands for ever, and
     the next dedupe silently admits a measurement the ledger already holds.
 
     Dropping the file is the recipe `refresh_index` has always described. What

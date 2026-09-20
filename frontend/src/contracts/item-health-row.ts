@@ -71,7 +71,7 @@ export type ItemOutcome = (typeof ITEM_OUTCOME)[number];
  * times three of these names and one emitter writes one of them.
  *
  * Declaration order is the funnel a person reads down, and
- * `retention.fold_month` sorts a month's groups by it. The order is free to
+ * `retention.compact_month` sorts a month's groups by it. The order is free to
  * change: this is a `StrEnum`, so the wire value is the string and never the
  * position.
  */

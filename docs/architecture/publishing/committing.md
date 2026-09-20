@@ -1,6 +1,6 @@
 # How a run's rows reach the repository
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-20
 
 Ten jobs of one run commit to one branch, and every one of them can lose the
 push race. This page owns what they run to win it: the three-attempt rebase
@@ -86,7 +86,7 @@ which names the one writer that can take it. Two sides of a lost race are
 therefore two different paths, and the rebase applies both whole.
 
 **Until 2026-09-19 those files were shared and `.gitattributes` gave every one of
-them `merge=union`**, which resolved the rebase by concatenating both sides. That
+them a union merge driver**, which resolved the rebase by concatenating both sides. That
 is the right answer for two runs writing different rows and the wrong one for two
 attempts writing the same row, and an appending stage cannot tell them apart: it
 filters against the file it checked out, and `actions/checkout` pins the job to

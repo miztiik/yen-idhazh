@@ -165,7 +165,7 @@ def item_health_history(state_dir: Path, months: list[str]) -> None:
 def totals_from_shard(texts: Iterable[str]) -> dict[tuple[str, str], tuple[int, int, int]]:
     """Rows, failures and total milliseconds per (date, stage), read off the CSVs.
 
-    Recomputed here from the raw text rather than by calling `fold_month`, so the
+    Recomputed here from the raw text rather than by calling `compact_month`, so the
     oracle cannot pass by agreeing with the code it is checking. It takes a
     month's day files together, because a month is what one aggregate covers.
     """

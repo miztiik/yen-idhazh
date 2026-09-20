@@ -947,13 +947,16 @@ def test_the_spread_is_read_off_the_cells_the_server_itself_counted(
     Both numbers are llama-server's own counters on the host row. The item ledger
     answers the same question by arithmetic over its own rows, which cannot check
     those rows - this is the reading that can disagree with them.
+
+    **The line carries the count it was taken over.** A bare ratio on the strip
+    reads as a fleet figure, and this one is two shards of one run.
     """
     state, digest = tree
 
     band = _band(state, digest)
 
     machine_route = next(route for route in band.routes if route.id is RouteId.MACHINE)
-    assert machine_route.worst == "shards read 2.00x apart"
+    assert machine_route.worst == "2 shards read 2.00x apart"
 
 
 def test_a_shard_that_filed_no_host_row_is_counted_against_the_plan(

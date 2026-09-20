@@ -611,7 +611,8 @@ export interface MemoryView {
 
 /** The run's own memory high-water mark, and every shard behind it.
  *
- * `peak_rss_bytes` landed on 2026-08-30, so most committed rows are blank in
+ * The item ledger's `llama_rss_peak_bytes` landed on 2026-08-30, so most
+ * committed rows are blank in
  * it. A blank is drawn as absence: this returns only the shards that reported,
  * and carries the run's shard count beside them so the page can say how much of
  * the run the figure covers rather than treating an unmeasured shard as a shard

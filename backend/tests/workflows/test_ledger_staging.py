@@ -594,8 +594,8 @@ def _rewritten_stores() -> set[str]:
     `append_*` adds to the file and `write_*` replaces it - the convention the module
     already spells in its own names, and the one `_store_publics` already splits on.
     A writer that replaces settles nothing as it writes, so it names no key. The
-    post-merge key is still right for it: the file is `merge=union`, so two runs'
-    folds stack in the merged copy and the settler is the only thing that can take
+    post-merge key is still right for it: two runs' folds can both land in the
+    merged copy and the settler is the only thing that can take
     one of them back out again.
 
     A head the compaction fills is the same case one step further out. It settles its

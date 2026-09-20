@@ -437,9 +437,9 @@ def test_no_ledger_head_carries_a_merge_driver_and_a_segment_refuses_one() -> No
     never opens a file, and a committed date literal in a test is a date that
     stops being interesting.
 
-    Every head under `state/` carried `merge=union` until 2026-09-19, which is
-    what let a second attempt at one job stack a row the first attempt had
-    already pushed. The two day trees that keep a union driver keep it in their
+    Every head under `state/` carried a union merge driver until 2026-09-19,
+    which is what let a second attempt at one job stack a row the first attempt
+    had already pushed. The two day trees that keep one keep it in their
     own named lines, and they have one writing job each.
     """
     paths = [

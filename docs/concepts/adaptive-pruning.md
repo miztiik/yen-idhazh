@@ -341,8 +341,10 @@ a raster family would move every row of the arithmetic above at once.
 
 **The module keeps the name `retention.py` and the concept is documented as
 adaptive pruning.** "Intelligent" claims a property that code reading a date does
-not have, and "compaction" is borrowed from log-structured storage where it means
-something else (O9, `CLAUDE.md` section 0b).
+not have. "Compaction" is this repository's own word for merging segments into a
+day head and day heads into a month file - `idhazh compact`, and
+`retention.compact_month` one level up - so taking it for deletion by age would
+be one word for two operations (O9, `CLAUDE.md` section 0b).
 
 **The register carries no test, and that is a decision rather than an omission.**
 Three shapes were available. A walk of `state/`, `corpus/` and

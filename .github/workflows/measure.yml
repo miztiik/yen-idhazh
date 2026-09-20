@@ -743,8 +743,9 @@ jobs:
       # Two dispatches of this workflow can run at once - it is the one state
       # writer with no concurrency group at all - so the segment is what keeps
       # them off one path. The heads they fold into are still two rewrites of one
-      # file, and `merge=union` plus the run-id key is what settles that until
-      # the segment store covers every ledger.
+      # file: the run-id key keeps the two rows distinct, and with no union
+      # driver left a lost race conflicts at the rebase rather than stacking both
+      # copies.
       - name: Fold the machine record into its day
         run: python -m idhazh compact --config backend/var/candidate-config
 

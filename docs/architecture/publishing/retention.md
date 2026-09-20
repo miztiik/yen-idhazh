@@ -413,7 +413,7 @@ what bounds them is still `observability.scores_full_grain_months`.
 
 What it buys is that the two things which could bound it are now possible. A
 retention rule can take a whole month the way `state/item-health/` already does,
-instead of rewriting a file that `merge=union` will not let anyone rewrite. And a
+instead of rewriting a file no run was allowed to rewrite. And a
 reader that wants a window can skip whole files - `payload.ts` has a shared
 `readShards` helper now, which `state/item-health/` was using at the time and
 this ledger could not. **`state/item-health/` left that helper on 2026-09-13**,

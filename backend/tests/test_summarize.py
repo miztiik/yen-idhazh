@@ -2492,8 +2492,8 @@ def test_the_sanitizer_and_not_the_prompt_decides_what_a_paragraph_break_is() ->
     Four things a decoder emits for "a blank line", and one shape out. The lone
     newline rejoins because a model that wrapped its prose at some width meant
     one paragraph, and the tab is the case that matters most - a control
-    character in a published field breaks a CSV cell and a `merge=union` day
-    file, and no paragraph break is worth that.
+    character in a published field breaks a CSV cell and the day file that holds
+    it, and no paragraph break is worth that.
     """
     assert normalize_prose("One.\nTwo.") == "One. Two."
     assert normalize_prose("One.\n\n\n\nTwo.") == "One.\n\nTwo."
