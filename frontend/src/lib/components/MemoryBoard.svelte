@@ -499,7 +499,7 @@
 		gap: 1px;
 		block-size: 5rem;
 		padding: 0;
-		border-block-end: 1px solid var(--color-border);
+		border-block-end: 1px solid var(--color-rule);
 	}
 
 	.mark {
@@ -536,8 +536,8 @@
 			45deg,
 			transparent,
 			transparent 3px,
-			var(--color-border) 3px,
-			var(--color-border) 4px
+			var(--color-rule) 3px,
+			var(--color-rule) 4px
 		);
 	}
 
@@ -545,11 +545,11 @@
 		position: absolute;
 		inset-inline: 0;
 		block-size: 2px;
-		background: var(--color-text-primary);
+		background: var(--color-text);
 	}
 
 	.mark.worst .bar {
-		outline: 1px solid var(--color-text-primary);
+		outline: 1px solid var(--color-text);
 		outline-offset: 0;
 	}
 
@@ -581,7 +581,7 @@
 		position: absolute;
 		inset-block: 0;
 		inline-size: 2px;
-		background: var(--color-text-primary);
+		background: var(--color-text);
 	}
 
 	.readout {
