@@ -173,12 +173,12 @@ section 3 is where it is answered.
 | #14 | 37 | C | The memory board drops the disputed mark | 2 is PENDING; 9 is PENDING |
 | #15 | 37 | C | The shard board gains the clocks nobody reads | 9 is PENDING |
 | #16 | 37 | C | Machine cards gain uptime, clock speed, cache size and copy speed | 6 is PENDING; 9 is PENDING |
-| #19 | 37 | C | Prompt reuse and reading speed, call by call | 9 is PENDING |
+| #19 | 37 | C | Which prompts get re-read, and how fast | 9 is PENDING |
 | #20 | 37 | C | What is holding the runner's memory | 5 is PENDING; 9 is PENDING |
 | #21 | 37 | C | What the context window actually costs | 9 is PENDING |
 | #22 | 37 | C | Dotted rules where a setting moved | 9 is PENDING; 21 is PENDING |
 | #17 | 37 | D | Every published column names its reader | 5 is PENDING; 10 is PENDING; 11 is PENDING; 12 is PENDING; 13 is PENDING; 14 is PENDING; 15 is PENDING; 16 is PENDING; 19 is PENDING; 20 is PENDING; 21 is PENDING; 22 is PENDING |
-| #18 | 37 | E | Docs, the plan 33 correction, and the orphan sweep | all names no row |
+| #18 | 37 | E | Docs, the living-page corrections, and the orphan sweep | all names no row |
 
 ## Finished - 18 plans with no live row
 
