@@ -1,4 +1,4 @@
-/** Where one run's time went, item by item, read at build time from the published mirror.
+/** Where one run's time went, by item and by shard, read at build time from the published mirror.
  *
  * `frontend/public/run-timeline/<YYYY-MM>.csv` holds one row per item of one run:
  * where the item's own work began on the run's clock, how long it took, and what
@@ -9,8 +9,15 @@
  *
  * **Read at build time, not fetched.** It sits under `$lib/server/` so SvelteKit
  * refuses to bundle it for a browser, the same place and for the same reason as
- * `span-rollup.ts`. Nothing on the machine route waits on a network for its first
- * frame and this does not change that.
+ * `span-rollup.ts`. Nothing on the Pipeline route waits on a network for its
+ * first frame and this does not change that.
+ *
+ * **Two grains, one fold.** The view carries a bar per item and a bar per shard,
+ * both built here in one call over one set of rows - so a step's seconds are the
+ * same seconds at either grain, and the panel's switch cannot put two answers to
+ * one question on the page. A shard bar was a panel of its own on a second
+ * ledger until 2026-09-20, and the two panels disagreed about which run was the
+ * newest because they read different files.
  *
  * **Which steps are drawn comes from the data, never from a list here.** Two of
  * the contract's eight steps - `plan` and `publish` - have no producer anywhere
@@ -92,7 +99,7 @@ const STEP_LABEL: Record<TimelineStep, string> = {
  * Declared rather than implied, because the empty-column gate is written against
  * this list: a column named here that is empty on every row of the canary day is
  * a panel drawing against nothing, and the gate fails rather than letting it ship
- * (`frontend/tests/console-run-timeline.spec.ts`).
+ * (`frontend/tests/console-pipeline-timeline.spec.ts`).
  */
 export const TIMELINE_COLUMNS = [
 	'date',
@@ -192,13 +199,34 @@ export interface TimelineSegment {
 	width: string;
 }
 
-/** One item as a bar placed on the run's clock. */
+/** Which grain the panel is drawing.
+ *
+ * Both come out of one builder call over one set of rows, so a step's seconds
+ * are the same seconds at either grain and the switch cannot put two answers to
+ * one question on the page.
+ */
+export type TimelineGrain = 'item' | 'shard';
+
+/** One bar placed on the run's clock - an item at the item grain, a shard at the
+ * shard grain. */
 export interface TimelineBar {
-	itemId: string;
+	/** Stable and unique within its grain: the item id, or `shard-<n>`. */
+	id: string;
+	/** What the gutter prints beside the bar. */
+	label: string;
 	shard: number;
 	startOffsetMs: number;
+	/** How long the bar is. An item's own clock at the item grain; at the shard
+	 * grain the stretch from that shard's first item start to its last item end. */
 	totalMs: number;
-	/** Signed. Negative means two steps overlapped - the visual plan is decoded
+	/** The time inside items. The same as `totalMs` at the item grain; at the shard
+	 * grain it is that shard's items added up, and it is shorter than the stretch
+	 * wherever the shard spent time between them. */
+	workMs: number;
+	/** How many items the bar covers. One at the item grain. */
+	itemCount: number;
+	/** Signed, and one meaning at both grains: the stretch the named steps do not
+	 * account for. Negative means two steps overlapped - the visual plan is decoded
 	 * inside the summary call, so it is apportioned out of it rather than timed
 	 * beside it (`backend/idhazh/contracts/run_timeline.py`). */
 	residualMs: number;
@@ -226,9 +254,9 @@ export interface TimelineTick {
 
 /** Everything the panel draws, worked out once on the server.
  *
- * A snapshot of one run and not a window, for the reason `SpanBreakdown` is: the
- * clock is a per-run quantity and narrowing a span cannot narrow a single run.
- * The panel names the run it drew instead.
+ * A snapshot of one run and not a window: the clock is a per-run quantity and
+ * narrowing a span cannot narrow a single run. The panel names the run it drew
+ * instead.
  */
 export interface RunTimelineView {
 	empty: boolean;
@@ -236,6 +264,13 @@ export interface RunTimelineView {
 	date: string;
 	/** One bar per item, in start order, capped at `console.timeline_bars`. */
 	bars: TimelineBar[];
+	/** `bars` re-ordered by the shard that ran each item, then by start - so a
+	 * reader chasing one worker reads its stretch contiguously instead of picking
+	 * its rows out of the run's queue. Indices into `bars`, because the same bars
+	 * carried twice would put every figure in the document twice. */
+	shardOrder: number[];
+	/** One bar per shard, folded from the same rows `bars` draws. */
+	shardBars: TimelineBar[];
 	/** Every item of the run, cap included - so the panel can say what it left out. */
 	itemCount: number;
 	/** Shards that worked at least one item of this run, ascending. */
@@ -266,6 +301,11 @@ export interface RunTimelineView {
 	overrunCount: number;
 	/** Every bar's residual added up, signed, over the whole run. */
 	residualMs: number;
+	/** The same at the shard grain: every shard's stretch that its named steps do
+	 * not account for, added up. Larger than `residualMs`, because a shard's
+	 * stretch holds the time between its items as well as the time inside one that
+	 * nothing timed. */
+	shardResidualMs: number;
 }
 
 /** Which chart-ramp stop a step takes: its position in `TIMELINE_STEPS`, one-based.
@@ -284,6 +324,8 @@ const EMPTY: RunTimelineView = {
 	runId: '',
 	date: '',
 	bars: [],
+	shardOrder: [],
+	shardBars: [],
 	itemCount: 0,
 	shards: [],
 	spanMs: 0,
@@ -295,52 +337,135 @@ const EMPTY: RunTimelineView = {
 	unproduced: [...UNPRODUCED_STEPS],
 	unrecorded: TIMELINE_STEPS.filter((step) => !UNPRODUCED_STEPS.includes(step)),
 	overrunCount: 0,
-	residualMs: 0
+	residualMs: 0,
+	shardResidualMs: 0
 };
+
+/** What one bar of either grain is made of, before it is placed on the clock. */
+interface BarSource {
+	id: string;
+	label: string;
+	shard: number;
+	startOffsetMs: number;
+	totalMs: number;
+	workMs: number;
+	itemCount: number;
+	residualMs: number;
+	steps: readonly { name: TimelineStep; ms: number }[];
+}
+
+/** How far right a bar reaches, steps included.
+ *
+ * Not the bar's own length: a bar whose steps overrun its clock is drawn past
+ * its end, and a scale taken off the clock alone would push that overrun off the
+ * right of the panel.
+ */
+function reachOf(start: number, total: number, steps: readonly { ms: number }[]): number {
+	return start + Math.max(total, steps.reduce((sum, step) => sum + step.ms, 0));
+}
+
+/** Fold the run's rows to one source per shard, ascending.
+ *
+ * The SAME rows the item grain draws, so a step's seconds are the same seconds
+ * at either grain. A shard's bar runs from its first item's start to its last
+ * item's end - the stretch it held a worker for - and `workMs` is the time
+ * inside its items, so the two differ by whatever the shard spent between them.
+ */
+function shardSources(rows: readonly TimelineRow[]): BarSource[] {
+	const byShard = new Map<number, TimelineRow[]>();
+	for (const row of rows) byShard.set(row.shard, [...(byShard.get(row.shard) ?? []), row]);
+
+	return [...byShard.entries()]
+		.sort((left, right) => left[0] - right[0])
+		.map(([shard, own]) => {
+			const startOffsetMs = Math.min(...own.map((row) => row.startOffsetMs));
+			const endMs = Math.max(...own.map((row) => row.startOffsetMs + row.totalMs));
+			const summed = new Map<TimelineStep, number>();
+			for (const row of own)
+				for (const step of row.steps) summed.set(step.name, (summed.get(step.name) ?? 0) + step.ms);
+			const steps = TIMELINE_STEPS.filter((step) => summed.has(step)).map((step) => ({
+				name: step,
+				ms: summed.get(step) as number
+			}));
+			const totalMs = endMs - startOffsetMs;
+			return {
+				id: `shard-${shard}`,
+				label: `Shard ${shard}`,
+				shard,
+				startOffsetMs,
+				totalMs,
+				workMs: own.reduce((sum, row) => sum + row.totalMs, 0),
+				itemCount: own.length,
+				// One meaning at both grains: the stretch the named steps do not
+				// account for. At this grain it holds the time between items as well as
+				// the time inside one that nothing timed, which is what the shard-clock
+				// panel used to draw on a ledger of its own.
+				steps,
+				residualMs: totalMs - steps.reduce((sum, step) => sum + step.ms, 0)
+			};
+		});
+}
 
 /** Turn one run into the bars the panel draws, or an empty view.
  *
  * `bars` is capped at `barLimit` and every figure beside it is not: a cap on the
  * drawing must never become a cap on the arithmetic, or the panel reports the
- * run it drew rather than the run that ran.
+ * run it drew rather than the run that ran. The shard grain is folded over every
+ * row and never over the drawn ones, for the same reason.
  */
 export function runTimelineView(run: TimelineRun | null, barLimit: number): RunTimelineView {
 	if (run === null || run.rows.length === 0) return EMPTY;
 
 	const spanMs = Math.max(...run.rows.map((row) => row.startOffsetMs + row.totalMs));
-	const drawnWidth = (row: TimelineRow): number =>
-		Math.max(
-			row.totalMs,
-			row.steps.reduce((sum, step) => sum + step.ms, 0)
-		);
-	// The scale has to cover the widest DRAWING, not the longest item: a bar whose
-	// steps overrun its own clock is drawn past its end, and a scale taken off the
-	// clock alone would push that overrun off the right of the panel.
-	const scaleMs = Math.max(spanMs, ...run.rows.map((row) => row.startOffsetMs + drawnWidth(row)));
+	const folds = shardSources(run.rows);
+	// The scale covers the widest DRAWING of either grain, so a switch of grain
+	// never moves a bar that did not change.
+	const scaleMs = Math.max(
+		spanMs,
+		...run.rows.map((row) => reachOf(row.startOffsetMs, row.totalMs, row.steps)),
+		...folds.map((fold) => reachOf(fold.startOffsetMs, fold.totalMs, fold.steps))
+	);
 	const width = (ms: number): string => `${scaleMs > 0 ? ((ms / scaleMs) * 100).toFixed(4) : 0}%`;
 
-	const bars: TimelineBar[] = run.rows.slice(0, barLimit).map((row) => {
-		const named = row.steps.reduce((sum, step) => sum + step.ms, 0);
-		const overruns = row.residualMs < 0;
+	const barOf = (source: BarSource): TimelineBar => {
+		const named = source.steps.reduce((sum, step) => sum + step.ms, 0);
+		const overruns = source.residualMs < 0;
 		return {
-			itemId: row.itemId,
-			shard: row.shard,
-			startOffsetMs: row.startOffsetMs,
-			totalMs: row.totalMs,
-			residualMs: row.residualMs,
-			segments: row.steps.map((step) => ({
+			id: source.id,
+			label: source.label,
+			shard: source.shard,
+			startOffsetMs: source.startOffsetMs,
+			totalMs: source.totalMs,
+			workMs: source.workMs,
+			itemCount: source.itemCount,
+			residualMs: source.residualMs,
+			segments: source.steps.map((step) => ({
 				name: step.name,
 				label: STEP_LABEL[step.name],
 				stop: stopOf(step.name),
 				ms: step.ms,
 				width: width(step.ms)
 			})),
-			offset: width(row.startOffsetMs),
-			residualWidth: row.residualMs > 0 ? width(row.residualMs) : '',
-			overrunOffset: overruns ? width(row.startOffsetMs + named + row.residualMs) : '',
-			overrunWidth: overruns ? width(-row.residualMs) : ''
+			offset: width(source.startOffsetMs),
+			residualWidth: source.residualMs > 0 ? width(source.residualMs) : '',
+			overrunOffset: overruns ? width(source.startOffsetMs + named + source.residualMs) : '',
+			overrunWidth: overruns ? width(-source.residualMs) : ''
 		};
-	});
+	};
+
+	const bars: TimelineBar[] = run.rows.slice(0, barLimit).map((row) =>
+		barOf({
+			id: row.itemId,
+			label: row.itemId,
+			shard: row.shard,
+			startOffsetMs: row.startOffsetMs,
+			totalMs: row.totalMs,
+			workMs: row.totalMs,
+			itemCount: 1,
+			residualMs: row.residualMs,
+			steps: row.steps
+		})
+	);
 
 	const timed = new Set<TimelineStep>();
 	for (const row of run.rows) for (const step of row.steps) timed.add(step.name);
@@ -351,8 +476,15 @@ export function runTimelineView(run: TimelineRun | null, barLimit: number): RunT
 		runId: run.runId,
 		date: run.date,
 		bars,
+		// Decided here rather than in the component: one builder call owns every
+		// shape the switch offers, indices rather than a second copy of the bars.
+		shardOrder: bars
+			.map((bar, at) => ({ at, shard: bar.shard, start: bar.startOffsetMs }))
+			.sort((left, right) => left.shard - right.shard || left.start - right.start || left.at - right.at)
+			.map((one) => one.at),
+		shardBars: folds.map(barOf),
 		itemCount: run.rows.length,
-		shards: [...new Set(run.rows.map((row) => row.shard))].sort((a, b) => a - b),
+		shards: folds.map((fold) => fold.shard),
 		spanMs,
 		scaleMs,
 		// Five positions, the first at zero and the last at the full width. Evenly
@@ -368,6 +500,7 @@ export function runTimelineView(run: TimelineRun | null, barLimit: number): RunT
 		unproduced: TIMELINE_STEPS.filter((step) => !timed.has(step) && UNPRODUCED_STEPS.includes(step)),
 		unrecorded: TIMELINE_STEPS.filter((step) => !timed.has(step) && !UNPRODUCED_STEPS.includes(step)),
 		overrunCount: run.rows.filter((row) => row.residualMs < 0).length,
-		residualMs: run.rows.reduce((sum, row) => sum + row.residualMs, 0)
+		residualMs: run.rows.reduce((sum, row) => sum + row.residualMs, 0),
+		shardResidualMs: folds.reduce((sum, fold) => sum + fold.residualMs, 0)
 	};
 }

@@ -390,12 +390,6 @@ span and a snapshot is not something a span can narrow - a board that emptied at
 7 days would say the run had stopped existing. The page states this once, above
 the snapshots, and names the run they are about. Authority: Jony, 2026-08-31.
 
-**One snapshot reads its own ledger, and often a different run.** The span
-breakdown reads `state/span-rollup/` rather than the counters, and the span
-record started later than the counters did, so the newest run it can draw is
-often not the newest run the counters hold. It names the run it found instead of
-borrowing the counters' newest, so the two are never silently conflated.
-
 Eight surfaces on Hardware declare `data-windowed`, and each one prints the day
 count in its own words: the run count at the top, the prompt cache, context
 headroom, what the platform has been giving us, the server panel's three spans,
@@ -406,22 +400,17 @@ day count.
 
 ## What the Hardware route draws
 
-Fifteen panels. Eleven read `state/item-health/` and
+Thirteen panels. Eleven read `state/item-health/` and
 `state/host-fingerprint/`, which are the two instruments this route puts beside
 each other; three - the two machine panels and the split - read the machine
-record for the processor and the flags as well; one - where a shard's clock went
-- reads `state/span-rollup/`; one - where the run's time went, item by item -
-reads the published mirror `frontend/public/run-timeline/`. All five are read at
-build time under `$lib/server/` and nothing on the route is fetched: the four
+record for the processor and the flags as well. All three are read at
+build time under `$lib/server/` and nothing on the route is fetched: the three
 `state/`
-ledgers add no telemetry column and no reader sees a cell of any of them, and the
-published mirror carries no address, no title and no fetched text.
+ledgers add no telemetry column and no reader sees a cell of any of them.
 
 | Panel | Grain | The sentence it is for |
 | --- | --- | --- |
 | Shards of the newest run | one row a shard | Was the day slow because of the work or because of the machine. |
-| Where a shard's clock went | one bar a shard | How much of a shard's time went to items, and how much to overhead nobody named. |
-| Where the run's time went, item by item | one bar an item | Which item queued, which one ran long, and where in a run the time actually went. |
 | How near the runner's ceiling this run got, item by item | one mark an item, with a shard grain and a window grain | Which item took the machine nearest its limit, whether it gave the memory back, and how long the queue was. |
 | Reading against writing, machine by machine | one group a machine | What a written token costs against a read one, on the machine that paid it. |
 | The machines this run drew | one card a machine | What machine this is, what it can do against the others this run drew, and whether its record survived the day. |
@@ -459,43 +448,10 @@ is the average every throughput figure this project had quoted until this page.
 4x inside a run on this ledger and write speed barely moves, so a single "model
 seconds" figure averages two different machines together.
 
-**The span breakdown draws where a shard's clock went, and the residual is the
-point.** Each shard's wall clock is `item.total_ms` - the time inside its items -
-plus `unattributed_ms`, the overhead outside every item that no span covers, and
-the fold commits the second on the item row so the two reconcile exactly. The
-panel draws that split per shard: the four sub-steps no ledger column times, the
-rest of the item work, and the overhead drawn hollow on the right - beside the
-stages rather than buried in them. It carries no threshold and no tint, because
-nobody has agreed how much overhead is too much and a colour would publish an
-alarm that does not exist. The record starts 2026-09-06, the day tracing went on
-across the pipeline; before it a run timed its stages but did not commit them, so
-the committed rollup is empty and the real page shows a named empty state that
-says so.
-[../../../frontend/tests/console-machine-spans.spec.ts](../../../frontend/tests/console-machine-spans.spec.ts)
-re-derives the drawn residual straight from the committed rollup cell and holds
-it against the number the page drew, and reaches the empty state through a rollup
-truncated to its header. The reader is
-[../../../frontend/src/lib/server/span-rollup.ts](../../../frontend/src/lib/server/span-rollup.ts),
-and the fixture rollup the canary draws is written in
-[../../../frontend/scripts/build-canary.mjs](../../../frontend/scripts/build-canary.mjs).
-
-**The run timeline answers a different question with the same seconds, and the
-difference is the grain.** The span breakdown folds a run per shard, so it knows
-how long fetching took and never which article was being fetched. This one is one
-bar an item, placed where that item's own work began on the run's clock, so it is
-the only surface on the site that can say which item queued and which one ran
-long. It is a snapshot for the same reason: a window is a span and a span cannot
-narrow one run, so the panel names the run it drew. Its reader is
-[../../../frontend/src/lib/server/run-timeline.ts](../../../frontend/src/lib/server/run-timeline.ts),
-its producer is
-[../../../backend/idhazh/telemetry/publish/run_timeline.py](../../../backend/idhazh/telemetry/publish/run_timeline.py),
-the shape is [run-timeline.md](run-timeline.md) and every drawing rule is
-[../../concepts/console-design.md](../../concepts/console-design.md). It reads
-one published directory and nothing else, so with that directory gone the panel
-is empty by construction and the route still renders whole - measured 2026-09-16
-by rebuilding the canary console with the series moved aside: 123,122 bytes of
-HTML, every panel the route then had present, the written empty state in place
-of the bars.
+**Hardware carried both timing panels until 2026-09-20, and carries neither
+now.** They merged into one panel on Pipelines - see [where a run's time
+went](#where-a-runs-time-went-is-one-panel-on-pipelines-at-two-grains). The move
+is what makes room on a route that had fifteen flat siblings.
 
 **The board is six columns on a desktop and one card a shard at 1280px and
 under.** The column head is the only thing naming a value, so when the columns
@@ -1241,6 +1197,76 @@ and the live numbers are in
 [../../reference/site-weight.md](../../reference/site-weight.md#the-page-guardrails-and-what-each-route-weighs-2026-09-10)
 and what to do when one fires is in
 [../../how-to/run-the-gates.md](../../how-to/run-the-gates.md).
+
+## Where a run's time went is one panel on Pipelines, at two grains
+
+| Panel | Grain | The sentence it is for |
+| --- | --- | --- |
+| Where the run's time went, on the run's own clock | one bar an item, or one bar a shard | Whether the run queued or worked in parallel, and where in it the time actually went. |
+
+**It answers "is it working".** It takes the run's central shape - what it took
+end to end, what its items cost added up, and how many ran at once - and it
+covers every item of the run rather than picking the worst one out. The grain
+switch changes the row and never the question.
+
+**Two panels became one on 2026-09-20, and the grain is why.** Hardware drew a
+shard's clock from `state/span-rollup/` beside an item timeline from
+`frontend/public/run-timeline/`. Two folds over two ledgers can name different
+runs as the newest, and on the committed data they routinely did - the rollup and
+the published mirror start on different days. The merged panel folds both grains
+from one set of rows in one builder call, so a step's seconds are the same
+seconds whichever row a reader is on. A shard's bar runs from its first item's
+start to its last item's end, which is the stretch it held a worker for, and its
+steps are that shard's items added up.
+
+**The shard panel is deleted rather than shrunk, because thickness was never the
+defect.** Measured 2026-09-17 over 23 shard rows of
+`state/span-rollup/2026-09.csv`, the four sub-steps of a shard's clock together
+drew **0.026 px of a 760 px track** and the residual drew **0.039 px**. A browser
+paints neither, so the panel published a legend teaching a reader that four
+categories were zero when they were only unmeasurable at that scale. No bar
+thickness fixes a band that narrow. Authority: Susan, 2026-09-17.
+
+**Every figure it carried survives, printed.** The four sub-steps sit under the
+bars as figures, each beside the step it runs inside - `tag read` is the tagging
+step inside taking the article out, not a step beside it, and a reader who takes
+it for one adds it twice. The overhead outside every item is printed with them,
+and the run's item time plus that overhead is still the shards' whole clock.
+Nothing visible was lost, because none of it was ever visible.
+
+**Hollow is unclaimed, hatched is overclaimed, and both carry a legend key.** The
+owner could not name the hatched notch on sight, which is the test: a texture
+nobody can read is a texture that says nothing. Neither is tinted - nobody has
+agreed how much overhead is too much.
+
+The readers are
+[../../../frontend/src/lib/server/run-timeline.ts](../../../frontend/src/lib/server/run-timeline.ts)
+and
+[../../../frontend/src/lib/server/span-rollup.ts](../../../frontend/src/lib/server/span-rollup.ts);
+the producer of the published mirror is
+[../../../backend/idhazh/telemetry/publish/run_timeline.py](../../../backend/idhazh/telemetry/publish/run_timeline.py),
+its shape is [run-timeline.md](run-timeline.md) and every drawing rule is
+[../../concepts/console-design.md](../../concepts/console-design.md).
+[../../../frontend/tests/console-pipeline-timeline.spec.ts](../../../frontend/tests/console-pipeline-timeline.spec.ts)
+holds the shard grain against the item grain per shard and per step, and fails on
+a declared column that is empty across every canary row.
+[../../../frontend/tests/console-substeps.spec.ts](../../../frontend/tests/console-substeps.spec.ts)
+re-derives each printed figure straight from the committed rollup cells, proves
+the sub-pixel rule on a built fixture in both directions, and reaches the empty
+state through a rollup truncated to its header. The fixture rollup the canary
+draws is written in
+[../../../frontend/scripts/build-canary.mjs](../../../frontend/scripts/build-canary.mjs).
+
+**It is a snapshot, so the window control does not reach it.** A bar's position
+is measured from its own run's start and a span cannot narrow one run, so the
+panel names the run it drew. It reads one published directory bounded to two
+months and one `state/` ledger bounded to the archive window, and with either
+gone the view is empty by construction and the route still renders whole.
+
+**Pipelines now depends on `$lib/charts/machine` for its `seconds` formatter, and
+on `STATE_ROOT`.** Both arrived with this panel. The second is the one worth
+knowing: a build with `STATE_ROOT` unset draws the named empty state for the
+sub-steps, which is correct rather than broken.
 
 ## What one item cost the model is two clocks, drawn apart
 

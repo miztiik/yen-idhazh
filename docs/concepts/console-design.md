@@ -1170,20 +1170,28 @@ Five rules hold under that table.
 
 Authority: Susan and Fowler, plan row #12.
 
-## A run's time is drawn one bar an item, on a real clock
+## A run's time is drawn on a real clock, at the grain the reader picks
 
 > **The shape of the run is legible before a single number is.** A wide staircase is a run that queued; a solid block is a run that worked in parallel.
 
-The run timeline on `/console/machine/` draws
+The run timeline on `/console/` draws
 [`run-timeline/<YYYY-MM>.csv`](../architecture/publishing/run-timeline.md). The
 shape it reads was settled first and left every drawing question open; those
 questions are settled here, because a drawing is not a contract.
 
-- **A row is one item and the y axis is items, in start order.** Not one stage
-  and not one shard: the panel above it already folds the same seconds per shard,
-  and this is the only surface on the site that can say WHICH article was being
-  read. Sorted by start rather than by cost, because the queue is the thing a
-  reader cannot get anywhere else.
+- **A row is one item and the y axis is items, in start order.** Sorted by start
+  rather than by cost, because the queue is the thing a reader cannot get
+  anywhere else, and this is the only surface on the site that can say WHICH
+  article was being read.
+- **A shard grain sits on the same switch, out of the same fold.** Item, item
+  grouped by the shard that ran it, and one bar a shard - three states of one
+  control, built by one call over one set of rows. A second panel drew the shard
+  grain from `state/span-rollup/` until 2026-09-20, and two folds over two
+  ledgers could name different runs as the newest. A shard's bar runs from its
+  first item's start to its last item's end, which is the stretch it held a
+  worker for, and its steps are that shard's items added up - so the same seconds
+  are drawn at either grain and the switch cannot put two answers to one question
+  on the page.
 - **The x axis is elapsed milliseconds from the run's start, and the wait is
   position rather than length.** An item that queued forty seconds sits forty
   seconds to the right; nothing is drawn in front of its bar. A category axis -
@@ -1203,10 +1211,11 @@ questions are settled here, because a drawing is not a contract.
   is named in words underneath, and the two silences are separated: `plan` and
   `publish` are timed by nothing in the pipeline at all, and any other absence is
   a gap in what THIS run wrote down. An operator acts on only one of those.
-- **The residual is drawn hollow and never tinted**, the ruling
-  [`SpanPanel`](../architecture/publishing/console.md) made for the shard. Nobody
-  has agreed how much overhead is too much, so a colour would publish an alarm
-  that does not exist.
+- **Hollow is unclaimed, hatched is overclaimed, and both carry a legend key.**
+  Neither is tinted - nobody has agreed how much overhead is too much, so a colour
+  would publish an alarm that does not exist. The keys are there because the
+  owner could not name the hatched notch on sight, which is the test a mark has
+  to pass: a texture nobody can read is a texture that says nothing.
 - **The residual is signed, and the sign changes the drawing rather than the
   colour.** Positive, it is a hollow slice extending the bar to the item's full
   clock, and the steps plus that slice are the item's own time exactly. Negative,
@@ -1233,14 +1242,22 @@ questions are settled here, because a drawing is not a contract.
   items cost added up, and the second divided by the first. That third number is
   the one that says staircase or block - one means a queue however many shards
   were running, and four means four shards genuinely busy together.
+- **The four sub-steps are printed figures and never bands.** `robots`, `tag`,
+  `render_prompt` and `parse_reply` nest inside steps the bars already draw, and
+  together they come to far under one pixel of the track, so they sit under the
+  bars as figures with the step each runs inside. A reader who takes `tag read`
+  for a step beside taking the article out adds it twice, which is why the place
+  it runs is printed next to it rather than left to be guessed.
 
 **A column the panel reads has to carry a value somewhere on the canary day, or
 the panel does not ship.**
-[../../frontend/tests/console-run-timeline.spec.ts](../../frontend/tests/console-run-timeline.spec.ts)
+[../../frontend/tests/console-pipeline-timeline.spec.ts](../../frontend/tests/console-pipeline-timeline.spec.ts)
 takes the declared list off `run-timeline.ts`, reads `backend/var/canary/`, and
 fails on any column empty across every row - then checks on the page that every
 step in the legend has a slice behind it and that all eight are accounted for as
-drawn, unproduced or unrecorded. The canary is the right fixture because it is
+drawn, unproduced or unrecorded. The same file holds the grain oracle: it reads
+the two arrays off the page and holds the shard grain against the item grain,
+per shard and per step. The canary is the right fixture because it is
 fixed in size (`CLAUDE.md` Guardrail #12) and because it is built, so it carries
 a case the archive has never produced: not one committed census row records an
 item clock, so nothing but a built day can place an item on one.
@@ -1256,7 +1273,8 @@ behind them - `day-metrics.addresses_considered` and
 `machine.cgroup_peak_bytes` - which is a different defect and a cheaper one. The
 `run-days` and `span-rollup` payloads are clean.
 
-Authority: Susan, 2026-09-16.
+Authority: Susan, 2026-09-16. The grain switch, the move to `/console/` and the
+printed sub-steps: Susan, 2026-09-20.
 
 ## The holdout margin is drawn at the scale of the margin, not of the score
 
