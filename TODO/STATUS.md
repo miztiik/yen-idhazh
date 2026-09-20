@@ -39,7 +39,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 
-## In flight - 18
+## In flight - 19
 
 | Row | Plan | Group | Title | Worktree |
 | --- | --- | --- | --- | --- |
@@ -60,6 +60,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | #24 | 33 | I | Counterfactual cost gets a shape | p33i24 |
 | #20 | 33 | I | Timing panels merge and move to Pipeline | p33i20 |
 | #26 | 33 | I | Machine cards: L3 and bandwidth as bars - AMENDS Row #5 | p33i26 |
+| #27 | 33 | K | Route grouping and panel order | p33i27 |
 | #29 | 33 | J | `prune.yml` wakes outside the digest window | p33j29 |
 
 ## Ready now - 28
@@ -99,7 +100,7 @@ section 3 is where it is answered.
 | #7 | 35 | A / eval-core | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - |
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
 
-## Waiting on another row - 76
+## Waiting on another row - 75
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -159,7 +160,6 @@ section 3 is where it is answered.
 | #9 | 27 | D | A cut reply keeps its summary | 1 is PENDING |
 | #11 | 27 | E | Two articles, three arms, one runner | 4 is PENDING |
 | #16 | 33 | G | Docs, and the orphan sweep | all names no row |
-| #27 | 33 | K | Route grouping and panel order | 20 is IN-FLIGHT; 26 is IN-FLIGHT |
 | #14 | 33 | - | The per-item machine load panel | - |
 | #8 | 33 | - | Memory split by prefill and decode | - |
 | #6 | 35 | A / eval-core | Remove `new_fact_rate` + `key_point_weight` (+#34 field, judge stages, C3) | #34 names no row |
