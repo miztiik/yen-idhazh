@@ -121,9 +121,11 @@ function writeItemHealthCanary() {
 	// needs a day of its own to sit on: a stage nothing timed, a stage timed at
 	// zero, and a day timed in part.
 	//
-	// The six `os_` cells are named and left empty. No committed run has written
-	// one yet, and a plausible memory figure nobody measured is worse here than
-	// a dash: this file is what the console's arithmetic is checked against.
+	// The machine cells that no committed run has written yet are named and left
+	// empty - the six `os_` ones, the stolen share, the fault count, the two
+	// anonymous-memory readings and the pinning flag. A plausible figure nobody
+	// measured is worse here than a dash: this file is what the console's
+	// arithmetic is checked against.
 	const COLUMNS = [
 		'version', 'date', 'run_id', 'item_id', 'url_key', 'canonical_url', 'vertical',
 		'source_id', 'stage', 'outcome', 'code', 'http_status', 'source_chars', 'source_words',
@@ -144,10 +146,12 @@ function writeItemHealthCanary() {
 		'kv_tokens_at_start', 'prefix_shared_with_previous', 'label_prefill_tokens_per_s',
 		'label_decode_tokens_per_s', 'summary_prefill_tokens_per_s', 'summary_decode_tokens_per_s',
 		'label_finish_reason', 'summary_finish_reason', 'recovered', 'cpu_model',
-		'cpu_busy_pct', 'cpu_busy_max', 'cpu_busy_min', 'load_1m', 'llama_rss_bytes',
-		'llama_rss_peak_bytes', 'python_rss_bytes', 'cgroup_peak_bytes', 'model_id',
+		'cpu_busy_pct', 'cpu_busy_max', 'cpu_busy_min', 'cpu_steal_pct', 'load_1m',
+		'llama_rss_bytes', 'llama_rss_anon_bytes', 'llama_rss_peak_bytes', 'llama_major_faults',
+		'python_rss_bytes', 'python_rss_anon_bytes', 'model_id',
 		'model_quantisation', 'n_ctx_configured', 'n_parallel', 'n_threads', 'n_batch',
-		'max_output_tokens', 'label_budget_tokens', 'summary_budget_tokens', 'run_visual_decision',
+		'weights_pinned', 'max_output_tokens', 'label_budget_tokens', 'summary_budget_tokens',
+		'run_visual_decision',
 		'temperature', 'failed_field', 'failed_rule', 'os_mem_available_bytes',
 		'os_mem_total_bytes', 'os_mem_cached_bytes', 'os_swap_free_bytes', 'os_swap_total_bytes',
 		'os_mem_available_min_bytes'
@@ -322,7 +326,6 @@ function writeItemHealthCanary() {
 			load_1m: Math.round((2 + (spread % 600) / 100) * 100) / 100,
 			llama_rss_peak_bytes: 12000000000 + (spread % 1000) * 1000000,
 			python_rss_bytes: 1700000000 + (spread % 1000) * 100000,
-			cgroup_peak_bytes: 13000000000 + (spread % 1000) * 1000000,
 			n_ctx_configured: 65536
 		};
 	};

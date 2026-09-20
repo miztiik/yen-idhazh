@@ -4,12 +4,12 @@
   "canonical_url": "https://dispatch.example.net/2026/08/short-note",
   "carriage_step": null,
   "carried_by": null,
-  "cgroup_peak_bytes": null,
   "code": "too_short",
   "cpu_busy_max": null,
   "cpu_busy_min": null,
   "cpu_busy_pct": null,
   "cpu_model": null,
+  "cpu_steal_pct": null,
   "date": "2026-08-23",
   "decode_ms": null,
   "detail": null,
@@ -46,6 +46,8 @@
   "label_prefill_ms": null,
   "label_prefill_tokens_per_s": null,
   "lens_bonus": null,
+  "llama_major_faults": null,
+  "llama_rss_anon_bytes": null,
   "llama_rss_bytes": null,
   "llama_rss_peak_bytes": null,
   "load_1m": null,
@@ -70,6 +72,7 @@
   "prefill_ms": null,
   "prefix_shared_with_previous": null,
   "published_at": null,
+  "python_rss_anon_bytes": null,
   "python_rss_bytes": null,
   "queue_wait_ms": null,
   "recency_bonus": null,
@@ -117,5 +120,6 @@
   "visual_plan_ms_is_estimate": null,
   "visual_plan_tokens_written": null,
   "watchlist_bonus": null,
-  "watchlist_hit": null
+  "watchlist_hit": null,
+  "weights_pinned": null
 }

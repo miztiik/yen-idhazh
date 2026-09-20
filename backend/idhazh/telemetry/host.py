@@ -13,8 +13,8 @@ change inside a job - the processor, the runner label - so those come from one
 `host_facts()` call taken before the first item runs.
 
 **Every source is a local file read.** `/proc/stat`, `/proc/loadavg`,
-`/proc/meminfo`, `/proc/self/status`, `/proc/<server pid>/status` and the cgroup
-peak file - one `open()` each, against a median 475,890 ms of model time.
+`/proc/meminfo`, `/proc/self/status` and `/proc/<server pid>/status` - one
+`open()` each, against a median 475,890 ms of model time.
 `/proc/<server pid>/stat` is read twice an item rather than once a tick, because
 the fault count it carries is a counter and a window's total is its difference.
 `psutil` would be a dependency, its install time and its shipped bytes for
@@ -95,25 +95,21 @@ MEMINFO_KEYS: Final = ("MemTotal", "MemAvailable", "Cached", "SwapFree", "SwapTo
 #: Where a process reports its own memory and its own fault counters.
 PROC: Final = Path("/proc")
 
-#: The two `/proc/<pid>/status` lines this project reads, spelled the kernel's
+#: The three `/proc/<pid>/status` lines this project reads, spelled the kernel's
 #: way. `VmRSS` is what the process holds now. `VmHWM` is the larger of that and
 #: a mark the kernel refreshes only when the process itself gives memory back -
 #: so it is a whole-life figure that a reclaimed page can still pull DOWN, and
-#: not a peak that only rises (`docs/reference/host-metrics.md`). One open
-#: answers both, because two opens would describe two instants.
-STATUS_KEYS: Final = ("VmRSS", "VmHWM")
+#: not a peak that only rises (`docs/reference/host-metrics.md`). `RssAnon` is
+#: the part of `VmRSS` that is not file-backed, and it is the one of the three
+#: that cannot also be counted in the page cache. One open answers all three,
+#: because three opens would describe three instants.
+STATUS_KEYS: Final = ("VmRSS", "VmHWM", "RssAnon")
 
 #: `majflt` is the twelfth field of `/proc/<pid>/stat`, and the first two are the
 #: pid and the command. The kernel brackets the command and it may hold a space
 #: or a bracket of its own, so the fields are taken from after the LAST bracket -
 #: where `state` is the first cell and the fault count is the tenth.
 _MAJOR_FAULTS_AFTER_COMM: Final = 9
-
-#: The kernel's own high-water mark for the whole job. Measured absent on every
-#: GitHub-hosted runner this project has probed, which is why it degrades rather
-#: than failing - and why it is worth reading anyway: it is the number the runner
-#: would kill the job over (Guardrail #2).
-CGROUP_PEAK: Final = Path("/sys/fs/cgroup/memory.peak")
 
 #: `/proc` reports these in kilobytes.
 _KB: Final = 1024
@@ -154,13 +150,13 @@ def _kb_keys(text: str | None, keys: tuple[str, ...]) -> dict[str, int | None]:
 
 
 def status_bytes(pid: int | None) -> dict[str, int | None]:
-    """What one process holds now and its high-water mark, from one open.
+    """What one process holds now, its high-water mark and its anonymous part, from one open.
 
-    Two lines of one file, read together because they have to describe one
+    Three lines of one file, read together because they have to describe one
     instant - the same reason `meminfo_bytes` below takes its five keys in one
     read.
 
-    A pid nobody named, or a process this machine will not open, answers two
+    A pid nobody named, or a process this machine will not open, answers three
     unknowns and never raises. That is the ordinary path on every machine this
     project is written on.
     """
@@ -320,21 +316,6 @@ def meminfo_bytes(reported: str | None = None) -> dict[str, int | None]:
     return _kb_keys(text, MEMINFO_KEYS)
 
 
-def cgroup_peak_bytes() -> int | None:
-    """What the kernel counted against the job's memory limit, at its highest.
-
-    The kernel writes a bare count, so a file that holds anything else reads as
-    unknown - and unknown is not zero. Absent is the reading a GitHub-hosted
-    runner has given every time this project has probed one, which is why it
-    degrades rather than raising.
-    """
-    text = _text(CGROUP_PEAK)
-    if not text:
-        return None
-    value = text.strip()
-    return int(value) if value.isdigit() else None
-
-
 def cpu_model() -> str | None:
     """The processor this job drew, in the host's own words.
 
@@ -404,7 +385,6 @@ class HostFacts:
 
     cpu_model: str | None
     runner_name: str | None
-    cgroup_peak_bytes: int | None
     #: Which workflow job drew this machine. Not a reading - no file on the host
     #: says it - so it is handed in rather than probed for, and it travels here
     #: because it is one half of the key the item row joins the host record on.
@@ -422,10 +402,6 @@ class HostFacts:
         job, and `job` with `shard` is how an item reaches that record. What is
         still read here is the one call that takes it, so nothing else has to
         open the environment a second time.
-
-        `cgroup_peak_bytes` is deliberately not here. It is a high-water mark
-        that grows across a job, so an item row takes it again at the end of
-        each item rather than once before the first one runs.
         """
         return {
             "cpu_model": self.cpu_model,
@@ -450,7 +426,6 @@ def host_facts(
     return HostFacts(
         cpu_model=cpu_model(),
         runner_name=runner_name(environ),
-        cgroup_peak_bytes=cgroup_peak_bytes(),
         job=job,
     )
 
@@ -465,7 +440,9 @@ class HostReading:
     load_1m: float | None
     llama_rss_bytes: int | None
     llama_rss_peak_bytes: int | None
+    llama_rss_anon_bytes: int | None
     python_rss_bytes: int | None
+    python_rss_anon_bytes: int | None
     #: What the MACHINE had at this instant, against the four process marks
     #: above. `mem_available_bytes` is the kernel's own estimate of what a new
     #: allocation could get, which is the question a headroom decision asks.
@@ -486,7 +463,9 @@ def read_now(*, server_pid: int | None = None) -> HostReading:
         load_1m=load_1m(),
         llama_rss_bytes=server["VmRSS"],
         llama_rss_peak_bytes=server["VmHWM"],
+        llama_rss_anon_bytes=server["RssAnon"],
         python_rss_bytes=ours["VmRSS"],
+        python_rss_anon_bytes=ours["RssAnon"],
         mem_available_bytes=machine["MemAvailable"],
         mem_total_bytes=machine["MemTotal"],
         mem_cached_bytes=machine["Cached"],
@@ -507,12 +486,18 @@ class HostCells:
     cpu_busy_pct: float | None
     cpu_busy_max: float | None
     cpu_busy_min: float | None
+    #: What the host gave another tenant while this item was charged for the
+    #: processor. Out of the same difference `cpu_busy_pct` comes from, so the
+    #: two cannot describe different windows.
+    cpu_steal_pct: float | None
     load_1m: float | None
     llama_rss_bytes: int | None
+    llama_rss_anon_bytes: int | None
     llama_rss_peak_bytes: int | None
+    llama_major_faults: int | None
     python_rss_bytes: int | None
-    cgroup_peak_bytes: int | None
-    #: What the machine had, against the four process marks above. The last one
+    python_rss_anon_bytes: int | None
+    #: What the machine had, against the process marks above. The last one
     #: is the only cell here taken over the window rather than at its end: the
     #: closest this item took the machine to running out.
     os_mem_available_bytes: int | None
@@ -521,30 +506,27 @@ class HostCells:
     os_swap_free_bytes: int | None
     os_swap_total_bytes: int | None
     os_mem_available_min_bytes: int | None
-    # --- Read, and not yet written down --------------------------------------
-    #
-    # `ItemHealthRow` declares no column for either, so `cells()` leaves them
-    # out: a cell the row does not declare is one `ItemRecorder.note` refuses,
-    # at the end of an eight-minute item rather than at import.
-    cpu_steal_pct: float | None
-    llama_major_faults: int | None
 
     def cells(self) -> dict[str, float | int | None]:
         """The cells by the names `ItemHealthRow` gives them.
 
-        **The two readings above are deliberately absent.** The row has no column
-        for the stolen share or for the fault count, so they are taken and held
-        here until it has somewhere to put them.
+        Every reading this class holds is here. A reading left out is one that is
+        taken on every item and written down nowhere, and a name the row does not
+        declare is one `ItemRecorder.note` refuses at the end of an eight-minute
+        item rather than at import.
         """
         return {
             "cpu_busy_pct": self.cpu_busy_pct,
             "cpu_busy_max": self.cpu_busy_max,
             "cpu_busy_min": self.cpu_busy_min,
+            "cpu_steal_pct": self.cpu_steal_pct,
             "load_1m": self.load_1m,
             "llama_rss_bytes": self.llama_rss_bytes,
+            "llama_rss_anon_bytes": self.llama_rss_anon_bytes,
             "llama_rss_peak_bytes": self.llama_rss_peak_bytes,
+            "llama_major_faults": self.llama_major_faults,
             "python_rss_bytes": self.python_rss_bytes,
-            "cgroup_peak_bytes": self.cgroup_peak_bytes,
+            "python_rss_anon_bytes": self.python_rss_anon_bytes,
             "os_mem_available_bytes": self.os_mem_available_bytes,
             "os_mem_total_bytes": self.os_mem_total_bytes,
             "os_mem_cached_bytes": self.os_mem_cached_bytes,
@@ -570,16 +552,10 @@ class Watch:
     A zero or negative interval samples the two ends and never ticks, which is
     how `logging.waiting_heartbeat_seconds = 0` turns the heartbeat off without
     also turning the maximum and the minimum off.
-
-    `facts` is the sampler call this watch shares with whatever else writes the
-    same column names. A run hands over nothing and the watch reads the kernel
-    peak itself at close, which is what a high-water mark wants - and it reads
-    only that one file, because the processor cannot change inside a shard.
     """
 
     __slots__ = (
         "_busy",
-        "_facts",
         "_faults_at_open",
         "_first",
         "_headroom",
@@ -597,12 +573,10 @@ class Watch:
         interval_s: float,
         server_pid: int | None = None,
         on_tick: Callable[[float], None] | None = None,
-        facts: HostFacts | None = None,
     ) -> None:
         self._interval = interval_s
         self._pid = server_pid
         self._on_tick = on_tick
-        self._facts = facts
         self._busy: list[float] = []
         self._headroom: list[int] = []
         self._first = read_now(server_pid=server_pid)
@@ -670,25 +644,22 @@ class Watch:
             for value in (self._first.llama_rss_peak_bytes, end.llama_rss_peak_bytes)
             if value is not None
         ]
-        # Only the kernel peak, never a whole `host_facts`. The processor cannot
-        # change inside a shard, so reading it again here would be one extra
-        # `/proc/cpuinfo` open on every item for an answer already on the row.
-        peak = cgroup_peak_bytes() if self._facts is None else self._facts.cgroup_peak_bytes
         return HostCells(
             cpu_busy_pct=None if shares is None else shares.busy_pct,
             cpu_busy_max=max(seen) if seen else None,
             cpu_busy_min=min(seen) if seen else None,
+            cpu_steal_pct=None if shares is None else shares.steal_pct,
             load_1m=end.load_1m,
             llama_rss_bytes=end.llama_rss_bytes,
+            llama_rss_anon_bytes=end.llama_rss_anon_bytes,
             llama_rss_peak_bytes=max(peaks) if peaks else None,
+            llama_major_faults=_faults_between(self._faults_at_open, major_faults(self._pid)),
             python_rss_bytes=end.python_rss_bytes,
-            cgroup_peak_bytes=peak,
+            python_rss_anon_bytes=end.python_rss_anon_bytes,
             os_mem_available_bytes=end.mem_available_bytes,
             os_mem_total_bytes=end.mem_total_bytes,
             os_mem_cached_bytes=end.mem_cached_bytes,
             os_swap_free_bytes=end.swap_free_bytes,
             os_swap_total_bytes=end.swap_total_bytes,
             os_mem_available_min_bytes=min(self._headroom) if self._headroom else None,
-            cpu_steal_pct=None if shares is None else shares.steal_pct,
-            llama_major_faults=_faults_between(self._faults_at_open, major_faults(self._pid)),
         )

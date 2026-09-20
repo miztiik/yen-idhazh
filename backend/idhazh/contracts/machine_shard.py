@@ -35,6 +35,11 @@ class MachineShardRow(Contract):
     __schema_stem__: ClassVar[str] = "machine-shard-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-20T18:00",
+            change="Dropped cgroup_peak_bytes, which no run has ever put a value under.",
+            why="A published column that is always empty promises an instrument we do not have.",
+        ),
+        ChangelogEntry(
             version="2026-09-19",
             change="Initial shape: one row per date, run and work shard.",
             why="The published machine series moved onto the two ledgers that survive.",
@@ -132,11 +137,6 @@ class MachineShardRow(Contract):
     )
     python_rss_bytes: int | None = Field(
         default=None, ge=0, description="The pipeline process's own high-water mark."
-    )
-    cgroup_peak_bytes: int | None = Field(
-        default=None,
-        ge=0,
-        description="What the container accounted to the shard, at its highest.",
     )
 
     model_load_ms: float | None = Field(

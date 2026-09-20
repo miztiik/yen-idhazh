@@ -4,6 +4,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Dropped cgroup_peak_bytes, which no run has ever put a value under.",
+      "version": "2026-09-20T18:00",
+      "why": "A published column that is always empty promises an instrument we do not have."
+    },
+    {
       "change": "Initial shape: one row per date, run and work shard.",
       "version": "2026-09-19",
       "why": "The published machine series moved onto the two ledgers that survive."
@@ -24,20 +29,6 @@
       "default": null,
       "description": "Prompt tokens the shard reused from the cache instead of reading. Read beside `read_tokens`: the two together are every prompt token the shard needed.",
       "title": "Cached Tokens"
-    },
-    "cgroup_peak_bytes": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "What the container accounted to the shard, at its highest.",
-      "title": "Cgroup Peak Bytes"
     },
     "cpu_busy_pct": {
       "anyOf": [
@@ -229,7 +220,7 @@
       "type": "integer"
     },
     "version": {
-      "default": "2026-09-19",
+      "default": "2026-09-20T18:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -271,5 +262,5 @@
   ],
   "title": "MachineShardRow",
   "type": "object",
-  "version": "2026-09-19"
+  "version": "2026-09-20T18:00"
 }

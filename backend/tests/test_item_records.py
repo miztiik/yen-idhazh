@@ -165,7 +165,6 @@ def test_every_cell_the_stage_hands_over_arrives_on_the_row() -> None:
             facts=host.HostFacts(
                 cpu_model="Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz",
                 runner_name="ubuntu-4core-3",
-                cgroup_peak_bytes=15_032_385_536,
             ),
         ),
         **work._planned_cells(_planned(article), index=0),

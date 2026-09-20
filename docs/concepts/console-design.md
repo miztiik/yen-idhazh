@@ -1271,9 +1271,11 @@ per column across every row of each file: the one `day-metrics` record the canar
 holds carries `extraction` null, `throughput` null and `stage_timing` empty, so
 the extraction census, the throughput figures and the stage-timing panel each
 fall back to a "nothing was measured" sentence on the fixture the browser suite
-runs against. Two more columns are empty on every canary row without a panel
+runs against. Two more columns were empty on every canary row without a panel
 behind them - `day-metrics.addresses_considered` and
 `machine.cgroup_peak_bytes` - which is a different defect and a cheaper one. The
+second of those is closed: the column was deleted on 2026-09-20, because the
+kernel file behind it is absent on every runner this project has probed. The
 `run-days` and `span-rollup` payloads are clean.
 
 Authority: Susan, 2026-09-16. The grain switch, the move to `/console/` and the

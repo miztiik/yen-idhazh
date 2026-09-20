@@ -49,9 +49,6 @@ export interface MachineShardRow {
 	/** The pipeline process's own high-water mark. */
 	python_rss_bytes?: number | null;
 
-	/** What the container accounted to the shard, at its highest. */
-	cgroup_peak_bytes?: number | null;
-
 	/** What the shard paid opening the weights before its first item, from the machine record. Once a job, which is this row's grain. */
 	model_load_ms?: number | null;
 

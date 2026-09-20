@@ -22,15 +22,11 @@ from dataclasses import fields
 from pathlib import Path
 
 import pytest
-from conftest import FIXTURES_DIR, REPO_ROOT, read_text
+from conftest import FIXTURES_DIR, read_text
 from pytest import MonkeyPatch
 
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.telemetry import host
-
-#: A kernel peak the test chooses, so the assertion is against a known answer
-#: and never against whatever host ran the suite.
-A_KERNEL_PEAK = 15_032_385_536
 
 #: Two real `/proc/stat` reads twenty seconds apart, taken by the probe on a
 #: `ubuntu-latest` runner on 2026-08-30. The gap is what makes it an oracle: the
@@ -56,11 +52,14 @@ def test_a_machine_with_no_proc_records_empty_and_never_raises() -> None:
         "cpu_busy_pct",
         "cpu_busy_max",
         "cpu_busy_min",
+        "cpu_steal_pct",
         "load_1m",
         "llama_rss_bytes",
+        "llama_rss_anon_bytes",
         "llama_rss_peak_bytes",
+        "llama_major_faults",
         "python_rss_bytes",
-        "cgroup_peak_bytes",
+        "python_rss_anon_bytes",
         "os_mem_available_bytes",
         "os_mem_total_bytes",
         "os_mem_cached_bytes",
@@ -359,13 +358,13 @@ def proc_status(name: str, *, rss_kb: int, peak_kb: int) -> str:
     )
 
 
-def test_one_open_a_tick_answers_both_of_a_processs_status_lines(
+def test_one_open_a_tick_answers_every_one_of_a_processs_status_lines(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Two lines of one file describe one instant, so one open has to answer both.
+    """Three lines of one file describe one instant, so one open has to answer all three.
 
     **The Oracle is the count, not the values.** A second open returns the same
-    two numbers on any quiet machine, so reading the values back would pass
+    numbers on any quiet machine, so reading the values back would pass
     whether the file was opened once or twice; what can fail is how many times
     it was opened. One open per process per tick, and two processes are read, so
     a tick opens two status files and never three.
@@ -409,10 +408,65 @@ def test_one_open_a_tick_answers_both_of_a_processs_status_lines(
     assert cells.python_rss_bytes == OUR_OWN_RSS_KB * 1024
 
 
+def test_the_anonymous_part_of_each_resident_set_is_recorded_apart_from_the_whole(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    """The Oracle for the two anonymous cells: `RssAnon`, per process, never `VmRSS`.
+
+    Anonymous memory is the part of a resident set that is not backed by a file.
+    It is worth its own cell because the weights ARE backed by a file: they are
+    counted inside `llama_rss_bytes` and inside the page cache at the same time,
+    so those two may not be added. These two may be, which is what lets a reader
+    split the machine's memory into parts that close.
+
+    Both processes are read, because one cell alone would pass while the other
+    silently took the server's figure.
+    """
+    server_pid = os.getpid() + 1
+    for pid, status in (
+        (server_pid, proc_status("llama-server", rss_kb=A_SERVER_RSS_KB, peak_kb=A_SERVER_PEAK_KB)),
+        (os.getpid(), proc_status("python3", rss_kb=OUR_OWN_RSS_KB, peak_kb=OUR_OWN_RSS_KB)),
+    ):
+        entry = tmp_path / str(pid)
+        entry.mkdir()
+        (entry / "status").write_text(status, encoding="utf-8")
+    monkeypatch.setattr(host, "PROC", tmp_path)
+
+    cells = host.Watch(interval_s=0, server_pid=server_pid).close()
+
+    # `proc_status` writes the anonymous part 2,048 kB below the resident set,
+    # so a cell that copied the whole figure fails rather than reading right.
+    assert cells.llama_rss_anon_bytes == (A_SERVER_RSS_KB - 2048) * 1024
+    assert cells.python_rss_anon_bytes == (OUR_OWN_RSS_KB - 2048) * 1024
+    assert cells.llama_rss_anon_bytes < A_SERVER_RSS_KB * 1024
+
+
+def test_a_process_that_reports_no_anonymous_line_records_nothing_rather_than_zero(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    """An unknown reading is not a process holding no anonymous memory.
+
+    Zero here would read as a process whose whole resident set is file-backed,
+    which is a claim about the machine. The absence is a claim about the reader.
+    """
+    entry = tmp_path / str(os.getpid())
+    entry.mkdir()
+    (entry / "status").write_text(
+        f"VmHWM:\t{OUR_OWN_RSS_KB} kB\nVmRSS:\t{OUR_OWN_RSS_KB} kB\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(host, "PROC", tmp_path)
+
+    cells = host.Watch(interval_s=0).close()
+
+    assert cells.python_rss_bytes == OUR_OWN_RSS_KB * 1024
+    assert cells.python_rss_anon_bytes is None
+    assert cells.llama_rss_anon_bytes is None, "no server pid was named, so there is no reading"
+
+
 def test_a_status_line_this_project_does_not_read_is_ignored(
     monkeypatch: MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Two keys out of about sixty, matched whole, and a key the file lacks is unknown.
+    """Three keys out of about sixty, matched whole, and a key the file lacks is unknown.
 
     A pid nobody named and a process this machine will not open are the same
     answer as a file with neither line in it: two unknowns, never two zeros.
@@ -745,41 +799,6 @@ def test_the_aggregate_line_is_read_out_of_a_whole_capture_or_out_of_the_line_al
     assert host.cpu_ticks(aggregate) is not None
 
 
-def test_the_kernel_peak_reads_the_file_and_the_line_the_shard_job_copies_it_into(
-    monkeypatch: MonkeyPatch, tmp_path: Path
-) -> None:
-    """The Oracle for `cgroup_peak_bytes`: the kernel's own file, and nothing else.
-
-    The kernel writes a bare count. Anything else is unknown, and unknown is not
-    zero - which is what a GitHub-hosted runner has measured every time this
-    project has looked, because the file is not there at all.
-
-    The shard job copies the same count into `memory-peak.txt` for the run
-    artifact and the operator's own read of the job log. Nothing parses that
-    copy, so the workflow half is asserted here only to prove the number a
-    person reads and the number this function reads come from one file.
-    """
-    workflow = read_text(REPO_ROOT / ".github" / "workflows" / "digest.yml")
-    assert "cgroup_memory_peak_bytes=$(cat /sys/fs/cgroup/memory.peak)" in workflow
-    assert "cgroup_memory_peak_bytes=unavailable" in workflow
-
-    # The kernel's own shape, from the file this module opens. Built here: the
-    # path is absent on every machine that runs this.
-    kernel_file = tmp_path / "memory.peak"
-    kernel_file.write_text(f"{A_KERNEL_PEAK}\n", encoding="utf-8")
-    monkeypatch.setattr(host, "CGROUP_PEAK", kernel_file)
-
-    assert host.cgroup_peak_bytes() == A_KERNEL_PEAK
-
-    kernel_file.write_text("unavailable\n", encoding="utf-8")
-
-    assert host.cgroup_peak_bytes() is None, "anything that is not a count is unknown"
-
-    monkeypatch.setattr(host, "CGROUP_PEAK", tmp_path / "absent")
-
-    assert host.cgroup_peak_bytes() is None
-
-
 def test_the_processor_is_read_once_here_and_never_reported_in(
     monkeypatch: MonkeyPatch,
 ) -> None:
@@ -810,9 +829,6 @@ def test_one_sampler_call_reaches_every_row_and_they_cannot_disagree() -> None:
     """
     once = host.host_facts(environ={"RUNNER_NAME": "ubuntu-4core-3"})
 
-    item_cells = host.Watch(interval_s=0, facts=once).close().cells()
-
-    assert item_cells["cgroup_peak_bytes"] == once.cgroup_peak_bytes
     assert once.shard_cells()["cpu_model"] == once.cpu_model
     assert once.runner_name == "ubuntu-4core-3", (
         "the label is still read here, and `state/host-fingerprint/` is what writes it down"
@@ -826,7 +842,7 @@ def test_one_sampler_call_reaches_every_row_and_they_cannot_disagree() -> None:
 
 
 def test_every_host_cell_the_sampler_names_is_a_column_the_item_row_declares() -> None:
-    """Sixteen names, and the row has to hold all sixteen or the cells go nowhere.
+    """Nineteen names, and the row has to hold all nineteen or the cells go nowhere.
 
     Pure code over the contract, so it cannot age out with the archive and it
     cannot pass by reading a day that happens to carry them (section 13). A cell
@@ -836,24 +852,26 @@ def test_every_host_cell_the_sampler_names_is_a_column_the_item_row_declares() -
 
     **The other direction is asserted too**, because it is the one that fails
     silently: a reading the sampler takes on every item and leaves out of
-    `cells()` is computed 80 times a shard and written down nowhere. The two
-    below are held deliberately, and this list empties when the row declares
-    them.
+    `cells()` is computed 80 times a shard and written down nowhere. Nothing is
+    held back now, and the empty set below is what says so.
     """
     every_reading = host.HostCells(*(None,) * len(fields(host.HostCells)))
     sampled = set(every_reading.cells()) | set(
-        host.HostFacts(cpu_model=None, runner_name=None, cgroup_peak_bytes=None).shard_cells()
+        host.HostFacts(cpu_model=None, runner_name=None).shard_cells()
     )
 
     assert sampled == {
         "cpu_busy_pct",
         "cpu_busy_max",
         "cpu_busy_min",
+        "cpu_steal_pct",
         "load_1m",
         "llama_rss_bytes",
+        "llama_rss_anon_bytes",
         "llama_rss_peak_bytes",
+        "llama_major_faults",
         "python_rss_bytes",
-        "cgroup_peak_bytes",
+        "python_rss_anon_bytes",
         "os_mem_available_bytes",
         "os_mem_total_bytes",
         "os_mem_cached_bytes",
@@ -864,7 +882,6 @@ def test_every_host_cell_the_sampler_names_is_a_column_the_item_row_declares() -
         "job",
     }
     assert sampled <= set(ItemHealthRow.model_fields)
-    assert {field.name for field in fields(host.HostCells)} - set(every_reading.cells()) == {
-        "cpu_steal_pct",
-        "llama_major_faults",
-    }, "a reading taken on every item and left out of the cells is written down nowhere"
+    assert not {field.name for field in fields(host.HostCells)} - set(every_reading.cells()), (
+        "a reading taken on every item and left out of the cells is written down nowhere"
+    )

@@ -69,7 +69,7 @@ class Group(NamedTuple):
     columns: tuple[str, ...]
 
 
-#: **The eight questions this row grew by.** It reached 119 columns one
+#: **The eight questions this row grew by.** It reached 123 columns one
 #: question at a time, and a reader meeting the flat list cannot see that.
 #: Which question a column serves is editorial - nothing in the contract says
 #: it - so the membership is declared here and checked against
@@ -219,11 +219,14 @@ GROUPS: Final[tuple[Group, ...]] = (
             "cpu_busy_pct",
             "cpu_busy_max",
             "cpu_busy_min",
+            "cpu_steal_pct",
             "load_1m",
             "llama_rss_bytes",
+            "llama_rss_anon_bytes",
             "llama_rss_peak_bytes",
+            "llama_major_faults",
             "python_rss_bytes",
-            "cgroup_peak_bytes",
+            "python_rss_anon_bytes",
             "os_mem_available_bytes",
             "os_mem_total_bytes",
             "os_mem_cached_bytes",
@@ -246,6 +249,7 @@ GROUPS: Final[tuple[Group, ...]] = (
             "n_parallel",
             "n_threads",
             "n_batch",
+            "weights_pinned",
             "max_output_tokens",
             "run_visual_decision",
             "temperature",

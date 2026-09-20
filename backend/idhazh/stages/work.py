@@ -158,6 +158,7 @@ def _shard_cells(
         "n_parallel": inference.n_parallel,
         "n_threads": inference.n_threads,
         "n_batch": inference.n_batch,
+        "weights_pinned": inference.load_mode == "mmap+mlock",
         "max_output_tokens": inference.max_answer_tokens,
         "label_budget_tokens": calls.label_budget_tokens(),
         "summary_budget_tokens": calls.summarize_and_plan_budget_tokens(settings.app.summarize),
@@ -268,7 +269,7 @@ def _failure_detail(recorder: ItemRecorder, summary: Summary) -> str | None:
 def _slowest(finished: list[ItemHealthRow]) -> dict[str, Any] | None:
     """The item that cost the shard most, and enough to find it again.
 
-    Four cells and not the row: a shard record carrying 119 columns of one item
+    Four cells and not the row: a shard record carrying 123 columns of one item
     buries the totals beside it, and the item's own completion record is already
     in the log for anyone who wants the rest.
 
