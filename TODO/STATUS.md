@@ -37,14 +37,18 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 4 |
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
-| [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 0 | 22 | 6 |
+| [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 0 | 22 | 0 |
 
-## In flight - 0
+## In flight - 4
 
-Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
-dispatches a row, so an empty table here and a busy worktree disagree.
+| Row | Plan | Group | Title | Worktree |
+| --- | --- | --- | --- | --- |
+| #1 | 37 | A | Does this runner expose a hardware PMU | p37r1 |
+| #3 | 37 | A | One status read a tick, not two | p37r3 |
+| #7 | 37 | A | One file a panel | p37r7 |
+| #8 | 37 | A | The rare-event thresholds become knobs | p37r8 |
 
-## Ready now - 34
+## Ready now - 28
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -80,14 +84,8 @@ section 3 is where it is answered.
 | #5 | 35 | A / search | Live-day search - instant + semantic (+ frontend `key_points` owner, C2) | - |
 | #7 | 35 | A / eval-core | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - |
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
-| #1 | 37 | A | Does this runner expose a hardware PMU | - |
-| #2 | 37 | A | Settle the peak that falls | - |
-| #3 | 37 | A | One status read a tick, not two | - |
-| #6 | 37 | A | The bandwidth probe sizes itself against the cache | - |
-| #7 | 37 | A | One file a panel | - |
-| #8 | 37 | A | The rare-event thresholds become knobs | - |
 
-## Waiting on another row - 88
+## Waiting on another row - 90
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -163,11 +161,13 @@ section 3 is where it is answered.
 | #8 | 36 | W4 / apply-gate (alone) | Flip the flag: withhold = absent + item-health telemetry (E7 placement) | 7 is PENDING |
 | #12 | 36 | W3 / rejects-store | The rejects store + corpus fence (`state/rejects/`, 30-day prune) | 3 is PENDING; 7 is PENDING |
 | #13 | 36 | W4 / plan34-gaps | Retro: plan-34 latent gaps + the shared space-trap guard | 34 landed names no row; 6 is PENDING |
-| #4 | 37 | B | The sampler stops calling theft our work | 2 is PENDING; 3 is PENDING |
-| #9 | 37 | B | Panels grouped by the decision they serve | 7 is PENDING |
+| #2 | 37 | A | Settle the peak that falls | 1 is IN-FLIGHT |
+| #6 | 37 | A | The bandwidth probe sizes itself against the cache | 1 is IN-FLIGHT; 3 is IN-FLIGHT; 8 is IN-FLIGHT |
+| #4 | 37 | B | The sampler stops calling theft our work | 2 is PENDING; 3 is IN-FLIGHT |
+| #9 | 37 | B | Panels grouped by the decision they serve | 7 is IN-FLIGHT |
 | #5 | 37 | C | `ItemHealthRow` gains three columns and loses one | 4 is PENDING |
-| #10 | 37 | C | Did another tenant take the processor | 5 is PENDING; 8 is PENDING; 9 is PENDING |
-| #11 | 37 | C | Is the kernel taking the model's weights back | 5 is PENDING; 8 is PENDING; 9 is PENDING |
+| #10 | 37 | C | Did another tenant take the processor | 5 is PENDING; 8 is IN-FLIGHT; 9 is PENDING |
+| #11 | 37 | C | Is the kernel taking the model's weights back | 5 is PENDING; 8 is IN-FLIGHT; 9 is PENDING |
 | #12 | 37 | C | What one article costs the machine | 9 is PENDING |
 | #13 | 37 | C | Three panels leave the page | 9 is PENDING |
 | #14 | 37 | C | The memory board drops the disputed mark | 2 is PENDING; 9 is PENDING |
