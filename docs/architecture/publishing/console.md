@@ -1,6 +1,6 @@
 # Published Console
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-20
 The operator's surface: which panel is on which route, the question each one
 answers, and the ruling behind its shape. `/console/` tells the owner what
 happened to the pipeline, where the digest tells a reader what happened in the
@@ -496,7 +496,7 @@ by rebuilding the canary console with the series moved aside: 123,122 bytes of
 HTML, every panel the route then had present, the written empty state in place
 of the bars.
 
-**The board is five columns on a desktop and one card a shard at 1024px and
+**The board is six columns on a desktop and one card a shard at 1280px and
 under.** The column head is the only thing naming a value, so when the columns
 go the names have to go into the cells - a heading that exists only on a desktop
 is a value with no name on a phone. What the cards replaced was a two-column
@@ -507,11 +507,23 @@ line, and `of the 150-minute timeout - 59 percent` took six lines in 41px. Every
 value the desktop shows the phone shows;
 [../../../frontend/tests/console-machine-data.spec.ts](../../../frontend/tests/console-machine-data.spec.ts)
 compares the two sets rather than trusting the layout, and holds every string to
-at least twelve characters a line. Dropping a column on a phone was refused: the
-board is five facts about one shard, and an instrument that answers four
-questions on a phone and five on a desktop is two instruments. So was a
-horizontal scroll, which hides the job clock - the column an operator opens the
-page for. Authority: Jony and Susan, 2026-08-31.
+at least twelve characters a line. Dropping a column on a phone was refused: an
+instrument that answers five questions on a phone and six on a desktop is two
+instruments. So was a horizontal scroll, which hides the job clock - the column
+an operator opens the page for. Authority: Jony and Susan, 2026-08-31; the
+breakpoint moved from 1024px to 1280px on 2026-09-20, when the sixth column made
+the two range marks under 60px of track each and a fill and a notch that close
+together are one smudge rather than a span.
+
+**The columns are the work-or-host answer, in the order an operator reads it.**
+Shard and its item count, reading against writing, the two rates, the host, the
+memory and processor range marks, and the job clock with the weights load under
+it. They were five until 2026-09-20, and the board's own claim - a long clock at
+a quarter of its neighbour's read rate is the host - could not be checked on the
+board, because every host fact behind it was on one of four other panels. The
+row now carries the item count, the write rate, the load against the cores the
+host reported, the free swap against the swap it has, and the two range marks.
+Authority: Susan, 2026-09-17, decisions 1 to 3 of Row #19.
 
 **The card is an edge, not a fill.** Every quiet line in a row is
 `--color-text-tertiary`, which reads 4.72:1 on `--color-surface` and 4.26:1 on
@@ -1984,7 +1996,9 @@ heading.
 | Re-centring the strip on the newest run after data or layout changes | The operator scrolled there on purpose. A view that snaps back cannot be read. | Jony |
 | A second threshold for the red square | CI already reads a success floor to decide whether to open an issue. Two numbers answering one question drift, and then a red square and an open issue disagree. | owner |
 | Counting skipped items against a run's health | An already-published article is skipped by design. Counting it would paint a healthy day amber for doing its job. | owner |
-| Dropping a column from the shard board on a phone | The board is five facts about one shard, and an instrument that answers four questions on a phone and five on a desktop is two instruments. A horizontal scroll was refused with it: it hides the job clock, the column an operator opens the page for. | Jony, Susan |
+| Dropping a column from the shard board on a phone | An instrument that answers five questions on a phone and six on a desktop is two instruments. A horizontal scroll was refused with it: it hides the job clock, the column an operator opens the page for. | Jony, Susan |
+| Memory and processor as four bars on the board | Four bars a row is eighty bars across a run of twenty shards, and the reader still has to pair them by eye. A median filled with the maximum notched is the same two facts on one track, and the distance between them IS the spread. | Susan |
+| A piecewise 0/10/50/100 value axis on the board | Equal pixel steps for unequal value steps misreports by construction. What the reader loses: at a 6x spread the low bars compress, and that compression is the true picture of a 6x spread. | Susan |
 | Summing peak memory across shards | Shards are separate jobs on separate hosts. The sum reads about 53 GB on a runner that has 16. | Carmack |
 | Reading stage timings from `state/scores.csv` | The score ledger did not carry those columns, and it only covers scored items. Timings belong on the item-health census. | Fowler |
 | Serving `state/item-health/` directly | It carries `canonical_url`, `url_key` and untrusted `detail`. The browser gets only the published telemetry projection. | Fowler, Guardrail #11 |

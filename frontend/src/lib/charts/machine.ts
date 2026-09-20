@@ -117,6 +117,9 @@ export function gib(value: number | null): string {
  */
 export interface BoardRow {
 	shard: number;
+	/** Items this shard finished. The work half of the work-or-host question: a
+	 * long clock at a normal read rate and a high count is a lot of articles. */
+	items: number;
 	readSeconds: number | null;
 	writeSeconds: number | null;
 	/** The two together. Null unless the shard reported both. */
@@ -125,14 +128,59 @@ export interface BoardRow {
 	 * a short row means a short shard rather than a differently scaled bar. */
 	readWidth: string;
 	writeWidth: string;
+	/** False where the smaller segment would draw under one pixel at
+	 * `console.chart_width`. The track then draws whole and the two seconds are
+	 * printed, because a band nobody can see teaches a category is zero. */
+	splitDrawn: boolean;
 	readTokensPerSecond: number | null;
+	writeTokensPerSecond: number | null;
+	/** The two rates as CSS lengths, against whichever domain the board chose. */
+	readRateWidth: string;
+	writeRateWidth: string;
 	/** The processor, as the text `/proc/cpuinfo` printed. Null on a shard that
 	 * ran before the cell existed - which is absence, not an unknown machine. */
 	cpuModel: string | null;
 	cpuBusyPct: number | null;
+	/** A typical item's memory against the shard's worst, on the board's one
+	 * memory domain. */
+	memory: RangeMark;
+	/** A typical item's CPU against the shard's worst, on nought to a hundred. */
+	cpu: RangeMark;
+	/** The highest load any of the shard's items ended under. */
+	loadMax: number | null;
+	/** Cores the host let the job see. The load figure's denominator. */
+	cores: number | null;
+	/** The load against those cores. Empty where either is missing. */
+	load: TargetMarks;
+	/** What the host had left to swap into, and what it has. */
+	swapFreeBytes: number | null;
+	swapTotalBytes: number | null;
+	/** Which of the three things the swap pair can say. `none` is a box with no
+	 * swap at all, which is not an emergency; `unrecorded` is a run older than
+	 * the cell. Carried rather than derived in markup so a test can name it. */
+	swapState: SwapState;
+	/** What the shard paid opening the weights, before its first item. */
+	modelLoadMs: number | null;
 	jobSeconds: number | null;
 	/** The job clock against `run.shard_timeout_minutes`. */
 	job: TargetMarks;
+}
+
+export type SwapState = 'measured' | 'none' | 'unrecorded';
+
+/** A typical reading and the worst one, on one track.
+ *
+ * Two numbers with a span, drawn once rather than written as two sentences: the
+ * fill runs to the median and the notch stands at the maximum, so the distance
+ * between them IS the spread. Four figures each written as prose is four
+ * sentences no two of which can be compared.
+ */
+export interface RangeMark {
+	median: number | null;
+	max: number | null;
+	medianWidth: string;
+	notchWidth: string;
+	empty: boolean;
 }
 
 export interface ShardBoardView {
@@ -150,10 +198,31 @@ export interface ShardBoardView {
 	readSpread: number | null;
 	/** The seconds the widest bar stands for. Every row shares it. */
 	scaleSeconds: number;
+	/** The tokens a second the widest rate bar stands for, taken from the rates
+	 * drawn and never from a fixed ceiling. A 4x spread draws a quarter-length
+	 * bar rather than being clipped at a round number somebody chose. */
+	rateScale: number;
+	/** The write series' own domain. The same number as `rateScale` while the
+	 * two share an axis, and the write series' own maximum once they cannot. */
+	writeRateScale: number;
+	/** The larger rate over the smaller, measured across every rate on the
+	 * board. Null with nothing to compare. */
+	rateRatio: number | null;
+	/** True while `rateRatio` is under `RATE_AXIS_RATIO_LIMIT`, so the two rates
+	 * are lengths a reader may compare. False past it, when the smaller would
+	 * draw under a twentieth of the track and read as zero. */
+	ratesShareAxis: boolean;
+	/** The bytes the widest memory mark stands for: the largest of what the
+	 * shards reached and the runner's own ceiling, so a breach draws past the
+	 * ceiling rather than being clipped at it. */
+	memoryScaleBytes: number;
 	/** What the job clock is measured against, in seconds. Null unconfigured. */
 	timeoutSeconds: number | null;
 	/** Shards that named a processor, and shards the run had. */
 	cpuKnown: number;
+	/** Shards whose host recorded how much swap it has. Zero is every run
+	 * written before the cell landed, and the cells then say so. */
+	swapKnown: number;
 	empty: boolean;
 }
 
@@ -163,15 +232,54 @@ function modelSeconds(shard: ShardCounters): number | null {
 		: shard.readSeconds + shard.writeSeconds;
 }
 
+/** How far apart two series may be and still share one axis.
+ *
+ * Past this the smaller draws under a twentieth of the track and reads as zero,
+ * so it takes its own domain and the board prints the ratio it measured. The
+ * threshold is a measurement rather than a taste, which is why it is named here
+ * once instead of being decided panel by panel.
+ */
+export const RATE_AXIS_RATIO_LIMIT = 20;
+
+/** A median and a maximum on one track, against a domain the caller owns. */
+function rangeMark(
+	middle: number | null,
+	highest: number | null,
+	scale: number
+): RangeMark {
+	if (middle === null && highest === null) {
+		return { median: null, max: null, medianWidth: '0%', notchWidth: '0%', empty: true };
+	}
+	const fraction = (value: number | null) =>
+		value === null || scale <= 0 ? 0 : Math.min(value / scale, 1);
+	return {
+		median: middle,
+		max: highest,
+		medianWidth: percentOf(fraction(middle)),
+		notchWidth: percentOf(fraction(highest)),
+		empty: false
+	};
+}
+
+function swapStateOf(total: number | null): SwapState {
+	if (total === null) return 'unrecorded';
+	return total > 0 ? 'measured' : 'none';
+}
+
 /** One run as one row per shard, ranked by the clock the timeout applies to.
  *
  * Ranked by the job clock rather than by model seconds, because the job clock
  * is the one the platform kills a shard on: the row at the top is the shard
  * that would be killed first.
+ *
+ * `chartWidth` is `console.chart_width`, and it decides one thing only: whether
+ * the smaller half of a shard's reading-against-writing split is wide enough to
+ * be a band rather than a legend key with no mark.
  */
 export function shardBoard(
 	run: MachineRun | null,
-	timeoutSeconds: number | null
+	timeoutSeconds: number | null,
+	chartWidth: number
 ): ShardBoardView {
 	if (run === null || run.reported.length === 0) {
 		return {
@@ -181,8 +289,14 @@ export function shardBoard(
 			shards: run?.shards ?? null,
 			readSpread: null,
 			scaleSeconds: 0,
+			rateScale: 0,
+			writeRateScale: 0,
+			rateRatio: null,
+			ratesShareAxis: true,
+			memoryScaleBytes: RUNNER_MEMORY_BYTES,
 			timeoutSeconds,
 			cpuKnown: 0,
+			swapKnown: 0,
 			empty: true
 		};
 	}
@@ -191,6 +305,32 @@ export function shardBoard(
 		.map(modelSeconds)
 		.filter((value): value is number => value !== null);
 	const scaleSeconds = totals.length === 0 ? 0 : Math.max(...totals);
+
+	// Both domains come from the values drawn. The memory one takes the runner's
+	// ceiling in beside them rather than as its maximum, so a shard that went
+	// past 16 GiB still draws past the line instead of stopping on it.
+	const readRates = run.reported
+		.map((shard) => shard.readTokensPerSecond)
+		.filter((value): value is number => value !== null);
+	const writeRates = run.reported
+		.map((shard) => shard.writeTokensPerSecond)
+		.filter((value): value is number => value !== null);
+	const readTop = readRates.length === 0 ? 0 : Math.max(...readRates);
+	const writeTop = writeRates.length === 0 ? 0 : Math.max(...writeRates);
+	const larger = Math.max(readTop, writeTop);
+	const smaller = Math.min(readTop, writeTop);
+	const rateRatio = smaller > 0 ? larger / smaller : null;
+	const ratesShareAxis = rateRatio === null || rateRatio < RATE_AXIS_RATIO_LIMIT;
+	const rateScale = larger;
+	const writeRateScale = ratesShareAxis ? larger : writeTop;
+
+	const memoryMarks = run.reported.flatMap((shard) =>
+		[shard.rssMedianBytes, shard.peakRssBytes].filter((value): value is number => value !== null)
+	);
+	const memoryScaleBytes = Math.max(RUNNER_MEMORY_BYTES, ...memoryMarks);
+
+	// A band this narrow is a legend entry with no mark on the track.
+	const leastVisible = chartWidth > 0 ? 1 / chartWidth : 0;
 
 	const ordered = [...run.reported].sort((a, b) => {
 		// A shard with no clock has no rank. It goes last, in shard order, rather
@@ -201,19 +341,44 @@ export function shardBoard(
 		return b.jobSeconds - a.jobSeconds;
 	});
 
-	const rows: BoardRow[] = ordered.map((shard) => ({
-		shard: shard.shard,
-		readSeconds: shard.readSeconds,
-		writeSeconds: shard.writeSeconds,
-		modelSeconds: modelSeconds(shard),
-		readWidth: percentOf(scaleSeconds > 0 ? (shard.readSeconds ?? 0) / scaleSeconds : 0),
-		writeWidth: percentOf(scaleSeconds > 0 ? (shard.writeSeconds ?? 0) / scaleSeconds : 0),
-		readTokensPerSecond: shard.readTokensPerSecond,
-		cpuModel: shard.cpuModel,
-		cpuBusyPct: shard.cpuBusyPct,
-		jobSeconds: shard.jobSeconds,
-		job: targetMarks(shard.jobSeconds, timeoutSeconds ?? 0, 'lower-is-better')
-	}));
+	const rows: BoardRow[] = ordered.map((shard) => {
+		const readShare = scaleSeconds > 0 ? (shard.readSeconds ?? 0) / scaleSeconds : 0;
+		const writeShare = scaleSeconds > 0 ? (shard.writeSeconds ?? 0) / scaleSeconds : 0;
+		// Only a band that is there at all has to be wide enough to see. A shard
+		// that spent no seconds writing has a real zero, not an invisible band.
+		const bands = [readShare, writeShare].filter((share) => share > 0);
+		return {
+			shard: shard.shard,
+			items: shard.items,
+			readSeconds: shard.readSeconds,
+			writeSeconds: shard.writeSeconds,
+			modelSeconds: modelSeconds(shard),
+			readWidth: percentOf(readShare),
+			writeWidth: percentOf(writeShare),
+			splitDrawn: bands.every((share) => share >= leastVisible),
+			readTokensPerSecond: shard.readTokensPerSecond,
+			writeTokensPerSecond: shard.writeTokensPerSecond,
+			readRateWidth: percentOf(
+				rateScale > 0 ? (shard.readTokensPerSecond ?? 0) / rateScale : 0
+			),
+			writeRateWidth: percentOf(
+				writeRateScale > 0 ? (shard.writeTokensPerSecond ?? 0) / writeRateScale : 0
+			),
+			cpuModel: shard.cpuModel,
+			cpuBusyPct: shard.cpuBusyPct,
+			memory: rangeMark(shard.rssMedianBytes, shard.peakRssBytes, memoryScaleBytes),
+			cpu: rangeMark(shard.cpuBusyMedianPct, shard.cpuBusyMaxPct, 100),
+			loadMax: shard.loadMax,
+			cores: shard.cores,
+			load: targetMarks(shard.loadMax, shard.cores ?? 0, 'lower-is-better'),
+			swapFreeBytes: shard.swapFreeMinBytes,
+			swapTotalBytes: shard.swapTotalBytes,
+			swapState: swapStateOf(shard.swapTotalBytes),
+			modelLoadMs: shard.modelLoadMs,
+			jobSeconds: shard.jobSeconds,
+			job: targetMarks(shard.jobSeconds, timeoutSeconds ?? 0, 'lower-is-better')
+		};
+	});
 
 	return {
 		runId: run.runId,
@@ -222,8 +387,14 @@ export function shardBoard(
 		shards: run.shards,
 		readSpread: run.readSpread.value,
 		scaleSeconds,
+		rateScale,
+		writeRateScale,
+		rateRatio,
+		ratesShareAxis,
+		memoryScaleBytes,
 		timeoutSeconds,
 		cpuKnown: run.cpuModels.from,
+		swapKnown: run.reported.filter((shard) => shard.swapTotalBytes !== null).length,
 		empty: false
 	};
 }

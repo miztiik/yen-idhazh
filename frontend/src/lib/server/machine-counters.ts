@@ -131,8 +131,25 @@ export interface ShardCounters {
 	cpuModel: string | null;
 	/** The least busy the processor was over any one item's model window. */
 	cpuBusyPct: number | null;
+	/** Cores the host let this job see. What `loadMax` is read against: a queue
+	 * is load past the cores, and 6.1 is a queue on four and not on eight. */
+	cores: number | null;
+	/** The middle item's mean CPU busy. A typical item, not the worst one. */
+	cpuBusyMedianPct: number | null;
+	/** The busiest any one item's model window got. */
+	cpuBusyMaxPct: number | null;
 	/** llama-server's own memory high-water mark over the shard's items. */
 	peakRssBytes: number | null;
+	/** The middle item's high-water mark. Paired with `peakRssBytes` it is a
+	 * range: a median near the peak is a shard that ran hot throughout. */
+	rssMedianBytes: number | null;
+	/** The highest one-minute load any of the shard's items ended under. */
+	loadMax: number | null;
+	/** The least swap left at the end of any of the shard's items. */
+	swapFreeMinBytes: number | null;
+	/** Swap the host has. Zero is a box with no swap, which is a different fact
+	 * from swap consumed - and only the second is an emergency. */
+	swapTotalBytes: number | null;
 	/** What the shard paid opening the weights before its first item. */
 	modelLoadMs: number | null;
 }
@@ -286,6 +303,7 @@ const lowest = (values: number[]): number => Math.min(...values);
  */
 const HOST_CELLS = [
 	'cpu_model',
+	'cores',
 	'job_seconds',
 	'model_load_ms',
 	'server_prompt_tokens',
@@ -295,6 +313,7 @@ const HOST_CELLS = [
 /** One shard's machine cells, merged from however many halves the record holds. */
 interface HostCells {
 	cpuModel: string | null;
+	cores: number | null;
 	jobSeconds: number | null;
 	modelLoadMs: number | null;
 	serverPromptTokens: number | null;
@@ -310,6 +329,15 @@ interface ItemFold {
 	longestSequence: number | null;
 	cpuBusyPct: number | null;
 	peakRssBytes: number | null;
+	/** Every item's own reading, kept only long enough to take the middle one.
+	 * A median cannot be folded the way a sum or a maximum can. Bounded by the
+	 * items one shard ran, and dropped before a `ShardCounters` leaves here. */
+	busy: number[];
+	rss: number[];
+	cpuBusyMaxPct: number | null;
+	loadMax: number | null;
+	swapFreeMinBytes: number | null;
+	swapTotalBytes: number | null;
 	/** The processor, where the item ledger recorded one. Read only when the
 	 * machine record missed the shard, so a shard the record never reached still
 	 * names its machine instead of drawing as unrecorded. */
@@ -325,8 +353,28 @@ function emptyFold(): ItemFold {
 		longestSequence: null,
 		cpuBusyPct: null,
 		peakRssBytes: null,
+		busy: [],
+		rss: [],
+		cpuBusyMaxPct: null,
+		loadMax: null,
+		swapFreeMinBytes: null,
+		swapTotalBytes: null,
 		cpuModel: null
 	};
+}
+
+/** The middle reading of a set, interpolated between the two nearest ranks.
+ *
+ * The same rule the route's percentiles use, so a median printed beside a p50
+ * cannot be a second answer to one question.
+ */
+function median(values: readonly number[]): number | null {
+	if (values.length === 0) return null;
+	const sorted = [...values].sort((left, right) => left - right);
+	const position = (sorted.length - 1) / 2;
+	const low = Math.floor(position);
+	const high = Math.ceil(position);
+	return sorted[low] + (sorted[high] - sorted[low]) * (position - low);
 }
 
 /** One item row folded into a shard's totals. A missing cell adds nothing.
@@ -350,9 +398,24 @@ function foldItem(carry: ItemFold, row: Record<string, string>): void {
 	const decode = measured(row.decode_ms);
 	if (decode !== null) carry.writeSeconds = (carry.writeSeconds ?? 0) + decode / 1000;
 	const busy = measured(row.cpu_busy_pct);
-	if (busy !== null) carry.cpuBusyPct = Math.min(carry.cpuBusyPct ?? busy, busy);
+	if (busy !== null) {
+		carry.cpuBusyPct = Math.min(carry.cpuBusyPct ?? busy, busy);
+		carry.busy.push(busy);
+	}
+	const busyMax = measured(row.cpu_busy_max);
+	if (busyMax !== null) carry.cpuBusyMaxPct = Math.max(carry.cpuBusyMaxPct ?? busyMax, busyMax);
 	const peak = measured(row.llama_rss_peak_bytes);
-	if (peak !== null) carry.peakRssBytes = Math.max(carry.peakRssBytes ?? 0, peak);
+	if (peak !== null) {
+		carry.peakRssBytes = Math.max(carry.peakRssBytes ?? 0, peak);
+		carry.rss.push(peak);
+	}
+	const load = measured(row.load_1m);
+	if (load !== null) carry.loadMax = Math.max(carry.loadMax ?? load, load);
+	const swapFree = measured(row.os_swap_free_bytes);
+	if (swapFree !== null)
+		carry.swapFreeMinBytes = Math.min(carry.swapFreeMinBytes ?? swapFree, swapFree);
+	const swapTotal = measured(row.os_swap_total_bytes);
+	if (swapTotal !== null) carry.swapTotalBytes = swapTotal;
 	carry.cpuModel = carry.cpuModel ?? text(row.cpu_model);
 }
 
@@ -370,6 +433,7 @@ function mergeHost(rows: Record<string, string>[]): HostCells | null {
 	}
 	return {
 		cpuModel: text(held.get('cpu_model')),
+		cores: measured(held.get('cores')),
 		jobSeconds: measured(held.get('job_seconds')),
 		modelLoadMs: measured(held.get('model_load_ms')),
 		serverPromptTokens: measured(held.get('server_prompt_tokens')),
@@ -419,7 +483,14 @@ function shardCounters(
 		// which would otherwise draw as a machine nobody can name.
 		cpuModel: host.cpuModel ?? fold.cpuModel,
 		cpuBusyPct: fold.cpuBusyPct,
+		cores: host.cores,
+		cpuBusyMedianPct: median(fold.busy),
+		cpuBusyMaxPct: fold.cpuBusyMaxPct,
 		peakRssBytes: fold.peakRssBytes,
+		rssMedianBytes: median(fold.rss),
+		loadMax: fold.loadMax,
+		swapFreeMinBytes: fold.swapFreeMinBytes,
+		swapTotalBytes: fold.swapTotalBytes,
 		modelLoadMs: host.modelLoadMs
 	};
 }

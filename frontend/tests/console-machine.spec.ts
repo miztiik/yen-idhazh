@@ -53,6 +53,15 @@ const CONFIG = JSON.parse(
 	};
 };
 
+/** `console.chart_width`, off the committed file for the same reason. It
+ * decides one thing on the board: whether the smaller half of a shard's split
+ * is wide enough to be a band. */
+const CHART_WIDTH = (
+	JSON.parse(
+		readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
+	) as { console: { chart_width: number } }
+).console.chart_width;
+
 /** The active model, reached through the pointer and never by filename. */
 const MODELS = JSON.parse(
 	readFileSync(resolve(process.cwd(), '..', 'config', CONFIG.models_file), 'utf8')
@@ -133,7 +142,7 @@ function onlyRun(readings: ShardReading[]): MachineRun {
 
 test.describe('the shard board', () => {
 	const run = onlyRun(TWO_SHARDS);
-	const board = shardBoard(run, LIMITS.jobTimeoutSeconds);
+	const board = shardBoard(run, LIMITS.jobTimeoutSeconds, CHART_WIDTH);
 
 	test('rows are ranked by the clock the platform kills a shard on', () => {
 		// Shard 1 took 1,200 seconds against shard 0's 600, so it is the one that
@@ -171,7 +180,7 @@ test.describe('the shard board', () => {
 		// same place for every value under its target.
 		expect(board.timeoutSeconds).toBe(CONFIG.run.shard_timeout_minutes * 60);
 		expect(machineLimits().jobTimeoutSeconds).toBe(CONFIG.run.shard_timeout_minutes * 60);
-		const tighter = shardBoard(run, 1500);
+		const tighter = shardBoard(run, 1500, CHART_WIDTH);
 		expect(tighter.rows[0].job.valueFraction).not.toBeCloseTo(
 			board.rows[0].job.valueFraction,
 			4
@@ -180,7 +189,7 @@ test.describe('the shard board', () => {
 
 	test('a shard that reported no clock is last and is not read as zero', () => {
 		const mixed = onlyRun([TWO_SHARDS[0], { shard: 1, serverPromptTokens: 10 }]);
-		const view = shardBoard(mixed, LIMITS.jobTimeoutSeconds);
+		const view = shardBoard(mixed, LIMITS.jobTimeoutSeconds, CHART_WIDTH);
 		expect(view.rows.map((row) => row.shard)).toEqual([0, 1]);
 		expect(view.rows[1].jobSeconds).toBeNull();
 		expect(view.rows[1].job.empty).toBe(true);
@@ -188,10 +197,270 @@ test.describe('the shard board', () => {
 	});
 
 	test('a run nothing reported draws nothing and says so', () => {
-		const view = shardBoard(null, LIMITS.jobTimeoutSeconds);
+		const view = shardBoard(null, LIMITS.jobTimeoutSeconds, CHART_WIDTH);
 		expect(view.empty).toBe(true);
 		expect(view.rows).toEqual([]);
 		expect(view.readSpread).toBeNull();
+	});
+});
+
+/** The one question this panel exists to answer: was the slow shard slow
+ * because of the WORK it was handed, or because of the HOST it landed on?
+ *
+ * Two runs below have the same shape - a shard on 600 seconds beside one on
+ * 1,200 - and differ only in why. An operator has to part them without leaving
+ * the panel, so every fact that parts them is on the row.
+ */
+const GIB = 1024 * 1024 * 1024;
+
+/** One shard as however many item rows it ran, with the machine record's cells
+ * on the first of them.
+ *
+ * The record is one row a shard and a second copy would have to agree cell for
+ * cell, so it is stated once. The item cells repeat, because a median over one
+ * reading is that reading and the fold has to be given something to sort.
+ */
+function shardOfItems(
+	items: number,
+	host: Partial<ShardReading>,
+	machine: Partial<ShardReading>
+): ShardReading[] {
+	return Array.from({ length: items }, (_, index) => ({
+		shard: host.shard ?? 0,
+		...(index === 0 ? host : { shard: host.shard ?? 0 }),
+		cachedTokens: 0,
+		writtenTokens: 100,
+		writeSeconds: 20,
+		longestSequence: 500,
+		peakRssBytes: 8 * GIB,
+		cpuBusyPct: 94,
+		cpuBusyMax: 97,
+		...machine
+	}));
+}
+
+/** A machine with room to spare: load inside its cores, swap barely touched. */
+const CALM: Partial<ShardReading> = { load: 3, swapFree: 4 * GIB, swapTotal: 4 * GIB };
+
+/** A machine in trouble: load past its four cores, and a sixteenth of its swap
+ * left. Read rate collapses here, and the shard walks towards its timeout. */
+const STRAINED: Partial<ShardReading> = {
+	load: 6.5,
+	swapFree: GIB / 4,
+	swapTotal: 4 * GIB,
+	cpuBusyPct: 62,
+	cpuBusyMax: 71
+};
+
+const HOST_JOB = { cores: 4, cpuModel: 'AMD EPYC 7763 64-Core Processor', modelLoadMs: 2400 };
+
+/** Shard 1 took twice shard 0's clock on the same two items, reading at a
+ * quarter of its rate on a host that is queueing and swapping. */
+const HOST_SLOW: ShardReading[] = [
+	...shardOfItems(
+		2,
+		{ shard: 0, ...HOST_JOB, serverPromptTokens: 8000, serverPromptSeconds: 200, jobSeconds: 600 },
+		CALM
+	),
+	...shardOfItems(
+		2,
+		{ shard: 1, ...HOST_JOB, serverPromptTokens: 2000, serverPromptSeconds: 200, jobSeconds: 1200 },
+		STRAINED
+	)
+];
+
+/** Shard 1 took twice shard 0's clock reading at exactly its rate, because it
+ * was handed three times the items on a host with room to spare. */
+const WORK_SLOW: ShardReading[] = [
+	...shardOfItems(
+		2,
+		{ shard: 0, ...HOST_JOB, serverPromptTokens: 8000, serverPromptSeconds: 200, jobSeconds: 600 },
+		CALM
+	),
+	...shardOfItems(
+		6,
+		{
+			shard: 1,
+			...HOST_JOB,
+			serverPromptTokens: 24000,
+			serverPromptSeconds: 600,
+			jobSeconds: 1200
+		},
+		CALM
+	)
+];
+
+function boardOf(readings: ShardReading[]) {
+	return shardBoard(onlyRun(readings), LIMITS.jobTimeoutSeconds, CHART_WIDTH);
+}
+
+test.describe('work or the host, decided on the row', () => {
+	const host = boardOf(HOST_SLOW);
+	const work = boardOf(WORK_SLOW);
+
+	test('the two runs look the same on the clock alone', () => {
+		// The state the panel has to break out of: the ranking cannot part them,
+		// because the clock is identical on both boards.
+		expect(host.rows.map((row) => row.shard)).toEqual([1, 0]);
+		expect(work.rows.map((row) => row.shard)).toEqual([1, 0]);
+		expect(host.rows.map((row) => row.jobSeconds)).toEqual(
+			work.rows.map((row) => row.jobSeconds)
+		);
+	});
+
+	test('the host-slow shard names the host on its own row', () => {
+		const [slow, fast] = host.rows;
+		// Hand-computed: 8,000 over 200 is 40 and 2,000 over 200 is 10.
+		expect(fast.readTokensPerSecond).toBeCloseTo(40, 6);
+		expect(slow.readTokensPerSecond).toBeCloseTo(10, 6);
+		// Same work, a quarter of the rate. That is the machine, not the queue.
+		expect(slow.items).toBe(fast.items);
+		expect(slow.readTokensPerSecond).toBeCloseTo((fast.readTokensPerSecond ?? 0) / 4, 6);
+		// Load past the cores the host reported is a queue, and the target bar
+		// says so rather than leaving the reader to divide.
+		expect(slow.cores).toBe(4);
+		expect(slow.loadMax).toBeCloseTo(6.5, 6);
+		expect(slow.load.band).toBe('past');
+		expect(fast.load.band).not.toBe('past');
+		// A sixteenth of the swap left, with the total beside it so the reading
+		// is not confused with a box that has no swap at all.
+		expect(slow.swapState).toBe('measured');
+		expect(slow.swapFreeBytes).toBe(GIB / 4);
+		expect(slow.swapTotalBytes).toBe(4 * GIB);
+		expect(fast.swapFreeBytes).toBe(4 * GIB);
+	});
+
+	test('the work-slow shard names the work on its own row', () => {
+		const [slow, fast] = work.rows;
+		// 24,000 over 600 is 40, the same rate its neighbour read at.
+		expect(slow.readTokensPerSecond).toBeCloseTo(fast.readTokensPerSecond ?? 0, 6);
+		expect(slow.items).toBe(fast.items * 3);
+		expect(slow.loadMax).toBeLessThan(slow.cores ?? 0);
+		expect(slow.load.band).not.toBe('past');
+		expect(slow.swapFreeBytes).toBe(4 * GIB);
+	});
+
+	test('the value domain adapts to the 4x rather than clipping it', () => {
+		// Every rate bar is drawn against the largest rate on the board, so the
+		// shard reading at a quarter draws at a quarter. A fixed domain would put
+		// both bars against a round number somebody picked, and a domain that
+		// clipped would draw the two at the same length.
+		expect(host.rateScale).toBeCloseTo(40, 6);
+		expect(host.rows[0].readRateWidth).toBe('25.0000%');
+		expect(host.rows[1].readRateWidth).toBe('100.0000%');
+		// The same run against a wider board draws the same fractions: the domain
+		// is the data, never the pixels.
+		expect(boardOf(HOST_SLOW).rateScale).toBe(host.rateScale);
+	});
+
+	test('reading and writing share one scale while they are inside 20x', () => {
+		// Hand-computed: 200 written tokens over 40 seconds is 5 a second on both
+		// shards, against a fastest read of 40. That is 8x, inside the 20 at
+		// which the smaller draws under a twentieth of the track.
+		expect(host.rateRatio).toBeCloseTo(8, 6);
+		expect(host.ratesShareAxis).toBe(true);
+		expect(host.writeRateScale).toBe(host.rateScale);
+
+		// Past 20x the write series takes its own domain, so a rate nothing can
+		// see is not drawn as a rate of zero. 8,000 over 200 against 100 written
+		// tokens over 400 seconds is 0.25 a second, which is 160x.
+		const wide = boardOf([
+			...shardOfItems(
+				1,
+				{
+					shard: 0,
+					...HOST_JOB,
+					serverPromptTokens: 8000,
+					serverPromptSeconds: 200,
+					jobSeconds: 600
+				},
+				{ ...CALM, writtenTokens: 100, writeSeconds: 400 }
+			)
+		]);
+		expect(wide.rateRatio).toBeCloseTo(160, 6);
+		expect(wide.ratesShareAxis).toBe(false);
+		expect(wide.writeRateScale).toBeCloseTo(0.25, 6);
+		expect(wide.rows[0].writeRateWidth).toBe('100.0000%');
+	});
+
+	test('a range mark is the middle item filled and the worst one notched', () => {
+		// Three items on one shard, so the median is a real middle rather than the
+		// only reading: 8, 9 and 14 GiB has a median of 9 and a maximum of 14.
+		const view = boardOf([
+			{ shard: 0, ...HOST_JOB, serverPromptTokens: 8000, serverPromptSeconds: 200, jobSeconds: 600, cachedTokens: 0, writtenTokens: 100, writeSeconds: 20, longestSequence: 500, peakRssBytes: 8 * GIB, cpuBusyPct: 50, cpuBusyMax: 55, ...CALM },
+			{ shard: 0, cachedTokens: 0, writtenTokens: 100, writeSeconds: 20, longestSequence: 500, peakRssBytes: 9 * GIB, cpuBusyPct: 60, cpuBusyMax: 91, ...CALM },
+			{ shard: 0, cachedTokens: 0, writtenTokens: 100, writeSeconds: 20, longestSequence: 500, peakRssBytes: 14 * GIB, cpuBusyPct: 70, cpuBusyMax: 75, ...CALM }
+		]);
+		const memory = view.rows[0].memory;
+		expect(memory.median).toBe(9 * GIB);
+		expect(memory.max).toBe(14 * GIB);
+		// The runner's own ceiling joins the figures rather than capping them, so
+		// the scale is 16 GiB and the notch sits at fourteen sixteenths of it.
+		expect(view.memoryScaleBytes).toBe(RUNNER_MEMORY_BYTES);
+		expect(memory.medianWidth).toBe('56.2500%');
+		expect(memory.notchWidth).toBe('87.5000%');
+		// A share runs nought to a hundred, so the CPU mark needs no scale of its
+		// own: 60 percent typical, 91 percent at its worst.
+		expect(view.rows[0].cpu.median).toBe(60);
+		expect(view.rows[0].cpu.max).toBe(91);
+		expect(view.rows[0].cpu.medianWidth).toBe('60.0000%');
+		expect(view.rows[0].cpu.notchWidth).toBe('91.0000%');
+	});
+
+	test('a band under one pixel is printed rather than drawn', () => {
+		// The write side is a thousandth of the read side, so at 760px the smaller
+		// band is 0.76px and a browser paints nothing. The bar draws whole and
+		// both seconds stay on the row.
+		const thin = boardOf([
+			{
+				shard: 0,
+				...HOST_JOB,
+				serverPromptTokens: 8000,
+				serverPromptSeconds: 600,
+				jobSeconds: 900,
+				cachedTokens: 0,
+				writtenTokens: 100,
+				writeSeconds: 0.6,
+				longestSequence: 500,
+				...CALM
+			}
+		]);
+		expect(1 / CHART_WIDTH).toBeGreaterThan(0.6 / 600.6);
+		expect(thin.rows[0].splitDrawn).toBe(false);
+		// The seconds themselves are untouched. The rule takes the band away, not
+		// the fact.
+		expect(thin.rows[0].writeSeconds).toBeCloseTo(0.6, 6);
+		expect(host.rows[0].splitDrawn).toBe(true);
+	});
+
+	test('a run that recorded no swap says so rather than reading as zero', () => {
+		const silent = boardOf(TWO_SHARDS);
+		expect(silent.swapKnown).toBe(0);
+		for (const row of silent.rows) {
+			expect(row.swapState).toBe('unrecorded');
+			expect(row.swapFreeBytes).toBeNull();
+		}
+		// A host that really has no swap is a third state, and not an emergency.
+		const none = boardOf(
+			shardOfItems(
+				1,
+				{
+					shard: 0,
+					...HOST_JOB,
+					serverPromptTokens: 8000,
+					serverPromptSeconds: 200,
+					jobSeconds: 600
+				},
+				{ load: 3, swapFree: 0, swapTotal: 0 }
+			)
+		);
+		expect(none.rows[0].swapState).toBe('none');
+		expect(none.swapKnown).toBe(1);
+	});
+
+	test('the weights load lands as a cell on the shard that paid it', () => {
+		expect(host.rows[0].modelLoadMs).toBe(2400);
+		expect(boardOf(TWO_SHARDS).rows.map((row) => row.modelLoadMs)).toEqual([4000, 3000]);
 	});
 });
 

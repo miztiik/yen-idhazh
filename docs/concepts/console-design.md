@@ -857,6 +857,47 @@ Authority: Susan, 2026-09-17. Which surface answers which of the two questions i
 [../architecture/publishing/console.md](../architecture/publishing/console.md);
 this page rules how the drawing may read.
 
+## A typical reading and the worst one are one mark, not two bars
+
+A **range mark** is a track with a fill and a notch. The fill runs to the median
+and the notch stands at the maximum, so the distance between them is the spread
+and the reader measures it with their eye rather than by subtracting two
+sentences. It is the shape the tenth rule above asks for, given a name because
+the shard board draws two of them on every row.
+
+**Why it exists: four bars a row is eighty bars.** The shard board carries a
+memory reading and a processor reading, each with a typical value and a worst
+one. Drawn as bars that is four per row, and a run of twenty shards is eighty
+bars in one panel with the reader pairing them by eye. Drawn as two range marks
+it is two tracks, and the pairing is already done. Susan, 2026-09-17.
+
+**What the reader loses, named.** A range mark says nothing about the shape
+between its two ends: a shard whose items were all near the median and one that
+had a single spike draw identically. That distinction belongs to a distribution
+panel over items, which is a different grain and a different question - the
+board is a break panel over shards, and its job is the extreme and the shard
+that owns it.
+
+Both marks obey the first rule above. The memory mark takes the runner's 16 GiB
+into the domain beside the drawn values rather than as the maximum, so a shard
+that went past the ceiling would still draw past the line, and the panel prints
+the ceiling. The processor mark is a share, so it runs nought to a hundred.
+
+## The two rates on a shard row are measured before they are drawn
+
+Reading and writing are two series on one board, so the fourth rule above binds:
+they share one domain while the larger is under 20x the smaller, and past that
+writing takes its own. The board measures the ratio from the run it is drawing
+and prints it, rather than choosing once and hoping. Measured 2026-09-20 over
+the three newest committed runs, a shard writes at 3.39 to 5.09 tokens a second;
+the read rates on the same ledger have run 9.73 to 41.98. That is about 12x at
+the widest, so the two share one scale today - and the panel will say so, or say
+the opposite, from whatever run it has.
+
+The rate domain is the largest rate on the board and never a round number. A
+shard reading at a quarter of its neighbour draws a quarter-length bar, which is
+the reading the panel exists for.
+
 ## A stacked chart offers lines only where no data is re-shaped
 
 Stacked says what the mix is and how big the total got. Lines say what one
