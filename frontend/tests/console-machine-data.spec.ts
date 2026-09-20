@@ -1003,8 +1003,15 @@ test.describe('Row #19 - context headroom is one chart with a limit rule', () =>
 		await widen(page, WIDEST);
 
 		const panel = page.locator('[data-windowed="machine-context"]');
+		// Go to the panel, not to the plot inside it. `hydrate` observes
+		// intersection, so a chart more than a screen down has no `svg` until
+		// somebody goes to it, and waiting on that `svg` first waits for the one
+		// thing only this scroll produces.
+		await panel.evaluate((node) => node.scrollIntoView({ behavior: 'instant', block: 'center' }));
 		const plot = panel.locator('svg').first();
-		await plot.scrollIntoViewIfNeeded();
+		await expect(plot, 'the context chart drew nothing after scrolling to it').toBeVisible({
+			timeout: 15000
+		});
 		const box = await plot.boundingBox();
 		expect(box, 'the context chart has no box to point at').not.toBeNull();
 
