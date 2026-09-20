@@ -18,6 +18,7 @@ import os
 import threading
 from collections import Counter
 from collections.abc import Callable, Iterator
+from dataclasses import fields
 from pathlib import Path
 
 import pytest
@@ -445,7 +446,7 @@ def test_the_two_proc_stat_captures_an_oracle_reads_are_committed() -> None:
 
 
 def test_the_processor_busy_share_is_read_from_a_real_proc_stat_pair() -> None:
-    """The Oracle for `cpu_busy_pct_between`: the capture proves its own window.
+    """The Oracle for `cpu_shares_between`: the capture proves its own window.
 
     Twenty seconds of four processors at 100 Hz is 8,000 ticks. A real pair
     reproduces that, and a hand-written pair only does so by arithmetic somebody
@@ -455,20 +456,29 @@ def test_the_processor_busy_share_is_read_from_a_real_proc_stat_pair() -> None:
 
     The reading is near zero because the probe slept through its own window. The
     shape is what is under test; the expected value on a work shard is near 100.
+
+    **This runner reported no stolen ticks at either end**, which is asserted
+    rather than assumed: a capture with steal in it would make the subtraction
+    below and the one in the function differ, and the reader deserves to know
+    which arm of the arithmetic this fixture exercises.
     """
     at_start = read_text(PROC_STAT_AT_START)
     at_end = read_text(PROC_STAT_AT_END)
     start = _aggregate_cpu_line(at_start)
     end = _aggregate_cpu_line(at_end)
     # guest sits inside user and guest_nice inside nice, so a plain sum of the
-    # line counts both twice. idle and iowait are the processors standing free.
+    # line counts both twice. idle and iowait are the processors standing free,
+    # and steal is time the host gave to somebody else's machine.
     available = (sum(end) - end[8] - end[9]) - (sum(start) - start[8] - start[9])
     idle = (end[3] + end[4]) - (start[3] + start[4])
+    stolen = end[7] - start[7]
+    shares = host.cpu_shares_between(at_start, at_end)
 
+    assert stolen == 0 and end[7] == 0, "this pair was taken on a runner with no stolen ticks"
     assert available == pytest.approx(PROBE_SECONDS * PROBE_PROCESSORS * USER_HZ, rel=0.01)
-    assert host.cpu_busy_pct_between(at_start, at_end) == pytest.approx(
-        100 * (available - idle) / available, abs=0.005
-    )
+    assert shares is not None
+    assert shares.busy_pct == pytest.approx(100 * (available - idle - stolen) / available, abs=0.005)
+    assert shares.steal_pct == 0.0
 
 
 def test_a_capture_nobody_took_is_absent_rather_than_a_share_of_zero() -> None:
@@ -479,11 +489,247 @@ def test_a_capture_nobody_took_is_absent_rather_than_a_share_of_zero() -> None:
     assert host.cpu_ticks("") is None
     assert host.cpu_ticks("cpu\n") is None
     assert host.cpu_ticks("cpu not a number\n") is None
-    assert host.cpu_busy_pct_between(at_start, None) is None
-    assert host.cpu_busy_pct_between(None, at_start) is None
-    assert host.cpu_busy_pct_between(at_start, at_start) is None, (
+    assert host.cpu_shares_between(at_start, None) is None
+    assert host.cpu_shares_between(None, at_start) is None
+    assert host.cpu_shares_between(at_start, at_start) is None, (
         "a window of no elapsed ticks has no share to report"
     )
+
+
+#: A window a test writes, with a quarter of it handed to somebody else. The
+#: deltas are user 400, system 200, idle 150, iowait 50 and steal 200, so the
+#: interval is 1,000 ticks of which 600 were ours and 200 were never offered.
+A_WINDOW_AT_START = "cpu  1000 0 1000 1000 1000 0 0 1000 0 0\n"
+A_WINDOW_AT_END = "cpu  1400 0 1200 1150 1050 0 0 1200 0 0\n"
+OUR_SHARE_PCT = 60.0
+THE_STOLEN_SHARE_PCT = 20.0
+THE_IDLE_SHARE_PCT = 15.0
+THE_IOWAIT_SHARE_PCT = 5.0
+
+
+def test_the_busy_share_leaves_out_what_the_host_gave_another_tenant() -> None:
+    """The Oracle for `cpu_shares_between`: four shares that add up to the interval.
+
+    Stolen ticks are time the hypervisor ran somebody else's machine on a
+    processor this one was charged for. Counting them as busy - which this
+    project did until 2026-09-20 - reports the window above at 80 percent busy,
+    when 60 percent was our work and 20 percent was a processor we did not get.
+
+    The sum is the half that cannot be satisfied by moving the theft to the
+    other side: busy, stolen, idle and iowait have to account for the whole
+    interval and nothing may be counted twice.
+
+    **What it cannot settle:** whether the hypervisor's own steal accounting is
+    accurate. That is the platform's contract, not this project's.
+    """
+    shares = host.cpu_shares_between(A_WINDOW_AT_START, A_WINDOW_AT_END)
+
+    assert shares is not None
+    assert shares.busy_pct == OUR_SHARE_PCT
+    assert shares.steal_pct == THE_STOLEN_SHARE_PCT
+    assert (
+        shares.busy_pct + shares.steal_pct + THE_IDLE_SHARE_PCT + THE_IOWAIT_SHARE_PCT == 100.0
+    ), "the four shares are the whole interval, and one of them is not ours"
+
+
+def test_a_kernel_that_does_not_account_theft_records_nothing_rather_than_zero() -> None:
+    """A steal figure of zero is a claim about the host, and a short line makes none.
+
+    The column arrived in Linux 2.6.11 and every runner this project draws
+    reports it, so this is the arm a developer machine will never produce - which
+    is why it is written here rather than waited for. The busy figure is still
+    the best the kernel can give: a kernel that does not account theft has
+    already folded it into user and system time, and nothing downstream can
+    unpick that.
+    """
+    no_steal_field = ("cpu  1000 0 1000 1000 1000 0 0\n", "cpu  1400 0 1200 1150 1050 0 0\n")
+
+    shares = host.cpu_shares_between(*no_steal_field)
+
+    assert shares is not None
+    assert shares.steal_pct is None
+    assert shares.busy_pct == pytest.approx(75.0), "600 ours plus the 200 nobody accounted"
+
+
+def test_the_sampler_reports_the_corrected_busy_share_and_the_stolen_one(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    """The item's own cells, not only the arithmetic underneath them.
+
+    The two captures are written by the test, so the window is a known one
+    rather than whatever the box that ran the suite was doing. A zero interval
+    starts no sampling thread, so the reading is the two ends and the maximum
+    and the minimum are that same whole-item figure.
+    """
+    captures = iter([A_WINDOW_AT_START, A_WINDOW_AT_END])
+
+    def one_file(path: Path) -> str | None:
+        return next(captures, None) if path == host.PROC_STAT else None
+
+    monkeypatch.setattr(host, "_text", one_file)
+
+    cells = host.Watch(interval_s=0).close()
+
+    assert cells.cpu_busy_pct == OUR_SHARE_PCT
+    assert cells.cpu_steal_pct == THE_STOLEN_SHARE_PCT
+    assert cells.cpu_busy_max == cells.cpu_busy_min == OUR_SHARE_PCT
+
+
+#: One process's fault counters, at values the test chooses. The minor count is
+#: the neighbouring field, so a reader off by one lands on it and is caught.
+A_MINOR_FAULT_COUNT = 1_234_567
+FAULTS_AT_ITEM_OPEN = 4_096
+FAULTS_AT_ITEM_CLOSE = 4_621
+
+#: The kernel brackets the command and it may hold a space or a bracket of its
+#: own, so a name carrying both is what the fixture uses.
+A_SERVER_COMMAND = "llama-server (ggml)"
+
+
+def proc_stat(pid: int, *, major_faults: int) -> str:
+    """One `/proc/<pid>/stat`, in the kernel's own layout and its own order.
+
+    Written here rather than read off the box: the file does not exist on the
+    machines this suite runs on. The fields before and after the fault count are
+    real ones, so the count has to be found by position among the rest.
+    """
+    ppid, pgrp, session, tty_nr, tpgid, flags = 1, pid, pid, 0, -1, 4_194_560
+    cminflt, cmajflt, utime, stime = 0, 0, 4_200, 310
+    return (
+        f"{pid} ({A_SERVER_COMMAND}) S {ppid} {pgrp} {session} {tty_nr} {tpgid} {flags} "
+        f"{A_MINOR_FAULT_COUNT} {cminflt} {major_faults} {cmajflt} {utime} {stime} 0 0 20 0 9\n"
+    )
+
+
+def _a_server_the_test_owns(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> tuple[int, dict[str, int], list[Path]]:
+    """A process table the test owns, whose fault counter it moves by hand.
+
+    Returns the pid, the counter the test writes into, and the list every open
+    is appended to - so a test can assert how OFTEN a file was read as well as
+    what it said.
+    """
+    # One more than our own, so the two processes are two files whatever pid the
+    # test worker drew.
+    server_pid = os.getpid() + 1
+    entry = tmp_path / str(server_pid)
+    entry.mkdir()
+    stat_file = entry / "stat"
+    faults = {"count": FAULTS_AT_ITEM_OPEN}
+    monkeypatch.setattr(host, "PROC", tmp_path)
+    # A spy over the module's one reader, so what is counted is a real open of a
+    # real file rather than a stand-in that returned text (Guardrail #7).
+    reads_a_file = host._text
+    opened: list[Path] = []
+
+    def counted(path: Path) -> str | None:
+        opened.append(path)
+        if path == stat_file:
+            stat_file.write_text(
+                proc_stat(server_pid, major_faults=faults["count"]), encoding="utf-8"
+            )
+        return reads_a_file(path)
+
+    monkeypatch.setattr(host, "_text", counted)
+    return server_pid, faults, opened
+
+
+def test_the_fault_count_is_the_difference_across_the_item(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    """The Oracle for the fault count: two counter reads, and the item is the gap.
+
+    A major fault is a page the process had to wait for off disk. llama.cpp maps
+    the weights file-backed, so a kernel reclaiming them charges the next token
+    back to storage - and the pages leave an RSS figure without touching a swap
+    counter, which is why nothing else on the row can see it.
+
+    The counter runs from the process's start, so one read says nothing about an
+    item and the reading is the difference. The counter is moved between the two
+    ends by the test, so the answer is a known one.
+
+    **What it cannot settle:** whether a fault was a weight page or another
+    mapping - the counter is per process, not per mapping.
+    """
+    server_pid, faults, _ = _a_server_the_test_owns(monkeypatch, tmp_path)
+
+    watch = host.Watch(interval_s=0, server_pid=server_pid)
+    faults["count"] = FAULTS_AT_ITEM_CLOSE
+
+    assert watch.close().llama_major_faults == FAULTS_AT_ITEM_CLOSE - FAULTS_AT_ITEM_OPEN
+
+
+def test_the_fault_counter_is_read_at_the_items_ends_and_never_on_a_tick(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    """A counter differenced across the window, so the tick interval cannot move it.
+
+    The two watches are the whole assertion: one with the sampling thread off
+    and one that is held open until it has taken a sample. The status file is
+    read every tick and proves the second watch really sampled; the fault
+    counter has to come out at the same count as the first, or the figure is a
+    gauge and `logging.waiting_heartbeat_seconds` silently changes it.
+    """
+    server_pid, _, opened = _a_server_the_test_owns(monkeypatch, tmp_path)
+    stat_file = tmp_path / str(server_pid) / "stat"
+    status_file = tmp_path / str(server_pid) / "status"
+
+    with host.Watch(interval_s=0, server_pid=server_pid):
+        pass
+    at_rest = Counter(opened)
+    opened.clear()
+    ticked = threading.Event()
+    with host.Watch(interval_s=0.01, server_pid=server_pid, on_tick=lambda _: ticked.set()):
+        assert ticked.wait(timeout=10.0), "the sampler never ticked"
+    sampling = Counter(opened)
+
+    assert sampling[status_file] > at_rest[status_file], "the sampler took no sample to compare"
+    assert sampling[stat_file] == at_rest[stat_file] > 0, (
+        f"the fault counter was read {sampling[stat_file]} times with the sampler running "
+        f"against {at_rest[stat_file]} with it off"
+    )
+
+
+def test_a_server_that_started_again_mid_item_records_no_fault_count(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    """A count that went down is a counter that started again, not a negative number of faults.
+
+    The alternative is a difference that reads as a quiet item on the morning the
+    server died and came back, which is the one morning the count is worth
+    having.
+    """
+    server_pid, faults, _ = _a_server_the_test_owns(monkeypatch, tmp_path)
+
+    watch = host.Watch(interval_s=0, server_pid=server_pid)
+    faults["count"] = FAULTS_AT_ITEM_OPEN - 1
+
+    assert watch.close().llama_major_faults is None
+
+
+def test_a_fault_counter_this_machine_will_not_answer_reports_nothing(
+    monkeypatch: MonkeyPatch, tmp_path: Path
+) -> None:
+    """A pid nobody named, a process gone, and a file of the wrong shape are all unknown.
+
+    The command is bracketed and carries a bracket of its own here, so a reader
+    splitting on the FIRST one lands on the wrong field and is caught - and the
+    minor count sits one field before the major one, so an off-by-one is caught
+    as well.
+    """
+    entry = tmp_path / "9931"
+    entry.mkdir()
+    (entry / "stat").write_text(proc_stat(9931, major_faults=FAULTS_AT_ITEM_OPEN), encoding="utf-8")
+    (tmp_path / "4242").mkdir()
+    (tmp_path / "4242" / "stat").write_text("4242 (a-truncated-read)\n", encoding="utf-8")
+    monkeypatch.setattr(host, "PROC", tmp_path)
+
+    assert host.major_faults(9931) == FAULTS_AT_ITEM_OPEN
+    assert host.major_faults(9931) != A_MINOR_FAULT_COUNT
+    assert host.major_faults(4242) is None
+    assert host.major_faults(None) is None
+    assert host.major_faults(7777) is None
 
 
 def test_the_aggregate_line_is_read_out_of_a_whole_capture_or_out_of_the_line_alone() -> None:
@@ -587,8 +833,15 @@ def test_every_host_cell_the_sampler_names_is_a_column_the_item_row_declares() -
     the sampler emits under a name `ItemHealthRow` does not declare is a cell the
     recorder would refuse, which is a failure at the end of an eight-minute item
     rather than here.
+
+    **The other direction is asserted too**, because it is the one that fails
+    silently: a reading the sampler takes on every item and leaves out of
+    `cells()` is computed 80 times a shard and written down nowhere. The two
+    below are held deliberately, and this list empties when the row declares
+    them.
     """
-    sampled = set(host.HostCells(*(None,) * 14).cells()) | set(
+    every_reading = host.HostCells(*(None,) * len(fields(host.HostCells)))
+    sampled = set(every_reading.cells()) | set(
         host.HostFacts(cpu_model=None, runner_name=None, cgroup_peak_bytes=None).shard_cells()
     )
 
@@ -611,3 +864,7 @@ def test_every_host_cell_the_sampler_names_is_a_column_the_item_row_declares() -
         "job",
     }
     assert sampled <= set(ItemHealthRow.model_fields)
+    assert {field.name for field in fields(host.HostCells)} - set(every_reading.cells()) == {
+        "cpu_steal_pct",
+        "llama_major_faults",
+    }, "a reading taken on every item and left out of the cells is written down nowhere"
