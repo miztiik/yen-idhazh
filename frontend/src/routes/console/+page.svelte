@@ -93,6 +93,7 @@
 	import Sparkline from '$lib/components/Sparkline.svelte';
 	import Viewport from '$lib/components/Viewport.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
+	import RunTimelinePanel from './RunTimelinePanel.svelte';
 	import type { Health } from './+page.server';
 
 	let { data } = $props();
@@ -1054,6 +1055,17 @@
 				/>
 			{/if}
 		</Reserved>
+	</Panel>
+
+	<!-- The panel above is a mean item over a span of days. This one is one run,
+	     on its own clock, so the window control does not reach it: a window is a
+	     span and a span cannot narrow a single run. It names the run it drew. -->
+	<Panel
+		title="Where the run's time went, on the run's own clock"
+		note="Is it working. Where each item's work sits against every other item's, on one clock - so a wide staircase is a run that queued and a solid block is a run that worked in parallel. The newest published run, one bar an item or one bar a shard. The four steps that nest inside those steps are printed under the bars rather than drawn: each runs inside a step a bar already draws, and the readout prints how wide it would have been."
+		wide
+	>
+		<RunTimelinePanel view={data.runTimeline} subSteps={data.subSteps} />
 	</Panel>
 
 	<div data-windowed="run-health" data-window-days={windowDays}>

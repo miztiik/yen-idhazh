@@ -38,8 +38,6 @@
 	import ShapeSwitch from '$lib/components/ShapeSwitch.svelte';
 	import ShardBoard from '$lib/components/ShardBoard.svelte';
 	import HostFigure from './HostFigure.svelte';
-	import SpanPanel from './SpanPanel.svelte';
-	import RunTimelinePanel from './RunTimelinePanel.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
 	import {
 		cacheChart,
@@ -603,7 +601,7 @@
 	<p class="mt-4 text-[0.8125rem] text-text-tertiary" data-window-exempt="newest-run">
 		{data.newestRunId === null
 			? 'The panels below read the newest run each ledger holds, and do not follow the window. No run has committed a counters row yet.'
-			: `The panels below do not follow the window; each reads one run or one day, because a span cannot narrow a single run. The hardware panels read the newest run the counters hold, ${data.newestRunId}. The span breakdown reads its own ledger and names the run it found.`}
+			: `The panels below do not follow the window; each reads one run or one day, because a span cannot narrow a single run. The hardware panels read the newest run the counters hold, ${data.newestRunId}.`}
 	</p>
 
 	<Panel
@@ -612,22 +610,6 @@
 		wide
 	>
 		<ShardBoard board={data.board} timeoutMinutes={data.shardTimeoutMinutes} />
-	</Panel>
-
-	<Panel
-		title="Where a shard's clock went"
-		note="Each shard of the newest traced run as one bar of its whole clock: the four sub-steps no ledger column times, the rest of the item work, and - on the right, drawn hollow - the overhead between items that no span covers. The item time plus that overhead is the shard's whole clock, so the residual is a figure that reconciles rather than an estimate."
-		wide
-	>
-		<SpanPanel breakdown={data.spanBreakdown} />
-	</Panel>
-
-	<Panel
-		title="Where the run's time went, item by item"
-		note="Every item of the newest timed run, placed where its own work began on the run's clock and split into the steps that timed themselves. The panel above folds the same seconds per shard; this is the only one that can say which article was being read. A wide staircase is a run that queued; a solid block is a run that worked in parallel."
-		wide
-	>
-		<RunTimelinePanel view={data.runTimeline} />
 	</Panel>
 
 	<Panel

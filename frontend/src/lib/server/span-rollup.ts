@@ -1,4 +1,4 @@
-/** Where each shard's wall clock went, read at build time from the span rollup.
+/** The four sub-steps of a run's clock, read at build time from the span rollup.
  *
  * `state/span-rollup/<YYYY-MM>.csv` holds one row per `(date, run_id, shard,
  * span_name)` for the five spans no ledger column already times - `item` and the
@@ -7,8 +7,16 @@
  * on the `item` row alone, the shard's `unattributed_ms`: its wall clock minus
  * the time inside its item spans. So one shard reconciles exactly -
  * `item.total_ms + unattributed_ms` is the wall clock - and this module reads
- * that back so a page can draw where a shard's seconds went and how many of them
- * no span covered.
+ * that back.
+ *
+ * **What it returns is figures, not a drawing.** A panel drew this split per
+ * shard until 2026-09-20. Measured over 23 shard rows of the committed rollup,
+ * the four sub-steps together came to 0.026 px of a 760 px track and the
+ * residual to 0.039 px, so a browser painted neither and the legend taught a
+ * reader that four categories were zero when they were only unmeasurable at that
+ * scale. The figures survive as printed figures beside the merged timing panel
+ * on the Pipeline route, which is where every one of them was already legible -
+ * none of them was ever visible as a band.
  *
  * **Nothing here is published.** It sits under `$lib/server/` so SvelteKit
  * refuses to bundle it for a browser, the same place and for the same reason as
@@ -55,6 +63,21 @@ const STAGE_LABEL: Record<SubStep, string> = {
 	tag: 'tag read',
 	render_prompt: 'prompt build',
 	parse_reply: 'reply parse'
+};
+
+/** Where each sub-step runs, because none of the four is a stage of its own.
+ *
+ * `tag` opens inside the extract span and `render_prompt` and `parse_reply` open
+ * inside the summary call (`backend/idhazh/stages/common.py`,
+ * `backend/idhazh/stages/two_calls.py`), so their seconds are already counted by
+ * the step they nest in. A reader who takes `tag read` for a step beside extract
+ * adds it twice.
+ */
+const STAGE_INSIDE: Record<SubStep, string> = {
+	robots: 'the robots check before a page is read',
+	tag: 'the tagging step inside taking the article out',
+	render_prompt: 'building the prompt inside the summary call',
+	parse_reply: 'reading the reply inside the summary call'
 };
 
 /** One sub-step a shard committed. */
@@ -204,103 +227,136 @@ export function loadSpanRollup(months: number = LEDGER_WINDOW_MONTHS): SpanRun[]
 }
 
 // ---------------------------------------------------------------------------
-// The drawable view
+// The printed readout
 // ---------------------------------------------------------------------------
 
-/** One drawn slice of a shard's wall clock. */
-export interface SpanSegment {
-	/** A stable id: a sub-step name, `other` for the rest of the item time, or
-	 * `residual` for the overhead outside every item. */
-	kind: SubStep | 'other' | 'residual';
-	/** What the slice is called beside the bar. */
-	label: string;
-	ms: number;
-	/** CSS length against the widest shard's wall clock, so a short bar means a
-	 * short shard rather than a differently scaled one. */
-	width: string;
-}
-
-/** One shard as a bar a reader takes left to right. */
-export interface SpanShardBar {
-	shard: number;
-	/** The shard's whole clock: the sum of every segment below. */
-	wallMs: number;
-	/** The time inside items - every segment but the residual. */
-	itemMs: number;
-	/** The overhead outside every item. Null where the shard's row predates the
-	 * column, and then no residual segment is drawn. */
-	residualMs: number | null;
-	itemCount: number;
-	/** Left to right: the four sub-steps, the rest of the item time, then the
-	 * residual last - so the overhead is always the right-hand end, beside the
-	 * item work and never buried inside it. */
-	segments: SpanSegment[];
-	/** The residual as a share of the shard's wall clock, whole percent. Null
-	 * where the residual was not recorded. */
-	residualPct: number | null;
-}
-
-/** Everything the panel draws, worked out once on the server.
+/** One sub-step as a figure a reader takes off the page.
  *
- * A snapshot of one run and not a window: the residual is a per-shard quantity
- * of one run, and narrowing a span cannot narrow a single run. The panel names
- * the run it drew instead.
+ * A figure and never a slice: the four together draw far under a pixel of the
+ * configured track, and a band that small is a legend entry with no mark
+ * (`docs/concepts/console-design.md`).
  */
-export interface SpanBreakdown {
+export interface SubStepFigure {
+	name: SubStep;
+	/** What the step is called. */
+	label: string;
+	/** Where it runs. None of the four is a stage of its own - `tag read` is the
+	 * tagging step inside taking the article out, not a step beside it - and a
+	 * figure read as a stage is a figure read wrong. */
+	inside: string;
+	/** Every span of this name, across every shard of the run. */
+	ms: number;
+	/** How many spans of this name the run opened. */
+	count: number;
+	/** How wide this figure would draw on the configured track, in CSS pixels. */
+	px: number;
+}
+
+/** The four sub-steps of one run, and the overhead outside every item.
+ *
+ * What survives of the panel that drew a shard's clock as a split. Every figure
+ * it carried is here; none of them was ever visible, because the split it drew
+ * was under a pixel wide.
+ */
+export interface SubStepReadout {
 	empty: boolean;
 	runId: string;
 	date: string;
-	/** One bar per shard, ascending. */
-	shards: SpanShardBar[];
-	/** The milliseconds the widest bar stands for. Every bar shares it. */
-	scaleMs: number;
+	/** How many shards of the run committed a reconcilable item row. */
+	shardCount: number;
+	/** One figure per sub-step the run committed a row for, in fold order. A step
+	 * no shard opened gets no figure and no legend key - a key for an absent
+	 * series is a claim the data does not support. */
+	steps: SubStepFigure[];
+	/** The figures above added together. */
+	namedMs: number;
+	/** The time inside the run's items - the clock the four are a slice of. */
+	itemMs: number;
+	/** The overhead outside every item, added over the shards that recorded it.
+	 * Null where none did, which is a missing reading and not zero overhead. */
+	residualMs: number | null;
+	/** `itemMs` plus that overhead: the shards' wall clock added up. */
+	wallMs: number;
+	/** The narrowest figure's width on the configured track, in CSS pixels. */
+	smallestPx: number;
+	/** The track the widths were measured against, in CSS pixels. */
+	trackPx: number;
+	/** True where the narrowest band would draw under one pixel, so the split is
+	 * printed rather than drawn. */
+	printed: boolean;
 	/** The day the record begins, for the note both states print. */
 	recordStarts: string;
 }
 
-/** Turn one run into the bars the panel draws, or an empty view.
+/** Reduce one run's rollup to the figures the merged timing panel prints.
  *
- * Empty when there is no run or the run committed no reconcilable shard: the
- * real rollup is empty until a traced run folds its spans, so the empty view is
- * the ordinary state and not a failure. It carries `recordStarts` so the panel
- * can say why it is empty.
+ * `trackPx` is `console.chart_width`, which is what decides whether a band is
+ * paintable: the rule is measured in pixels of a real track, so the track has to
+ * be handed in rather than assumed here.
  */
-export function spanBreakdown(run: SpanRun | null): SpanBreakdown {
+export function subStepReadout(run: SpanRun | null, trackPx: number): SubStepReadout {
 	if (run === null || run.shards.length === 0) {
 		return {
 			empty: true,
 			runId: run?.runId ?? '',
 			date: run?.date ?? '',
-			shards: [],
-			scaleMs: 0,
+			shardCount: 0,
+			steps: [],
+			namedMs: 0,
+			itemMs: 0,
+			residualMs: null,
+			wallMs: 0,
+			smallestPx: 0,
+			trackPx,
+			printed: true,
 			recordStarts: SPAN_RECORD_STARTS
 		};
 	}
 
-	const scaleMs = Math.max(...run.shards.map((shard) => shard.wallMs));
-	const width = (ms: number): string => `${scaleMs > 0 ? ((ms / scaleMs) * 100).toFixed(3) : 0}%`;
-
-	const shards: SpanShardBar[] = run.shards.map((shard) => {
-		const segments: SpanSegment[] = [];
+	const summed = new Map<SubStep, { ms: number; count: number }>();
+	for (const shard of run.shards)
 		for (const stage of shard.stages) {
-			segments.push({ kind: stage.name, label: STAGE_LABEL[stage.name], ms: stage.totalMs, width: width(stage.totalMs) });
+			const found = summed.get(stage.name) ?? { ms: 0, count: 0 };
+			summed.set(stage.name, { ms: found.ms + stage.totalMs, count: found.count + stage.count });
 		}
-		segments.push({ kind: 'other', label: 'the rest of the item time', ms: shard.otherItemMs, width: width(shard.otherItemMs) });
-		// The residual only where it was measured. A null residual means the wall
-		// clock is unknown, so drawing a zero-width slice would claim no overhead.
-		if (shard.residualMs !== null) {
-			segments.push({ kind: 'residual', label: 'overhead between items', ms: shard.residualMs, width: width(shard.residualMs) });
-		}
+
+	const itemMs = run.shards.reduce((sum, shard) => sum + shard.itemMs, 0);
+	const recorded = run.shards.filter((shard) => shard.residualMs !== null);
+	const residualMs =
+		recorded.length === 0 ? null : recorded.reduce((sum, shard) => sum + (shard.residualMs ?? 0), 0);
+	const wallMs = itemMs + (residualMs ?? 0);
+	// Measured against the wall clock, because that is what a bar of this run
+	// would be drawn to.
+	const pxOf = (ms: number): number => (wallMs > 0 ? (ms / wallMs) * trackPx : 0);
+
+	const steps: SubStepFigure[] = SUB_STEPS.filter((step) => summed.has(step)).map((step) => {
+		const found = summed.get(step) as { ms: number; count: number };
 		return {
-			shard: shard.shard,
-			wallMs: shard.wallMs,
-			itemMs: shard.itemMs,
-			residualMs: shard.residualMs,
-			itemCount: shard.itemCount,
-			segments,
-			residualPct: shard.residualMs === null || shard.wallMs === 0 ? null : Math.round((shard.residualMs / shard.wallMs) * 100)
+			name: step,
+			label: STAGE_LABEL[step],
+			inside: STAGE_INSIDE[step],
+			ms: found.ms,
+			count: found.count,
+			px: pxOf(found.ms)
 		};
 	});
 
-	return { empty: false, runId: run.runId, date: run.date, shards, scaleMs, recordStarts: SPAN_RECORD_STARTS };
+	const namedMs = steps.reduce((sum, step) => sum + step.ms, 0);
+	const smallestPx = steps.length === 0 ? 0 : Math.min(...steps.map((step) => step.px));
+
+	return {
+		empty: false,
+		runId: run.runId,
+		date: run.date,
+		shardCount: run.shards.length,
+		steps,
+		namedMs,
+		itemMs,
+		residualMs,
+		wallMs,
+		smallestPx,
+		trackPx,
+		printed: steps.length === 0 || smallestPx < 1,
+		recordStarts: SPAN_RECORD_STARTS
+	};
 }

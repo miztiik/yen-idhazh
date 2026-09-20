@@ -35,7 +35,7 @@ import {
 	observabilityConfig,
 	runConfig
 } from '$lib/server/config';
-import { itemHealthRows, evalRows, loadDay, loadManifests, shardDays, shardMonths } from '$lib/server/payload';
+import { itemHealthRows, evalRows, loadDay, loadManifests, shardDays } from '$lib/server/payload';
 import { pipelineChanges } from '$lib/server/model-work';
 import {
 	CLOCKS_AGREE_WITHIN_PCT,
@@ -44,8 +44,6 @@ import {
 	type MachineRun,
 	type RefusedRun
 } from '$lib/server/machine-counters';
-import { loadSpanRollup, spanBreakdown } from '$lib/server/span-rollup';
-import { loadRunTimeline, runTimelineView } from '$lib/server/run-timeline';
 
 export const prerender = true;
 
@@ -147,10 +145,8 @@ export async function load() {
 	// The widest span the control can reach. Nothing older can be drawn whatever
 	// the operator does, so nothing older is read (`CLAUDE.md` Guardrail #12), and the
 	// cover follows `console.window_presets` rather than a literal so raising a
-	// preset widens it (Guardrail #6). Two covers, because a `state/` ledger files
-	// by day and a published mirror by month: `shards` is the span rollup's.
+	// preset widens it (Guardrail #6). Every ledger this route reads files by day.
 	const widestPreset = Math.max(...console_.window_presets);
-	const shards = shardMonths(widestPreset);
 	const days = shardDays(widestPreset);
 	const chart = chartConfig();
 	const limits = machineLimits();
@@ -365,21 +361,6 @@ export async function load() {
 	const clocks = clockAgreement(newest, health, CLOCKS_AGREE_WITHIN_PCT);
 	const clocksPlot = clocksChart(clocks.pairs);
 
-	// The newest run that folded its spans, and where its shards' seconds went.
-	// A snapshot like the board above, not a window: the residual is a per-shard
-	// quantity of one run, and a span cannot narrow a single run. It reads its
-	// own ledger - `state/span-rollup/`, empty until a traced run commits - so it
-	// is often a different run from `newest`, and its own empty state when the
-	// real rollup holds nothing.
-	const spanView = spanBreakdown(loadSpanRollup(shards)[0] ?? null);
-
-	// The newest run the published item timeline holds, and where each of its
-	// items sat on the run's clock. A snapshot for the same reason the two above
-	// are: a bar's position is measured from its own run's start, and a window
-	// cannot narrow one run. It reads its own published mirror, so it is often a
-	// different run again and carries its own empty state.
-	const timeline = runTimelineView(loadRunTimeline()[0] ?? null, console_.timeline_bars);
-
 	// The newest run the item ledger timed enough items on, which is not always
 	// the newest run the counters reached: a run can publish before its shards
 	// scrape. It is the last entry of the same array the multiples draw, so
@@ -447,8 +428,6 @@ export async function load() {
 		// (`CLAUDE.md` Guardrail #12), and the manifests are bounded the same way.
 		modelChanges: pipelineChanges(evalRows(days).rows, loadManifests(undefined, widest)),
 		board,
-		spanBreakdown: spanView,
-		runTimeline: timeline,
 		memory,
 		newestRunId: newest?.runId ?? null,
 		split,

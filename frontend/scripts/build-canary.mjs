@@ -680,7 +680,7 @@ function writeItemHealthCanary() {
 	}
 }
 
-/** One traced run's span rollup, so the console's span breakdown has a run to
+/** One traced run's span rollup, so the console's sub-step readout has a run to
  * draw. `build_canary_day.py` fabricates a day rather than running the traced
  * pipeline, so it writes no spans; without this the panel only ever shows its
  * empty state, and the residual it exists to draw would never be tested.
