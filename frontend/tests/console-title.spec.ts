@@ -162,13 +162,23 @@ test('THE ORACLE: no Hardware title borrows a word from how it is built', async 
 	// other four still carry titles written before it - `Extraction` is a stage
 	// name - so asserting there would report a defect this row did not open and
 	// cannot fix.
+	//
+	// And scoped to the titles the row wrote, which is narrower than every
+	// heading on the page: a machine card draws its own processor as an `h3`,
+	// so `titlesOn` returns `AMD EPYC 7763` beside the panel titles. That is a
+	// value the ledger recorded, not a word anybody chose, and a rule about
+	// chosen words has nothing to say about it.
 	await page.goto('/console/machine/');
-	const titles = await titlesOn(page);
-	expect(titles.length, 'the Hardware route drew no titles to read').toBeGreaterThanOrEqual(
+	const written = await page
+		.locator('[data-console-group] > h2, [data-console-panel] > header > h3')
+		.evaluateAll((nodes) =>
+			nodes.map((node) => (node.textContent ?? '').replace(/\s+/g, ' ').trim())
+		);
+	expect(written.length, 'the Hardware route drew no titles to read').toBeGreaterThanOrEqual(
 		ROUTES['/console/machine/']
 	);
 
-	for (const title of titles) {
+	for (const title of written) {
 		for (const borrowed of BORROWED) {
 			expect(
 				borrowed.pattern.test(title),
