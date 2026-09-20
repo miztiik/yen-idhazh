@@ -499,6 +499,11 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-20T12:00",
+            change="console.panel_groups, additive, default three groups on Hardware.",
+            why="Panel order and grouping were markup order, which no config could move.",
+        ),
+        ChangelogEntry(
             version="2026-09-20",
             change="console.fleet_top_kinds, additive, default 4.",
             why="The fleet count became bars a day, and too many series draw sub-pixel bars.",
@@ -512,11 +517,6 @@ class AppearanceConfig(Contract):
             version="2026-09-16T00:40",
             change="digest.draw_same_story, additive, default true.",
             why="The page folds a group into one card, and this is the one-edit revert.",
-        ),
-        ChangelogEntry(
-            version="2026-09-15T10:00",
-            change="console.chart_arm_rule_days, console.chart_arm_minutes_target.",
-            why="`arm` came from benchmarking and reads as a limb on a reader-facing page.",
         ),
         ChangelogEntry(
             version="2026-08-29",

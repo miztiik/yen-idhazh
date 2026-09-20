@@ -29,7 +29,7 @@ import { expect, test, type Page } from '@playwright/test';
  * tabs on 2026-09-12, is in `console-nav.spec.ts`.
  */
 
-/** Every console route, and the fewest h2 headings it may draw.
+/** Every console route, and the fewest headings it may draw.
  *
  * The floor is per route rather than shared, because the two things it is doing
  * pull apart. The grammar below binds every title on every route. The floor is
@@ -42,12 +42,13 @@ import { expect, test, type Page } from '@playwright/test';
  * `/console/judgement/` draws two on 2026-09-17: the `Stories the day merged`
  * panel, and the heading over the absence that names what the model still does
  * not record. `/console/voices/` drew one until 2026-09-14, when four panels
- * moved onto it.
+ * moved onto it. `/console/machine/` draws sixteen since 2026-09-20 - three
+ * group headings and the thirteen panel titles under them.
  */
 const ROUTES: Record<string, number> = {
 	'/console/': 3,
 	'/console/model/': 3,
-	'/console/machine/': 3,
+	'/console/machine/': 16,
 	'/console/voices/': 3,
 	'/console/judgement/': 2
 };
@@ -56,12 +57,13 @@ const ROUTES: Record<string, number> = {
 const AUXILIARY =
 	/^(did|do|does|is|are|am|was|were|has|have|had|can|could|will|would|shall|should|may|might|must)\b/i;
 
-/** Every h2 the route draws, which is every section heading and every panel
- * title - `Panel.svelte` renders its `title` prop as an h2, so one scan covers
- * both halves of what the row rules on. */
+/** Every heading the route draws, which is every section heading and every
+ * panel title - `Panel.svelte` renders its `title` prop as an h2, or as an h3
+ * where a group heading above it took the h2, so one scan covers both halves of
+ * what the row rules on. */
 async function titlesOn(page: Page): Promise<string[]> {
 	return page
-		.locator('[data-surface="operator"] h2')
+		.locator('[data-surface="operator"] h2, [data-surface="operator"] h3')
 		.evaluateAll((nodes) =>
 			nodes.map((node) => (node.textContent ?? '').replace(/\s+/g, ' ').trim())
 		);
@@ -73,7 +75,7 @@ for (const [route, floor] of Object.entries(ROUTES)) {
 		const titles = await titlesOn(page);
 		expect(
 			titles.length,
-			`${route} draws fewer than ${floor} h2, so this asserts less than it should`
+			`${route} draws fewer than ${floor} headings, so this asserts less than it should`
 		).toBeGreaterThanOrEqual(floor);
 
 		for (const title of titles) {

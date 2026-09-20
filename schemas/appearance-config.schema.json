@@ -327,6 +327,17 @@
           "title": "Pan Days",
           "type": "integer"
         },
+        "panel_groups": {
+          "additionalProperties": {
+            "items": {
+              "$ref": "#/$defs/ConsolePanelGroup"
+            },
+            "type": "array"
+          },
+          "description": "The order the panels of a console route are drawn in, and the headings they group under. Keyed by route id. Thirteen equal siblings down one column give the eye nothing to land on first, so the Hardware route reads as three questions - the run that just finished, the span the control is open on, and the machines the platform handed us - and the first panel of the first group is the one that verdicts the rest. The Pipelines route takes one untitled group, because what it needed was an order rather than a grouping. An id here is a panel the route implements, and the route refuses a list that names one it does not.",
+          "title": "Panel Groups",
+          "type": "object"
+        },
         "precision_axis_multiple": {
           "default": 10.0,
           "description": "How many times assemble.same_story.adaptive_dedup_threshold.discard_share the precision axis reaches. The fit places the line so that the discard share of judged two-story pairs stays above it, so 1 percent is where the line should hover; ten times that shows the target and a tenfold overshoot on one fixed scale. A value past the top is clamped at the top and printed in the readout, because the worst day is the one a hidden mark would cost.",
@@ -379,6 +390,39 @@
         }
       },
       "title": "ConsoleConfig",
+      "type": "object"
+    },
+    "ConsolePanelGroup": {
+      "additionalProperties": false,
+      "description": "One heading on a console route, and the panels that sit under it in order.",
+      "properties": {
+        "id": {
+          "description": "What the group is called in markup, drawn as `data-console-group`. Lower case and hyphens, so it is a stable handle a test can name while the heading above it is reworded.",
+          "pattern": "^[a-z][a-z0-9-]*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "panels": {
+          "description": "The panels under this heading, in the order they are drawn. Each entry is a panel id the route implements; the route's `load` refuses a list that names a panel it does not draw, or omits one it does, so a rename here fails the build rather than dropping a panel off the page in silence.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Panels",
+          "type": "array"
+        },
+        "title": {
+          "description": "The heading drawn above the group. An empty title draws no heading and no group element, so the panels stay flat siblings - which is what a route that wants an order without a grouping asks for. A route mixes the two at its peril, so the contract refuses it.",
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "panels"
+      ],
+      "title": "ConsolePanelGroup",
       "type": "object"
     },
     "FrameConfig": {
@@ -853,6 +897,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "console.panel_groups, additive, default three groups on Hardware.",
+      "version": "2026-09-20T12:00",
+      "why": "Panel order and grouping were markup order, which no config could move."
+    },
+    {
       "change": "console.fleet_top_kinds, additive, default 4.",
       "version": "2026-09-20",
       "why": "The fleet count became bars a day, and too many series draw sub-pixel bars."
@@ -866,11 +915,6 @@
       "change": "digest.draw_same_story, additive, default true.",
       "version": "2026-09-16T00:40",
       "why": "The page folds a group into one card, and this is the one-edit revert."
-    },
-    {
-      "change": "console.chart_arm_rule_days, console.chart_arm_minutes_target.",
-      "version": "2026-09-15T10:00",
-      "why": "`arm` came from benchmarking and reads as a limb on a reader-facing page."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -908,7 +952,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-09-20",
+      "default": "2026-09-20T12:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -916,5 +960,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-09-20"
+  "version": "2026-09-20T12:00"
 }
