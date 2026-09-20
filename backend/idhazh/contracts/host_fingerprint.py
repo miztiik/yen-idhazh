@@ -63,6 +63,11 @@ class HostFingerprintRow(Contract):
     __schema_stem__: ClassVar[str] = "host-fingerprint-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-20",
+            change="`memcpy_probe_mib` is the derived buffer, not the configured one.",
+            why="A constant could not clear a cache that varies fifteenfold across the fleet.",
+        ),
+        ChangelogEntry(
             version="2026-09-19",
             change="Added `server_prompt_tokens`, `server_prompt_seconds`.",
             why="Arithmetic over the item ledger cannot check the item ledger.",
@@ -134,8 +139,9 @@ class HostFingerprintRow(Contract):
         default=None,
         ge=0,
         description=(
-            "L3 as the host reports it. Read beside `memcpy_probe_mib`: a probe "
-            "buffer smaller than this measured cache rather than memory."
+            "L3 as the host reports it, and what sizes the bandwidth probe. Read "
+            "beside `memcpy_probe_mib`: a probe buffer that does not clear this "
+            "measured cache rather than memory."
         ),
     )
 
@@ -183,8 +189,10 @@ class HostFingerprintRow(Contract):
         default=None,
         ge=0,
         description=(
-            "The buffer each side of the copy used. Below `l3_cache_bytes` the figure "
-            "is a cache reading."
+            "The buffer each side of the copy used, as used rather than as "
+            "configured: the larger of the configured floor and twice "
+            "`l3_cache_bytes`. Under twice that cache the figure cannot be read as "
+            "a memory rate, which is what rows written before 2026-09-20 carry."
         ),
     )
 

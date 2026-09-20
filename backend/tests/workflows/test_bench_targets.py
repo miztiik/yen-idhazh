@@ -467,7 +467,7 @@ def test_a_bench_machine_row_cannot_land_where_the_console_reads(tmp_path: Path)
     production_root = tmp_path / ledger.STATE_DIRNAME
     settings = config.load()
     settings.app.observability.host_fingerprint = True
-    settings.app.observability.host_fingerprint_bandwidth_mib = 0
+    settings.app.observability.host_fingerprint_bandwidth_floor_mib = 0
     plan = RunPlan.model_validate(
         {
             "date": "2026-09-17",

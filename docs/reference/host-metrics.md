@@ -149,7 +149,7 @@ that moves without anything else moving.
 | `flags` | string | The watched instruction-set flags, sorted, space joined | **The cell that tracks prefill.** llama.cpp dispatches to a different kernel when the wider instructions are there |
 | `cores` | int? | Physical cores | Constant at 2 on every machine drawn so far |
 | `threads` | int? | Logical processors | Constant at 4 so far |
-| `l3_cache_bytes` | int? | L3 as the kernel reports it | Ranges 32 MiB to 480 MiB across the fleet. **Read it beside `memcpy_probe_mib`** |
+| `l3_cache_bytes` | int? | L3 as the kernel reports it | Ranges 32 MiB to 480 MiB across the fleet, and **it is what sizes the bandwidth probe.** Read it beside `memcpy_probe_mib` |
 
 **`flags` holds only the flags in `WATCHED_FLAGS`**, which is a fixed tuple in
 the contract: the AMX, AVX-512, VNNI, FMA and SSE entries an inference runtime
@@ -231,17 +231,42 @@ down once rather than retaken per draw.
 | `mhz_at_probe` | float? | Mean `cpu MHz` across processors at probe time | **Not a reading under load.** The probe runs before the job's heaviest step, so this says what the machine idles at |
 | `boot_seconds` | float? | Uptime when the probe ran | A small number is a freshly started machine; a large one was pooled and handed to us |
 | `memcpy_gib_s` | float? | Large-block copy rate, bytes read plus written | **Decode is bandwidth bound and this is the only bandwidth reading anywhere** |
-| `memcpy_probe_mib` | int? | The buffer each side of the copy used | Says whether `memcpy_gib_s` measured memory or cache |
+| `memcpy_probe_mib` | int? | The buffer each side of the copy used, as used rather than as configured | Says whether `memcpy_gib_s` measured memory or cache |
 
-**`memcpy_probe_mib` is why `memcpy_gib_s` can be trusted.** A buffer smaller
-than `l3_cache_bytes` never leaves cache, and reads several times higher than
+**`memcpy_probe_mib` is why `memcpy_gib_s` can be trusted.** A buffer that does
+not clear `l3_cache_bytes` measures cache, and reads several times higher than
 memory. The two columns sit side by side so nobody can read one for the other,
-and `observability.host_fingerprint_bandwidth_mib` sets the buffer - **zero
+and `observability.host_fingerprint_bandwidth_floor_mib` sets the floor - **zero
 switches the probe off and leaves the rate empty**, which is different from a
 rate of zero.
 
-The default buffer beats the largest L3 this project has drawn, 480 MiB. Raise it
-when a drawn machine reports an L3 at or above the default.
+**The probe sizes itself against the machine, from 2026-09-20.** The buffer is
+the larger of that floor and twice the L3 this machine reports, so a part with
+more cache than anybody has drawn cannot quietly turn the reading into a cache
+reading. There is no longer a sentence here asking a person to raise a constant
+when a bigger part arrives. What it costs: on a machine reporting 480 MiB the
+probe holds two buffers of 960 MiB, so 1.9 GiB of the runner's 16 GB, taken
+before the model server starts.
+
+**A row divides `memcpy_probe_mib` by `l3_cache_bytes` to grade its own rate**,
+and rows written before that date do not survive the division. Measured
+2026-09-20 over the 60 rows then committed under `state/host-fingerprint/`,
+exact counts over committed files and therefore carrying no spread:
+
+| L3 reported | Buffer / cache | Rows | Rate, min / median / max GiB/s |
+| --- | --- | --- | --- |
+| 32 MiB, AMD EPYC 7763 | 16.00 | 52 | 29.40 / 40.39 / 48.57 |
+| 48 MiB, Intel Xeon 8370C | 10.67 | 1 | 25.02 |
+| 260 MiB, Intel Xeon 8573C | 1.97 | 4 | 21.96 / 23.17 / 26.42 |
+| 480 MiB, Intel Xeon 6973P-C | 1.07 | 3 | 24.44 / 25.08 / 26.08 |
+
+The buffer is 512 MiB on all 60, so the seven rows in the last two lines are the
+ones a reader cannot grade. **Their rates are the seven slowest of the 60, not
+the fastest**, which is the opposite of what a cache-resident buffer would do -
+so the undersized margin is a reason to distrust those figures rather than
+evidence that they were inflated. The likelier reading is that these two Xeon
+parts are simply slower per allotted processor than the EPYC 7763, and the
+probe cannot say so while its own buffer is in question.
 
 ## Where the platform put us
 

@@ -68,6 +68,13 @@ npm --prefix frontend run test:changed -- --list
 
 ## Contracts and schemas
 
+**A worktree borrowing another checkout's venv exports into whichever tree that venv was installed from, and the drift gate then passes on the wrong tree.** The editable install resolves `idhazh` through a meta-path finder, so neither the working directory nor the `python.exe` you named moves it: run from worktree `A` with the root checkout's interpreter and `python -m idhazh.contracts.export` can write `B/schemas/` and `B/frontend/src/contracts/`, print paths that look right, and leave `A` untouched. `git status --porcelain -- schemas/` is then empty for the best possible reason and the worst one at once. It is also a write into a sibling's checkout, which is the contamination the execution contract forbids. Ask where the package came from before believing any export, and set `PYTHONPATH` - it wins over the finder:
+
+```powershell
+python -c "import idhazh; print(idhazh.__file__)"
+$env:PYTHONPATH = (Join-Path $PWD 'backend')
+```
+
 **`git status --porcelain -- schemas/` straight after `python -m idhazh.contracts.export` looks like every schema changed.** The exporter prints the path of every file it wrote, so the two commands' output runs together and reads as twenty-nine modified files; `git diff --stat -- schemas/` is the question you meant, and empty is the pass. And `git diff --exit-code -- schemas/` is not the drift gate until you have committed - on a branch whose only schema change is the one it exists to make it returns 1, which reads exactly like a hand-edited schema. The gate is `test_committed_schemas_match_the_models`, which exports into a temporary directory, so it does not care what `HEAD` holds.
 
 **The schema export CLI needs an absolute `--out` path.** A relative one lets the export write its files and then fails when the CLI prints each path relative to the repository root, which is not schema drift. Use `--out (Join-Path $PWD 'backend/var/schemas')`.

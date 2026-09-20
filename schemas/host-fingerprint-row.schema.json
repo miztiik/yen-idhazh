@@ -19,6 +19,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "`memcpy_probe_mib` is the derived buffer, not the configured one.",
+      "version": "2026-09-20",
+      "why": "A constant could not clear a cache that varies fifteenfold across the fleet."
+    },
+    {
       "change": "Added `server_prompt_tokens`, `server_prompt_seconds`.",
       "version": "2026-09-19",
       "why": "Arithmetic over the item ledger cannot check the item ledger."
@@ -189,7 +194,7 @@
         }
       ],
       "default": null,
-      "description": "L3 as the host reports it. Read beside `memcpy_probe_mib`: a probe buffer smaller than this measured cache rather than memory.",
+      "description": "L3 as the host reports it, and what sizes the bandwidth probe. Read beside `memcpy_probe_mib`: a probe buffer that does not clear this measured cache rather than memory.",
       "title": "L3 Cache Bytes"
     },
     "measured_at": {
@@ -231,7 +236,7 @@
         }
       ],
       "default": null,
-      "description": "The buffer each side of the copy used. Below `l3_cache_bytes` the figure is a cache reading.",
+      "description": "The buffer each side of the copy used, as used rather than as configured: the larger of the configured floor and twice `l3_cache_bytes`. Under twice that cache the figure cannot be read as a memory rate, which is what rows written before 2026-09-20 carry.",
       "title": "Memcpy Probe Mib"
     },
     "mhz_at_probe": {
@@ -356,7 +361,7 @@
       "title": "Threads"
     },
     "version": {
-      "default": "2026-09-19",
+      "default": "2026-09-20",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -421,5 +426,5 @@
   ],
   "title": "HostFingerprintRow",
   "type": "object",
-  "version": "2026-09-19"
+  "version": "2026-09-20"
 }

@@ -191,17 +191,20 @@ class ObservabilityConfig(Model):
             "constant and a constant is not a reading."
         ),
     )
-    host_fingerprint_bandwidth_mib: int = Field(
+    host_fingerprint_bandwidth_floor_mib: int = Field(
         default=512,
         ge=0,
         description=(
-            "The buffer each side of the memory-bandwidth probe allocates, so the "
-            "probe holds twice this. Zero switches the probe off and leaves the "
-            "bandwidth cell empty; every other cell of the fingerprint still gets "
-            "written. The default beats the largest L3 this project has drawn, 480 "
-            "MiB, because a buffer that fits in cache measures cache and reads as a "
-            "memory figure four times too high. Raise it when a drawn machine "
-            "reports an L3 at or above this."
+            "The smallest buffer each side of the memory-bandwidth probe may "
+            "allocate, so the probe holds twice this. Zero switches the probe off "
+            "and leaves the bandwidth cell empty; every other cell of the "
+            "fingerprint still gets written. It is a floor and not the answer: a "
+            "buffer that does not clear the cache measures cache and reads as a "
+            "memory figure several times too high, and the reported L3 across the "
+            "machines this project draws spans 32 MiB to 480 MiB. So the probe "
+            "raises the buffer to twice whatever cache the machine it drew reports, "
+            "and this value is what a machine reporting no cache at all gets. "
+            "memcpy_probe_mib on the row records the size that was used."
         ),
     )
     sample_rate: float = Field(
