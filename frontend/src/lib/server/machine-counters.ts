@@ -5,8 +5,9 @@
  * counted reading prompts, what the job's clock said, and which processor the
  * host drew. `state/item-health/<Y>/<M>/<D>.csv` carries what every item cost,
  * which folded by shard gives the cache, the written tokens, the longest
- * sequence and the memory high-water mark. The run's planned shard count comes
- * from its own manifest and from nowhere else.
+ * sequence, the memory high-water mark, the time no named stage claimed and
+ * the time an item waited before its worker started it. The run's planned
+ * shard count comes from its own manifest and from nowhere else.
  *
  * **The read rate is the server's and the write rate is the ledger's, on
  * purpose.** Reading is the one quantity two instruments measure, so the two
@@ -152,6 +153,38 @@ export interface ShardCounters {
 	swapTotalBytes: number | null;
 	/** What the shard paid opening the weights before its first item. */
 	modelLoadMs: number | null;
+	/** Seconds of the shard's items that no named stage claimed - `stage_gap_ms`
+	 * added over them, and never a difference worked out here.
+	 *
+	 * **Signed, and added as it is stored.** Below zero means the named stages
+	 * claim more time than the items took, which is two clocks disagreeing.
+	 * Taking the absolute value would throw away the one finding this figure
+	 * exists for. Each item's gap is a slice of that item's own clock and the
+	 * items run one after another, so adding them is the shard's own total.
+	 */
+	unclaimedSeconds: number | null;
+	/** Items of this shard whose unclaimed time is below zero.
+	 *
+	 * Carried beside the sum because a sum can cancel: one item at plus two
+	 * seconds and one at minus two add to nothing, and the disagreement the pair
+	 * records would disappear.
+	 */
+	clocksDisagreed: number;
+	/** Item rows of this shard that carried an unclaimed figure at all. The
+	 * denominator `clocksDisagreed` is read against, and not `items` - a row with
+	 * no model call still has a stage clock, so the two counts differ. */
+	clockedItems: number;
+	/** The middle item's wait before its worker started it, in seconds. */
+	queueMedianSeconds: number | null;
+	/** The longest any one item waited, in seconds.
+	 *
+	 * **Never a sum.** The stage fetches every item and then works them in a
+	 * different order, so each item's wait covers the queue ahead of it and
+	 * adding them counts that queue once per item - measured 2026-09-14 at 2,786
+	 * seconds against a shard's true 2,196. A typical item and the worst one are
+	 * two figures that stay true however many items the shard ran.
+	 */
+	queueMaxSeconds: number | null;
 }
 
 /** Tokens and the seconds they took, summed. Never a mean of per-part rates.
@@ -290,6 +323,11 @@ function rate(tokens: number | null, seconds: number | null): number | null {
 	return tokens / seconds;
 }
 
+/** Milliseconds as seconds, keeping absence absent and keeping the sign. */
+function msToSeconds(value: number | null): number | null {
+	return value === null ? null : value / 1000;
+}
+
 const sum = (values: number[]): number => values.reduce((total, value) => total + value, 0);
 const highest = (values: number[]): number => Math.max(...values);
 const lowest = (values: number[]): number => Math.min(...values);
@@ -342,6 +380,16 @@ interface ItemFold {
 	 * machine record missed the shard, so a shard the record never reached still
 	 * names its machine instead of drawing as unrecorded. */
 	cpuModel: string | null;
+	/** `stage_gap_ms` added over the shard's items, signed. */
+	unclaimedMs: number | null;
+	/** How many of those items carried a gap below zero. */
+	clocksDisagreed: number;
+	/** How many item rows carried a gap at all. */
+	clockedItems: number;
+	/** Every item's own wait, kept only long enough to take the middle one and
+	 * the worst. Bounded by the items one shard ran, and dropped before a
+	 * `ShardCounters` leaves here - the same handling `busy` and `rss` get. */
+	queueWaits: number[];
 }
 
 function emptyFold(): ItemFold {
@@ -359,7 +407,11 @@ function emptyFold(): ItemFold {
 		loadMax: null,
 		swapFreeMinBytes: null,
 		swapTotalBytes: null,
-		cpuModel: null
+		cpuModel: null,
+		unclaimedMs: null,
+		clocksDisagreed: 0,
+		clockedItems: 0,
+		queueWaits: []
 	};
 }
 
@@ -417,6 +469,16 @@ function foldItem(carry: ItemFold, row: Record<string, string>): void {
 	const swapTotal = measured(row.os_swap_total_bytes);
 	if (swapTotal !== null) carry.swapTotalBytes = swapTotal;
 	carry.cpuModel = carry.cpuModel ?? text(row.cpu_model);
+	// Added as stored, sign and all. A row below zero is the finding, so it is
+	// counted as well as added: a sum alone lets two items cancel each other out.
+	const unclaimed = measured(row.stage_gap_ms);
+	if (unclaimed !== null) {
+		carry.unclaimedMs = (carry.unclaimedMs ?? 0) + unclaimed;
+		carry.clockedItems += 1;
+		if (unclaimed < 0) carry.clocksDisagreed += 1;
+	}
+	const queued = measured(row.queue_wait_ms);
+	if (queued !== null) carry.queueWaits.push(queued);
 }
 
 /** The machine record's halves for one shard, merged. Null where they disagree. */
@@ -491,7 +553,13 @@ function shardCounters(
 		loadMax: fold.loadMax,
 		swapFreeMinBytes: fold.swapFreeMinBytes,
 		swapTotalBytes: fold.swapTotalBytes,
-		modelLoadMs: host.modelLoadMs
+		modelLoadMs: host.modelLoadMs,
+		unclaimedSeconds: msToSeconds(fold.unclaimedMs),
+		clocksDisagreed: fold.clocksDisagreed,
+		clockedItems: fold.clockedItems,
+		queueMedianSeconds: msToSeconds(median(fold.queueWaits)),
+		queueMaxSeconds:
+			fold.queueWaits.length === 0 ? null : Math.max(...fold.queueWaits) / 1000
 	};
 }
 
