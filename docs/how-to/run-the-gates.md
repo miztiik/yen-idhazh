@@ -755,6 +755,30 @@ Three traps make this suite lie to you.
  and unit-test it there - `frontend/src/lib/day-shape.ts` exists for exactly
  this reason.
 
+## A chart has no plot until somebody scrolls to it
+
+`engine.ts` starts a chart from an `IntersectionObserver` that reaches one
+viewport past the fold, so a panel further down than that holds no `svg` at all
+until the page scrolls to it. A check that waits on the `svg` before scrolling
+waits for the one thing only that scroll produces, and it waits until the test
+budget runs out.
+
+**Scroll the panel, then wait for the plot.** The panel is on the page from the
+first paint, so scrolling it is a move that can finish:
+
+```ts
+await owner.evaluate((node) => node.scrollIntoView({ behavior: 'instant', block: 'center' }));
+await expect(owner.locator('svg').first(), 'nothing drew').toBeVisible({ timeout: 15000 });
+```
+
+`scrollIntoViewIfNeeded` on the plot itself is the shape to avoid, and instant
+beats smooth either way: a box read mid-scroll is a box the mouse misses.
+
+Nothing about the page order is safe to assume here. Two checks were written
+before a route's panels were regrouped, and both passed until the regrouping put
+the first chart they reach more than a viewport down with nothing scrolling to
+it first.
+
 ## Smoke-test a published-site change by hand
 
 `CLAUDE.md` section 12 requires an agent to drive the affected pages in a
