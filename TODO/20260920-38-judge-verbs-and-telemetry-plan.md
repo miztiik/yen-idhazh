@@ -70,8 +70,8 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 18 | The store groups under the judge that fills it | 17 | I | PENDING | - | - | - |
 | 19 | Where the line stands against its holdout | 7, 18 | J | PENDING | - | - | - |
 | 20 | The plan pointer | 19 | K | PENDING | - | - | - |
-| 21 | A night that recorded nothing says so | 1 | A | PENDING | - | - | - |
-| 22 | The reason a shard does not commit is rewritten | 21 | A | PENDING | - | - | - |
+| 21 | The council repairs its own missing nights | 1, 2 | A | PENDING | - | - | - |
+| 22 | The guard that stops a shard committing is renamed and re-reasoned | 13, 21 | F | PENDING | - | - | - |
 
 **A `Parallel-group` letter is one pull request.** Rows sharing a letter are written together, gated once and merged once, and are chained in `Depends-on` where they write the same files - which is why every row inside C and F carries a predecessor.
 
@@ -81,7 +81,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | Word | Borrowed from | What it actually meant | Becomes |
 | --- | --- | --- | --- |
-| `leg` | relay racing | one shard of the judging work | **deleted.** `shard` is already the column, the knob and the count |
+| `leg` | relay racing | one shard of the judging work | **deleted.** `shard` is already the column, the knob and the count. **Test names included** - a scrub that leaves the word in a test's own name has not been done |
 | `fold` | functional programming | collect the shards' output, commit it, count it into the record | the job is `collect`; the verb is `count-verdicts`; prose names the action |
 | `draw` | a lottery | the pairs selected for judging | the verb is `pick-item-pairs`; the file is `picked-pairs.csv` |
 | `arm` | clinical trials | one configuration of a comparison run | already deleted on 2026-09-15, in favour of `cases` - one test case a pass, the first being the baseline the rest are read against |
@@ -787,35 +787,38 @@ Committed value `200`, bounds unchanged. It moves beside the pair budget and the
 
 ---
 
-### Row #21 - A night that recorded nothing says so
+### Row #21 - The council repairs its own missing nights
 
-- **Scope:** a council run that produced no committed evidence is detectable, so a lost night costs a re-dispatch rather than going unnoticed until somebody reads the record weeks later.
-- **Files touched:** `backend/utilities/check_council_nights.py` (new), `.github/workflows/llm-council.yml`, `docs/architecture/publishing/llm-council.md`, `backend/tests/`
-- **Acceptance gates:** local - the utility's own test module, ruff, mypy, `doc_load.py --changed`. CI - full suite.
-- **Oracle:** the check reports a gap for a date the council was scheduled to judge and for which no row exists in the judged-pairs store, driven against a fixture tree. **It is bounded by the window it is asked about**, never by walking the archive (Guardrail #12). It cannot settle why the night is missing.
+- **Scope:** the council judges every unjudged date in its window rather than only yesterday, recovering a dead run's uploads where they still exist and re-judging where they do not. **No operator action, ever.**
+- **Files touched:** `backend/idhazh/council/night_plan.py` (new), `backend/idhazh/cli.py`, `.github/workflows/llm-council.yml`, `backend/idhazh/contracts/knobs/` (the window and the per-night cap), `config/idhazh.json`, `backend/tests/`, `backend/tests/workflows/test_llm_council_workflow.py`, `docs/architecture/publishing/llm-council.md`, `schemas/app-config.schema.json` (generated)
+- **Acceptance gates:** local - the council and workflow test modules, contract export, drift gate, `doc_load.py --changed`. CI - full suite.
+- **Oracle:** given a fixture store with a gap, the night plan names the missing date, marks it recoverable when a prior run's uploads still exist and re-judgeable when they do not, and refuses it when the published day it needs is gone. **The read is bounded by the window it is asked about**, never by walking the archive (Guardrail #12). It cannot settle whether the recovery succeeds on a runner.
 - **Decisions:**
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | **What makes a lost night expensive is silence, not loss.** A collecting job that dies before its first commit writes no judged rows, no fitted row and no held reason - the night leaves no trace at all, and the existing missing-shard reason only exists when that job actually runs. | Andre |
-| 2 | The loss itself is bounded, recoverable and cheap. The first fitted line is about 25 nights away because the scarce input is agreed NO readings at 8 a night against a floor of 200, so one night is about 4 percent of the run-up. The workflow takes a date input, the selection is a deterministic hash over the date and the committed day, and the record refuses only a second fold of a date it already counted - so re-dispatching a lost date redraws exactly the same pairs. Cost of the re-run: about four runner-hours. | Andre |
-| 3 | The line is not wired to a published day yet, so a lost night costs a reader nothing today. That changes when it is enabled, and the alarm is what makes the change safe. | Andre |
-| 4 | An operator surface under `backend/utilities/`, which pytest does not collect, so a real gap in the archive never turns a test suite red for a reason no reviewer could have seen (section 13). | Fowler |
-| 5 | This is the cheapest thing in the plan that moves the failure from permanent to a re-dispatch, which is why it sits with the defects rather than with the telemetry. | Owner, 2026-09-20 |
+| 1 | **A failure that needs a person to re-run it is not handled, it is deferred.** The date the council judges is not "yesterday" - it is every date in the window with no committed evidence, oldest first, with yesterday among them. | Owner, 2026-09-20 |
+| 2 | **This is the house pattern, not a new one.** The digest run's planning job already carries a catch-up whose stated job is to finish the work of a run that died before its own publishing step. The council gets the same shape. | Carmack |
+| 3 | **Recovery is tried before re-judging.** Where a previous council run for that date left uploads that still exist, the collecting job takes them from that run and spends no model time. Where they have expired, the date is judged again. Where the published day it needs has been deleted by retention, the date is refused and the refusal is recorded - that is the one case nothing can repair, and it is bounded by the published-day window rather than by chance. | Carmack |
+| 4 | **The matrix carries a date as well as a shard**, so a catch-up date is judged beside yesterday rather than instead of it. Judging yesterday instead of the gap never closes the gap; judging both in one run at the committed budget is 158 minutes of model time against a 200-minute bound, derived from the measured 94.53 s a pair. | Carmack |
+| 5 | **A per-night cap on catch-up dates**, because the job-concurrency ceiling is 20 and each date costs its own shards. Past the cap the oldest wait one more night, which is a queue rather than a failure. | Carmack |
+| 6 | **The plan is computed per judge**, against that judge's own store. A judge added later inherits the repair with no change here, which is the point of the judge owning its own store. | Fowler |
+| 7 | **This does not depend on anything noticing.** There is no alarm to read and no dashboard to check: the next run finds the gap because finding the gap is how it chooses its work. | Owner, 2026-09-20 |
 
 - **Rejected alternatives:**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | Make the loss impossible instead, by having shards commit | It does not make it impossible - it makes the rows unreachable by the job that counts them, because every checkout is pinned to the commit the run started at | Rows on the branch that nothing reads | Fowler |
-| 2 | Measure the failure rate first, then decide | Bounding it at one night in ten needs about 30 clean nights, which is longer than the run-up to the first fit. The measurement arrives after the decision it would inform | A month of waiting for a number that changes nothing | Andre |
-| 3 | A test that walks the committed archive for gaps | A run can turn it red, and no reviewer can see it coming (section 13) | A suite that reports the weather | Fowler |
+| 1 | An alarm reporting a night with no evidence, and a person re-dispatches the date | Manual effort with a notification in front of it, and it fails exactly when it is needed - a run that dies quietly is one nobody is watching for | A check script, and a repair that happens only when somebody is looking | Owner |
+| 2 | Re-run the failed run from the platform interface | A person does it, and only inside the upload retention window | Nothing to build, and nothing repaired unattended | Owner |
+| 3 | Accept the loss because the first fitted line is far away | **Builds for today's data rather than for the pipeline being built.** More judges are coming and the line will be wired to a published day; a design that tolerates holes now tolerates them then | Nothing now, and a record with gaps nobody can account for later | Owner |
+| 4 | Have the council re-trigger itself through the platform API on failure | The default job credential cannot start a new run, so it needs a stored personal token - a secret and a permission this pipeline does not otherwise hold | A credential to manage, for a repair the next scheduled run already does | Carmack |
 
 ---
 
-### Row #22 - The reason a shard does not commit is rewritten
+### Row #22 - The guard that stops a shard committing is renamed and re-reasoned
 
-- **Scope:** the guard that stops a judging shard committing keeps its assertion and loses its dead reason, and the council page gains the design rationale it has never carried.
+- **Scope:** the guard keeps its assertion, loses a name carrying a deleted word, loses a dead reason, and learns to see a commit issued from a composite action.
 - **Files touched:** `backend/tests/workflows/test_llm_council_workflow.py`, `.github/workflows/llm-council.yml`, `docs/architecture/publishing/llm-council.md`
 - **Acceptance gates:** local - the workflow harness, `doc_load.py --changed`. CI - full suite.
 - **Oracle:** the guard still refuses a judging job that commits, **and it detects one issued from a composite action** rather than only from an inline script. It cannot settle whether the new reason is the best one.
@@ -823,8 +826,9 @@ Committed value `200`, bounds unchanged. It moves beside the pair budget and the
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | The assertion stays. The reason goes: it says four shards would push into one union-merged file, and union merging left the judged-pairs store on 2026-09-19. Quoting it today quotes a dead fact and invites a reader to retire the guard with it. | Fowler |
-| 2 | The reason that replaces it cannot be retired by a config edit: **the job that counts the shards is pinned to the commit the run started at, so rows a shard commits during the run are invisible to it.** | Fowler |
-| 3 | The same dead premise is repeated in the workflow's own comment and is corrected in the same pass. | Carmack |
-| 4 | **The guard is a substring search over the job's inline scripts, so it sees nothing issued from a composite action** - and the composite-action row moves the model block into exactly such an action. It is widened here, in the row that owns it, rather than discovered later. | Carmack |
-| 5 | The council page asserts the artifact choice and has never priced it. It gains a `## Design rationale` naming the pinned checkout, the conflict segments solve, and the trigger that would change the answer. | Guardrail #4 |
+| 1 | **The test's own name carries the word this plan deletes**, so it is renamed here with every other occurrence. A vocabulary scrub that leaves the word in a test name has not been done. | Owner, 2026-09-20 |
+| 2 | The assertion stays. The reason goes: it says four shards would push into one union-merged file, and union merging left the judged-pairs store on 2026-09-19. Quoting it today quotes a dead fact and invites a reader to retire the guard with it. | Fowler |
+| 3 | The reason that replaces it cannot be retired by a config edit: **the job that counts the shards is pinned to the commit the run started at, so rows a shard commits during the run are invisible to it.** | Fowler |
+| 4 | The same dead premise is repeated in the workflow's own comment and is corrected in the same pass. | Carmack |
+| 5 | **The guard is a substring search over the job's inline scripts, so it sees nothing issued from a composite action** - and the composite-action row moves the model block into exactly such an action. It is widened here rather than discovered later. | Carmack |
+| 6 | The council page asserts the upload choice and has never priced it. It gains a `## Design rationale` naming the pinned checkout, the conflict segments solve, and the trigger that would change the answer. | Guardrail #4 |
