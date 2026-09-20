@@ -223,13 +223,12 @@ It used to be the rank position. That broke the moment a day had more than one r
 
 There is no daily item cap and no per-vertical cap. What a day publishes is what survives the score, `max_per_source` (2), which stops one prolific outlet filling a vertical in one run, and `max_source_share_per_day` (0.05), which stops one filling the day.
 
-**`run.safety_ceiling_per_run` (80) is what sizes a run, and saying otherwise
-was wrong.** This page used to call it a crash guard that a normal day was
-nowhere near, and quoted 149 as the largest day ever planned. Both statements
-were false by 2026-08-25 and stayed here: `items_planned` has been **exactly the
-ceiling on every run since**, first at 200, then 160, and now 80
+**`run.safety_ceiling_per_run` (80) is what sizes a run, and its name says
+otherwise.** A guard sitting inside the working range is a cap, whatever it is
+called: `items_planned` has been **exactly the ceiling on every run** since
+2026-08-25, first at 200, then 160, and now 80
 ([../../reference/pipeline-cost.md](../../reference/pipeline-cost.md)). Supply
-overtook the guard, and a guard sitting inside the working range is a cap.
+overtook the guard.
 
 It is now a cap on purpose. Owner decision, 2026-09-05: the number comes down to
 80 from 160, so a day publishes half as many stories and the gain is that those

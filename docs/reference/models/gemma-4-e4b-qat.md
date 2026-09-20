@@ -207,7 +207,8 @@ output-identical to the head being off, on six articles of six across two
 processor models, with every case reproducing itself byte-identically at
 `temperature: 0`.
 
-**The 6.3 percent speedup this page used to quote is withdrawn.** The head
+**There is no speedup figure here, and the 6.3 percent that circulated is
+withdrawn.** The head
 changes how much text gets written - on one article it wrote 3.4 times as much -
 so a wall clock against head-off is timing two different jobs rather than
 measuring a rate. Two runs on one processor model then disagree about the sign:

@@ -888,7 +888,7 @@ browser's.
 **What the ruling costs, named rather than implied.** A reader with JavaScript off gets no
 chart, where today they get one, because today the drawing is markup inside the document
 itself. That is the reason row 22 chose build-time SVG and it is a real loss. **They get no
-sentence either, and this page said they did until 2026-09-14.** Measured on the canary
+sentence either.** Measured on the canary
 build that day: the prerendered document carries zero `<figure>` elements, because the
 figure exists only once the marks have arrived - so `alt` reaches a payload blob and never
 a reader who runs no script. What a reader who does run one hears is written in the browser

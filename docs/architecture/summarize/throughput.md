@@ -337,9 +337,9 @@ item. **Net, a 20-item shard is 20.8 minutes better off.** Measured 2026-09-12
 **What the two calls cost over a single call was 797 tokens an item** - the
 template break plus the trailing turn - which is **80.9 seconds an item, about
 27 minutes of a 20-item shard.** Rows #3c and #3e removed 749 of the 797,
-leaving about **48 tokens an item, 4.9 seconds**. **The "787" this page carried
-until 2026-09-12 was arithmetic over a saving nobody had measured yet**: 37
-tokens of pointer stay behind, which is what the row's floor exists to say.
+leaving about **48 tokens an item, 4.9 seconds**. **37 tokens of pointer stay
+behind, which is what the row's floor exists to say** - the saving is not the
+whole 797.
 
 **A token count names the runtime, not the processor** (`CLAUDE.md` Guardrail
 #10, as clarified 2026-09-12), so the counts above travel and the seconds beside
