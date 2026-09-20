@@ -10,10 +10,10 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 | Field | Value |
 | --- | --- |
-| Why this plan exists | The council had no separation between its own pipeline observability and the metrics a judge produces, so a shared row was about to force judge two to file columns it cannot have. **A fifth adversarial round found the deeper fault**: the council could not be declared, built or tested without a judge present - its own record imported a judge roster, its own clock lived in a judge's config block, its repair plan opened a judge's store, and every council behaviour that had a test at all was gated through a judge's test module. Four verbs name their mechanism rather than their work. And five defects the work uncovered would lose data on a live run. |
-| Hard scope - in | **The six seams that made the council depend on a judge, cut** (section 1d); the three-layer separation, written into the page that owns the council; the tenancy protocol and the shipping capability a judge is reached through; the council's own shard-outcome record; the council's night plan and the repair of a dead night; the content-similarity judge's own metrics; the four verb renames and the deletion of `leg` and `fold` from the vocabulary; the five defects (a shard losing its verdicts on its own clock, the council having no run identity, the reader that cannot fill a default, the header that makes the store unappendable, and the verdict artifact a cancelled shard never writes); the measured call cost; the knob move; thinking support and the decode stamp; the store grouping under the judge slug; the line-against-holdout record; one composite action for the model block. |
+| Why this plan exists | The council had no separation between its own pipeline observability and the metrics a judge produces, so a shared row was about to force judge two to file columns it cannot have. **A fifth adversarial round found the deeper fault**: the council could not be declared, built or tested without a judge present - its own record imported a judge roster, its own clock lived in a judge's config block, its repair plan opened a judge's store, and every council behaviour that had a test at all was gated through a judge's test module. **A sixth round found four more, three of them worse**: the router imports a judge at module scope, the workflow computes the council's own fan-out width out of a judge's config block, `AppConfig` imports a judge's knob module, and nothing at all owned the act of handing a tenant to the council. Four verbs name their mechanism rather than their work. And five defects the work uncovered would lose data on a live run. |
+| Hard scope - in | **The ten seams that made the council depend on a judge, cut** (section 1d); the three-layer separation, written into the page that owns the council; the tenancy protocol, the tenant registry and the shipping capability a judge is reached through; the council's own shard-outcome record; the council's night plan and the repair of a dead night; the content-similarity judge's own metrics; the four verb renames and the deletion of `leg` and `fold` from the vocabulary; the five defects (a shard losing its verdicts on its own clock, the council having no run identity, the reader that cannot fill a default, the header that makes the store unappendable, and the verdict artifact a cancelled shard never writes); the measured call cost; the knob move; thinking support and the decode stamp; the store grouping under the judge slug; the line-against-holdout record; one composite action for the model block. |
 | Hard scope - out | See the table below. |
-| ESCALATE triggers | (1) Row #2 changes what a committed `run_id` cell means - pause for sign-off. (2) **Row #8** widens a header on a store with committed rows, rewrites them, and extends a persisted key - pause for sign-off before the rewrite runs. (3) **Row #9** renames a config knob AND the workflow key that reads it - if the two cannot land in one commit, stop. (4) **Row #11b** widens the record's stamp, which resets the distribution once by construction - pause for sign-off on that reset. (5) **Row #13** renames `folded_dates`, a published schema property with committed rows behind it - pause for sign-off on the read-side migration. (6) **Row #18** moves a committed state tree - pause for sign-off on the path map before any file moves. (7) **Row #19**: if the holdout resolves fewer pairs than its floor, write the cells null and refuse the reading. (8) **Row #21a** changes the matrix width, widens the workflow permissions block and raises artifact retention - pause for sign-off on the permissions change. (9) Any row that would raise a runner budget figure (Guardrail #2). (10) **Any row that would make `backend/idhazh/council/` import a judge.** That is the dictum below, it is checked by row #23, and it is not a judgement call. |
+| ESCALATE triggers | (1) Row #2 changes what a committed `run_id` cell means - pause for sign-off. (2) **Row #8** widens a header on a store with committed rows, rewrites them, and extends a persisted key - pause for sign-off before the rewrite runs. (3) **Row #9** renames a config knob AND the workflow key that reads it, and makes the judge's block optional - if the knob and the key cannot land in one commit, stop. (4) **Row #11b** widens the record's stamp, which resets the distribution once by construction - pause for sign-off on that reset, and take its decision 6 replay **before** the reset. (5) **Row #13** renames `folded_dates`, a published schema property with committed rows behind it - pause for sign-off on the read-side migration. (6) **Row #18** moves a committed state tree - pause for sign-off on the path map before any file moves. (7) **Row #19**: if the holdout resolves fewer pairs than its floor, write the cells null and refuse the reading. (8) **Row #21a** changes the matrix width, widens the workflow permissions block and raises artifact retention - pause for sign-off on the permissions change. (9) **Row #24** rewrites the workflow that judges every night - pause for sign-off on the verb map and the matrix shape before the file changes. (10) Any row that would raise a runner budget figure (Guardrail #2). (11) **Any row that would put a judge module in the import closure of a council verb.** That is the dictum below, it is checked by row #23's second arm, and it is not a judgement call. |
 | Chosen strategy | The council owns the pipe, its own execution record and the window arithmetic. Each judge owns what it measures, its own store and its own stamp rule. They meet at **one structural protocol and one shipping capability, both declared by the council, neither naming a judge**. Share the call and the plumbing, never the metric set and never the type. Owner ruling 2026-09-20, extended 2026-09-21 after the fifth round (section 1b). |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 2.` Two, and live in two windows only: the dependency chain leaves at most two groups ready at once. |
 
@@ -21,16 +21,17 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 **The council runs one judge or many - in sequence, in parallel, or chained - and depends on none of them.** A judge's development does not wait on the council, and the council's does not wait on a judge. Owner ruling, 2026-09-21.
 
-That sentence is worth nothing unless it is checkable, so it is four conditions and every row below answers to them.
+That sentence is worth nothing unless it is checkable, so it is five conditions and every row below answers to them.
 
 | # | The condition | How it is checked |
 | --- | --- | --- |
-| 1 | `backend/idhazh/council/` imports nothing from `idhazh.similarity` and no judge contract | A static import check, row #23. The precedent is CLAUDE.md section 4, where contracts import no sibling subpackage |
-| 2 | Every council contract is declarable, instantiable and round-trippable with **zero judges in the repository** | No council contract names a judge type. A `Literal` with no members is not even legal Python, which is how the old roster failed this outright |
-| 3 | Every council row's gates run **without a judge's test module** | Council tests live in `backend/tests/council/`. The fifth round found eleven council behaviours gated by `test_similarity_judge.py` |
-| 4 | A judge is reached **only** through a protocol the council declares | The council never opens a judge's store, reads a judge's stamp, or names a judge's type. Registration points judge to council, never council to judge |
+| 1 | `backend/idhazh/council/` imports nothing from `idhazh.similarity` and no judge contract | A static import check, row #23 arm one. The precedent is CLAUDE.md section 4, where contracts import no sibling subpackage |
+| 2 | **No judge module appears in the import closure of any council verb** | Row #23 arm two, added by round six. Arm one is scoped to a directory and would never have seen `cli.py:75-78` importing four judge stages, or `app_config.py:42` importing the judge's knob module |
+| 3 | Every council contract is declarable, instantiable and round-trippable with **zero judges in the repository** | No council contract names a judge type, and no council contract's field description names a judge's unit - a description is the published schema. A `Literal` with no members is not even legal Python, which is how the old roster failed this outright |
+| 4 | Every council row's gates run **without a judge's test module**, and no council row waits on a judge row | Council tests live in `backend/tests/council/`. The Reckoner's `Depends-on` column carries no council-to-judge edge, which is a property of the table rather than a claim about it |
+| 5 | A judge is reached **only** through a protocol the council declares, and is registered **only** from config | The council never opens a judge's store, reads a judge's stamp, or names a judge's type. `council.tenants` is a slug list; the resolver imports lazily. Registration points judge to council, never council to judge |
 
-**One judge or N, and the shape of the night is the council's.** The night plan is a union over the tenants registered for that run, the matrix is shards times dates times tenants under the platform's 20-job ceiling, and a chain is a tenant whose input is another tenant's output - which the council expresses as an order over tenants, never as a judge importing a judge. **With zero tenants registered the union is empty, the plan names tonight, every job is a no-op, and every one of those steps still runs and is still asserted.** That last sentence is the test.
+**One judge or N, and the shape of the night is the council's.** The night plan is a union over the tenants registered for that run, and the matrix is tenants times shards times dates under the platform's 20-job ceiling. **A chain is priced rather than assumed**: a tenant's job is pinned to the commit the run started at, so it cannot read a store a sibling committed in the same run - a chain crosses as an artifact and a `needs:` edge or it does not cross at all (row #24). **With zero tenants registered the union is empty, the plan names tonight, every job is a no-op, and every one of those steps still runs and is still asserted.** That last sentence is the test.
 
 ### The separation this plan exists to hold
 
@@ -67,67 +68,72 @@ That sentence is worth nothing unless it is checkable, so it is four conditions 
 
 **A `Parallel-group` letter is one pull request, not one row.** Rows sharing a letter are written together, gated once and merged once, and are chained in `Depends-on` where they write the same files.
 
-**Every group is on exactly one side of the line.** No pull request carries both a council row and a judge row, and that is not tidiness - it is what makes a council group's gates runnable with no judge present (dictum condition 3). Two groups are marked shared: they are the contracts every side declares and the model boundary every caller uses, and neither names a judge.
+**Every group is on exactly one side of the line.** No pull request carries both a council row and a judge row, and that is not tidiness - it is what makes a council group's gates runnable with no judge present (dictum condition 3). **Round six caught group F breaking this**: it bundled the council's own record with three judge contracts, so the council lane could not merge until a pull request full of judge columns merged. F is split. Two groups are marked shared: they are the stamp every side may declare and the model boundary every caller uses, and neither names a judge.
 
 | Group | Side | Pull request | Rows |
 | --- | --- | --- | --- |
-| A | council | The council gets a package: the tenancy protocol and the shipping capability | 15a |
-| B | council | The council's clocks move to a council block | 9 |
+| A | council | The council gets a package: the tenancy protocol, `ShardResult` and the shipping capability | 15a |
+| B | council | The council's clocks and its fan-out width move to a council block | 9 |
 | C | council | The council bounds its shard and ships whatever it wrote | 1a |
 | D | council | The council knows which run it is | 2 |
 | E | council | The separation and the dictum, written where the next agent reads it | 3 |
-| F | shared | Every persisted shape this plan needs | 4, 5, 6, 7, 8 |
-| G | judge | The judge stops safely, and its bound reads a measured number | 1b, 10 |
-| H | shared | The model layer carries the two spans and the posted decode | 11a |
-| I | judge | The judge reads its verdict from the answer span and fills the stamp | 11b, 14 |
+| F | shared | The call stamp, and the council's own record | 4, 5 |
+| G | judge | The content-similarity judge's own persisted shapes | 6, 7, 8 |
+| H | judge | The judge stops safely, and its bound reads a measured number | 1b, 10 |
+| I | shared | The model layer offers both spans and says what it decoded | 11a |
 | J | judge | The verbs name their work, and two borrowed words leave | 12, 13 |
-| K | judge | The judge ships its metrics through the capability | 15b |
-| L | council | The model block becomes one composite action | 16 |
-| M | council | The council runs the tenant and files its own outcome row | 17 |
-| N | judge | The store groups under the judge that fills it | 18 |
-| O | judge | Where the judge's merge line stands against its holdout | 19 |
-| P | council | The council plans the night over its tenants | 21a |
-| Q | judge | The judge answers what nights it is missing | 21b |
-| R | council | The guard is renamed, and the council runs green with no judge | 22, 23 |
-| S | process | The plan pointer | 20 |
+| K | judge | The judge reads its own margin and fills the stamp | 11b, 14 |
+| L | judge | The judge fills its metrics and registers as a tenant | 15b |
+| M | process | The model block becomes one composite action | 16 |
+| N | council | The council runs verbs of its own over a tenant list | 24 |
+| O | council | The council runs the tenant and files its own outcome row | 17 |
+| P | council | The config arm moves to the tenant that owns the number | 25 |
+| Q | judge | The store groups under the judge that fills it | 18 |
+| R | judge | Where the judge's merge line stands against its holdout | 19 |
+| S | council | The council asks every tenant what it is behind on | 21a |
+| T | judge | The judge answers which nights it is behind on | 21b |
+| U | council | The guard is renamed, and the council runs green with no judge | 22, 23 |
+| V | process | The plan pointer | 20 |
 
 **Group A lands first and it is the whole point.** The council has no code today - `git grep -i council -- backend/idhazh` returns nothing, and its three workflow jobs are the judge's four verbs - which is why every venue row in the earlier draft had to reach into the tenant. There was no venue. A creates one.
 
-**The council's track is A, B, C, D, E, L, M, P, R - nine pull requests, ten rows, and not one of them needs a judge to exist.** That is the dictum made structural rather than asserted. It is also why a later split into two plan-docs would be mechanical: cut the seams first and the council chain has no cross-plan dependency left to re-derive.
+**The council's track is A, B, C, D, E, F, N, O, P, S, U - eleven pull requests, twelve rows, and not one of them depends on a judge row.** That is the dictum made structural rather than asserted, and round six is what made it true: the old graph had two council-to-judge edges, one direct (#22 waited on the vocabulary scrub) and one hidden inside group F's bundling. Both are cut. It is also why a later split into two plan-docs would be mechanical.
 
-**Q lands after P, and that is the round-four correction kept.** The repair re-judges a date, and re-judging without the extended pair key from F and the widened record stamp from I discards the very work it re-does.
+**T lands after S, and that is the round-four correction kept.** The repair re-judges a date, and re-judging without the extended pair key from G and the widened record stamp from K discards the very work it re-does.
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 15a | The council's package, the tenancy protocol and the shipping capability | - | A | PENDING | - | - | - |
-| 9 | The council's clocks move to a council block | - | B | PENDING | - | - | - |
+| 9 | The council's clocks and its fan-out width move to a council block | - | B | PENDING | - | - | - |
 | 1a | The council bounds its shard and ships whatever it wrote | 9, 15a | C | PENDING | - | - | - |
 | 2 | The council knows which run it is | 1a | D | PENDING | - | - | - |
 | 3 | The separation and the dictum, written where the next agent reads it | - | E | PENDING | - | - | - |
 | 4 | The judge-call stamp, declared once and naming no judge | - | F | PENDING | - | - | - |
 | 5 | The council's own shard-outcome record | 4 | F | PENDING | - | - | - |
-| 6 | The content-similarity judge's own metrics | 5 | F | PENDING | - | - | - |
-| 7 | The content-similarity judge's merge-line benchmark record | 5 | F | PENDING | - | - | - |
-| 8 | The pair row gains the stamp, and the store is rewritten | 5 | F | PENDING | - | - | - |
-| 1b | The judge stops safely and flushes as it goes | 1a | G | PENDING | - | - | - |
-| 10 | The measured judge pair replaces the derived call | 9 | G | PENDING | - | - | - |
-| 11a | The model layer offers both spans and says what it decoded | 4 | H | PENDING | - | - | - |
-| 11b | The content-similarity judge reads its own margin | 11a | I | PENDING | - | - | - |
-| 14 | The judge fills the stamp | 8, 11b, 13 | I | PENDING | - | - | - |
+| 6 | The content-similarity judge's own metrics | 5 | G | PENDING | - | - | - |
+| 7 | The content-similarity judge's merge-line benchmark record | 5 | G | PENDING | - | - | - |
+| 8 | The pair row gains the stamp, and the store is rewritten | 5 | G | PENDING | - | - | - |
+| 1b | The judge stops safely and flushes as it goes | 1a | H | PENDING | - | - | - |
+| 10 | The measured judge pair replaces the derived call | 9 | H | PENDING | - | - | - |
+| 11a | The model layer offers both spans and says what it decoded | 4 | I | PENDING | - | - | - |
 | 12 | The four verbs name their work | 9 | J | PENDING | - | - | - |
 | 13 | `leg` and `fold` leave the vocabulary | 12 | J | PENDING | - | - | - |
-| 15b | The content-similarity judge fills its metrics and registers as a tenant | 6, 14, 15a | K | PENDING | - | - | - |
-| 16 | The model block becomes one composite action | - | L | PENDING | - | - | - |
-| 17 | The council runs the tenant and files its own outcome row | 5, 15a, 16 | M | PENDING | - | - | - |
-| 18 | The store groups under the judge that fills it | 17 | N | PENDING | - | - | - |
-| 19 | Where the content-similarity judge's merge line stands against its holdout | 7, 18 | O | PENDING | - | - | - |
-| 21a | The council asks every tenant what it is behind on | 15a, 17 | P | PENDING | - | - | - |
-| 21b | The content-similarity judge answers which nights it is behind on | 8, 11b, 12, 21a | Q | PENDING | - | - | - |
-| 22 | The guard that stops a shard committing is renamed and re-reasoned | 13, 16, 21a | R | PENDING | - | - | - |
-| 23 | The council runs green with no judge in the repository | 15a, 17, 21a | R | PENDING | - | - | - |
-| 20 | The plan pointer | 19, 21b | S | PENDING | - | - | - |
+| 11b | The content-similarity judge reads its own margin | 11a | K | PENDING | - | - | - |
+| 14 | The judge fills the stamp | 8, 11b, 13 | K | PENDING | - | - | - |
+| 15b | The content-similarity judge fills its metrics and registers as a tenant | 6, 14, 15a | L | PENDING | - | - | - |
+| 16 | The model block becomes one composite action | - | M | PENDING | - | - | - |
+| 24 | The council runs verbs of its own over a tenant list | 2, 15a, 16 | N | PENDING | - | - | - |
+| 17 | The council runs the tenant and files its own outcome row | 5, 15a, 24 | O | PENDING | - | - | - |
+| 25 | The config arm moves to the tenant that owns the number | 9, 24 | P | PENDING | - | - | - |
+| 18 | The store groups under the judge that fills it | 17 | Q | PENDING | - | - | - |
+| 19 | Where the content-similarity judge's merge line stands against its holdout | 7, 18 | R | PENDING | - | - | - |
+| 21a | The council asks every tenant what it is behind on | 15a, 17, 24 | S | PENDING | - | - | - |
+| 21b | The content-similarity judge answers which nights it is behind on | 8, 11b, 12, 21a | T | PENDING | - | - | - |
+| 22 | The guard that stops a shard committing is renamed and re-reasoned | 16, 21a | U | PENDING | - | - | - |
+| 23 | The council runs green with no judge in the repository | 15a, 17, 21a, 24, 25 | U | PENDING | - | - | - |
+| 20 | The plan pointer | 19, 21b, 23 | V | PENDING | - | - | - |
 
-**Two lanes, not two windows.** `Parallel N = 2` is the council lane and the judge lane. After group F they share no file and no gate, so the two run against each other all the way to R and Q with no merge order between them.
+**Two lanes, not two windows.** `Parallel N = 2` is the council lane and the judge lane. After group F they share no file and no gate, and **no council row waits on a judge row anywhere in the graph** - which is now a property of the table rather than a claim about it.
 
 ## Section 1a - The words this plan deletes
 
@@ -142,9 +148,9 @@ That sentence is worth nothing unless it is checkable, so it is four conditions 
 
 **Prose names the action, not the job.** "A day with a missing shard is not counted into the record" replaces "the fold refuses a partial day". This is the half that keeps coming back after the identifiers are fixed.
 
-## Section 1b - What five adversarial rounds changed
+## Section 1b - What six adversarial rounds changed
 
-Each line is a claim a worker would otherwise re-derive. Five rounds ran against earlier drafts, 2026-09-20 and 2026-09-21. Round three split a stamp that had started meaning three things again, added a sixth pair column and extended a persisted key; round four found the catch-up scheduled before the key it depends on, four sign-off triggers naming the wrong rows, and a three-decision chain that latched the council into judging nothing for ever; **round five asked the question none of the first four had - can the council be built and tested with no judge in the repository - and the answer was no, in six places** (section 1d).
+Each line is a claim a worker would otherwise re-derive. Six rounds ran against earlier drafts, 2026-09-20 and 2026-09-21. Round three split a stamp that had started meaning three things again, added a sixth pair column and extended a persisted key; round four found the catch-up scheduled before the key it depends on, four sign-off triggers naming the wrong rows, and a three-decision chain that latched the council into judging nothing for ever; **round five asked the question none of the first four had - can the council be built and tested with no judge in the repository - and the answer was no, in six places**; **round six ran three independent reviews against the cut version and found four more seams, an arithmetic error that refuses a legal config, and three real decode defects in the model layer** (section 1d).
 
 | The draft said | The code says | What changed |
 | --- | --- | --- |
@@ -154,7 +160,7 @@ Each line is a claim a worker would otherwise re-derive. Five rounds ran against
 | `from_csv_row` fills absent keys from defaults | It maps an absent cell to empty string, converting only when the default is `None`; a Literal refuses it and the loader stops the read | Named as new code, added to the existing by-name branch - not a general predicate, which would also pop `version` |
 | The council reuses a run id | It has none, and the pair rows carry the digest run's | Row #2 mints one, from the day the council **runs** - the compaction reads a run id's first ten characters as the day the run opened and publishes it as a lag figure |
 | Spans come from the existing closed set | The rollup has five members and silently skips anything else | Spans dropped entirely (scope-out), and the judge's row carries three aggregate numbers |
-| The fingerprint goes before the first model call | The probe wants 1.9 GiB and the server peaks at 14.31 GiB of 16 GB | The fingerprint is dropped entirely (scope-out), which removes the risk rather than ordering around it |
+| The fingerprint goes before the first model call | The probe wants 1.9 GiB, and the judging job's two processes hold at most 9.02 GiB of anonymous memory that actually has to fit in 16 GB | The fingerprint is dropped entirely (scope-out), which removes the risk rather than ordering around it |
 | The fold stages what the shards wrote | A shard's files are on its own runner, and the collecting job downloads only verdicts | Row #15a gives the council its own artifact path, which is what it already runs for verdicts |
 | The council runs the compaction verb | It takes no filter: it files away every ledger waiting in transit and deletes the transit copies. The digest run's are often still waiting at 22:00 | The council does not run it. Its own artifact path has no shared transit to collide on, and the segment design it declines solves a conflict the council does not have - it has one committing writer, not eight |
 | The plan updates the plan-queue page | A gate fails any pull request that edits it, and it already names this plan | The page is left alone |
@@ -164,10 +170,17 @@ Each line is a claim a worker would otherwise re-derive. Five rounds ran against
 | The night plan reads the judge's distribution record | `folded_dates`, the stamp rule and the reset semantics are all judge internals, and the plan's own decisions 4 and 5 were written about them | The council declares a protocol and asks; the judge answers (seam 2) |
 | Only field descriptions carry `fold` | `folded_dates` is a **field name** and a published schema property with committed rows behind it | Row #13 gains a read-side migration and a sign-off trigger (seam 6) |
 | The council has somewhere to put council code | `git grep -i council -- backend/idhazh` returns nothing. **The council has no code at all today** - its three workflow jobs are the judge's four verbs | Every venue row had to reach into the tenant because there was no venue. Row #15a creates the package |
+| The protocol may return the judge's metrics contract | `CouncilShardOutcome` needs an outcome and four model-cost columns, and row #6 says a judge's metrics columns are shared with nobody | Row #15a declares `ShardResult`, council-owned, carrying the metrics as an opaque `Contract` (seam 7) |
+| The council can get a verb and a matrix width without touching a judge | `cli.py:75-78` imports four judge stages at module scope; `llm-council.yml:143` reads the judge's `shards` knob to size the council's own fan-out | Row #24: council verbs, a config tenant list, lazy resolution, and the width off the protocol (seams 8 and 10) |
+| `AppConfig` couples two blocks as data | `app_config.py:42` imports `SECONDS_A_CALL` from the judge's `knobs/placement.py` at module scope, so no council module can read config without the judge | Row #25 moves the arm to the tenant; row #23's boundary arm widens to the whole import closure (seam 9) |
+| The date cap multiplies the shard's time budget | Dates are separate jobs with separate per-job bounds, so multiplying compares parallel work against a per-job number - and refuses a legal config at two dates | Row #21a deletes the multiplier. The axis that actually compounds inside one job is tenants, and row #24 makes each tenant its own job |
+| The margin is taken over the three verdict-opening ids | `prompt.py:159 first_token_ids` returns the ids of the **bare** words, and the grammar's own comment at `prompt.py:52` says the **space-prefixed** token is "the model's natural first choice" | Row #11b sums per verdict over all six legal strings before renormalising, and gains an oracle that goes red on the bare-only reading |
+| The thinking span is the answer span minus its schema | `server.py:733` strips only `json_schema`, so on the grammar route span one inherits `grammar` and `n_probs` - it is constrained to three verdict words and cannot write a thinking block at all | Row #11a strips both, and asserts on the **posted body** rather than on a recorded reply |
+| The reading type drops the token counts | `server.py:370-371` - `Completion` already declares `prompt_tokens` and `completion_tokens` and fills them at 928 and 944. The type that drops them is `similarity/judge.py:47`, a judge module | Row #11a's decision is struck; the counts cross on the council-owned `ShardResult` |
 
-## Section 1d - The six seams that coupled the council to a judge
+## Section 1d - The ten seams that coupled the council to a judge
 
-Round five asked one question: **take every judge out of the repository - does the council still declare, build, test and run?** It did not, in six places. Each is cut in this plan, each cut is a decision on a named row, and each is checkable.
+Round five asked one question: **take every judge out of the repository - does the council still declare, build, test and run?** It did not, in six places. **Round six ran three independent reviews against the cut version and found four more**, three of them worse than anything round five caught - because round five looked at contracts and rows, and round six looked at the router, the workflow, the config import and the return type. Each seam is cut in this plan, each cut is a decision on a named row, and each is checkable.
 
 | # | The seam | Why it breaks the dictum | Where it is cut |
 | --- | --- | --- | --- |
@@ -177,6 +190,12 @@ Round five asked one question: **take every judge out of the repository - does t
 | 4 | **The shipping capability's gate is a judge's metrics contract** | The venue goes red when a tenant's columns move, and the venue's green depends on a tenant existing | Row #15a gates it on a throwaway `Contract` subclass declared in the council's own test module |
 | 5 | **The council's own outcome row is written by the judge's stage** | The venue's paperwork is filed by a tenant, so only a tenant's test can assert it was filed | Row #17: the council runs the tenant and files its own row on the way out |
 | 6 | **`folded_dates` is a field name, not a description** | Row #13 decision 5 said no payload migrates. It does | Row #13 gains the read-side migration and a sign-off trigger |
+| 7 | **The protocol returns a judge's metrics contract, and the council's row needs five values that are not on it** | `CouncilShardOutcome` declares an outcome and four model-cost columns. Row #6 says every column on a judge's metrics contract is that judge's own and shared with nobody. So the council could fill its own row only by reading named attributes off a tenant's contract - seam 5 cut in prose and re-opened in the type | Row #15a declares `ShardResult`, a council-owned record the tenant returns. Its metrics field is an opaque `Contract` the council ships without reading |
+| 8 | **The router and the workflow are one judge's four verbs** | `backend/idhazh/cli.py:75-78` imports four judge stages at module scope, so deleting the judge makes every council verb fail at import. `llm-council.yml:143` computes the council's own fan-out width by reading `assemble.same_story.adaptive_dedup_threshold.shards` - a judge's config path - so with no judge the planning job dies before it plans anything | Row #24: council verbs over a config-declared tenant list, resolved by lazy import; the fan-out width comes back from the protocol |
+| 9 | **`AppConfig` imports the judge's knob module at module scope** | `contracts/app_config.py:42-43` imports `SECONDS_A_CALL` from `knobs/placement.py`. Every council module that calls `config.load()` imports `AppConfig`, so deleting the judge means the council cannot read its own config. Row #23's boundary arm was scoped to `backend/idhazh/council/` and would never have seen it | Row #25 moves the arm to the tenant that owns the number; row #23's arm widens to the whole import closure of the council's entry point |
+| 10 | **There is no tenant registry, so nothing hands the council a tenant** | The protocol is declared, the judge implements it, and no row owns the act of registration. "The council resolves slugs from its own config" was prose with no knob and no row behind it | Row #24 adds `council.tenants`, an ordered slug list, and the resolver that turns a slug into a tenant |
+
+**Seams 7 to 10 are one problem seen from four altitudes: nothing owned the act of handing a tenant to the council.** The fifth round cut the couplings that were visible in the contracts and missed the one in the wiring, because the wiring does not exist yet and an absent thing shows up in no grep.
 
 **What a fake tenant is, and why it is not a mock** (Guardrail #7). It is a real `Contract` subclass and a real protocol implementation, declared in the council's own test module, with nothing stubbed and nothing returning a plausible value it did not compute. It has no `__schema_stem__` and is not in the `CONTRACTS` tuple, so the exporter - which iterates that explicit tuple - never sees it and the drift gate never reports an orphan. No test declares one today; this is a new pattern, and it is the one that makes condition 2 above testable rather than merely stated.
 
@@ -205,19 +224,40 @@ An earlier draft declared `JudgeId = Literal["content-similarity-judge", "summar
 
 ### The tenancy protocol (`backend/idhazh/council/tenancy.py`)
 
-A `typing.Protocol`, structural, declared by the council, naming no judge. It is the whole of what a judge presents.
+A `typing.Protocol`, structural, declared by the council, naming no judge. It is the whole of what a judge presents: **five members, and the count is written once here.**
 
 | Member | Shape | Who answers |
 | --- | --- | --- |
 | `judge_id` | `str`, the slug | The judge, as a module constant |
+| `shard_count` | `int`, `ge=1` | The judge. **A tenant with no model returns 1** - sharding exists because a model is slow, and a pure-Python tenant that got four jobs would pay four weights restores for work that uses none of them |
 | `nights_outstanding(*, window)` | `tuple[DateStamp, ...]` - the dates this judge has not counted, inside a window the council hands it | The judge, from its own store, under its own stamp rule and its own reset semantics |
-| `judge(*, date, shard, shards, deadline)` | the judge's own metrics contract instance | The judge, which decides what a unit is and when it is safe to stop |
+| `run_shard(*, date, shard, shards, deadline)` | `ShardResult` | The judge, which decides what a unit is and when it is safe to stop |
+| `settle(*, date, run_id)` | `ShardResult` | The judge, once per date after every shard has reported - counting, fitting, or nothing at all |
 
-**The council owns the window - floor, length, per-night cap - and the union arithmetic. The judge owns what is missing and why.** So a judge with a different stamp rule, a different store shape or no stamp at all is a different implementation of three members, not a second branch inside a council module.
+**The member is `run_shard`, not `judge`.** Row #12 decision 3 already rules that a tenant whose emitted token is discarded and whose distribution is the answer is a scorer rather than a judge. A council-declared member named `judge` puts one tenant's shape in the one file that must not carry it.
 
-**Registration points judge to council, never council to judge.** The council resolves slugs from its own config, and a judge's stage module is what supplies the object. Nothing under `backend/idhazh/council/` imports a judge package, which is the line row #23 checks.
+### `ShardResult` - what a tenant hands back (`backend/idhazh/council/tenancy.py`)
 
-**One, N, sequence, parallel or chain.** The council holds an ordered tuple of tenants for the run. Parallel is the matrix widening to shards times dates times tenants under the platform's 20-job ceiling; sequence is that tuple's order; a chain is a tenant whose input is a store an earlier tenant wrote, which the council expresses as order and never as a judge importing a judge. **With an empty tuple every step still runs and every step is still asserted.**
+**Seam 7 cut.** The protocol used to return "the judge's own metrics contract instance", while `CouncilShardOutcome` declares an outcome and four model-cost columns - and row #6 rules that every column on a judge's metrics contract is that judge's own and shared with nobody. The council would have had to read named attributes off a tenant's contract to fill its own row. That is seam 5 cut in the prose and re-opened in the type.
+
+`class ShardResult(Model)` - a plain model, no schema stem, never persisted as itself.
+
+| Field | Type | Why the council owns it |
+| --- | --- | --- |
+| `outcome` | `ShardOutcome` | The council files it and never infers it |
+| `model_calls` | `int \| None` | **Null, not zero, for a tenant with no model.** The tenant decides which, because only it knows whether it has one |
+| `tokens_in` | `int \| None` | Off `Completion.prompt_tokens`, which the model layer already fills |
+| `tokens_out` | `int \| None` | Off `Completion.completion_tokens`, same |
+| `model_seconds` | `float \| None` | Wall clock inside model calls |
+| `metrics` | `Contract \| None` | **Opaque.** The council validates it and ships it through the capability. It never reads a field off it, and a tenant with nothing to report returns `None` |
+
+`metrics` being typed `Contract` rather than a judge's class is the whole point: the council can ship any row a tenant declares and can read none of them.
+
+**The council owns the window - floor, length, per-night cap - and the union arithmetic. The judge owns what is missing and why.** So a judge with a different stamp rule, a different store shape or no stamp at all is a different implementation of five members, not a second branch inside a council module.
+
+**Registration points judge to council, never council to judge - and row #24 is what makes that true.** `council.tenants` is an ordered slug list in config; the resolver maps a slug to a module path and imports it **lazily, inside the function**, so no council module carries a judge in its import closure. A slug with no module is a config error the council reports by name. Removing a judge from the repository is then a config edit and a directory delete, never a router edit.
+
+**One, N, sequence, parallel or chain.** The council holds an ordered tuple of tenants for the run. Parallel is the matrix widening to **tenants times shards times dates** under the platform's 20-job ceiling; sequence is that tuple's order within one job. **A chain is not free and row #24 prices it**: every checkout in the council names no ref, so a tenant's job is pinned to the commit the run started at and cannot see a store a sibling committed during the same run. A chain therefore crosses as an **artifact** and a `needs:` edge, never as a commit - and until a second tenant exists there is nothing to chain, so row #24 declares the shape and builds only the single-tenant case. **With an empty tuple every step still runs and every step is still asserted.**
 
 ### `CouncilShardOutcome` - the council's own record (`backend/idhazh/contracts/council_shard_outcome.py`)
 
@@ -231,17 +271,19 @@ A `typing.Protocol`, structural, declared by the council, naming no judge. It is
 | `run_id` | `RunId` | - | The council run, minted from the day the council ran |
 | `judge_id` | `str` | `SLUG_PATTERN`, `max_length=64` | Which tenant this shard hosted. Without it a night running two judges files rows nobody can attribute. **Recorded, not validated**: no membership check, because the council records who ran and never declares who may exist. The slug arrives from the tenant's own module constant, so a typo is a source edit a reviewer sees |
 | `shard` | `int` | `ge=0` | Which shard |
-| `shards` | `int` | `ge=1` | How many the work was split across. A run judged by fewer shards than it was split for leaves work unread, and the pair alone says so |
+| `shards` | `int` | `ge=1` | How many the work was split across. A run reporting fewer shards than it was split for left work unread, and the pair alone says so |
 | `outcome` | `ShardOutcome` | - | `completed`, `stopped_on_deadline`, or `nothing_to_do`. A shard killed by the platform writes no row at all, and absence against a known shard count is what says so |
-| `started_at` | `Timestamp` | - | When the judging stage began |
-| `seconds_spent` | `float` | `ge=0` | Wall clock for the stage. Not the job - the job's own clock includes a checkout and a weights restore this row is not about |
-| `model_calls` | `int \| None` | `ge=0` | How many calls the hosted work made. **Null, not zero, for a judge that runs no model**; zero for a model judge whose shard had nothing to judge. The judge's stage decides which, because only it knows whether it has a model. Counted per call rather than derived as twice the pairs - a pair refused on its first call made one call, not two |
-| `tokens_in` | `int \| None` | `ge=0` | Prompt tokens the server reported across the shard. **Requires the reading type to stop dropping the count it already receives** - row #11a |
-| `tokens_out` | `int \| None` | `ge=0` | Generated tokens. **Requires the reading type to carry a completion count it does not carry today** - row #11a adds it, or this column is dropped rather than shipped null for ever |
-| `model_seconds` | `float \| None` | `ge=0` | Wall clock inside model calls, summed from each reading's own clock. Read against `seconds_spent`, the two say how much of a shard was the model and how much was everything else |
+| `started_at` | `Timestamp` | - | When the shard began |
+| `seconds_spent` | `float` | `ge=0` | Wall clock for the shard. Not the job - the job's own clock includes a checkout and a weights restore this row is not about |
+| `model_calls` | `int \| None` | `ge=0` | How many calls the hosted work made. **Null, not zero, for a tenant that runs no model**; zero for a tenant with a model whose shard had nothing to do. **One call, one count, derived from no other column** - a tenant that stopped part way through a unit of its own made the calls it made |
+| `tokens_in` | `int \| None` | `ge=0` | Prompt tokens the server reported across the shard, off `Completion.prompt_tokens` |
+| `tokens_out` | `int \| None` | `ge=0` | Generated tokens, off `Completion.completion_tokens` |
+| `model_seconds` | `float \| None` | `ge=0` | Wall clock inside model calls. Read against `seconds_spent`, the two say how much of a shard was the model and how much was everything else |
 | `host_model` | `str \| None` | `PRINTABLE_LINE_PATTERN`, `max_length=96` | The processor name, one line read from the kernel's own file. **This is not the host fingerprint** - the 1.9 GiB bandwidth probe stays refused. Without it a slow night and a slower processor read identically, and the scope-out's "the digest pipeline already characterises the pool" has no join key a council row could use |
 
 `ShardOutcome` is a `StrEnum` in the same module, three members, because a free-text outcome is a column that splits silently on a typo.
+
+**Every description above is a published schema property, so a judge's unit may not appear in one.** An earlier draft explained `model_calls` as "not twice the pairs - a pair refused on its first call made one call, not two", which puts one tenant's unit and one tenant's failure mode into the council's own generated contract. Row #13's rejected alternative 2 already rules that a description is the contract. **Five values come off `ShardResult`, so none of them needs a story about pairs.**
 
 ### One stamp, and why there is not a second (`backend/idhazh/contracts/judge_call.py`)
 
@@ -333,7 +375,7 @@ The declaration is unchanged - it does **not** inherit either stamp. **Six** fie
 
 `decode_seconds` keeps its existing meaning on this row - both calls on the pair - and its description says so.
 
-Changelog entry to prepend: version `2026-09-20`, change "Added the judge-call stamp columns: which judge, its temperature and decode digest, whether the grammar applied, and the first-token vector.", why "A verdict could not be read back to the sampler that produced it."
+Changelog entry to prepend: version stamped the day row #8 lands, change "Added the judge-call stamp columns and the judging run id, and extended the key with it.", why "A verdict could not be read back to the sampler that produced it, and a re-judged pair collided with the row it replaced."
 
 **Two migrations, both in the same commit.**
 
@@ -378,16 +420,20 @@ All three stores join the prune targets (CLAUDE.md 1b: a prune verb per store) a
 | Today | Becomes | Whose |
 | --- | --- | --- |
 | `run.judge_shard_timeout_minutes` | `council.shard_timeout_minutes`, committed `200`, bounds unchanged | council |
+| `assemble.same_story.adaptive_dedup_threshold.shards` | `council.shards`, committed `4` - **the fan-out width is a runner number, and the workflow reads it to size its own matrix** (row #9 decision 3). A tenant narrows it downward through `shard_count` | council |
 | (new, row #9) | `council.shard_wrap_up_minutes`, default `12`, `ge=0` | council |
+| (new, row #24) | `council.tenants`, an ordered slug list, **default empty**. The registry seam 10 left unowned. Empty is the zero-judge case and it must load | council |
 | (new, row #21a) | `council.repair_window_days`, default `14`, `ge=1`, `le=60` - how far back the council asks its tenants about | council |
-| (new, row #21a) | `council.repair_floor_date`, a date stamp, no default - **the council's own first night.** Without it the plan names every published day the council predates, which is 29 dates on its first run | council |
+| (new, row #21a) | `council.repair_floor_date`, a date stamp, no default - **the council's own first night.** Without it the plan names every published day the council predates, which is 29 dates on its first run. **A tenant may raise it to its own first night**; it cannot lower it | council, per-tenant override |
 | (new, row #21a) | `council.repair_dates_a_night`, default `1`, `ge=0`, `le=4` - how many outstanding dates one run may add beside tonight's. Zero switches the repair off | council |
 | (new, row #1b) | `assemble.same_story.adaptive_dedup_threshold.flush_every_pairs`, default `1`, `ge=1` - **denominated in pairs, a unit only this judge has** | judge |
 | (new, row #19) | `HOLDOUT_RESOLVED_FLOOR` in `knobs/placement.py`, a source constant at half the labelled population - a property of what makes the reading meaningful, not something an operator tunes down to turn a red row green | judge |
 
 `run.shard_timeout_minutes`, the work job's own bound, does not move. The bound reader gains a dotted-path key and keeps one reader and one refusal message.
 
-**The arm that checks a shard fits runs per tenant, and does not run at all when no tenant is configured.** It reads a council clock and a judge's pair budget, which is legitimate - `AppConfig` is exactly where two blocks meet, and it is data rather than an import. A validator that cannot run without a judge is not.
+**The judge's whole block becomes optional** (row #9 decision 5), because an absent block is what "no tenant is configured" has to look like in a config file - and without that the zero-judge oracle cannot go red.
+
+**The arm that checks a shard fits leaves `AppConfig` entirely** (row #25). It read `SECONDS_A_CALL` from the judge's knob module at module scope, so every council module that read config imported a judge. The tenant now validates its own fit against the bound the council hands it.
 
 **The deadline is a backstop with room to spare.** At the committed budget a shard draws 50 pairs; at the measured 94.53 s a pair that is 78.8 minutes and at the worst measured pair 92.5 minutes, against a 200-minute bound. `stopped_on_deadline` is reachable in the type system and will not fire on the runner until the shard count drops or the budget rises, which is why row #1a's oracle drives it against a fake tenant directly. **The flush default is 1**: a rewrite of a file of at most 50 rows is not measurable beside a pair that costs 94.53 s.
 
@@ -530,7 +576,7 @@ All three stores join the prune targets (CLAUDE.md 1b: a prune verb per store) a
 
 - **Side: shared.** Two judges may inherit it; the council does not, and neither does it name a judge.
 - **Scope:** the columns a model-using judge's reading carries, declared as a mixin in one module, with no roster anywhere.
-- **Files touched:** `backend/idhazh/contracts/judge_call.py` (new), `backend/idhazh/contracts/export.py`, `backend/tests/contracts/test_judge_call.py` (new)
+- **Files touched:** `backend/idhazh/contracts/judge_call.py` (new), `backend/tests/contracts/test_judge_call.py` (new)
 - **Acceptance gates:** local - the new contract test, contract export, drift gate, ruff, mypy. CI - full suite.
 - **Oracle:** a `Contract` subclass inheriting the mixin round-trips every field through the CSV writer and reader, the mixin declares no schema stem so nothing generates a file for it, **and the module imports nothing from any judge package**. It cannot settle whether the fields are the right fields.
 - **Decisions:**
@@ -544,7 +590,7 @@ All three stores join the prune targets (CLAUDE.md 1b: a prune verb per store) a
 | 5 | `decode_seconds` on the mixin is one call and nothing else. The pair row's column of the same name is both calls, and its description says so. | Andre |
 | 6 | The probability vector is a list of id and logprob pairs. A rendered token is right for one set of weights, two ids can collide as one string, and exponentiating a logprob throws away the precision the margin is computed at. | Andre |
 | 7 | A judge with no model does not inherit this at all. It is the stamp for a model call, not for a judge. | Owner, 2026-09-20 |
-| 8 | Every new contract is registered in the export tuple, or no schema is generated and the drift gate reports an orphan file instead of a missing registration. | Fowler |
+| 8 | **This row does not touch the export tuple, and that is the carve-out rather than an omission.** The tuple is typed `tuple[type[Contract], ...]` and `export()` calls `schema_filename()` on every member, so registering a stem-less mixin crashes the exporter. The mixin is a `Model`, not a `Contract`. Every row that adds a real contract registers it. | Fowler |
 
 - **Rejected alternatives:**
 
@@ -579,7 +625,7 @@ All three stores join the prune targets (CLAUDE.md 1b: a prune verb per store) a
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | Put the council's outcome on the existing work-shard machine row | That row is one work shard of one digest run and carries 113 columns this pipeline does not fill | A discriminator column on a row describing two unrelated jobs | Carmack |
-| 2 | A host fingerprint per judging shard | The probe wants 1.9 GiB against a server at 96 percent of the runner, and the digest pipeline already characterises the same runner pool | An OOM risk for a reading nobody asked for | Carmack |
+| 2 | A host fingerprint per judging shard | The probe wants 1.9 GiB on a job whose two processes already hold up to 9.02 GiB of anonymous memory in 16 GB, and the digest pipeline already characterises the same runner pool | An OOM risk for a reading nobody asked for | Carmack |
 | 3 | Units dealt and completed on the council row | The council has no name for the unit, and the judge already counts it - two counts of one thing that can disagree | A duplicate that drifts | Owner |
 
 ---
@@ -637,10 +683,10 @@ All three stores join the prune targets (CLAUDE.md 1b: a prune verb per store) a
 
 ### Row #8 - The pair row gains the stamp, and the store is rewritten
 
-- **Scope:** the pair row gains five columns at the tail, the reader learns to fill a non-null default, and the committed file is widened so the store stays appendable.
-- **Files touched:** `backend/idhazh/contracts/story_similarity_pair.py`, `backend/utilities/widen_ledger_header.py` (new), `schemas/story-similarity-pair.schema.json` (generated), `frontend/src/contracts/` (generated), `state/story-similarity/scored-pairs/2026/09/18.csv`, `docs/architecture/contracts/schemas.md`, `backend/tests/contracts/`, `backend/tests/fixtures/`
-- **Acceptance gates:** local - the contract tests, contract export, drift gate, `doc_load.py --changed`. CI - full suite.
-- **Oracle:** a fixture carrying the pre-change header is widened, then a fresh row is appended to it through the ledger's own append path without raising. **The append is the load-bearing half** - a read-only oracle cannot see the header equality check that makes the store unappendable.
+- **Scope:** the pair row gains **six** columns at the tail and its key extends to four parts, the reader learns to fill a non-null default, and the committed file is widened so the store stays appendable.
+- **Files touched:** `backend/idhazh/contracts/story_similarity_pair.py`, `backend/idhazh/ledger.py` (the key), `backend/idhazh/similarity/fold.py` (the tie-break ordering), `backend/utilities/widen_ledger_header.py` (new), `schemas/story-similarity-pair.schema.json` (generated), `frontend/src/contracts/` (generated), `state/story-similarity/scored-pairs/2026/09/18.csv`, `docs/architecture/contracts/schemas.md`, `backend/tests/contracts/`, `backend/tests/test_similarity_fold.py`, `backend/tests/fixtures/`
+- **Acceptance gates:** local - the contract and similarity test modules, contract export, drift gate, `doc_load.py --changed`. CI - full suite.
+- **Oracle:** a fixture carrying the pre-change header is widened, then a fresh row is appended to it through the ledger's own append path without raising. **The append is the load-bearing half** - a read-only oracle cannot see the header equality check that makes the store unappendable. A second case drives two rows for one pair, one with a null run stamp, and asserts the stamped one wins.
 - **Decisions:**
 
 | # | Decision | Authority |
@@ -650,7 +696,9 @@ All three stores join the prune targets (CLAUDE.md 1b: a prune verb per store) a
 | 3 | **Nothing in the repository can widen a header from a command line today.** The row adds an operator utility under `backend/utilities/`, which pytest does not collect, taking a store from the prune vocabulary and dry-running by default as the prune verb does. | Fowler |
 | 4 | The committed file is widened in the same commit, or the append check refuses it and the next re-dispatch of that date kills the commit step and every ledger staged beside it. | Andre |
 | 5 | `judge_id` carries a default rather than being required, so the widening can fill it and the selection stage - which writes these rows with verdict columns empty - does not invent an instrument. | Fowler |
-| 6 | ESCALATE: committed rows are rewritten. Sign-off before the utility runs. | Section 6 |
+| 6 | **The sixth column is `judged_by_run_id`, and the key extends with it - round six found it had no owner.** Section 1c specified six columns and a four-part key while this row's scope said five, so the one column the whole re-judge design rests on was specified and unassigned. `STORY_SIMILARITY_PAIR_KEY` becomes `("date", "run_id", "pair_key", "judged_by_run_id")` here. | Section 11 |
+| 7 | **The tie-break ordering lands in this commit too**, because the column is nullable and every committed row carries it empty. The counting module's one-row-a-pair tie-break compares on a bare `>`, which raises on two empty values. The ordering is `(row.judged_by_run_id or "")`, null lowest, so a stamped re-judge beats an unstamped original and two unstamped rows keep file order - today's behaviour exactly. | Andre |
+| 8 | ESCALATE: committed rows are rewritten and a persisted key widens. Sign-off before the utility runs. | Section 6 |
 
 - **Rejected alternatives:**
 
@@ -662,34 +710,37 @@ All three stores join the prune targets (CLAUDE.md 1b: a prune verb per store) a
 
 ---
 
-### Row #9 - The council's clocks move to a council block
+### Row #9 - The council's clocks and its fan-out width move to a council block
 
 - **Side: council.** Its gates run with no judge in the repository.
-- **Scope:** the judging shard's bound and a new wrap-up margin move out of the digest pipeline's generic run block into a block the council owns, the reader learns a dotted path, and the validator that asserts a shard fits becomes a per-tenant arm.
-- **Files touched:** `backend/idhazh/contracts/knobs/run.py`, `backend/idhazh/contracts/knobs/council.py` (new), `backend/idhazh/contracts/app_config.py`, `config/idhazh.json`, `backend/utilities/shard_bound.py`, `.github/workflows/llm-council.yml`, `frontend/src/lib/server/config.ts`, `docs/concepts/config.md`, `backend/tests/contracts/test_app_config.py`, `backend/tests/workflows/test_llm_council_workflow.py`, `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`, `schemas/app-config.schema.json` (generated), `frontend/src/contracts/app-config.ts` (generated)
+- **Scope:** the judging shard's bound, a new wrap-up margin and the fan-out width move out of the digest pipeline's generic run block and out of the judge's block into a block the council owns; the judge's own block becomes optional; the reader learns a dotted path.
+- **Files touched:** `backend/idhazh/contracts/knobs/run.py`, `backend/idhazh/contracts/knobs/council.py` (new), `backend/idhazh/contracts/knobs/placement.py`, `backend/idhazh/contracts/app_config.py`, `config/idhazh.json`, `backend/utilities/shard_bound.py`, `.github/workflows/llm-council.yml`, `frontend/src/lib/server/config.ts`, `docs/concepts/config.md`, `backend/tests/contracts/test_app_config.py`, `backend/tests/workflows/test_llm_council_workflow.py`, `tests/fixtures/contracts/app-config/every-knob-differs-from-the-committed-config.json`, `schemas/app-config.schema.json` (generated), `frontend/src/contracts/app-config.ts` (generated)
 - **Acceptance gates:** local - the two named test modules, contract export, drift gate, `doc_load.py --changed`. CI - full suite.
-- **Oracle:** the dotted key the workflow passes and the field the contract declares resolve to the same value, the reader returns a bare positive integer, **and `AppConfig` validates with every tenant block removed** - which is the zero-judge condition expressed as a config test. It cannot settle whether the bound is the right size.
+- **Oracle:** the dotted key the workflow passes and the field the contract declares resolve to the same value, the reader returns a bare positive integer, **and `AppConfig` validates with the judge's whole block absent from the config file** - which is the zero-judge condition expressed as a config test, and it can only bite once decision 5 makes that block optional. It cannot settle whether the bound is the right size.
 - **Decisions:**
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | **This row reverses the earlier draft's direction, and that was seam 3.** The draft moved the council's bound *into* `assemble.same_story.adaptive_dedup_threshold` - the judge's block, itself nested under the digest pipeline's assemble stage - so with zero judges the council had no timeout at all. The bound and the margin are the venue's: they price a runner, a checkout, an install and a weights restore, none of which a tenant can see. | Owner, 2026-09-21 |
 | 2 | **`council.shard_timeout_minutes` and `council.shard_wrap_up_minutes`**, a new top-level block. Committed values `200` and `12`, bounds unchanged. | Carmack |
-| 3 | **The flush knob does not move and never was the council's.** It is denominated in pairs - a unit only this judge has - so it stays in the judge's own block (row #1b). | Carmack |
-| 4 | **The validator that asserts a shard fits its bound becomes a per-tenant arm, and runs only when that tenant's block is configured.** It reads a council number and a judge number, which is legitimate - `AppConfig` is exactly where two blocks meet, and it is data rather than an import. What is not legitimate is a validator that cannot run at all without a judge, so with no tenant block there is no arm and the config still validates. | Fowler |
-| 5 | The bound reader resolves a dotted path rather than a leaf under a fixed block. One reader, one refusal message. | Carmack |
-| 6 | A straight rename in one commit. One config file, one fixture, no payload an earlier run wrote. | Fowler |
-| 7 | The hand-written frontend config mirror moves with it, or the two disagree silently. | Fowler |
-| 8 | ESCALATE: the knob and the workflow key land in one commit, or the workflow resolves no bound and the shard runs to the platform ceiling. | Section 6 |
+| 3 | **`council.shards` moves too, and round six is why - it was seam 8's other half.** `llm-council.yml:143` computes the council's own fan-out width by reading `assemble.same_story.adaptive_dedup_threshold.shards`, so with no judge configured that step raises and the planning job dies before it plans anything. A fan-out width is the purest runner number there is. Committed value `4`. **A tenant may narrow it downward** through `shard_count` on the protocol; the council's knob is the ceiling and the default. | Carmack |
+| 4 | **The flush knob does not move and never was the council's.** It is denominated in pairs - a unit only this judge has - so it stays in the judge's own block (row #1b). | Carmack |
+| 5 | **The judge's block becomes optional, defaulting to absent.** Without this the zero-judge oracle cannot go red: `assemble` is built by a default factory, so the judge's knobs exist whether or not a judge does, and the condition would be asserted and never tested. An absent block is what "no tenant is configured" has to look like in a config file. | Fowler |
+| 6 | **The validator that asserts a shard fits its bound becomes a per-tenant arm, and runs only when that tenant's block is present.** Row #25 then moves the arm itself out of `AppConfig`, which is where it still imports a judge module. This row makes the arm conditional; row #25 makes it uncoupled. | Fowler |
+| 7 | The bound reader resolves a dotted path rather than a leaf under a fixed block. One reader, one refusal message. | Carmack |
+| 8 | A straight rename in one commit. One config file, one fixture, no payload an earlier run wrote. | Fowler |
+| 9 | The hand-written frontend config mirror moves with it, or the two disagree silently. | Fowler |
+| 10 | ESCALATE: the knob and the workflow key land in one commit, or the workflow resolves no bound and no width, and the shard runs to the platform ceiling. | Section 6 |
 
 - **Rejected alternatives:**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | Move the bound into the judge's block, as the earlier draft did | Seam 3. The venue's runner budget expressed as a tenant's knob, and no timeout at all with zero judges | The dictum, failed at condition 2 | Owner |
-| 2 | Leave it in the run block | The validator keeps asserting something pair-specific about a generic knob, and `run` is the digest pipeline's | Two timeouts neither of which says what it bounds | Fowler |
-| 3 | A block flag beside the key flag | Two ways to spell one address | A second grammar | Carmack |
-| 4 | Keep one validator reading both blocks unconditionally | It cannot run in a repository with no judge, which is the condition this plan exists to meet | A config that will not load | Fowler |
+| 2 | Leave `shards` where it is | Seam 8's other half. The council cannot size its own matrix without reading a judge's config path | A planning job that dies with no judge | Carmack |
+| 3 | Leave it in the run block | The validator keeps asserting something pair-specific about a generic knob, and `run` is the digest pipeline's | Two timeouts neither of which says what it bounds | Fowler |
+| 4 | A block flag beside the key flag | Two ways to spell one address | A second grammar | Carmack |
+| 5 | Keep the judge's block non-optional | The zero-judge oracle is unfalsifiable, which is how the first five rounds all passed a broken design | A test that cannot fail | Fowler |
 
 ---
 
@@ -725,19 +776,23 @@ All three stores join the prune targets (CLAUDE.md 1b: a prune verb per store) a
 - **Scope:** a caller may open a thinking channel, pin the probability mode, constrain a grammar at the answer position, and receive the raw first-token window at that position with a digest of what was posted.
 - **Files touched:** `backend/idhazh/llm/server.py`, `backend/tests/test_decode_split.py`, `backend/tests/fixtures/`, `docs/reference/benchmarks/which-probabilities-the-server-returns.md` (new)
 - **Acceptance gates:** local - `test_decode_split.py`, `test_summarize.py`, ruff, mypy, `doc_load.py --changed`. CI - full suite.
-- **Oracle:** driven by recorded replies through the module that already owns the two-span split, **importing nothing from `idhazh.similarity`**. A reply from an entry declaring a thinking close yields a thinking span and an answer span, and the returned window is the server's list at the answer position. A test enumerates the builder's posted keys and fails on one the digest neither covers nor excludes by name. It cannot settle what a live model returns.
+- **Oracle:** two arms, and the second is the one round six had to add.
+  - **The reply arm**, driven by recorded replies through the module that already owns the two-span split, **importing nothing from `idhazh.similarity`**: a reply from an entry declaring a thinking close yields a thinking span and an answer span, and the returned window is the server's list at the requested position.
+  - **The posted-body arm**, asserting on the request the builder produces rather than on a reply: span one carries neither `grammar` nor `n_probs`, and every posted key is either in the digest or in the named exclusion list. **A reply-driven oracle cannot see a request-side defect**, which is exactly how the two faults in decisions 3 and 7 survived five rounds.
+  - It cannot settle what a live model returns.
 - **Decisions:**
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | **Thinking is supported, not refused.** An earlier draft refused a call whose model entry opened a thinking channel. That was wrong: the temperature is already above zero for writing that reads like a person wrote it, and thinking mode is coming. A guard that breaks a caller the day the feature lands is not a guard. | Owner, 2026-09-21 |
-| 2 | **The machinery already exists** - the layer carries a thinking span and an answer span, the summariser's payload builder sends the template flag that turns the channel on, and `decode_split` already tests the split. This row makes the same shape reachable by any caller and adds nothing new to the concept. | Owner, 2026-09-21 |
-| 3 | **A grammar may be constrained at the answer position rather than at position zero.** That is the defect the refusal was reaching for: constraining the first token forces an answer where the model meant to start reasoning, and the reply still parses. | Andre |
-| 4 | **The layer returns the raw first-token window and computes no margin.** It has no idea what a verdict opening is, and it must not: row #12 decision 3 already names a judge whose emitted token is discarded and whose distribution is the answer, so one shared margin would be two instruments in one column. **Each judge takes its own reading over the window.** | Andre, ruling 3 |
-| 5 | The window is sized by the caller, from its own grammar's legal first-token set at the answer position. The layer applies the number and does not derive it. | Andre |
-| 6 | The probability mode is sent explicitly rather than inherited from a build default, and which mode the server returns is measured and written up in its own benchmark record. | Andre |
-| 7 | The decode digest covers exactly six posted keys and is held to the payload by the key-enumeration test. A key the digest neither covers nor names is a decode change nothing would see. | Andre |
-| 8 | **The reading type carries both token counts.** It drops the prompt count the server already returns and has no completion count at all, so the council's `tokens_in` and `tokens_out` have nothing to fill them. Both are added here, in the layer that receives them, rather than in a judge. | Carmack |
+| 1 | **Thinking is supported, not refused.** An earlier draft refused a call whose model entry opened a thinking channel. That was wrong: thinking mode is a stated direction, and a guard that breaks a caller the day the feature lands is not a guard. | Owner, 2026-09-21 |
+| 2 | **The machinery already exists** - the layer carries a thinking span and an answer span, the summariser's payload builder sends the template flag that turns the channel on, and `decode_split` already tests the split. This row makes the same shape reachable by a constrained caller. | Owner, 2026-09-21 |
+| 3 | **`thinking_span` strips `grammar` and `n_probs`, not only `json_schema` - round six found this and it is a real defect.** `server.py:733` derives span one from the answer body by removing one key. On the grammar route span one would therefore inherit the grammar, so the model is constrained to three verdict words **and cannot write a thinking block at all**, and it would inherit `n_probs`, asking for 25 alternatives at every position of an uncapped decode. The reply would still parse. Nothing downstream could tell. | Andre |
+| 4 | **A grammar may be constrained at the answer position rather than at position zero.** Constraining the first token forces an answer where the model meant to start reasoning. | Andre |
+| 5 | **The layer returns the raw first-token window and computes no margin.** It has no idea what a verdict opening is, and it must not: row #12 decision 3 already names a tenant whose emitted token is discarded and whose distribution is the answer, so one shared margin would be two instruments in one column. **Each judge takes its own reading over the window.** | Andre |
+| 6 | **The position the window is read at is an argument, defaulting to zero.** The layer's current reader is hard-pinned to position zero and justified in its own docstring by "a grammar of three literals has nothing left to be uncertain about" - one judge's grammar shape, stated as a property of the shared layer. The justification moves to the judge that holds it; the layer takes a number. | Andre |
+| 7 | **The decode digest is every posted key not in a named exclusion list - not a fixed six.** Round six counted the grammar builder's body: ten keys, of which the three named exclusions (prompt, grammar, model) leave seven, so `stream` and `cache_prompt` were in neither list and the key-enumeration test would have gone red on its first run. A fixed count is also one route's key set; a second caller on the schema route posts a different one. Each exclusion carries its reason on the line that names it. | Andre |
+| 8 | The window is sized by the caller, from its own grammar's legal first-token set. The layer applies the number and does not derive it. | Andre |
+| 9 | The probability mode is sent explicitly rather than inherited from a build default, and which mode the server returns is measured and written up in its own benchmark record. | Andre |
 
 - **Rejected alternatives:**
 
@@ -745,33 +800,40 @@ All three stores join the prune targets (CLAUDE.md 1b: a prune verb per store) a
 | --- | --- | --- | --- | --- |
 | 1 | Refuse a call whose model entry opens a thinking channel | It breaks on the day thinking mode ships, and thinking mode is a stated direction. A guard against a feature you intend to use is a bug with a schedule | A caller that stops working when the writing improves | Owner |
 | 2 | Compute the margin in the model layer | It would have to know one judge's grammar, and it would be wrong for the scorer | The model layer, coupled to a judge | Andre |
-| 3 | Assert thinking off in the prompt wording | Prompt wording is not a control, and a template cannot close a channel the server opened | A guard that reads as one without being one | Andre |
+| 3 | Add the token counts here, as an earlier draft's decision 8 did | **The premise was false.** `server.py:370-371` already declares `prompt_tokens` and `completion_tokens` on the reply type and fills them at 928 and 944. The type that drops them is `similarity/judge.py:47`, a judge module this row does not touch - so the decision delivered nothing and pinned a council column to a row that could not fill it | A council column whose only producer is inside a judge | Carmack |
+| 4 | Assert thinking off in the prompt wording | Prompt wording is not a control, and a template cannot close a channel the server opened | A guard that reads as one without being one | Andre |
 
 ---
 
 ### Row #11b - The content-similarity judge reads its own margin
 
 - **Side: judge.**
-- **Scope:** this judge opens the thinking channel, constrains its six legal strings at the answer span, takes its margin over its own three verdict openings, and records which shape ran.
-- **Files touched:** `backend/idhazh/similarity/judge.py`, `backend/idhazh/similarity/prompt.py`, `backend/idhazh/similarity/stamps.py`, `backend/idhazh/similarity/fold.py` (the change detector), `backend/tests/test_similarity_judge.py`, `backend/tests/fixtures/`
-- **Acceptance gates:** local - the similarity test modules, ruff, mypy. CI - full suite.
-- **Oracle:** a canary drives a recorded reply from an entry declaring a thinking close and asserts the verdict is read from the **answer** span, with the thinking span recorded and never parsed as a verdict; a second drives a reply whose window omits a verdict opening and asserts a null margin rather than a gap between two prefixes.
+- **Scope:** this judge opens the thinking channel, constrains its six legal strings at the answer span, takes its margin over its own verdict openings, and records which shape ran.
+- **Files touched:** `backend/idhazh/similarity/judge.py`, `backend/idhazh/similarity/prompt.py`, `backend/idhazh/similarity/stamps.py`, `backend/idhazh/similarity/fold.py` (the change detector), `backend/tests/test_similarity_judge.py`, `backend/tests/fixtures/`, `docs/reference/benchmarks/what-the-thinking-envelope-changes.md` (new)
+- **Acceptance gates:** local - the similarity test modules, ruff, mypy, `doc_load.py --changed`. CI - full suite.
+- **Oracle:** three cases. A recorded reply from an entry declaring a thinking close has its verdict read from the **answer** span, with the thinking span held for the assertion and never parsed as a verdict. A window whose only verdict token is **space-prefixed** yields a **non-null** margin - the case decision 2 exists for, and the one that would have shipped null on every row. A window with one verdict opening yields null.
 - **Decisions:**
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | The judge asks for a window sized to **the 25 non-empty prefixes of its six legal strings**, not to the count of verdict words. That is what the grammar admits at the answer position. | Andre |
-| 2 | **Widening the window alone changes the margin by nothing**, because the margin is the top two of whatever came back. So it is taken over the three verdict-opening ids, renormalised, and is null when fewer than two are present. The stage already computes those ids and discards them. | Andre |
-| 3 | **The stamp records which shape ran**, so a margin taken after a thinking span and one taken cold are distinguishable. A verdict produced after reasoning is not the same measurement. | Andre |
-| 4 | The change detector gains the temperature, the decode digest and the thinking shape in this commit. A stamp column the detector cannot see is a stamp that lies. | Andre |
-| 5 | ESCALATE: widening the detector resets the distribution once, by construction. Row #21b decision 5 says why that is correct and how it is recorded. | Section 6 |
+| 2 | **The margin sums per verdict across all six legal spellings before renormalising - round six found the three-id reading is broken.** `prompt.py:159 first_token_ids` returns the ids of the **bare** words, while the grammar's own comment at `prompt.py:52` says most vocabularies spell ` YES` and `YES` as different tokens and the space-prefixed one is "the model's natural first choice". A margin renormalised over three ids the model rarely emits returns null on the common case, and the earlier draft's own null-margin oracle would have gone **green** on exactly that failure. | Andre |
+| 3 | **Widening the window alone changes the margin by nothing**, because the margin is the top two of whatever came back. The reading is over the verdict openings, renormalised, null when fewer than two verdicts are present. | Andre |
+| 4 | **The stamp records which shape ran**, so a margin taken after a thinking span and one taken cold are distinguishable. A verdict produced after reasoning is not the same measurement. | Andre |
+| 5 | The change detector gains the temperature, the decode digest and the thinking shape in this commit. A stamp column the detector cannot see is a stamp that lies. | Andre |
+| 6 | **The envelope is not flipped on the strength of a plumbing test.** Both oracles above drive recorded replies, which say nothing about whether reasoning first changes the verdict - and this row lands in the group that erases the distribution record, so a before-and-after agreement rate could never be taken afterwards. **Replay the 82 committed pairs under both envelopes on one box, report the change in the usable rate and in the verdict mix, and write it up.** An A-against-B on one machine cancels the machine (Guardrail #10), so this is cheap and it is the only reading that settles the question. | Andre |
+| 7 | **The temperature claim is corrected.** An earlier draft argued thinking support from "the temperature is already above zero". This judge decodes at `judge_temperature: 0.0`. The conclusion stands on decision 1's reason - thinking mode is coming - and not on a number that is false for this call. | Andre |
+| 8 | The thinking span is held in memory for the assertion and is **not** persisted. A model-written free-text cell in a committed store is a surface Guardrail #11 would have to cover, for a value nothing reads. | Andre |
+| 9 | ESCALATE: widening the detector resets the distribution once, by construction. Row #21b decision 5 says why that is correct and how it is recorded. Decision 6's replay is taken **before** the reset, or it cannot be taken at all. | Section 6 |
 
 - **Rejected alternatives:**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
 | 1 | Keep the three-wide window | It is sized to the answer set rather than to what the grammar admits | A margin over the wrong tokens | Andre |
-| 2 | Take the margin over the whole returned window | A prefix of a legal string is not a verdict, so two prefixes of one verdict would read as a close call between two verdicts | A number that inverts on the case it exists to catch | Andre |
+| 2 | Renormalise over the three bare ids | The grammar's own comment says the space-prefixed token is the natural first choice, so the reading is null whenever the model behaves normally | A column that is empty for the reason it exists | Andre |
+| 3 | Take the margin over the whole returned window | A prefix of a legal string is not a verdict, so two prefixes of one verdict would read as a close call between two verdicts | A number that inverts on the case it exists to catch | Andre |
+| 4 | Flip the envelope and measure later | The reset erases the only baseline, so "later" is never | An instrument change with no before | Andre |
 
 ---
 
@@ -803,14 +865,14 @@ All three stores join the prune targets (CLAUDE.md 1b: a prune verb per store) a
 
 - **Side: shared.** A vocabulary scrub over both sides, landing after the verb rename.
 - **Scope:** the two borrowed words are deleted from identifiers, field names, field descriptions, docstrings and prose, the one persisted field among them takes a read-side migration, and the plain-meaning test that caught them is written down.
-- **Files touched:** the eighteen files carrying `leg`; `backend/idhazh/similarity/fold.py` -> `counting.py`; `backend/idhazh/similarity/draw.py` -> `selection.py`; `backend/idhazh/contracts/story_similarity_distribution.py` (the field), `fitted_similarity_threshold.py`, `story_similarity_pair.py`, `knobs/placement.py`, `knobs/council.py` (field descriptions); `backend/idhazh/stages/judge_fit.py`; `state/story-similarity/score-distribution.json` and its archived sibling; `schemas/` (generated); `CLAUDE.md` section 0b; `docs/architecture/publishing/llm-council.md`
+- **Files touched:** every tracked file carrying `leg` as a word - **counted by the row itself, with the exact pattern its oracle will use, as the first step**; `backend/idhazh/similarity/fold.py` -> `counting.py`; `backend/idhazh/similarity/draw.py` -> `selection.py`; `backend/idhazh/contracts/story_similarity_distribution.py` (the field), `fitted_similarity_threshold.py`, `story_similarity_pair.py`, `knobs/placement.py`, `knobs/council.py` (field descriptions); `backend/idhazh/stages/judge_fit.py`; `state/story-similarity/score-distribution.json` and its archived sibling; `schemas/` (generated); `frontend/src/contracts/` (generated); `frontend/src/lib/console/merge-line.ts`; `frontend/src/routes/console/judgement/`; `CLAUDE.md` section 0b; `docs/architecture/publishing/llm-council.md`
 - **Acceptance gates:** local - the similarity and contract test modules, contract export, drift gate, ruff, mypy, `doc_load.py --changed`. CI - full suite.
 - **Oracle:** a grep over tracked text finds no `leg`, `legs`, `arm` or `fold` used as a name for a shard or for the collecting job, **and the committed record loads through the migration with its date list intact**. It cannot settle whether a future borrowed word is caught - that is what the test in section 0b is for.
 - **Decisions:**
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | `leg` is a pure synonym for `shard` - 75 occurrences across 18 files, every one meaning the thing the `shard` column already names. It is deleted, not replaced. | Owner, 2026-09-20 |
+| 1 | `leg` is a pure synonym for `shard` wherever it names one - **every occurrence means the thing the `shard` column already names**. It is deleted, not replaced. **The row counts its own scope before it starts**: an earlier draft carried "75 occurrences across 18 files", which round six re-took as 25 files in `backend/` and `.github/` alone, plus the generated frontend contracts the file list had missed. A count of a tracked tree is a rotting number (Guardrail #10), so the property is what is written here and the count is taken on the day. | Owner, 2026-09-20 |
 | 2 | `fold` is functional-programming vocabulary for the job that collects the shards' output, commits it and counts it. The job becomes `collect`, and **prose names the action, never the job**: "a day with a missing shard is not counted into the record". | Owner, 2026-09-20 |
 | 3 | The repository has done this scrub before - `arm` became `cases` on 2026-09-15 with a read-side migration - so the pattern and its changelog wording already exist. | Fowler |
 | 4 | Two occurrences of `leg` mean a clause of a two-part rule rather than a shard. Those become "the first of two checks". | Fowler |
@@ -952,12 +1014,12 @@ All three stores join the prune targets (CLAUDE.md 1b: a prune verb per store) a
 | --- | --- | --- |
 | 1 | **The council writes its own row - seam 5.** An earlier draft had the judge's two stages write it, so the venue's record existed only because a tenant remembered to file it, and a judge that forgot would leave the venue blind. The council owns the invocation, so it owns the outcome: it starts the clock, calls the tenant, catches what comes back, and files the row in a `finally`. | Owner, 2026-09-21 |
 | 2 | The council records the shard's identity, its clock, its outcome and the aggregate cost of the work it hosted - and nothing that needs a name for the unit. | Owner, 2026-09-20 |
-| 3 | **The aggregate cost comes back from the tenant, not out of a judge's store.** A tenant with no model returns nulls; the council does not look inside anything to find out. | Owner, 2026-09-21 |
-| 4 | **No host fingerprint.** The probe wants 1.9 GiB against a server at 96 percent of the runner, the council's data is discardable, and the digest pipeline already characterises the same runner pool. Dropping it removes the only memory risk in this plan rather than ordering around it. | Carmack |
+| 3 | **The five values the council files come off `ShardResult`, not out of a judge's store or off a judge's contract - seam 7.** The protocol used to return the judge's own metrics contract, and row #6 rules that those columns are shared with nobody, so the council could have filled its own row only by reading named attributes off a tenant. A tenant with no model returns nulls. The council looks inside nothing. | Owner, 2026-09-21 |
+| 4 | **No host fingerprint.** The probe wants 1.9 GiB on a job whose two processes already hold up to 9.02 GiB of anonymous memory in 16 GB, the council's data is discardable, and the digest pipeline already characterises the same runner pool. Dropping it removes the only memory risk in this plan rather than ordering around it. **The number is 9.02 and not 14.31**: the 14.31 GiB reading is summed RSS across two processes and its own source says so in its title, counting every shared page twice - round six found it quoted here against the caveat it carries at home (Guardrail #10). | Carmack |
 | 5 | **No per-call spans and no span rollup.** The judge's own row carries the call count, the total and the worst, which is what the three questions actually need. | Owner, 2026-09-20 |
 | 6 | The outcome row is written by the same capability the judge metrics use, so there is one shipping path and not two. | Fowler |
 | 7 | The store is seeded with a `.gitkeep`, **not a header-only day file**. A header-only file at a day path is a real day file to the partition walker - a permanent phantom day in the prune target and the day inventory. The three seeded directories in this repository are all `.gitkeep`. | Fowler |
-| 8 | **A judge that needs no model needs no shards.** Sharding exists because the model is slow. A pure-Python tenant is invoked once with one shard of one, which the council expresses as an argument rather than as a special case. | Carmack |
+| 8 | **A tenant with no model returns `shard_count = 1`.** Sharding exists because a model is slow; a pure-Python tenant given four jobs pays four weights restores for work that uses none of them. The width is the protocol's answer, not a council constant. | Carmack |
 | 9 | This row assumes plan 37's corrected sampler and does not wait for it. Nothing here reads the sampler. | Owner, 2026-09-20 |
 
 - **Rejected alternatives:**
@@ -1052,12 +1114,12 @@ All three stores join the prune targets (CLAUDE.md 1b: a prune verb per store) a
 | --- | --- | --- |
 | 1 | **The council asks; it does not look - seam 2.** An earlier draft had the council's night plan open a judge's distribution record and read its counted-dates list, so the venue knew a tenant's storage layout and could not plan at all without one. The plan calls `nights_outstanding(window=...)` on each registered tenant and unions what comes back. **With no tenants the union is empty and tonight is the plan.** | Owner, 2026-09-21 |
 | 2 | **The window, the floor and the per-night cap are the council's**, because they price a runner and a matrix. What counts as outstanding is the tenant's, because only the tenant knows what it has read. | Fowler |
-| 3 | **The window has a floor: the council's first night.** The store holds one day file against 30 published days, so an unfloored window names 29 dates on its first run and cannot tell "this night died" from "the council did not exist yet". | Carmack |
+| 3 | **The window has a floor: the council's first night, and a tenant may raise it to its own.** The store holds one day file against 30 published days, so an unfloored window names 29 dates on its first run and cannot tell "this night died" from "the council did not exist yet". **The same sentence applies to a tenant that moves in later**: with only the council's floor it reports every date back to the council's own birth as outstanding. The floor is therefore per tenant, defaulting to the council's. | Carmack |
 | 4 | **A per-night cap with a committed value of 1**, plus the floor. A cap without a floor only slows a 29-date backfill to 29 nights. | Carmack |
 | 5 | **The judging job's timeout is per job, so a catch-up date costs wall clock, not headroom.** At the committed budget a shard judges 50 pairs at the measured 94.53 s a pair - 78.8 minutes against a 200-minute bound, per job, per date. | Carmack |
-| 6 | **The matrix's parallel width becomes shards times dates**, capped at the platform's 20-job ceiling. It is the shard count today, so two dates would otherwise run as two waves and finish near 01:30 rather than 23:30. The timeout clock starts when a job begins executing, not when it is queued, so a queued job still gets its full bound. | Carmack |
-| 7 | **The per-tenant config arm from row #9 gains the date cap as a multiplier**, and its refusal message names the cap as a fourth knob to lower. Without it the arm passes at 50 pairs while the run costs two dates. With no tenant configured there is no arm, and the cap is still valid on its own bounds. | Carmack |
-| 8 | **Every artifact name carries the date.** Two dates in one run would either fail the job on an immutable name or silently overwrite the first date's verdicts. The collecting job's download pattern moves with them. | Carmack |
+| 6 | **The matrix's parallel width is tenants times shards times dates**, capped at the platform's 20-job ceiling. Row #24 adds the tenant axis; this row adds the date axis. The timeout clock starts when a job begins executing, not when it is queued, so a queued job still gets its full bound. | Carmack |
+| 7 | **There is no date multiplier on the config arm, and round six is why.** An earlier draft multiplied the per-shard time budget by the date cap. Dates are a **parallel** axis - each date is its own job with its own bound, which decision 5 already says - so multiplying compares parallel work against a per-job number. It also refuses a legal config: 50 pairs x 94.53 s x 3 dates is 14,179 s against a 12,000 s bound, so `AppConfig` would reject `repair_dates_a_night = 2` while the knob's own bound admits 4. **A knob whose top half will not load is a lying bound.** The axis that genuinely compounds inside one job is tenants, and row #24 gives each tenant its own job. | Carmack |
+| 8 | **Every artifact name carries the date, and row #24 adds the tenant to the same names.** Two dates in one run would either fail the job on an immutable name or silently overwrite the first date's verdicts - and the identical sentence is true of two tenants at shard zero, which would also collide on the merged filename. The collecting job's download pattern moves with them. | Carmack |
 | 9 | **Recovery needs two things the workflow does not have, and neither is a stored secret.** The permissions block declares one scope and a declared block sets every unlisted scope to none, so cross-run download needs `actions: read` and the default credential passed explicitly. And **the uploads expire after one day**, before the next night's collecting job reaches them - so verdict retention rises to the cap plus two. A shard file is about 27 KB, so a week of four shards is under a megabyte. | Carmack |
 | 10 | **The collecting job is per date.** Its two verbs, both commit messages and - the dangerous one - the command that rebuilds the derived record after a lost push all name a single date today. Left alone on a two-date night the rebuild would regenerate one date and drop the other's count. | Carmack |
 | 11 | **An explicit dispatched date replaces the night plan entirely** and judges exactly that date. An operator naming a date is asserting something the plan cannot know. | Carmack |
@@ -1130,26 +1192,88 @@ All three stores join the prune targets (CLAUDE.md 1b: a prune verb per store) a
 - **Scope:** a static import boundary over the council's package, and one end-to-end council run driven by a fake tenant with no judge anywhere in the call.
 - **Files touched:** `backend/tests/council/conftest.py` (new, the fake tenant), `backend/tests/council/test_council_runs_without_a_judge.py` (new), `backend/tests/contracts/test_repo_structure.py`, `backend/tests/test_marks.py`, `docs/architecture/publishing/llm-council.md`
 - **Acceptance gates:** local - the council test package, the repo-structure test module, ruff, mypy, `doc_load.py --changed`. CI - full suite.
-- **Oracle:** two arms, and both fail loudly on the coupling they exist to catch.
-  - **The boundary arm** parses every module under `backend/idhazh/council/` and fails on any import naming `idhazh.similarity`, any module under a judge package, or any judge contract. The precedent is the existing repo-structure check, which already parses imports to hold the contracts package at the bottom of the graph - this adds one rule to a mechanism that works.
-  - **The run arm** drives mint a run id -> build the night plan -> run the tenant under a deadline -> ship its row -> file the council's outcome row, against a fake tenant declared in the council's own `conftest.py`. **The module imports nothing from `idhazh.similarity`**, and that is asserted rather than assumed.
+- **Oracle:** three arms, and the second is the one round six had to add.
+  - **The directory arm** parses every module under `backend/idhazh/council/` and fails on any import naming `idhazh.similarity`, any module under a judge package, or any judge contract. The precedent is the existing repo-structure check, which already parses imports to hold the contracts package at the bottom of the graph.
+  - **The closure arm** walks the **whole static import closure of the council's entry point** - `cli.py` and `AppConfig` included - and fails on a judge module reached at import time from any council verb. A directory arm alone would never have seen either of the two real couplings: `cli.py:75-78` imports four judge stages at module scope, and `app_config.py:42` imports the judge's knob module, so every council module that reads config carried a judge in its closure.
+  - **The run arm** drives mint a run id -> resolve tenants from config -> build the night plan -> run the tenant under a deadline -> ship its row -> file the council's outcome row, against a fake tenant declared in the council's own `conftest.py`. **The module imports nothing from `idhazh.similarity`**, and that is asserted rather than assumed.
   - It cannot settle whether a real judge works. That is what every judge-side row's own oracle is for.
 - **Decisions:**
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | **The empty case is the test.** With zero tenants registered the union is empty, the plan names tonight, every job is a no-op, and every one of those steps still runs and is still asserted. A venue that only works when somebody has moved in is not a venue. | Owner, 2026-09-21 |
-| 2 | **The fake tenant is a fixture, not a mock.** It implements four protocol members over a fixed list and returns a real contract instance; nothing asserts that it judged anything. Guardrail #7 forbids a stub asserted as if it were the real implementation, which is a different object. It is declared once in the council's `conftest.py` so every council row can reach it. | Guardrail #7 |
-| 3 | **The boundary arm is static, not a runtime import check.** A runtime check passes whenever the judge happens to be installed, which is always, so it would never go red. Parsing the import statements is the only arm that catches the coupling on the commit that adds it. | Fowler |
-| 4 | Two fake tenants are registered in one case, returning overlapping date lists, so the union and the ordering are exercised rather than assumed from one caller. **One judge or many is a property of the union, and this is where it is checked.** | Owner, 2026-09-21 |
-| 5 | Sequence and parallel are the matrix's, not the protocol's. The protocol is called once per tenant per shard per date, and the workflow decides how many of those run at once - so there is nothing extra to declare and nothing extra to test here. | Carmack |
-| 6 | This row lands **last among the council rows and before any judge-side row is called done**, because it is the gate that proves the seams stayed cut. | Fowler |
+| 2 | **The closure arm is the one that would have caught round six's findings, so it is not optional.** A boundary check scoped to a directory only ever proves something about that directory. The question the dictum asks is about what happens when a judge is deleted, and the answer is decided by the whole import graph a council verb pulls in. | Owner, 2026-09-21 |
+| 3 | **The fake tenant is a fixture, not a mock.** It implements five protocol members over a fixed list and returns a real `ShardResult`; nothing asserts that it judged anything. Guardrail #7 forbids a stub asserted as if it were the real implementation, which is a different object. It is declared once in the council's `conftest.py` so every council row can reach it. | Guardrail #7 |
+| 4 | **The boundary arms are static, not runtime import checks.** A runtime check passes whenever the judge happens to be installed, which is always, so it would never go red. Parsing the import statements is the only arm that catches the coupling on the commit that adds it. | Fowler |
+| 5 | Two fake tenants are registered in one case, returning overlapping date lists and different shard counts, so the union, the ordering and the per-tenant width are exercised rather than assumed from one caller. **One judge or many is a property of the union, and this is where it is checked.** | Owner, 2026-09-21 |
+| 6 | **Sequence and parallel are the matrix's. Chain is neither, and row #24 owns it.** A tenant's job is pinned to the commit the run started at, so it cannot read a store a sibling committed during the same run - a chain crosses as an artifact and a `needs:` edge or it does not cross at all. This row asserts the shape row #24 declares; it does not invent one. | Carmack |
+| 7 | This row lands **last among the council rows and before any judge-side row is called done**, because it is the gate that proves the seams stayed cut. | Fowler |
 
 - **Rejected alternatives:**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | Trust the review to keep the boundary | Five adversarial rounds read the earlier draft and four of them missed all six seams | A rule nobody can fail, which is the state this row ends | Owner |
-| 2 | Drive the run arm with the real judge | It is the coupling, written as a test. The venue would then go red whenever a tenant moved | The dictum, failed at condition 3 | Owner |
-| 3 | One combined arm | An import that crosses the boundary would surface as a failure in a run test, naming the wrong thing | A red test that does not say what broke | Fowler |
+| 1 | Trust the review to keep the boundary | Six adversarial rounds read this plan. Round five found six seams; round six found four more in the version that had just been corrected | A rule nobody can fail, which is the state this row ends | Owner |
+| 2 | The directory arm alone | It is scoped to the one place the coupling was already cut, and blind to the two places it still lived | A green gate over `cli.py` importing four judge stages | Owner |
+| 3 | Drive the run arm with the real judge | It is the coupling, written as a test. The venue would then go red whenever a tenant moved | The dictum, failed at condition 3 | Owner |
+| 4 | One combined arm | An import that crosses the boundary would surface as a failure in a run test, naming the wrong thing | A red test that does not say what broke | Fowler |
+
+---
+
+### Row #24 - The council runs verbs of its own over a tenant list
+
+- **Side: council.** Its gates run with no judge in the repository. **This is seams 8 and 10.**
+- **Scope:** council verbs replace the judge's four in the workflow, a config-declared tenant list replaces the router's module-scope imports, and the fan-out width comes back from the protocol.
+- **Files touched:** `backend/idhazh/council/registry.py` (new), `backend/idhazh/council/session.py`, `backend/idhazh/cli.py`, `backend/idhazh/contracts/knobs/council.py`, `config/idhazh.json`, `.github/workflows/llm-council.yml`, `backend/tests/council/test_registry.py` (new), `backend/tests/workflows/test_llm_council_workflow.py`, `backend/tests/test_marks.py`, `docs/architecture/publishing/llm-council.md`, `schemas/app-config.schema.json` (generated), `frontend/src/contracts/app-config.ts` (generated)
+- **Acceptance gates:** local - the council test package, the workflow harness, contract export, drift gate, ruff, mypy, `doc_load.py --changed`. CI - full suite.
+- **Oracle:** with `council.tenants` empty, every council verb runs and exits 0, the planning job emits an empty matrix, and **no judge module appears in the import closure of any council verb**. With one fake slug registered, the resolver returns the tenant and the matrix carries its slug and its own shard count. A slug naming no module is refused by name. It cannot settle whether a real tenant's module resolves on a runner - that is the workflow's own smoke.
+- **Decisions:**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | **The router is the registration today, and it points the wrong way - seam 8.** `cli.py:75-78` imports four judge stages at module scope, so deleting the judge makes every council verb fail at import. The plan's own sentence "registration points judge to council, never council to judge" had no implementation behind it. | Fowler |
+| 2 | **`council.tenants` is an ordered slug list in config, and it may be empty.** Guardrail #6: a tenant list in source is a hard-coded roster wearing a different hat, and it is the `JudgeId` roster coming back through the side door. An empty list is the zero-judge case and it is the committed default's only legal neighbour. | Guardrail #6 |
+| 3 | **The resolver imports lazily, inside the function.** A module-scope import of a tenant would put a judge in the council's closure and fail row #23's second arm. A slug with no module is a config error reported by name, never a silent skip. | Fowler |
+| 4 | **The planning job asks the protocol for the width - seam 8's other half.** `llm-council.yml:143` computes the council's own fan-out from `assemble.same_story.adaptive_dedup_threshold.shards`, a judge's config path, so with no judge the planning job dies before it plans. The width is `council.shards` (row #9) narrowed by each tenant's `shard_count`. | Carmack |
+| 5 | **The matrix gains a tenant axis, and every artifact name gains the tenant slug.** Two tenants at shard zero produce one artifact name and one merged filename today, so the collecting job would append one tenant's output twice or neither. The download pattern moves with them. | Carmack |
+| 6 | **The collecting job loops the tenant tuple and calls `settle`.** Today it is one judge's counting and fitting verbs, run unconditionally - a tenant with nothing to settle would have a fit run against it anyway. | Fowler |
+| 7 | **A chain crosses as an artifact and a `needs:` edge, or it does not cross.** Every checkout in the council names no ref, so a tenant is pinned to the commit the run started at and cannot see a sibling's commit from the same run. **The shape is declared here and only the single-tenant case is built** - there is no second tenant to chain to yet, and building a join for nobody is the over-engineering this plan otherwise avoids. What this row owes is that adding one later is a workflow edit, not a redesign. | Carmack |
+| 8 | **The deadline stays per job.** Row #1a computes it in-process from the council's clocks; with one tenant per job that is correct as written. It would be wrong if two tenants shared a job - each would be handed the full span - which is the second reason the tenant axis is a matrix dimension rather than a loop. | Carmack |
+| 9 | ESCALATE: this rewrites the workflow that judges every night. The verb map and the matrix shape are signed off before the file changes. | Section 6 |
+
+- **Rejected alternatives:**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | Leave the workflow calling the judge's verbs | The council's entire runtime is then one tenant's four verbs, which is the seam restated. Every other cut in this plan is decoration without this one | The dictum, failed at conditions 1, 2 and 3 | Owner |
+| 2 | A source-level tenant registry | A roster in Python. It is seam 1 rebuilt one layer up, and it makes adding a judge a code change | Guardrail #6 broken, and the roster back | Fowler |
+| 3 | Import tenants at module scope and guard with a try | A judge in the closure, and a failure that reads as "no tenants" | A silent zero-tenant night | Fowler |
+| 4 | Build the chain join now | There is no second tenant to chain to, and the join shape depends on what that tenant reads | A feature for a caller that does not exist | Carmack |
+
+---
+
+### Row #25 - The config arm moves to the tenant that owns the number
+
+- **Side: council.** Its gates run with no judge in the repository. **This is seam 9.**
+- **Scope:** the validator that asserts a shard fits its bound leaves `AppConfig`, so reading config no longer imports a judge.
+- **Files touched:** `backend/idhazh/contracts/app_config.py`, `backend/idhazh/contracts/knobs/placement.py`, `backend/idhazh/similarity/tenant.py`, `backend/idhazh/council/registry.py`, `backend/tests/contracts/test_app_config.py`, `backend/tests/council/`, `backend/tests/test_similarity_judge.py`
+- **Acceptance gates:** local - the app-config, council and similarity test modules, contract export, drift gate, ruff, mypy. CI - full suite.
+- **Oracle:** `AppConfig` imports and validates with `knobs/placement.py` absent from the tree, and a tenant whose shard does not fit its bound is still refused - **with the refusal raised by the tenant, not by the config layer**. It cannot settle whether the bound is the right size.
+- **Decisions:**
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | **`AppConfig` imports the judge's knob module at module scope - seam 9.** `app_config.py:42-43` imports `SECONDS_A_CALL` from `knobs/placement.py` and uses it at 239. Every council module that calls `config.load()` imports `AppConfig`, so with the judge deleted the council cannot read its own config. Row #9's per-tenant arm made the check conditional at runtime; the import is unconditional and happens first. | Fowler |
+| 2 | **The check is the tenant's, because the number is the tenant's.** `SECONDS_A_CALL` is one judge's measured per-call cost. The tenant validates its own fit against the council's bound when it is resolved, and refuses with the same message and the same knobs to lower. | Fowler |
+| 3 | **The council hands the bound down; the tenant does the arithmetic.** That is the same direction as every other member of the protocol, and it is the direction that survives a second tenant with a different unit. | Fowler |
+| 4 | The refusal moves from config-load time to tenant-resolve time. Both are before any model call, so nothing reaches a runner with an impossible budget. **The refusal message keeps naming the knobs to lower**, which is the part an operator uses. | Carmack |
+| 5 | This row is small and it is the last import standing between the council and a judge-free build. It is separated from row #9 because #9 is a knob move with a generated schema and this is a one-import structural fix. | Fowler |
+
+- **Rejected alternatives:**
+
+| # | Option | Why rejected | What it would cost to take | Authority |
+| --- | --- | --- | --- | --- |
+| 1 | Leave the arm in `AppConfig` and call it data | It is a module-scope import, not data. The earlier draft said "it is data rather than an import" and the line above it in the file says otherwise | Conditions 2 and 3, failed, with a green boundary test over a directory that does not contain the fault | Owner |
+| 2 | Import it lazily inside the validator | The coupling survives in a form no static check catches, which is worse than the one we can see | A seam that the next round cannot find | Fowler |
+| 3 | Move `SECONDS_A_CALL` into the council block | It is one judge's measured per-call cost. A second tenant's call costs something else | A council knob that is one tenant's measurement | Carmack |
 
