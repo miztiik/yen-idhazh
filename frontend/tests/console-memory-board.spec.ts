@@ -33,7 +33,10 @@ import { ledgers, plan, type ShardReading } from './support/machine-rows';
 const REPO = resolve(process.cwd(), '..');
 const DATE = '2026-09-04';
 const RUN = '2026-09-04-1';
-const GIB = 1024 * 1024 * 1024;
+// Whole bytes, because the ledger's cells are whole bytes and a fixture written
+// in fractions of a gibibyte turns every subtraction below into a float compare.
+const MIB = 1024 * 1024;
+const GIB = 1024 * MIB;
 
 /** `config/idhazh.json` off disk, so an expectation comes from the committed
  * file rather than from the reader it is checking. */
@@ -100,9 +103,9 @@ const THREE_ITEMS: ShardReading[] = [
 		itemId: 'item-b',
 		startedAt: '2026-09-04T06:10:00Z',
 		peakRssBytes: 13 * GIB,
-		workerRssBytes: 1.2 * GIB,
+		workerRssBytes: 1229 * MIB,
 		memAvailableMin: 2 * GIB,
-		memAvailable: 2.2 * GIB,
+		memAvailable: 2 * GIB + 205 * MIB,
 		load: 6.5,
 		cpuBusyMin: 96,
 		cpuBusyMax: 100
@@ -111,9 +114,9 @@ const THREE_ITEMS: ShardReading[] = [
 		itemId: 'item-c',
 		startedAt: '2026-09-04T06:20:00Z',
 		peakRssBytes: 12 * GIB,
-		workerRssBytes: 1.5 * GIB,
+		workerRssBytes: 1536 * MIB,
 		memAvailableMin: 3 * GIB,
-		memAvailable: 3.4 * GIB,
+		memAvailable: 3 * GIB + 410 * MIB,
 		load: 3.1,
 		cpuBusyMin: 88,
 		cpuBusyMax: 97
@@ -197,8 +200,8 @@ test.describe('memory and load, three grains', () => {
 		// worker figure, so no moment of this run held both.
 		expect(board.coPeak).toBe(false);
 		expect(board.itemHighWater).toBe(13 * GIB);
-		expect(board.workerHighWater).toBe(1.5 * GIB);
-		expect(board.bothHighWater).toBe(13 * GIB + 1.5 * GIB);
+		expect(board.workerHighWater).toBe(1536 * MIB);
+		expect(board.bothHighWater).toBe(13 * GIB + 1536 * MIB);
 
 		// Move the worker maximum onto the item that owns the memory maximum and
 		// the same sum becomes a reading.
@@ -215,9 +218,9 @@ test.describe('memory and load, three grains', () => {
 
 		const b = board.items.find((one) => one.itemId === 'item-b');
 		expect(b?.headroom.floorBytes).toBe(2 * GIB);
-		expect(b?.headroom.endBytes).toBe(2.2 * GIB);
+		expect(b?.headroom.endBytes).toBe(2 * GIB + 205 * MIB);
 		expect(b?.headroom.recoveredBytes, 'the second end of the mark is not drawn').toBe(
-			0.2 * GIB
+			205 * MIB
 		);
 		// An item that ends lower than its own floor gave nothing back, which is
 		// the state the second end exists to separate from working hard.
@@ -227,12 +230,12 @@ test.describe('memory and load, three grains', () => {
 				startedAt: '2026-09-04T07:00:00Z',
 				peakRssBytes: 13 * GIB,
 				memAvailableMin: 3 * GIB,
-				memAvailable: 2.5 * GIB,
+				memAvailable: 3 * GIB - 512 * MIB,
 				load: 4
 			})
 		]);
 		const mark = memoryBoard(leaking.run, leaking.health).items[0].headroom;
-		expect(mark.recoveredBytes).toBeLessThan(0);
+		expect(mark.recoveredBytes).toBe(-512 * MIB);
 	});
 
 	test('an item with no headroom cells keeps its memory bar and says the mark is absent', () => {
