@@ -10,7 +10,7 @@ time: **16 committed days and 6,539 stories**, growing by about 400 stories a
 day.
 
 This is the record behind Guardrail #12 and behind the three paragraphs
-[../../CLAUDE.md](../../CLAUDE.md) section 13 gained on 2026-09-06. The rule is
+[../../../CLAUDE.md](../../../CLAUDE.md) section 13 gained on 2026-09-06. The rule is
 about cost, not correctness: every check here passed on every run.
 
 ### The critical path was one job, and the archive was not most of it

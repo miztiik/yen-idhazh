@@ -303,6 +303,23 @@ none of the benefit.
 | `from` | how many other pages link here. `1` means one page is the only way in, so the **merge test** asks whether that page owns this as a section; `0` is the same question, louder |
 | `super` | sections saying a later one corrects them. Each is a **delete test** candidate and never a verdict: keep the correction whose trap a reader can still walk into, cut the one the correction closed. A section correcting the page rather than the system is not a candidate - it is a cut |
 
+**Under the table it prints the required elements, and those are faults rather
+than numbers.** The elements listed above have one correct answer each, so the
+tool says missing where the columns can only say large: a title that is not one
+H1, a `**Last Updated**` that is absent or is not a date, no `## See also`, a
+non-ASCII character, a page nested past the depth rule, and a relative link whose
+target is not there. The last one is the reason the check exists at all - a wrong
+number of `../` resolves to a path that looks real, so nothing complains until a
+reader clicks it.
+
+**A `#` inside a code fence is a shell comment, and the tool knows that.** This
+is the one place a hand-rolled `grep` for the same rules reliably lies, which is
+why the check lives in the tool rather than in anybody's shell history.
+
+**It still fails nothing.** A fault printed beside the page that carries it is
+what this rule was ever going to get, for the same reason there is no length
+limit.
+
 Its token figure is about four characters a token - a declared estimate rather
 than a measurement (Guardrail #10), which is enough to compare pages and not enough to
 quote anywhere else. Run it before a docs pass to pick the page, and after one to
