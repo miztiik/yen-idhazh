@@ -504,6 +504,29 @@ quotable number on the route.
  buffer at or below L3 never left cache and reads several times high, so the
  sentence says `this measured cache, not memory` rather than leaving a reader
  to compare two numbers in different places.
+- **L3 and the copy rate are lengths on a track every card of the panel
+ shares.** Two numbers in two sentences on two cards is a subtraction the
+ reader performs; two bars on one domain is a difference the eye reads. The
+ reading stays in words under its own bar, so the track is the comparison and
+ never the carrier of the number.
+  - **Each measure has its own domain and it comes from the readings drawn.**
+    No runner model publishes a ceiling for either, so there is no limit to
+    measure distance from: a fixed maximum would clip the next bigger machine
+    or spend the track on room nothing reaches. The domain is anchored at zero
+    and niced by `linearAxis`, which makes two lengths the two readings.
+  - **MiB of cache and GiB/s of copy rate share no axis.** They are two
+    quantities, so neither reading can be read off the other's length. The
+    twenty-to-one test does not apply between them and is never taken.
+  - **A cache reading is refused rather than pooled with the memory ones**, for
+    the reason the sentence above already carries: a buffer inside L3 reads
+    several times a memory rate, and on one track it would draw as the fastest
+    machine of the run. The card says why its rate is not drawn.
+  - **Under two readings of a kind there is no bar.** A lone bar's domain is
+    its own value, so it fills the track whatever it says, and a full bar reads
+    as a maximum rather than as the only one. Named on the card, because a bar
+    missing beside a bar drawn is the state a reader would otherwise have to
+    work out. The three refusals are `absent`, `alone` and `cache`, and
+    `data-machine-bar-state` carries whichever holds.
 - **A count of machine kinds is a count and never a rate.** No percentage, no
  probability, no pie: what the next job will draw is precisely what the
  processor lottery refuses to quote. Under `console.fleet_min_rows` it is a
@@ -519,13 +542,13 @@ quotable number on the route.
 Two panels were refused, and what the reader loses is on the record.
 
 - **Bandwidth against decode speed was refused**, so the only on-screen test of
- whether decode is really bandwidth bound is missing, and the bandwidth probe's
- reading is a number nothing is plotted against. What buys it back today is
- that the machine card prints that reading in words per machine: the fact is on
- the page and only the correlation is absent. It ships when
- `console.fleet_min_rows` rows exist **and** `console.bandwidth_min_kinds`
- distinct kinds carry a bandwidth reading. Two points define a line, so a
- scatter of two is a claim rather than a measurement.
+ whether decode is really bandwidth bound is missing. What buys it back today
+ is that the machine card prints that reading in words per machine and draws it
+ against the other machines of the run: the fact is on the page and its spread
+ across the fleet is drawn, so only the correlation with decode is absent. It
+ ships when `console.fleet_min_rows` rows exist **and**
+ `console.bandwidth_min_kinds` distinct kinds carry a bandwidth reading. Two
+ points define a line, so a scatter of two is a claim rather than a measurement.
 - **A processor detail table was refused**, so a reader cannot read a raw column
  value off the console, and twenty-seven columns is the reference page's job.
  Five of those columns were bought back: the machine card's own `<details>`
@@ -534,11 +557,14 @@ Two panels were refused, and what the reader loses is on the record.
  explanation left for a speed change with no other change. Closed by default,
  so the attention cost is zero.
 
-Authority: Susan, 2026-09-17.
+Authority: Susan, 2026-09-17. The bars are Susan, 2026-09-20.
 The sufficiency checks pass, conditional on the twelve flag chips shipping: a
 definition list of text rows with a semicolon-joined vendor string is a 2004
 page, and dropping the chips fails **made this year** and would need a
-`## Design rationale` entry of its own.
+`## Design rationale` entry of its own. **Two of the card's readings were
+sentences and are now lengths**, which is what carries the two-second check:
+`32 MiB` beside `260 MiB` on two cards is a division the reader performs, and
+two bars on one track is not.
 
 **The veto that cost the most was a title.** "The host under the newest run"
 let the page carry one processor string for the whole of its life, and that

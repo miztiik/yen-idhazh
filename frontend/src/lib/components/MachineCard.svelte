@@ -11,6 +11,13 @@
 	 * list of only the flags a machine has cannot show the one it is missing,
 	 * and that missing one is why decode moved.
 	 *
+	 * **L3 and the copy rate are bars on a track every card of the panel
+	 * shares**, so the difference between two machines is a length rather than a
+	 * subtraction. The reading stays in words under its own bar: a track is the
+	 * comparison and never the carrier of the number. A bar is refused rather
+	 * than drawn empty where there is nothing to draw or nothing to draw it
+	 * against, and `data-machine-bar-state` says which.
+	 *
 	 * The disclosure holds where the platform put the machine, and the microcode
 	 * revision - the cell that moves without anything else moving, so it is the
 	 * only explanation left for a speed change with no other change. A native
@@ -26,6 +33,11 @@
 	 * places: the record had not begun yet, or it ran and what it wrote is gone.
 	 */
 	let { card, lost = false }: { card: MachineCard; lost?: boolean } = $props();
+
+	/** Why a bar is missing where a neighbour drew one. Said once, because a
+	 * reader who has to work out which cards are comparable has lost the
+	 * comparison the bars were added for. */
+	const ALONE = 'Nothing to draw it against: one reading of this kind on this run.';
 
 	const where = $derived(card.where);
 	const placed = $derived(
@@ -92,12 +104,63 @@
 	{/if}
 
 	{#if card.source === 'fingerprint'}
-		<p class="reading" data-machine-cache={card.l3CacheBytes ?? ''}>
-			{cacheWords(card.l3CacheBytes)} of L3.
-		</p>
-		<p class="reading" data-machine-bandwidth={card.memcpyGibPerSecond ?? ''}>
-			{bandwidthSentence(card)}
-		</p>
+		<div class="bar" data-machine-bar="l3" data-machine-bar-state={card.l3Bar.state}>
+			{#if card.l3Bar.state === 'drawn'}
+				<div
+					class="bar-track"
+					data-machine-bar-cell="track"
+					data-machine-bar-fraction={card.l3Bar.fraction.toFixed(6)}
+					role="img"
+					aria-label="L3 cache {card.l3Bar.valueWords}, against {card.l3Bar
+						.topWords} - the largest of the {card.l3Bar.of} machines this run measured."
+				>
+					<span
+						class="bar-fill"
+						data-machine-bar-cell="fill"
+						style="inline-size: {card.l3Bar.percent}"
+					></span>
+				</div>
+			{/if}
+			<p class="reading" data-machine-cache={card.l3CacheBytes ?? ''}>
+				{#if card.l3CacheBytes === null}
+					L3 was not recorded on this job.
+				{:else}
+					{cacheWords(card.l3CacheBytes)} of L3.
+				{/if}
+			</p>
+			{#if card.l3Bar.state === 'alone'}
+				<p class="note" data-machine-bar-why="alone">{ALONE}</p>
+			{/if}
+		</div>
+
+		<div class="bar" data-machine-bar="bandwidth" data-machine-bar-state={card.bandwidthBar.state}>
+			{#if card.bandwidthBar.state === 'drawn'}
+				<div
+					class="bar-track"
+					data-machine-bar-cell="track"
+					data-machine-bar-fraction={card.bandwidthBar.fraction.toFixed(6)}
+					role="img"
+					aria-label="Read rate {card.bandwidthBar.valueWords}, against {card.bandwidthBar
+						.topWords} - the fastest of the {card.bandwidthBar.of} machines this run measured against memory."
+				>
+					<span
+						class="bar-fill"
+						data-machine-bar-cell="fill"
+						style="inline-size: {card.bandwidthBar.percent}"
+					></span>
+				</div>
+			{/if}
+			<p class="reading" data-machine-bandwidth={card.memcpyGibPerSecond ?? ''}>
+				{bandwidthSentence(card)}
+			</p>
+			{#if card.bandwidthBar.state === 'alone'}
+				<p class="note" data-machine-bar-why="alone">{ALONE}</p>
+			{:else if card.bandwidthBar.state === 'cache'}
+				<p class="note" data-machine-bar-why="cache">
+					Not drawn against the others: this reading is cache, not memory.
+				</p>
+			{/if}
+		</div>
 	{/if}
 
 	<p class="drawn" data-machine-jobs="{card.jobsDrawn}/{card.jobsTotal}">
@@ -180,6 +243,33 @@
 
 	.note {
 		color: var(--color-text-tertiary);
+	}
+
+	.bar {
+		margin-block-start: var(--space-2);
+	}
+
+	/* The bar's own margin is on the track, so a row whose bar is refused sits
+	   exactly where a row that drew one sits. */
+	.bar .reading {
+		margin-block-start: var(--space-1);
+	}
+
+	.bar-track {
+		block-size: 8px;
+		border-radius: var(--radius-full);
+		background: var(--color-surface-sunken);
+		overflow: hidden;
+	}
+
+	/* The machine's own colour, so a bar and the card's edge say the same thing.
+	   The reading is in words underneath, so the colour carries nothing alone. */
+	.bar-fill {
+		display: block;
+		block-size: 100%;
+		min-inline-size: 1px;
+		border-radius: var(--radius-full);
+		background: var(--machine-edge);
 	}
 
 	.where {

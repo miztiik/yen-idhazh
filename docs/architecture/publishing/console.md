@@ -1,6 +1,6 @@
 # Published Console
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-20
 The operator's surface: which panel is on which route, the question each one
 answers, and the ruling behind its shape. `/console/` tells the owner what
 happened to the pipeline, where the digest tells a reader what happened in the
@@ -423,7 +423,7 @@ published mirror carries no address, no title and no fetched text.
 | Where the run's time went, item by item | one bar an item | Which item queued, which one ran long, and where in a run the time actually went. |
 | Peak memory, and how near the runner's ceiling it got | one bar a shard | How much of the runner's 16 GB one run needed. |
 | Reading against writing, machine by machine | one group a machine | What a written token costs against a read one, on the machine that paid it. |
-| The machines this run drew | one card a machine | What machine this is, and what it can do, and whether its record survived the day. |
+| The machines this run drew | one card a machine | What machine this is, what it can do against the others this run drew, and whether its record survived the day. |
 | What the platform has been giving us | one row a machine kind | What kinds of machine we keep being handed. |
 | Prompt cache | one column a day | Whether a bigger cache would save wall clock. |
 | Context headroom | one mark a run | Whether raising the truncation cap is even possible. |
