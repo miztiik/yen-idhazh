@@ -90,6 +90,13 @@ METADATA_TIMEOUT_SECONDS: Final = 2.0
 #: not decide what a machine's bandwidth was.
 MEMCPY_REPEATS: Final = 3
 
+#: How many times the reported cache each side of the copy has to be. Not a knob:
+#: the probe holds two buffers, so at this multiple the working set is four times
+#: the cache and no part of the copy can be served from it. A smaller multiple
+#: stops being a memory reading; a larger one buys nothing and costs the runner's
+#: memory before the model server starts.
+CACHE_MULTIPLE: Final = 2
+
 _MIB: Final = 1024 * 1024
 _GIB: Final = 1024 * 1024 * 1024
 
@@ -181,6 +188,26 @@ def boot_seconds(text: str | None = None) -> float | None:
     return _as_float(cells[0]) if cells else None
 
 
+def probe_buffer_mib(floor_mib: int, l3_cache_bytes: int | None) -> int:
+    """How large each side of the copy has to be on THIS machine, in MiB.
+
+    The size decides what the probe measures, so it cannot be a constant. The
+    reported L3 across the machines this project draws spans 32 MiB to 480 MiB,
+    and a buffer that does not clear the cache reads as memory bandwidth while
+    measuring something else. The configured value is the floor and the machine's
+    own report raises it, so a part with more cache than anybody has drawn cannot
+    quietly turn the reading into a cache reading.
+
+    A floor of zero stays zero: that is the caller saying do not probe at all. A
+    machine that reports no cache keeps the floor, because an unknown cache is
+    not a small one and there is nothing else to derive from.
+    """
+    if floor_mib <= 0 or l3_cache_bytes is None or l3_cache_bytes <= 0:
+        return floor_mib
+    whole_mib = -(-l3_cache_bytes // _MIB)  # round up, so the result clears the cache
+    return max(floor_mib, CACHE_MULTIPLE * whole_mib)
+
+
 def memcpy_gib_s(probe_mib: int) -> float | None:
     """Large-block copy bandwidth, or nothing where the probe is switched off.
 
@@ -189,8 +216,9 @@ def memcpy_gib_s(probe_mib: int) -> float | None:
     and the write, which is how STREAM counts a copy.
 
     The caller decides the size and the size decides what is measured: a buffer
-    smaller than L3 measures cache. `HostFingerprintRow` records both so nobody
-    can read one for the other.
+    smaller than L3 measures cache. `probe_buffer_mib` is where that size comes
+    from, and `HostFingerprintRow` records it beside the rate so nobody can read
+    one for the other.
     """
     if probe_mib <= 0:
         return None
@@ -274,14 +302,16 @@ def read_row(
     run_id: str,
     job: ServerJob,
     shard: int,
-    probe_mib: int,
+    probe_floor_mib: int,
     ask_placement: bool = True,
     cpuinfo: str | None = None,
+    cache_root: Path | None = None,
 ) -> HostFingerprintRow:
     """Everything this machine will say about itself, taken once."""
     text = _text(CPUINFO) if cpuinfo is None else cpuinfo
     fields, clocks = _cpuinfo_fields(text or "")
     where = placement() if ask_placement else Placement()
+    l3_cache_bytes = cache_bytes(root=cache_root)
     cells: dict[str, object] = {
         "cpu_model": fields.get("model name") or None,
         "cpu_vendor": fields.get("vendor_id") or None,
@@ -291,9 +321,12 @@ def read_row(
         "microcode": fields.get("microcode") or None,
         "cores": _as_int(fields.get("cpu cores")),
         "threads": len(clocks) or None,
-        "l3_cache_bytes": cache_bytes(),
+        "l3_cache_bytes": l3_cache_bytes,
         "flags": watched_flags(text),
     }
+    # The recorded size is the derived one, never the configured floor, so the
+    # column says what was probed rather than what somebody asked for.
+    probe_mib = probe_buffer_mib(probe_floor_mib, l3_cache_bytes)
     return HostFingerprintRow(
         date=date,
         run_id=run_id,
@@ -325,11 +358,12 @@ def stage_fingerprint(
 ) -> HostFingerprintRow | None:
     """Record what machine this job drew, before anything else competes for it.
 
-    Runs early on purpose. The bandwidth probe needs a gigabyte and an idle
-    machine, and a job that has already started its heaviest step has neither -
-    the model server in `work`, the embeddings and the site build in `assemble`.
-    A probe taken at the end of a job would measure that step rather than the
-    host.
+    Runs early on purpose. The bandwidth probe needs a gigabyte or two and an
+    idle machine, and a job that has already started its heaviest step has
+    neither - the model server in `work`, the embeddings and the site build in
+    `assemble`. A probe taken at the end of a job would measure that step rather
+    than the host. How much it needs depends on the cache the machine reports:
+    `probe_buffer_mib` sizes each of the two buffers against it.
 
     The row goes to this job's own segment, never to the day file. Ten jobs of
     one run each draw a machine and each record it, so ten runners would be
@@ -346,7 +380,7 @@ def stage_fingerprint(
         run_id=plan.run_id,
         job=job,
         shard=shard,
-        probe_mib=knobs.host_fingerprint_bandwidth_mib,
+        probe_floor_mib=knobs.host_fingerprint_bandwidth_floor_mib,
     )
     attempt = run_context.run_attempt()
     landed = ledger.write_segment(
