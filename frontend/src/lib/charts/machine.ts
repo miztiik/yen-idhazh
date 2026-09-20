@@ -647,6 +647,325 @@ export function peakMemory(run: MachineRun | null): MemoryView {
 }
 
 // ---------------------------------------------------------------------------
+// Memory and load, at the item grain
+// ---------------------------------------------------------------------------
+
+/** How far the machine's own MemTotal may sit from the runner's 16 GiB and
+ * still be read as that runner.
+ *
+ * `/proc/meminfo` is not namespaced, so inside a container MemTotal reports the
+ * HOST rather than the job. That makes it the one cell that can say the other
+ * five OS cells are about the wrong machine. A tolerance is needed because
+ * MemTotal excludes the memory the kernel reserved at boot, which is a low
+ * single-digit percent of a 16 GiB box - so ten percent is wide enough never to
+ * fire on a healthy runner and narrow enough to catch a host twice or half the
+ * size. Stated once here for the same reason `CLOCKS_AGREE_WITHIN_PCT` is.
+ */
+export const MEM_TOTAL_AGREES_WITHIN_PCT = 10;
+
+/** Which of the three grains the panel is drawing. */
+export type MemoryGrain = 'item' | 'shard' | 'span';
+
+/** What one item left the kernel, at its worst moment and at its last.
+ *
+ * Two ends and not one, because the pair separates two states nothing else on
+ * this site can tell apart. A machine whose floor falls and whose end also
+ * falls is leaking; one whose floor falls and whose end recovers was only
+ * working hard. The floor alone reads the same on both.
+ */
+export interface HeadroomMark {
+	/** The lowest MemAvailable seen while the model worked on this item. */
+	floorBytes: number | null;
+	/** MemAvailable when the item ended. */
+	endBytes: number | null;
+	floorWidth: string;
+	endWidth: string;
+	/** What the item gave back between those two. Null with either end missing,
+	 * and negative where the item ended lower than its own recorded floor. */
+	recoveredBytes: number | null;
+	empty: boolean;
+}
+
+/** One item of one run: what it held, what it left, and what it queued. */
+export interface ItemMemory {
+	itemId: string;
+	shard: number;
+	/** The clock the run order is taken from. Empty where the row carried none,
+	 * which puts the item last rather than first. */
+	startedAt: string;
+	/** llama-server's own high-water mark over this item. The figure a per-shard
+	 * maximum hides, and the one that reaches five sixths of the ceiling. */
+	peakBytes: number | null;
+	/** The worker process when the item ended. A second process on the same box,
+	 * and never added to the figure above without saying what the sum is. */
+	workerBytes: number | null;
+	peakWidth: string;
+	workerWidth: string;
+	headroom: HeadroomMark;
+	/** The one-minute load when the item ended. Past the core count it is a
+	 * queue, which is a different fact from a busy processor. */
+	load: number | null;
+	loadWidth: string;
+	/** Processor busy over the item's model window, trough as fill and peak as
+	 * notch. Near 100 on every row, which is why load is drawn beside it. */
+	busy: RangeMark;
+	/** True on the one item that owns the run's memory maximum. */
+	worst: boolean;
+}
+
+/** Memory and machine load over one run, at every grain the panel offers.
+ *
+ * **A break panel.** It takes the extreme and the item that owns it, over every
+ * item of one run. The verdict reading - how near the ceiling the run got - is
+ * the shard grain, and it is here as the second grain rather than as a second
+ * panel, because one measurement asked two questions is one panel.
+ */
+export interface MemoryBoardView {
+	runId: string;
+	date: string;
+	/** One entry an item, in run order. The x every track here shares. */
+	items: ItemMemory[];
+	/** The shard grain, exactly as the peak-memory bars drew it. */
+	shard: MemoryView;
+	/** The largest any single item took the model server to. */
+	itemHighWater: number | null;
+	itemHighWaterPct: number | null;
+	/** The item that owns that figure, by name. */
+	worstItemId: string | null;
+	/** The largest worker reading over the same items. */
+	workerHighWater: number | null;
+	/** The two maxima added. */
+	bothHighWater: number | null;
+	bothHighWaterPct: number | null;
+	/** True only where both maxima fall on the SAME item. False makes the sum an
+	 * upper bound rather than a reading, and the panel says which it is. */
+	coPeak: boolean;
+	/** What every byte figure here is drawn against. */
+	ceilingBytes: number;
+	/** The byte domain every byte track shares: the ceiling and every drawn
+	 * value, so a reading past the ceiling draws past the line rather than
+	 * stopping on it, and the grains stay comparable across the switch. */
+	scaleBytes: number;
+	/** The machine's own MemTotal, where the rows carried one. */
+	measuredTotalBytes: number | null;
+	/** Every distinct MemTotal the drawn rows carried, ascending. More than one
+	 * entry is a run that drew two machine sizes, which is itself a finding. */
+	totalsSeen: number[];
+	/** Whether that total reads as the runner we believe we are on. Null where
+	 * no row carried one, which is unknown rather than agreement. */
+	totalAgrees: boolean | null;
+	/** The highest load any item of the run ended under. */
+	loadHigh: number | null;
+	/** Cores the run's hosts let the jobs see. The smaller where they disagree,
+	 * for the same reason the memory denominator takes the smaller. */
+	cores: number | null;
+	load: TargetMarks;
+	/** Processor busy across the whole run, trough to peak. */
+	busySpan: RangeMark;
+	/** Items that carried a memory reading, and items the run's shards counted.
+	 * Null where no shard recorded its own item count. */
+	from: number;
+	outOf: number | null;
+	/** Items that carried each of the three tracks. A track no item measured is
+	 * a sentence rather than a row of marks with nothing in them. */
+	heldFrom: number;
+	headroomFrom: number;
+	loadFrom: number;
+	itemsEmpty: boolean;
+	loadEmpty: boolean;
+	empty: boolean;
+}
+
+function numberCell(row: Record<string, string>, name: string): number | null {
+	const text = (row[name] ?? '').trim();
+	if (text === '') return null;
+	const value = Number(text);
+	return Number.isFinite(value) ? value : null;
+}
+
+function smallest(values: readonly (number | null)[]): number | null {
+	const known = values.filter((value): value is number => value !== null);
+	return known.length === 0 ? null : Math.min(...known);
+}
+
+function widthOf(value: number | null, scale: number): string {
+	return percentOf(value === null || scale <= 0 ? 0 : Math.min(value / scale, 1));
+}
+
+/** One run's memory and load, item by item, with the shard grain beside it.
+ *
+ * `health` is the item ledger, bounded by the caller; only the handed run's own
+ * rows are read. The denominator is the machine's own MemTotal where the rows
+ * carried one and the runner's 16 GiB where they did not - and the two are
+ * printed together, because a MemTotal that disagrees with the runner is the
+ * tell that every other OS cell is about a different machine.
+ *
+ * The domain takes the ceiling in beside the drawn values rather than as its
+ * maximum, so an item past the ceiling still draws past the line.
+ */
+export function memoryBoard(
+	run: MachineRun | null,
+	health: readonly Record<string, string>[]
+): MemoryBoardView {
+	const shard = peakMemory(run);
+	const runId = run?.runId ?? '';
+	const rows = runId === '' ? [] : health.filter((row) => (row.run_id ?? '') === runId);
+
+	// The smaller of two totals, per decision 8: a run that drew two machine
+	// sizes is read against the smaller of them, because the smaller is the one
+	// that could have run out.
+	const totalsSeen = [
+		...new Set(rows.map((row) => numberCell(row, 'os_mem_total_bytes')).filter((v): v is number => v !== null))
+	].sort((left, right) => left - right);
+	const measuredTotalBytes = totalsSeen[0] ?? null;
+	const totalAgrees =
+		measuredTotalBytes === null
+			? null
+			: Math.abs(measuredTotalBytes - RUNNER_MEMORY_BYTES) / RUNNER_MEMORY_BYTES <=
+				MEM_TOTAL_AGREES_WITHIN_PCT / 100;
+	const denominator = measuredTotalBytes ?? RUNNER_MEMORY_BYTES;
+
+	const drawn = rows.filter(
+		(row) =>
+			numberCell(row, 'llama_rss_peak_bytes') !== null ||
+			numberCell(row, 'python_rss_bytes') !== null ||
+			numberCell(row, 'os_mem_available_min_bytes') !== null ||
+			numberCell(row, 'os_mem_available_bytes') !== null
+	);
+	// Run order, from the item's own clock. A row with no clock has no place in
+	// that order, so it follows the ones that have rather than opening the strip.
+	const ordered = [...drawn].sort((left, right) => {
+		const leftAt = (left.item_started_at ?? '').trim();
+		const rightAt = (right.item_started_at ?? '').trim();
+		if (leftAt === '' && rightAt === '') return (left.item_id ?? '').localeCompare(right.item_id ?? '');
+		if (leftAt === '') return 1;
+		if (rightAt === '') return -1;
+		return leftAt.localeCompare(rightAt);
+	});
+
+	const peaks = ordered
+		.map((row) => numberCell(row, 'llama_rss_peak_bytes'))
+		.filter((value): value is number => value !== null);
+	const workers = ordered
+		.map((row) => numberCell(row, 'python_rss_bytes'))
+		.filter((value): value is number => value !== null);
+	const floors = ordered
+		.map((row) => numberCell(row, 'os_mem_available_min_bytes'))
+		.filter((value): value is number => value !== null);
+	const ends = ordered
+		.map((row) => numberCell(row, 'os_mem_available_bytes'))
+		.filter((value): value is number => value !== null);
+
+	const itemHighWater = peaks.length === 0 ? null : Math.max(...peaks);
+	const workerHighWater = workers.length === 0 ? null : Math.max(...workers);
+	const worstRow =
+		itemHighWater === null
+			? null
+			: (ordered.find((row) => numberCell(row, 'llama_rss_peak_bytes') === itemHighWater) ?? null);
+	const worstItemId = worstRow === null ? null : (worstRow.item_id ?? '').trim() || null;
+	// The two maxima added is a reading only where one item held both. Anywhere
+	// else it is arithmetic over two moments that never met.
+	const coPeak =
+		worstRow !== null &&
+		workerHighWater !== null &&
+		numberCell(worstRow, 'python_rss_bytes') === workerHighWater;
+
+	// Every byte track on the panel runs to this, ceiling included, so a reading
+	// past the ceiling draws past the line rather than stopping on it.
+	const scaleBytes = Math.max(denominator, ...peaks, ...workers, ...floors, ...ends);
+
+	const loads = ordered
+		.map((row) => numberCell(row, 'load_1m'))
+		.filter((value): value is number => value !== null);
+	const loadHigh = loads.length === 0 ? null : Math.max(...loads);
+	const cores = run === null ? null : smallest(run.reported.map((one) => one.cores));
+	const loadScale = Math.max(loadHigh ?? 0, cores ?? 0);
+	const busyLow = smallest(ordered.map((row) => numberCell(row, 'cpu_busy_min')));
+	const busyHighs = ordered
+		.map((row) => numberCell(row, 'cpu_busy_max'))
+		.filter((value): value is number => value !== null);
+
+	const items: ItemMemory[] = ordered.map((row) => {
+		const floorBytes = numberCell(row, 'os_mem_available_min_bytes');
+		const endBytes = numberCell(row, 'os_mem_available_bytes');
+		const peakBytes = numberCell(row, 'llama_rss_peak_bytes');
+		const workerBytes = numberCell(row, 'python_rss_bytes');
+		const load = numberCell(row, 'load_1m');
+		return {
+			itemId: (row.item_id ?? '').trim(),
+			shard: numberCell(row, 'shard') ?? 0,
+			startedAt: (row.item_started_at ?? '').trim(),
+			peakBytes,
+			workerBytes,
+			peakWidth: widthOf(peakBytes, scaleBytes),
+			workerWidth: widthOf(workerBytes, scaleBytes),
+			headroom: {
+				floorBytes,
+				endBytes,
+				floorWidth: widthOf(floorBytes, scaleBytes),
+				endWidth: widthOf(endBytes, scaleBytes),
+				recoveredBytes: floorBytes === null || endBytes === null ? null : endBytes - floorBytes,
+				empty: floorBytes === null && endBytes === null
+			},
+			load,
+			loadWidth: widthOf(load, loadScale),
+			busy: rangeMark(numberCell(row, 'cpu_busy_min'), numberCell(row, 'cpu_busy_max'), 100),
+			// The one row, not every row that ties with it. Two items that reached
+			// the same byte are a tie the panel names once, because "the item that
+			// owns the maximum" has to be an item a reader can go and look at.
+			worst: row === worstRow
+		};
+	});
+
+	const bothHighWater =
+		itemHighWater === null || workerHighWater === null ? null : itemHighWater + workerHighWater;
+	const share = (value: number | null) =>
+		value === null ? null : Math.round((value / denominator) * 100);
+	// Items the shards said they had, which is a different number from the items
+	// that carried a reading. One count a shard, summed over the shards that
+	// recorded one - never the largest, which would report one shard's work as
+	// the run's. Null where no shard counted, because an unknown total is not
+	// the count of who answered.
+	const planned = new Map<number, number>();
+	for (const row of rows) {
+		const count = numberCell(row, 'shard_item_count');
+		const at = numberCell(row, 'shard');
+		if (count !== null && at !== null) planned.set(at, count);
+	}
+
+	return {
+		runId,
+		date: run?.date ?? '',
+		items,
+		shard,
+		itemHighWater,
+		itemHighWaterPct: share(itemHighWater),
+		worstItemId,
+		workerHighWater,
+		bothHighWater,
+		bothHighWaterPct: share(bothHighWater),
+		coPeak,
+		ceilingBytes: denominator,
+		scaleBytes,
+		measuredTotalBytes,
+		totalsSeen,
+		totalAgrees,
+		loadHigh,
+		cores,
+		load: targetMarks(loadHigh, cores ?? 0, 'lower-is-better'),
+		busySpan: rangeMark(busyLow, busyHighs.length === 0 ? null : Math.max(...busyHighs), 100),
+		from: items.length,
+		outOf: planned.size === 0 ? null : sum([...planned.values()]),
+		heldFrom: peaks.length,
+		headroomFrom: items.filter((one) => !one.headroom.empty).length,
+		loadFrom: loads.length,
+		itemsEmpty: items.length === 0,
+		loadEmpty: loadHigh === null && busyLow === null && busyHighs.length === 0,
+		empty: items.length === 0 && shard.empty
+	};
+}
+
+// ---------------------------------------------------------------------------
 // The two clocks, compared
 // ---------------------------------------------------------------------------
 

@@ -421,7 +421,7 @@ published mirror carries no address, no title and no fetched text.
 | Shards of the newest run | one row a shard | Was the day slow because of the work or because of the machine. |
 | Where a shard's clock went | one bar a shard | How much of a shard's time went to items, and how much to overhead nobody named. |
 | Where the run's time went, item by item | one bar an item | Which item queued, which one ran long, and where in a run the time actually went. |
-| Peak memory, and how near the runner's ceiling it got | one bar a shard | How much of the runner's 16 GB one run needed. |
+| How near the runner's ceiling this run got, item by item | one mark an item, with a shard grain and a window grain | Which item took the machine nearest its limit, whether it gave the memory back, and how long the queue was. |
 | Reading against writing, machine by machine | one group a machine | What a written token costs against a read one, on the machine that paid it. |
 | The machines this run drew | one card a machine | What machine this is, and what it can do, and whether its record survived the day. |
 | What the platform has been giving us | one row a machine kind | What kinds of machine we keep being handed. |
@@ -591,12 +591,63 @@ three times.
 under the chart. The chart is the shape of the question; the list is the table it
 was made from, and nothing on this route is only in a picture.
 
+### One measurement asked two questions is one panel, not two
+
+**A per-shard maximum is the verdict reading, and it hides the item that owns
+it.** Until 2026-09-20 the run's high-water mark was drawn twice - once as
+per-shard bars and once again as a sentence in the panel about what the server
+did outside the model call - and the item's own high-water mark was drawn
+nowhere. Measured 2026-09-17 over `state/item-health/2026/09/17.csv`, 80 rows
+and 74 carrying host samples, **one item took the model server to 13.30 GiB, 83.1
+percent of the runner's 16 GiB**, and the shard that item ran on reported a
+figure that read as a normal run. So the two questions are one panel with a
+grain switch: item, shard, and the span across the open window. Authority:
+Susan, 2026-09-17. **What the reader loses: nothing.** The sentence that left is
+the window grain, where it is a track beside the run's own mark rather than a
+figure to hold in the head.
+
+**The item mark runs floor to recovery, not floor alone.**
+`os_mem_available_min_bytes` says how close the item took the machine to its
+limit; `os_mem_available_bytes` says whether it got back. **A machine whose
+floor falls and whose end also falls is leaking; one whose floor falls and whose
+end recovers was only working hard.** That separation exists nowhere else on the
+site and it costs one more field on a series this panel already builds.
+
+**Machine load is the second series, not a second panel.** Measured on the same
+80 rows, `load_1m` runs at **5.49 on 4 vCPU** - a run queue 37 percent longer
+than the cores - and no panel drew it, while `cpu_busy_max` reads 99.96 percent
+on the median row and carries no signal on its own. **Busy and queued are
+different facts and neither implies the other**, so both are drawn, beside the
+memory they explain. A panel of its own would have been an eighth writer on a
+file seven rows already serialise over.
+
+**The two maxima added are an upper bound unless one item held both.** The
+memory maximum and the worker maximum fall on different items on the committed
+ledger, so their sum - 91.3 percent of the ceiling - is arithmetic over two
+moments that never met. The panel says which of the two it is printing.
+
+**`os_mem_total_bytes` is the denominator and the tell.** `/proc/meminfo` is not
+namespaced, so inside a container it reports the HOST rather than the job. A
+total that is not about the runner's 16 GiB means every reading built on the
+other five OS cells is about a different machine, and the panel says so instead
+of drawing them. Where the drawn rows disagree on the total the smaller is the
+denominator, because the smaller is the one that could have run out - **and a
+run that drew two machine sizes is itself a finding**, so both are printed.
+`MEM_TOTAL_AGREES_WITHIN_PCT` in `frontend/src/lib/charts/machine.ts` is the
+width of that check and carries its reason.
+
+**It says what it cannot separate.** Nothing samples memory inside the model
+call, so which phase owns the peak - reading the prompt or writing the answer -
+is unanswerable here, and the panel says so on the panel. A memory panel silent
+about what it did not separate invites a reader to assume it did.
+
 ### Peak memory is a maximum, and never a sum
 
 **Shards are separate jobs on separate hosts.** Adding four of them reports a
 machine that never existed, and on this ledger the sum would read about 53 GB on
 a runner that has 16. So the run's figure is the LARGEST of its shards, the
-per-shard bars sit beside it, and the oracle in
+per-shard bars sit beside it on the shard grain of the panel above, and the
+oracle in
 [../../../frontend/tests/console-machine-data.spec.ts](../../../frontend/tests/console-machine-data.spec.ts)
 asserts the aggregate is the maximum and is not the total. Authority: Carmack,
 2026-08-31.

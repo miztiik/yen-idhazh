@@ -32,6 +32,7 @@
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import MachineCard from '$lib/components/MachineCard.svelte';
 	import MachineSplitGroup from '$lib/components/MachineSplitGroup.svelte';
+	import MemoryBoard from '$lib/components/MemoryBoard.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 	import RankedList from '$lib/components/RankedList.svelte';
 	import RateControl from '$lib/components/RateControl.svelte';
@@ -39,7 +40,6 @@
 	import ShardBoard from '$lib/components/ShardBoard.svelte';
 	import SpanPanel from './SpanPanel.svelte';
 	import RunTimelinePanel from './RunTimelinePanel.svelte';
-	import TargetBar from '$lib/components/TargetBar.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
 	import {
 		cacheChart,
@@ -56,8 +56,7 @@
 		percentileColumns,
 		seconds,
 		tokenChart,
-		PERCENTILES,
-		RUNNER_MEMORY_BYTES
+		PERCENTILES
 	} from '$lib/charts/machine';
 	import { grouped } from '$lib/charts/series';
 	import {
@@ -563,61 +562,11 @@
 	</Panel>
 
 	<Panel
-		title="Peak memory, and how near the runner's ceiling it got"
-		note="What llama-server's own high-water mark reached on each shard of the newest run. The run's figure is the LARGEST of these and never their total: shards are separate jobs on separate hosts, so adding them would report a machine that never existed. Every bar runs to the same 16 GB the runner has, so their lengths compare."
+		title="How near the runner's ceiling this run got, item by item"
+		note="What the model server held, what it left the kernel, and how long the queue was - one mark an item, with the per-shard maxima and the window's span a grain switch away. The item grain is the one a per-shard maximum cannot show: one item can take the machine most of the way to its ceiling while its shard's figure reads as a normal run."
+		wide
 	>
-		{#if data.memory.empty}
-			<p class="empty" data-machine-panel-empty="memory">
-				No shard of the newest run recorded a memory high-water mark. The cell landed on
-				2026-08-30, so a run older than that reports nothing here - which is a missing reading and
-				not a run that used no memory.
-			</p>
-		{:else}
-			<div class="memory" data-peak-memory={data.memory.runId}>
-				<div data-memory="run" data-memory-high-water={data.memory.highWater ?? ''}>
-					<TargetBar
-						marks={data.memory.marks}
-						label="The run's high-water mark"
-						valueText={gib(data.memory.highWater)}
-						targetText="of the runner's {gib(RUNNER_MEMORY_BYTES)} - {data.memory
-							.pctOfRunner}%, the largest of the {data.memory.from} shards below and never their
-						total"
-						emptyNote="This run recorded no memory high-water mark."
-					/>
-				</div>
-				{#each data.memory.shards as shard (shard.shard)}
-					<div data-memory-shard={shard.shard} data-memory-bytes={shard.bytes}>
-						<TargetBar
-							marks={shard.marks}
-							label="Shard {shard.shard}"
-							valueText={gib(shard.bytes)}
-							targetText="of the runner's {gib(RUNNER_MEMORY_BYTES)} - {Math.round(
-								(shard.bytes / RUNNER_MEMORY_BYTES) * 100
-							)}%"
-							emptyNote="This shard recorded no memory high-water mark."
-						/>
-					</div>
-				{/each}
-			</div>
-			<!-- No tint and no band. Nobody has agreed how near 16 GB is too near,
-			     and a colour would publish a threshold that does not exist. -->
-			<p class="reads" data-memory-basis data-memory-planned={data.memory.outOf ?? ''}>
-				{#if data.memory.outOf === null}
-					Over {data.memory.from}
-					{data.memory.from === 1 ? 'shard' : 'shards'}. This run's manifest recorded no shard
-					count, so how many the plan asked for is unknown - and counting the shards that
-					answered would only ever equal the shards that answered.
-				{:else}
-					Over {data.memory.from} of the run's {data.memory.outOf} shards.
-					{#if data.memory.from < data.memory.outOf}
-						The other {data.memory.outOf - data.memory.from} recorded nothing, and are left out rather
-						than drawn as shards that used no memory.
-					{/if}
-				{/if}
-				A run the reader refuses is in none of this: its rows cannot be made into one run, so it has
-				no shards to take a maximum over.
-			</p>
-		{/if}
+		<MemoryBoard board={data.memory} span={view.peakRssSpan} windowDays={view.days} />
 	</Panel>
 
 	<div
@@ -1139,26 +1088,10 @@
 					</dd>
 				</div>
 
-				<!-- The newest run's own high-water mark and its shards are a panel of
-				     their own above. What belongs here is the other half of the
-				     question - whether that run was unusual over the span - and
-				     printing the bar again would be one fact drawn twice. -->
-				<div data-host="peak-memory" data-host-value={view.peakRssSpan.high ?? ''}>
-					<dt>Peak memory over the span</dt>
-					<dd>
-						{#if view.peakRssSpan.high === null}
-							<span class="absent">No run in this span recorded a memory high-water mark.</span>
-						{:else}
-							{gib(view.peakRssSpan.high)} at the highest
-							<span class="unit">
-								{gib(view.peakRssSpan.low)} at the lowest, over these {view.days} days, on
-								{view.peakRssSpan.from} of {view.peakRssSpan.outOf} runs. Each of those is itself
-								the largest of a run's shards. The newest run's own shards are drawn above.
-							</span>
-						{/if}
-					</dd>
-				</div>
-
+				<!-- The memory row that sat here was the window's span of the same
+				     figure the panel above draws, written as prose. It is now that
+				     panel's window grain, where it is a track beside the run's own
+				     mark rather than a sentence a reader has to hold in their head. -->
 				<div data-host="model-load" data-host-value={data.host.modelLoad?.value ?? ''}>
 					<dt>Opening the weights</dt>
 					<dd>
@@ -1634,23 +1567,6 @@
 	.plot {
 		position: relative;
 		margin-top: var(--space-2);
-	}
-
-	/* The run's own mark first, then a bar a shard. Every bar runs to the same
-	   16 GB ceiling, so their lengths compare. */
-	.memory {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
-		gap: var(--space-4) var(--space-5);
-	}
-
-	/* The run's own mark first, then a bar a shard. One column below the
-	   breakpoint, because a memory bar squeezed into half a phone is a bar
-	   nobody can compare with the one beside it. */
-	.memory {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
-		gap: var(--space-4) var(--space-5);
 	}
 
 	.host {

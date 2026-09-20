@@ -605,6 +605,9 @@ ledger had been committed for four days with no page reading a cell of it.
 | The processor | `cpu_model` | text, per shard, and never averaged |
 | Busy and load | `cpu_busy_pct`, `model_load_ms` | lowest, slowest |
 | Peak memory | `peak_rss_bytes` against the runner's 16 GB | the LARGEST shard, never their sum - shards are separate jobs on separate hosts |
+| What one item cost the machine | the item ledger's `llama_rss_peak_bytes` and `python_rss_bytes` against `os_mem_total_bytes` | one mark an item in run order, the maximum named with the item that owns it. The two maxima added are an UPPER BOUND unless one item held both |
+| What one item left the kernel | `os_mem_available_min_bytes` to `os_mem_available_bytes` | one range mark an item, floor to recovery - a floor that falls with an end that falls is a leak, a floor that falls with an end that recovers is hard work |
+| The queue behind an item | `load_1m` against the host's `cores`, with `cpu_busy_min` to `cpu_busy_max` | one mark an item. Busy and queued are different facts and neither implies the other, so both are drawn |
 | The shape of a run | the item ledger's `summarize_ms` | one ladder a run at the five configured percentiles, interpolated between the two nearest ranks, never pooled between runs |
 | The two clocks, compared | the item ledger's `prefill_ms` and `input_tokens - cached_tokens` against the server's own totals | the same pooling and the same 5 percent bound `backend/utilities/reconcile_prefill.py` gates on |
 

@@ -883,6 +883,29 @@ into the domain beside the drawn values rather than as the maximum, so a shard
 that went past the ceiling would still draw past the line, and the panel prints
 the ceiling. The processor mark is a share, so it runs nought to a hundred.
 
+## A mark with two named ends is not a range mark, and it says which end is which
+
+A **range mark** has a typical end and a worst end, and the reader learns that
+shape once. **A mark whose two ends are two different measurements is a
+different mark**, and giving it the range mark's field names would have taught a
+reader to read a floor as a median. So it carries its own names.
+
+The shipped one is the kernel headroom mark on the memory panel of
+`/console/machine/`. Its fill runs to `os_mem_available_min_bytes` - the least
+memory the kernel had while the model worked on that item - and its notch stands
+at `os_mem_available_bytes`, which is what the item left when it ended. **A
+machine whose floor falls and whose end also falls is leaking; one whose floor
+falls and whose end recovers was only working hard.** The two states draw
+differently, and the floor alone draws them the same.
+
+**What the reader loses, named.** The mark says nothing about when in the item
+the floor fell, so an item that dipped once and an item that sat at the floor
+throughout draw identically. That is a question for a sampled series over one
+item, which is a different grain and an instrument nobody has built - and the
+panel says it cannot answer it rather than leaving the reader to assume it did.
+
+Authority: Susan, 2026-09-17.
+
 ## The two rates on a shard row are measured before they are drawn
 
 Reading and writing are two series on one board, so the fourth rule above binds:
