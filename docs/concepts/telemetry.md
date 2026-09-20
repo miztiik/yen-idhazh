@@ -311,10 +311,11 @@ different answers on two items of one shard would mean the host had been read
 twice. Every row a shard writes takes it from one `host_facts` call.
 
 Every source is one local file read, and a reading that cannot be taken records
-empty rather than failing the item. `/sys/fs/cgroup/memory.peak` has measured
-absent on every GitHub-hosted runner this project has probed, so that cell is
-usually empty in CI and always empty on a developer machine - a fact about the
-instrument, not about the job. What one sample costs is in
+empty rather than failing the item. The sampler read `/sys/fs/cgroup/memory.peak`
+until 2026-09-20 and it has measured absent on every GitHub-hosted runner this
+project has probed, so the column it filled was empty on every committed row and
+was deleted with the reading - a fact about the instrument, not about the job.
+What one sample costs is in
 [pipeline-cost.md](../reference/pipeline-cost.md).
 
 ## What the machine WAS, which is a different question

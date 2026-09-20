@@ -304,6 +304,11 @@ class ModelsConfig(Contract):
     __schema_stem__: ClassVar[str] = "models-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-20",
+            change="Add optional CPU, cache, checkpoint and template controls.",
+            why="Each model can declare the runtime settings it needs.",
+        ),
+        ChangelogEntry(
             version="2026-09-17T02:00",
             change="inference.seed is the sampling control rather than dead code.",
             why="Every entry pins temperature 0.2, where the seed decides which token is drawn.",
@@ -317,11 +322,6 @@ class ModelsConfig(Contract):
             version="2026-09-15T12:30",
             change="models.<role>.draft.spec_type accepts a third value, draft-mtp.",
             why="A model that predicts its own next tokens needs no second set of weights.",
-        ),
-        ChangelogEntry(
-            version="2026-09-15T10:00",
-            change="console.chart_arm_rule_days, console.chart_arm_minutes_target.",
-            why="`arm` came from benchmarking and reads as a limb on a reader-facing page.",
         ),
         ChangelogEntry(
             version="2026-09-14",

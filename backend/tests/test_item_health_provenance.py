@@ -1,6 +1,6 @@
 """Does the column report name a real producer, and refuse a word that only looks like one?
 
-`ItemHealthRow` has 119 columns and nine other contracts also have a `date`, so
+`ItemHealthRow` has 123 columns and nine other contracts also have a `date`, so
 the scan's whole job is telling a module that fills a cell from one that uses
 the same word. Every fixture here is a source tree or a day file built under
 `tmp_path`. Nothing reads `backend/idhazh/` or the committed archive, which both

@@ -379,7 +379,7 @@ export interface ItemHealthRow {
 	/** The CPU the runner reported, verbatim. */
 	cpu_model?: string | null;
 
-	/** Mean CPU busy over the item. */
+	/** The share of the item's processor time that was our own work: busy ticks over available ticks across the whole item, differenced from two reads of /proc/stat. Time the host gave another tenant is taken out and recorded in cpu_steal_pct instead. A row written before 2026-09-20 counted that time as ours, so the two sides of the change are not comparable and nothing can recover the split for a row already written. */
 	cpu_busy_pct?: number | null;
 
 	/** Peak CPU busy over the item. */
@@ -388,20 +388,29 @@ export interface ItemHealthRow {
 	/** Trough CPU busy over the item. */
 	cpu_busy_min?: number | null;
 
+	/** The share of the item's processor time the host gave to another tenant, from the same /proc/stat difference cpu_busy_pct is taken from. Neither ours nor idle, which is why it is counted apart from both. Null where the kernel's cpu line stops short of the field: a kernel that does not account stolen time has not told us there was none. */
+	cpu_steal_pct?: number | null;
+
 	/** One-minute load average when the item ended. */
 	load_1m?: number | null;
 
 	/** Resident memory of the model server when the item ended. */
 	llama_rss_bytes?: number | null;
 
+	/** The part of the model server's resident set that is not file-backed, as `RssAnon` in `/proc/<pid>/status` reported it. The weights are mapped from a file, so they count inside llama_rss_bytes and inside the page cache at the same time and the two may not be added; this cell can double-count with neither, which is what lets a reader split the machine's memory up and have the parts close. */
+	llama_rss_anon_bytes?: number | null;
+
 	/** The model server's high-water resident memory, as `VmHWM` in `/proc/<pid>/status` reported it - the higher of one reading when the item opened and one when it closed. It covers the server's whole life up to that moment, not this item. And it can read lower than an earlier item's: the kernel prints the larger of the current resident set and a stored mark it refreshes only when the process itself gives memory back, so a page the kernel reclaims takes the figure down with it. */
 	llama_rss_peak_bytes?: number | null;
+
+	/** How many pages the model server had to wait for off disk across this item, differenced from `/proc/<pid>/stat` at either end. A count over the window and never a rate, because the row already carries the interval. It is the one reading that can see the kernel taking the weights back: those pages are file-backed, so they leave an RSS figure and touch no swap counter on the way out. Null where either end could not be read, and null is not zero. */
+	llama_major_faults?: number | null;
 
 	/** Resident memory of the worker process when the item ended. */
 	python_rss_bytes?: number | null;
 
-	/** Peak memory the job's cgroup reported. This is the number the runner kills the job over, so it is the one that answers whether a bigger model would have fitted (Guardrail #2). */
-	cgroup_peak_bytes?: number | null;
+	/** The part of the worker process's resident set that is not file-backed, on the same terms as the model server's. */
+	python_rss_anon_bytes?: number | null;
 
 	/** The model this run summarised with. */
 	model_id?: string | null;
@@ -420,6 +429,9 @@ export interface ItemHealthRow {
 
 	/** The server's prefill batch size. */
 	n_batch?: number | null;
+
+	/** Was the server told to lock the weights in memory - `inference.load_mode`, which llama-server spells `-lm`? False is the ordinary setting and says the kernel may reclaim them, which is the state llama_major_faults exists to catch. Recorded because a surface that states the weights are not pinned with nothing on the row to check it against starts lying the day somebody sets the flag. Null on a row written before the column. */
+	weights_pinned?: boolean | null;
 
 	/** The configured ceiling on any one decode. */
 	max_output_tokens?: number | null;
@@ -454,7 +466,7 @@ export interface ItemHealthRow {
 	/** Swap left when the item ended, from /proc/meminfo SwapFree. A fall here is the machine in trouble before the cgroup kill. */
 	os_swap_free_bytes?: number | null;
 
-	/** Swap this machine has, from /proc/meminfo SwapTotal. Recorded because a free figure of zero says 'no swap on this box' and 'swap fully consumed' equally, and only the second is an emergency. */
+	/** Swap this machine has, from /proc/meminfo SwapTotal. Constant inside a job, so it is read paired with os_swap_free_bytes off one row and never as a distribution of its own. Recorded because a free figure of zero says 'no swap on this box' and 'swap fully consumed' equally, and only the second is an emergency. */
 	os_swap_total_bytes?: number | null;
 
 	/** Lowest MemAvailable seen while the model was working on this item, from /proc/meminfo sampled by that item's own watch. The closest this item took the machine to its limit. */
