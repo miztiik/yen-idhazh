@@ -35,7 +35,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | --- | --- | --- |
 | A host fingerprint on each judging shard | The council cannot say which processor ran a shard | A council reading that depends on the machine. The digest pipeline already characterises the same runner pool, and the bandwidth probe wants 1.9 GiB on the widest part in the fleet against a server that peaks at 96 percent of the runner |
 | Per-call spans folded into the shared span rollup | Per-call attribution. The judge's own row carries the call count, the total and the worst instead | A question the three aggregate numbers cannot answer |
-| Segments and the compaction verb as the council's shipping path | Nothing - the council gets its own path, which it already runs for verdicts | A second judge whose output does not fit an artifact |
+| Segments and the compaction verb as the council's shipping path | Durability the moment a shard finishes, and cross-run recovery by the row's own date. **Segments exist to remove a merge conflict by construction** - many committing shards on one day file - and the council has no committing shards, so there is no conflict here for them to prevent | A judging shard needing to commit something itself: output too large for an artifact, or output that must survive a dead collecting job (row #15, decision 4) |
 | A shared judge metric schema | Nothing. Each judge declares its own | Never. This is the defect the plan exists to remove |
 | A `Judge` base class, protocol or registry | The second judge duplicates the stage shape, about 150 lines | A third judge sharing three of the four steps |
 | One workflow per judge | Every judge shares one schedule and one runner label | A judge needing different weights or a different cadence |
@@ -99,7 +99,7 @@ Each line is a claim a worker would otherwise re-derive. Rounds one and two ran 
 | Spans come from the existing closed set | The rollup has five members and silently skips anything else | Spans dropped entirely (scope-out), and the judge's row carries three aggregate numbers |
 | The fingerprint goes before the first model call | The probe wants 1.9 GiB and the server peaks at 14.31 GiB of 16 GB | The fingerprint is dropped entirely (scope-out), which removes the risk rather than ordering around it |
 | The fold stages what the shards wrote | A shard's files are on its own runner, and the collecting job downloads only verdicts | Row #15 gives the council its own artifact path, which is what it already runs for verdicts |
-| The council runs the compaction verb | It takes no filter: it files away every ledger waiting in transit and deletes the transit copies. The digest run's are often still waiting at 22:00 | The council does not run it. Its own path has no collision to design around |
+| The council runs the compaction verb | It takes no filter: it files away every ledger waiting in transit and deletes the transit copies. The digest run's are often still waiting at 22:00 | The council does not run it. Its own artifact path has no shared transit to collide on, and the segment design it declines solves a conflict the council does not have - it has one committing writer, not eight |
 | The plan updates the plan-queue page | A gate fails any pull request that edits it, and it already names this plan | The page is left alone |
 | Widening the probability window fixes the margin | The margin is the top two of whatever came back, and the top two do not move | The margin is taken over the three verdict-opening ids, renormalised |
 | A grammar failure writes `usable` false | A nullable verdict makes two failures compare equal, so `usable` goes true with no verdict and the row's validator refuses that shape | The agreement test gains a null check in the same change |
@@ -643,19 +643,22 @@ Committed value `200`, bounds unchanged. It moves beside the pair budget and the
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | **The capability declares nothing about the payload.** It takes a contract instance, a judge identity and an output directory, validates, and writes one file a shard with a temp-file-then-rename. | Owner, 2026-09-20 |
-| 2 | The council's own artifact path, not the digest pipeline's segment store. That verb takes no filter - it files away every ledger waiting in transit and deletes the transit copies, and the digest run's are often still waiting at 22:00. A council run that used it and committed only its own folders would destroy three ledgers a night. | Carmack |
-| 3 | This is the path the council already runs for verdict files, so it is one more artifact of a shape the workflow understands. | Carmack |
-| 4 | The upload carries an always condition. A shard that stopped on its deadline has metrics worth more than a shard that finished. | Carmack |
-| 5 | The collecting job appends each row to the store its own contract names, so a second judge needs no change here. | Fowler |
-| 6 | The staging drift guard is widened in this row to every workflow reaching a store writer, not only the daily one. Scoping a drift guard to a file rather than to a question is what let a second writer through before. | Carmack |
+| 2 | **The council's own artifact path, not the digest pipeline's segment store - and the reason is who commits.** Segments exist to remove a merge conflict by construction: the digest pipeline has four to eight work shards on four to eight runners, each producing rows for one day file and **each committing**, and that many pushes racing on one file cannot be resolved by a workflow. Each shard commits a uniquely-named file instead, and one later process compacts. **The council has no committing shards.** Its shards upload and commit nothing, a test pins that, the concurrency group serialises two council runs, and the push script replays rows onto a new base when it loses a race to the digest run. One writer cannot conflict with itself, so there is no conflict here for a segment to prevent. | Owner, 2026-09-20 |
+| 3 | This is the path the council already runs for its primary data: the collecting stage appends every judged pair to the day file and pushes, tonight and every night. The metrics take the path the verdicts already take. | Carmack |
+| 4 | **The trigger that adopts segments, stated so it is a condition rather than a preference:** the day a judging shard must commit something itself - because its output is too large for an artifact, or because it must survive a collecting job that died. Segments are then the right answer, and the price is four rebase races at 22:00 and the end of the shards-commit-nothing ruling. | Owner, 2026-09-20 |
+| 5 | **Running the compaction verb is a separate hazard from writing segments, and only the verb is refused.** It takes no filter: it files away every ledger waiting in transit and deletes the transit copies, and the digest run's are often still waiting at 22:00 - measured 2026-09-20, 21 files across five ledgers. A council run that compacted and then committed only its own folders would destroy three ledgers a night. Writing segments without compacting would have avoided that; it is refused on decision 2, not on this one. | Carmack |
+| 6 | The upload carries an always condition. A shard that stopped on its deadline has metrics worth more than a shard that finished. | Carmack |
+| 7 | The collecting job appends each row to the store its own contract names, so a second judge needs no change here. | Fowler |
+| 8 | The staging drift guard is widened in this row to every workflow reaching a store writer, not only the daily one. Scoping a drift guard to a file rather than to a question is what let a second writer through before. | Carmack |
 
 - **Rejected alternatives:**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | Segments and the compaction verb | The compaction has no filter and the digest pipeline's transit is shared; the council would delete data it never wrote | Three ledgers destroyed nightly, silently | Carmack |
-| 2 | Each shard commits its own metrics | One collecting job, one push is a ruling the council already made; four shards pushing at 22:00 is four rebase races | A contention window | Carmack |
-| 3 | A capability that defines the metric columns | That is the council dictating a judge's metrics - the coupling this plan removes | Judge two files columns it cannot have | Owner |
+| 1 | Shards commit segments; the council never compacts, and the digest pipeline's compaction files them later | It buys durability the moment a shard finishes and cross-run recovery by the row's own date - both real. But it ends the ruling that judging shards commit nothing and the test pinning it, and puts four pushes at 22:00 where the council chose to have none | Four rebase races a night, and a ruling reversed. **Take it the day decision 4's trigger fires** | Owner |
+| 2 | The collecting job writes segments instead of appending | One writer cannot conflict with itself, so the indirection has no beneficiary - and the rows stay unreadable until somebody else's compaction runs | A dependency on another pipeline's schedule for no gain | Fowler |
+| 3 | Segments plus the council running the compaction verb | The compaction has no filter and the transit directory is shared; the council would delete data it never wrote | Three ledgers destroyed nightly, silently | Carmack |
+| 4 | A capability that defines the metric columns | That is the council dictating a judge's metrics - the coupling this plan removes | Judge two files columns it cannot have | Owner |
 
 ---
 
