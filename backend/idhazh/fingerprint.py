@@ -164,30 +164,28 @@ def sampling_spelling(inference: InferenceConfig) -> str:
 
 
 def runtime_flags_spelling(inference: InferenceConfig) -> str:
-    """One canonical spelling of the runtime knobs that move the arithmetic.
+    """Canonical settings that can change arithmetic, prompt rendering or cache reuse.
 
-    These five were enumerated as known blind spots and left out of the record
-    until 2026-08-26, so they could be moved without moving anything anybody
-    could read. A quantised KV cache, another attention kernel, a second slot or
-    a different prompt-thread count each change how the partial sums accumulate,
-    and a summary that changed for one of those reasons used to record identical
-    to the one before it.
-
-    They arrive folded into one field for the same reason `sampling` is one
-    field: five values that are null on almost every run are five lines nobody
-    reads.
+    A cached prefix and a newly evaluated prefix need not take the same numeric
+    path. Record the controls that choose between them as well as the cache
+    type, attention kernel, slot count and prompt-thread count.
     """
+    values = {
+        "cache_type_k": inference.cache_type_k,
+        "cache_type_v": inference.cache_type_v,
+        "flash_attention": inference.flash_attention,
+        "n_parallel": inference.n_parallel,
+        "n_threads_batch": inference.n_threads_batch,
+        "checkpoint_min_step": inference.checkpoint_min_step,
+        "ctx_checkpoints": inference.ctx_checkpoints,
+        "cache_ram": inference.cache_ram,
+        "cache_prompt": inference.cache_prompt,
+        "slot_prompt_similarity": inference.slot_prompt_similarity,
+        "jinja": inference.jinja,
+        "reasoning_preserve": inference.reasoning_preserve,
+    }
     return ";".join(
-        (
-            f"cache_type_k={inference.cache_type_k or RUNTIME_DEFAULT}",
-            f"cache_type_v={inference.cache_type_v or RUNTIME_DEFAULT}",
-            f"flash_attention={inference.flash_attention or RUNTIME_DEFAULT}",
-            f"n_parallel={inference.n_parallel if inference.n_parallel else RUNTIME_DEFAULT}",
-            (
-                "n_threads_batch="
-                f"{inference.n_threads_batch if inference.n_threads_batch else RUNTIME_DEFAULT}"
-            ),
-        )
+        f"{name}={RUNTIME_DEFAULT if value is None else value}" for name, value in values.items()
     )
 
 
@@ -229,6 +227,12 @@ NOT_DIGESTED: Final[Mapping[str, Undigested]] = MappingProxyType(
             "tensors and two digests cannot, so the size says nothing the digest does "
             "not say better. It exists to cross-check the entry against the file the "
             "run opened, not to describe the run.",
+        ),
+        "cpu_range": Undigested(
+            False, "Chooses CPUs for fixed thread counts, not the weights or the prompt."
+        ),
+        "cpu_strict": Undigested(
+            False, "Keeps threads on their configured CPUs without changing the arithmetic."
         ),
         "declared_for": Undigested(
             False,

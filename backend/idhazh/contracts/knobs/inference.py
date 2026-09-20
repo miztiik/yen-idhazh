@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Any, Final, Literal
+from typing import Any, Final, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -20,15 +20,9 @@ class InferenceConfig(Model):
         description=(
             "The window one sequence gets. The default stays 8192 because it is the "
             "conservative window for weights nobody has put in front of a runner; "
-            "models.summarize pins 65536, and the "
-            "measurement that earns the raise is about the 9B on a GitHub-hosted "
-            "runner rather than about this field. Doubling buys nothing but KV cache: "
-            "32 KiB a token on those weights, which is 2048.00 MiB at the pinned "
-            "65536 against 512.00 MiB at 16384, over the 8 attention "
-            "layers of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB "
-            "whatever the window is. Whether that fits is decided by what the machine "
-            "had free and never by what the processes held - "
-            "docs/reference/pipeline-cost.md."
+            "each model file sets its own window. Whether its KV cache fits is "
+            "decided by what the machine has free, not by the process's resident "
+            "memory alone - docs/reference/pipeline-cost.md."
         ),
     )
     n_threads: int = Field(default=4, ge=1)
@@ -43,6 +37,17 @@ class InferenceConfig(Model):
         default=None,
         ge=1,
         description="llama-server -tb. None omits the flag and lets it follow n_threads.",
+    )
+    cpu_range: str | None = Field(
+        default=None,
+        pattern=r"^[0-9]+-[0-9]+$",
+        description="llama-server --cpu-range, inclusive lo-hi. None omits the flag.",
+    )
+    cpu_strict: int | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        description="llama-server --cpu-strict, 0 or 1. None omits the flag.",
     )
     startup_warmup: bool = Field(
         default=True,
@@ -82,6 +87,48 @@ class InferenceConfig(Model):
         default=None,
         ge=0,
         description="llama-server --poll. None omits the flag and keeps the runtime default.",
+    )
+    checkpoint_min_step: int | None = Field(
+        default=None,
+        ge=0,
+        description="llama-server -cms, in tokens; 0 means no minimum. None omits the flag.",
+    )
+    ctx_checkpoints: int | None = Field(
+        default=None,
+        ge=0,
+        description="llama-server -ctxcp, maximum checkpoints per slot. None omits the flag.",
+    )
+    cache_ram: int | None = Field(
+        default=None,
+        ge=-1,
+        description=(
+            "llama-server -cram, in MiB; -1 is unlimited and 0 disables the cache. "
+            "None omits the flag."
+        ),
+    )
+    cache_prompt: bool | None = Field(
+        default=None,
+        description=(
+            "llama-server --cache-prompt or --no-cache-prompt. None omits the flag "
+            "and preserves the completion requests' existing enabled cache."
+        ),
+    )
+    slot_prompt_similarity: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="llama-server -sps, shared-prefix fraction. None omits the flag.",
+    )
+    jinja: bool | None = Field(
+        default=None,
+        description="llama-server --jinja or --no-jinja. None omits the flag.",
+    )
+    reasoning_preserve: bool | None = Field(
+        default=None,
+        description=(
+            "llama-server --reasoning-preserve or --no-reasoning-preserve. "
+            "None omits the flag."
+        ),
     )
     log_verbosity: int | None = Field(
         default=None,
@@ -190,6 +237,14 @@ class InferenceConfig(Model):
             "by a validator and a field nothing checks is a comment."
         ),
     )
+
+    @model_validator(mode="after")
+    def _cpu_range_is_ordered(self) -> Self:
+        if self.cpu_range is not None:
+            first, last = (int(cpu) for cpu in self.cpu_range.split("-"))
+            if first > last:
+                raise ValueError("cpu_range must start at or before its end")
+        return self
 
     @model_validator(mode="before")
     @classmethod

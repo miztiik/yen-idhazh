@@ -55,7 +55,7 @@ export interface DraftConfig {
 
 /** Decoding is pinned here so a change of output is a reviewable diff. */
 export interface InferenceConfig {
-	/** The window one sequence gets. The default stays 8192 because it is the conservative window for weights nobody has put in front of a runner; models.summarize pins 65536, and the measurement that earns the raise is about the 9B on a GitHub-hosted runner rather than about this field. Doubling buys nothing but KV cache: 32 KiB a token on those weights, which is 2048.00 MiB at the pinned 65536 against 512.00 MiB at 16384, over the 8 attention layers of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB whatever the window is. Whether that fits is decided by what the machine had free and never by what the processes held - docs/reference/pipeline-cost.md. */
+	/** The window one sequence gets. The default stays 8192 because it is the conservative window for weights nobody has put in front of a runner; each model file sets its own window. Whether its KV cache fits is decided by what the machine has free, not by the process's resident memory alone - docs/reference/pipeline-cost.md. */
 	n_ctx?: number;
 
 	n_threads?: number;
@@ -69,6 +69,12 @@ export interface InferenceConfig {
 
 	/** llama-server -tb. None omits the flag and lets it follow n_threads. */
 	n_threads_batch?: number | null;
+
+	/** llama-server --cpu-range, inclusive lo-hi. None omits the flag. */
+	cpu_range?: string | null;
+
+	/** llama-server --cpu-strict, 0 or 1. None omits the flag. */
+	cpu_strict?: number | null;
 
 	/** If false, emit --no-warmup. True lets llama-server warm at startup. */
 	startup_warmup?: boolean;
@@ -93,6 +99,27 @@ export interface InferenceConfig {
 
 	/** llama-server --poll. None omits the flag and keeps the runtime default. */
 	poll?: number | null;
+
+	/** llama-server -cms, in tokens; 0 means no minimum. None omits the flag. */
+	checkpoint_min_step?: number | null;
+
+	/** llama-server -ctxcp, maximum checkpoints per slot. None omits the flag. */
+	ctx_checkpoints?: number | null;
+
+	/** llama-server -cram, in MiB; -1 is unlimited and 0 disables the cache. None omits the flag. */
+	cache_ram?: number | null;
+
+	/** llama-server --cache-prompt or --no-cache-prompt. None omits the flag and preserves the completion requests' existing enabled cache. */
+	cache_prompt?: boolean | null;
+
+	/** llama-server -sps, shared-prefix fraction. None omits the flag. */
+	slot_prompt_similarity?: number | null;
+
+	/** llama-server --jinja or --no-jinja. None omits the flag. */
+	jinja?: boolean | null;
+
+	/** llama-server --reasoning-preserve or --no-reasoning-preserve. None omits the flag. */
+	reasoning_preserve?: boolean | null;
 
 	/** llama-server -lv. None omits the flag and keeps the runtime default of 3, which prints twelve lines and none of them names flash attention, the KV buffer or the compute buffer. At 4 the whole model-loader block comes back, which is what lets a check read the attention state off the server's own line instead of off the flag we passed it. Measured 2026-09-09 on a 12th Gen Intel Core i7-1265U against llama.cpp b10444, three runs a case and zero spread: one server start goes from 12 lines and 1,085 bytes to about 206 lines and 16,011 bytes. That is a job artifact kept for two days, never a committed file. It changes what the server says about itself and nothing about what it decodes, so idhazh.fingerprint leaves it out of the stamp. */
 	log_verbosity?: number | null;

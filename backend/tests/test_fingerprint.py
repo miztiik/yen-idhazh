@@ -302,6 +302,13 @@ def test_the_folded_knobs_are_digested_through_their_spellings() -> None:
         "seed",
         "max_answer_tokens",
         "max_think_tokens",
+        "checkpoint_min_step",
+        "ctx_checkpoints",
+        "cache_ram",
+        "cache_prompt",
+        "slot_prompt_similarity",
+        "jinja",
+        "reasoning_preserve",
         *RULED_LOGIT_MOVERS,
     }
 
