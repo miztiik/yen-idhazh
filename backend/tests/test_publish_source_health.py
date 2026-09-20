@@ -839,7 +839,7 @@ def test_a_healthy_source_raises_nothing_and_the_worst_is_named_first() -> None:
 #
 # `publish` must count over the dates the ledger actually holds, chosen before it
 # reads anything, so a gap in the record cannot shorten the census and the months
-# behind the window are never opened (audit finding 12; CLAUDE.md Guardrail #12). The
+# behind the window are never opened (CLAUDE.md Guardrail #12). The
 # fixture below records three dates one month apart and three older ones, so a
 # `keep`-day calendar window reaches none of the older two and the history behind
 # the third must stay shut.

@@ -10,7 +10,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 | Field | Value |
 | --- | --- |
-| Why this plan exists | Every finding in ranks 1 and 10 of [the growth audit](../docs/reference/data-growth-audit.md) - 43 in all - so that an ordinary build, page load or click stops re-reading history it does not need. |
+| Why this plan exists | Every finding in ranks 1 and 10 of [the growth audit](../docs/reference/data-growth.md) - 43 in all - so that an ordinary build, page load or click stops re-reading history it does not need. |
 | Hard scope - in | Audit findings 11, 12, 61-75, 84-89, 93-113 as listed in section 1. Config knobs those rows need. The month-partition pattern and its doc. The day-facts contract. The archive window control. |
 | Hard scope - out | Any other audit finding. Model or summary quality. Retrieval accuracy. Deleting telemetry shards. Changing the article ID format. Virtualizing the story list. |
 | ESCALATE triggers | (a) Row 21 before the day-facts schema is written. (b) Row 17 before any all-history chart is narrowed to a window. (c) Row 26 - the day payload contract - authored only, never implemented. (d) Any row that would delete a committed state or telemetry file. (e) Any row that cannot hold its Oracle without weakening an existing trust or sanitization control. |
@@ -563,7 +563,7 @@ Every entry is scope a worker or the orchestrator added mid-flight because it ad
 - **Files touched:**
   - `docs/architecture/` the frontend, telemetry and state living docs
   - `docs/concepts/` the pages whose vocabulary moved
-  - `docs/reference/data-growth-audit.md`
+  - `docs/reference/data-growth.md`
   - `TODO/20260906-data-growth-research.md`
 - **Acceptance gates:** documentation only - the shared test selector must select nothing but the whitespace check.
 - **Oracle:** every finding this plan closed is marked closed with its PR, and every living doc a row changed states the new behaviour rather than the old one.
@@ -577,6 +577,6 @@ Every entry is scope a worker or the orchestrator added mid-flight because it ad
 ## See also
 
 - [data-growth-research.md](20260906-data-growth-research.md) - the 155-finding research handover this plan draws rows 2-26 from.
-- [../docs/reference/data-growth-audit.md](../docs/reference/data-growth-audit.md) - the audit and its evidence.
+- [../docs/reference/data-growth.md](../docs/reference/data-growth.md) - the audit and its evidence.
 - [../docs/how-to/execute-a-plan.md](../docs/how-to/execute-a-plan.md) - the orchestrator contract this plan stamps.
 - [../docs/how-to/run-the-gates.md](../docs/how-to/run-the-gates.md) - the gate commands every row's acceptance section names.

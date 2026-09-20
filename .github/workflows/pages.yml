@@ -38,8 +38,7 @@ jobs:
   # said no. A failed daily run has not: the job that writes a day runs
   # `validate-days` before its own commit, so the day is verified by its
   # producer, and a sibling job failing afterwards does not unvalidate it.
-  # Holding it back would leave a good day unpublished for up to four hours
-  # (`docs/reference/data-growth-audit.md`).
+  # Holding it back would leave a good day unpublished for up to four hours.
   decide:
     if: >-
       github.event_name != 'workflow_run'

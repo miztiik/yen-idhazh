@@ -481,8 +481,7 @@ def _recent_item_health(state_root: Path, *, today: str, keep: int) -> list[Item
     calendar names. The census wants the last `keep` dates that ran, and a `keep`
     day calendar window is not the same set: a gap in the record leaves the window
     short, and widening it until it is long enough reads back to the first run the
-    project ever made. That preload is `docs/reference/data-growth-audit.md`
-    finding 12, and calendar subtraction is not an equivalent query for it.
+    project ever made. Calendar subtraction is not an equivalent query for it.
 
     So the ledger's own day files are the index: each name IS a recorded date, the
     newest is taken first, and the walk stops the moment `keep` of them are in

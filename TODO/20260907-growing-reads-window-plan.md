@@ -252,7 +252,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 ## 8 - Row #7 - The cover, the fallback deleted, and the docs
 
 - **Scope:** `load_published` gains `today` and `within_days`, drops the flat-file fallback, and reads the day files its cover names. Every doc that describes the old shape moves in the same commit.
-- **Files:** `backend/idhazh/ledger.py`, `backend/idhazh/cli.py`, `backend/idhazh/contracts/seen.py`, `backend/idhazh/contracts/digest_day.py`, `schemas/published-row.schema.json`, `schemas/digest-day.schema.json`, `backend/tests/test_ledger.py`, `backend/tests/test_plan.py`, `backend/tests/test_discover.py`, `backend/tests/pipeline/`, and 13 docs: `docs/architecture/contracts/schemas.md`, `docs/architecture/sources/freshness.md`, `docs/architecture/publishing/layout.md`, `docs/architecture/sources/discovery.md`, `docs/concepts/partitions.md`, `docs/concepts/pipeline-loop.md`, `docs/concepts/evaluation.md`, `docs/how-to/run-the-pipeline.md`, `docs/reference/pipeline-cost.md`, `docs/reference/data-growth-audit.md`, `docs/reference/repository-layout.md`, `docs/architecture/sources/item-health.md`, `AGENTS.md`
+- **Files:** `backend/idhazh/ledger.py`, `backend/idhazh/cli.py`, `backend/idhazh/contracts/seen.py`, `backend/idhazh/contracts/digest_day.py`, `schemas/published-row.schema.json`, `schemas/digest-day.schema.json`, `backend/tests/test_ledger.py`, `backend/tests/test_plan.py`, `backend/tests/test_discover.py`, `backend/tests/pipeline/`, and 13 docs: `docs/architecture/contracts/schemas.md`, `docs/architecture/sources/freshness.md`, `docs/architecture/publishing/layout.md`, `docs/architecture/sources/discovery.md`, `docs/concepts/partitions.md`, `docs/concepts/pipeline-loop.md`, `docs/concepts/evaluation.md`, `docs/how-to/run-the-pipeline.md`, `docs/reference/pipeline-cost.md`, `docs/reference/data-growth.md`, `docs/reference/repository-layout.md`, `docs/architecture/sources/item-health.md`, `AGENTS.md`
 - **Gates:** local - `ruff`, `mypy --strict`, the shared test selector, the contract drift gate. CI - full suite.
 - **Oracle:** with the committed config the mapping is **equal cell-for-cell to what it returned before this plan started** - the guarantee is untouched, which is the whole point of shipping `-1`. A second arm sets 120 over a built fixture spanning six months and proves the older day files are not opened, by counting file reads rather than by timing them.
 
@@ -337,7 +337,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | The total is accumulated as output is written and retracted on deletion. A full independent walk stays available where certification genuinely needs one | Carmack |
-| 2 | Committed-tree bytes and built-tree bytes stay separate measurements. They are different questions and mixing them was already a defect | [audit finding 17](../docs/reference/data-growth-audit.md) |
+| 2 | Committed-tree bytes and built-tree bytes stay separate measurements. They are different questions and mixing them was already a defect | [audit finding 17](../docs/reference/data-growth.md) |
 
 ## 15 - Row #14 - Visual cleanup walks dated directories
 
@@ -349,7 +349,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | **No globbing per day.** Walk `YYYY/MM/` and select the days in range by name. A directory entry that is not a date raises | Owner, 2026-09-07 |
-| 2 | Exact candidate counts, suffix exclusions, backdated-run safety and fuse behaviour are unchanged. Stopping at the fuse would lose the backlog count | [audit finding 18](../docs/reference/data-growth-audit.md) |
+| 2 | Exact candidate counts, suffix exclusions, backdated-run safety and fuse behaviour are unchanged. Stopping at the fuse would lose the backlog count | [audit finding 18](../docs/reference/data-growth.md) |
 
 ## 16 - Row #15 - State cleanup asks the catalogue what is due
 
@@ -361,7 +361,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | The keep-set is still derived from `shards_in_window`, which is what makes it impossible to delete a shard a later read would have opened | [ledger.py](../backend/idhazh/ledger.py) |
-| 2 | Backdated-run safety and the deletion fuses are unchanged | [audit finding 19](../docs/reference/data-growth-audit.md) |
+| 2 | Backdated-run safety and the deletion fuses are unchanged | [audit finding 19](../docs/reference/data-growth.md) |
 
 ## 17 - Row #16 - Visual prunes get the day layout
 
@@ -398,7 +398,7 @@ Rows 1, 2, 3, 10 and 11 are disjoint and run together. Rows 4 to 7 are strictly 
 
 ## See also
 
-- [../docs/reference/data-growth-audit.md](../docs/reference/data-growth-audit.md) - finding 1 and the Indexed State package this plan takes a slice of.
+- [../docs/reference/data-growth.md](../docs/reference/data-growth.md) - finding 1 and the Indexed State package this plan takes a slice of.
 - [../docs/concepts/partitions.md](../docs/concepts/partitions.md) - the pattern, the freeze rule, and the four cases an append-only layout gets wrong.
 - [../docs/architecture/sources/freshness.md](../docs/architecture/sources/freshness.md) - why publishing twice is prevented by a record rather than a window.
 - [20260906-constant-cost-reads-plan.md](20260906-constant-cost-reads-plan.md) - ranks 1 and 10 of the same audit, in flight.

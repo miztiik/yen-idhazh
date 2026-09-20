@@ -163,7 +163,7 @@ The owner now asks for a complete context-free research record in `TODO/`.
 
 This is a research snapshot, not a ratified architecture or an execution-ready
 plan. The factual audit also remains in
-[docs/reference/data-growth-audit.md](../docs/reference/data-growth-audit.md).
+[docs/reference/data-growth.md](../docs/reference/data-growth.md).
 Living subsystem docs remain authoritative for current behavior. When a future
 plan adopts a decision, put that decision in the living doc it changes. Do not
 delete this research until every retained finding, decision, caveat and evidence
@@ -1926,7 +1926,7 @@ Default `autojunk=True` is not an equivalent algorithm for repeated words.
 
 ## See Also
 
-- [docs/reference/data-growth-audit.md](../docs/reference/data-growth-audit.md) - accepted factual baseline and matching priorities.
+- [docs/reference/data-growth.md](../docs/reference/data-growth.md) - accepted factual baseline and matching priorities.
 - [CLAUDE.md](../CLAUDE.md) - current constraints, correction levels and approval requirements.
 - [docs/architecture/publishing/frontend.md](../docs/architecture/publishing/frontend.md) - reading and console behavior.
 - [docs/architecture/publishing/layout.md](../docs/architecture/publishing/layout.md) - published shapes and retention.
