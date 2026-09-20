@@ -34,10 +34,10 @@
 	import MachineSplitGroup from '$lib/components/MachineSplitGroup.svelte';
 	import MemoryBoard from '$lib/components/MemoryBoard.svelte';
 	import Panel from '$lib/components/Panel.svelte';
-	import RankedList from '$lib/components/RankedList.svelte';
 	import RateControl from '$lib/components/RateControl.svelte';
 	import ShapeSwitch from '$lib/components/ShapeSwitch.svelte';
 	import ShardBoard from '$lib/components/ShardBoard.svelte';
+	import HostFigure from './HostFigure.svelte';
 	import SpanPanel from './SpanPanel.svelte';
 	import RunTimelinePanel from './RunTimelinePanel.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
@@ -55,9 +55,24 @@
 		percentileChart,
 		percentileColumns,
 		seconds,
-		tokenChart,
-		PERCENTILES
+		workChart,
+		workValues,
+		DEFAULT_WORK_UNIT,
+		PERCENTILES,
+		SHARED_AXIS_LIMIT,
+		type WorkUnit
 	} from '$lib/charts/machine';
+	import {
+		costChart,
+		costColumns,
+		costLabel,
+		costOverDays,
+		COST_SHAPES,
+		DEFAULT_COST_SHAPE,
+		type CostShape
+	} from '$lib/charts/cost';
+	import { spanTrack } from '$lib/charts/span-track';
+	import { fleetChart, fleetColumns } from '$lib/charts/fleet';
 	import { grouped } from '$lib/charts/series';
 	import {
 		chartWidth,
@@ -119,6 +134,25 @@
 		data.windows[String(windowDays)] ?? data.windows[String(data.console.default_window_days)]
 	);
 
+	/** The two figures the server records outside the model call that have both a
+	 * reading and a window to read it against. One shape for both, so the reader
+	 * compares them by looking rather than by converting two sentences.
+	 *
+	 * A processor share is read against 100 because that is the comparison - a
+	 * shard that idled is the gap. Opening the weights has no ceiling, so its
+	 * track ends at the slowest thing drawn on it. */
+	const cpuBusyTrack = $derived(
+		spanTrack(data.host.cpuBusy?.value ?? null, view.cpuBusySpan, {
+			ceiling: 100,
+			width: data.chart.width_px
+		})
+	);
+	const modelLoadTrack = $derived(
+		spanTrack(data.host.modelLoad?.value ?? null, view.modelLoadSpan, {
+			width: data.chart.width_px
+		})
+	);
+
 	// The option a live chart hydrates from is rebuilt here rather than handed
 	// over by `load`. Everything a load returns is serialised into the prerendered
 	// document, and an option carries the magenta sentinels `toCssVariables` swaps
@@ -134,12 +168,22 @@
 	const clocksOption = $derived(clocksChart(data.clocks.pairs).option);
 	const newestCurve = $derived(data.newestTail === null ? [] : [curveOf(data.newestTail)]);
 	const percentileOption = $derived(percentileChart(newestCurve).option);
-	const inputOption = $derived(
-		tokenChart(view.tokens, (run) => run.input, 'prompt tokens', '--chart-1').option
-	);
-	const outputOption = $derived(
-		tokenChart(view.tokens, (run) => run.output, 'written tokens', '--chart-4').option
-	);
+	// The unit the read-against-written panel opens on. The server drew this one,
+	// so the first paint and the radio that is already checked agree; picking the
+	// other redraws the same row set in the other currency.
+	let workUnit = $state<WorkUnit>(DEFAULT_WORK_UNIT);
+	const WORK_UNITS: { value: WorkUnit; text: string }[] = [
+		{ value: 'tokens', text: 'Tokens' },
+		{ value: 'seconds', text: 'Seconds' }
+	];
+	const workOption = $derived(workChart(view.tokens, view.work, workUnit).option);
+	/** Absent where the open unit has nothing to draw. The seconds grain goes
+	 * absent on its own while the count grain still draws: a run nobody timed did
+	 * not take no time. */
+	const workAbsent = $derived(workUnit === 'seconds' && view.work.timedRuns === 0);
+	/** The measured ratio at one precision, so the figure the panel prints and the
+	 * figure it stamps can never be two different readings of one measurement. */
+	const workRatio = $derived(view.work.ratio[workUnit]?.toFixed(2) ?? null);
 
 	// The strips under every chart that has a column to land on. Built here from
 	// the same arrays the options are, so a column the strip prints and a column
@@ -149,39 +193,48 @@
 	const cacheStrip = $derived(cacheColumns(view.cacheDays));
 	const clockStrip = $derived(clockColumns(data.clocks.pairs));
 	const percentileStrip = $derived(percentileColumns(newestCurve));
+	/** The fleet trend, redrawn in the browser from the same counts the server
+	 * drew, so a span the operator picks gets the same bars as the first paint. */
+	const fleetOption = $derived(fleetChart(view.fleet.trend).option);
+	const fleetStrip = $derived(fleetColumns(view.fleet.trend));
 	/** The insets `percentileChart` draws its grid at. The strip's column centres
 	 * are computed from them, so a pointer and the strip agree. */
 	const PERCENTILE_GRID = { left: 60, right: 44 };
-	/** One series each, and each still earns a strip: the axis carries the run's
-		* day and the strip carries the run itself, so the bar a pointer is on is
-		* the one place a run id and its count can be read together. These read the
-		* open span, because the bars do. */
+	/** One strip for one panel: the axis carries the run's day and the strip
+		* carries the run itself, so the group a pointer is on is the one place a
+		* run id and both its figures can be read together. It reads the open span,
+		* because the bars do, and the open unit, because 19D7 forbids the tooltip
+		* being the only carrier of a fact the panel is about. */
 	const tokenRuns = $derived(view.tokens.map((run) => run.runId));
-	const inputStrip = $derived(
+	const workNumber = (value: number | null) =>
+		value === null ? '-' : workUnit === 'tokens' ? grouped(value) : `${value.toFixed(1)}s`;
+	const workStrip = $derived(
 		columnStrip(tokenRuns, [
 			{
-				label: 'Prompt tokens',
+				label: 'Read',
 				colour: 'var(--chart-1)',
-				value: (index) => grouped(view.tokens[index]?.input ?? 0)
+				value: (index) =>
+					workNumber(
+						view.tokens[index] === undefined ? null : workValues(view.tokens[index], workUnit).read
+					)
 			},
 			{
-				label: 'Items that reported both counts',
-				colour: '',
-				value: (index) => grouped(view.tokens[index]?.items ?? 0)
-			}
-		])
-	);
-	const outputStrip = $derived(
-		columnStrip(tokenRuns, [
-			{
-				label: 'Written tokens',
+				label: 'Written',
 				colour: 'var(--chart-4)',
-				value: (index) => grouped(view.tokens[index]?.output ?? 0)
+				value: (index) =>
+					workNumber(
+						view.tokens[index] === undefined
+							? null
+							: workValues(view.tokens[index], workUnit).written
+					)
 			},
 			{
-				label: 'Items that reported both counts',
+				label: workUnit === 'tokens' ? 'Items counted' : 'Items timed',
 				colour: '',
-				value: (index) => grouped(view.tokens[index]?.items ?? 0)
+				value: (index) =>
+					grouped(
+						(workUnit === 'tokens' ? view.tokens[index]?.items : view.tokens[index]?.timed) ?? 0
+					)
 			}
 		])
 	);
@@ -430,6 +483,22 @@
 	const totalCost = $derived(inputCost + outputCost);
 	const perArticle = $derived(
 		view.tokenTotals.items === 0 ? null : totalCost / view.tokenTotals.items
+	);
+
+	// One call, both shapes. The bars and the line are two readings of one array,
+	// so the line's last point and the total printed above it are the same
+	// arithmetic rather than two derivations that can drift apart.
+	const costShapes = $derived(costOverDays(view.tokens, rate, { heightPx: data.chart.height_px }));
+	// The shape the panel opens on. The server drew this one, so the first paint
+	// and the radio that is already checked agree before a script has run.
+	let costShape = $state<CostShape>(DEFAULT_COST_SHAPE);
+	const costOption = $derived(costChart(costShapes, costShape, rate.currency).option);
+	const costStrip = $derived(costColumns(costShapes, costShape, rate.currency));
+	/** The thinnest band as a share of the tallest day, at one precision, so the
+	 * figure the panel prints and the figure the shape was picked on can never be
+	 * two readings of one measurement. */
+	const costThinnest = $derived(
+		costShapes.thinnestShare === null ? null : (costShapes.thinnestShare * 100).toFixed(1)
 	);
 </script>
 
@@ -1001,11 +1070,11 @@
 	<div
 		data-windowed="machine-fleet"
 		data-window-days={windowDays}
-		data-readout-none="a ranked list has no column"
+		data-readout-none={view.fleet.drawBars ? undefined : 'a list of counts has no column'}
 	>
 		<Panel
 			title="What the platform has been giving us"
-			note="How often each kind of machine turned up over the last {windowDays} days. A count of what happened, never a rate: what the next job will draw is the one thing this cannot say."
+			note="How often each kind of machine turned up over the last {windowDays} days, day by day. A count of what happened, never a rate: what the next job will draw is the one thing this cannot say."
 		>
 			{#if view.fleet.nothing === 'recording-off'}
 				<p class="empty" data-machine-panel-empty="fleet-off">
@@ -1022,28 +1091,44 @@
 					after the record ships.
 				</p>
 			{:else if view.fleet.drawBars}
-				<p class="reads" data-fleet-basis={view.fleet.placements}>
-					Over {view.fleet.placements} job placements in these {view.fleet.days} days.
-				</p>
-				<RankedList
-					caption="Machines by how often the platform gave us one"
-					ranked={view.fleet.ranked}
-					maxText="{view.fleet.ranked.max} placements"
-					unmeasuredNote="Nothing has recorded which machine a job drew yet."
-					emptyNote="No job in these {view.fleet.days} days recorded which machine it drew."
+				<!-- The title asks what has been given lately, so the shape is a time
+				     axis and not a ranked list. The ordering a list carried is the
+				     sentence above the plot: that is the loss, named rather than
+				     absorbed. -->
+				<div
+					data-fleet-days={view.fleet.trend.days.length}
+					data-fleet-series={view.fleet.trend.series.length}
+					data-fleet-folded={view.fleet.trend.folded}
+					data-fleet-top-kinds={view.fleet.trend.topKinds}
+					data-fleet-other={view.fleet.trend.other}
+					data-fleet-outside-top={view.fleet.trend.outsideTop}
+					data-panel-question="is it working"
 				>
-					{#snippet glyph(row)}
-						<span
-							class="fleet-edge"
-							aria-hidden="true"
-							data-fleet-stop={view.fleet.kinds.find((kind) => kind.identity.key === row.key)
-								?.identity.colourStop ?? ''}
-							style="background: var(--chart-{view.fleet.kinds.find(
-								(kind) => kind.identity.key === row.key
-							)?.identity.colourStop ?? 8})"
-						></span>
-					{/snippet}
-				</RankedList>
+					<p class="reads" data-fleet-basis={view.fleet.placements}>
+						Over {view.fleet.placements} job placements in these {view.fleet.days} days,
+						{view.fleet.trend.days.length}
+						{view.fleet.trend.days.length === 1 ? 'day' : 'days'} of which recorded one. The kind we
+						are given most is {view.fleet.kinds[0].identity.name}, {view.fleet.kinds[0].placements} of
+						them.
+						{#if view.fleet.trend.folded > 0}
+							The {view.fleet.trend.folded} rarest kinds are drawn as one bar:
+							{view.fleet.trend.series.at(-1)?.identity.folded.join(', ')}.
+						{/if}
+					</p>
+					<Chart
+						svg={data.fleetSvg ?? ''}
+						option={fleetOption}
+						width={data.chart.width_px}
+						height={data.chart.height_px}
+						label="Job placements per day over {view.fleet.days} days, one bar per kind of machine. One group is one day."
+						columns={fleetStrip}
+						readoutName="machine-fleet"
+						readoutMaxShare={data.chart.readout_max_share}
+						grid={data.fleetGrid}
+						restingNote=", the newest day"
+						hint="Point at a day to read every kind on it. Left and Right step through them, Escape returns to the newest."
+					/>
+				</div>
 			{:else}
 				<ul class="shares" data-fleet-list={view.fleet.placements}>
 					{#each view.fleet.kinds as kind (kind.identity.key)}
@@ -1067,47 +1152,33 @@
 	<div data-windowed="machine-host" data-window-days={windowDays}>
 		<Panel
 			title="What the server did outside the model call"
-			note="What the machine and the server spent outside the model call itself. Each figure carries its ceiling: a counter without one is not a measurement. Each also carries its span over the last {windowDays} days, which is what says whether the newest run was unusual."
+			note="What the machine and the server spent outside the model call itself. Each figure carries its ceiling: a counter without one is not a measurement. A figure with a span is one track - the band is what the last {windowDays} days read, the upright is this run's own mark on it, and that is what says whether the newest run was unusual."
 		>
 			<dl class="host">
-				<div data-host="cpu-busy" data-host-value={data.host.cpuBusy?.value ?? ''}>
-					<dt>Least busy shard</dt>
-					<dd>
-						{#if data.host.cpuBusy === null || data.host.cpuBusy.value === null}
-							<span class="absent">Not recorded on this run.</span>
-						{:else}
-							{data.host.cpuBusy.value.toFixed(2)}% of every processor second
-							<span class="unit">
-								Near 100 is the expected reading, so the gap is the share of that shard's job spent
-								waiting rather than computing. Over these {view.days} days the lowest reading ran
-								{(view.cpuBusySpan.low ?? 0).toFixed(2)}% to
-								{(view.cpuBusySpan.high ?? 0).toFixed(2)}%, on
-								{view.cpuBusySpan.from} of {view.cpuBusySpan.outOf} runs.
-							</span>
-						{/if}
-					</dd>
-				</div>
+				<!-- Two figures, one shape. Each was a reading and a span written as
+				     prose, which a reader can follow but cannot compare: a track puts
+				     the run's own mark on the window that measured it. -->
+				<HostFigure
+					name="cpu-busy"
+					label="Least busy shard"
+					track={cpuBusyTrack}
+					format={(pct) => `${pct.toFixed(2)}%`}
+					windowDays={view.days}
+					note="Of every processor second. Near 100 is the expected reading, so the gap is the share of that shard's job spent waiting rather than computing."
+				/>
 
 				<!-- The memory row that sat here was the window's span of the same
 				     figure the panel above draws, written as prose. It is now that
 				     panel's window grain, where it is a track beside the run's own
 				     mark rather than a sentence a reader has to hold in their head. -->
-				<div data-host="model-load" data-host-value={data.host.modelLoad?.value ?? ''}>
-					<dt>Opening the weights</dt>
-					<dd>
-						{#if data.host.modelLoad === null || data.host.modelLoad.value === null}
-							<span class="absent">Not recorded on this run.</span>
-						{:else}
-							{grouped(Math.round(data.host.modelLoad.value))} ms on its slowest shard
-							<span class="unit">
-								Over these {view.days} days: {grouped(
-									Math.round(view.modelLoadSpan.low ?? 0)
-								)} to {grouped(Math.round(view.modelLoadSpan.high ?? 0))} ms, on
-								{view.modelLoadSpan.from} of {view.modelLoadSpan.outOf} runs.
-							</span>
-						{/if}
-					</dd>
-				</div>
+				<HostFigure
+					name="model-load"
+					label="Opening the weights"
+					track={modelLoadTrack}
+					format={(ms) => `${grouped(Math.round(ms))} ms`}
+					windowDays={view.days}
+					note="The run's slowest shard."
+				/>
 
 				<!-- One line of text, not a chart. The server serves one request at a
 				     time because `models.summarize.inference.n_parallel` is 1, and this
@@ -1395,53 +1466,82 @@
 		data-model-rule-none="one bar a run, so there is no day edge to draw between"
 	>
 		<Panel
-			title="Tokens per run"
-			note="Prompt tokens and written tokens, one bar per run over the last {windowDays} days. They are different quantities with different prices, so each carries its own axis."
+			title="What a run reads against what it writes"
+			note="One group per run over the last {windowDays} days, a read bar beside a written bar on one axis. The switch changes the unit: the tokens each half counted, or the seconds the model server spent on it."
 		>
 			{#if view.tokens.length === 0}
 				<p class="empty" data-machine-panel-empty="tokens">
 					No run in these {view.days} days recorded both a prompt count and a written count.
 				</p>
 			{:else}
-				<div class="pair">
-					<figure class="pane" data-token-chart="input">
-						<figcaption>Prompt tokens</figcaption>
+				<div
+					data-read-write-unit={workUnit}
+					data-read-write-runs={view.tokens.length}
+					data-read-write-timed-runs={view.work.timedRuns}
+					data-read-write-taller={view.work.taller[workUnit] ?? ''}
+					data-read-write-ratio={workRatio ?? ''}
+					data-read-write-split={view.work.split[workUnit] ? 'yes' : 'no'}
+					data-panel-question="is it working"
+				>
+					<!-- Top right of its own panel, and radio inputs: two named states a
+					     reader can see both of beat one state and a verb. -->
+					<div class="units">
+						<ShapeSwitch
+							bind:shape={workUnit}
+							name="work-unit"
+							label="Which unit to count in"
+							options={WORK_UNITS}
+						/>
+					</div>
+
+					{#if workAbsent}
+						<p class="empty" data-work-absent="seconds">
+							No run in these {view.days} days timed the model call, so there are no seconds to draw.
+							That is a measurement that did not survive, not a run that took no time. Count the
+							tokens instead.
+						</p>
+					{:else}
 						<Chart
-							svg={data.inputSvg ?? ''}
-							option={inputOption}
+							svg={data.workSvg ?? ''}
+							option={workOption}
 							width={data.chart.width_px}
 							height={data.chart.height_px}
-							label="Prompt tokens each run sent to the model over {view.days} days. One bar is one run."
-							columns={inputStrip}
-							readoutName="tokens-input"
+							label="What each run read beside what it wrote, in {workUnit}, over {view.days} days. One group is one run."
+							columns={workStrip}
+							readoutName="read-against-written"
 							readoutMaxShare={data.chart.readout_max_share}
-							grid={data.inputGrid}
+							grid={data.workGrid}
 							restingNote=", the last run"
 							hint="Point at a run to read it. Left and Right step through them, Escape returns to the last."
 						/>
-					</figure>
-					<figure class="pane" data-token-chart="output">
-						<figcaption>Written tokens</figcaption>
-						<Chart
-							svg={data.outputSvg ?? ''}
-							option={outputOption}
-							width={data.chart.width_px}
-							height={data.chart.height_px}
-							label="Tokens each run's answers were made of over {view.days} days. One bar is one run."
-							columns={outputStrip}
-							readoutName="tokens-output"
-							readoutMaxShare={data.chart.readout_max_share}
-							grid={data.outputGrid}
-							restingNote=", the last run"
-							hint="Point at a run to read it. Left and Right step through them, Escape returns to the last."
-						/>
-					</figure>
+					{/if}
+
+					<p class="reads" data-token-totals>
+						{grouped(view.tokenTotals.input)} tokens read and {grouped(view.tokenTotals.output)}
+						written, over {view.tokens.length}
+						{view.tokens.length === 1 ? 'run' : 'runs'} and {grouped(view.tokenTotals.items)} items.
+						{#if view.work.timedRuns < view.tokens.length}
+							{view.work.timedRuns} of those
+							{view.work.timedRuns === 1 ? 'run' : 'runs'} timed the model call.
+						{/if}
+					</p>
+					<!-- 19D4's threshold is a measurement, so the panel prints the one it
+					     took rather than asserting the shape was safe. -->
+					<p class="reads" data-read-write-measured>
+						{#if workRatio === null}
+							Nothing in {workUnit} to divide over this span, so the two bars carry no ratio.
+						{:else}
+							Measured over these runs: {workRatio}
+							{workUnit}
+							{view.work.taller[workUnit] === 'read' ? 'read' : 'written'} for every one
+							{view.work.taller[workUnit] === 'read' ? 'written' : 'read'}.
+							{#if view.work.split[workUnit]}
+								Past {SHARED_AXIS_LIMIT} to one the smaller side draws under 5 percent of a shared
+								axis and reads as zero, so it takes its own row here.
+							{/if}
+						{/if}
+					</p>
 				</div>
-				<p class="reads" data-token-totals>
-					{grouped(view.tokenTotals.input)} prompt tokens and {grouped(view.tokenTotals.output)}
-					written, over {view.tokens.length}
-					{view.tokens.length === 1 ? 'run' : 'runs'} and {grouped(view.tokenTotals.items)} items.
-				</p>
 			{/if}
 		</Panel>
 	</div>
@@ -1484,6 +1584,62 @@
 						</dd>
 					</div>
 				</dl>
+
+				<div
+					data-cost-shape={costShape}
+					data-cost-days={costShapes.days.length}
+					data-cost-running-total={costShapes.runningTotal}
+					data-cost-split={costShapes.splitTooThin ? 'printed' : 'drawn'}
+					data-cost-thinnest-pct={costThinnest ?? ''}
+					data-panel-question="is it working"
+				>
+					<!-- Top right of its own panel, and radio inputs: two named states a
+					     reader can see both of beat one state and a verb. -->
+					<div class="units">
+						<ShapeSwitch
+							bind:shape={costShape}
+							name="cost-shape"
+							label="Which shape to draw the counterfactual in"
+							options={COST_SHAPES}
+						/>
+					</div>
+
+					{#if costShapes.days.length === 0}
+						<p class="empty" data-cost-absent="days">
+							No run in these {view.days} days carries a date, so there is nothing to lay on a
+							time axis. The four figures above still hold.
+						</p>
+					{:else}
+						<Chart
+							svg={data.costSvg ?? ''}
+							option={costOption}
+							width={data.chart.width_px}
+							height={data.chart.height_px}
+							label={costLabel(costShape, view.days)}
+							columns={costStrip}
+							readoutName="counterfactual-cost"
+							readoutMaxShare={data.chart.readout_max_share}
+							grid={data.costGrid}
+							restingNote=", the newest day"
+							hint="Point at a day to read it. Left and Right step through them, Escape returns to the newest."
+						/>
+					{/if}
+
+					<!-- 19D8's threshold is a measurement, so the panel prints the one it
+					     took rather than asserting the bands were safe to draw. -->
+					<p class="reads" data-cost-measured>
+						{#if costThinnest === null}
+							Nothing split in this window, so the columns carry no bands.
+						{:else if costShapes.splitTooThin}
+							Reading and writing are one column here. The smaller half measures {costThinnest}
+							percent of the tallest day, which draws under a pixel, and a band a browser paints
+							nothing for teaches a reader the half is zero.
+						{:else}
+							The smaller half of the busiest day measures {costThinnest} percent of the tallest
+							column, so both halves draw as bands rather than as a printed figure.
+						{/if}
+					</p>
+				</div>
 
 				<p class="reads" data-cost-basis>
 					What {view.tokens.length}
@@ -1545,16 +1701,6 @@
 		gap: var(--space-4);
 	}
 
-	/* The machine's colour beside its name in the ranked list. The name is on
-	   the row in words, so this repeats a fact rather than carrying one. */
-	.fleet-edge {
-		display: inline-block;
-		inline-size: 4px;
-		block-size: 1em;
-		border-radius: 2px;
-		vertical-align: -0.15em;
-	}
-
 	.reads {
 		margin: var(--space-3) 0 0;
 		font-size: var(--text-sm);
@@ -1601,22 +1747,9 @@
 		color: var(--color-text-tertiary);
 	}
 
-	.pair {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
-		gap: var(--space-5);
-	}
-
-	.pane {
-		margin: 0;
-		min-inline-size: 0;
-	}
-
-	.pane figcaption {
-		font-size: var(--text-xs);
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-		color: var(--color-text-tertiary);
+	.units {
+		display: flex;
+		justify-content: flex-end;
 	}
 
 	.cost {

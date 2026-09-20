@@ -115,6 +115,7 @@
     "failure_list_max": 10,
     "feed_rows": 6,
     "fleet_min_rows": 80,
+    "fleet_top_kinds": 2,
     "machine_colour_stops": 5,
     "max_window_days": 180,
     "min_attempts_for_rate": 3,

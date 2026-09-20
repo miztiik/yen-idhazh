@@ -48,14 +48,14 @@ export const MEMORY_POLARITY: Polarity = 'lower-is-better';
 
 /** The room an engine-drawn value axis needs for its own widest label.
  *
- * `stacked` and `tokenChart` both took a fixed 48px, which is a gutter sized
- * for a four-digit count. Measured 2026-09-01 at 1440, 768 and 390 on the built
- * console, that clipped `200,000` by 1.35px and `1,200,000` by 10.44px on the
- * prompt-cache chart - six labels cut on every width. The engine picks its own
- * top tick, so the widest label it can draw is the largest value grouped plus
- * at most one more character; that character is the slack added here.
+ * `stacked` and the run-by-run bars both took a fixed 48px, which is a gutter
+ * sized for a four-digit count. Measured 2026-09-01 at 1440, 768 and 390 on the
+ * built console, that clipped `200,000` by 1.35px and `1,200,000` by 10.44px on
+ * the prompt-cache chart - six labels cut on every width. The engine picks its
+ * own top tick, so the widest label it can draw is the largest value grouped
+ * plus at most one more character; that character is the slack added here.
  */
-function valueGutter(highest: number, fontSize = 11): number {
+export function valueGutter(highest: number, fontSize = 11): number {
 	const widest = labelWidth(grouped(Math.round(highest)), fontSize) + fontSize * LABEL_ADVANCE_EM;
 	return Math.ceil(widest) + AXIS_LABEL_GAP_PX;
 }
@@ -1360,7 +1360,7 @@ export function percentileChart(curves: readonly PercentileCurve[]): {
 }
 
 // ---------------------------------------------------------------------------
-// Tokens, and what they would have cost somewhere else
+// What a run reads against what it writes, and what it would have cost
 // ---------------------------------------------------------------------------
 
 /** Every run's reading at one percentile, for the strip under the curves.
@@ -1381,40 +1381,179 @@ export function percentileColumns(curves: readonly PercentileCurve[]): DayReadou
 	}));
 }
 
-export interface RunTokens {
+/** The two currencies a run's model work can be counted in. */
+export type WorkUnit = 'tokens' | 'seconds';
+
+/** Which unit the panel opens on, read by the server that draws the first
+ * paint and by the browser that redraws it, so the two can never disagree.
+ *
+ * Seconds, because it is the true reading. Reading is batched prefill and
+ * writing is sequential decode, so the taller token bar is the cheaper half of
+ * the run - a panel that opens in tokens states the wrong answer first and
+ * waits for the reader to find the switch. */
+export const DEFAULT_WORK_UNIT: WorkUnit = 'seconds';
+
+/** Past this, the smaller series draws under 5 percent and reads as zero, so
+ * it takes its own row on a shared x rather than a sliver on a shared axis. */
+export const SHARED_AXIS_LIMIT = 20;
+
+export interface RunWork {
 	runId: string;
 	date: string;
 	/** Every prompt token the run sent, cached ones included: a provider bills
 	 * for the prompt it was given, not for the part its own cache missed. */
 	input: number;
 	output: number;
-	/** Items that reported both counts. The denominator. */
+	/** Prefill and decode over the SAME item rows the two token counts came
+	 * from. Null where none of those rows timed the model call: a run that was
+	 * not timed did not take no time. */
+	prefillMs: number | null;
+	decodeMs: number | null;
+	/** Items that reported both token counts. The denominator, and the row set
+	 * both units are summed over. */
 	items: number;
+	/** Of those, the ones that also timed both halves of the model call. */
+	timed: number;
 }
 
-export function tokensByRun(health: readonly Record<string, string>[]): RunTokens[] {
-	const byRun = new Map<string, { date: string; input: number; output: number; items: number }>();
+export interface ReadWriteSummary {
+	/** Runs carrying a duration. Zero is the seconds grain's absent state. */
+	timedRuns: number;
+	/** Larger over smaller, per unit, over every run drawn. Null where the unit
+	 * has no reading or the smaller side is zero. */
+	ratio: Record<WorkUnit, number | null>;
+	/** Which side of the comparison is the taller one, per unit. The two
+	 * disagreeing is the finding this panel exists to deliver. */
+	taller: Record<WorkUnit, 'read' | 'written' | null>;
+	/** Where that ratio passed `SHARED_AXIS_LIMIT` and the smaller series takes
+	 * its own row. Measured rather than assumed. */
+	split: Record<WorkUnit, boolean>;
+}
+
+export interface ReadWriteView extends ReadWriteSummary {
+	runs: RunWork[];
+}
+
+/** What a run read against what it wrote, counted twice over one row set.
+ *
+ * **One call returns both units, and the row set is decided once.** A row
+ * qualifies on its token counts; the durations are then summed over exactly
+ * those rows. Two independent filters would let the two grains cover different
+ * runs, and a panel whose grains disagree about what they measured cannot be
+ * recovered by reading it harder.
+ */
+export function readAgainstWritten(health: readonly Record<string, string>[]): ReadWriteView {
+	const byRun = new Map<
+		string,
+		{
+			date: string;
+			input: number;
+			output: number;
+			prefillMs: number;
+			decodeMs: number;
+			items: number;
+			timed: number;
+		}
+	>();
 	for (const row of health) {
-		if (row.input_tokens === '' || row.output_tokens === '') continue;
-		const input = Number(row.input_tokens);
-		const output = Number(row.output_tokens);
-		if (!Number.isFinite(input) || !Number.isFinite(output)) continue;
+		const input = cell(row.input_tokens);
+		const output = cell(row.output_tokens);
+		if (input === null || output === null) continue;
 		const runId = row.run_id ?? '';
-		const bucket = byRun.get(runId) ?? { date: row.date ?? '', input: 0, output: 0, items: 0 };
+		const bucket = byRun.get(runId) ?? {
+			date: row.date ?? '',
+			input: 0,
+			output: 0,
+			prefillMs: 0,
+			decodeMs: 0,
+			items: 0,
+			timed: 0
+		};
 		bucket.input += input;
 		bucket.output += output;
 		bucket.items += 1;
+		const prefill = cell(row.prefill_ms);
+		const decode = cell(row.decode_ms);
+		if (prefill !== null && decode !== null) {
+			bucket.prefillMs += prefill;
+			bucket.decodeMs += decode;
+			bucket.timed += 1;
+		}
 		byRun.set(runId, bucket);
 	}
-	return [...byRun.entries()]
-		.map(([runId, bucket]) => ({ runId, ...bucket }))
+	const runs: RunWork[] = [...byRun.entries()]
+		.map(([runId, bucket]) => ({
+			runId,
+			date: bucket.date,
+			input: bucket.input,
+			output: bucket.output,
+			prefillMs: bucket.timed === 0 ? null : bucket.prefillMs,
+			decodeMs: bucket.timed === 0 ? null : bucket.decodeMs,
+			items: bucket.items,
+			timed: bucket.timed
+		}))
 		.filter((run) => run.items > 0)
 		.sort((a, b) => a.runId.localeCompare(b.runId));
+
+	const total = (pick: (run: RunWork) => number | null): number | null => {
+		const drawn = runs.map(pick).filter((value): value is number => value !== null);
+		return drawn.length === 0 ? null : drawn.reduce((carry, value) => carry + value, 0);
+	};
+	const pair = (read: number | null, written: number | null) => {
+		if (read === null || written === null) {
+			return { ratio: null, taller: null, split: false } as const;
+		}
+		const high = Math.max(read, written);
+		const low = Math.min(read, written);
+		const ratio = low === 0 ? null : high / low;
+		return {
+			ratio,
+			taller: (read === written ? null : read > written ? 'read' : 'written') as
+				| 'read'
+				| 'written'
+				| null,
+			split: ratio !== null && ratio > SHARED_AXIS_LIMIT
+		};
+	};
+	const counted = pair(total((run) => run.input), total((run) => run.output));
+	const clocked = pair(total((run) => run.prefillMs), total((run) => run.decodeMs));
+	return {
+		runs,
+		timedRuns: runs.filter((run) => run.timed > 0).length,
+		ratio: { tokens: counted.ratio, seconds: clocked.ratio },
+		taller: { tokens: counted.taller, seconds: clocked.taller },
+		split: { tokens: counted.split, seconds: clocked.split }
+	};
 }
 
-/** One bar a run. Input and output are separate charts because they are
- * separate quantities with separate prices, and a shared axis would flatten
- * whichever of them is smaller into nothing.
+/** What one run's two sides measure in the open unit, or nothing.
+ *
+ * Milliseconds leave as seconds here and nowhere else, so the axis, the strip
+ * and the readout are one conversion rather than three.
+ */
+export function workValues(
+	run: RunWork,
+	unit: WorkUnit
+): { read: number | null; written: number | null } {
+	if (unit === 'tokens') return { read: run.input, written: run.output };
+	return {
+		read: run.prefillMs === null ? null : run.prefillMs / 1000,
+		written: run.decodeMs === null ? null : run.decodeMs / 1000
+	};
+}
+
+/** One group a run: what it read beside what it wrote, in the open unit.
+ *
+ * **Two bars a group and one linear domain, because the comparison IS the
+ * panel.** Two plots with a domain each let both series fill their own box, and
+ * a reader who wants to know which half of the run costs more learns nothing
+ * from two full boxes.
+ *
+ * **Past `SHARED_AXIS_LIMIT` the smaller series takes its own row on a shared
+ * x.** Two grids, same categories, larger on top - the ratio is measured before
+ * the shape is picked, and the page prints the ratio it measured. On the
+ * committed ledger neither unit reaches the limit, so this is the degradation
+ * and not the panel.
  *
  * The axis carries the run's DAY and not its run id. A run id is now
  * `<date>-<workflow run>`, and turned 45 degrees, measured 2026-09-01 on the
@@ -1431,49 +1570,102 @@ export function tokensByRun(health: readonly Record<string, string>[]): RunToken
  * label set computed at the authored width would be the wrong set at all the
  * others.
  */
-export function tokenChart(
-	runs: readonly RunTokens[],
-	pick: (run: RunTokens) => number,
-	label: string,
-	token: ChartToken
+export function workChart(
+	runs: readonly RunWork[],
+	summary: ReadWriteSummary,
+	unit: WorkUnit
 ): { option: EChartsOption; empty: boolean; grid: { left: number; right: number } } {
-	const grid = { left: valueGutter(Math.max(0, ...runs.map(pick))), right: 12 };
-	if (runs.length === 0) return { option: {}, empty: true, grid };
+	const values = runs.map((run) => workValues(run, unit));
+	const read = values.map((value) => value.read);
+	const written = values.map((value) => value.written);
+	const drawn = [...read, ...written].filter((value): value is number => value !== null);
+	const grid = { left: valueGutter(Math.max(0, ...drawn)), right: 12 };
+	if (drawn.length === 0) return { option: {}, empty: true, grid };
+
+	const name = unit === 'tokens' ? 'tokens' : 'seconds';
+	const dates = runs.map((run) => dayMonth(run.date));
+	const category = (extra: Record<string, unknown>) => ({
+		type: 'category' as const,
+		data: dates,
+		axisLine: { lineStyle: { color: paint('--chart-axis') } },
+		axisTick: { show: false },
+		axisLabel: {
+			color: paint('--color-text-tertiary'),
+			fontSize: 10,
+			hideOverlap: true
+		},
+		...extra
+	});
+	const value = (title: string, extra: Record<string, unknown>) => ({
+		type: 'value' as const,
+		name: title,
+		nameTextStyle: { color: paint('--color-text-tertiary'), fontSize: 11 },
+		axisLabel: { color: paint('--color-text-tertiary'), fontSize: 11 },
+		splitLine: { lineStyle: { color: paint('--chart-grid') } },
+		...extra
+	});
+	const bar = (title: string, token: ChartToken, data: (number | null)[], at: number) => ({
+		name: title,
+		type: 'bar' as const,
+		barMaxWidth: 24,
+		itemStyle: { color: paint(token) },
+		xAxisIndex: at,
+		yAxisIndex: at,
+		data
+	});
+	const READ = { title: 'Read', token: '--chart-1' as ChartToken, data: read };
+	const WRITTEN = { title: 'Written', token: '--chart-4' as ChartToken, data: written };
+
+	if (!summary.split[unit]) {
+		return {
+			empty: false,
+			grid,
+			option: {
+				animation: false,
+				// 30 at the top for the axis name, 26 at the bottom now that no label
+				// is turned. The 14px that buys goes back to the plot.
+				grid: { ...grid, top: 30, bottom: 26, containLabel: false },
+				tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+				xAxis: category({}),
+				yAxis: value(name, {}),
+				series: [
+					bar(READ.title, READ.token, READ.data, 0),
+					bar(WRITTEN.title, WRITTEN.token, WRITTEN.data, 0)
+				]
+			}
+		};
+	}
+
+	const readTotal = read.reduce<number>((carry, entry) => carry + (entry ?? 0), 0);
+	const writtenTotal = written.reduce<number>((carry, entry) => carry + (entry ?? 0), 0);
+	const [top, below] = readTotal >= writtenTotal ? [READ, WRITTEN] : [WRITTEN, READ];
 	return {
 		empty: false,
 		grid,
 		option: {
 			animation: false,
-			// 30 at the top for the axis name, 26 at the bottom now that no label is
-			// turned. The 14px that buys goes back to the plot.
-			grid: { ...grid, top: 30, bottom: 26, containLabel: false },
+			// Percentages rather than pixels: the renderer is handed a height and
+			// the two rows have to divide whatever it is.
+			grid: [
+				{ ...grid, top: 30, height: '34%', containLabel: false },
+				{ ...grid, top: '62%', bottom: 26, containLabel: false }
+			],
 			tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-			xAxis: {
-				type: 'category',
-				data: runs.map((run) => dayMonth(run.date)),
-				axisLine: { lineStyle: { color: paint('--chart-axis') } },
-				axisTick: { show: false },
-				axisLabel: {
-					color: paint('--color-text-tertiary'),
-					fontSize: 10,
-					hideOverlap: true
-				}
-			},
-			yAxis: {
-				type: 'value',
-				name: label,
-				nameTextStyle: { color: paint('--color-text-tertiary'), fontSize: 11 },
-				axisLabel: { color: paint('--color-text-tertiary'), fontSize: 11 },
-				splitLine: { lineStyle: { color: paint('--chart-grid') } }
-			},
+			// One pointer over both rows, so a run is read on both at once.
+			axisPointer: { link: [{ xAxisIndex: 'all' }] },
+			// The top row borrows the bottom row's labels rather than printing the
+			// same dates twice.
+			xAxis: [
+				category({ gridIndex: 0, axisLabel: { show: false } }),
+				category({ gridIndex: 1 })
+			],
+			yAxis: [
+				value(`${top.title.toLowerCase()}, ${name}`, { gridIndex: 0 }),
+				value(`${below.title.toLowerCase()}, ${name}`, { gridIndex: 1 })
+			],
 			series: [
-				{
-					name: label,
-					type: 'bar' as const,
-					barMaxWidth: 24,
-					itemStyle: { color: paint(token) },
-					data: runs.map((run) => pick(run))
-				}
+				bar(top.title, top.token, top.data, 0),
+				bar(below.title, below.token, below.data, 1)
 			]
 		}
 	};

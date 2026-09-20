@@ -13,25 +13,72 @@
  * counter rows and the 5-observation floor `console.min_attempts_for_rate`
  * already sets.
  *
- * Pure. The threshold, the window and the switch arrive as arguments.
+ * **Over the threshold it is a trend, because that is what the title asks.** One
+ * group a day and one bar a kind, with everything past `console.fleet_top_kinds`
+ * folded into one named row so a day's band keeps bars a reader can see.
+ *
+ * Pure. The threshold, the fold, the window and the switch arrive as arguments.
  */
 
+import type { EChartsOption } from 'echarts';
 import type { HostFingerprint } from '$lib/server/host-fingerprint';
 import type { LostDay } from '$lib/console/recording';
+import { dayMonth, shortDate } from '$lib/format';
+import { columnStrip, type DayReadout } from './frame';
+import { valueGutter } from './machine';
 import {
 	machineKeys,
 	machineRamp,
+	FOLDED_KEY,
+	FOLDED_NAME,
+	UNRECORDED_STOP,
 	type MachineIdentity,
 	type MachineKey,
 	type MachineRamp,
 	type MachineSeen
 } from './machine-colour';
-import { rank, type Ranked, type RankedDisplay } from './rank';
+import { paint, type ChartToken } from './theme';
+
+/** One kind's placements, day by day, in the order `FleetTrend.days` holds. */
+export interface FleetSeries {
+	identity: MachineIdentity;
+	/** One entry per day drawn. Zero where the day recorded another kind only. */
+	counts: number[];
+	/** The window total. The figure the top-K fold is taken on. */
+	placements: number;
+}
+
+/** The count as a trend: one group a day, one bar a kind, folded past top K.
+ *
+ * **The day grain is derived here and declared nowhere.** Every fingerprint row
+ * carries its own `date`, so grouping by it needs no payload field - and a
+ * declared one would be a second place for the grain to disagree with itself.
+ *
+ * **Only days that recorded something are drawn.** A day the machine record
+ * never reached is not a day the platform gave us no machine, and a zero-height
+ * group would say it was. How many of the window's days are missing is printed
+ * above the plot instead.
+ */
+export interface FleetTrend {
+	/** The days that recorded a placement, ascending. One group each. */
+	days: string[];
+	/** Kept kinds, biggest first, then the fold row last where one exists. */
+	series: FleetSeries[];
+	/** Kinds folded into that last row. Zero where nothing folded. */
+	folded: number;
+	/** The fold bar's own window total, read off the series that is drawn. */
+	other: number;
+	/** The same figure summed off the kinds that fell outside the top K. Two
+	 * derivations of one quantity, so the page can be held to them agreeing. */
+	outsideTop: number;
+	/** The K the fold was taken at, so the panel can print the knob it read. */
+	topKinds: number;
+	/** Days of the window that recorded no placement at all. */
+	daysWithout: number;
+}
 
 export interface FleetView {
-	/** Ranked by count, descending. Empty where nothing was recorded. */
-	ranked: Ranked<RankedDisplay>;
-	/** Every kind and its count, in the same order, with its colour. */
+	/** Every kind and its count, biggest first, with its colour. */
 	kinds: { identity: MachineIdentity; placements: number }[];
 	/** Job placements the count was made from. The denominator, printed. */
 	placements: number;
@@ -41,6 +88,8 @@ export interface FleetView {
 	minRows: number;
 	/** True at or above the threshold. Below it the panel lists and draws no bar. */
 	drawBars: boolean;
+	/** The same count arranged by day, which is what the bars are drawn from. */
+	trend: FleetTrend;
 	/** Why there is nothing. Null where there is something.
 	 *
 	 * `record-lost` and `none` are the two the panel could not tell apart until
@@ -57,6 +106,8 @@ export function fleetOverWindow(
 		days: number;
 		minRows: number;
 		colourStops: number;
+		/** How many kinds keep a bar of their own before the rest fold into one. */
+		topKinds: number;
 		/** False where the machine record is switched off. */
 		recording: boolean;
 		ramp?: MachineRamp;
@@ -92,28 +143,21 @@ export function fleetOverWindow(
 		.map((identity) => ({ identity, placements: counts.get(identity.key) ?? 0 }))
 		.sort((a, b) => b.placements - a.placements || a.identity.key.localeCompare(b.identity.key));
 
-	// No cap: the ramp already bounds the row count, so a `Show more` here would
-	// reveal nothing (`console.machine_colour_stops` plus the reserved grey).
-	const ranked = rank(
-		kinds.map((kind) => ({
-			key: kind.identity.key,
-			value: kind.placements,
-			row: {
-				label: kind.identity.name,
-				value: `${kind.placements}`,
-				context: kind.identity.folded.length > 0 ? kind.identity.folded.join(', ') : null
-			}
-		})),
-		0
-	);
-
 	return {
-		ranked,
 		kinds,
 		placements: inWindow.length,
 		days: options.days,
 		minRows: options.minRows,
 		drawBars: inWindow.length >= options.minRows,
+		trend: trendOf(
+			inWindow.map((row, index) => ({
+				date: row.date,
+				identity: ramp.at.get(keys[index].key) ?? null
+			})),
+			kinds,
+			options.topKinds,
+			options.days
+		),
 		nothing: !options.recording
 			? 'recording-off'
 			: inWindow.length > 0
@@ -121,5 +165,158 @@ export function fleetOverWindow(
 				: (options.lost ?? []).length > 0
 					? 'record-lost'
 					: 'none'
+	};
+}
+
+/** The lowest stop of the ramp no kept kind is holding.
+ *
+ * The fold row cannot take a colour a drawn kind already has - two kinds in one
+ * hue with nothing on the page to say so - and it cannot take the reserved grey,
+ * which would read as an absence. A fold only happens past K, and K is bounded
+ * below the ramp's stops, so one is always free.
+ */
+function freeStop(taken: readonly number[]): number {
+	for (let stop = 1; stop < UNRECORDED_STOP; stop += 1) {
+		if (!taken.includes(stop)) return stop;
+	}
+	return UNRECORDED_STOP - 1;
+}
+
+/** The same placements arranged by day, with everything past K folded into one.
+ *
+ * The fold is taken on the window total and never per day, so a kind keeps the
+ * same colour in every group. Folding per day would let one machine be its own
+ * bar on Monday and part of `other` on Tuesday.
+ */
+function trendOf(
+	placements: readonly { date: string; identity: MachineIdentity | null }[],
+	kinds: readonly { identity: MachineIdentity; placements: number }[],
+	topKinds: number,
+	windowDays: number
+): FleetTrend {
+	const days = [...new Set(placements.map((one) => one.date))].sort();
+	const at = new Map(days.map((date, index) => [date, index]));
+	const perDay = new Map<string, number[]>();
+	for (const one of placements) {
+		if (one.identity === null) continue;
+		const counts = perDay.get(one.identity.key) ?? days.map(() => 0);
+		counts[at.get(one.date) ?? 0] += 1;
+		perDay.set(one.identity.key, counts);
+	}
+
+	const keep = kinds.slice(0, Math.max(1, topKinds));
+	const rest = kinds.slice(keep.length);
+	const series: FleetSeries[] = keep.map((kind) => ({
+		identity: kind.identity,
+		counts: perDay.get(kind.identity.key) ?? days.map(() => 0),
+		placements: kind.placements
+	}));
+	if (rest.length > 0) {
+		const counts = days.map((_, index) =>
+			rest.reduce((carry, kind) => carry + (perDay.get(kind.identity.key)?.[index] ?? 0), 0)
+		);
+		const total = rest.reduce((carry, kind) => carry + kind.placements, 0);
+		const names = rest.map((kind) => kind.identity.name);
+		// The ramp may already have folded, and its row can be one of the kept.
+		// Two rows both called `Other machines` is the one shape that cannot ship.
+		const already = series.find((one) => one.identity.key === FOLDED_KEY);
+		if (already === undefined) {
+			series.push({
+				identity: {
+					key: FOLDED_KEY,
+					name: FOLDED_NAME,
+					colourStop: freeStop(keep.map((kind) => kind.identity.colourStop)),
+					folded: names
+				},
+				counts,
+				placements: total
+			});
+		} else {
+			already.identity = { ...already.identity, folded: [...already.identity.folded, ...names] };
+			already.counts = already.counts.map((count, index) => count + counts[index]);
+			already.placements += total;
+		}
+	}
+
+	return {
+		days,
+		series,
+		folded: rest.length,
+		other: series.find((one) => one.identity.key === FOLDED_KEY)?.placements ?? 0,
+		outsideTop: rest.reduce((carry, kind) => carry + kind.placements, 0),
+		topKinds,
+		daysWithout: Math.max(0, windowDays - days.length)
+	};
+}
+
+/** One strip column a day, one row a kind: every count the tooltip carries.
+ *
+ * Printed, because a tooltip is never the only carrier of a fact and the
+ * dominant reading device has no hover. It is the legend too - every kind drawn
+ * is named and swatched here, so no second key is drawn beside the plot.
+ */
+export function fleetColumns(trend: FleetTrend): DayReadout[] {
+	return columnStrip(
+		trend.days.map(shortDate),
+		trend.series.map((one) => ({
+			label: one.identity.name,
+			colour: `var(--chart-${one.identity.colourStop})`,
+			value: (index: number) => `${one.counts[index] ?? 0}`
+		}))
+	);
+}
+
+/** One group a day, one bar a kind: what the platform handed us, over time.
+ *
+ * **A trend question takes a time axis.** The panel asks what has been given
+ * lately, and a ranked list answers which is biggest - never what is changing.
+ * The ordering the list carried survives as the sentence above the plot.
+ *
+ * **One quantity, so one adaptive domain.** Every bar counts placements, so the
+ * bars are comparable by construction and there is no ceiling for the domain to
+ * be fixed against. The 20x rule governs two series of one quantity choosing
+ * between one axis and two rows; here the fold is what bounds the series count,
+ * and every count is printed in the strip whatever height it draws at.
+ */
+export function fleetChart(trend: FleetTrend): {
+	option: EChartsOption;
+	empty: boolean;
+	grid: { left: number; right: number };
+} {
+	const highest = Math.max(0, ...trend.series.flatMap((one) => one.counts));
+	const grid = { left: valueGutter(highest), right: 12 };
+	if (trend.days.length === 0 || trend.series.length === 0) {
+		return { option: {}, empty: true, grid };
+	}
+	return {
+		empty: false,
+		grid,
+		option: {
+			animation: false,
+			grid: { ...grid, top: 30, bottom: 26, containLabel: false },
+			tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+			xAxis: {
+				type: 'category',
+				data: trend.days.map(dayMonth),
+				axisLine: { lineStyle: { color: paint('--chart-axis') } },
+				axisTick: { show: false },
+				axisLabel: { color: paint('--color-text-tertiary'), fontSize: 10, hideOverlap: true }
+			},
+			yAxis: {
+				type: 'value',
+				name: 'placements',
+				nameTextStyle: { color: paint('--color-text-tertiary'), fontSize: 11 },
+				axisLabel: { color: paint('--color-text-tertiary'), fontSize: 11 },
+				splitLine: { lineStyle: { color: paint('--chart-grid') } },
+				minInterval: 1
+			},
+			series: trend.series.map((one) => ({
+				name: one.identity.name,
+				type: 'bar' as const,
+				barMaxWidth: 24,
+				itemStyle: { color: paint(`--chart-${one.identity.colourStop}` as ChartToken) },
+				data: one.counts
+			}))
+		}
 	};
 }

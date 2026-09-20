@@ -11,7 +11,7 @@
     },
     "FleetKind": {
       "additionalProperties": false,
-      "description": "One kind of machine, counted over the window.",
+      "description": "One kind of machine, counted over the window.\n\nThe panel also draws this count day by day. That grain is DERIVED from the\n`date` every fingerprint row already carries, and is declared nowhere: a\nfield for it would be a second place for the day grain to disagree with\nitself, written by nothing.",
       "properties": {
         "identity": {
           "$ref": "#/$defs/MachineIdentity"
@@ -393,6 +393,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "FleetKind records that the fleet panel's day grain is derived.",
+      "version": "2026-09-20",
+      "why": "The panel draws a day axis the declared shape does not describe."
+    },
+    {
       "change": "Initial shape: machine cards, the split per machine, and the fleet count.",
       "version": "2026-09-17",
       "why": "A run is not a machine, and one pooled rate was wrong on 86 of 90 runs."
@@ -469,7 +474,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-17",
+      "default": "2026-09-20",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -477,5 +482,5 @@
   },
   "title": "MachinePanels",
   "type": "object",
-  "version": "2026-09-17"
+  "version": "2026-09-20"
 }

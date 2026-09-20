@@ -399,9 +399,10 @@ borrowing the counters' newest, so the two are never silently conflated.
 Eight surfaces on Hardware declare `data-windowed`, and each one prints the day
 count in its own words: the run count at the top, the prompt cache, context
 headroom, what the platform has been giving us, the server panel's three spans,
-the latency plots, tokens per run and the cost panel. The refused-run list
-follows the window without declaring it, because a clean span renders nothing at
-all and a surface that comes and goes cannot report a day count.
+the latency plots, what a run reads against what it writes and the cost panel.
+The refused-run list follows the window without declaring it, because a clean
+span renders nothing at all and a surface that comes and goes cannot report a
+day count.
 
 ## What the Hardware route draws
 
@@ -424,15 +425,15 @@ published mirror carries no address, no title and no fetched text.
 | How near the runner's ceiling this run got, item by item | one mark an item, with a shard grain and a window grain | Which item took the machine nearest its limit, whether it gave the memory back, and how long the queue was. |
 | Reading against writing, machine by machine | one group a machine | What a written token costs against a read one, on the machine that paid it. |
 | The machines this run drew | one card a machine | What machine this is, what it can do against the others this run drew, and whether its record survived the day. |
-| What the platform has been giving us | one row a machine kind | What kinds of machine we keep being handed. |
+| What the platform has been giving us | one group a day, one bar a machine kind | What kinds of machine we keep being handed, and whether that is changing. |
 | Prompt cache | one column a day | Whether a bigger cache would save wall clock. |
 | Context headroom | one mark a run | Whether raising the truncation cap is even possible. |
 | The two clocks, compared | one bar a shard | Whether the day's rates can be trusted at all. |
-| What the server did outside the model call | the newest run | How busy the machine was, and how long the weights took to open. |
+| What the server did outside the model call | one track a figure, over the window | How busy the machine was, and how long the weights took to open, each against the window that measured it. |
 | How the tail moved | one plot a percentile, one mark a run | Whether the slow end of a run is moving. |
 | How long the newest run's tail was | the newest run | What the whole distribution of one run looks like at once. |
-| Tokens per run | one bar a run, twice | How much the model read and how much it wrote. |
-| What this would have cost somewhere else | the whole span | Whether the runner time was a good trade. |
+| What a run reads against what it writes | one group a run, in either unit | Which half of the model call the run actually spent itself on. |
+| What this would have cost somewhere else | four figures over the whole span, and one column a day or one running line | Whether the runner time was a good trade, and whether the trade is getting worse. |
 
 **A run is not a machine, and three of those panels exist because the route said
 otherwise for weeks.** Measured 2026-09-17 over the committed counters ledger -

@@ -114,6 +114,14 @@ owner's carve-out for that one on conditions this section holds:
  Guardrail #10 exists to prevent.
 - **The word for what it is sits in the panel, not in a tooltip**: what the run
  would have cost somewhere else, never an amount owed.
+- **Once the figure has a shape, the word rides the shape.** The value axis
+ reads `Counterfactual cost, USD`, and the running shape reads `Counterfactual
+ cost so far, USD`; the chart's own description says it again for a reader who
+ cannot see the marks. A currency code alone on an axis is the shape a bill
+ takes just as surely as a symbol is, and an axis title is the label a reader
+ meets before any of the numbers - so it is the one place the word cannot be
+ missed. The four figures above the chart keep the sentence they already
+ carried. The chart does not inherit it by being near it.
 - **Digits are grouped by hand, never by `toLocaleString`.** The server draws
  the page and two builds have to agree; a locale-dependent separator moves the
  prerendered document and the byte gate reads it as a regression.
@@ -534,6 +542,22 @@ quotable number on the route.
  read as a distribution, and a reader who has read one will act on it. **It
  ships at 160 as a declared estimate and not a measurement** - see the design
  rationale below.
+- **Over that floor the count is a trend, one group a day and one bar a kind.**
+ The panel's title asks what the platform has been giving us lately, and a
+ ranked list answers which is biggest rather than what is changing. The
+ ordering the list carried is not lost, it is the sentence above the plot.
+ **Only days that recorded a placement are drawn** - a zero-height group would
+ say the platform gave us nothing that day, and a day the record never reached
+ says nothing at all - so the count of days missing from the window is printed
+ in the same sentence.
+- **Past `console.fleet_top_kinds` the rarest kinds are one bar, named in
+ words.** A grouped bar is only a bar while it is wide enough to paint: at
+ `console.chart_width` of 760 and the widest span the window control offers, 90
+ days, a day band is 8.4 px, five bars in it draw 1.09 px each after the chart
+ engine's own gaps and seven draw 0.77 px. Four kinds plus the fold row is the
+ largest set that clears a pixel there. **The fold bar equals the kinds it
+ folded, in the window and on every day of it**, and the page carries both
+ figures so it can be held to them agreeing.
 - **None of the empty states is tinted and none gets the reserved box.** The
  route is prerendered and reads `state/` at build time, so there is no fetch,
  no waiting state and no unreachable state. Every nothing here is settled at
@@ -857,8 +881,8 @@ half-quote, and a rule whose reason has stopped holding is a rule to change.
   that never carried it. A key for an absent series is a claim the data does not
   support.
 - **A figure with a span is drawn as a range, never written as two sentences.**
-  Value, low, high, one track. Four figures that each have a span, each written
-  as prose, is four sentences no two of which can be compared.
+  Value, low, high, one track. Figures that each have a span, each written as
+  prose, are sentences no two of which can be compared.
 - **A panel whose title asks a trend question draws a time axis.** A ranked list
   answers "which is biggest", never "what is changing". The title and the shape
   have to agree, or one of them is wrong.
@@ -932,6 +956,52 @@ panel says it cannot answer it rather than leaving the reader to assume it did.
 
 Authority: Susan, 2026-09-17.
 
+## A reading and the window it is read against are one track
+
+A **span track** is a band and an upright. The band runs from the lowest reading
+the window holds to the highest, and the upright stands where the newest run
+read. Whether that run was unusual is then one look, rather than three numbers a
+reader converts and subtracts.
+
+**Why it exists: a sentence cannot be compared with the sentence beside it.**
+`What the server did outside the model call` on `/console/machine/` carries a
+processor share and a weight-opening time. Each was a reading followed by its
+span in prose, in a different unit from its neighbour and with its ends buried
+mid-paragraph, so a reader who wanted to know which of the two was the odd one
+this run had to do the conversion by hand. Two tracks make that comparison free,
+and the shape is the one the memory panel's window grain already draws - so this
+is one shape reused rather than a second shape learned. Susan, 2026-09-20.
+
+**One shape, two drawings, stated rather than hidden.** The memory panel drew
+this shape first, in its own markup. The maths now lives once, in
+`frontend/src/lib/charts/span-track.ts`, and the host panel draws from it; the
+memory panel has not been repointed. **What that costs:** two pieces of markup
+that have to agree by eye, so a change to the band or the upright is a change in
+two places until the memory panel becomes a caller.
+
+**What the reader loses, named.** A span track says nothing about the shape
+between its ends, and nothing about when in the window each end fell: a figure
+that drifted steadily and one that jumped once and held draw identically. That
+is a question for a series over runs, which is a different grain - `How the tail
+moved` on the same route is the panel built for it, for a different figure.
+
+**An absent span is said, never drawn.** Where no run in the window recorded the
+figure the panel says so in words and draws nothing, because a band of no length
+would report a window that read the same thing every day. Where the window has
+both ends but they sit closer than one pixel at `console.chart_width`, the span
+is printed and the band becomes a mark - the eighth rule above, applied to a
+band rather than to a split. A run that recorded nothing keeps the band it
+cannot be placed on: the window still measured something, and the missing
+upright is the fact.
+
+**A figure with no span is not given a track.** Parallel slots sits in that same
+panel as one line of text, because it is a count of what a server offered and
+has no low-to-high window to place a run inside. The tenth rule binds a figure
+with a span; a shape reused where it does not fit is a shape a reader stops
+trusting.
+
+Authority: Susan, 2026-09-20.
+
 ## The two rates on a shard row are measured before they are drawn
 
 Reading and writing are two series on one board, so the fourth rule above binds:
@@ -946,6 +1016,41 @@ the opposite, from whatever run it has.
 The rate domain is the largest rate on the board and never a round number. A
 shard reading at a quarter of its neighbour draws a quarter-length bar, which is
 the reading the panel exists for.
+
+## A comparison drawn in one unit can be confidently wrong, so it carries both
+
+**Reading and writing are two quantities only if you count them.** Counted in
+tokens they are one quantity in two directions and the fourth rule above binds;
+so are they counted in seconds. What the two counts do not have to agree about
+is which side is bigger, and where they disagree the unit is the whole answer.
+
+The shipped case is `What a run reads against what it writes` on
+`/console/machine/`. A run reads far more tokens than it writes, so in tokens the
+read bar towers. **Reading is batched prefill and writing is sequential decode,
+so a tall read bar is not a run that spent itself reading.** A panel that offers
+only the count teaches that it is, fast and without a caveat, and a reader who
+acts on it tunes the prompt when the clock belongs to the answer. So the panel
+carries a unit switch, and the switch is the finding rather than a convenience:
+which side is taller in each unit is exactly the question "where did the model
+time go", answered by looking rather than by a caption.
+
+**The switch qualifies under the fifth rule because one call returns both
+units, and the row set is decided once.** An item row is admitted on its token
+counts, and its `prefill_ms` and `decode_ms` are then summed over exactly those
+rows. Two independent filters would let the two units cover different runs, and
+a panel whose units disagree about what they measured cannot be recovered by
+reading it harder. It needs no new column: both durations already reach the
+frontend for the read and write rates on the shard board.
+
+**Each unit measures its own ratio and prints it**, so the fourth rule's
+threshold is taken from the data drawn rather than assumed - and where one unit
+passes 20:1 the smaller series takes its own row in that unit only. **What the
+reader loses, named:** a unit switch is a state to remember, and an operator who
+reads the panel in tokens on Monday and in seconds on Tuesday is comparing two
+pictures. The panel opens on the same unit every time and prints the unit beside
+the ratio, which is the most a switch can do about that.
+
+Authority: owner, 2026-09-17. Susan rules the unit it opens on.
 
 ## A stacked chart offers lines only where no data is re-shaped
 
@@ -983,6 +1088,28 @@ stronger form still holds, and it is still the one to prefer.
 switch. A panel whose shapes come out of one call but are not the same array owes
 its own oracle comparing the two shapes' numbers, the way `console-chrome.spec.ts`
 already compares the two that qualify under the stronger form.
+
+**The counterfactual-cost panel is the first to ship under the widened form, and
+this is the oracle it paid.** `costOverDays` walks the window's runs once and
+returns one array of days, each carrying what reading cost, what writing cost,
+and the running total to that day. The bars read the first two, the line reads
+the third, and neither derives anything. `console-machine.spec.ts` asserts the
+line's last point equals every bar added up, and asserts it a second time against
+the window total the four figures above the chart print - so the two shapes and
+the headline number are one piece of arithmetic reached three ways.
+`console-machine-panels.spec.ts` then asserts in a browser that moving the switch
+changes neither the day count nor that total, which is what a second derivation
+would have moved.
+
+**Reading is the bottom band and writing the top, and the panel measures whether
+the split may be drawn at all.** At the committed rate, over the 25 days the
+ledger held on 2026-09-20, the writing half ran between 27.4 and 45.4 percent of
+its own day, and the thinnest band of all measured 2.0 percent of the tallest
+column - 3.3 px of a 164 px plot, so the split draws. The rate is the operator's
+to type, though, and a writing rate near zero takes that band under a pixel. The
+builder measures the thinnest band against the tallest column before it picks a
+shape; under a pixel the column draws whole and the split becomes the printed
+figure beside it, with the measurement it was decided on printed too.
 
 ## A chart says how much of its window it measured, once, above the plot
 

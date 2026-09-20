@@ -253,6 +253,24 @@ class ConsoleConfig(Model):
             "rather than argue with it."
         ),
     )
+    fleet_top_kinds: int = Field(
+        default=4,
+        ge=1,
+        le=6,
+        description=(
+            "How many kinds of machine keep a bar of their own on the fleet trend "
+            "before the rest fold into one row named in words. A grouped bar is "
+            "only a bar while it is wide enough to paint. At chart_width of 760 "
+            "and the widest span the window control offers, 90 days, a day band is "
+            "8.4 px; five bars in it draw 1.09 px each after the chart engine's own "
+            "gaps and seven draw 0.77 px, which is the sub-pixel band the chart "
+            "rules already refuse. Four kinds plus the fold row is the largest set "
+            "that stays over a pixel there. It costs little: of the 40 placements "
+            "on the committed machine record on 2026-09-20, seven distinct machines "
+            "in all, the top four hold 37. The upper bound is six because the "
+            "colour ramp keeps seven stops and the fold row needs one of them."
+        ),
+    )
     bandwidth_min_kinds: int = Field(
         default=3,
         ge=2,

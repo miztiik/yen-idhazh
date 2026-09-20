@@ -164,6 +164,9 @@ export interface ConsoleConfig {
 	/** How many recorded job placements the console needs before it draws the machines as bars. Under it the panel lists the counts in words, because bars over a handful of placements read as a distribution and it is not one. A DECLARED ESTIMATE and not a measurement (CLAUDE.md Guardrail #10): the rarest of the six machine kinds on record held 11 of 356 counter rows on 2026-09-17, 3.1 percent, and 5 of those - the floor min_attempts_for_rate already sets - needs about 162 rows. A seventh machine kind lowers every share and raises the bar, so re-derive it rather than argue with it. */
 	fleet_min_rows?: number;
 
+	/** How many kinds of machine keep a bar of their own on the fleet trend before the rest fold into one row named in words. A grouped bar is only a bar while it is wide enough to paint. At chart_width of 760 and the widest span the window control offers, 90 days, a day band is 8.4 px; five bars in it draw 1.09 px each after the chart engine's own gaps and seven draw 0.77 px, which is the sub-pixel band the chart rules already refuse. Four kinds plus the fold row is the largest set that stays over a pixel there. It costs little: of the 40 placements on the committed machine record on 2026-09-20, seven distinct machines in all, the top four hold 37. The upper bound is six because the colour ramp keeps seven stops and the fold row needs one of them. */
+	fleet_top_kinds?: number;
+
 	/** How many distinct machine kinds must carry a memory-bandwidth reading before bandwidth may be plotted against decode speed. Two points define a line, so a scatter of two is a claim rather than a measurement. Nothing plots it today - the panel was refused on 2026-09-17 and this is half of the trigger that would bring it back, the other half being fleet_min_rows. */
 	bandwidth_min_kinds?: number;
 
