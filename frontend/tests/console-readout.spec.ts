@@ -226,10 +226,25 @@ test.describe('the readout is the default', () => {
 				const owner = owners.nth(index);
 				const columns = Number((await owner.getAttribute('data-readout-columns')) ?? 0);
 				if (columns < 2) continue;
+				const name = (await owner.getAttribute('aria-label')) ?? `chart ${index}`;
+				// Go to the chart, and scroll the panel rather than the plot inside
+				// it. `hydrate` observes intersection, so a chart more than a screen
+				// down has no `svg` at all until somebody goes to it - and waiting on
+				// that `svg` first waits for the one thing only this scroll produces.
+				// The same move puts the box where a pointer can reach it: a page
+				// coordinate past the viewport height is not a place a mouse can go.
+				// Instant rather than smooth, because a box read mid-scroll is a box
+				// the mouse misses.
+				await owner.evaluate((node) =>
+					node.scrollIntoView({ behavior: 'instant', block: 'center' })
+				);
 				const plot = owner.locator('svg').first();
-				// A chart below the fold reports a box the mouse cannot reach: a page
-				// coordinate past the viewport height is not a place a pointer can go.
-				await plot.scrollIntoViewIfNeeded();
+				// Named when nothing arrives. Waiting on the locator alone reports a
+				// selector and the whole test budget, which says neither which chart
+				// stayed blank nor that a chart is what went wrong.
+				await expect(plot, `${name}: nothing was drawn after scrolling to it`).toBeVisible({
+					timeout: 15000
+				});
 				const box = await plot.boundingBox();
 				if (box === null || box.width < 40) continue;
 
@@ -241,7 +256,6 @@ test.describe('the readout is the default', () => {
 				await page.waitForTimeout(150);
 				const last = await dayOf(owner).innerText();
 
-				const name = (await owner.getAttribute('aria-label')) ?? `chart ${index}`;
 				expect(first, `${name}: the first column printed nothing`).not.toBe('');
 				expect(last, `${name}: the two ends of the plot print one column`).not.toBe(first);
 				compared += 1;
