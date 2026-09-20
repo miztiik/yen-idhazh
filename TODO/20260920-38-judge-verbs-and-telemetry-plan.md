@@ -133,36 +133,48 @@ A Literal for the reason the scorer id is one: a fold over a store mixing two in
 | `outcome` | `ShardOutcome` | - | `completed`, `stopped_on_deadline`, or `nothing_to_do`. A shard killed by the platform writes no row at all, and absence against a known shard count is what says so |
 | `started_at` | `Timestamp` | - | When the judging stage began |
 | `seconds_spent` | `float` | `ge=0` | Wall clock for the stage. Not the job - the job's own clock includes a checkout and a weights restore this row is not about |
-| `model_calls` | `int \| None` | `ge=0` | How many calls the hosted work made. **Null, not zero, for a judge that runs no model** - a heuristic judge is a judge, and zero would read as a broken model judge |
-| `tokens_in` | `int \| None` | `ge=0` | Prompt tokens the server reported across the shard, where it reported them |
-| `tokens_out` | `int \| None` | `ge=0` | Generated tokens, same condition |
-| `model_seconds` | `float \| None` | `ge=0` | Wall clock inside model calls. Read against `seconds_spent`, the two say how much of a shard was the model and how much was everything else |
+| `model_calls` | `int \| None` | `ge=0` | How many calls the hosted work made. **Null, not zero, for a judge that runs no model**; zero for a model judge whose shard had nothing to judge. The judge's stage decides which, because only it knows whether it has a model. Counted per call rather than derived as twice the pairs - a pair refused on its first call made one call, not two |
+| `tokens_in` | `int \| None` | `ge=0` | Prompt tokens the server reported across the shard. **Requires the reading type to stop dropping the count it already receives** |
+| `tokens_out` | `int \| None` | `ge=0` | Generated tokens. **Requires the reading type to carry a completion count it does not carry today** - row #17 adds it or this column is dropped rather than shipped null for ever |
+| `model_seconds` | `float \| None` | `ge=0` | Wall clock inside model calls, summed from each reading's own clock. Read against `seconds_spent`, the two say how much of a shard was the model and how much was everything else |
+| `host_model` | `str \| None` | `PRINTABLE_LINE_PATTERN`, `max_length=96` | The processor name, one line read from the kernel's own file. **This is not the host fingerprint** - the 1.9 GiB bandwidth probe stays refused. Without it a slow night and a slower processor read identically, and the scope-out's "the digest pipeline already characterises the pool" has no join key a council row could use |
 
 `ShardOutcome` is a `StrEnum` in the same module, three members, because a free-text outcome is a column that splits silently on a typo.
 
-### `JudgeCallStamp` - a mixin for a judge that uses a model
+### Two stamps, split by grain (`backend/idhazh/contracts/judge_call.py`)
 
-`class JudgeCallStamp(Model)` in `backend/idhazh/contracts/judge_call.py`. No `__schema_stem__`, writes no file. **The pair row does not inherit it** - inheriting would reorder a header that has committed rows behind it. A judge with no model does not use it at all.
+**One stamp was wrong, and it reintroduced the defect this plan exists to remove.** A single mixin carried per-call fields onto a per-shard row, where `decode_seconds` would have meant one call on the mixin, both calls on the pair row, and the shard's first call on the metrics row - three meanings, one name, sitting beside two columns with the same stem.
+
+**`JudgeConfigStamp(Model)` - what the instrument was SET TO. Grain-free, so any row may carry it.**
 
 | Field | Type | Constraint | Description to carry |
 | --- | --- | --- | --- |
-| `judge_id` | `JudgeId` | default `"content-similarity-judge"` | Which instrument wrote this reading |
+| `judge_id` | `JudgeId` | default `"content-similarity-judge"` | Which instrument wrote this |
 | `judge_model` | `JudgeModelId \| None` | default `None` | Which weights judged |
 | `judge_temperature` | `float \| None` | `ge=0`, default `None` | The sampler temperature, as a number. An operator reading a row needs the value, not a hash of it |
 | `decode_digest` | `Sha256 \| None` | default `None` | sha256 of the canonical JSON of six sampler keys **of the body actually posted**: temperature, top-p, seed, prediction length, the alternatives count and the probability mode. Not the prompt, which differs every row; not the grammar or the model, which have their own columns. Taken from the payload rather than from config, because a digest built off config cannot see a payload-builder bug |
 | `prompt_digest` | `Sha256 \| None` | default `None` | sha256 of the rendered system turn |
 | `grammar_digest` | `Sha256 \| None` | default `None` | sha256 of the grammar handed to the decoder |
-| `grammar_applied` | `bool \| None` | default `None` | Whether **both** calls of the reading opened inside the grammar |
-| `first_token_probabilities` | `str \| None` | `PRINTABLE_LINE_PATTERN`, `max_length=1024`, default `None` | Compact JSON, a list of `[token_id, logprob]` in the server's own order. **Ids and logprobs only** - a rendered token is right for one set of weights, two ids can render to one string, and a byte-fallback token would fail the printable pattern outright |
-| `decode_seconds` | `float \| None` | `ge=0`, default `None` | Wall clock for **one call** |
 
-**A key added to the payload builder and not to the digest is a digest gone silently narrower**, which is the blindness moving it off config was meant to remove. The builder and the digest are held together by a test that enumerates the payload's keys and fails on one the digest neither covers nor names as excluded.
+**`JudgeCallStamp(JudgeConfigStamp)` - what ONE CALL did. Only a row whose grain is one call may carry it.**
+
+| Field | Type | Constraint | Description to carry |
+| --- | --- | --- | --- |
+| `grammar_applied` | `bool \| None` | default `None` | Whether this call opened inside the grammar |
+| `first_token_probabilities` | `str \| None` | `PRINTABLE_LINE_PATTERN`, `max_length=1024`, default `None` | Compact JSON, a list of `[token_id, logprob]` in the server's own order. **Ids and logprobs only** - a rendered token is right for one set of weights, two ids can render to one string, and a byte-fallback token would fail the printable pattern outright |
+| `decode_seconds` | `float \| None` | `ge=0`, default `None` | Wall clock for this one call |
+
+**Who inherits which.** The judge's per-shard metrics row inherits the **config** stamp only - a shard has no single call, so the three per-call columns have no referent there. The pair row declares its own columns at the tail rather than inheriting either, because inheriting reorders a header with committed rows behind it.
+
+**A key added to the payload builder and not to the digest is a digest gone silently narrower.** The builder and the digest are held together by a test that enumerates the payload's keys and fails on one the digest neither covers nor names as excluded.
 
 **`first_token_probabilities` is the first model-written value this loop commits.** It is safe where it lands - a quoted CSV value, never a key, never a name - and it stays there (Guardrail #11).
 
 ### `ContentSimilarityJudgeMetrics` - the judge's own (`backend/idhazh/contracts/content_similarity_judge_metrics.py`)
 
-`class ContentSimilarityJudgeMetrics(JudgeCallStamp, Contract)`. `__schema_stem__ = "content-similarity-judge-metrics"`. Key: `("date", "run_id", "shard")`. Store: `state/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>.csv`.
+`class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract)`. `__schema_stem__ = "content-similarity-judge-metrics"`. Key: `("date", "run_id", "shard")`. Store: `state/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>.csv`.
+
+**It inherits the config stamp and not the call stamp.** A shard has no single call, so a per-call grammar flag, a per-call probability window and a per-call clock have no referent here. The three shard-level equivalents are `pairs_refused`, `first_token_margin_median` and the two decode totals below.
 
 **Every column here is this judge's own.** A second judge declares its own contract with its own columns and shares none of them.
 
@@ -185,7 +197,7 @@ A Literal for the reason the scorer id is one: a fold over a store mixing two in
 
 **The identity that closes:** `pairs_dealt = pairs_read + pairs_refused + pairs_unreadable + pairs_abandoned`, enforced by a model validator. Every term is a column, including the abandoned one - without it the identity fails on exactly the shard row #1 exists to let write a row at all.
 
-The inherited `decode_seconds` is this shard's first call, so the mixin's meaning is honoured on every row that carries it.
+**No bare `decode_seconds` on this row.** The two totals are named for what they are, so no reader mistakes a per-call column for the typical call.
 
 ### `LineHoldoutScoreRow` - new (`backend/idhazh/contracts/line_holdout_score_row.py`)
 
@@ -213,11 +225,15 @@ The inherited `decode_seconds` is this shard's first call, so the mixin's meanin
 
 **The read is bounded by the holdout, not by the archive** (Guardrail #12). Each holdout row names its own two days, so the file's length is the bound. The unbounded walk in the sheet tool exists only because that tool resolves against a different date, and this must not copy it.
 
-### `StorySimilarityPair` - five columns appended at the tail
+### `StorySimilarityPair` - six columns appended at the tail
 
-The declaration is unchanged - it does **not** inherit the mixin. Five fields are appended after `decode_seconds`, so the header widens and does not reorder: `judge_id` (default `"content-similarity-judge"`), `judge_temperature`, `decode_digest`, `grammar_applied`, `first_token_probabilities`, each typed and constrained as in the mixin table.
+The declaration is unchanged - it does **not** inherit either stamp. **Six** fields are appended after `decode_seconds`, so the header widens and does not reorder: `judge_id` (default `"content-similarity-judge"`), `judge_temperature`, `decode_digest`, `grammar_applied`, `first_token_probabilities`, and `judged_by_run_id`.
 
-`decode_seconds` keeps its existing meaning on this row - **both calls on the pair** - and its description says so, because the mixin's field of the same name is one call.
+**`judged_by_run_id: RunId | None`, and the key extends to `("date", "run_id", "pair_key", "judged_by_run_id")`.** This is what makes a re-judge possible at all. `run_id` on this row is the DIGEST run that published the day - a property of the date, so two council runs judging one date write the identical string. Under today's three-part key the append path's de-duplication keeps the first row it sees, which is the one already in the checked-out file, so **every re-judged pair would be silently discarded while the record counted the fresh verdicts** - the committed store and the fitted record would then describe two different sets with nothing able to tell. The tie-break in `one_row_a_pair` moves to this column in the same commit, which is what finally makes its newest-run-wins rule operative.
+
+**`grammar_applied` on this row means both calls of the pair opened inside the grammar**, because this row's grain is a pair. `first_token_probabilities` on this row is the **file-order** call's window, named so, because a pair makes two calls and a singular column must say which.
+
+`decode_seconds` keeps its existing meaning on this row - both calls on the pair - and its description says so.
 
 Changelog entry to prepend: version `2026-09-20`, change "Added the judge-call stamp columns: which judge, its temperature and decode digest, whether the grammar applied, and the first-token vector.", why "A verdict could not be read back to the sampler that produced it."
 
@@ -285,7 +301,10 @@ Committed value `200`, bounds unchanged. It moves beside the pair budget and the
 | 2 | The stage takes a deadline from the shard bound minus a wrap-up margin, stops on it, writes what it has and exits clean. The work shard already does exactly this, computing from its own start with no job timestamp passed in. | Carmack |
 | 3 | A header-only file is written before the first pair, so the artifact always exists and a no-files-found error becomes meaningful rather than permanent. | Andre |
 | 4 | The file is rewritten whole every flush, not appended. A temp-file-then-rename has no partial state, which is what makes an interrupted shard's file readable. | Fowler |
-| 5 | This makes `stopped_on_deadline` reachable, and `pairs_abandoned` is what keeps the judge's funnel identity closing when it fires. | Andre |
+| 5 | The flush interval and the wrap-up margin are **new knobs in the same block the shard bound moves to in row #9**, not reuses of the work shard's. `run.shard_wrap_up_minutes` exists at 12 and belongs to a different stage with a different preamble. **The default flush is 1**: a rewrite of a file of at most 50 rows is not measurable beside a pair that costs 94.53 s. | Carmack |
+| 6 | The deadline's zero is the stage's own start, as the work shard already does - it passes no job timestamp in. **The margin must cover what the stage cannot see**: a checkout, an install, a weights restore and a health loop of up to ten minutes. That is why the margin is its own knob rather than a copy of 12. | Carmack |
+| 7 | **The deadline is checked before a pair, never between its two calls.** A pair stopped between its calls has one reading and no agreement, so it is neither read nor abandoned, and the funnel identity in row #6 stops closing. | Andre |
+| 8 | This makes `stopped_on_deadline` reachable, and `pairs_abandoned` is what keeps the judge's funnel identity closing when it fires. | Andre |
 
 - **Rejected alternatives:**
 
@@ -310,7 +329,8 @@ Committed value `200`, bounds unchanged. It moves beside the pair budget and the
 | 1 | The council has no run id today - the string does not appear in its workflow file, and the verbs that record one read it from a plan file only the digest pipeline produces. | Carmack |
 | 2 | The affected verbs take **a date and a run id**, not a plan object. Those are the only two attributes either reads off it, and a stub plan is not free - the plan contract requires a generated-at stamp beside them. | Carmack |
 | 3 | The run id is minted from **the day the council runs**, not the day it judges. The compaction reads a run id's first ten characters as the day the run opened and feeds it to the console's lag figure, so a yesterday prefix would publish a standing two-day lag that is not real. The judged date is already the `date` column, which is what routes a row to its store. | Carmack |
-| 4 | The platform run number is unique per repository across every workflow, so the council's id cannot collide with the digest run's. | Carmack |
+| 4 | The run identity is minted from the platform's **run id**, which is unique per repository across every workflow - **not the run number, which is unique only within one workflow** and would let a council id equal a digest run id in a column that already carries both meanings. | Carmack |
+| 5 | A reader separates the 82 pair rows carrying a digest run id from the council ids that follow by the `version` stamp the row already carries. One column, one store, two meanings across time - the stamp is the discriminator, and it is free. | Carmack |
 | 5 | ESCALATE: `run_id` on a pair row means the run that published the day; on a council row it means the run that judged it. Two columns, two meanings, both written down. | Section 6 |
 
 - **Rejected alternatives:**
@@ -789,30 +809,39 @@ Committed value `200`, bounds unchanged. It moves beside the pair budget and the
 
 ### Row #21 - The council repairs its own missing nights
 
-- **Scope:** the council judges every unjudged date in its window rather than only yesterday, recovering a dead run's uploads where they still exist and re-judging where they do not. **No operator action, ever.**
-- **Files touched:** `backend/idhazh/council/night_plan.py` (new), `backend/idhazh/cli.py`, `.github/workflows/llm-council.yml`, `backend/idhazh/contracts/knobs/` (the window and the per-night cap), `config/idhazh.json`, `backend/tests/`, `backend/tests/workflows/test_llm_council_workflow.py`, `docs/architecture/publishing/llm-council.md`, `schemas/app-config.schema.json` (generated)
-- **Acceptance gates:** local - the council and workflow test modules, contract export, drift gate, `doc_load.py --changed`. CI - full suite.
-- **Oracle:** given a fixture store with a gap, the night plan names the missing date, marks it recoverable when a prior run's uploads still exist and re-judgeable when they do not, and refuses it when the published day it needs is gone. **The read is bounded by the window it is asked about**, never by walking the archive (Guardrail #12). It cannot settle whether the recovery succeeds on a runner.
+- **Scope:** the council judges every date its record has not counted, within a window floored at the council's own first night, recovering a dead run's uploads where they still exist and re-judging where they do not. **No operator action, ever.**
+- **Files touched:** `backend/idhazh/council/night_plan.py` (new), `backend/idhazh/cli.py`, `backend/idhazh/contracts/app_config.py`, `backend/idhazh/contracts/knobs/` (the window, the floor and the per-night cap), `config/idhazh.json`, `.github/workflows/llm-council.yml`, `backend/tests/`, `backend/tests/workflows/test_llm_council_workflow.py`, `backend/tests/contracts/test_app_config.py`, `docs/architecture/publishing/llm-council.md`, `schemas/app-config.schema.json` (generated), `frontend/src/contracts/app-config.ts` (generated)
+- **Acceptance gates:** local - the council, workflow and app-config test modules, contract export, drift gate, `doc_load.py --changed`. CI - full suite.
+- **Oracle:** driven against a fixture record and store, the night plan names a date whose day file holds **three of four shards' rows** - the shape the dominant failure actually produces - and does not name a date the record has counted. **The read is bounded by the window it is asked about** (Guardrail #12). It cannot settle whether the recovery succeeds on a runner.
 - **Decisions:**
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | **A failure that needs a person to re-run it is not handled, it is deferred.** The date the council judges is not "yesterday" - it is every date in the window with no committed evidence, oldest first, with yesterday among them. | Owner, 2026-09-20 |
-| 2 | **This is the house pattern, not a new one.** The digest run's planning job already carries a catch-up whose stated job is to finish the work of a run that died before its own publishing step. The council gets the same shape. | Carmack |
-| 3 | **Recovery is tried before re-judging.** Where a previous council run for that date left uploads that still exist, the collecting job takes them from that run and spends no model time. Where they have expired, the date is judged again. Where the published day it needs has been deleted by retention, the date is refused and the refusal is recorded - that is the one case nothing can repair, and it is bounded by the published-day window rather than by chance. | Carmack |
-| 4 | **The matrix carries a date as well as a shard**, so a catch-up date is judged beside yesterday rather than instead of it. Judging yesterday instead of the gap never closes the gap; judging both in one run at the committed budget is 158 minutes of model time against a 200-minute bound, derived from the measured 94.53 s a pair. | Carmack |
-| 5 | **A per-night cap on catch-up dates**, because the job-concurrency ceiling is 20 and each date costs its own shards. Past the cap the oldest wait one more night, which is a queue rather than a failure. | Carmack |
-| 6 | **The plan is computed per judge**, against that judge's own store. A judge added later inherits the repair with no change here, which is the point of the judge owning its own store. | Fowler |
-| 7 | **This does not depend on anything noticing.** There is no alarm to read and no dashboard to check: the next run finds the gap because finding the gap is how it chooses its work. | Owner, 2026-09-20 |
+| 1 | **The gap predicate is "the record has not counted this date", never "no committed evidence".** A run that lost one shard still commits the other three shards' rows, so a date with 75 percent of its pairs on disk is the common failure and reads as evidence. The one value meaning "this date is not in the fit" is the record's own counted-dates list. | Andre |
+| 2 | **The window has a floor: the council's first night.** The store holds one day file against 30 published days, so an unfloored predicate names 29 dates on its first run and cannot tell "this night died" from "the council did not exist yet". | Carmack |
+| 3 | **A per-night cap with a committed value of 1**, plus the floor. A cap without a floor only slows a 29-date backfill to 29 nights. | Carmack |
+| 4 | **The judging job's timeout is per job, so a catch-up date costs wall clock, not headroom.** At the committed budget a shard judges 50 pairs at the measured 94.53 s a pair - 78.8 minutes against a 200-minute bound, per job, per date. The earlier 158-minute figure was wrong: it assumed one job judging two dates serially, which contradicts a matrix that carries the date. | Carmack |
+| 5 | **The matrix's parallel width becomes shards times dates**, capped at the platform's 20-job ceiling. It is the shard count today, so two dates would otherwise run as two waves and finish near 01:30 rather than 23:30. The timeout clock starts when a job begins executing, not when it is queued, so a queued job still gets its full bound. | Carmack |
+| 6 | **The config validator that guarantees a shard fits gains the date cap as a multiplier**, and its refusal message names the cap as a fourth knob to lower. Without it the validator passes at 50 pairs while the run costs two dates. | Carmack |
+| 7 | **Every artifact name carries the date.** The selection uploads under one name and each shard under one name; two dates in one run would either fail the job on an immutable name or silently overwrite the first date's verdicts. The collecting job's download pattern moves with them. | Carmack |
+| 8 | **Recovery needs two things the workflow does not have today, and neither is a stored secret.** The permissions block declares only one scope, and a declared block sets every unlisted scope to none, so cross-run download needs `actions: read` and the default job credential passed explicitly. And **the uploads expire after one day**, which is before the next night's collecting job reaches them - so the verdict retention rises to the per-night cap plus two. A shard file is about 27 KB, so a week of four shards is under a megabyte. | Carmack |
+| 9 | **The collecting job is per date.** Its two verbs, both commit messages and - the dangerous one - the command that rebuilds the derived record after a lost push both name a single date today. Left alone on a two-date night, the rebuild would regenerate one date and drop the other's count. | Carmack |
+| 10 | **An explicit dispatched date replaces the night plan entirely** and judges exactly that date. An operator naming a date is asserting something the plan cannot know, and silently adding dates to a one-date request is the surprise. | Carmack |
+| 11 | **The plan refuses to re-judge a date when the record's stamps do not match the current config**, records the refusal, and leaves the reset to a person. The counting step archives and empties the record whenever its inputs moved, so an unattended catch-up under new weights would wipe the record and then re-judge the whole window - a reset nobody signed off. Refusing costs one date of evidence and costs nothing to build. | Andre |
+| 12 | **The change detector must see what the stamp carries.** It compares the model, the prompt and grammar digests and the scorer values, and does not compare the temperature or the decode digest that rows #8 and #11 add. A stamp column the detector cannot see is a stamp that lies; both join it in row #11's commit. | Andre |
+| 13 | The plan is computed per judge against that judge's own record, so a judge added later inherits the repair with no change here. | Fowler |
+| 14 | **This does not depend on anything noticing.** There is no alarm to read: the next run finds the gap because finding the gap is how it chooses its work. | Owner, 2026-09-20 |
+| 15 | The house pattern is "the next run finishes the dead run's work". **The mechanism is new** - the digest run's catch-up drains whatever is waiting and takes no date at all, so there is no code to copy, only the principle. | Carmack |
 
 - **Rejected alternatives:**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | An alarm reporting a night with no evidence, and a person re-dispatches the date | Manual effort with a notification in front of it, and it fails exactly when it is needed - a run that dies quietly is one nobody is watching for | A check script, and a repair that happens only when somebody is looking | Owner |
-| 2 | Re-run the failed run from the platform interface | A person does it, and only inside the upload retention window | Nothing to build, and nothing repaired unattended | Owner |
-| 3 | Accept the loss because the first fitted line is far away | **Builds for today's data rather than for the pipeline being built.** More judges are coming and the line will be wired to a published day; a design that tolerates holes now tolerates them then | Nothing now, and a record with gaps nobody can account for later | Owner |
-| 4 | Have the council re-trigger itself through the platform API on failure | The default job credential cannot start a new run, so it needs a stored personal token - a secret and a permission this pipeline does not otherwise hold | A credential to manage, for a repair the next scheduled run already does | Carmack |
+| 1 | An alarm reporting a night with no evidence, and a person re-dispatches | Manual effort with a notification in front of it, and it fails exactly when it is needed - a run that dies quietly is one nobody is watching for | A repair that happens only when somebody is looking | Owner |
+| 2 | Accept the loss because the first fitted line is far away | **Builds for today's data rather than for the pipeline being built.** More judges are coming and the line will be wired to a published day | A record with gaps nobody can account for later | Owner |
+| 3 | Re-judge without extending the pair key | The re-judged rows collide with the partial run's on a key that cannot tell two council runs apart, and the de-duplication keeps the row already on disk - so the fresh verdicts are discarded while the record counts them | Four shards of model time discarded on write, and a record that cannot be re-derived from the tree it summarises | Andre |
+| 4 | Record both readings and let the counting step split the window at a fingerprint change | Splitting needs a per-date stamp the record does not have and a fit that can weight two populations | Two features to build before the first repair works | Andre |
+| 5 | Have the council re-trigger itself through the platform API | The default credential cannot start a new run, so it needs a stored personal token | A credential to manage, for a repair the next scheduled run already does | Carmack |
 
 ---
 
