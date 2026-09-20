@@ -522,7 +522,10 @@ quotable number on the route.
 - **A card says what clock the machine ran at and how long it had been up.**
  Uptime is there because a machine started minutes ago still has an empty page
  cache, which is one of the two reasons a run reads its weights back off disk -
- without it the eviction strip has one explanation instead of two. Every
+ without it the eviction strip has one explanation instead of two. That reason
+ is why the reading earns its place and **is not printed on the panel**: a
+ Hardware subtitle is one sentence ending in its own grain, so a second sentence
+ explaining a card would break the rule that keeps the page scannable. Every
  committed row is a freshly started machine: 2.6 to 38 minutes of uptime, median
  3.8 minutes, over 65 rows on 2026-09-21. **The clock prints alone.** The
  ceiling column a share would divide by is empty on all 65, so a card that drew
