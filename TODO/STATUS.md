@@ -177,7 +177,7 @@ section 3 is where it is answered.
 | #4 | 38 | C | The judge-call stamp, declared once | 2 is PENDING |
 | #5 | 38 | C | The council's own shard-outcome record | 4 is PENDING |
 | #6 | 38 | C | The content-similarity judge's own metrics | 5 is PENDING |
-| #7 | 38 | C | The line-against-holdout record | 5 is PENDING |
+| #7 | 38 | C | The judge's merge-line benchmark record | 5 is PENDING |
 | #8 | 38 | C | The pair row gains the stamp, and the store is rewritten | 5 is PENDING |
 | #9 | 38 | D | The shard timeout moves to the block that validates it | 2 is PENDING |
 | #10 | 38 | D | The measured judge pair replaces the derived call | 9 is PENDING |
@@ -189,7 +189,7 @@ section 3 is where it is answered.
 | #16 | 38 | H | The model block becomes one composite action | 15 is PENDING |
 | #17 | 38 | H | The council records its own shard outcomes | 16 is PENDING |
 | #18 | 38 | I | The store groups under the judge that fills it | 17 is PENDING |
-| #19 | 38 | J | Where the line stands against its holdout | 7 is PENDING; 18 is PENDING |
+| #19 | 38 | J | Where the judge's merge line stands against its holdout | 7 is PENDING; 18 is PENDING |
 | #20 | 38 | K | The plan pointer | 19 is PENDING |
 | #21 | 38 | L | The council repairs its own missing nights | 8 is PENDING; 11 is PENDING; 12 is PENDING |
 | #22 | 38 | F | The guard that stops a shard committing is renamed and re-reasoned | 13 is PENDING; 21 is PENDING |
