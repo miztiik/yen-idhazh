@@ -53,9 +53,7 @@ older than `observability.item_health_full_grain_months` (14) is folded to one
 row per `(date, stage)` in `state/telemetry-aggregate/<YYYY-MM>.csv` and that
 month's day files are deleted, by `idhazh prune-state` after the day is
 committed. The browser's copy of that same month under
-`frontend/public/telemetry/` goes in the same step. Until 2026-09-03 this page
-said the ledger was never pruned, which was true when it was written and stopped
-being true when the fold landed.
+`frontend/public/telemetry/` goes in the same step.
 
 **The boundary is still a month and only the files below it are days.** The fold
 is where the two grains meet: it reads a month's day files - at most 31 - writes

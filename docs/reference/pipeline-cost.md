@@ -200,10 +200,8 @@ cannot check. The retired incumbent's rows stay above, where they were taken.
 
 #### The fifth canary was never exercised
 
-**This page carried a false security finding from 2026-08-26 to 2026-08-27, and
-the correction is the lesson.** It read, verbatim: "The sanitizer was meant to
-strip the attacker-controlled URL before the model saw it, and it did not."
-Nothing measured ever said that. Four canaries were neutralised, and the fifth
+**A canary the model never answered is not a canary that was neutralised.**
+Four canaries were neutralised, and the fifth
 was never exercised, because the model returned nothing to check.
 
 **Evidence 1 - the run's own artifact**, downloaded 2026-08-27 with
@@ -279,7 +277,7 @@ its summary, this gate would have scored that neutralised. The exfiltration
 oracle is currently an assertion that can only pass. The output-side control
 that would make it falsifiable is being added separately.
 
-**The 8B replay this page used to prescribe is cancelled.** It cannot measure
+**The 8B replay is cancelled.** It cannot measure
 what it was written to measure. Both of its branches - "both models fail" and
 "only the 9B fails" - assume a marker reached a reply, and none did. It is also
 structurally incapable of returning a different answer, because the marker is
@@ -490,8 +488,8 @@ the automatic path draws `ceil(80 / 4) = 20` items and cannot draw more - half
 the 40 it drew at the 160 ceiling this section was first sized against, so the
 base work per worker roughly halves.
 
-**The worst shard is measured, not the slowest-of-each-day this page used to
-quote.** Read from the whole of `state/runtime-counters.csv` on 2026-09-02 -
+**The worst shard is measured, and it is not the slowest worker of each day.**
+Read from the whole of `state/runtime-counters.csv` on 2026-09-02 -
 104 rows, 80 of them carrying `job_seconds` at the old 40-item load, on the
 runner - the distribution is min 26.4, median **78.5**, p90 101.7 and worst
 **135.4 minutes**. The worst used 90.3 percent of the old 150-minute bound and

@@ -251,7 +251,7 @@ three runs cannot say.
 work.** `llama-bench` puts Gemma's decode within 0.014 tokens a second on the two
 machines - 10.226 on the EPYC 7763 in this very dispatch, and 10.212 on a Xeon
 8573C drawn by `35011547415` on another day, a ratio of 1.0014. On that reading
-the halving is unexplained, and until 2026-09-17 this page said so.
+the halving is unexplained.
 
 **It said so because `llama-bench` did not run on the machine that wrote these
 summaries.** The server's own counters, taken inside the `runtime` job, read 7.94

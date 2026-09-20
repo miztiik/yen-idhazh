@@ -135,9 +135,8 @@ price. Every one of them answers the query's own written intent, "items about
 crude output, crude imports or the crude price". None of them is labelled. The
 labels are incomplete, not wrong, and no label was changed to raise the score.
 
-**This is pooling bias, and it is the correction the earlier text got wrong.**
-The previous version of this page said the number "drifts down as the archive
-grows, and that is correct", on the reasoning that a new day can only add
+**This is pooling bias, and it is what makes the obvious reading wrong.**
+The drift reads as correct on the reasoning that a new day can only add
 distractors. The measurement says otherwise: most of what takes a slot from a
 labelled answer is another right answer nobody judged. So the drift is partly an
 artifact, and the bar will keep sliding for a reason that is not a regression.
@@ -268,9 +267,9 @@ wrong shape being tried first: a band around a drifting number is a looser bar,
 not a stable one, and the arithmetic priced it at 1.8 days.
 
 **A bar with no expiry date is the same defect as a magnitude with no date.**
-The previous version of this page said the bar "has about 0.077 of room before
-that matters". That room was spent in five days and nobody was watching the
-rate, so the gate failed on `main` and blocked every open pull request. The rate
+Quoting the room a bar has left - "about 0.077 before that matters" - prices it
+in a unit that expires: that room was spent in five days, the gate failed on
+`main`, and every open pull request was blocked. The rate
 is now measured, and the pin means it no longer applies to the gated number.
 
 **Archive search does clear a defensible bar, and the bar is lower than it

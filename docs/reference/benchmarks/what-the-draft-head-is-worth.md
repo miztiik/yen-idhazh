@@ -151,9 +151,7 @@ summaries differ while knowing something about how and not saying it.
 
 ## There is no speed reading on this page, and that is the finding
 
-The previous version of this page said the head was 6.3 percent faster. **That
-number should not have been read as a speed, and neither should any of the three
-below.**
+**No number below may be read as a speed, including the 6.3 percent that was.**
 
 Wall clock for the model path, median of two repeats, against each run's own
 head-off case:

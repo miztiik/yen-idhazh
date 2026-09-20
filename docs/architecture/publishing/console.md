@@ -44,12 +44,9 @@ The band is not a route. It stands on all five, which is why it is the surface t
 **Every route carries its own verdict panel, and it goes first.** That is the
 rule in the row above applied rather than a second rule: a verdict that only
 exists on the band tells an operator the pipeline is unwell and leaves him to
-work out which of thirteen readings to distrust. This page said until 2026-09-20
-that `/console/` was break panels only and that `/console/machine/` carried no
-verdict at all, while three Hardware panels already declared
-`data-panel-question="is it working"` in their own markup. **The page was what
-was wrong.** The panels stayed where they were and the two verdict panels moved
-to the top of their routes.
+work out which of thirteen readings to distrust. A panel declares which of the
+two questions it answers in its own markup, as `data-panel-question`, so the
+markup is what to read when a heading and a panel disagree.
 
 **On Pipelines "first" means first PANEL, under the glance cards.** The cards
 are a verdict too - they are this route's `is it working` over the open window -
