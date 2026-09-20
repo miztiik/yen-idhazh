@@ -183,7 +183,7 @@ Nothing on the page needs one today.
 
 ### The seventeen columns an operator asks for, since 2026-09-15
 
-The census measures 119 columns an item at a time. This projection published 32
+The census measures 123 columns an item at a time. This projection published 32
 of them, so three questions an operator asks had no answer anywhere a person
 could read.
 
@@ -248,7 +248,7 @@ in seven groups.
 | Ranking provenance | `selection_score`, `authority_score`, `tier_score`, `feed_weight`, `feed_reliability`, `lens_bonus`, `recency_bonus`, `carriage_step`, `watchlist_bonus`, `carried_by`, `watchlist_hit`, `on_front_page`, `tier`, `source_form`, `published_at`, `time_source` | Sixteen cells about why a story was chosen. No timing or rate question reads one, and the ranker has its own surfaces. |
 | Fetch sub-splits | `fetch_connect_ms`, `fetch_ttfb_ms`, `robots_ms`, `retry_count`, `retry_total_ms`, `http_status` | One level below the question asked. `fetch_ms` names the band; these say which half of it, which is the next question and not this one. |
 | Cache and slot internals | `label_cache_pct`, `summary_cache_pct`, `slot_id`, `kv_tokens_at_start`, `prefix_shared_with_previous` | The two percentages are `cached / input` off cells already published, and the other three are llama-server bookkeeping a page never draws. |
-| Shard and run bookkeeping | `shard`, `job`, `item_index`, `shard_item_count`, `item_started_at`, `item_ended_at`, `cpu_busy_max`, `cpu_busy_min`, `llama_rss_bytes`, `llama_rss_peak_bytes`, `python_rss_bytes`, `cgroup_peak_bytes` | Answered at shard grain on `/console/machine/`, which already publishes them once a shard instead of once an item. |
+| Shard and run bookkeeping | `shard`, `job`, `item_index`, `shard_item_count`, `item_started_at`, `item_ended_at`, `cpu_busy_max`, `cpu_busy_min`, `llama_rss_bytes`, `llama_rss_peak_bytes`, `python_rss_bytes` | Answered at shard grain on `/console/machine/`, which already publishes them once a shard instead of once an item. |
 | What the machine had | `os_mem_available_bytes`, `os_mem_total_bytes`, `os_mem_cached_bytes`, `os_swap_free_bytes`, `os_swap_total_bytes`, `os_mem_available_min_bytes` | Six memory cells a reader never asks about. The operator console reads them out of `state/` at build time, so publishing them would cost every browser fetch and answer nobody's question. |
 | Configuration provenance | `model_id`, `model_quantisation`, `n_ctx_configured`, `n_parallel`, `n_threads`, `n_batch`, `max_output_tokens`, `label_budget_tokens`, `summary_budget_tokens`, `run_visual_decision`, `temperature`, `truncation_cap_tokens` | Constant within a run. Carrying twelve constants on every row is the largest byte waste on the list, and the run surface already holds them. |
 | Extraction, finish reasons, recovery | `source_chars`, `span_integrity`, `elements_found`, `element_class`, `failed_field`, `failed_rule`, `label_finish_reason`, `summary_finish_reason`, `recovered` | The extraction pass has its own panel, and a finish reason is neither a timing nor a rate. |

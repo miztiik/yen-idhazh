@@ -87,15 +87,17 @@ RETIRED_CELLS: Final[Mapping[str, str]] = MappingProxyType(
 
 #: Headings a day file an earlier run wrote still carries that this row no longer
 #: names and that nothing replaced. A retired cell moves to another column; a
-#: dropped one is gone, and the value it held is answered elsewhere - the host
-#: record carries `runner_name` at job grain, which an item row reaches through
-#: `job` and `shard` (`docs/reference/host-metrics.md`).
+#: dropped one is gone. `runner_name` is answered elsewhere - the host record
+#: carries it at job grain, which an item row reaches through `job` and `shard`
+#: (`docs/reference/host-metrics.md`). `cgroup_peak_bytes` is answered nowhere:
+#: the kernel file it was read from is absent on every runner this project has
+#: probed, so no run has ever put a value under that heading.
 #:
 #: **This is a contract, not a courtesy.** `ledger.migrate_header` refuses any
 #: heading that is neither a current column nor one the reader carries, rather
 #: than dropping cells silently - so a column deleted above without an entry here
 #: raises on the first append to every committed day file.
-DROPPED_CELLS: Final[frozenset[str]] = frozenset({"runner_name"})
+DROPPED_CELLS: Final[frozenset[str]] = frozenset({"runner_name", "cgroup_peak_bytes"})
 
 
 class ItemStage(StrEnum):
@@ -360,6 +362,11 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-20T18:00",
+            change="Steal, faults, pinning and anonymous RSS added; empty cgroup_peak_bytes cut.",
+            why="Time another tenant used, and pages the kernel took back, are not our own work.",
+        ),
+        ChangelogEntry(
             version="2026-09-20T15:30",
             change="llama_rss_peak_bytes says what it measures: a whole-life mark that can fall.",
             why="It read as a per-item peak that cannot fall, which is neither thing it is.",
@@ -373,11 +380,6 @@ class ItemHealthRow(Contract):
             version="2026-09-17T12:00",
             change="Retired runner_name; the host record carries it at job grain.",
             why="Nothing read the item-row copy, and a second copy is a thing that can disagree.",
-        ),
-        ChangelogEntry(
-            version="2026-09-17",
-            change="job names the workflow job whose machine took this row's readings.",
-            why="Shard alone does not reach the host record: more than one job spells shard 0.",
         ),
         ChangelogEntry(
             version="2026-08-23",
@@ -835,7 +837,17 @@ class ItemHealthRow(Contract):
         default=None, description="The CPU the runner reported, verbatim."
     )
     cpu_busy_pct: float | None = Field(
-        default=None, ge=0.0, le=100.0, description="Mean CPU busy over the item."
+        default=None,
+        ge=0.0,
+        le=100.0,
+        description=(
+            "The share of the item's processor time that was our own work: busy ticks "
+            "over available ticks across the whole item, differenced from two reads of "
+            "/proc/stat. Time the host gave another tenant is taken out and recorded in "
+            "cpu_steal_pct instead. A row written before 2026-09-20 counted that time "
+            "as ours, so the two sides of the change are not comparable and nothing can "
+            "recover the split for a row already written."
+        ),
     )
     cpu_busy_max: float | None = Field(
         default=None, ge=0.0, le=100.0, description="Peak CPU busy over the item."
@@ -843,11 +855,35 @@ class ItemHealthRow(Contract):
     cpu_busy_min: float | None = Field(
         default=None, ge=0.0, le=100.0, description="Trough CPU busy over the item."
     )
+    cpu_steal_pct: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=100.0,
+        description=(
+            "The share of the item's processor time the host gave to another tenant, "
+            "from the same /proc/stat difference cpu_busy_pct is taken from. Neither "
+            "ours nor idle, which is why it is counted apart from both. Null where the "
+            "kernel's cpu line stops short of the field: a kernel that does not account "
+            "stolen time has not told us there was none."
+        ),
+    )
     load_1m: float | None = Field(
         default=None, ge=0.0, description="One-minute load average when the item ended."
     )
     llama_rss_bytes: int | None = Field(
         default=None, ge=0, description="Resident memory of the model server when the item ended."
+    )
+    llama_rss_anon_bytes: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "The part of the model server's resident set that is not file-backed, as "
+            "`RssAnon` in `/proc/<pid>/status` reported it. The weights are mapped from "
+            "a file, so they count inside llama_rss_bytes and inside the page cache at "
+            "the same time and the two may not be added; this cell can double-count "
+            "with neither, which is what lets a reader split the machine's memory up "
+            "and have the parts close."
+        ),
     )
     llama_rss_peak_bytes: int | None = Field(
         default=None,
@@ -862,16 +898,27 @@ class ItemHealthRow(Contract):
             "kernel reclaims takes the figure down with it."
         ),
     )
-    python_rss_bytes: int | None = Field(
-        default=None, ge=0, description="Resident memory of the worker process when the item ended."
-    )
-    cgroup_peak_bytes: int | None = Field(
+    llama_major_faults: int | None = Field(
         default=None,
         ge=0,
         description=(
-            "Peak memory the job's cgroup reported. This is the number the runner "
-            "kills the job over, so it is the one that answers whether a bigger "
-            "model would have fitted (Guardrail #2)."
+            "How many pages the model server had to wait for off disk across this item, "
+            "differenced from `/proc/<pid>/stat` at either end. A count over the window "
+            "and never a rate, because the row already carries the interval. It is the "
+            "one reading that can see the kernel taking the weights back: those pages "
+            "are file-backed, so they leave an RSS figure and touch no swap counter on "
+            "the way out. Null where either end could not be read, and null is not zero."
+        ),
+    )
+    python_rss_bytes: int | None = Field(
+        default=None, ge=0, description="Resident memory of the worker process when the item ended."
+    )
+    python_rss_anon_bytes: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "The part of the worker process's resident set that is not file-backed, on "
+            "the same terms as the model server's."
         ),
     )
 
@@ -895,6 +942,17 @@ class ItemHealthRow(Contract):
     )
     n_threads: int | None = Field(default=None, ge=1, description="Threads the server was given.")
     n_batch: int | None = Field(default=None, ge=1, description="The server's prefill batch size.")
+    weights_pinned: bool | None = Field(
+        default=None,
+        description=(
+            "Was the server told to lock the weights in memory - `inference.load_mode`, "
+            "which llama-server spells `-lm`? False is the ordinary setting and says the "
+            "kernel may reclaim them, which is the state llama_major_faults exists to "
+            "catch. Recorded because a surface that states the weights are not pinned "
+            "with nothing on the row to check it against starts lying the day somebody "
+            "sets the flag. Null on a row written before the column."
+        ),
+    )
     max_output_tokens: int | None = Field(
         default=None, ge=1, description="The configured ceiling on any one decode."
     )
@@ -930,11 +988,6 @@ class ItemHealthRow(Contract):
     # resident pages are file-backed and evictable in every RSS figure, and a
     # page two processes share is counted twice. These six are the kernel's own
     # account, sampled by the same `Watch` over the same model window.
-    #
-    # They sit at the end rather than beside the RSS cells because
-    # `csv_columns()` is declaration order: a column filed in the middle would
-    # move every later value one place left under a reader that maps by
-    # position, across every day file an earlier run wrote.
     os_mem_available_bytes: int | None = Field(
         default=None,
         ge=0,
@@ -972,7 +1025,9 @@ class ItemHealthRow(Contract):
         default=None,
         ge=0,
         description=(
-            "Swap this machine has, from /proc/meminfo SwapTotal. Recorded because a free "
+            "Swap this machine has, from /proc/meminfo SwapTotal. Constant inside a job, "
+            "so it is read paired with os_swap_free_bytes off one row and never as a "
+            "distribution of its own. Recorded because a free "
             "figure of zero says 'no swap on this box' and 'swap fully consumed' equally, "
             "and only the second is an emergency."
         ),

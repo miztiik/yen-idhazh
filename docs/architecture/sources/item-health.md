@@ -24,9 +24,9 @@ writes the whole day's census afterwards. A worker also leaves its own copy of
 the row beside the item's other payloads, which is
 [the file below](#the-row-on-the-shard-before-the-ledger-has-it).
 
-The row carries 119 columns. `ItemHealthRow.csv_columns` in
+The row carries 123 columns. `ItemHealthRow.csv_columns` in
 `backend/idhazh/contracts/item_health.py` is the list, and this page does not
-restate it - a second copy of 119 names is a second thing to keep in step, and
+restate it - a second copy of 123 names is a second thing to keep in step, and
 it drifts. [item-health-columns.md](item-health-columns.md) is the generated
 answer to "where does this cell come from": every column, the eight questions
 they group into, which module puts a value under each name, whether that value
@@ -368,13 +368,27 @@ is that rule: a row naming a job beats a row that does not.
 
 ### What the machine had, against what a process held
 
-Eight memory and processor cells on this row are about a PROCESS - the model
-server's resident set, the worker's, the job's cgroup peak. **None of them can
+Seven memory cells on this row are about a PROCESS - the model server's
+resident set now and over its whole life, the worker's, and the part of each
+that is not file-backed. **None of them can
 say what was left.** llama.cpp maps the weights with no `-lm`, so their resident
 pages are file-backed and evictable and count in every RSS figure, and a page
 two processes share is counted twice. Adding the marks up and subtracting from
 16 GB is a number this project has already withdrawn
 ([../../reference/pipeline-cost.md](../../reference/pipeline-cost.md)).
+
+**`llama_rss_anon_bytes` and `python_rss_anon_bytes` are the two that can be
+added to something.** Anonymous memory is not file-backed, so it cannot also be
+counted in the page cache, and a decomposition of the machine's total built from
+those two closes instead of overflowing. A resident-set figure drawn against the
+machine total does not.
+
+**One memory column was deleted rather than left empty.** `cgroup_peak_bytes`
+read `/sys/fs/cgroup/memory.peak`, the count the runner would kill a job over,
+and that file is absent on every GitHub-hosted runner this project has probed -
+so the column was empty on all 13,797 committed rows and on every row of the
+published machine series. The heading is in `DROPPED_CELLS`, which is what lets
+the day files an earlier run wrote re-file rather than raise.
 
 Six `os_` columns are the kernel's own account instead, read from
 `/proc/meminfo` by the same watch that fills `cpu_busy_max`:
@@ -402,10 +416,11 @@ zero in the headroom cell would read as a machine with no memory left.
 
 ### What the processors did, and what was taken from them
 
-Three columns are the processor's side of the same window. `cpu_busy_pct` is
+Four columns are the processor's side of the same window. `cpu_busy_pct` is
 busy ticks over available ticks across the item, differenced from two reads of
 `/proc/stat`. `cpu_busy_max` and `cpu_busy_min` are the highest and lowest the
-sampler saw between the same two ends.
+sampler saw between the same two ends. `cpu_steal_pct` is the share of the same
+window the host gave to another tenant.
 
 **From 2026-09-20 the busy figure leaves out time the host gave to another
 tenant, and before that date it counted that time as ours.** The kernel reports
@@ -416,15 +431,20 @@ apart on the row, and the two sides of the date are not comparable. Nothing can
 recover the split for a row already written: the endpoints it was differenced
 from are gone.
 
-**The stolen share is read from the same difference and has no column yet.** It
-costs no extra file read - both processor-time texts were already opened and
-already subtracted - so it is taken at the same instant as the figure it was
-removed from, and held until the row declares somewhere to put it. The same is
-true of the model server's major page faults, which are read once as the item
-opens and once as it closes: a major fault is a page the process had to wait for
-off disk, and it is the only signal that the kernel took the weights back, since
-those pages are file-backed and leave an RSS figure without touching a swap
-counter.
+**The stolen share costs no extra file read.** Both processor-time texts were
+already opened and already subtracted, so it is taken at the same instant as the
+figure it was removed from. An empty cell is a kernel whose `cpu` line stops
+short of the field, which is not the same fact as a host that took nothing.
+
+**`llama_major_faults` is the one reading that can see the weights being taken
+back.** It is the model server's major page faults across the item, read once as
+the item opens and once as it closes, and recorded as the difference. A major
+fault is a page the process had to wait for off disk. The weight pages are
+file-backed, so a kernel reclaiming them leaves an RSS figure and touches no
+swap counter - this count and the page-cache column beside it are the only two
+cells that would say it happened. `weights_pinned` says whether the server was
+told to lock them down, so a surface can state the setting from the row rather
+than from a literal.
 
 ## Stages and outcomes
 
@@ -628,7 +648,7 @@ Three things follow, and the first is the one most often got wrong:
  column nor one the reader carries, rather than dropping cells silently - so a
  retired column with no entry there raises on the first append to every
  committed day file, and takes every ledger staged beside it down with it.
- `runner_name` is in that set for exactly this reason.
+ `runner_name` and `cgroup_peak_bytes` are in that set for exactly this reason.
 
 **The committed day files are not rewritten by the pull request.** Each one is
 re-filed by the first run that appends to it. A branch that rewrote a day file
@@ -748,7 +768,7 @@ moved twice, so it was a stale reading rather than history and has been replaced
 | Widest day, `2026/08/25.csv` | 1,000 rows, 396,015 bytes | `stat` |
 | Rows on a full day | **800** | 5 runs x the 160-item `safety_ceiling_per_run` |
 | A full day at the current width | **~351 KB** | 800 x 439.3 |
-| Published projection `frontend/public/telemetry/2026-09.csv` | 1,373,976 bytes, 49 of the 119 columns | `stat` |
+| Published projection `frontend/public/telemetry/2026-09.csv` | 1,373,976 bytes, 49 of the 123 columns | `stat` |
 | Mean published row | 180.5 bytes raw, **41.3 bytes gzipped** (4.4x) | gzip at maximum level |
 
 What the 2026-09-17 column change costs the archive, one time, on the first
@@ -779,7 +799,7 @@ Three limits, in the order they will actually bite:
 1. **The reader's download, first.** The console fetches a whole month shard.
  991 KB gzipped at the end of a busy month is far more than the rest of the
  page. The lever is the projection, not the ledger: the served file carries 49
- of the row's 119 columns and could carry fewer, or become a pre-aggregated
+ of the row's 123 columns and could carry fewer, or become a pre-aggregated
  day-grain file with the per-item rows kept for the operator only. Nothing
  here is measured against a slow connection yet, so that is the next
  measurement rather than the next change.

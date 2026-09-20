@@ -82,7 +82,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 6 | The bandwidth probe sizes itself against the cache | 1, 3, 8 | A | DONE | p37r6 | #978 | worker |
 | 4 | The sampler stops calling theft our work | 2, 3 | B | DONE | p37r4 | - | worker |
 | 9 | Panels grouped by the decision they serve | 7 | B | PENDING | - | - | - |
-| 5 | `ItemHealthRow` gains three columns and loses one | 4 | C | PENDING | - | - | - |
+| 5 | `ItemHealthRow` gains three columns and loses one | 4 | C | DONE | p37r5 | - | worker |
 | 10 | Did another tenant take the processor | 5, 8, 9 | C | PENDING | - | - | - |
 | 11 | Is the kernel taking the model's weights back | 5, 8, 9 | C | PENDING | - | - | - |
 | 12 | What one article costs the machine | 9 | C | PENDING | - | - | - |

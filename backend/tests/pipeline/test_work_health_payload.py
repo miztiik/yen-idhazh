@@ -141,11 +141,14 @@ HOST_COLUMNS: Final = (
     "cpu_busy_pct",
     "cpu_busy_max",
     "cpu_busy_min",
+    "cpu_steal_pct",
     "load_1m",
     "llama_rss_bytes",
+    "llama_rss_anon_bytes",
     "llama_rss_peak_bytes",
+    "llama_major_faults",
     "python_rss_bytes",
-    "cgroup_peak_bytes",
+    "python_rss_anon_bytes",
     "os_mem_available_bytes",
     "os_mem_total_bytes",
     "os_mem_cached_bytes",
@@ -156,7 +159,7 @@ HOST_COLUMNS: Final = (
 
 
 def a_machine_that_answers(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
-    """A `/proc` and a kernel peak this test writes, so every host cell fills.
+    """A `/proc` this test writes, so every host cell fills.
 
     Nothing here reads the box the suite runs on. None of these paths exists on a
     developer machine, so a test that asked the real host would record every host
@@ -172,11 +175,14 @@ def a_machine_that_answers(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
         (table / pid / "comm").write_text(f"{comm}\n", encoding="utf-8")
     ticks = count(start=100, step=200)
     spent = count(start=0, step=1000)
+    faulted = count(start=7, step=3)
 
     def built(path: Path) -> str | None:
         if path == host.PROC_STAT:
             moment = next(ticks)
-            return f"cpu  {moment} 0 {moment} {moment * 4} 0 0 0 0 0 0\n"
+            # A stolen share that climbs with the rest, so the steal cell proves
+            # a reading travelled rather than proving a zero appeared.
+            return f"cpu  {moment} 0 {moment} {moment * 4} 0 0 0 {moment // 10} 0 0\n"
         if path == host.LOADAVG:
             return "1.53 1.20 0.91 2/312 9931\n"
         if path == host.MEMINFO:
@@ -189,10 +195,13 @@ def a_machine_that_answers(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
                 "SwapTotal:       4194300 kB\n"
                 "SwapFree:        4194300 kB\n"
             )
-        if path == host.CGROUP_PEAK:
-            return "15032385536\n"
         if path.name == "status":
-            return "VmRSS:\t 4194304 kB\nVmHWM:\t 5242880 kB\n"
+            return "VmRSS:\t 4194304 kB\nVmHWM:\t 5242880 kB\nRssAnon:\t 1048576 kB\n"
+        if path.name == "stat":
+            # A counter that climbs, so the item's total is a real difference
+            # rather than two reads of one number. `majflt` is the tenth cell
+            # after the bracketed command.
+            return f"742 (llama-server) S 1 742 742 0 -1 0 900 0 {next(faulted)} 0\n"
         if path.name == "comm":
             return path.read_text(encoding="utf-8")
         return None
@@ -205,7 +214,7 @@ def a_machine_that_answers(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
 def test_every_host_column_reaches_the_row_the_shard_left_behind(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
-    """Fifteen columns that were computed and discarded now outlive the process.
+    """Eighteen columns that were computed and discarded now outlive the process.
 
     A throughput number with no machine beside it is not a measurement
     (Guardrail #10), and until the work stage recorded these, whether a slow item
