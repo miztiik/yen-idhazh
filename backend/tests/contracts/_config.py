@@ -8,10 +8,10 @@ from typing import Any, Final
 from conftest import FIXTURES_DIR
 
 #: Every place `pipeline_fingerprint` may still be named in source a person
-#: wrote, and why. The removal cannot be gated on "the name appears nowhere":
-#: the read-side migration has to name the key it pops, and one shape still
-#: declares the field because the console still reads its column. So the gate is
-#: that every mention is one of these, with its reason beside it.
+#: wrote or a generator emits, and why. The removal cannot be gated on "the name
+#: appears nowhere": the read-side migration has to name the key it pops, and one
+#: shape still declares the field because the console still reads its column. So
+#: the gate is that every mention is one of these, with its reason beside it.
 FINGERPRINT_SURVIVORS: Final[dict[str, str]] = {
     "backend/idhazh/contracts/day_metrics.py": (
         "the popper: 23 committed state/day-metrics/ records and both published "
@@ -25,6 +25,10 @@ FINGERPRINT_SURVIVORS: Final[dict[str, str]] = {
         "the one field that survives the drop, because the console reads its "
         "state/scores/ column for every day before RECORDED_INPUTS_FROM - the "
         "condition that removes it is on the line that declares it"
+    ),
+    "frontend/src/contracts/eval-row.ts": (
+        "generated from the field above, so it goes when that field goes and "
+        "cannot be edited out on its own"
     ),
     "backend/idhazh/contracts/score_archive.py": "a changelog entry and a docstring, both history",
     "backend/idhazh/contracts/evidence.py": "a changelog entry, which is history",

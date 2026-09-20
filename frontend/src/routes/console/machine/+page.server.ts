@@ -152,8 +152,8 @@ export async function load() {
 	const today = new Date().toISOString().slice(0, 10);
 
 	// One row a job, bounded to the same cover every other read on this route
-	// takes (Guardrail #12), and the twelve flag names out of the generated schema
-	// rather than a list typed here.
+	// takes (Guardrail #12), and the twelve flag names out of the generated
+	// contract rather than a list typed here.
 	const fingerprints = hostFingerprints(days);
 	const flagNames = watchedFlags();
 
@@ -180,7 +180,7 @@ export async function load() {
 	// control is for. The key set is bounded by the widest preset, so it is fixed
 	// for a build whatever the reader does.
 	const seen = [
-		...fingerprints.map((row) => ({ fingerprint: row.fingerprint, cpuModel: row.cpuModel })),
+		...fingerprints.map((row) => ({ fingerprint: row.fingerprint, cpuModel: row.cpu_model })),
 		...counters.runs.flatMap((run) =>
 			run.reported.map((shard) => ({ fingerprint: null, cpuModel: shard.cpuModel }))
 		)
@@ -326,7 +326,7 @@ export async function load() {
 	// One group a machine, never one figure over all of them. Measured 2026-09-17
 	// over the committed counters ledger, 86 of the 90 runs that name a processor
 	// drew more than one kind, so a pooled rate was a number about neither.
-	const newestFingerprints = fingerprints.filter((row) => row.runId === (newest?.runId ?? ''));
+	const newestFingerprints = fingerprints.filter((row) => row.run_id === (newest?.runId ?? ''));
 	const split = splitByMachine(newest, {
 		colourStops: console_.machine_colour_stops,
 		// Two machines reporting one model name are not the same machine, so the
