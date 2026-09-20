@@ -166,7 +166,7 @@ export function selectPaths(paths: readonly string[]): Selection {
 			fullBackend = true;
 			reason = 'shared or unknown input; full coverage';
 		}
-		if (/^(config\/|schemas\/|backend\/idhazh\/contracts\/|pyproject\.toml$)/.test(path)) {
+		if (/^(config\/|schemas\/|frontend\/src\/contracts\/|backend\/idhazh\/contracts\/|pyproject\.toml$)/.test(path)) {
 			contracts = true;
 		}
 		if (/^(frontend\/(scripts\/|playwright(?:\.logic)?\.config\.ts$|package(?:-lock)?\.json$)|\.github\/(scripts\/browser-suite-needed\.sh|workflows\/ci\.yml)$|backend\/utilities\/gate_lock\.py$|pyproject\.toml$|unresolved-change-base$|full-ci-run$)/.test(path)) {

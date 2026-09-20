@@ -13,12 +13,36 @@ backend/idhazh/contracts/*.py <- Pydantic models. HAND-WRITTEN. The source of tr
  |
  +--> schemas/*.schema.json <- GENERATED. Never hand-edited.
  |
- +--> frontend/src/lib/payload/types.ts <- mirrors the schema. HAND-WRITTEN, for now.
+ +--> frontend/src/contracts/*.ts <- GENERATED. Never hand-edited.
 ```
 
 The direction is one-way and never reversed. To change a persisted shape you edit the Pydantic model and regenerate; editing a generated artifact is an anti-pattern (`CLAUDE.md` section 10) and the drift gate will fail it anyway.
 
-**The third arrow is not automated yet, and that is a known gap.** `frontend/src/lib/payload/types.ts` is written by hand against `schemas/digest-day.schema.json`, so nothing stops the two drifting apart except a person noticing. The generator and the gate over it land with the rest of the frontend contract work. Until then the mirror is narrow on purpose - the published payload only, not all seventeen shapes - because a hand-kept mirror is only safe while it is small enough to read in one sitting.
+**One command writes both trees.** `python -m idhazh.contracts.export` walks one list of models and emits the schema and the TypeScript from it, so there is no second command a person can forget to run. That matters more than it sounds: the gap a hand-written mirror lives in is exactly the gap between two commands.
+
+## What the TypeScript carries
+
+The emitter reads the generated JSON Schema rather than the model, so the schema and the TypeScript cannot describe two different shapes. One module per contract, named for the schema stem: `schemas/host-fingerprint-row.schema.json` and `frontend/src/contracts/host-fingerprint-row.ts`.
+
+Each module carries the root interface, one declaration per `$defs` entry, and the field descriptions as JSDoc, so a frontend developer reads the contract's own words on hover rather than opening the Python.
+
+**A closed vocabulary ships twice: as a frozen array and as the union that array's members form.**
+
+```ts
+export const SERVER_JOB = ['plan', 'work', 'assemble', 'visuals', 'runtime', 'decide'] as const;
+
+export type ServerJob = (typeof SERVER_JOB)[number];
+```
+
+The union alone cannot be tested against at run time, and a reader that has to narrow a CSV cell would otherwise retype the members - which is the drift the generator exists to remove. `frontend/src/lib/server/host-fingerprint.ts` narrows the `job` column against that array and `watchedFlags()` hands back `WATCHED_FLAG`, so no list of jobs and no list of instruction-set flags is typed anywhere in the frontend.
+
+**An optional field is emitted optional.** Pydantic marks a field with a default as not required, so `cpu_model?: string | null` is what the contract says: the key may be absent, and present-but-null is the reading nobody took. A reader that fills every key says so by deriving from the generated type - `Required<HostFingerprintRow>` - rather than by declaring a second interface.
+
+**A column added to a model becomes a compile error in the reader that builds the row.** That is the whole point: before this, adding a column moved `schemas/` and moved nothing in `frontend/`.
+
+## What is still hand-written
+
+`frontend/src/lib/payload/types.ts` mirrors `schemas/digest-day.schema.json`, `digest-view`, `search-index` and `visual-data` by hand, and the published reading surface is typed from it. It is not converted yet: several of its types narrow the contract on purpose (`DigestViewItem` is a `Pick`, and `markup` is a build-time field that is deliberately not in the schema), so replacing it is a design change to the reading path rather than a rename. The chart view models under `frontend/src/lib/charts/` that share a name with a `machine-panels` definition are the same kind of case - `console-machine-panels.spec.ts` checks them against the schema at run time instead.
 
 ## Why the models, and not the schemas, are the source
 
@@ -30,9 +54,11 @@ A JSON Schema is a good interchange format and a poor authoring format: it canno
 | --- | --- |
 | `backend/idhazh/contracts/base.py` | The shared string types, the canonical serializer, and the two base models: `Model` for a nested shape and `Contract` for a top-level persisted document. `Contract` owns the `version` date-stamp, the `changelog` tuple, the invariant that `version` equals the newest changelog entry, the `<stem>.schema.json` name, and the JSON Schema emitter. |
 | `backend/idhazh/contracts/<name>.py` | One module per persisted shape. |
-| `backend/idhazh/contracts/export.py` | Walks the models and writes `schemas/`. Also the list of what a schema directory is allowed to contain. |
+| `backend/idhazh/contracts/export.py` | Walks the models and writes both generated trees. Also the list of what each of them is allowed to contain. |
+| `backend/idhazh/contracts/typescript.py` | Turns one contract's generated JSON Schema into one TypeScript module. |
 | `schemas/<name>.schema.json` | Generated. One flat file per model. |
-| `frontend/src/lib/payload/types.ts` | The published payload's TypeScript shapes, mirroring `schemas/digest-day.schema.json`. Hand-written today, generated later. |
+| `frontend/src/contracts/<name>.ts` | Generated. One module per model, named for the same stem. |
+| `frontend/src/lib/payload/types.ts` | The published payload's TypeScript shapes, mirroring `schemas/digest-day.schema.json`. Hand-written, and the one mirror left. |
 
 The shapes, and where each one lives once written:
 
@@ -392,7 +418,7 @@ in scope. Compare parsed schema trees before and after the change, including
 every value nested under `changelog`. Searching diff lines for the `version`
 and `changelog` keys misses a changed sentence whose key line did not move.
 
-The backend half is a contract-tier test: it regenerates every schema into a temporary directory and compares bytes against what is committed. It additionally asserts that `schemas/` holds **exactly** the generated set, so retiring a contract cannot leave a stale schema behind for something to keep validating against. The frontend half lands with the frontend.
+The backend half is a contract-tier test: it regenerates every schema into a temporary directory and compares bytes against what is committed. It additionally asserts that `schemas/` holds **exactly** the generated set, so retiring a contract cannot leave a stale schema behind for something to keep validating against. `backend/tests/contracts/test_typescript_contracts.py` asks the same two questions of `frontend/src/contracts/`, and adds the one the byte comparison cannot answer: it widens a model in memory and asserts the emitted TypeScript changed, so a generator that stopped reading the model would be caught by a test rather than by a reader.
 
 ## The persisted surfaces
 

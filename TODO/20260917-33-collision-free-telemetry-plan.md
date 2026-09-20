@@ -89,7 +89,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 12 | Delete the merge machinery | 2, 3, 4, 6, 17 | D | IN-FLIGHT | p33d12b | - | - |
 | 13 | Compaction lag and free swap on the console band | 1, 5, 7, 12 | D | IN-FLIGHT | p33d13 | - | - |
 | 11 | Delete `runtime-counters` and everything that reads it | 7, 10, 17 | E | IN-FLIGHT | p33e11p3b | - | - |
-| 15 | Generated TypeScript contracts replace the hand-written ones | 10, 11 | F | PENDING | - | - | - |
+| 15 | Generated TypeScript contracts replace the hand-written ones | 10, 11 | F | IN-FLIGHT | p33f15 | - | - |
 | 16 | Docs, and the orphan sweep | all | G | PENDING | - | - | - |
 | 18 | Chart-craft doctrine - the thirteen rules, written once | - | H | DONE | p33r18 | #863 | - |
 | 28 | Pipeline panels: the share track goes, Extraction gains a trend | 18 | H | DONE | p33h28 | #867 | - |
