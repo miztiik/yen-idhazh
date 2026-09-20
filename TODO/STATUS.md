@@ -84,7 +84,7 @@ section 3 is where it is answered.
 | #10 | 37 | C | Did another tenant take the processor | 5, 8, 9 |
 | #11 | 37 | C | Is the kernel taking the model's weights back | 5, 8, 9 |
 | #12 | 37 | C | What one article costs the machine | 9 |
-| #13 | 37 | C | Three panels leave the page | 9 |
+| #13 | 37 | C | Two panels leave the page | 9 |
 | #14 | 37 | C | The memory board drops the disputed mark | 2, 9 |
 | #15 | 37 | C | The shard board gains the clocks nobody reads | 9 |
 | #16 | 37 | C | Machine cards gain uptime, clock speed, cache size and copy speed | 6, 9 |
