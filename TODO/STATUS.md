@@ -37,7 +37,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 4 |
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
-| [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 3 | 19 | 2 |
+| [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 4 | 18 | 1 |
 
 ## In flight - 1
 
@@ -45,7 +45,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | --- | --- | --- | --- | --- |
 | #7 | 37 | A | One file a panel | p37r7 |
 
-## Ready now - 30
+## Ready now - 29
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -82,7 +82,6 @@ section 3 is where it is answered.
 | #7 | 35 | A / eval-core | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - |
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
 | #2 | 37 | A | Settle the peak that falls | 1 |
-| #6 | 37 | A | The bandwidth probe sizes itself against the cache | 1, 3, 8 |
 
 ## Waiting on another row - 88
 
@@ -169,7 +168,7 @@ section 3 is where it is answered.
 | #13 | 37 | C | Three panels leave the page | 9 is PENDING |
 | #14 | 37 | C | The memory board drops the disputed mark | 2 is PENDING; 9 is PENDING |
 | #15 | 37 | C | The shard board gains the clocks nobody reads | 9 is PENDING |
-| #16 | 37 | C | Machine cards gain uptime, clock speed, cache size and copy speed | 6 is PENDING; 9 is PENDING |
+| #16 | 37 | C | Machine cards gain uptime, clock speed, cache size and copy speed | 9 is PENDING |
 | #19 | 37 | C | Which prompts get re-read, and how fast | 9 is PENDING |
 | #20 | 37 | C | What is holding the runner's memory | 5 is PENDING; 9 is PENDING |
 | #21 | 37 | C | What the context window actually costs | 9 is PENDING |
