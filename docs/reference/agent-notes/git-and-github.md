@@ -130,6 +130,15 @@ main_tree=$(git rev-parse origin/main^{tree})
 
 **That test has one false negative, and it is the common case for a plan-doc.** If both sides added the same file the merge is an add/add conflict, so the branch reads as unmerged. Compare the blobs before believing it - identical object ids mean the content landed verbatim (`git rev-parse <branch>:<path> <squash>:<path>`, needs `MSYS_NO_PATHCONV=1`). One branch of four flagged this way can be fully merged.
 
+**Merging the tip of a stacked chain lands every branch under it, so the parents' pull requests are closed rather than merged.** A branch cut from another branch carries its parent's commits, and the squash folds all of them into the one entry the tip creates. Three pull requests of a four-deep chain were already on `main` the moment the tip merged, and merging them after that would have re-applied content that was there - a conflict at best, a duplicated row at worst. The tell is not the pull-request state, which still reads `OPEN`: ask whether the branch adds a file `main` does not have.
+
+```powershell
+git diff --name-only --diff-filter=A origin/main...origin/<branch> |
+  ForEach-Object { git cat-file -e "origin/main:$_" 2>$null; "$_ on main: $($LASTEXITCODE -eq 0)" }
+```
+
+Every file already present means the branch is redundant. Close it with a comment naming the pull request that carried it, so the row's history stays readable.
+
 ## Reading the tree with `git grep`
 
 **A hit count says a symbol is everywhere when nothing calls it.** Counting `visual_planner` across this repository named 56 files, which reads as a live subsystem. Three of them were under `backend/idhazh/` and **all three were docstring prose**; the only real import outside `backend/tests/` was an offline harness under `backend/utilities/`. A plan row was dispatched to retire that subsystem on the strength of a replacement that had never been wired to anything, and the count is what made the replacement look live. **"Is it mentioned" and "is it called" can answer 56 and 0**, and only the second one says whether deleting the old thing breaks the site. Ask for import statements, and read the production package on its own:
