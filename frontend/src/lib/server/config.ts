@@ -21,6 +21,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { ConsolePanelGroup } from '../../contracts/appearance-config';
 import { REPO_ROOT } from './payload';
 
 export interface UiConfig {
@@ -269,6 +270,16 @@ export interface ConsoleConfig {
 	machine_colour_stops: number;
 }
 
+/** One heading on a console route, and the panels under it, in drawn order.
+ *
+ * Not a field of `ConsoleConfig`, and the omission is the point: whatever
+ * `consoleConfig()` returns is inlined into all five prerendered console
+ * documents, and a route has no use for another route's running order. Each
+ * route reads its own list through `panelGroupsFor`.
+ */
+export type { ConsolePanelGroup };
+type PanelGroups = Record<string, ConsolePanelGroup[]>;
+
 /** What on-device archive search reads, keeps and shows.
  *
  * **Four fields, and the `assist` block in `config/` holds eight.** Whatever
@@ -480,6 +491,56 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	bandwidth_min_kinds: 3,
 	machine_colour_stops: 7
 };
+/** The running order a fresh clone draws, and the one the committed config
+ * repeats. Three headings on Hardware, because fifteen equal siblings down one
+ * column gave the eye nothing to land on first; one untitled group on
+ * Pipelines, because what that route needed was an order rather than headings.
+ * The first panel of the first group is the one that verdicts the rest. */
+const PANEL_GROUP_DEFAULTS: PanelGroups = {
+	pipelines: [
+		{
+			id: 'pipelines',
+			title: '',
+			panels: [
+				'at-a-glance',
+				'run-health',
+				'site-cost-per-item',
+				'failure-mix',
+				'item-time-split',
+				'throughput-viewport',
+				'stage-timings',
+				'item-cost',
+				'run-timeline',
+				'chart-drawing',
+				'extraction'
+			]
+		}
+	],
+	machine: [
+		{
+			id: 'the-newest-run',
+			title: 'The newest run',
+			panels: ['two-clocks', 'shard-board', 'memory-board', 'newest-run-tail']
+		},
+		{
+			id: 'the-open-window',
+			title: 'The open window',
+			panels: [
+				'prompt-cache',
+				'context-headroom',
+				'outside-the-model-call',
+				'tail-trend',
+				'read-against-written',
+				'counterfactual-cost'
+			]
+		},
+		{
+			id: 'the-machines',
+			title: 'The machines',
+			panels: ['machine-cards', 'reading-against-writing', 'platform-mix']
+		}
+	]
+};
 const ASSIST_DEFAULTS: AssistConfig = {
 	similarity_floor: 0.35,
 	result_limit: 10,
@@ -535,7 +596,7 @@ interface RawConfig {
 	collect?: Partial<CollectConfig>;
 	evaluation?: Partial<EvaluationConfig>;
 	summarize?: Partial<SummarizeConfig>;
-	console?: Partial<ConsoleConfig>;
+	console?: ConsoleBlock;
 	assist?: Partial<AssistConfig>;
 	observability?: Partial<ObservabilityConfig>;
 	visuals?: Partial<VisualsConfig>;
@@ -599,9 +660,13 @@ const BUILD_ONLY_KEYS = [
 type DigestBlock = Partial<UiConfig> &
 	Partial<Record<(typeof BUILD_ONLY_KEYS)[number], number>>;
 
+/** The `console` block: everything `ConsoleConfig` holds, plus the running
+ * order, which `consoleConfig()` deliberately leaves out of what it inlines. */
+type ConsoleBlock = Partial<ConsoleConfig> & { panel_groups?: PanelGroups };
+
 interface RawAppearance {
 	digest?: DigestBlock;
-	console?: Partial<ConsoleConfig>;
+	console?: ConsoleBlock;
 	assist?: Partial<AssistConfig>;
 	frame?: Partial<FrameConfig>;
 	theme?: Partial<ThemeConfig>;
@@ -855,7 +920,34 @@ export function summarizeConfig(): SummarizeConfig {
 }
 
 export function consoleConfig(): ConsoleConfig {
-	return mergeLayers(CONSOLE_DEFAULTS, raw().console, appearance().console);
+	const merged = mergeLayers(CONSOLE_DEFAULTS, raw().console, appearance().console);
+	// The running order shares the block and must not ride along - see the note
+	// on `ConsolePanelGroup`.
+	const { panel_groups: _order, ...knobs } = merged as ConsoleBlock;
+	return knobs as ConsoleConfig;
+}
+
+/** The groups one console route draws, in order, refusing a list it cannot draw.
+ *
+ * `drawn` is the route's own set of panel ids. A config that names a panel the
+ * route does not implement, or leaves one out, fails the build here rather than
+ * dropping a panel off the page in silence - a missing panel renders as nothing
+ * at all, and nothing is exactly what an empty window looks like.
+ */
+export function panelGroupsFor(route: string, drawn: readonly string[]): ConsolePanelGroup[] {
+	const configured = appearance().console?.panel_groups ?? raw().console?.panel_groups;
+	const groups = (configured ?? PANEL_GROUP_DEFAULTS)[route] ?? [];
+	const named = groups.flatMap((group) => group.panels);
+	const missing = drawn.filter((panel) => !named.includes(panel));
+	const unknown = named.filter((panel) => !drawn.includes(panel));
+	if (missing.length > 0 || unknown.length > 0) {
+		throw new Error(
+			`console.panel_groups.${route} does not match the route: ` +
+				`${missing.length} panel(s) it draws are unplaced [${missing.join(', ')}], ` +
+				`${unknown.length} named panel(s) it does not draw [${unknown.join(', ')}]`
+		);
+	}
+	return groups;
 }
 
 export function assistConfig(): AssistConfig {

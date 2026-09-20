@@ -34,6 +34,7 @@
 	import MachineSplitGroup from '$lib/components/MachineSplitGroup.svelte';
 	import MemoryBoard from '$lib/components/MemoryBoard.svelte';
 	import Panel from '$lib/components/Panel.svelte';
+	import PanelGroup from '$lib/components/PanelGroup.svelte';
 	import RateControl from '$lib/components/RateControl.svelte';
 	import ShapeSwitch from '$lib/components/ShapeSwitch.svelte';
 	import ShardBoard from '$lib/components/ShardBoard.svelte';
@@ -604,27 +605,35 @@
 			: `The panels below do not follow the window; each reads one run or one day, because a span cannot narrow a single run. The hardware panels read the newest run the counters hold, ${data.newestRunId}.`}
 	</p>
 
-	<Panel
-		title="Shards of the newest run"
-		note="What is broken, one row per shard, ranked by how long its job took. It answers whether a slow day was the work or the machine without leaving the row: a long clock at a normal read rate and a high item count is a lot of articles, and a long clock at a quarter of its neighbour's read rate, with load past the host's cores and swap falling, is the machine."
-		wide
-	>
-		<ShardBoard board={data.board} timeoutMinutes={data.shardTimeoutMinutes} />
-	</Panel>
+	{#snippet shardBoardPanel()}
+		<Panel
+			heading="h3"
+			title="Shards of the newest run"
+			note="What is broken, one row per shard, ranked by how long its job took. It answers whether a slow day was the work or the machine without leaving the row: a long clock at a normal read rate and a high item count is a lot of articles, and a long clock at a quarter of its neighbour's read rate, with load past the host's cores and swap falling, is the machine."
+			wide
+		>
+			<ShardBoard board={data.board} timeoutMinutes={data.shardTimeoutMinutes} />
+		</Panel>
+	{/snippet}
 
-	<Panel
-		title="How near the runner's ceiling this run got, item by item"
-		note="What the model server held, what it left the kernel, and how long the queue was - one mark an item, with the per-shard maxima and the window's span a grain switch away. The item grain is the one a per-shard maximum cannot show: one item can take the machine most of the way to its ceiling while its shard's figure reads as a normal run."
-		wide
-	>
-		<MemoryBoard board={data.memory} span={view.peakRssSpan} windowDays={view.days} />
-	</Panel>
+	{#snippet memoryBoardPanel()}
+		<Panel
+			heading="h3"
+			title="How near the runner's ceiling this run got, item by item"
+			note="What the model server held, what it left the kernel, and how long the queue was - one mark an item, with the per-shard maxima and the window's span a grain switch away. The item grain is the one a per-shard maximum cannot show: one item can take the machine most of the way to its ceiling while its shard's figure reads as a normal run."
+			wide
+		>
+			<MemoryBoard board={data.memory} span={view.peakRssSpan} windowDays={view.days} />
+		</Panel>
+	{/snippet}
 
+	{#snippet machineSplitPanel()}
 	<div
 		data-readout-none="one row per machine, no shared column"
 		data-machine-split={data.split.runId}
 	>
 		<Panel
+			heading="h3"
 			title="Reading against writing, machine by machine"
 			note="Two rows per machine: how the model server's seconds split on that machine, and how its tokens split. Read the mismatch between them - that is the price of a written token, on the machine that paid it."
 		>
@@ -678,7 +687,9 @@
 			{/if}
 		</Panel>
 	</div>
+	{/snippet}
 
+	{#snippet promptCachePanel()}
 	<div
 		data-windowed="machine-cache"
 		data-window-days={windowDays}
@@ -687,6 +698,7 @@
 		data-model-rule-none="a change moves this, and an engine-drawn axis carries no rule yet"
 	>
 		<Panel
+			heading="h3"
 			title="Prompt cache"
 			note="Prompt tokens the server read, against the ones it reused instead of reading, over the last {windowDays} days. Read whether a bigger cache would save wall clock."
 		>
@@ -726,7 +738,9 @@
 			{/if}
 		</Panel>
 	</div>
+	{/snippet}
 
+	{#snippet contextHeadroomPanel()}
 	<div
 		data-windowed="machine-context"
 		data-window-days={windowDays}
@@ -740,6 +754,7 @@
 		data-model-rule-to={contextRuns.at(-1)?.date ?? ''}
 	>
 		<Panel
+			heading="h3"
 			title="Context headroom"
 			note="The longest sequence each run saw, prompt and answer together, against the window the server was given. One mark a run over the last {windowDays} days, oldest on the left. This is the panel that says whether raising the truncation cap is even possible - which is a question about the worst run in the span, not the newest."
 		>
@@ -945,8 +960,12 @@
 			{/if}
 		</Panel>
 	</div>
+	{/snippet}
 
+	{#snippet twoClocksPanel()}
 	<Panel
+		heading="h3"
+		verdict
 		title="The two clocks, compared"
 		note="Prompt tokens a second, counted twice: once by the item ledger and once by the model server itself. The runtime ledger was created for this check and nothing performed it on a screen. A day where the two disagree is a day whose rates cannot be trusted."
 	>
@@ -1000,13 +1019,16 @@
 			</p>
 		{/if}
 	</Panel>
+	{/snippet}
 
+	{#snippet machineCardsPanel()}
 	<div
 		data-readout-none="one card per machine, nothing shared"
 		data-machine-cards={data.machines.runId}
 		data-machine-record={data.machines.record}
 	>
 		<Panel
+			heading="h3"
 			title="The machines this run drew"
 			note="One card per machine the newest run was given. A run is not a machine: over the committed record, 86 of the last 90 runs that named a processor drew more than one kind, and the read rate between the fastest and the slowest of them ran up to 6.1 times."
 		>
@@ -1048,13 +1070,16 @@
 			{/if}
 		</Panel>
 	</div>
+	{/snippet}
 
+	{#snippet platformMixPanel()}
 	<div
 		data-windowed="machine-fleet"
 		data-window-days={windowDays}
 		data-readout-none={view.fleet.drawBars ? undefined : 'a list of counts has no column'}
 	>
 		<Panel
+			heading="h3"
 			title="What the platform has been giving us"
 			note="How often each kind of machine turned up over the last {windowDays} days, day by day. A count of what happened, never a rate: what the next job will draw is the one thing this cannot say."
 		>
@@ -1130,9 +1155,12 @@
 			{/if}
 		</Panel>
 	</div>
+	{/snippet}
 
+	{#snippet outsideModelCallPanel()}
 	<div data-windowed="machine-host" data-window-days={windowDays}>
 		<Panel
+			heading="h3"
 			title="What the server did outside the model call"
 			note="What the machine and the server spent outside the model call itself. Each figure carries its ceiling: a counter without one is not a measurement. A figure with a span is one track - the band is what the last {windowDays} days read, the upright is this run's own mark on it, and that is what says whether the newest run was unusual."
 		>
@@ -1190,7 +1218,9 @@
 			</dl>
 		</Panel>
 	</div>
+	{/snippet}
 
+	{#snippet tailTrendPanel()}
 	<div
 		data-windowed="machine-latency"
 		data-window-days={windowDays}
@@ -1204,6 +1234,7 @@
 		data-model-rule-to={tailRuns.at(-1)?.date ?? ''}
 	>
 		<Panel
+			heading="h3"
 			title="How the tail moved"
 			note="One plot a percentile, one mark a run, over the last {windowDays} days. Five lines on one chart is a bundle a reader has to untangle by colour; separated, each is a trend read in one look. All five share one scale, which is the point of the arrangement - a p99 twenty times its own p50 has to look twenty times taller, and five plots on five scales would draw the same shape five times."
 		>
@@ -1388,8 +1419,11 @@
 			{/if}
 		</Panel>
 	</div>
+	{/snippet}
 
+	{#snippet newestRunTailPanel()}
 	<Panel
+		heading="h3"
 		title="How long the newest run's tail was"
 		note="The whole distribution of one run at once, which is a different question from whether the tail is growing. It reads the newest run the item ledger timed, so it holds still while the window moves."
 	>
@@ -1439,7 +1473,9 @@
 			</p>
 		{/if}
 	</Panel>
+	{/snippet}
 
+	{#snippet readAgainstWrittenPanel()}
 	<div
 		data-windowed="machine-tokens"
 		data-window-days={windowDays}
@@ -1448,6 +1484,7 @@
 		data-model-rule-none="one bar a run, so there is no day edge to draw between"
 	>
 		<Panel
+			heading="h3"
 			title="What a run reads against what it writes"
 			note="One group per run over the last {windowDays} days, a read bar beside a written bar on one axis. The switch changes the unit: the tokens each half counted, or the seconds the model server spent on it."
 		>
@@ -1527,9 +1564,12 @@
 			{/if}
 		</Panel>
 	</div>
+	{/snippet}
 
+	{#snippet counterfactualCostPanel()}
 	<div data-windowed="machine-cost" data-window-days={windowDays}>
 		<Panel
+			heading="h3"
 			title="What this would have cost somewhere else"
 			note="A counterfactual, never a bill, over the last {windowDays} days. Nothing bills us - Actions minutes are free on a public repository - which is why the wall clock alone cannot say whether the runner time was a good trade. Priced at a hosted provider's rate, it can."
 			tone="info"
@@ -1633,6 +1673,35 @@
 			{/if}
 		</Panel>
 	</div>
+	{/snippet}
+
+	<!-- The route's own running order lives in `config/appearance.json`, not in
+	     the order these snippets happen to be written in. Thirteen equal
+	     siblings down one column gave the eye nothing to land on first; three
+	     headings give it three stops, and the first panel of the first group is
+	     the one that says whether the rest can be trusted. -->
+	{#snippet panelFor(id: string)}
+		{#if id === 'shard-board'}{@render shardBoardPanel()}
+		{:else if id === 'memory-board'}{@render memoryBoardPanel()}
+		{:else if id === 'reading-against-writing'}{@render machineSplitPanel()}
+		{:else if id === 'prompt-cache'}{@render promptCachePanel()}
+		{:else if id === 'context-headroom'}{@render contextHeadroomPanel()}
+		{:else if id === 'two-clocks'}{@render twoClocksPanel()}
+		{:else if id === 'machine-cards'}{@render machineCardsPanel()}
+		{:else if id === 'platform-mix'}{@render platformMixPanel()}
+		{:else if id === 'outside-the-model-call'}{@render outsideModelCallPanel()}
+		{:else if id === 'tail-trend'}{@render tailTrendPanel()}
+		{:else if id === 'newest-run-tail'}{@render newestRunTailPanel()}
+		{:else if id === 'read-against-written'}{@render readAgainstWrittenPanel()}
+		{:else if id === 'counterfactual-cost'}{@render counterfactualCostPanel()}
+		{/if}
+	{/snippet}
+
+	{#each data.panelGroups as group (group.id)}
+		<PanelGroup id={group.id} title={group.title} panels={group.panels.length}>
+			{#each group.panels as id (id)}{@render panelFor(id)}{/each}
+		</PanelGroup>
+	{/each}
 </div>
 
 <style>

@@ -172,6 +172,21 @@ export interface ConsoleConfig {
 
 	/** How many machines get a colour of their own before the rest fold into one row named in words. Seven, because the chart ramp holds eight stops and the eighth is reserved for shards that recorded no machine at all - an absence is not a machine and must not take a machine's hue. Folding is what keeps the assignment bounded: without it a seventh kind would either collide with a sixth or need a ninth stop nobody has drawn. */
 	machine_colour_stops?: number;
+
+	/** The order the panels of a console route are drawn in, and the headings they group under. Keyed by route id. Thirteen equal siblings down one column give the eye nothing to land on first, so the Hardware route reads as three questions - the run that just finished, the span the control is open on, and the machines the platform handed us - and the first panel of the first group is the one that verdicts the rest. The Pipelines route takes one untitled group, because what it needed was an order rather than a grouping. An id here is a panel the route implements, and the route refuses a list that names one it does not. */
+	panel_groups?: Record<string, ConsolePanelGroup[]>;
+}
+
+/** One heading on a console route, and the panels that sit under it in order. */
+export interface ConsolePanelGroup {
+	/** What the group is called in markup, drawn as `data-console-group`. Lower case and hyphens, so it is a stable handle a test can name while the heading above it is reworded. */
+	id: string;
+
+	/** The heading drawn above the group. An empty title draws no heading and no group element, so the panels stay flat siblings - which is what a route that wants an order without a grouping asks for. A route mixes the two at its peril, so the contract refuses it. */
+	title: string;
+
+	/** The panels under this heading, in the order they are drawn. Each entry is a panel id the route implements; the route's `load` refuses a list that names a panel it does not draw, or omits one it does, so a rename here fails the build rather than dropping a panel off the page in silence. */
+	panels: string[];
 }
 
 /**

@@ -33,11 +33,32 @@ fits the screen it is on, and a page that can be scanned in one pass
 | --- | --- |
 | the standing band | is it working - one verdict across all five routes, at a size that does not grow with the pipeline |
 | `/console/` "At a glance" | is it working - for this route alone, and over the open window where the band's figures are whole-record |
-| `/console/` panels | what is broken in the run |
+| `/console/` `Run health` | is it working - in the run, and it is the first panel on the route |
+| the rest of `/console/` | what is broken in the run |
 | `/console/model/`, `/console/judgement/`, `/console/voices/` | what is broken in the writing, the labelling and the supply |
-| `/console/machine/` | what is broken on the box, and nothing else - it carries no verdict the band does not already give |
+| `/console/machine/` `The two clocks, compared` | is it working - can the day's rates be trusted at all, and it is the first panel on the route |
+| the rest of `/console/machine/` | what is broken on the box |
 
 The band is not a route. It stands on all five, which is why it is the surface that can verdict five.
+
+**Every route carries its own verdict panel, and it goes first.** That is the
+rule in the row above applied rather than a second rule: a verdict that only
+exists on the band tells an operator the pipeline is unwell and leaves him to
+work out which of thirteen readings to distrust. This page said until 2026-09-20
+that `/console/` was break panels only and that `/console/machine/` carried no
+verdict at all, while three Hardware panels already declared
+`data-panel-question="is it working"` in their own markup. **The page was what
+was wrong.** The panels stayed where they were and the two verdict panels moved
+to the top of their routes.
+
+**On Pipelines "first" means first PANEL, under the glance cards.** The cards
+are a verdict too - they are this route's `is it working` over the open window -
+and they carry the route's first chart. Measured 2026-09-20 on the canary build,
+Intel Core i7-1265U: drawing `Run health` above them put that chart at 1,179px
+at 1440 CSS px and 1,704px at 390, against the 800 and 1,200 lines
+`frontend/tests/console-band.spec.ts` holds - so a reader on a phone would have
+scrolled a screen and a half before seeing a shape. Both verdict surfaces sit
+above every panel they verdict either way, so the order costs the rule nothing.
 
 How a panel obeying this is allowed to draw is [../../concepts/console-design.md](../../concepts/console-design.md), whose thirteen chart rules carry it as the last and widest of them. Susan, 2026-09-17.
 
@@ -400,7 +421,7 @@ day count.
 
 ## What the Hardware route draws
 
-Thirteen panels. Eleven read `state/item-health/` and
+Thirteen panels under **three headings**. Eleven read `state/item-health/` and
 `state/host-fingerprint/`, which are the two instruments this route puts beside
 each other; three - the two machine panels and the split - read the machine
 record for the processor and the flags as well. All three are read at
@@ -408,21 +429,42 @@ build time under `$lib/server/` and nothing on the route is fetched: the three
 `state/`
 ledgers add no telemetry column and no reader sees a cell of any of them.
 
-| Panel | Grain | The sentence it is for |
-| --- | --- | --- |
-| Shards of the newest run | one row a shard | Was the day slow because of the work or because of the machine. |
-| How near the runner's ceiling this run got, item by item | one mark an item, with a shard grain and a window grain | Which item took the machine nearest its limit, whether it gave the memory back, and how long the queue was. |
-| Reading against writing, machine by machine | one group a machine | What a written token costs against a read one, on the machine that paid it. |
-| The machines this run drew | one card a machine | What machine this is, what it can do against the others this run drew, and whether its record survived the day. |
-| What the platform has been giving us | one group a day, one bar a machine kind | What kinds of machine we keep being handed, and whether that is changing. |
-| Prompt cache | one column a day | Whether a bigger cache would save wall clock. |
-| Context headroom | one mark a run | Whether raising the truncation cap is even possible. |
-| The two clocks, compared | one bar a shard | Whether the day's rates can be trusted at all. |
-| What the server did outside the model call | one track a figure, over the window | How busy the machine was, and how long the weights took to open, each against the window that measured it. |
-| How the tail moved | one plot a percentile, one mark a run | Whether the slow end of a run is moving. |
-| How long the newest run's tail was | the newest run | What the whole distribution of one run looks like at once. |
-| What a run reads against what it writes | one group a run, in either unit | Which half of the model call the run actually spent itself on. |
-| What this would have cost somewhere else | four figures over the whole span, and one column a day or one running line | Whether the runner time was a good trade, and whether the trade is getting worse. |
+| Group | Panel | Grain | The sentence it is for |
+| --- | --- | --- | --- |
+| The newest run | The two clocks, compared | one bar a shard | Whether the day's rates can be trusted at all. |
+| The newest run | Shards of the newest run | one row a shard | Was the day slow because of the work or because of the machine. |
+| The newest run | How near the runner's ceiling this run got, item by item | one mark an item, with a shard grain and a window grain | Which item took the machine nearest its limit, whether it gave the memory back, and how long the queue was. |
+| The newest run | How long the newest run's tail was | the newest run | What the whole distribution of one run looks like at once. |
+| The open window | Prompt cache | one column a day | Whether a bigger cache would save wall clock. |
+| The open window | Context headroom | one mark a run | Whether raising the truncation cap is even possible. |
+| The open window | What the server did outside the model call | one track a figure, over the window | How busy the machine was, and how long the weights took to open, each against the window that measured it. |
+| The open window | How the tail moved | one plot a percentile, one mark a run | Whether the slow end of a run is moving. |
+| The open window | What a run reads against what it writes | one group a run, in either unit | Which half of the model call the run actually spent itself on. |
+| The open window | What this would have cost somewhere else | four figures over the whole span, and one column a day or one running line | Whether the runner time was a good trade, and whether the trade is getting worse. |
+| The machines | The machines this run drew | one card a machine | What machine this is, what it can do against the others this run drew, and whether its record survived the day. |
+| The machines | Reading against writing, machine by machine | one group a machine | What a written token costs against a read one, on the machine that paid it. |
+| The machines | What the platform has been giving us | one group a day, one bar a machine kind | What kinds of machine we keep being handed, and whether that is changing. |
+
+**The three headings are what the route answers, and they are a knob rather
+than markup order.** Until 2026-09-20 this was fifteen flat siblings down one
+column, every title at one weight, and the sufficiency check an operator surface
+fails first is the one that asks what the eye lands on
+([../../concepts/design-system.md](../../concepts/design-system.md)). Three
+headings give the column three stops: the run that has just finished, the span
+the window control is open on, and the machines the platform handed us. The
+order and the membership live in `console.panel_groups` in
+`config/appearance.json`, so a re-grouping is a config edit rather than a
+markup move; the route's own `load` refuses a list that names a panel it does
+not draw, or leaves one out, so a typo fails the build rather than dropping a
+panel off the page in silence. A titled group steps its panels' titles to an
+`h3` under its own `h2`, which is what makes the grouping a document outline and
+not a row of dividers. Authority: Susan, decision 2 of Row #27 -
+three headings, not more.
+
+**The verdict panel goes first**, so `The two clocks, compared` opens the route
+rather than sitting seventh. It is the panel that says whether the other twelve
+can be believed, and an operator who reads it last has read twelve readings he
+had no reason to trust yet.
 
 **A run is not a machine, and three of those panels exist because the route said
 otherwise for weeks.** Measured 2026-09-17 over the committed counters ledger -
@@ -1208,6 +1250,15 @@ and what to do when one fires is in
 end to end, what its items cost added up, and how many ran at once - and it
 covers every item of the run rather than picking the worst one out. The grain
 switch changes the row and never the question.
+
+**It sits low on Pipelines, and `Run health` is the route's first panel.** A
+window is a span and this panel is one run, so an operator reaches it after a
+windowed panel has told him which run to open it on - and the panel that
+verdicts the route goes first, which is the thirteenth chart rule applied
+([../../concepts/console-design.md](../../concepts/console-design.md)).
+Pipelines takes one untitled group in `console.panel_groups`: what it needed was
+an order, not headings, and it already carries four section headings of its own.
+Authority: Row #27, 2026-09-20.
 
 **Two panels became one on 2026-09-20, and the grain is why.** Hardware drew a
 shard's clock from `state/span-rollup/` beside an item timeline from

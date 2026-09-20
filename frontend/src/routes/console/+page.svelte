@@ -60,6 +60,7 @@
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
 	import Panel from '$lib/components/Panel.svelte';
+	import PanelGroup from '$lib/components/PanelGroup.svelte';
 	import TargetBar from '$lib/components/TargetBar.svelte';
 	import { shortDate } from '$lib/format';
 	import { movementVerdict } from '$lib/charts/theme';
@@ -773,9 +774,6 @@
 		<a class="carry-link" href="{base}/console/model/">Model &rarr;</a>
 	</p>
 
-	<!-- Six questions, six shapes. A different chart per question is the point:
-	     one shape repeated is what made this page read as a single instrument. -->
-	<h2 class="console-h2">At a glance</h2>
 	<!-- Bars, not a line: a count per day is a discrete quantity, and a line
 	     between two days claims a value for the hours in between that nobody
 	     counted. Drawn as markup rather than by the engine, so it is complete
@@ -835,6 +833,10 @@
 			</p>
 		{/if}
 	{/snippet}
+	{#snippet atAGlancePanel()}
+	<!-- Six questions, six shapes. A different chart per question is the point:
+	     one shape repeated is what made this page read as a single instrument. -->
+	<h2 class="console-h2">At a glance</h2>
 	<div class="auto-grid mt-4" style="--auto-grid-min: 17rem" data-glance>
 		<!-- Articles first. Visuals published is a fraction of it, and a fraction
 		     reads as one only when the denominator is beside it. -->
@@ -876,7 +878,9 @@
 		     same window median against the same target, with the coverage half of
 		     the rule beside it, and one page may not state one figure twice. -->
 	</div>
+	{/snippet}
 
+	{#snippet siteCostPerItemPanel()}
 	<div
 		data-windowed="site-cost-per-item"
 		data-window-days={windowDays}
@@ -955,7 +959,9 @@
 			{/if}
 		</Panel>
 	</div>
+	{/snippet}
 
+	{#snippet failureMixPanel()}
 	<!-- No note. The heading names the subject and the strip under the chart
 	     prints every stage at the hovered day, so a sentence restating the
 	     encoding said what the shape already says - and said it wrongly the
@@ -1003,7 +1009,9 @@
 			{/if}
 		</Reserved>
 	</Panel>
+	{/snippet}
 
+	{#snippet itemTimeSplitPanel()}
 	<!-- The note is not a restatement of the encoding - the strip under the chart
 	     already prints every band at the hovered day. It is there for the one
 	     thing the shape cannot say: that the top band is time no step claimed,
@@ -1056,10 +1064,14 @@
 			{/if}
 		</Reserved>
 	</Panel>
+	{/snippet}
 
-	<!-- The panel above is a mean item over a span of days. This one is one run,
-	     on its own clock, so the window control does not reach it: a window is a
-	     span and a span cannot narrow a single run. It names the run it drew. -->
+	{#snippet runTimelinePanel()}
+	<!-- One run, on its own clock, so the window control does not reach it: a
+	     window is a span and a span cannot narrow a single run. It names the run
+	     it drew. It sits below the windowed timing panels because a snapshot of
+	     one run is what an operator opens after a span has told him which run to
+	     look at. -->
 	<Panel
 		title="Where the run's time went, on the run's own clock"
 		note="Is it working. Where each item's work sits against every other item's, on one clock - so a wide staircase is a run that queued and a solid block is a run that worked in parallel. The newest published run, one bar an item or one bar a shard. The four steps that nest inside those steps are printed under the bars rather than drawn: each runs inside a step a bar already draws, and the readout prints how wide it would have been."
@@ -1067,9 +1079,12 @@
 	>
 		<RunTimelinePanel view={data.runTimeline} subSteps={data.subSteps} />
 	</Panel>
+	{/snippet}
 
+	{#snippet runHealthPanel()}
 	<div data-windowed="run-health" data-window-days={windowDays}>
 		<Panel
+			verdict
 			title="Run health"
 			note="The last {windowDays} days, one column per day, oldest on the left, one square per recorded run with run 1 at the bottom. A column with no square is a day nothing ran. A run is green when it published what it planned, amber when it found nothing new, and red when it failed or published under {data.floorPct}%. A skipped item does not count against a run - an article we already published is skipped by design."
 		>
@@ -1170,7 +1185,9 @@
 			{/if}
 		</Panel>
 	</div>
+	{/snippet}
 
+	{#snippet throughputViewportPanel()}
 	<Viewport
 		{rows}
 		window={viewport}
@@ -1182,7 +1199,9 @@
 		onPan={pan}
 		onStep={(direction) => show(stepPreset(windowDays, presets, direction))}
 	/>
+	{/snippet}
 
+	{#snippet stageTimingsPanel()}
 	<StageTimings
 		days={data.timingDays}
 		span={viewport}
@@ -1192,7 +1211,9 @@
 		readoutMaxShare={data.chart.readout_max_share}
 		modelChanges={data.modelChanges}
 	/>
+	{/snippet}
 
+	{#snippet itemCostPanel()}
 	<!-- Reading and writing are drawn apart and never pooled. Measured over the
 	     committed projection they cost different amounts per token, and an
 	     operator acts on them differently: the article's length moves the first
@@ -1433,7 +1454,9 @@
 			{/if}
 		{/if}
 	</div>
+	{/snippet}
 
+	{#snippet chartDrawingPanel()}
 	{#if data.charts.length > 0}
 		<h2 class="console-h2">Visuals drawn for articles</h2>
 		<div
@@ -1599,7 +1622,9 @@
 			</details>
 		</div>
 	{/if}
+	{/snippet}
 
+	{#snippet extractionPanel()}
 	<h2 class="console-h2">What the extractor found, and what was drawn from it</h2>
 	<div data-windowed="extraction" data-window-days={windowDays}>
 		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
@@ -1752,6 +1777,33 @@
 			</p>
 		</Panel>
 	</div>
+	{/snippet}
+
+	<!-- The route's own running order lives in `config/appearance.json`, not in
+	     the order these snippets happen to be written in. One untitled group,
+	     because what this route needed was an order rather than headings: the
+	     panel that verdicts the run goes first, and the single-run timeline goes
+	     below the windowed panels that say which run to open it on. -->
+	{#snippet panelFor(id: string)}
+		{#if id === 'at-a-glance'}{@render atAGlancePanel()}
+		{:else if id === 'site-cost-per-item'}{@render siteCostPerItemPanel()}
+		{:else if id === 'failure-mix'}{@render failureMixPanel()}
+		{:else if id === 'item-time-split'}{@render itemTimeSplitPanel()}
+		{:else if id === 'run-timeline'}{@render runTimelinePanel()}
+		{:else if id === 'run-health'}{@render runHealthPanel()}
+		{:else if id === 'throughput-viewport'}{@render throughputViewportPanel()}
+		{:else if id === 'stage-timings'}{@render stageTimingsPanel()}
+		{:else if id === 'item-cost'}{@render itemCostPanel()}
+		{:else if id === 'chart-drawing'}{@render chartDrawingPanel()}
+		{:else if id === 'extraction'}{@render extractionPanel()}
+		{/if}
+	{/snippet}
+
+	{#each data.panelGroups as group (group.id)}
+		<PanelGroup id={group.id} title={group.title} panels={group.panels.length}>
+			{#each group.panels as id (id)}{@render panelFor(id)}{/each}
+		</PanelGroup>
+	{/each}
 </div>
 
 <style>

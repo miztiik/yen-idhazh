@@ -15,6 +15,37 @@ class TodayAnchor(StrEnum):
     CENTRE = "centre"
 
 
+class ConsolePanelGroup(Model):
+    """One heading on a console route, and the panels that sit under it in order."""
+
+    id: str = Field(
+        pattern=r"^[a-z][a-z0-9-]*$",
+        description=(
+            "What the group is called in markup, drawn as `data-console-group`. "
+            "Lower case and hyphens, so it is a stable handle a test can name "
+            "while the heading above it is reworded."
+        ),
+    )
+    title: str = Field(
+        description=(
+            "The heading drawn above the group. An empty title draws no heading "
+            "and no group element, so the panels stay flat siblings - which is "
+            "what a route that wants an order without a grouping asks for. A "
+            "route mixes the two at its peril, so the contract refuses it."
+        ),
+    )
+    panels: list[str] = Field(
+        min_length=1,
+        description=(
+            "The panels under this heading, in the order they are drawn. Each "
+            "entry is a panel id the route implements; the route's `load` "
+            "refuses a list that names a panel it does not draw, or omits one it "
+            "does, so a rename here fails the build rather than dropping a panel "
+            "off the page in silence."
+        ),
+    )
+
+
 class ConsoleConfig(Model):
     """Knobs for the operator console's time viewport."""
 
@@ -296,6 +327,74 @@ class ConsoleConfig(Model):
             "either collide with a sixth or need a ninth stop nobody has drawn."
         ),
     )
+    panel_groups: dict[str, list[ConsolePanelGroup]] = Field(
+        default_factory=lambda: {
+            "pipelines": [
+                ConsolePanelGroup(
+                    id="pipelines",
+                    title="",
+                    panels=[
+                        "at-a-glance",
+                        "run-health",
+                        "site-cost-per-item",
+                        "failure-mix",
+                        "item-time-split",
+                        "throughput-viewport",
+                        "stage-timings",
+                        "item-cost",
+                        "run-timeline",
+                        "chart-drawing",
+                        "extraction",
+                    ],
+                )
+            ],
+            "machine": [
+                ConsolePanelGroup(
+                    id="the-newest-run",
+                    title="The newest run",
+                    panels=[
+                        "two-clocks",
+                        "shard-board",
+                        "memory-board",
+                        "newest-run-tail",
+                    ],
+                ),
+                ConsolePanelGroup(
+                    id="the-open-window",
+                    title="The open window",
+                    panels=[
+                        "prompt-cache",
+                        "context-headroom",
+                        "outside-the-model-call",
+                        "tail-trend",
+                        "read-against-written",
+                        "counterfactual-cost",
+                    ],
+                ),
+                ConsolePanelGroup(
+                    id="the-machines",
+                    title="The machines",
+                    panels=[
+                        "machine-cards",
+                        "reading-against-writing",
+                        "platform-mix",
+                    ],
+                ),
+            ],
+        },
+        description=(
+            "The order the panels of a console route are drawn in, and the "
+            "headings they group under. Keyed by route id. Thirteen equal "
+            "siblings down one column give the eye nothing to land on first, so "
+            "the Hardware route reads as three questions - the run that just "
+            "finished, the span the control is open on, and the machines the "
+            "platform handed us - and the first panel of the first group is the "
+            "one that verdicts the rest. The Pipelines route takes one untitled "
+            "group, because what it needed was an order rather than a grouping. "
+            "An id here is a panel the route implements, and the route refuses a "
+            "list that names one it does not."
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -356,4 +455,32 @@ class ConsoleConfig(Model):
             raise ValueError(
                 "console.window_presets must offer a span of at least chart_rule_days"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _every_panel_is_named_once(self) -> Self:
+        """A panel belongs to one group of one route, and a route groups all or none.
+
+        Two rules, and each catches a different way the knob goes quietly wrong.
+        A panel named twice draws twice, which reads as a duplicated instrument
+        rather than as a config anybody would look at. And a route that titles
+        some groups and not others has no heading level left to give the panels:
+        a titled group steps its panels down to an h3 under its own h2, so a
+        route holding both kinds would draw two panel titles at two sizes with
+        nothing on the page to say why.
+        """
+        seen_groups: set[str] = set()
+        for route, groups in self.panel_groups.items():
+            for group in groups:
+                if group.id in seen_groups:
+                    raise ValueError(f"console.panel_groups repeats the group id {group.id}")
+                seen_groups.add(group.id)
+            titled = [group.title != "" for group in groups]
+            if any(titled) and not all(titled):
+                raise ValueError(
+                    f"console.panel_groups[{route}] titles some groups and not others"
+                )
+            named = [panel for group in groups for panel in group.panels]
+            if len(named) != len(set(named)):
+                raise ValueError(f"console.panel_groups[{route}] names a panel twice")
         return self
