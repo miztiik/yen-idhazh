@@ -74,7 +74,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Does this runner expose a hardware PMU | - | A | IN-FLIGHT | p37r1 | - | - |
+| 1 | Does this runner expose a hardware PMU | - | A | DONE | p37r1 | - | worker |
 | 3 | One status read a tick, not two | - | A | DONE | p37r3 | - | worker |
 | 7 | One file a panel | - | A | IN-FLIGHT | p37r7 | - | - |
 | 8 | The rare-event thresholds become knobs | - | A | DONE | p37r8 | - | worker |

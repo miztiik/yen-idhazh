@@ -1,8 +1,11 @@
 name: Runtime probe
 
-# What the pinned runtime accepts, asked of the runtime rather than of a
-# release note. The question that made this file: whether the pinned build takes
-# the speculation kind a Gemma multi-token head needs. A models entry naming a
+# What the runner and its pinned runtime report when asked directly, rather
+# than read off a release note or assumed from how the platform is built. Every
+# step below puts a question to the machine the job drew.
+#
+# The question that made this file: whether the pinned build takes the
+# speculation kind a Gemma multi-token head needs. A models entry naming a
 # kind the build cannot drive fails late and quietly - the server starts, loads
 # the head, drafts nothing - so the answer costs an hour of bench time to learn
 # the expensive way and about a minute to learn here.
@@ -20,11 +23,69 @@ permissions:
   contents: read
 
 jobs:
-  speculation:
-    name: What the runtime accepts
+  probe:
+    name: What this runner and its pinned runtime report
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # Does the guest expose a hardware performance monitoring unit? Six reads
+      # of /proc and /sys - no package, no checkout, under a second - and they
+      # go first so the reading lands whether or not the install below does.
+      # The decision rule: an absent or empty cpu/events/ directory means no
+      # cache counter can be read here at all, and the cache-utilization
+      # question is closed without a profiling toolchain. `perf_event_paranoid`
+      # is recorded beside it but is not the blocker - a sysctl is adjustable
+      # and a missing unit is not. What one dispatch found, and on which
+      # runner, is docs/reference/host-metrics.md.
+      #
+      # `set +e` is the load-bearing line. The platform runs every `run:` block
+      # under `bash -e`, so the first absent path ends the step - and here an
+      # absent path is the answer. Without it this step exits 2 on the runner
+      # it was written to describe, having printed half the reading.
+      - name: Say what a hardware profiler could read here
+        run: |
+          set +e
+          set -u
+          events=/sys/bus/event_source/devices/cpu/events
+          {
+            echo "## What a hardware profiler could read on this runner"
+            echo
+            echo "Runner image ${ImageOS:-unknown} ${ImageVersion:-unknown}, kernel $(uname -r)."
+            echo "Processor: $(sed -n 's/^model name[[:space:]]*: //p' /proc/cpuinfo | head -1)."
+            echo
+            echo '```'
+            echo '$ cat /proc/sys/kernel/perf_event_paranoid'
+            cat /proc/sys/kernel/perf_event_paranoid || echo 'unreadable'
+            echo
+            echo '$ ls /sys/bus/event_source/devices/'
+            ls /sys/bus/event_source/devices/ || echo 'no event_source directory'
+            echo
+            echo "\$ ls ${events}/ | head -40"
+            if [ -d "${events}" ]; then
+              ls "${events}/" | head -40
+              echo "-> $(ls -A "${events}" | wc -l) entries"
+            else
+              echo '-> no such directory'
+            fi
+            echo
+            echo '$ ls -d /sys/fs/resctrl'
+            ls -d /sys/fs/resctrl 2>/dev/null || echo 'no resctrl'
+            echo
+            echo '$ grep -om1 rdt_a /proc/cpuinfo'
+            grep -om1 rdt_a /proc/cpuinfo || echo 'no rdt_a'
+            echo
+            echo '$ grep -om1 cqm_occup_llc /proc/cpuinfo'
+            grep -om1 cqm_occup_llc /proc/cpuinfo || echo 'no cqm'
+            echo '```'
+            echo
+            if [ -n "$(ls -A "${events}" 2>/dev/null)" ]; then
+              echo 'VERDICT: this guest exposes a hardware PMU, so a cache event is readable here.'
+            else
+              echo 'VERDICT: no hardware PMU. No cache event can be read on this runner,'
+              echo 'whatever perf_event_paranoid says, and no toolchain changes that.'
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/checkout@v6
 
       # The build this job is about to install, asked of the file that decides
