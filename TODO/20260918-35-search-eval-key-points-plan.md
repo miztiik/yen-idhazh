@@ -7,7 +7,7 @@
 resolved all four K-items and the five flags on 2026-09-18 (sections 0b, 0c), overruling advisors
 where noted; the 2026-09-18 convergence debate (Andre, Carmack, Fowler) settled the eval design; and on
 2026-09-19 the owner confirmed the complete `key_points` removal (0e C1) and authorized execution. The
-Autotuning feedback loop is split OUT to a separate plan (#36, section 0d) per Fowler; this plan
+autotuning feedback loop is split OUT to a separate plan (#36, section 0d) per Fowler; this plan
 does the cleanup, the search, the chart, and the recorded-only scorers.
 
 **Execution stamp** (per [`docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md)):
@@ -110,7 +110,7 @@ isolated worktrees off origin/main.
 | --- | --- |
 | Why this plan exists | Raise the read cap, fully retire `key_points` and the deterministic metrics built on it, give the live page instant + semantic search, redesign and re-label the faithfulness chart, and add recorded-only coherence + coverage scorers reusing models already loaded. |
 | Hard scope - in | `extract.truncation_cap_tokens`; `key_points` (published + internal decode + corpus); live-day search (instant + semantic); `lead_coverage`, `new_fact_rate`, `key_point_weight`; the faithfulness console chart + metric naming + a docs glyph-link; coherence + coverage scorers (recorded-only). |
-| Hard scope - out | the Autotune loop, adaptive bands, publish gate and G-Eval council (all -> plan #36); UniEval (a new runtime beside llama.cpp); RAGAS retriever metrics (no retriever here); see table below |
+| Hard scope - out | the autotune loop, adaptive bands, publish gate and G-Eval council (all -> plan #36); UniEval (a new runtime beside llama.cpp); RAGAS retriever metrics (no retriever here); see table below |
 | ESCALATE triggers | (1) F1 - Row 4 removes internal `Summary.key_points`, retiring the facts-first decode and reshaping the corpus. (2) F2 - Row 6 removes `key_point_weight`, a committed field on plan #34's `StorySimilarityDistribution`. (3) any `EvalRow`/published-payload field removal (Level 5, section 11). |
 | Chosen strategy | Cleanup + search + recorded-only scorers here; the closed loop (fold/fit/gate/G-Eval) is plan #36, after #34, reusing its `Fit` and `LLM-JUDGES` workflow. Owner + convergence debate, 2026-09-18. |
 | Execution | AUTHORIZED (owner, 2026-09-19); ready to run. Parallel N = 4 default; the running-pool orchestration + 5-PR wave grouping is section 0e. |
@@ -159,7 +159,7 @@ row's `Files touched` is the exact surface; every persisted change stamps its sc
 | F4 | G-Eval placement | Council-only, next-day, judging FLUENCY only, on a stratified sample of ~30 summaries/day. Not per-item, not in the digest job. Plan #36. |
 | F5 | Read cap vs context window | Fits (n_ctx 65536). Row 1 pins the cap check to the model's `n_ctx` rather than a bare literal, so a future 32 k model swap fails loudly. |
 
-### Section 0d - what moves to plan #36 (the Autotune loop)
+### Section 0d - what moves to plan #36 (the autotune loop)
 
 Fowler's ruling: the closed loop is one coherent Level-5 surface and gets its own plan, after #34,
 reusing #34's `Fit` core (extracted, direction-parameterised) and the `LLM-JUDGES` workflow. Design of

@@ -104,7 +104,7 @@ FIRST ACTION: confirm plan 34's fit core and plan 35's EvalRow churn are on main
 
 | Field | Value |
 | --- | --- |
-| Why this plan exists | The Autotune is half-built: plan 35 measures four quality axes but nothing acts on them. This fits an adaptive band to each axis and gates publication on it, mirroring plan 34's proven loop. |
+| Why this plan exists | The autotune is half-built: plan 35 measures four quality axes but nothing acts on them. This fits an adaptive band to each axis and gates publication on it, mirroring plan 34's proven loop. |
 | Hard scope - in | Two new contracts (`MetricScoreDistribution`, `FittedMetricBand`); three `EvalRow` columns; the fold and fit stages; the G-Eval fluency judge in the `LLM-JUDGES` council; the veto-chain publish gate (record-only, then flagged on); the console panels; a G-Eval cost measurement. |
 | Hard scope - out | see table below |
 | ESCALATE triggers | (1) Row 8 flips the flag and withholds items - the first change to a published day, lands alone, owner sign-off. (2) promoting any metric's action from `watch`/`downgrade` to `block` - owner, on a track record. |
@@ -120,7 +120,7 @@ runs), [`docs/agents/bootstrap.md`](../docs/agents/bootstrap.md) (which page own
 touches), and [`docs/how-to/run-the-gates.md`](../docs/how-to/run-the-gates.md) (the gate commands). The
 design of record is [`docs/concepts/autotune-summary-quality.md`](../docs/concepts/autotune-summary-quality.md)
 (the four metrics, the fold-fit loop, the publish gate). The loop this plan mirrors is the adaptive
-merge line in [`docs/architecture/publishing/Autotune-content-similarity.md`](../docs/architecture/publishing/Autotune-content-similarity.md)
+merge line in [`docs/architecture/publishing/autotune-content-similarity.md`](../docs/architecture/publishing/autotune-content-similarity.md)
 - Row 1 extracts its fit core from `backend/idhazh/similarity/fit.py`. Owning pages per surface:
 contracts + schema versioning ->
 [`docs/architecture/contracts/schemas.md`](../docs/architecture/contracts/schemas.md); evaluation + the
@@ -651,7 +651,7 @@ removed in the same commit.
 
 ## See also
 
-- [`docs/architecture/publishing/Autotune-content-similarity.md`](../docs/architecture/publishing/Autotune-content-similarity.md) - the
+- [`docs/architecture/publishing/autotune-content-similarity.md`](../docs/architecture/publishing/autotune-content-similarity.md) - the
   merge line that fits itself: the loop this plan mirrors, and the fit core Row 1 extracts.
 - [`20260918-35-search-eval-key-points-plan.md`](20260918-35-search-eval-key-points-plan.md) - the
   cleanup and the recorded-only scorers this plan consumes.

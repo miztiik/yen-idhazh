@@ -632,7 +632,7 @@ but `rank_score` set to zero reproduces today's order exactly.
 The owner ruled that the labelling is done by a model rather than a person, that
 the line fits itself daily, and that there is no hard floor. That is a subsystem
 rather than a row, so it had its own plan; the rule and its rationale now live in
-[`../docs/architecture/publishing/Autotune-content-similarity.md`](../docs/architecture/publishing/Autotune-content-similarity.md).
+[`../docs/architecture/publishing/autotune-content-similarity.md`](../docs/architecture/publishing/autotune-content-similarity.md).
 Row #15 goes with it: the floor is no longer a number somebody picks once.
 
 **What this row got right and the new plan keeps.** No floor is chosen by taste.
