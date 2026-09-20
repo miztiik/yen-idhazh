@@ -1,6 +1,6 @@
 # Collision-free telemetry: segments, compaction, and the retirement of runtime-counters
 
-**Last Updated**: 2026-09-17
+**Last Updated**: 2026-09-20
 **Level**: 5 (core design, four persisted contracts, the trust-free boundary between concurrent runners)
 
 Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
@@ -75,37 +75,41 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 
 **The collision fix does not wait on the telemetry work.** Rows #1 to #6, #17 and #12 are the fix for the day that was destroyed, and they close on their own. Rows #7, #9, #10, #11, #14 and #15 are the telemetry redesign, and nothing in the fix depends on them. Fowler found the first draft welding the two together - Row #12 depended on Row #11, which depended on four rows of unrelated column work through a contract file that would have gone red - and Row #17 is what breaks that chain.
 
+**Every dispatchable row has landed on `main`.** Twenty-six rows closed across twenty-seven pull requests. Three rows never became dispatchable and the table keeps them so nobody re-derives them: #14 was absorbed, #9 was collapsed, and #8 is escalated and waits on a separate decision.
+
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Segment store and the `compact` stage, shipped inert | - | A | DONE | p33a1 | #862 | - |
 | 5 | Machine page stops lying about a day with no rows | - | A | DONE | p33r5 | #864 | - |
-| 6 | The validation ledger leaves the root of `state/` | - | A | IN-FLIGHT | p33a6 | - | - |
+| 6 | The validation ledger leaves the root of `state/` | - | A | DONE | p33a6 | #919 | - |
 | 7 | OS memory and load, per item | - | A | DONE | p33r7b | #865 | - |
 | 2 | `host-fingerprint` writes segments | 1 | B | DONE | p33b2 | #866 | - |
-| 3 | `item-health`, `scores`, `score-index` write segments | 2 | B | IN-FLIGHT | p33b3 | - | - |
-| 4 | `span-rollup` writes segments | 3 | B | IN-FLIGHT | p33b4 | - | - |
-| 17 | `runtime-counters` writes segments | 4 | B | IN-FLIGHT | p33b17 | - | - |
-| 10 | `model_load_ms` and `job_seconds` join `host-fingerprint` | 2 | C | IN-FLIGHT | p33c10 | #887 | - |
-| 12 | Delete the merge machinery | 2, 3, 4, 6, 17 | D | IN-FLIGHT | p33d12b | - | - |
-| 13 | Compaction lag and free swap on the console band | 1, 5, 7, 12 | D | IN-FLIGHT | p33d13 | - | - |
-| 11 | Delete `runtime-counters` and everything that reads it | 7, 10, 17 | E | IN-FLIGHT | p33e11p3b | - | - |
-| 15 | Generated TypeScript contracts replace the hand-written ones | 10, 11 | F | IN-FLIGHT | p33f15 | - | - |
-| 16 | Docs, and the orphan sweep | all | G | IN-FLIGHT | p33i16 | - | - |
+| 3 | `item-health`, `scores`, `score-index` write segments | 2 | B | DONE | p33b3 | #891 | - |
+| 4 | `span-rollup` writes segments | 3 | B | DONE | p33b4 | #901 | - |
+| 17 | `runtime-counters` writes segments | 4 | B | DONE | p33b17 | #909 | - |
+| 10 | `model_load_ms` and `job_seconds` join `host-fingerprint` | 2 | C | DONE | p33c10 | #887 | - |
+| 12 | Delete the merge machinery | 2, 3, 4, 6, 17 | D | DONE | p33d12b | #930 | - |
+| 13 | Compaction lag and free swap on the console band | 1, 5, 7, 12 | D | DONE | p33d13 | #938 | - |
+| 11 | Delete `runtime-counters` and everything that reads it | 7, 10, 17 | E | DONE | p33e11p3b | #939, #943, #960 | - |
+| 15 | Generated TypeScript contracts replace the hand-written ones | 10, 11 | F | DONE | p33f15 | #961 | - |
+| 16 | Docs, and the orphan sweep | all | G | DONE | p33i16 | #971 | - |
 | 18 | Chart-craft doctrine - the thirteen rules, written once | - | H | DONE | p33r18 | #863 | - |
 | 28 | Pipeline panels: the share track goes, Extraction gains a trend | 18 | H | DONE | p33h28 | #867 | - |
-| 19 | The shard board | 11, 18 | I | IN-FLIGHT | p33i19 | - | - |
-| 21 | Memory and load, three grains - ABSORBS Row #14 | 5, 7, 15, 19 | I | IN-FLIGHT | p33i21 | - | - |
-| 23 | What a run reads against what it writes, in tokens and in seconds | 21 | I | IN-FLIGHT | p33i23 | - | - |
-| 25 | Outside the model call, as range marks | 23 | I | IN-FLIGHT | p33i25 | - | - |
-| 22 | Platform mix as grouped bars | 25 | I | IN-FLIGHT | p33i22 | - | - |
-| 24 | Counterfactual cost gets a shape | 22 | I | IN-FLIGHT | p33i24 | - | - |
-| 20 | Timing panels merge and move to Pipeline | 24 | I | IN-FLIGHT | p33i20 | - | - |
-| 26 | Machine cards: L3 and bandwidth as bars - AMENDS Row #5 | 5, 11, 18 | I | IN-FLIGHT | p33i26 | - | - |
-| 27 | Route grouping and panel order | 20, 26 | K | IN-FLIGHT | p33i27 | - | - |
-| 29 | `prune.yml` wakes outside the digest window | - | J | IN-FLIGHT | p33j29 | - | - |
+| 19 | The shard board | 11, 18 | I | DONE | p33i19 | #962 | - |
+| 21 | Memory and load, three grains - ABSORBS Row #14 | 5, 7, 15, 19 | I | DONE | p33i21 | #964 | - |
+| 23 | What a run reads against what it writes, in tokens and in seconds | 21 | I | DONE | p33i23 | #967 | - |
+| 25 | Outside the model call, as range marks | 23 | I | DONE | p33i25 | #967 | - |
+| 22 | Platform mix as grouped bars | 25 | I | DONE | p33i22 | #967 | - |
+| 24 | Counterfactual cost gets a shape | 22 | I | DONE | p33i24 | #967 | - |
+| 20 | Timing panels merge and move to Pipeline | 24 | I | DONE | p33i20 | #968 | - |
+| 26 | Machine cards: L3 and bandwidth as bars - AMENDS Row #5 | 5, 11, 18 | I | DONE | p33i26 | #963 | - |
+| 27 | Route grouping and panel order | 20, 26 | K | DONE | p33i27 | #969 | - |
+| 29 | `prune.yml` wakes outside the digest window | - | J | DONE | p33j29 | #914 | - |
 | 14 | The per-item machine load panel | - | - | **ABSORBED into #21** | - | - | - |
 | 9 | Server batching counters, per item | - | - | **COLLAPSED into #7** | - | - | - |
 | 8 | Memory split by prefill and decode | - | - | **ESCALATED - not dispatchable** | - | - | - |
+
+**Rows #23, #25 and #22 carry #967 because they were stacked under it.** Each was built and gated on its own branch, and #967's squash carried all four commits onto `main` in one merge. Their own pull requests - #965 and #966 - were closed rather than merged, because every file they add was already on `main` by then. A second merge would have been a second copy.
 
 **The plan is in two parts, and a row heading carries its row number and nothing else.** Part A is the write path - rows #1 to #17, which close the collision that destroyed 303 rows. Part B is the read path - rows #18 to #28, which make the panel analysis true on the page. **Nothing in Part A depends on Part B.** Row headings were numbered by section until 2026-09-17; they are not any more, because "section 19" and "Row #19" were different things and the plan cited both. Find a row by its `Row #N` heading.
 
