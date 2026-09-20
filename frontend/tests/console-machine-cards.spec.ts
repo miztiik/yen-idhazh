@@ -9,6 +9,12 @@
  * wrong: **never read** and **reported none of them** are different facts, and
  * twelve absent chips for the first would publish a guess as a reading.
  *
+ * The last block asks the same question of the two readings that became bars.
+ * A bar can draw a plausible length against the wrong divisor and look
+ * perfectly healthy, so the oracle is the ratio of the readings rather than
+ * either length on its own - and the three refusals are named, because a bar
+ * that is simply missing is the defect this file exists to catch.
+ *
  * Every case is built. The archive has never produced a run whose jobs drew
  * three machines with one of them unrecorded, and that is the case that matters.
  */
@@ -206,6 +212,109 @@ test.describe('the bandwidth reading and the buffer it was taken with', () => {
 
 	test('a cache nothing recorded prints a dash rather than nothing at all', () => {
 		expect(cacheWords(null)).toBe('-');
+	});
+});
+
+test.describe('L3 and the copy rate as lengths on one track', () => {
+	/** Two machines that differ only in what this panel draws.
+	 *
+	 * The committed record has never carried two machines with different L3 on
+	 * one run - every row of it reports 32 MiB - so the case the bars exist for
+	 * is built here (`CLAUDE.md` section 13).
+	 */
+	function twoMachines(over: Partial<HostFingerprint>) {
+		const view = cardsFor([
+			fingerprint({ job: 'work', shard: 0 }),
+			fingerprint({
+				job: 'work',
+				shard: 1,
+				fingerprint: 'c81d9e0a1b2c3d4e',
+				cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C',
+				...over
+			})
+		]);
+		const epyc = view.cards.find((card) => card.identity.name === 'AMD EPYC 7763');
+		const xeon = view.cards.find((card) => card.identity.name === 'Intel Xeon Platinum 8573C');
+		if (epyc === undefined || xeon === undefined) throw new Error('the fixture drew one machine');
+		return { epyc, xeon };
+	}
+
+	test('two cards with different L3 draw bars in the ratio of their bytes', () => {
+		const { epyc, xeon } = twoMachines({ l3_cache_bytes: 260 * MIB });
+		expect(epyc.l3CacheBytes).toBe(32 * MIB);
+		expect(xeon.l3CacheBytes).toBe(260 * MIB);
+		expect(epyc.l3Bar.state).toBe('drawn');
+		expect(xeon.l3Bar.state).toBe('drawn');
+		// The one property the bar is for. A zero-anchored domain makes the two
+		// lengths the two readings, so this holds whatever the track runs to.
+		expect(xeon.l3Bar.fraction / epyc.l3Bar.fraction).toBeCloseTo(260 / 32, 6);
+	});
+
+	test('the track is the same on every card, and it comes from the readings drawn', () => {
+		const { epyc, xeon } = twoMachines({ l3_cache_bytes: 260 * MIB });
+		// One domain, or the panel's comparison is deleted. The top is niced
+		// upward from the largest reading rather than fixed: no runner model
+		// publishes a ceiling for L3, so there is no limit to measure against.
+		expect(epyc.l3Bar.top).toBe(xeon.l3Bar.top);
+		expect(epyc.l3Bar.top).toBeGreaterThanOrEqual(260);
+		expect(epyc.l3Bar.of).toBe(2);
+		expect(xeon.l3Bar.topWords).toBe(cacheWords(xeon.l3Bar.top * MIB));
+	});
+
+	test('a copy rate draws on its own track, in the ratio of the rates', () => {
+		const { epyc, xeon } = twoMachines({ memcpy_gib_s: 6.2 });
+		expect(epyc.bandwidthBar.state).toBe('drawn');
+		expect(xeon.bandwidthBar.state).toBe('drawn');
+		expect(epyc.bandwidthBar.fraction / xeon.bandwidthBar.fraction).toBeCloseTo(12.4 / 6.2, 6);
+		// Two quantities, two tracks. MiB of cache and GiB/s of copy rate share
+		// no axis, so neither reading can be read off the other's length.
+		expect(epyc.l3Bar.topWords.endsWith(' MiB')).toBe(true);
+		expect(epyc.bandwidthBar.topWords.endsWith(' GiB/s')).toBe(true);
+		expect(epyc.bandwidthBar.valueWords).toBe('12.4 GiB/s');
+	});
+
+	test('a cache reading is refused rather than pooled with the memory ones', () => {
+		// A buffer at or below L3 never left cache and reads several times a
+		// memory rate. On one track it would draw the fastest machine of the run.
+		const { epyc, xeon } = twoMachines({
+			l3_cache_bytes: 260 * MIB,
+			memcpy_probe_mib: 256,
+			memcpy_gib_s: 96.0
+		});
+		expect(xeon.measuredCache).toBe(true);
+		expect(xeon.bandwidthBar.state).toBe('cache');
+		expect(xeon.bandwidthBar.fraction).toBe(0);
+		// And the one memory reading left has nothing to compare against.
+		expect(epyc.bandwidthBar.state).toBe('alone');
+		expect(epyc.bandwidthBar.of).toBe(1);
+	});
+
+	test('one reading of a kind is named, never drawn full', () => {
+		// A lone bar's domain is its own value, so it fills the track whatever it
+		// says - and a full bar reads as a maximum rather than as the only one.
+		const { epyc, xeon } = twoMachines({ l3_cache_bytes: null });
+		expect(xeon.l3Bar.state).toBe('absent');
+		expect(epyc.l3Bar.state).toBe('alone');
+		expect(epyc.l3Bar.fraction).toBe(0);
+		expect(epyc.l3Bar.percent).toBe('0.0000%');
+	});
+
+	test('a card with no reading states absence rather than drawing an empty bar', () => {
+		const [card] = cardsFor([
+			fingerprint({ job: 'work', shard: 0, l3_cache_bytes: null, memcpy_gib_s: null })
+		]).cards;
+		expect(card.l3Bar.state).toBe('absent');
+		expect(card.bandwidthBar.state).toBe('absent');
+		expect(card.l3Bar.valueWords).toBe('');
+		expect(card.bandwidthBar.topWords).toBe('');
+	});
+
+	test('a card off the counters alone carries no track at all', () => {
+		const xeon = cardsFor([fingerprint({ job: 'work', shard: 0 })]).cards.find(
+			(card) => card.source === 'name-only'
+		);
+		expect(xeon?.l3Bar.state).toBe('absent');
+		expect(xeon?.bandwidthBar.state).toBe('absent');
 	});
 });
 
