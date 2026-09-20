@@ -124,6 +124,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Steal, faults, pinning and anonymous RSS added; empty cgroup_peak_bytes cut.",
+      "version": "2026-09-20T18:00",
+      "why": "Time another tenant used, and pages the kernel took back, are not our own work."
+    },
+    {
       "change": "llama_rss_peak_bytes says what it measures: a whole-life mark that can fall.",
       "version": "2026-09-20T15:30",
       "why": "It read as a per-item peak that cannot fall, which is neither thing it is."
@@ -137,11 +142,6 @@
       "change": "Retired runner_name; the host record carries it at job grain.",
       "version": "2026-09-17T12:00",
       "why": "Nothing read the item-row copy, and a second copy is a thing that can disagree."
-    },
-    {
-      "change": "job names the workflow job whose machine took this row's readings.",
-      "version": "2026-09-17",
-      "why": "Shard alone does not reach the host record: more than one job spells shard 0."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -210,20 +210,6 @@
       "description": "How many runs have carried this item forward without publishing it.",
       "title": "Carried By"
     },
-    "cgroup_peak_bytes": {
-      "anyOf": [
-        {
-          "minimum": 0,
-          "type": "integer"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "Peak memory the job's cgroup reported. This is the number the runner kills the job over, so it is the one that answers whether a bigger model would have fitted (Guardrail #2).",
-      "title": "Cgroup Peak Bytes"
-    },
     "code": {
       "anyOf": [
         {
@@ -277,7 +263,7 @@
         }
       ],
       "default": null,
-      "description": "Mean CPU busy over the item.",
+      "description": "The share of the item's processor time that was our own work: busy ticks over available ticks across the whole item, differenced from two reads of /proc/stat. Time the host gave another tenant is taken out and recorded in cpu_steal_pct instead. A row written before 2026-09-20 counted that time as ours, so the two sides of the change are not comparable and nothing can recover the split for a row already written.",
       "title": "Cpu Busy Pct"
     },
     "cpu_model": {
@@ -295,6 +281,21 @@
       "default": null,
       "description": "The CPU the runner reported, verbatim.",
       "title": "Cpu Model"
+    },
+    "cpu_steal_pct": {
+      "anyOf": [
+        {
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The share of the item's processor time the host gave to another tenant, from the same /proc/stat difference cpu_busy_pct is taken from. Neither ours nor idle, which is why it is counted apart from both. Null where the kernel's cpu line stops short of the field: a kernel that does not account stolen time has not told us there was none.",
+      "title": "Cpu Steal Pct"
     },
     "date": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
@@ -776,6 +777,34 @@
       "description": "The lens term of selection_score.",
       "title": "Lens Bonus"
     },
+    "llama_major_faults": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "How many pages the model server had to wait for off disk across this item, differenced from `/proc/<pid>/stat` at either end. A count over the window and never a rate, because the row already carries the interval. It is the one reading that can see the kernel taking the weights back: those pages are file-backed, so they leave an RSS figure and touch no swap counter on the way out. Null where either end could not be read, and null is not zero.",
+      "title": "Llama Major Faults"
+    },
+    "llama_rss_anon_bytes": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The part of the model server's resident set that is not file-backed, as `RssAnon` in `/proc/<pid>/status` reported it. The weights are mapped from a file, so they count inside llama_rss_bytes and inside the page cache at the same time and the two may not be added; this cell can double-count with neither, which is what lets a reader split the machine's memory up and have the parts close.",
+      "title": "Llama Rss Anon Bytes"
+    },
     "llama_rss_bytes": {
       "anyOf": [
         {
@@ -1042,7 +1071,7 @@
         }
       ],
       "default": null,
-      "description": "Swap this machine has, from /proc/meminfo SwapTotal. Recorded because a free figure of zero says 'no swap on this box' and 'swap fully consumed' equally, and only the second is an emergency.",
+      "description": "Swap this machine has, from /proc/meminfo SwapTotal. Constant inside a job, so it is read paired with os_swap_free_bytes off one row and never as a distribution of its own. Recorded because a free figure of zero says 'no swap on this box' and 'swap fully consumed' equally, and only the second is an emergency.",
       "title": "Os Swap Total Bytes"
     },
     "outcome": {
@@ -1100,6 +1129,20 @@
       "default": null,
       "description": "The time the item carries, from whichever clock time_source names.",
       "title": "Published At"
+    },
+    "python_rss_anon_bytes": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The part of the worker process's resident set that is not file-backed, on the same terms as the model server's.",
+      "title": "Python Rss Anon Bytes"
     },
     "python_rss_bytes": {
       "anyOf": [
@@ -1617,7 +1660,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-09-20T15:30",
+      "default": "2026-09-20T18:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1693,6 +1736,19 @@
       "default": null,
       "description": "Did a watchlist entry match this item?",
       "title": "Watchlist Hit"
+    },
+    "weights_pinned": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Was the server told to lock the weights in memory - `inference.load_mode`, which llama-server spells `-lm`? False is the ordinary setting and says the kernel may reclaim them, which is the state llama_major_faults exists to catch. Recorded because a surface that states the weights are not pinned with nothing on the row to check it against starts lying the day somebody sets the flag. Null on a row written before the column.",
+      "title": "Weights Pinned"
     }
   },
   "required": [
@@ -1708,5 +1764,5 @@
   ],
   "title": "ItemHealthRow",
   "type": "object",
-  "version": "2026-09-20T15:30"
+  "version": "2026-09-20T18:00"
 }

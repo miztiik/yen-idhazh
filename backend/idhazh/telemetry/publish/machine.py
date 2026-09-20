@@ -120,7 +120,6 @@ class _Fold:
         self.cpu_busy_pct: float | None = None
         self.llama_rss_peak_bytes: int | None = None
         self.python_rss_bytes: int | None = None
-        self.cgroup_peak_bytes: int | None = None
         self.cpu_model: str | None = None
         self.model_load_ms: float | None = None
         self.job_seconds: int | None = None
@@ -162,9 +161,6 @@ class _Fold:
         self.python_rss_bytes = _highest(
             self.python_rss_bytes, _whole(_figure(row.get("python_rss_bytes")))
         )
-        self.cgroup_peak_bytes = _highest(
-            self.cgroup_peak_bytes, _whole(_figure(row.get("cgroup_peak_bytes")))
-        )
 
     def add_host(self, row: Mapping[str, str]) -> None:
         """The machine record's half. A job writes two rows, so a filled cell wins."""
@@ -200,7 +196,6 @@ class _Fold:
             cpu_busy_pct=self.cpu_busy_pct,
             llama_rss_peak_bytes=self.llama_rss_peak_bytes,
             python_rss_bytes=self.python_rss_bytes,
-            cgroup_peak_bytes=self.cgroup_peak_bytes,
             model_load_ms=self.model_load_ms,
             job_seconds=self.job_seconds,
             server_prompt_tokens=self.server_prompt_tokens,
