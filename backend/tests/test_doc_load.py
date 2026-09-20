@@ -98,6 +98,18 @@ def test_a_page_that_does_not_exist_is_skipped_rather_than_refused(
     assert "docs/gone.md" not in printed
 
 
+def test_a_relative_root_counts_the_same_inbound_links_as_an_absolute_one(
+    tmp_path: Path, monkeypatch: object
+) -> None:
+    """A relative root used to read as a tree where nobody links to anybody."""
+    tree(tmp_path)
+    monkeypatch.chdir(tmp_path)  # type: ignore[attr-defined]
+
+    here = {row[1]: row[4] for row in doc_load.measure(Path())}
+
+    assert here["docs/reference/light.md"] == 1, "the heavy page still links to it"
+
+
 def page(root: Path, rel: str, body: str) -> None:
     path = root / rel
     path.parent.mkdir(parents=True, exist_ok=True)

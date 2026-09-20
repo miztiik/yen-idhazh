@@ -1623,4 +1623,5 @@ file before it can be enabled.
 - [`../../reference/github-actions.md`](../../reference/github-actions.md) - the commit loop that drops a raced chart.
 - [`../sources/trust-boundary.md`](../sources/trust-boundary.md) - why article text is data.
 - [`../contracts/determinism.md`](../contracts/determinism.md) - why decoding is pinned in one place.
+- [`../../reference/benchmarks/articles-that-state-a-whole.md`](../../reference/benchmarks/articles-that-state-a-whole.md) - how often an article declares a whole its parts add up to, which is what decides whether `pie` may be drawn at all.
 - [`../../concepts/evaluation.md`](../../concepts/evaluation.md) - how a stage gets measured.
