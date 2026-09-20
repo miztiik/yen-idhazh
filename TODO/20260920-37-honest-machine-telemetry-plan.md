@@ -74,12 +74,12 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Does this runner expose a hardware PMU | - | A | DONE | p37r1 | - | worker |
-| 3 | One status read a tick, not two | - | A | DONE | p37r3 | - | worker |
-| 7 | One file a panel | - | A | DONE | p37r7 | - | worker |
-| 8 | The rare-event thresholds become knobs | - | A | DONE | p37r8 | - | worker |
-| 2 | Settle the peak that falls | 1 | A | DONE | - | - | worker |
-| 6 | The bandwidth probe sizes itself against the cache | 1, 3, 8 | A | DONE | p37r6 | - | worker |
+| 1 | Does this runner expose a hardware PMU | - | A | DONE | p37r1 | #975 | worker |
+| 3 | One status read a tick, not two | - | A | DONE | p37r3 | #974 | worker |
+| 7 | One file a panel | - | A | DONE | p37r7 | #977 | worker |
+| 8 | The rare-event thresholds become knobs | - | A | DONE | p37r8 | #976 | worker |
+| 2 | Settle the peak that falls | 1 | A | DONE | p37r2 | #979 | worker |
+| 6 | The bandwidth probe sizes itself against the cache | 1, 3, 8 | A | DONE | p37r6 | #978 | worker |
 | 4 | The sampler stops calling theft our work | 2, 3 | B | PENDING | - | - | - |
 | 9 | Panels grouped by the decision they serve | 7 | B | PENDING | - | - | - |
 | 5 | `ItemHealthRow` gains three columns and loses one | 4 | C | PENDING | - | - | - |
@@ -449,7 +449,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 2 | The top clock column is empty on all 57 committed host rows, so the card prints the probe clock alone until a producer writes it | Susan, 2026-09-20. The column sits in the header and is never written. A card that divides by an empty column is the empty-column defect a second time, and the first draft of this row would have shipped it |
 | 3 | The card's three existing named absent states are kept verbatim | Susan - they already distinguish recording switched off, record lost, and no machine drawn |
 | 4 | Cache size and copy speed go on the card; the fleet SPREAD goes on the existing per-machine panel | Susan - a card cannot show a spread, and the spread is the defect. Measured over 57 committed host rows, copy speed spans 21.96 to 48.57 GiB a second and cache size spans 32 MiB to 480 MiB, a 15-fold range across machines we draw at random |
-| 5 | Where the probe buffer is under twice the cache, the copy figure is refused and the card says why | Susan - the recorded buffer is 512 MiB on all 57 rows and 4 of them carry a 480 MiB cache, so those four figures are cache readings wearing a memory reading's name. **They are the four fastest in the fleet**, so leaving them in inflates exactly the machines a reader would single out. Row #6 fixes it going forward; the card has to tell the truth about rows already committed |
+| 5 | Where the probe buffer is under twice the cache, the copy figure is refused and the card says why | Susan, 2026-09-20, **on a corrected premise**. Re-measured by Row #6's worker over 60 committed host rows, not the 57 first written: the buffer was 512 MiB on every row and **7 of them carry a cache too large for it** - 3 at 480 MiB and 4 at 260 MiB - so those seven figures are cache readings wearing a memory reading's name. **They are the seven SLOWEST in the fleet, 21.96 to 26.42 GiB a second against a median of 39.57 - not the fastest, as this row first claimed.** So the undersized buffer is a reason to distrust those seven rather than evidence they were inflated, and the fastest figure in the fleet, 48.57, comes from a 32 MiB machine with a 16-fold buffer and is a clean reading. The refusal still stands; its reason is the opposite of what was written. Row #6 fixes the probe going forward; the card has to tell the truth about rows already committed |
 
 - **Rejected alternatives:**
 
