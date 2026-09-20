@@ -82,8 +82,9 @@
 <div data-windowed="machine-cost" data-window-days={windowDays}>
 	<Panel
 		heading="h3"
+		id="counterfactual-cost"
 		title="What this would have cost somewhere else"
-		note="A counterfactual, never a bill, over the last {windowDays} days. Nothing bills us - Actions minutes are free on a public repository - which is why the wall clock alone cannot say whether the runner time was a good trade. Priced at a hosted provider's rate, it can."
+		note="A counterfactual and never a bill: nothing bills us, so the wall clock alone cannot say whether the runner time was a good trade - four figures and one column a day, over the last {windowDays} days."
 		tone="info"
 	>
 		{#if runs.length === 0}

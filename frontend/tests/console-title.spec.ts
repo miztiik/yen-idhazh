@@ -42,13 +42,13 @@ import { expect, test, type Page } from '@playwright/test';
  * `/console/judgement/` draws two on 2026-09-17: the `Stories the day merged`
  * panel, and the heading over the absence that names what the model still does
  * not record. `/console/voices/` drew one until 2026-09-14, when four panels
- * moved onto it. `/console/machine/` draws sixteen since 2026-09-20 - three
+ * moved onto it. `/console/machine/` draws seventeen since 2026-09-20 - four
  * group headings and the thirteen panel titles under them.
  */
 const ROUTES: Record<string, number> = {
 	'/console/': 3,
 	'/console/model/': 3,
-	'/console/machine/': 16,
+	'/console/machine/': 17,
 	'/console/voices/': 3,
 	'/console/judgement/': 2
 };
@@ -113,8 +113,12 @@ test('the three titles the row was opened for are the ones that changed', async 
 	);
 	await page.goto('/console/machine/');
 	const machine = await titlesOn(page);
-	expect(machine, 'the clock check lost its panel').toContain('The two clocks, compared');
-	expect(machine, 'the latency panel lost its panel').toContain('How the tail moved');
+	expect(machine, 'the clock check lost its panel').toContain(
+		'Whether the speed numbers can be trusted'
+	);
+	expect(machine, 'the latency panel lost its panel').toContain(
+		'Whether the slowest articles are getting slower'
+	);
 
 	// The model-change panel draws only where the ledger holds a swap, and the
 	// canary holds none - so what is asserted is the shape that survives either
@@ -128,6 +132,49 @@ test('the three titles the row was opened for are the ones that changed', async 
 		expect(await titlesOn(page), 'a headless model-change section is on the page').not.toContain(
 			'What the model change moved'
 		);
+	}
+});
+
+/** A word that belongs to how the thing is built rather than to what a reader
+ * came to find out.
+ *
+ * Two halves, and they are different kinds of rule. The first is a property and
+ * survives a title nobody has written yet: a column name and a config key are
+ * the identifiers this codebase writes in snake_case or dotted form, so the
+ * pattern catches every one of them including the ones added tomorrow. The
+ * second is a list, and a list is only ever as good as the day it was written -
+ * these are the words the Hardware retitle actually removed, held so they
+ * cannot walk back in. What it cannot catch is a subsystem word nobody has
+ * coined yet, and that is what review is for.
+ */
+const BORROWED: { name: string; pattern: RegExp }[] = [
+	{ name: 'a column name or a config key', pattern: /[a-z]+_[a-z]+|\b[a-z]+\.[a-z_]+\b/ },
+	{
+		name: 'a subsystem term',
+		pattern:
+			/\b(shard|shards|payload|ledger|kernel|headroom|percentile|p50|p90|p99|token|tokens|prompt|prompts|context window|model call|model server)\b/i
+	},
+	{ name: 'a vendor name', pattern: /\b(llama|ggml|gguf|github|actions|intel|amd|epyc|openai)\b/i }
+];
+
+test('THE ORACLE: no Hardware title borrows a word from how it is built', async ({ page }) => {
+	// Scoped to the one route whose titles were rewritten to this rule. The
+	// other four still carry titles written before it - `Extraction` is a stage
+	// name - so asserting there would report a defect this row did not open and
+	// cannot fix.
+	await page.goto('/console/machine/');
+	const titles = await titlesOn(page);
+	expect(titles.length, 'the Hardware route drew no titles to read').toBeGreaterThanOrEqual(
+		ROUTES['/console/machine/']
+	);
+
+	for (const title of titles) {
+		for (const borrowed of BORROWED) {
+			expect(
+				borrowed.pattern.test(title),
+				`"${title}" names ${borrowed.name}, which is a word about the build and not about the reader's question`
+			).toBe(false);
+		}
 	}
 });
 

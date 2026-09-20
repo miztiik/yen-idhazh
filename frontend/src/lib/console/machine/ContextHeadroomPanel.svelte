@@ -142,8 +142,9 @@
 >
 	<Panel
 		heading="h3"
-		title="Context headroom"
-		note="The longest sequence each run saw, prompt and answer together, against the window the server was given. One mark a run over the last {windowDays} days, oldest on the left. This is the panel that says whether raising the truncation cap is even possible - which is a question about the worst run in the span, not the newest."
+		id="context-headroom"
+		title="How close the longest text came to the model's limit"
+		note="Whether the cap on how much an article may send can move turns on the longest text in the span rather than the newest one - one mark a run, over the last {windowDays} days."
 	>
 		{#if contextRuns.length === 0}
 			<p class="empty" data-machine-panel-empty="context">
