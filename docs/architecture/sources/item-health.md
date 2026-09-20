@@ -400,6 +400,32 @@ almost every row would carry the whole job's low-water mark rather than its own
 `/proc/meminfo` does not exist on the machines this project is written on, and a
 zero in the headroom cell would read as a machine with no memory left.
 
+### What the processors did, and what was taken from them
+
+Three columns are the processor's side of the same window. `cpu_busy_pct` is
+busy ticks over available ticks across the item, differenced from two reads of
+`/proc/stat`. `cpu_busy_max` and `cpu_busy_min` are the highest and lowest the
+sampler saw between the same two ends.
+
+**From 2026-09-20 the busy figure leaves out time the host gave to another
+tenant, and before that date it counted that time as ours.** The kernel reports
+it as `steal` - a processor this machine was charged for and did not get - and
+the sampler treated everything that was not `idle` or `iowait` as our own work.
+So a row written before that date reads high for two reasons that cannot be told
+apart on the row, and the two sides of the date are not comparable. Nothing can
+recover the split for a row already written: the endpoints it was differenced
+from are gone.
+
+**The stolen share is read from the same difference and has no column yet.** It
+costs no extra file read - both processor-time texts were already opened and
+already subtracted - so it is taken at the same instant as the figure it was
+removed from, and held until the row declares somewhere to put it. The same is
+true of the model server's major page faults, which are read once as the item
+opens and once as it closes: a major fault is a page the process had to wait for
+off disk, and it is the only signal that the kernel took the weights back, since
+those pages are file-backed and leave an RSS figure without touching a swap
+counter.
+
 ## Stages and outcomes
 
 An item can terminate at one of five stages:
