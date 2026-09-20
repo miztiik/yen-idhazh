@@ -14,7 +14,7 @@ The line falls fast and rises slow. Both directions are damped and both are
 capped; what differs is the size of each. Lowering the line publishes less, and
 publishing less is the house rule, so down is the quick direction. Anyone about
 to make this symmetric should read the design rationale in
-`docs/architecture/publishing/same-story.md` first.
+`docs/architecture/publishing/auto-tune-content-similarity.md` first.
 """
 
 from __future__ import annotations

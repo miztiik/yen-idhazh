@@ -1,10 +1,10 @@
-# When two items are the same story
+# Auto-tuning the similarity line that groups one story
 
 **Last Updated**: 2026-09-20
 
 A day runs the same story from more than one of our feeds. This page owns the
-rule that decides when two items are one story, what the page does about it, and
-what every knob in it costs.
+line that decides when two items are one story, how that line fits itself once a
+night instead of being set by hand, and what every knob in it costs.
 
 The shape the decision is written into, and the addresses a reader gets, are in
 [layout.md](layout.md).

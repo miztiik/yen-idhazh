@@ -167,6 +167,6 @@ sample.
 ## See also
 
 - `docs/concepts/evaluation.md` - the eval ledger, HHEM, and the metrics that ship today.
-- `docs/architecture/publishing/same-story.md` - the merge line that already fits itself: the
+- `docs/architecture/publishing/auto-tune-content-similarity.md` - the merge line that already fits itself: the
   `LLM-COUNCIL` workflow and the fold-fit pattern this loop reuses.
 - `TODO/20260918-35-search-eval-key-points-plan.md` - the cleanup that precedes this loop.

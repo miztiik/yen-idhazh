@@ -93,7 +93,7 @@ export function cosineInt8(left: Int8Array, right: Int8Array): number {
  * that is not a letter, a digit or an underscore into a space. Two spellings of
  * one rule, in two languages, because no contract can be generated for a string
  * function - so the copy was measured against its source rather than asserted
- * (`docs/architecture/publishing/same-story.md`).
+ * (`docs/architecture/publishing/auto-tune-content-similarity.md`).
  *
  * **A combining mark is a separator here, as it is there.** Python's `\w` is
  * alphanumeric plus the underscore and a matra is neither, so a Devanagari word
