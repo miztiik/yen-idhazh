@@ -45,11 +45,36 @@
 	const rate = (value: number | null) => (value === null ? '-' : value.toFixed(2));
 	const percent = (value: number | null) => (value === null ? '-' : `${value.toFixed(1)}%`);
 
-	/** What a range mark says in one sentence, for the hover and for the reader
-	 * who has none. Never the only carrier of any of it. */
-	function spread(mark: RangeMark, unit: (value: number | null) => string): string {
+	/** A range mark as a sentence, for the hover and for the reader who has no
+	 * pointer. Never the only carrier of any of it.
+	 *
+	 * Three shapes, and each is a fact about the shard rather than a formatting
+	 * choice. A mark with one end missing prints the end it has and names the
+	 * other as absent, because "63.5% to -" reads as a range that reached a
+	 * dash. A mark whose two ends PRINT the same is one figure: the comparison
+	 * is made on what a reader can see, so two peaks that differ in the seventh
+	 * significant digit are one reading here and a range would invite a reader
+	 * to look for a spread the page cannot show them.
+	 */
+	function spread(
+		mark: RangeMark,
+		unit: (value: number | null) => string,
+		noun = ''
+	): string {
 		if (mark.empty) return 'not recorded on this run';
-		return `${unit(mark.median)} on a typical item, ${unit(mark.max)} at its worst`;
+		if (mark.max === null) return `${unit(mark.median)}${noun} on a typical item, and no worst recorded`;
+		if (mark.median === null) return `${unit(mark.max)}${noun} at its worst, and no typical recorded`;
+		if (unit(mark.median) === unit(mark.max)) return `${unit(mark.median)}${noun} on every item`;
+		return `${unit(mark.median)}${noun} on a typical item, ${unit(mark.max)}${noun} at its worst`;
+	}
+
+	/** The same fact in the width a cell has. */
+	function terse(mark: RangeMark, unit: (value: number | null) => string, noun = ''): string {
+		if (mark.empty) return '-';
+		if (mark.max === null) return `${unit(mark.median)}${noun} typical, worst not recorded`;
+		if (mark.median === null) return `${unit(mark.max)}${noun} worst, typical not recorded`;
+		if (unit(mark.median) === unit(mark.max)) return `${unit(mark.median)}${noun} on every item`;
+		return `${unit(mark.median)} to ${unit(mark.max)}${noun}`;
 	}
 </script>
 
@@ -320,15 +345,17 @@
 								aria-label="Shard {row.shard} memory, {spread(row.memory, gib)}"
 							>
 								<span class="range-fill" style="inline-size: {row.memory.medianWidth}"></span>
-								<span class="range-notch" style="inset-inline-start: {row.memory.notchWidth}"
-								></span>
+								{#if row.memory.max !== null}
+									<span class="range-notch" style="inset-inline-start: {row.memory.notchWidth}"
+									></span>
+								{/if}
 							</span>
 							<span class="range-figure tabular-nums" data-shard-figure="memory">
-								{gib(row.memory.median)} to {gib(row.memory.max)}
+								{terse(row.memory, gib)}
 							</span>
 						{/if}
 					</p>
-					<p class="range-line" title="Shard {row.shard} processor: {spread(row.cpu, percent)}.">
+					<p class="range-line" title="Shard {row.shard} processor: {spread(row.cpu, percent, ' busy')}.">
 						<span class="cell-label" data-shard-name="cpu-range" aria-hidden="true">
 							Processor busy
 						</span>
@@ -338,14 +365,17 @@
 							<span
 								class="range"
 								role="img"
-								aria-label="Shard {row.shard} processor busy, {spread(row.cpu, percent)}"
+								aria-label="Shard {row.shard} processor, {spread(row.cpu, percent, ' busy')}"
 							>
 								<span class="range-fill cpu-fill" style="inline-size: {row.cpu.medianWidth}"
 								></span>
-								<span class="range-notch" style="inset-inline-start: {row.cpu.notchWidth}"></span>
+								{#if row.cpu.max !== null}
+									<span class="range-notch" style="inset-inline-start: {row.cpu.notchWidth}"
+									></span>
+								{/if}
 							</span>
 							<span class="range-figure tabular-nums" data-shard-figure="cpu-range">
-								{percent(row.cpu.median)} to {percent(row.cpu.max)} busy
+								{terse(row.cpu, percent, ' busy')}
 							</span>
 						{/if}
 					</p>
@@ -386,7 +416,8 @@
 					)} written, on {row.cpuModel ?? 'a processor this run did not record'}, job clock
 					{seconds(row.jobSeconds)}, memory {spread(row.memory, gib)}, processor {spread(
 						row.cpu,
-						percent
+						percent,
+						' busy'
 					)}, load {rate(row.loadMax)} on {row.cores ?? 'an unrecorded number of'} cores,
 					{row.swapState === 'measured'
 						? `${gib(row.swapFreeBytes)} swap free of ${gib(row.swapTotalBytes)}`
