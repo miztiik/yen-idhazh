@@ -312,6 +312,11 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-20",
+            change="Embedded inference gains CPU, cache, checkpoint and template controls.",
+            why="Run records must carry the settings a model used.",
+        ),
+        ChangelogEntry(
             version="2026-09-19",
             change="A run records `shards`, the shard count the plan derived.",
             why="A denominator taken off the numerator's own rows can never disagree.",
@@ -325,11 +330,6 @@ class RunManifest(Contract):
             version="2026-09-17T02:00",
             change="The embedded ModelRef's inference.seed is the sampling control.",
             why="It follows models-config, where every entry now pins temperature 0.2.",
-        ),
-        ChangelogEntry(
-            version="2026-09-17",
-            change="The embedded ModelRef's inference.max_think_tokens accepts null.",
-            why="It follows models-config, which is where the budget is declared.",
         ),
         ChangelogEntry(
             version="2026-08-21",

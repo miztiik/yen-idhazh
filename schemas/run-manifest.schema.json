@@ -104,6 +104,33 @@
       "additionalProperties": false,
       "description": "Decoding is pinned here so a change of output is a reviewable diff.",
       "properties": {
+        "cache_prompt": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server --cache-prompt or --no-cache-prompt. None omits the flag and preserves the completion requests' existing enabled cache.",
+          "title": "Cache Prompt"
+        },
+        "cache_ram": {
+          "anyOf": [
+            {
+              "minimum": -1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -cram, in MiB; -1 is unlimited and 0 disables the cache. None omits the flag.",
+          "title": "Cache Ram"
+        },
         "cache_type_k": {
           "anyOf": [
             {
@@ -131,6 +158,63 @@
           "default": null,
           "description": "llama-server -ctv. None omits the flag and keeps full-precision KV.",
           "title": "Cache Type V"
+        },
+        "checkpoint_min_step": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -cms, in tokens; 0 means no minimum. None omits the flag.",
+          "title": "Checkpoint Min Step"
+        },
+        "cpu_range": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9]+-[0-9]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server --cpu-range, inclusive lo-hi. None omits the flag.",
+          "title": "Cpu Range"
+        },
+        "cpu_strict": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server --cpu-strict, 0 or 1. None omits the flag.",
+          "title": "Cpu Strict"
+        },
+        "ctx_checkpoints": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -ctxcp, maximum checkpoints per slot. None omits the flag.",
+          "title": "Ctx Checkpoints"
         },
         "declared_for": {
           "anyOf": [
@@ -162,6 +246,19 @@
           "default": null,
           "description": "llama-server -fa. None omits the flag and leaves the runtime on auto.",
           "title": "Flash Attention"
+        },
+        "jinja": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server --jinja or --no-jinja. None omits the flag.",
+          "title": "Jinja"
         },
         "load_mode": {
           "anyOf": [
@@ -226,7 +323,7 @@
         },
         "n_ctx": {
           "default": 8192,
-          "description": "The window one sequence gets. The default stays 8192 because it is the conservative window for weights nobody has put in front of a runner; models.summarize pins 65536, and the measurement that earns the raise is about the 9B on a GitHub-hosted runner rather than about this field. Doubling buys nothing but KV cache: 32 KiB a token on those weights, which is 2048.00 MiB at the pinned 65536 against 512.00 MiB at 16384, over the 8 attention layers of 32 - the other 24 are recurrent and cost a fixed 50.25 MiB whatever the window is. Whether that fits is decided by what the machine had free and never by what the processes held - docs/reference/pipeline-cost.md.",
+          "description": "The window one sequence gets. The default stays 8192 because it is the conservative window for weights nobody has put in front of a runner; each model file sets its own window. Whether its KV cache fits is decided by what the machine has free, not by the process's resident memory alone - docs/reference/pipeline-cost.md.",
           "minimum": 512,
           "title": "N Ctx",
           "type": "integer"
@@ -300,6 +397,19 @@
           "description": "llama-server --prio. None omits the flag and keeps normal priority.",
           "title": "Priority"
         },
+        "reasoning_preserve": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server --reasoning-preserve or --no-reasoning-preserve. None omits the flag.",
+          "title": "Reasoning Preserve"
+        },
         "request_timeout_minutes": {
           "default": 22.1,
           "description": "One summarizer POST may wait this long. Sized from the measured worst 8B long article plus one cold prompt prefix, doubled; the shard timeout remains the outer bound.",
@@ -312,6 +422,21 @@
           "description": "Which sample the sampler draws. It is the whole of the repeatability story above temperature 0: same inputs and same seed is the same reply, same inputs and a different seed is a different one. At temperature 0 it is dead code and nothing reads it, which is what it was until 2026-09-17. It is enumerated in the fingerprint either way, so a change of sampler cannot move the words without moving the stamp.",
           "title": "Seed",
           "type": "integer"
+        },
+        "slot_prompt_similarity": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -sps, shared-prefix fraction. None omits the flag.",
+          "title": "Slot Prompt Similarity"
         },
         "startup_warmup": {
           "default": true,
@@ -970,6 +1095,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Embedded inference gains CPU, cache, checkpoint and template controls.",
+      "version": "2026-09-20",
+      "why": "Run records must carry the settings a model used."
+    },
+    {
       "change": "A run records `shards`, the shard count the plan derived.",
       "version": "2026-09-19",
       "why": "A denominator taken off the numerator's own rows can never disagree."
@@ -983,11 +1113,6 @@
       "change": "The embedded ModelRef's inference.seed is the sampling control.",
       "version": "2026-09-17T02:00",
       "why": "It follows models-config, where every entry now pins temperature 0.2."
-    },
-    {
-      "change": "The embedded ModelRef's inference.max_think_tokens accepts null.",
-      "version": "2026-09-17",
-      "why": "It follows models-config, which is where the budget is declared."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -1011,7 +1136,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-19",
+      "default": "2026-09-20",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1023,5 +1148,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-09-19"
+  "version": "2026-09-20"
 }

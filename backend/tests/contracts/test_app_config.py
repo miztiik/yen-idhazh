@@ -290,21 +290,10 @@ def _worst_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
 
 
 def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
-    """The cap and the window are one decision, and this is where they meet.
+    """Keep the configured article cap and reply budget within the model window.
 
-    Both sides are read from `config/` (Guardrail #6), so the assertion survives the
-    next move of either. It is the guard that was missing on 2026-09-09: the cap
-    went from 5,000 to 10,000 tokens that day and could not have, at the 8,192
-    window committed the day before - 14,089 tokens against 8,192 is 172 percent
-    of it. Nothing in the tree said so. A doc said so, and a doc does not fail.
-
-    The worst case is built from the measured expansion rather than from
-    `TOKENS_PER_WORD`. At the committed cap of 20,000 that is a 24,256-token
-    prompt and a 25,156-token sequence, which is 38 percent of a 65,536 window.
-    **It is the smaller of the two sums this file now holds and it is the one
-    that is retiring**, so read `test_the_two_calls_fit_the_window_at_the_cap`
-    before concluding the window has room: that one sizes 54,887 over the same
-    cap, which is 84 percent.
+    Use measured token expansion because the extraction cap estimates tokens
+    from word count and can undercount the rendered prompt.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     inference = committed_models().summarize.inference
@@ -372,36 +361,10 @@ def test_the_sequence_is_two_calls_and_growing_it_is_an_escalation() -> None:
 
 
 def test_the_two_calls_fit_the_window_at_the_cap() -> None:
-    """The window has to hold both calls, and nothing sized both until today.
+    """The second call retains the first prompt and reply, so size the full context.
 
-    The test above sizes the single call this plan is replacing and passes with
-    room. That is the trap: a green gate over the path being retired reads as
-    coverage of the path replacing it. The two-call sequence is 2.8 times the
-    single call's, because the label call's reply is paid twice and the candidate menu
-    is paid once, and neither term exists on the single-call path at all.
-
-    Both sides come from `config/` (Guardrail #6) and the arithmetic is measured
-    rather than assumed: at the committed cap of 20,000 tokens and a menu of 256
-    rows the prompt sizes at 43,603 and the sequence at 54,887 tokens, which is
-    84 percent of a 65,536 window with 10,649 spare.
-
-    **The 10,649 is what the first whole multiple of 16,384 and of the 512-token
-    batch above the sum leaves over, and that is the rule.** A wider window costs
-    almost nothing in memory and costs this assertion its reach: the gate is the
-    product on this path, and it cannot report a sequence that grew until the
-    sequence has outgrown the window. Ruled by Carmack, 2026-09-13, over the
-    65,536 that branch first carried at a 10,000 cap; the cap doubled on
-    2026-09-14 and 65,536 is what that cap needs rather than slack it was given.
-
-    **At 32,768 this failed by 6,516 tokens and the failure was not theoretical.**
-    Of eight cap-length articles built from committed corpus prose on 2026-09-13,
-    three measured over 32,768 on their own and the worst reached 37,495.
-
-    The failure it catches is silent. `--no-context-shift` means a decode that
-    runs into the wall stops there on an ordinary HTTP 200, `recovered_completion`
-    salvages the summary, and the item publishes with no picture - so what a
-    window this sum does not fit produces is not an error but a quiet drop in how
-    many items carry a picture at all.
+    Include the candidate menu and both reply budgets to catch config changes
+    that could exhaust the window and truncate the summary or visual plan.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     inference = committed_models().summarize.inference

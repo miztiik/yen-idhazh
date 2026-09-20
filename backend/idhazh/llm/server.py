@@ -471,6 +471,26 @@ def server_argv(
         argv.extend(("--poll", str(inference.poll)))
     if inference.n_threads_batch is not None:
         argv.extend(("-tb", str(inference.n_threads_batch)))
+    if inference.cpu_range is not None:
+        argv.extend(("--cpu-range", inference.cpu_range))
+    if inference.cpu_strict is not None:
+        argv.extend(("--cpu-strict", str(inference.cpu_strict)))
+    if inference.checkpoint_min_step is not None:
+        argv.extend(("-cms", str(inference.checkpoint_min_step)))
+    if inference.ctx_checkpoints is not None:
+        argv.extend(("-ctxcp", str(inference.ctx_checkpoints)))
+    if inference.cache_ram is not None:
+        argv.extend(("-cram", str(inference.cache_ram)))
+    if inference.slot_prompt_similarity is not None:
+        argv.extend(("-sps", str(inference.slot_prompt_similarity)))
+    if inference.cache_prompt is not None:
+        argv.append("--cache-prompt" if inference.cache_prompt else "--no-cache-prompt")
+    if inference.jinja is not None:
+        argv.append("--jinja" if inference.jinja else "--no-jinja")
+    if inference.reasoning_preserve is not None:
+        argv.append(
+            "--reasoning-preserve" if inference.reasoning_preserve else "--no-reasoning-preserve"
+        )
     # What the server says about itself. At the runtime default of 3 it prints
     # twelve lines and none of them names the attention state, the KV buffer or
     # the compute buffer, so a check on any of those reads the flag we passed
@@ -605,11 +625,10 @@ def completion_payload(
     and `answer_span` puts this body's own shape back on the same slot, so the
     budget here is never a share of a combined number.
 
-    `cache_prompt` is stated rather than inherited. The whole point of a
-    rendered prompt is that the next call reuses this one, the build's own
-    default for the flag is not readable off `/props`, and nothing pins the
-    build - so a default that flipped would re-read every prompt in full with
-    no line in any log to say why.
+    `cache_prompt` is explicit on every request. Unset inference preserves
+    enabled caching; an explicit boolean reaches both the startup flag and
+    this request. The build's default is not readable off `/props`, so inheriting
+    a default that flipped could re-read every prompt with no log saying why.
 
     `model` is carried although a single-model server ignores it. It is the one
     field that says which weights the body was built for, and a payload read out
@@ -623,7 +642,7 @@ def completion_payload(
         "seed": inference.seed,
         "n_predict": max_answer_tokens,
         "stream": False,
-        "cache_prompt": True,
+        "cache_prompt": True if inference.cache_prompt is None else inference.cache_prompt,
         "json_schema": output_schema,
     }
 
@@ -667,7 +686,7 @@ def grammar_completion_payload(
         "n_predict": max_answer_tokens,
         "n_probs": first_token_alternatives,
         "stream": False,
-        "cache_prompt": True,
+        "cache_prompt": True if inference.cache_prompt is None else inference.cache_prompt,
         "grammar": grammar,
     }
 

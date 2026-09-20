@@ -167,6 +167,44 @@ def test_the_start_script_refuses_a_call_it_cannot_serve(
     assert message in completed.stderr
 
 
+@requires_bash
+def test_start_script_limit_checks_preserve_other_startup_errors(tmp_path: Path) -> None:
+    """A lock-limit refusal is local; the missing server binary still stops startup."""
+    shell = _bash()
+    assert shell is not None
+    completed = subprocess.run(
+        [
+            shell,
+            "-e",
+            "-c",
+            'ulimit -l 0 2>/dev/null || true\nexec "$@"',
+            "lock-limit-check",
+            shell,
+            START_SERVER_SCRIPT.as_posix(),
+            "summarize",
+            "llama-server",
+        ],
+        cwd=tmp_path,
+        env={**_isolated_env(tmp_path), "LLAMA_WEIGHTS": "w.gguf", "LLAMA_PORT": "8080"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert "ulimit -l before (KiB, or unlimited):" in completed.stdout
+    assert "ulimit -Hl (KiB, or unlimited):" in completed.stdout
+    assert "Running: ulimit -l unlimited" in completed.stdout
+    assert (
+        "Locked-memory limit set to unlimited." in completed.stdout
+        or "::warning::Could not raise the locked-memory limit;" in completed.stdout
+    )
+    assert "ulimit -l after (KiB, or unlimited):" in completed.stdout
+    assert "::endgroup::" in completed.stdout
+    assert completed.returncode != 0
+    assert "backend/bin/llama-server" in completed.stderr
+    assert not (tmp_path / "backend" / "var").exists()
+
+
 def _digest_step(job_name: str, name: str) -> str:
     """One step body of a daily-run job, without the shell comments."""
     workflow = _load_workflows()["digest.yml"]

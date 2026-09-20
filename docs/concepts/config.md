@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Guardrail #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -427,6 +427,7 @@ raising.
 See [../how-to/fine-tune-a-model.md](../how-to/fine-tune-a-model.md).
 
 ## Runtime sweep surface
+
 `models.<role>.inference` holds both the ordinary deterministic decode knobs and
 the flag-sweep knobs, and there is one block per model entry rather than one for
 the pipeline. The sweep surface is explicit so a measurement changes one thing at
@@ -434,15 +435,35 @@ a time through config, not through workflow literals:
 
 - `n_ctx`, `n_threads`, `n_batch`, `n_ubatch`
 - `n_parallel`, `n_threads_batch`
+- `cpu_range`, `cpu_strict`
 - `startup_warmup`
 - `metrics`
 - `flash_attention`
 - `load_mode`
 - `cache_type_k`, `cache_type_v`
 - `priority`, `poll`
+- `checkpoint_min_step`, `ctx_checkpoints`, `cache_ram`
+- `cache_prompt`, `slot_prompt_similarity`
+- `jinja`, `reasoning_preserve`
 - `temperature`, `top_p`, `seed`, `max_answer_tokens`, `max_think_tokens`
 - `request_timeout_minutes`
 - `declared_for`
+
+Optional launch settings default to `null`, which omits their flags. Numeric
+zero and boolean `false` are explicit values, not absence. The template and
+prompt-cache booleans emit their positive or negative switches. Omitted core
+settings such as `n_ctx` still receive the Python defaults and are sent.
+`cache_prompt: null` leaves completion requests explicitly cache-enabled, as
+before; a configured boolean controls both the startup flag and request body.
+`load_mode: "mmap+mlock"` emits `-lm mmap+mlock`, the combined spelling the
+runtime recommends instead of the deprecated separate switches.
+
+The daily worker logs its locked-memory limits and attempts `ulimit -l unlimited`
+inside the script that starts the server. The server inherits that shell's
+effective limit; a separate workflow step would not carry it over. Each limit
+command captures its error and only warns on failure. Other startup errors
+still stop the job. The log records the effective limit after the attempt,
+not a claim that the operating system locked the model's pages.
 
 `declared_for` is not a sweep knob. It is the sha256 of the entry the block sits
 in, and `ModelsConfig` refuses a config where the two disagree - so the settings
@@ -488,9 +509,11 @@ above 1 is a candidate here, and sweeping it again needs new hardware or a new
 runtime, not a repeat
 ([Parallel decode on 4 vCPU](../archive/measurements-2026-08.md#parallel-decode-on-4-vcpu)).
 
-No sweep flag is adopted merely because the knob exists. A candidate becomes the
-runtime only after a runner measurement records hardware, date and spread in
-[../reference/pipeline-cost.md](../reference/pipeline-cost.md).
+A knob's presence is not evidence that it improves a run. Owner-selected
+settings remain labelled unmeasured until a runner measurement records their
+hardware, date and spread in
+[../reference/pipeline-cost.md](../reference/pipeline-cost.md). Setting a value
+claims no speed, memory or quality gain on its own.
 
 ### Where the committed numbers came from, and which entry they are declared for
 
@@ -501,7 +524,7 @@ provenance here:
 
 | Entry | `declared_for` | Where the numbers came from |
 | --- | --- | --- |
-| `models.summarize` (`qwen3-5-9b-q4-k-m`) | `03b74727...b7e8` | Derived against the retired `qwen3-8b-q4-k-m` on a GitHub-hosted `ubuntu-latest` (AMD EPYC 9V74, 4 vCPU, 15 GB) through 2026-08-25 and 2026-08-26, then carried onto the 9B when the summarizer was swapped on **2026-08-27** (#146). **Two of them have since been re-derived on a runner, and only two.** Run `2026-09-09-34379502244` priced `n_ctx` at 16,384 and `flash_attention` at `on` against the configured 9B, and read both back from the server's own log at `log_verbosity: 4`. `n_batch`, `n_ubatch`, `n_threads`, `temperature`, `top_p` and every other value in the block were untouched by that run and still stand on the 8B numbers. **`n_ctx` is 65,536 since 2026-09-14, and that value has not run on a runner.** What was measured for it is memory, on a laptop, and memory is the only thing a window costs: KV is 32 KiB a token over 8 attention layers of 32, so the raise is 1,584 MiB against the 6.84 GiB low-water free the runner itself measured ([`../reference/benchmarks/two-call-window-sizing.md`](../reference/benchmarks/two-call-window-sizing.md)). A prompt costs the same seconds at any window, so nothing about decode rate is claimed for it. |
+| `models.summarize` (`qwen3-5-9b-q4-k-m`) | `03b74727...b7e8` | The owner selected the explicit runtime settings on 2026-09-20 and approved the 65,536-token window on 2026-09-21. Both caches use q8_0 and the answer budget is 2,000 tokens. The article and candidate limits are unchanged. This combination has not been benchmarked. Earlier measurements used different settings and do not establish this combination's speed, memory use or output quality. The committed model file is the complete list of selected values. |
 
 The row says the uncomfortable thing, which is the point of writing it
 down: the file now states a pairing where before it implied one. `declared_for`
