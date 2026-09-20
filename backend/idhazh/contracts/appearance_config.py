@@ -499,6 +499,11 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-20T14:00",
+            change="console.panel_groups.machine is four decision groups, not three time grains.",
+            why="A heading naming a grain answers no question an operator arrives with.",
+        ),
+        ChangelogEntry(
             version="2026-09-20T13:00",
             change="Four console thresholds, additive: lost processor time and model disk reads.",
             why="Whether a day is marked or named is a setting, not a literal in a chart.",
@@ -512,11 +517,6 @@ class AppearanceConfig(Contract):
             version="2026-09-20",
             change="console.fleet_top_kinds, additive, default 4.",
             why="The fleet count became bars a day, and too many series draw sub-pixel bars.",
-        ),
-        ChangelogEntry(
-            version="2026-09-18",
-            change="console.precision_axis_multiple, additive, default 10.0.",
-            why="The precision line needed a fixed axis, and a bare 10 is a hard-coded one.",
         ),
         ChangelogEntry(
             version="2026-08-29",

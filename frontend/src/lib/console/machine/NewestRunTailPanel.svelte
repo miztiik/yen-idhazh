@@ -43,8 +43,9 @@
 
 <Panel
 	heading="h3"
-	title="How long the newest run's tail was"
-	note="The whole distribution of one run at once, which is a different question from whether the tail is growing. It reads the newest run the item ledger timed, so it holds still while the window moves."
+	id="newest-run-tail"
+	title="How far the slowest articles ran behind the rest"
+	note="A spread this wide means the average is not a time any article actually took - the whole distribution of the newest run."
 >
 	{#if svg === null || newestTail === null}
 		<p class="empty" data-machine-panel-empty="percentiles">

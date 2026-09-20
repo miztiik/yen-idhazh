@@ -1,9 +1,9 @@
 <script lang="ts">
 	/** Which machines one run was actually given.
 	 *
-	 * A run is not a machine: over the committed record, 86 of the last 90 runs
-	 * that named a processor drew more than one kind, so one card a machine is
-	 * the only honest grain.
+	 * A run is not a machine: over the committed record, 86 of the 90 runs that
+	 * name a processor drew more than one kind, so one card a machine is the only
+	 * honest grain.
 	 */
 	import MachineCard from '$lib/components/MachineCard.svelte';
 	import Panel from '$lib/components/Panel.svelte';
@@ -19,8 +19,9 @@
 >
 	<Panel
 		heading="h3"
-		title="The machines this run drew"
-		note="One card per machine the newest run was given. A run is not a machine: over the committed record, 86 of the last 90 runs that named a processor drew more than one kind, and the read rate between the fastest and the slowest of them ran up to 6.1 times."
+		id="machine-cards"
+		title="Which machines this run was given"
+		note="A run is not a machine and most runs draw more than one kind, so a rate quoted for the whole run belongs to none of them - one card a machine of the newest run."
 	>
 		{#if machines.nothing === 'recording-off'}
 			<p class="empty" data-machine-panel-empty="machines-off">

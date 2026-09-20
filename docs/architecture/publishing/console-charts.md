@@ -498,9 +498,9 @@ an answer. Where a drawing chart's span holds no boundary it says so in type
 | Sources we may ask | Voices | no | Permission, a rest and a retirement are all decided before a summary is written. |
 | Charts drawn for articles | Pipelines | no | Chart drawing is a different model call, judged on its own retirement rule. |
 | Time to write one summary | Summaries | no | A change moves every bar on it. The axis is seconds, so the window is pooled into one distribution and a day has no position to draw at. |
-| Prompt cache | Hardware | no | A change moves it - the prompt is in the stamp - and its engine-drawn axis carries no rule yet. |
-| Context headroom | Hardware | no | One bar a run, so there is no day edge to draw between. |
-| What a run reads against what it writes | Hardware | no | One group a run, so there is no day edge to draw between. |
+| How much text the model has to read again each time | Hardware | no | A change moves it - the prompt is in the stamp - and its engine-drawn axis carries no rule yet. |
+| How close the longest text came to the model's limit | Hardware | no | One bar a run, so there is no day edge to draw between. |
+| How much of a run is reading and how much is writing | Hardware | no | One group a run, so there is no day edge to draw between. |
 
 The last three are the honest edge of this rule and are recorded rather than
 hidden: two of them are charts a change **does** move, and neither draws,

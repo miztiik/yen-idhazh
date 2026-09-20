@@ -348,7 +348,7 @@
             },
             "type": "array"
           },
-          "description": "The order the panels of a console route are drawn in, and the headings they group under. Keyed by route id. Thirteen equal siblings down one column give the eye nothing to land on first, so the Hardware route reads as three questions - the run that just finished, the span the control is open on, and the machines the platform handed us - and the first panel of the first group is the one that verdicts the rest. The Pipelines route takes one untitled group, because what it needed was an order rather than a grouping. An id here is a panel the route implements, and the route refuses a list that names one it does not.",
+          "description": "The order the panels of a console route are drawn in, and the headings they group under. Keyed by route id. Thirteen equal siblings down one column give the eye nothing to land on first, and a heading naming a time grain answers no question anybody arrives with - so each Hardware heading names a decision instead, in the order an operator takes them: what the machine was doing, where the time went, how close we are to the limits, and what the model spends. Each group's answer decides whether the next is worth reading. A grain is a fact about one panel and is stated on that panel, which is what lets one group hold a snapshot of a run beside a reading over the open span. The first panel of the first group is the one that verdicts the rest. The Pipelines route takes one untitled group, because what it needed was an order rather than a grouping. An id here is a panel the route implements, and the route refuses a list that names one it does not.",
           "title": "Panel Groups",
           "type": "object"
         },
@@ -927,6 +927,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "console.panel_groups.machine is four decision groups, not three time grains.",
+      "version": "2026-09-20T14:00",
+      "why": "A heading naming a grain answers no question an operator arrives with."
+    },
+    {
       "change": "Four console thresholds, additive: lost processor time and model disk reads.",
       "version": "2026-09-20T13:00",
       "why": "Whether a day is marked or named is a setting, not a literal in a chart."
@@ -940,11 +945,6 @@
       "change": "console.fleet_top_kinds, additive, default 4.",
       "version": "2026-09-20",
       "why": "The fleet count became bars a day, and too many series draw sub-pixel bars."
-    },
-    {
-      "change": "console.precision_axis_multiple, additive, default 10.0.",
-      "version": "2026-09-18",
-      "why": "The precision line needed a fixed axis, and a bare 10 is a hard-coded one."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -982,7 +982,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-09-20T13:00",
+      "default": "2026-09-20T14:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -990,5 +990,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-09-20T13:00"
+  "version": "2026-09-20T14:00"
 }

@@ -46,7 +46,7 @@ fits the screen it is on, and a page that can be scanned in one pass
 | `/console/` `Run health` | is it working - in the run, and it is the first panel on the route |
 | the rest of `/console/` | what is broken in the run |
 | `/console/model/`, `/console/judgement/`, `/console/voices/` | what is broken in the writing, the labelling and the supply |
-| `/console/machine/` `The two clocks, compared` | is it working - can the day's rates be trusted at all, and it is the first panel on the route |
+| `/console/machine/` `Whether the speed numbers can be trusted` | is it working - can the day's rates be trusted at all, and it is the first panel on the route |
 | the rest of `/console/machine/` | what is broken on the box |
 
 The band is not a route. It stands on all five, which is why it is the surface that can verdict five.
@@ -169,6 +169,17 @@ the model for it. A question title asks the reader to hold it while he reads the
 panel; a noun phrase names what is in front of him. `What`, `Which` and `How`
 stay legal openings, because they head a free relative rather than a question.
 Authority: Editor, 2026-08-31.
+
+**On the Hardware route the rule went further on 2026-09-20: a title states the
+question the panel answers and borrows no word from how the thing is built.**
+The grammar above is necessary and was not sufficient - `Prompt cache` and
+`Context headroom` both passed it while naming a mechanism and saying nothing a
+reader would learn. Both of the titles named in the paragraph above have moved
+again under it: `The two clocks, compared` is now `Whether the speed numbers can
+be trusted` and `How the tail moved` is now `Whether the slowest articles are
+getting slower`. That route's own inventory is
+[console-machine.md](console-machine.md); what is here is the rule, and it binds
+any route whose titles are next rewritten.
 
 `Model` and `Machine` shared a first letter, which was the recorded cost of the
 old name set; `Summaries` and `Hardware` do not, so that cost is paid off.
@@ -956,9 +967,10 @@ reader loses, named:** the picture of the split, which is now three printed
 counts instead. What the split was ever worth was the counts it was built from,
 and the track carried no fact they do not. Susan, 2026-09-17.
 
-**The deleted track and the Hardware route's `Prompt cache` panel were one
+**The deleted track and the Hardware route's re-reading panel were one
 subject at the two questions.** This panel carried the level - how much of the
-window's prompt the model already held - and `Prompt cache` carries the
+window's prompt the model already held - and `How much text the model has to
+read again each time` carries the
 direction, one column a day. With the level deleted the Hardware panel is the
 whole answer rather than half of one, so the gap a later reader sees here is a
 subject already covered and not a figure to rebuild.
