@@ -4,7 +4,7 @@
 
 **Level**: 5 (two persisted contracts with committed rows, a committed state tree that moves, and a new meaning for a `run_id` cell)
 
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 3 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 2 rows in flight, refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
 ## Section 0 - Operating contract
 
@@ -15,7 +15,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Hard scope - out | See the table below. |
 | ESCALATE triggers | (1) Row #2 changes what a committed `run_id` cell means across four contracts - pause for sign-off. (2) Row #7 widens a header on a store with committed rows and refiles them - pause for sign-off on the refile before it runs. (3) Row #17 moves a committed state tree - pause for sign-off on the path map before any file moves. (4) Any row that would raise a runner budget figure (Guardrail #2). (5) Row #18: if the holdout resolves fewer pairs than its stated floor, write the cells null and refuse the reading. (6) Row #9 renames a config knob AND the workflow key that reads it - if the two cannot land in one commit, stop. |
 | Chosen strategy | Share the model call, not the judge - one constrained-decode layer and a per-reading stamp each judge embeds in its own row, with per-judge packages, contracts and stores above it. Fowler, Carmack and Andre in debate, owner ruling 2026-09-20; corrected by adversarial review 2026-09-20 (see section 1b). |
-| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 3.` Three because the file islands never widen past three once groups C, E and G are sequenced (section 0, grouping note). |
+| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 2.` Two, not three, and it is live in two windows only. The dependency chain is A -> {B, C} -> D and E -> F -> G -> H -> I -> J, and D depends on row #11, which depends on row #3 inside B - so three groups are never ready at once. A third slot would only hold a row. |
 
 ### How the rows group into pull requests
 
@@ -34,7 +34,9 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | I | Where the line stands against its holdout | 18 | Reads the moved tree, so it follows H |
 | J | The plan pointers | 19 | Docs only |
 
-**`.github/workflows/llm-council.yml` is the chokepoint and is sequenced rather than hoped about.** It is touched by groups A, C, E, G and H. The Reckoner's `Depends-on` column chains them: C after A, E after C, G after E, H after G. Under N = 3 the three live slots are spent on B, D and whichever of the workflow chain is current.
+**`.github/workflows/llm-council.yml` is the chokepoint and is sequenced rather than hoped about.** It is touched by groups A, C, E, G and H. The Reckoner's `Depends-on` column chains them: C after A, E after C, G after E, H after G, and the chain holds transitively through F.
+
+**Rows inside one letter are serialised too, where they write the same file.** A letter is one pull request and one worktree, so two rows of one letter with no dependency between them are dispatchable at once and would collide. Four pairs are chained in the Reckoner for that reason: #2 after #1 (both write the council workflow and its test), #10 after #9 (six shared files including the generated app-config schema), and #7 and #8 after #6 (all three write the schema register, and two write the export tuple and the ledger).
 
 ### Hard scope - out
 
@@ -50,28 +52,28 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | New console panels | `/console/judgement/` already renders the holdout against the applied line | An operator asking for a panel the committed rows cannot answer |
 | Renaming `backend/var/judge/` | The scratch directory keeps a word naming one loop's draw | The parallel work already moving production artefacts out of the code tree |
 | A judge role in `ModelRole` | Every judge keeps inheriting the summariser's weights, so no judge can be independent | The second-opinion judge, the first that needs different weights |
-| Converting `measure.yml` and `validate.yml` to the composite action | Four cache blocks stay hand-written; they share one of the action's five steps, so the drift risk is small | A second judge in either file |
+| Converting the pipeline-tests and validation workflows to the composite action | The pipeline-tests workflow runs four of the action's five steps and the validation workflow runs all five under its own step names, so both carry a real drift risk rather than none | A second judge in either file, or the first time a weights step drifts between them |
 
 ## Section 1 - Status Reckoner
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | A leg survives its own clock | - | A | PENDING | - | - | - |
-| 2 | The council knows which run it is | - | A | PENDING | - | - | - |
+| 2 | The council knows which run it is | 1 | A | PENDING | - | - | - |
 | 3 | The judge-call stamp, declared once | 2 | B | PENDING | - | - | - |
-| 4 | `ServerJob` and `SegmentLedger` admit judges | 2 | B | PENDING | - | - | - |
+| 4 | `ServerJob` and `SegmentLedger` admit judges | 3 | B | PENDING | - | - | - |
 | 5 | A judge call is a committed span | 4 | B | PENDING | - | - | - |
 | 6 | The judge-leg row, and what prunes it | 3, 4 | B | PENDING | - | - | - |
-| 7 | The pair row gains the stamp, and the store is refiled | 3 | B | PENDING | - | - | - |
-| 8 | The line-against-holdout row | 4 | B | PENDING | - | - | - |
-| 9 | The leg timeout moves to the block that validates it | 1 | C | PENDING | - | - | - |
-| 10 | The measured judge pair replaces the derived call | 1 | C | PENDING | - | - | - |
+| 7 | The pair row gains the stamp, and the store is refiled | 6 | B | PENDING | - | - | - |
+| 8 | The line-against-holdout row | 6 | B | PENDING | - | - | - |
+| 9 | The leg timeout moves to the block that validates it | 2 | C | PENDING | - | - | - |
+| 10 | The measured judge pair replaces the derived call | 9 | C | PENDING | - | - | - |
 | 11 | Thinking is refused and the decode is stamped | 3 | D | PENDING | - | - | - |
 | 12 | The four verbs name their work | 4, 9 | E | PENDING | - | - | - |
 | 13 | The leg fills the stamp | 7, 11, 12 | F | PENDING | - | - | - |
 | 14 | The leg writes its row and opens its spans | 5, 6, 13 | F | PENDING | - | - | - |
-| 15 | The council records the machine it ran on | 14 | G | PENDING | - | - | - |
-| 16 | The model block becomes one composite action | 15 | G | PENDING | - | - | - |
+| 16 | The model block becomes one composite action | 14 | G | PENDING | - | - | - |
+| 15 | The council records the machine it ran on | 16 | G | PENDING | - | - | - |
 | 17 | The store groups under the judge that fills it | 15 | H | PENDING | - | - | - |
 | 18 | Where the line stands against its holdout | 8, 17 | I | PENDING | - | - | - |
 | 19 | The plan pointers | 18 | J | PENDING | - | - | - |
@@ -93,6 +95,21 @@ Recorded because each correction is a claim an executing worker would otherwise 
 | 9 | Row #14 scores the judge against the holdout | The holdout rows carry no verdict, the shipped implementation takes weights and a line and calls no model, and the labels were written by an outside model | Row #18 scores the **line**, carries no judge stamp, and names its labeller |
 | 10 | `first_token_probabilities` lets a scoring fix be re-applied from the row | `n_probs` is 3, and the grammar admits prefix tokens, so the window can hold `{" ", "YES", "Y"}` with two verdicts outside it | Row #11 sizes the window to the legal first-token set and sends `post_sampling_probs` explicitly; the claim is narrowed to what the window holds |
 | 11 | `decode_digest` records the sampler | Temperature, top-p, seed and the thinking flag are all constants on every row that can exist, and deriving it from `settings` cannot see a payload-builder bug | The digest is taken from the body actually posted, and `judge_temperature` is carried as a plain number beside it |
+
+**A second round, on the corrected plan, found ten more.** The ones that would have destroyed data or shipped a green test:
+
+| # | The corrected plan said | The code says | What changed |
+| --- | --- | --- | --- |
+| 12 | The fold stages what the legs wrote | A leg's segments are on the leg's own runner; the council forbids leg commits and the fold downloads only verdicts. Nothing carried them across, and the oracle asserted over a list of strings so it passed anyway | The legs upload their segments and the fold downloads them before compacting; the oracle matches upload name to download pattern |
+| 13 | The fold stages four named prefixes | The compaction takes no filter - it folds every ledger in transit and unlinks every segment. At 22:00 the digest run's own segments are still waiting, measured at 21 files across five ledgers, so a named set would commit their deletions and drop their heads nightly | The fold stages the state tree whole, which is the correction the daily workflow already made for this reason |
+| 14 | The run id is the judged date joined to the run number | The compaction reads a run id's first ten characters as the day the run opened and feeds it to the console's compaction-lag figure, so a yesterday prefix would publish a permanent two-day lag that is not real | Minted from the day the council runs; the judged date is already the row's own `date` column |
+| 15 | The fingerprint order is asserted against the server-start step by name | Row #16 moves that step into a composite action, and both rows were one pull request | Row #16 lands first, and four test modules that look weights steps up by name move with it |
+| 16 | Widening the alternatives window fixes the margin | The margin is the top two of whatever came back, and the top two do not move when more are asked for | The margin is taken over the three verdict-opening ids, renormalised - ids the stage already computes and discards |
+| 17 | A grammar failure writes `usable` false | A nullable verdict makes two failed calls compare equal, so `usable` would go true with no verdict and the row's own validator refuses that shape | The agreement test gains a null check in the same change |
+| 18 | The funnel closes on three terms | A leg stopping on its new deadline leaves rows it never reached, so the identity fails on exactly the leg the deadline exists to let write a row | A fourth term, `rows_abandoned`, and a rule pairing it with `reached_bound` |
+| 19 | The reader drops an empty cell for any non-`None` default | A required field's default is undefined, not `None`, so the branch would also pop `version` - which a before-validator refills with this build's stamp | One field added to the existing by-name branch |
+| 20 | `refiler` widens the committed file | It returns a row-to-row function and touches no file; nothing in the repository runs the header migration from a command line | Row #7 adds the operator entry point it needs |
+| 21 | Row #19 updates the plan queue page | A continuous-integration gate fails any pull request that edits it, and the page already names this plan because it discovers them structurally | The page is left alone |
 
 ## Section 1c - The contracts, settled before any row is written
 
@@ -119,7 +136,7 @@ A Literal for the reason `ScorerModelId` is one: a fold over a store mixing two 
 | `prompt_digest` | `Sha256 \| None` | default `None` | sha256 of the rendered system turn |
 | `grammar_digest` | `Sha256 \| None` | default `None` | sha256 of the grammar handed to the decoder |
 | `grammar_applied` | `bool \| None` | default `None` | Whether the reply opened inside the grammar |
-| `first_token_probabilities` | `str \| None` | `PRINTABLE_LINE_PATTERN`, `max_length=512`, default `None` | Compact JSON, a list of `[token_id, token, logprob]` in the server's own order. Ids because a token string is right for one set of weights and says nothing when the weights move; logprobs because exponentiating loses the precision the margin is computed at |
+| `first_token_probabilities` | `str \| None` | `PRINTABLE_LINE_PATTERN`, `max_length=1024`, default `None` | Compact JSON, a list of `[token_id, logprob]` in the server's own order. **Ids and logprobs only - no token string.** The id is the durable half; a rendered string is right for one set of weights and says nothing when they move, two ids can render to one string, and a byte-fallback token would fail the printable pattern outright. Exponentiating a logprob throws away the precision the margin is computed at |
 | `decode_seconds` | `float \| None` | `ge=0`, default `None` | Wall clock for **one call**. Exactly one call, on every row that inherits this |
 
 **`usable`, `verdict`, `verdict_swapped` and `first_token_margin` stay off the mixin.** Agreement between two readings is a position-bias control with no honest meaning for a judge whose input has no order.
@@ -136,7 +153,7 @@ A Literal for the reason `ScorerModelId` is one: a fold over a store mixing two 
 | `judge_temperature` | `float \| None` | `ge=0`, default `None` |
 | `decode_digest` | `Sha256 \| None` | default `None` |
 | `grammar_applied` | `bool \| None` | default `None` |
-| `first_token_probabilities` | `str \| None` | `PRINTABLE_LINE_PATTERN`, `max_length=512`, default `None` |
+| `first_token_probabilities` | `str \| None` | `PRINTABLE_LINE_PATTERN`, `max_length=1024`, default `None` |
 
 `decode_seconds` keeps its existing meaning on this row - **both calls on the pair** - and its description says so, because the mixin's field of the same name means one call and the two must not be confused.
 
@@ -148,8 +165,10 @@ Changelog entry to prepend:
 
 **Two migrations, both in the same commit.**
 
-1. **Read side.** `from_csv_row` gains a branch that drops an empty cell for any field whose default is not `None`, so the field default applies instead of `""` reaching a Literal.
-2. **Write side.** `refiler(StorySimilarityPair)` is run over `state/story-similarity/scored-pairs/**/*.csv`, widening the header in place. This adds empty cells and changes no value any run wrote, so the "do not edit the archive" objection does not apply. Without it `_append` refuses the file and a re-dispatch of that date kills the commit step and every ledger staged beside it.
+1. **Read side.** `from_csv_row` adds `judge_id` to the existing by-name branch that already special-cases the two other non-null defaults on this row. **Not a general predicate over "any field whose default is not `None`"** - a required field's default is `PydanticUndefined`, not `None`, so a general branch would also pop `version`, which a `mode="before"` validator then refills with this build's own stamp. That is silent coercion of invalid input on the one column the header migration uses as its sentinel.
+2. **Write side.** The committed day files are widened in place by `migrate_header(path, StorySimilarityPair.csv_columns(), refiler(StorySimilarityPair))`. **`refiler` alone touches no file** - it returns a row-to-row function, and `migrate_header` is what writes. Nothing in the repository runs either from a command line today, so row #7 adds the entry point (below). Widening adds empty cells and changes no value any run wrote, so the "do not edit the archive" objection does not apply. Without it `_append` refuses the file and a re-dispatch of that date kills the commit step and every ledger staged beside it.
+
+Verified read-only on 2026-09-20: all 82 committed rows re-validate through all three model validators and re-render, so the widening has no refused row to stop on.
 
 ### `JudgeLegRow` - new (`backend/idhazh/contracts/judge_leg_row.py`)
 
@@ -167,7 +186,8 @@ Changelog entry to prepend:
 | `rows_judged` | `int` | `ge=0` | Rows that got a reading inside the grammar |
 | `rows_usable` | `int` | `ge=0` | Rows whose two readings agreed |
 | `rows_unreadable` | `int` | `ge=0` | Drawn rows whose items the window no longer reaches. The stage already counts this and throws it into a log line |
-| `grammar_failures` | `int` | `ge=0` | Readings that came back outside the grammar. Disjoint from `rows_judged` |
+| `rows_abandoned` | `int` | `ge=0` | Rows this leg owned and never reached, because it stopped on its own deadline. **Without this term the identity below fails on exactly the leg row #1 exists to let write a row at all** |
+| `grammar_failures` | `int` | `ge=0` | **Rows** where `grammar_applied` is false - not readings. A pair is two calls, so counting calls would over-count a pair whose both calls failed and make the identity below go red on a production event rather than on a defect. Per-call attribution lives on the span row #14 opens per call |
 | `disagreement_rate` | `float \| None` | `ge=0, le=1` | Share of judged rows whose two readings differed. Null on an empty leg - a rate over zero rows is not zero. **Per leg over judged rows**, where the fit's gate is per day over usable rows; the two are different quantities and the description says so |
 | `unclear_rate` | `float \| None` | `ge=0, le=1` | Share of usable rows answered UNCLEAR. Null on an empty leg, same reason, same per-leg caveat |
 | `first_token_margin_median` | `float \| None` | `ge=0, le=1` | Median gap at the deciding position |
@@ -176,7 +196,7 @@ Changelog entry to prepend:
 | `decode_seconds_max` | `float \| None` | `ge=0` | The leg's longest single call. A leg with an ordinary total and a bad worst call is the one that times out next week |
 | `reached_bound` | `bool` | default `False` | Whether the leg stopped on its own deadline rather than on running out of rows. Reachable only because row #1 gives the stage a deadline |
 
-**The identity that closes:** `rows_owned = rows_judged + grammar_failures + rows_unreadable`. This is row #14's oracle, and every term is a column.
+**The identity that closes:** `rows_owned = rows_judged + grammar_failures + rows_unreadable + rows_abandoned`. This is row #14's oracle, and every term is a column. A second rule pairs with it: `rows_abandoned > 0` implies `reached_bound`, which is a better check than either column alone.
 
 The inherited `decode_seconds` is this leg's **first** call, kept so the mixin's meaning is honoured on every row that carries it.
 
@@ -249,8 +269,14 @@ Ids and digests only. A title or a URL never becomes a span attribute.
 | Today | Becomes |
 | --- | --- |
 | `run.judge_shard_timeout_minutes` | `assemble.same_story.adaptive_dedup_threshold.leg_timeout_minutes` |
+| (new) | `assemble.same_story.adaptive_dedup_threshold.leg_wrap_up_minutes`, default `12` |
+| (new) | `assemble.same_story.adaptive_dedup_threshold.flush_every_pairs`, default `1` |
 
-Committed value `200`, `ge=1`, `le=350`, unchanged. It moves beside `pair_budget` and `shards`, the two numbers its validator already reads. `backend/utilities/shard_bound.py` resolves `run["<key>"]` only, so it gains a dotted-path `--key` and keeps one reader and one refusal message. `run.shard_timeout_minutes` does not move.
+Committed value `200`, `ge=1`, `le=350`, unchanged. It moves beside `pair_budget` and `shards`, the two numbers its validator already reads, and its two siblings move with it so one stage's deadline and its flush interval are not in two blocks. `backend/utilities/shard_bound.py` resolves `run["<key>"]` only, so it gains a dotted-path `--key` and keeps one reader and one refusal message. `run.shard_timeout_minutes` does not move.
+
+**The deadline is a backstop with room to spare, and the plan says so rather than implying the column fires.** At the committed `pair_budget` of 200 over 4 shards a leg draws 50 pairs; at the measured 94.53 s a pair that is 78.8 minutes, and at the measured worst pair 92.5 minutes, against a 200-minute bound. So `reached_bound` is reachable in the type system and will not fire on the runner until the shard count drops or the budget rises. The oracle is the only evidence that path works, which is why row #1's oracle drives it directly.
+
+**The flush default is 1.** A flush rewrites the whole leg file, and a leg file at 50 rows is about 50 KB against a pair that costs 94.53 s - the rewrite is not measurable beside the call that produced the row, so there is no reason to risk losing a pair.
 
 ### Store paths (`backend/idhazh/ledger.py`)
 
@@ -259,6 +285,8 @@ Committed value `200`, `ge=1`, `le=350`, unchanged. It moves beside `pair_budget
 | `CONTENT_SIMILARITY_JUDGE_DIRNAME` | `"content-similarity-judge"` |
 | `JUDGE_SHARDS_DIRNAME` | `"shards"` |
 | `LINE_HOLDOUT_SCORES_DIRNAME` | `"line-holdout-scores"` |
+
+**`STORY_SIMILARITY_DIRNAME` is deleted in row #17, not left holding the same string.** The segment enum's own rule is that a value is the head's `*_DIRNAME` constant so the transit directory and the head cannot be spelled two ways; two constants carrying one value re-opens exactly that. The prune vocabulary is built by joining those constants, so the words move with them - `story-similarity-scored-pairs` becomes `content-similarity-judge-scored-pairs`, and the same for the fitted thresholds.
 
 Day-sharded, `<slug>/<store>/<YYYY>/<MM>/<DD>.csv`. **Two directory levels and no more:** the day inventory globs `*/<Y>/<M>/<D>` and `*/*/<Y>/<M>/<D>`, so a third level is invisible to `idhazh telemetry show` and the miss is silent.
 
@@ -287,8 +315,9 @@ Both stores join `TARGETS` in `backend/idhazh/telemetry/prune.py` (CLAUDE.md 1b:
 | 2 | The stage takes a deadline derived from the leg bound minus a wrap-up margin, stops on it, writes what it has and exits clean. The pattern is `run.shard_wrap_up_minutes`, which already exists for the work shard. | Andre |
 | 3 | A header-only file is written before the first pair, so the artifact always exists and `if-no-files-found: error` becomes a meaningful assertion rather than a permanent failure. | Andre |
 | 4 | The file is rewritten whole through `write_atomic` every flush, not appended. A temp-file-plus-rename has no partial state, which is the property that makes an interrupted leg's file readable. | Fowler |
-| 5 | The flush interval is a knob with a sane default, because a flush per pair costs a rewrite per pair and a flush per leg is what this row is fixing. | Guardrail #6 |
-| 6 | This makes `JudgeLegRow.reached_bound` reachable. Without a deadline in the stage, the leg that hit the bound is exactly the leg that cannot write a row saying so. | Andre |
+| 5 | The flush interval is a knob with a sane default, and it lives in the same block as the leg deadline rather than in the generic run block - one stage's two clocks belong together. **The default is 1**: a flush rewrites a file of at most 50 rows, which is not measurable beside a pair that costs 94.53 s, so there is no reason to risk losing one. | Guardrail #6 |
+| 6 | The deadline is computed from the stage's own start plus the bound minus a margin, which is how the work shard already does it - no job-start timestamp is passed in, and the margin absorbs the checkout, the cache restore and the weight load as well as the wrap-up. | Carmack |
+| 7 | This makes `JudgeLegRow.reached_bound` reachable, and `rows_abandoned` is the column that keeps the leg row's funnel identity closing when it fires. Without a deadline in the stage, the leg that hit the bound is exactly the leg that cannot write a row saying so. | Andre |
 
 - **Rejected alternatives:**
 
@@ -317,10 +346,11 @@ Both stores join `TARGETS` in `backend/idhazh/telemetry/prune.py` (CLAUDE.md 1b:
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | The council has no run id today - the string does not appear in its workflow file. The fingerprint and job-clock verbs read one from `backend/var/run/<date>/plan.json`, which only exists because the digest work job downloads a plan artifact. The council has no plan job. | Carmack |
-| 2 | The two verbs take a run id directly rather than a plan object, so a workflow with no planning stage can still record a machine. | Carmack |
-| 3 | The council's run id is the judged date joined to the platform run number, which satisfies the `RunId` pattern. | Carmack |
-| 4 | ESCALATE: `run_id` on a pair row means the run that published the day; on a leg row it means the council run that judged it. Two columns, two meanings, both written down. Sign-off before the code. | Section 6 |
-| 5 | Without this row, reusing the digest run's id would collide on `SPAN_ROLLUP_KEY`, which carries no `job` column - and the compaction settles by attempt, so the council's segment would delete the digest run's committed span rows for that date. | Carmack |
+| 2 | The two verbs take **a date and a run id**, not a plan object. Those are the only two attributes either reads off it, and a stub plan is not free - the plan contract requires a generated-at stamp beside them. | Carmack |
+| 3 | The council's run id is minted from **the day the council runs**, not the day it judges. The compaction reads the first ten characters of a run id as the day the run opened and feeds it to the console's compaction-lag figure, so a run id prefixed with yesterday would publish a standing lag of two days for ever while nothing was actually lagging. The judged date is already the `date` column on every row, which is what routes a row to its head. | Carmack |
+| 4 | The platform run number is unique per repository across every workflow, so the council's id cannot collide with the digest run's on the segment key. | Carmack |
+| 5 | ESCALATE: `run_id` on a pair row means the run that published the day; on a leg row it means the council run that judged it. Two columns, two meanings, both written down. Sign-off before the code. | Section 6 |
+| 6 | Without this row, reusing the digest run's id would collide on the span-rollup key, which carries no `job` column - and the compaction settles by attempt, so the council's segment would delete the digest run's committed span rows for that date. | Carmack |
 
 - **Rejected alternatives:**
 
@@ -372,6 +402,8 @@ Both stores join `TARGETS` in `backend/idhazh/telemetry/prune.py` (CLAUDE.md 1b:
   - `backend/tests/contracts/`
   - `backend/tests/workflows/test_ledger_staging.py`
   - `backend/tests/retention/test_prune_range.py`
+  - `docs/concepts/telemetry.md`
+  - `docs/concepts/partitions.md`
   - `docs/architecture/publishing/retention.md`
   - `schemas/` (every generated schema listing `ServerJob`)
 - **Acceptance gates:** local - the contract, staging and retention test modules, contract export, drift gate, `doc_load.py --changed`. CI - full suite.
@@ -385,7 +417,8 @@ Both stores join `TARGETS` in `backend/idhazh/telemetry/prune.py` (CLAUDE.md 1b:
 | 3 | The head joins `keyed_paths` in the same row as `_SEGMENT_HEADS`. Registering one without the other is the exact defect the settlement test's docstring records. | Fowler |
 | 4 | Both new stores join the prune targets in this row. A day-sharded store with no prune verb is a store that grows for ever (CLAUDE.md 1b). | Fowler |
 | 5 | The two stores are listed as filled-by-nothing until rows #14 and #18 land, so the staging test is green between group B and group F. | Fowler |
-| 6 | Reader before writer: this row adds the members and leaves every writer alone. | Fowler |
+| 6 | The concept page that owns telemetry gains the new segment member and the two stores, and its store count moves. The day-partition page gains both stores with no writer named yet - the wording the two existing story-similarity stores already use for a shape that lands ahead of its producer. **No new judge-telemetry page is created**: the existing page answers this question, and a second would be the split the documentation rule forbids. | Guardrail #4 |
+| 7 | Reader before writer: this row adds the members and leaves every writer alone. | Fowler |
 
 - **Rejected alternatives:**
 
@@ -437,9 +470,10 @@ Both stores join `TARGETS` in `backend/idhazh/telemetry/prune.py` (CLAUDE.md 1b:
   - `schemas/judge-leg-row.schema.json` (generated)
   - `frontend/src/contracts/` (generated)
   - `docs/architecture/contracts/schemas.md`
+  - `docs/concepts/partitions.md`
   - `backend/tests/contracts/`
 - **Acceptance gates:** local - the contract tests, contract export, drift gate, `doc_load.py --changed`. CI - full suite.
-- **Oracle:** the row round-trips through CSV, and `rows_owned = rows_judged + grammar_failures + rows_unreadable` is enforced by a model validator, so a leg cannot file a funnel that does not close. It cannot settle whether the figures are true; row #14's oracle does that.
+- **Oracle:** the row round-trips through CSV, and `rows_owned = rows_judged + grammar_failures + rows_unreadable + rows_abandoned` is enforced by a model validator, so a leg cannot file a funnel that does not close. It cannot settle whether the figures are true; row #14's oracle does that.
 - **Decisions:**
 
 | # | Decision | Authority |
@@ -508,6 +542,7 @@ Both stores join `TARGETS` in `backend/idhazh/telemetry/prune.py` (CLAUDE.md 1b:
   - `schemas/line-holdout-score-row.schema.json` (generated)
   - `frontend/src/contracts/` (generated)
   - `docs/architecture/contracts/schemas.md`
+  - `docs/concepts/partitions.md`
   - `backend/tests/contracts/`
 - **Acceptance gates:** local - the contract tests, contract export, drift gate, `doc_load.py --changed`. CI - full suite.
 - **Oracle:** the row round-trips through CSV and refuses a set of cells whose sum exceeds the labelled population. It cannot settle whether the cells were counted correctly; row #18's oracle does that.
@@ -631,11 +666,13 @@ Both stores join `TARGETS` in `backend/idhazh/telemetry/prune.py` (CLAUDE.md 1b:
 | 1 | Three of five registry entries declare a non-null thinking close; the active entry does not, so the committed rows are clean. The guard is a precondition, not a property of today's config. | Andre |
 | 2 | Refuse the call rather than record the flag. The grammar would force a verdict token where the model meant to start reasoning, the reply would still parse, and the margin would describe a reasoning channel. | Andre |
 | 3 | The refusal is scoped to the judge call. The summariser legitimately uses a thinking channel and must not be affected. | Andre |
-| 4 | The alternatives window is sized to the grammar's legal first-token set, not to the count of verdict words. A grammar admits any token whose bytes are a legal prefix, so a three-wide window can hold a leading space and a one-letter prefix while two verdicts sit outside it. | Andre |
-| 5 | `post_sampling_probs` is sent explicitly rather than inherited from a build default, and which mode the server returns is measured and written up. A margin over an unpinned mode is a reading about the grammar or about arbitrary vocabulary tokens, and nobody can tell which. | Andre |
-| 6 | The decode digest is taken from the sampler keys of the posted body, never from config. A digest built off config cannot see a payload-builder bug, which is the one failure it exists to catch. | Andre |
-| 7 | The space-trap guard and the encode-in-position helper move into the model layer, because every judge needs them and only one has them. | Fowler |
-| 8 | This row computes; row #13 writes. Reader before writer. | Fowler |
+| 4 | The alternatives window is sized to the grammar's legal first-token set, not to the count of verdict words. The grammar admits any token whose bytes are a legal prefix, so the set is the 25 non-empty prefixes of its six legal strings - a three-wide window can hold a leading space and a one-letter prefix while two verdicts sit outside it. | Andre |
+| 5 | **Widening the window alone changes the margin by nothing**, because the margin is the top two of whatever came back and the top two do not move when more are asked for. So the margin is taken over the three verdict-opening ids, renormalised over those three, and is null when fewer than two of them are in the window. The stage already computes those three ids and discards them - it calls for the refusal side effect only. | Andre |
+| 6 | `post_sampling_probs` is sent explicitly rather than inherited from a build default, and which mode the server returns is measured and written up. A margin over an unpinned mode is a reading about the grammar or about arbitrary vocabulary tokens, and nobody can tell which. | Andre |
+| 7 | The decode digest covers exactly six posted keys: temperature, top-p, seed, prediction length, the alternatives count and the probability mode. Not the prompt - it differs on every row and would make the column useless as a comparator. Not the grammar or the model - each has its own column. | Andre |
+| 8 | **A key added to the payload builder and not to the digest is a digest that has gone silently narrower**, which is the same blindness moving it off config was meant to remove. The builder and the digest are held together by a test that enumerates the payload's keys and fails on one the digest neither covers nor names as excluded. | Andre |
+| 9 | The space-trap guard and the encode-in-position helper move into the model layer, because every judge needs them and only one has them. | Fowler |
+| 10 | This row computes; row #13 writes. Reader before writer. | Fowler |
 
 - **Rejected alternatives:**
 
@@ -703,10 +740,13 @@ Both stores join `TARGETS` in `backend/idhazh/telemetry/prune.py` (CLAUDE.md 1b:
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | A grammar failure is recorded rather than raised: `grammar_applied` false, `usable` false, `verdict` null where there was none. Today it raises and the leg dies, so absence means two things an operator cannot separate. | Andre |
-| 2 | A recorded failure is counted in `grammar_failures` and not in `rows_judged`, so the disagreement rate stays a share of the population it is drawn from. | Andre |
-| 3 | The fold's docstring already claims `usable` is false when the grammar could not be shown to have held. That is false today because the path raises; this row makes it true and the docstring stops lying. | Andre |
-| 4 | The leg is the only writer of the stamp's model-side columns. The draw writes the row with its verdict columns empty and carries only the defaulted `judge_id`. | Fowler |
-| 5 | The judge's identity is a module constant in the stage, not a config knob. | Guardrail #6 |
+| 2 | **The agreement test gains a null check in the same change.** It is `forward.verdict == swapped.verdict` today, and a nullable verdict makes two failed calls compare equal - so `usable` would go true with no verdict, and the pair row's own validator refuses exactly that shape. The writer that reaches for the verdict's value must map null to empty rather than raising an attribute error on it. | Andre |
+| 3 | `grammar_applied` means **both calls opened inside the grammar**, and `grammar_failures` counts rows where it is false. Per-call attribution goes on the span row #14 opens per call, which is what a per-call span is for. | Andre |
+| 4 | **Both calls always run.** A forward failure does not skip the swapped call, or the pair row's decode seconds - documented as both calls - silently becomes one. | Andre |
+| 5 | A recorded failure is counted in `grammar_failures` and not in `rows_judged`, so the disagreement rate stays a share of the population it is drawn from. | Andre |
+| 6 | The fold's docstring already claims `usable` is false when the grammar could not be shown to have held. That is false today because the path raises; this row makes it true and the docstring stops lying. | Andre |
+| 7 | The leg is the only writer of the stamp's model-side columns. The draw writes the row with its verdict columns empty and carries only the defaulted `judge_id`. | Fowler |
+| 8 | The judge's identity is a module constant in the stage, not a config knob. | Guardrail #6 |
 
 - **Rejected alternatives:**
 
@@ -728,7 +768,7 @@ Both stores join `TARGETS` in `backend/idhazh/telemetry/prune.py` (CLAUDE.md 1b:
   - `backend/tests/workflows/test_ledger_staging.py`
   - `backend/tests/fixtures/`
 - **Acceptance gates:** local - the similarity, telemetry and staging test modules, ruff, mypy. CI - full suite.
-- **Oracle:** a leg's row satisfies `rows_owned = rows_judged + grammar_failures + rows_unreadable` against the verdict rows that leg wrote, and its median margin is the median of the margins in those rows. It cannot settle whether the machine readings are accurate; the sampler owns that and plan 37 is changing it.
+- **Oracle:** a leg's row satisfies `rows_owned = rows_judged + grammar_failures + rows_unreadable + rows_abandoned` against the verdict rows that leg wrote, and its median margin is the median of the margins in those rows. It cannot settle whether the machine readings are accurate; the sampler owns that and plan 37 is changing it.
 - **Decisions:**
 
 | # | Decision | Authority |
@@ -751,34 +791,37 @@ Both stores join `TARGETS` in `backend/idhazh/telemetry/prune.py` (CLAUDE.md 1b:
 
 ### Row #15 - The council records the machine it ran on
 
-- **Scope:** the judging legs write a host fingerprint and a job clock before the server starts, and the fold stages and commits everything the legs left behind.
+- **Scope:** the judging legs stamp a clock, write a host fingerprint before the server starts, upload what they recorded, and the fold downloads it, folds it and commits the whole state tree.
 - **Files touched:**
   - `.github/workflows/llm-council.yml`
   - `backend/tests/workflows/test_llm_council_workflow.py`
   - `backend/tests/workflows/test_staged_paths.py`
   - `backend/tests/workflows/test_ledger_staging.py`
+  - `docs/concepts/telemetry.md`
   - `state/content-similarity-judge/shards/.gitkeep`
-- **Acceptance gates:** local - the three workflow test modules. CI - full suite.
-- **Oracle:** the fingerprint step appears **before the step named `Start the model`**, and every state prefix a leg writes appears in the fold's staged path set. It cannot settle whether the readings are accurate on a runner.
+- **Acceptance gates:** local - the three workflow test modules, `doc_load.py --changed`. CI - full suite.
+- **Oracle:** every segment a leg writes is uploaded under a name the fold's download pattern matches, and the download step precedes the compaction step. **Not "the staged path list mentions the prefix"** - staging a path on a machine where the file was never written stages nothing, `git add` on an empty directory exits 0, and the assertion would go green over an instrument that records nothing. It cannot settle whether the readings are accurate on a runner.
 - **Decisions:**
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | The legs keep the host fingerprint, the job clock, spans and the segment compaction, and take nothing else from the digest workflow. | Owner, 2026-09-20 |
-| 2 | Dropped deliberately: the item-health ledger, feed health, the day census, committed per-item traces, day metrics and counterfactual scores. A judge has no items with terminal states, reads no feeds and publishes no day. | Owner, 2026-09-20 |
-| 3 | The fingerprint runs **before the model server starts**, not merely before the first model call. The bandwidth probe wants two buffers of at least 512 MiB and the server peaks at 14.31 GiB of a 16 GB runner, so a step placed after the server OOMs the leg. The oracle asserts the order against the server step by name. | Carmack |
-| 4 | The probe carries `continue-on-error`, and the job clock carries both `if: always()` and `continue-on-error`. A leg at the cap holds hours of decode; a failed instrument must not throw it away. | Carmack |
-| 5 | The fold stages four new prefixes: the segment transit, the host fingerprint, the span rollup and the judge head. Nothing commits any of them today, and `git add` under a failing shell aborts the whole step and costs the ledgers staged beside it. | Carmack |
-| 6 | A header-only day file is committed for the judge head, so a fresh clone has a path for `git add` to find. This is the three-part fix the same defect needed before. | Carmack |
-| 7 | This row assumes plan 37's corrected sampler and does not wait for it. The steps are the same either way. | Owner, 2026-09-20 |
+| 1 | **A leg's segments are on the leg's own runner, and the fold is a different machine.** The council forbids leg commits by design and a test pins it, and the fold downloads only the verdict artifacts. Without an upload and a matching download, every fingerprint, clock and span row this plan adds dies with the runner. | Carmack |
+| 2 | Each leg uploads its segment tree as its own artifact with an always condition; the fold downloads them merged into the segment directory **before** the compaction runs. The digest pipeline solves this by having each worker commit its own segments, which the council cannot copy - one fold, one push is a ruling it already made. | Carmack |
+| 3 | **The fold stages the state tree whole, not a hand-listed set of prefixes.** The compaction takes no filter: it folds every ledger present in the transit directory and then unlinks every segment file. A council run at 22:00 lands inside the window where the digest run's own segments are still waiting - measured 2026-09-20, 21 files across five ledgers - so a hand-listed set would commit the segment deletions while leaving those heads behind, and three ledgers would be destroyed nightly. The daily workflow's plan job already made this exact correction for this exact reason. | Carmack |
+| 4 | The fingerprint runs **before the model server starts**, not merely before the first model call. The probe allocates two buffers of `max(512 MiB, 2 x L3)` - 1.9 GiB on the widest part in the fleet - and the server peaks at 14.31 GiB of a 16 GB runner. The probe is its own process and exits before the server, so the order is the whole of the fix. | Carmack |
+| 5 | **The job clock runs last, not first.** It fills the model load time, the server's prompt counters and the job seconds; run before the server those four cells are null, and the compaction unions that row into the probe's, filling them with nothing permanently. The leg's first step stamps the job start instead, so the clock covers the cache restore and the weight load. | Carmack |
+| 6 | The probe carries a continue-on-error, and the job clock carries both an always condition and a continue-on-error. A leg at the cap holds over an hour of decode; a failed instrument must not throw it away. | Carmack |
+| 7 | The judge head is seeded with a `.gitkeep`, **not a header-only day file**. A header-only file at a day path is a real day file to the partition walker - a permanent phantom day in the prune target and in the day inventory. The three seeded directories in this repository are all `.gitkeep`, and the seeded-store checker deliberately excludes day trees. | Fowler |
+| 8 | The concept page that owns telemetry gains the council as a second fingerprint and span writer, and its store count moves. | Guardrail #4 |
+| 9 | This row assumes plan 37's corrected sampler and does not wait for it. | Owner, 2026-09-20 |
 
 - **Rejected alternatives:**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | Import the digest workflow's observability set wholesale | Half of it answers questions a judge does not have | Six stores that stay empty or carry meaningless rows | Owner |
-| 2 | Wait for plan 37 | The steps are identical; only the sampler's arithmetic differs | A serialized dependency for no change | Owner |
-| 3 | Build a new shipping path | The segment store and the compaction verb already drain six ledgers | A second transit mechanism to keep in step | Fowler |
+| 1 | Let each leg commit its own segments, as the digest workers do | One fold, one push is a ruling the council already made, and four legs pushing to main at 22:00 is four rebase races | Four commit steps and a contention window | Carmack |
+| 2 | Stage four named prefixes | The compaction folds ledgers the council never asked for, so a named set commits their deletions and drops their heads | Three ledgers destroyed every night, silently | Carmack |
+| 3 | Import the digest workflow's observability set wholesale | Half of it answers questions a judge does not have | Six stores that stay empty or carry meaningless rows | Owner |
 
 ---
 
@@ -789,20 +832,24 @@ Both stores join `TARGETS` in `backend/idhazh/telemetry/prune.py` (CLAUDE.md 1b:
   - `.github/actions/model-server/action.yml` (new)
   - `.github/workflows/llm-council.yml`
   - `.github/workflows/digest.yml`
+  - `backend/tests/workflows/_harness.py`
   - `backend/tests/workflows/test_llm_council_workflow.py`
-  - `backend/tests/workflows/`
+  - `backend/tests/workflows/test_model_server_jobs.py`
+  - `backend/tests/workflows/test_weights_and_model_refs.py`
 - **Acceptance gates:** local - the workflow harness across both files. CI - full suite.
 - **Oracle:** the cache key literal inside the action matches a committed fixture, character for character. **Not a comparison against the daily workflow** - once the key moves into the action there is nothing left in that workflow to compare against, so the old oracle cancels itself.
 - **Decisions:**
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | The full five-step block exists **twice**, in the daily workflow and the council. Six cache blocks exist overall, but the other four share at most one of the five steps. The row is scoped to the two. | Carmack |
-| 2 | Converting the measurement and validation workflows is out of scope and priced in the scope-out table. | Carmack |
-| 3 | A composite action carries no job-level knob, so the leg bound, the matrix and the runner label stay in the workflow. | Carmack |
-| 4 | The cache-hit output is declared explicitly, or the condition on the fetch step silently stops working. | Carmack |
-| 5 | The one-server-per-leg guard must survive by reading the action's step list rather than the job's. It is what stops a second server landing on a 16 GB runner. | Carmack |
-| 6 | Whether a composite step sees the caller's workflow-level environment is verified on a branch before the row is written; if it does not, the port becomes an action input and the single-port test is told where to look. | Carmack |
+| 1 | Measured across all eleven workflow files - one of which ends `.yaml`, not `.yml`, which is how an earlier count missed it: **four** call the shared fetch script, **three** spell the server-start step verbatim, and one runs all five steps under its own names. The row converts the two that run the five steps identically. | Carmack |
+| 2 | The pipeline-tests and validation workflows go to the scope-out table with what each actually shares, because "they share one step" was a false premise rather than a priced decision. | Carmack |
+| 3 | **This row lands before row #15, not after.** Row #15's oracle asks where a step sits relative to the server start; this row moves that step into the action. Written the other way round, the two break each other inside one pull request with no green state between them. | Carmack |
+| 4 | Every test that looks a weights step up **by name** moves with it. Four modules do, including two tables in the shared harness that pin the three step names for three separate jobs. A bare test-directory entry in a file list is not a plan for them. | Carmack |
+| 5 | A composite action carries no job-level knob, so the leg bound, the matrix and the runner label stay in the workflow. | Carmack |
+| 6 | The cache-hit output is declared explicitly, or the condition on the fetch step silently stops working. | Carmack |
+| 7 | The one-server-per-leg guard must survive by reading the action's step list rather than the job's. It is what stops a second server landing on a 16 GB runner. | Carmack |
+| 8 | Whether a composite step sees the caller's workflow-level environment is verified on a branch before the row is written; if it does not, the port becomes an action input and the single-port test is told where to look. | Carmack |
 
 - **Rejected alternatives:**
 
@@ -845,9 +892,10 @@ Both stores join `TARGETS` in `backend/idhazh/telemetry/prune.py` (CLAUDE.md 1b:
 | 2 | The stores under it keep their names - scored pairs, fitted thresholds, the distribution record, the holdout and the archive all move unchanged. | Fowler |
 | 3 | The council workflow names the old paths in its commit step. It moves in this row, or the next run's `git add` aborts under a failing shell and costs the ledgers staged beside it. | Carmack |
 | 4 | Two utilities build their paths from the directory constants and follow the rename for free; the ones that spell the path move by hand. The attribute file pins the holdout by exact path and its rule goes dead unless it moves. | Fowler |
-| 5 | `git mv` per file, so history follows and the move reviews as a rename. | Fowler |
-| 6 | A rename of the tree, not a rewrite of its rows. | Fowler |
-| 7 | ESCALATE: this moves committed data. The path map is signed off before any file moves. | Section 6 |
+| 5 | **`STORY_SIMILARITY_DIRNAME` is deleted, not left holding the new string.** Two constants carrying one value re-opens the drift the segment enum's rule exists to close, and the prune vocabulary is built by joining those constants - so the next store under this judge could be spelled either way. Every reader repoints at the judge constant and the prune words move with it. | Fowler |
+| 6 | `git mv` per file, so history follows and the move reviews as a rename. | Fowler |
+| 7 | A rename of the tree, not a rewrite of its rows. | Fowler |
+| 8 | ESCALATE: this moves committed data. The path map is signed off before any file moves. | Section 6 |
 
 - **Rejected alternatives:**
 
@@ -867,6 +915,8 @@ Both stores join `TARGETS` in `backend/idhazh/telemetry/prune.py` (CLAUDE.md 1b:
   - `backend/idhazh/cli.py`
   - `backend/idhazh/ledger.py`
   - `backend/idhazh/contracts/knobs/placement.py`
+  - `frontend/src/lib/server/similarity-holdout.ts`
+  - `frontend/src/routes/console/judgement/+page.server.ts`
   - `docs/architecture/publishing/autotune-content-similarity.md`
   - `docs/how-to/label-the-similarity-holdout.md`
   - `docs/concepts/growing-reads.md`
@@ -879,9 +929,9 @@ Both stores join `TARGETS` in `backend/idhazh/telemetry/prune.py` (CLAUDE.md 1b:
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | It scores the line, not the judge. A judge-against-holdout measurement is a different row and a different budget, and it is named in the scope-out table. | Andre |
-| 2 | A shipped implementation already does this in the console's server layer. This row commits the counts so the reading survives the page, and the two must agree; the console reads the committed row rather than recomputing beside it. | Andre |
+| 2 | **A shipped implementation already does this in the console's server layer**, reading the holdout, resolving each row against the two days the row itself names, recomputing the score and rendering it against the applied line. This row commits the counts so the reading survives the page, and the console then reads the committed row instead of recomputing beside it - two answers to one question is what the commit exists to stop. On a date with no row the console degrades to saying the line has not been scored, never to an error. | Andre |
 | 3 | The read is bounded by the holdout file, whose rows name their own two days. The existing sheet tool walks the archive only because it resolves against a different date, and this row must not copy it. | Guardrail #12 |
-| 4 | ESCALATE: below the resolved-pairs floor the four cells are written null rather than zero, and the row says why. That is the same rule the leg row applies to its rates. | Owner, 2026-09-20 |
+| 4 | ESCALATE: the resolved-pairs floor is **half the labelled population**, a constant beside the frozen two-story maximum rather than a config knob, because it is a property of what makes the reading meaningful and not something an operator should tune down to make a red row go green. Below it the four cells are written null rather than zero, and the row says why. Retention deletes days the holdout still names, so this floor is reached by the calendar, not by a bug. | Owner, 2026-09-20 |
 | 5 | The frozen two-story maximum constant in the knobs module is reconciled with this row or retired, so one number does not have two sources. | Andre |
 | 6 | The labels interleave - one story at 0.9406, two stories at 0.9407, one story at 0.9409 - so no single threshold separates the populations. This row measures where the line stands; it does not assert a perfect line exists. | Andre |
 | 7 | The verb is `score-line-holdout`. A person types it; nothing in the daily pipeline calls it. | Carmack |
@@ -900,17 +950,17 @@ Both stores join `TARGETS` in `backend/idhazh/telemetry/prune.py` (CLAUDE.md 1b:
 
 ### Row #19 - The plan pointers
 
-- **Scope:** the two indexes that list live plans learn this one exists, and the closed rows' findings reach the pages that own them.
+- **Scope:** the index that lists live plans learns this one exists, and the closed rows' findings reach the pages that own them.
 - **Files touched:**
   - `AGENTS.md`
-  - `TODO/STATUS.md`
   - `docs/reference/agent-notes/`
   - `docs/architecture/publishing/autotune-content-similarity.md`
 - **Acceptance gates:** local - `doc_load.py --changed`. CI - full suite. No application suite: documentation-only closure.
-- **Oracle:** every live plan file under `TODO/` is named by both indexes, and every index entry names a file that exists. It cannot settle whether the descriptions are accurate.
+- **Oracle:** every live plan file under `TODO/` is named by the agent index, and every index entry names a file that exists. It cannot settle whether the descriptions are accurate.
 - **Decisions:**
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | A plan absent from the indexes is invisible to the next agent, and every landed plan in this repository has carried its pointer. | Fowler |
-| 2 | The findings that outlive the plan go to the living doc that owns them, not into the plan-doc's own history. | Guardrail #4 |
+| 1 | A plan absent from the index is invisible to the next agent. | Fowler |
+| 2 | **The plan queue page is not touched.** A continuous-integration gate refuses any pull request that edits it and tells the author to restore it from the trunk; one job writes it after merge, and it discovers plans structurally - it already names this plan. Editing it here would fail the branch for no gain. | Fowler |
+| 3 | The findings that outlive the plan go to the living doc that owns them, not into the plan-doc's own history. | Guardrail #4 |
