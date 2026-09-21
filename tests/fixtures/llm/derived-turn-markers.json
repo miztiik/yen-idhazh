@@ -18,6 +18,15 @@
   },
   "endpoint": "POST /apply-template, three times: two turns, two turns asking for reasoning, and a conversation with a reply already in it",
   "entries": {
+    "gemma-4-e4b-qat-no-draft.json": {
+      "history": "<|turn>user\nAnswer with the one word this shape allows.<turn|>\n<|turn>model\nThe earlier reply.<turn|>\n<|turn>user\nAnswer once more.<turn|>\n<|turn>model\n",
+      "model_id": "gemma-4-e4b-it-qat-ud-q4-k-xl",
+      "plain": "<|turn>system\nYou are a probe.<turn|>\n<|turn>user\nAnswer with the one word this shape allows.<turn|>\n<|turn>model\n",
+      "prompt_today": "<|turn>system\nYou are a probe.<turn|>\n<|turn>user\nAnswer with the one word this shape allows.<turn|>\n<|turn>model\n<|channel>thought\n",
+      "thinking": "<|turn>system\nYou are a probe.<turn|>\n<|turn>user\nAnswer with the one word this shape allows.<turn|>\n<|turn>model\n<|channel>thought\n",
+      "thinking_close": "<channel|>",
+      "thinking_kwarg": "enable_thinking"
+    },
     "gemma-4-e4b-qat.json": {
       "history": "<|turn>user\nAnswer with the one word this shape allows.<turn|>\n<|turn>model\nThe earlier reply.<turn|>\n<|turn>user\nAnswer once more.<turn|>\n<|turn>model\n",
       "model_id": "gemma-4-e4b-it-qat-ud-q4-k-xl",
