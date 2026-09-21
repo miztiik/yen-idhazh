@@ -499,6 +499,11 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21",
+            change="console.context_high_percentile and console.context_cut_off_reason, additive.",
+            why="The context panel draws two ends a run and names what a cut-off looks like.",
+        ),
+        ChangelogEntry(
             version="2026-09-20T15:00",
             change="console.panel_groups.machine drops two Hardware panels.",
             why="A container of unrelated figures has no question to be titled with.",
@@ -512,11 +517,6 @@ class AppearanceConfig(Contract):
             version="2026-09-20T13:00",
             change="Four console thresholds, additive: lost processor time and model disk reads.",
             why="Whether a day is marked or named is a setting, not a literal in a chart.",
-        ),
-        ChangelogEntry(
-            version="2026-09-20T12:00",
-            change="console.panel_groups, additive, default three groups on Hardware.",
-            why="Panel order and grouping were markup order, which no config could move.",
         ),
         ChangelogEntry(
             version="2026-08-29",
