@@ -35,19 +35,13 @@ which this module may not import (CLAUDE.md section 4).
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Literal, Self
+from typing import Any, ClassVar, Self
 
 from pydantic import Field, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, RunId
 from idhazh.contracts.judge_call import JudgeConfigStamp
-from idhazh.contracts.story_similarity_pair import JudgeModelId
-
-#: The slug column of this judge's own rows, closed to the one member that can
-#: ever write them. A closed set is honest here in the way it could not be on the
-#: shared stamp: that stamp is inherited by judges nobody has written yet, and
-#: this store holds one judge's readings and no other's.
-ContentSimilarityJudgeId = Literal["content-similarity-judge"]
+from idhazh.contracts.story_similarity_pair import ContentSimilarityJudgeId, JudgeModelId
 
 
 class ContentSimilarityJudgeMetrics(JudgeConfigStamp, Contract):

@@ -13,18 +13,19 @@ section 0a).
 The row is persisted twice on the way through: `backend/var/judge/<date>/draw.csv`
 holds the day's draw before a judging leg reads it, and
 `state/story-similarity/scored-pairs/<YYYY>/<MM>/<DD>.csv` holds what came back.
-One shape for both, because the second file is the first one with four more
+One shape for both, because the second file is the first one with the judge's
 columns filled in.
 """
 
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, ClassVar, Final, Literal, Self
+from typing import Annotated, Any, ClassVar, Final, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StringConstraints, model_validator
 
 from idhazh.contracts.base import (
+    PRINTABLE_LINE_PATTERN,
     ChangelogEntry,
     Contract,
     DateStamp,
@@ -71,6 +72,23 @@ JudgeModelId = Literal[
     "gemma-4-e4b-it-qat-ud-q4-k-xl",
 ]
 
+#: The slug this judge files its readings under. A closed set is honest here in
+#: the way it could not be on the shared call stamp: that stamp is inherited by
+#: judges nobody has written yet, and every row that carries this one is written
+#: by this judge and no other. It sits beside the two Literals above because all
+#: three are this judge's own vocabulary and three contracts already read that
+#: vocabulary off this module; declared on any of them instead, this row would
+#: have to import a module that imports this one back.
+ContentSimilarityJudgeId = Literal["content-similarity-judge"]
+
+#: A first-token window as one cell: printable ASCII, one line, at most 1024
+#: characters. A character class rather than an identity, so a writer folds the
+#: decoder's own tokens into it with `base.fit_field` and a token no ASCII
+#: spelling covers costs a `?` rather than the row.
+FirstTokenWindow = Annotated[
+    str, StringConstraints(pattern=PRINTABLE_LINE_PATTERN, max_length=1024)
+]
+
 
 def scorer_stamp(
     *,
@@ -113,6 +131,11 @@ class StorySimilarityPair(Contract):
 
     __schema_stem__: ClassVar[str] = "story-similarity-pair"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-21",
+            change="Added the judge-call stamp columns and the judging run id, and keyed on it.",
+            why="A verdict named no sampler, and a re-judge collided with the row it replaced",
+        ),
         ChangelogEntry(
             version="2026-09-18",
             change="Initial shape: one pair, two readings, and the scorer and judge behind them.",
@@ -262,6 +285,76 @@ class StorySimilarityPair(Contract):
             "is readable off the day file; the leg bound is sized off its own run instead."
         ),
     )
+    # Seven columns at the TAIL, declared here rather than inherited from
+    # `judge_call.JudgeConfigStamp`. Pydantic collects a base class's fields
+    # first, so inheriting would put them at the HEAD of the header and every
+    # committed row would be read one cell out of place.
+    judge_id: ContentSimilarityJudgeId = Field(
+        default="content-similarity-judge",
+        description=(
+            "Which instrument produced the verdict on this row. One member, because one "
+            "judge writes this store and no other - so the column is narrowed here, where "
+            "a closed set can be closed honestly."
+        ),
+    )
+    judge_temperature: float | None = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "The sampler temperature both calls ran at, as the number it was set to. An "
+            "operator reading a row needs the value, not a digest of it."
+        ),
+    )
+    decode_digest: Sha256 | None = Field(
+        default=None,
+        description=(
+            "sha256 of the canonical JSON of every key the caller posted that is not "
+            "excluded. Taken from the payload rather than from config, because a digest "
+            "built off config cannot see a payload-builder defect. The prompt is excluded "
+            "because it differs every row and would make this a pair id; the grammar and "
+            "the model reference are excluded because each has a column here already."
+        ),
+    )
+    grammar_applied: bool | None = Field(
+        default=None,
+        description=(
+            "Whether BOTH calls of this pair opened inside the grammar. The grain here is "
+            "a pair, so one call that came back outside it makes this false. Empty until a "
+            "judge has read the pair: a pair nothing decoded is a different fact from a "
+            "decode the grammar did not hold."
+        ),
+    )
+    first_token_probabilities: FirstTokenWindow | None = Field(
+        default=None,
+        description=(
+            "What the decoder said it could have written at the first generated position "
+            "of the FILE-ORDER call, named so because a pair makes two calls and a "
+            "singular column must say which. `first_token_margin` is the gap this "
+            "window's top two leave, so the window is what lets that number be re-derived "
+            "rather than trusted."
+        ),
+    )
+    thinking_spans: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "How many reasoning spans the file-order call decoded before its answer - 0 "
+            "for a cold answer, 1 under a thinking envelope. A column of its own because "
+            "`decode_digest` cannot see the envelope: the only posted key a thinking "
+            "envelope moves is the prompt, and the prompt is excluded. Without this cell a "
+            "margin taken after reasoning and one taken cold are one population."
+        ),
+    )
+    judged_by_run_id: RunId | None = Field(
+        default=None,
+        description=(
+            "The run that READ this pair, which `run_id` beside it does not say: that one "
+            "names the digest run that published the day, so two judging runs over one "
+            "date write the identical string there. It is in the settlement key, so a "
+            "re-judged pair lands beside the row it replaces instead of being dropped as a "
+            "repeat. Empty on every row written before this column existed."
+        ),
+    )
 
     @model_validator(mode="after")
     def _the_pair_is_ordered_and_named_by_its_own_contents(self) -> Self:
@@ -359,4 +452,11 @@ class StorySimilarityPair(Contract):
                 payload[name] = None
         for name in ("headline", "usable"):
             payload[name] = row.get(name, "") == "True"
+        # By name, never by a predicate over "any default that is not None". A
+        # required field has no default at all, so such a predicate would also
+        # drop `version` - and the before-validator would then refill it with
+        # this build's own stamp, erasing the one cell that says which rows
+        # predate the widening.
+        if payload["judge_id"] == "":
+            del payload["judge_id"]
         return cls.model_validate(payload)

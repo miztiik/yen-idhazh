@@ -151,6 +151,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_two_runs",
         "test_validation",
         "test_visual_pruning",
+        "test_widen_ledger_header",
         "test_work_order",
     }
 )

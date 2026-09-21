@@ -48,6 +48,7 @@ def a_row(
     usable: bool = True,
     pair_key: str | None = None,
     run_id: str = f"{DATE}-1",
+    judged_by_run_id: str | None = None,
 ) -> StorySimilarityPair:
     """One judged pair, re-cast from the committed contract fixture.
 
@@ -65,6 +66,7 @@ def a_row(
             "version": StorySimilarityPair.schema_version(),
             "date": DATE,
             "run_id": run_id,
+            "judged_by_run_id": judged_by_run_id,
             "composite_score": score,
             "cosine": score,
             "verdict": verdict.value,
@@ -178,3 +180,29 @@ def test_one_pair_judged_twice_is_counted_once_at_the_newer_run() -> None:
     folded = fold.fold_day(record, rows, date=DATE)
     slot = folded.slots[fold.slot_index(0.55, record=record) or 0]
     assert (slot.same_count, slot.different_count) == (0, 1)
+
+
+def test_a_stamped_re_judge_beats_the_unstamped_rows_it_replaces() -> None:
+    """Three rows, because two of them are what the old ordering decided between.
+
+    `judged_by_run_id` is empty on every row written before the column existed,
+    and an empty stamp sorts lowest - so a re-judge wins whichever digest run it
+    is filed under. The two unstamped rows are still ordered by `run_id`, which
+    is what this did before the column existed: drop that half of the pair and
+    they would compare equal and the first one seen would win.
+    """
+    rows = [
+        a_row(score=0.55, verdict=SameStoryVerdict.YES, run_id=f"{DATE}-2"),
+        a_row(
+            score=0.55,
+            verdict=SameStoryVerdict.NO,
+            run_id=f"{DATE}-1",
+            judged_by_run_id=f"{DATE}-7",
+        ),
+        a_row(score=0.55, verdict=SameStoryVerdict.UNCLEAR, run_id=f"{DATE}-1"),
+    ]
+
+    kept = fold.one_row_a_pair(rows)
+
+    assert [row.verdict for row in kept] == [SameStoryVerdict.NO]
+    assert [row.run_id for row in fold.one_row_a_pair(rows[::2])] == [f"{DATE}-2"]
