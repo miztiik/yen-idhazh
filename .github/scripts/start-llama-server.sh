@@ -43,9 +43,9 @@ printf 'ulimit -l before (KiB, or unlimited): '
 ulimit -l 2>&1 || echo "::warning::Could not read the current locked-memory limit."
 printf 'ulimit -Hl (KiB, or unlimited): '
 ulimit -Hl 2>&1 || echo "::warning::Could not read the hard locked-memory limit."
-echo "Running: ulimit -l unlimited"
-if ulimit -l unlimited 2>&1; then
-	echo "Locked-memory limit set to unlimited."
+echo "Running: sudo prlimit --memlock=unlimited --pid $$"
+if sudo prlimit --memlock=unlimited --pid "$$"; then
+	echo "Locked-memory limit raised."
 else
 	echo "::warning::Could not raise the locked-memory limit; model memory may remain unlocked."
 fi
