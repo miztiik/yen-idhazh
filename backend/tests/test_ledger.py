@@ -193,7 +193,7 @@ def span_fold_row(*, on: str = DATE, shard: int = 0, total_ms: int = 16) -> Span
     )
 
 
-def pair_row(*, on: str = DATE) -> StorySimilarityPair:
+def pair_row(*, on: str = DATE, judged_by_run_id: str | None = None) -> StorySimilarityPair:
     """One judged pair, read from the committed contract fixture and re-dated.
 
     Read inside the helper rather than at module scope, so a fixture that stops
@@ -211,6 +211,7 @@ def pair_row(*, on: str = DATE) -> StorySimilarityPair:
             "version": StorySimilarityPair.schema_version(),
             "date": on,
             "run_id": f"{on}-1",
+            "judged_by_run_id": judged_by_run_id,
         }
     )
 
@@ -2039,6 +2040,30 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     assert [
         (target.path.relative_to(tmp_path).as_posix(), target.key) for target in this_run
     ] == named
+
+
+def test_a_re_judged_pair_keeps_its_row_and_a_repeated_attempt_does_not(
+    tmp_path: Path,
+) -> None:
+    """`judged_by_run_id` is in the key because `run_id` cannot tell these two apart.
+
+    `run_id` on this row names the DIGEST run that published the day, so two
+    judging runs over one date write the identical string. Under a key without
+    the judging stamp the settlement would keep the row already in the file and
+    drop every fresh verdict, while the record counted the fresh ones - two
+    descriptions of one day with nothing able to tell them apart. A second
+    attempt at ONE judging run is still one row: both attempts read the same
+    pair the same way.
+    """
+    first = pair_row()
+    again = pair_row(judged_by_run_id=f"{DATE}-7")
+
+    assert ledger.append_story_similarity_pairs(tmp_path, DATE, [first]) == 1
+    assert ledger.append_story_similarity_pairs(tmp_path, DATE, [again]) == 1
+    assert ledger.append_story_similarity_pairs(tmp_path, DATE, [again]) == 0
+
+    kept = ledger.load_story_similarity_pairs(tmp_path, DATE)
+    assert [row.judged_by_run_id for row in kept] == [None, f"{DATE}-7"]
 
 
 def test_a_repeated_fingerprint_is_settled_inside_the_day_that_holds_it(

@@ -14,11 +14,13 @@ section 13).
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 from typing import Any, get_args
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
 from idhazh.contracts.base import derive_text_digest, derive_url_key
@@ -49,6 +51,28 @@ def keys_of(left: str, right: str) -> tuple[str, str, str]:
     """The two address keys in stored order, and the identity they digest to."""
     low, high = sorted((derive_url_key(left), derive_url_key(right)))
     return low, high, derive_text_digest(low + high)
+
+
+def _narrow_file() -> list[list[str]]:
+    """The committed pre-widening day file, read inside whichever test asked for it.
+
+    A fixture rather than the store itself: the archive can no longer produce a
+    narrow header, and a test that walked `state/` would go red the day somebody
+    re-filed it (`CLAUDE.md` section 13).
+    """
+    path = FIXTURES_DIR / "state" / "scored-pairs-before-the-stamp.csv"
+    return list(csv.reader(io.StringIO(read_text(path))))
+
+
+def narrow_header() -> tuple[str, ...]:
+    """The columns this store carried before the judge-call stamp was appended."""
+    return tuple(_narrow_file()[0])
+
+
+def a_narrow_row() -> dict[str, str]:
+    """One judged row as the store held it before the widening, cell by cell."""
+    header, first = _narrow_file()[0], _narrow_file()[1]
+    return dict(zip(header, first, strict=True))
 
 
 def a_pair(**overrides: Any) -> dict[str, Any]:
@@ -237,6 +261,80 @@ def test_a_verdict_with_no_judge_named_is_refused() -> None:
         "verdict_swapped": SameStoryVerdict.UNCLEAR,
     }
     assert StorySimilarityPair.model_validate(both_unclear).usable is True
+
+
+def test_the_judge_call_stamp_sits_at_the_tail_of_the_pair_header() -> None:
+    """A column inserted in the middle re-reads every committed row one cell out.
+
+    This is why the seven are declared in the row's own body rather than
+    inherited from `judge_call.JudgeConfigStamp`: pydantic collects a base
+    class's fields first, so inheriting would put them at the HEAD. The header
+    the store carried before the widening is committed as a fixture, so this
+    asserts the widening was additive rather than counting seven names.
+    """
+    columns = StorySimilarityPair.csv_columns()
+    narrow = narrow_header()
+
+    assert columns[: len(narrow)] == narrow
+    assert columns[len(narrow) :] == (
+        "judge_id",
+        "judge_temperature",
+        "decode_digest",
+        "grammar_applied",
+        "first_token_probabilities",
+        "thinking_spans",
+        "judged_by_run_id",
+    )
+
+
+def test_a_row_written_before_the_stamp_reads_back_with_its_own_version() -> None:
+    """The empty `judge_id` cell falls back to the default and `version` does not move.
+
+    `judge_id` is the one appended column whose default is not `None`, so the
+    reader names it rather than reaching for a predicate over non-`None`
+    defaults - a required field has no default at all, and such a predicate
+    would drop `version` too. The before-validator would then refill it with
+    this build's stamp, erasing the one cell that says which rows predate the
+    widening.
+    """
+    narrow = StorySimilarityPair.from_csv_row(a_narrow_row())
+
+    assert narrow.judge_id == "content-similarity-judge"
+    assert narrow.version == "2026-09-18" != StorySimilarityPair.schema_version()
+    assert narrow.judged_by_run_id is None
+    assert narrow.grammar_applied is None
+    assert narrow.first_token_probabilities is None
+
+
+def test_a_widened_row_round_trips_through_the_csv_cells() -> None:
+    """Every appended column has to survive the render and the read, or the store loses it."""
+    stamped = StorySimilarityPair.model_validate(
+        a_pair(
+            judge_temperature=0.0,
+            decode_digest=derive_text_digest("a payload"),
+            grammar_applied=True,
+            first_token_probabilities='[{"token":" YES","probability":0.81}]',
+            thinking_spans=0,
+            judged_by_run_id=f"{DATE}-7",
+        )
+    )
+
+    read_back = StorySimilarityPair.from_csv_row(stamped.csv_row())
+
+    assert read_back == stamped
+    assert stamped.csv_row()["grammar_applied"] == "True"
+    assert stamped.csv_row()["thinking_spans"] == "0"
+
+
+def test_a_pair_row_refuses_a_first_token_window_that_would_split_the_row() -> None:
+    """The window is the first model-written value this store commits.
+
+    It lands as a quoted CSV value and never as a key, a name or a path
+    (Guardrail #11). What it may not hold is a newline, which splits the row for
+    any reader that takes a day file a line at a time.
+    """
+    with pytest.raises(ValidationError, match="first_token_probabilities"):
+        StorySimilarityPair.model_validate(a_pair(first_token_probabilities="YES\nNO"))
 
 
 def test_a_record_whose_slot_count_disagrees_with_its_band_is_refused() -> None:

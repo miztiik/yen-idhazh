@@ -92,20 +92,37 @@ def slot_index(score: float, *, record: StorySimilarityDistribution) -> int | No
     return min(index, len(record.slots) - 1)
 
 
+def _read_at(row: StorySimilarityPair) -> tuple[str, str]:
+    """How recently a row was judged, as a value two rows can be compared on.
+
+    `judged_by_run_id` first, because that is the run that READ the pair.
+    `run_id` names the digest run that published the day, so two judging runs
+    over one date write the identical string there and it can settle nothing on
+    its own.
+
+    An empty stamp sorts lowest, so a stamped re-judge beats the unstamped row
+    it replaces. `run_id` stays in the pair rather than being dropped: without
+    it two unstamped rows from different runs would compare equal and the first
+    one seen would win, which is neither file order nor what this did before the
+    column existed.
+    """
+    return (row.judged_by_run_id or "", row.run_id)
+
+
 def one_row_a_pair(rows: Sequence[StorySimilarityPair]) -> list[StorySimilarityPair]:
-    """At most one row per `pair_key`, the newest `run_id` winning.
+    """At most one row per `pair_key`, the most recently judged one winning.
 
     The day file can hold one pair twice: once from the run that judged it and
     once from a later run that judged it again against a rebuilt day. Both rows
-    stay in the file, because `run_id` says they are two facts. The record counts
-    the pair once, and it counts the newest run, because that run read the day as
-    it stands. Counting both would double one pair's weight in its slot with
-    nothing downstream able to see it.
+    stay in the file, because the two run stamps say they are two facts. The
+    record counts the pair once, and it counts the latest reading, because that
+    run read the day as it stands. Counting both would double one pair's weight
+    in its slot with nothing downstream able to see it.
     """
     newest: dict[str, StorySimilarityPair] = {}
     for row in rows:
         held = newest.get(row.pair_key)
-        if held is None or row.run_id > held.run_id:
+        if held is None or _read_at(row) > _read_at(held):
             newest[row.pair_key] = row
     return [newest[key] for key in sorted(newest)]
 
