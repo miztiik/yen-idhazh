@@ -1,6 +1,6 @@
 # Label the Similarity Holdout
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 
 Read pairs of articles the merge line has to decide between, and record whether
 each pair is one news event or two. The marks land in
@@ -188,6 +188,39 @@ state/content-similarity-judge/holdout-pairs.csv, 0 labels matched no drawn pair
 A non-zero tail count means a `pair_key` in a batch file is not in this draw.
 Widen `--draw-root` rather than editing the batch.
 
+## Score the line against them
+
+```powershell
+python -m idhazh score-merge-line-holdout --date 2026-09-21 `
+  --run-id 2026-09-21-35534060762 --labeller claude-opus-4.6
+```
+
+It counts what the merge line in force does to every marked pair and writes one
+row into
+`state/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>.csv`:
+the line, the four cells, how many pairs it could not score, and how many marks
+say two stories. `--labeller` is the same name the harvest was given, and
+`--run-id` is `<date>-<a number>` - the row has to say which run took the
+reading.
+
+**Nothing schedules it.** The marked file changes when somebody labels more
+pairs rather than when a day publishes, so no workflow runs this verb and no job
+stages what it writes. Commit the row yourself, the way you commit the marks.
+
+**It writes nothing when fewer than half the marks can be scored.** Retention
+deletes published days the marked file still names, and four cells counted over
+a handful of surviving pairs read as a line that got almost everything right.
+The verb exits 1 and prints how many it resolved.
+
+| What you see | What happened |
+| --- | --- |
+| `resolved N of M marked pairs, and a reading means nothing below K` | Retention has taken the days most marks name. Nothing to fix in the file; the comparison has aged out. |
+| `labeller=X appears in none of the N marks' notes` | The name does not match what the harvest wrote. Check `--labeller`. |
+| `the highest pair marked as two stories now scores A and HOLDOUT_TWO_STORY_MAX declares B` | New marks, or new weights, have moved the hardest pair. Retake the constant in `backend/idhazh/contracts/knobs/placement.py`. |
+
+`/console/judgement/` prints the newest row under the holdout panel, and says
+the line has not been scored where there is none.
+
 ## The mark spelling
 
 The harvest writes `true` and `false`. The reader accepts any case and any
@@ -205,10 +238,12 @@ two-story pairs and a floor that refuses every merge without erroring.
 
 ## Two things a mark is not
 
-**It is not a verdict the fit reads.** Nothing in the pipeline consumes this
-file. The console's holdout panel draws it, scores each marked pair against the
-published days it names, and reports the gap between the highest two-story mark
-and the line in force ([../concepts/console-design.md](../concepts/console-design.md#the-holdout-margin-is-drawn-at-the-scale-of-the-margin-not-of-the-score)).
+**It is not a verdict the fit reads.** Nothing that moves the line consumes this
+file. One verb reads it - `score-merge-line-holdout`, above, which reports how
+the line stands against the marks and changes nothing. The console's holdout
+panel draws the marks, scores each one against the published days it names, and
+reports the gap between the highest two-story mark and the line in force
+([../concepts/console-design.md](../concepts/console-design.md#the-holdout-margin-is-drawn-at-the-scale-of-the-margin-not-of-the-score)).
 
 **It is not a rate over a day.** The sheet is band-stratified by construction, so
 a share taken off it describes the sheet. The committed 200 are 50 well-below,

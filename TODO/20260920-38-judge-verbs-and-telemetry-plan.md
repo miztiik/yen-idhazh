@@ -187,7 +187,7 @@ After those three land, three groups open at once and the file lists must be re-
 | 17 | The council runs the tenant and files its own outcome row | 5, 15a, 24 | O | DONE | - | 1013 | worker |
 | 25 | The config check moves to the tenant that owns the number | 9, 24 | P | DONE | - | 1012 | worker |
 | 18 | The store groups under the judge that fills it | 17 | Q | DONE | - | 1015 | worker |
-| 19 | Where the content-similarity judge's merge line stands against its holdout | 7, 18 | R | PENDING | - | - | - |
+| 19 | Where the content-similarity judge's merge line stands against its holdout | 7, 18 | R | DONE | - | 1026 | worker |
 | 21a | The council asks every tenant what it is behind on | 15a, 17, 24 | S | DONE | - | 1019 | worker |
 | 21b | The content-similarity judge answers which nights it is behind on | 8, 11b, 12, 15b, 21a | T | PENDING | - | - | - |
 | 22 | The guard that stops a shard committing is renamed and re-reasoned | 16, 21a | U | DONE | - | 1023 | worker |
