@@ -145,7 +145,7 @@ five-column file and from a four-column one - measured 2026-08-26 over two
 fixtures of eleven real rows in
 `backend/tests/test_ledger.py::test_load_published_answers_the_same_from_either_header`.
 The check that does care is `require_matching_header`, and it is called from
-`_append` and from nothing on the read path: a run that tried to append a
+`extend_ledger_file` and from nothing on the read path: a run that tried to append a
 four-column row onto a five-column file raises `Migrate the ledger before
 appending to it`. So the shape change and the file rewrite are one atomic act,
 and there was no read-side transition to stage.

@@ -298,6 +298,24 @@ jobs:
           path: backend/var/judge/${{ needs.draw.outputs.date }}/verdicts/${{ matrix.shard }}.csv
           retention-days: 1
 
+      # What the hosted work measured about its own instrument, on its own way
+      # out. An artifact rather than a commit, and the reason is that a commit
+      # would not reach the reader: every checkout here names no ref, so each
+      # job is pinned to the commit the run was triggered at and a row pushed at
+      # 22:40 is invisible to a job checked out at 22:00.
+      #
+      # `always()`, because a unit that stopped on its own clock still measured
+      # what it reached, and that is the reading the night is judged on. Nothing
+      # writes this directory until a tenant is registered, so an empty upload is
+      # the no-tenant case rather than a failure.
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: council-metrics-${{ matrix.shard }}
+          path: backend/var/council/${{ needs.draw.outputs.date }}/metrics
+          if-no-files-found: warn
+          retention-days: 1
+
   fold:
     needs: [draw, judge]
     # A leg that died still leaves the others' rows worth keeping, and the day
@@ -322,6 +340,15 @@ jobs:
           pattern: judge-verdicts-*
           merge-multiple: true
           path: backend/var/judge/${{ needs.draw.outputs.date }}/verdicts
+
+      # Every unit's metrics, merged into one tree. Each upload carries the
+      # tenant's own slug as a directory level, so two tenants' shard 0 land
+      # beside each other rather than on top of each other.
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: council-metrics-*
+          merge-multiple: true
+          path: backend/var/council/${{ needs.draw.outputs.date }}/metrics
 
       # One process appends every leg's rows into one day file, so two writers
       # never share a path: no merge driver to trust, no union stacking to

@@ -510,7 +510,7 @@ def _published_rows(day: DigestDay, plan: RunPlan) -> list[PublishedRow]:
     joined here rather than widening the published payload with anything the
     skip read does not open.
 
-    That join is also the filter, and it is load-bearing: `ledger._append`
+    That join is also the filter, and it is load-bearing: `ledger.extend_ledger_file`
     writes every row it is handed, so nothing downstream would collapse a
     repeat. A day carries yesterday's items forward, and re-recording them would
     move their published date every morning. They do not survive the join

@@ -111,7 +111,7 @@ def rebuild(root: Path, date: str) -> None:
     )
     _write_json(day_dir / "run.json", {"date": date, "runs": runs})
 
-    # Two of the three ledgers append blind, as `ledger._append` does: a row is
+    # Two of the three ledgers append blind, as `ledger.extend_ledger_file` does: a row is
     # a fact about a run, and a run that runs twice records twice. The published
     # one and the item-health one are filed under the day they name, as
     # `ledger.append_published` and `ledger.append_item_health` do.
