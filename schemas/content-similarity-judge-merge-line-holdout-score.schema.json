@@ -1,0 +1,121 @@
+{
+  "$id": "content-similarity-judge-merge-line-holdout-score.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the line in force, its four cells, and what it was made of.",
+      "version": "2026-09-21",
+      "why": "Nothing recorded how the line the pipeline applies stands against the labels."
+    }
+  ],
+  "description": "One run's reading of the applied merge line against the hand-marked holdout.",
+  "properties": {
+    "apart_and_one_story": {
+      "description": "The line left one story in two pieces. The reader sees it twice and can dismiss the second, which is why this is the cheaper of the two mistakes.",
+      "minimum": 0,
+      "title": "Apart And One Story",
+      "type": "integer"
+    },
+    "apart_and_two_stories": {
+      "description": "The line left the pair apart and the label agrees they are two.",
+      "minimum": 0,
+      "title": "Apart And Two Stories",
+      "type": "integer"
+    },
+    "applied_line": {
+      "description": "The merge line in force when these cells were counted. On the row because two rows counted under two lines answer two different questions.",
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Applied Line",
+      "type": "number"
+    },
+    "cosine_weight": {
+      "description": "What the cosine was worth in the score the line was applied to. On the row because a later reader comparing two runs has to know both were asked the same question.",
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Cosine Weight",
+      "type": "number"
+    },
+    "date": {
+      "description": "The day the line was scored.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "key_point_weight": {
+      "description": "What the key-point term was worth. Same reason as the cosine weight.",
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Key Point Weight",
+      "type": "number"
+    },
+    "labelled_two_story_pairs": {
+      "description": "How many labelled pairs are marked two stories - the population the false-merge cell is drawn from. On the row so that no rate is ever read without the denominator it came from.",
+      "minimum": 0,
+      "title": "Labelled Two Story Pairs",
+      "type": "integer"
+    },
+    "labeller": {
+      "description": "Who marked the holdout. Free text rather than a model this repository ships, because the committed labels name a model from outside the registry and a narrower column would have to refuse the truth.",
+      "maxLength": 64,
+      "pattern": "^[ -~]+$",
+      "title": "Labeller",
+      "type": "string"
+    },
+    "merged_and_one_story": {
+      "description": "The line joined the pair and the label agrees it is one story.",
+      "minimum": 0,
+      "title": "Merged And One Story",
+      "type": "integer"
+    },
+    "merged_and_two_stories": {
+      "description": "The line joined two stories that the label says are not one. The invisible direction: the reader never learns the second story existed.",
+      "minimum": 0,
+      "title": "Merged And Two Stories",
+      "type": "integer"
+    },
+    "pairs_unresolved": {
+      "description": "Labelled pairs neither cell could be counted for, because retention has deleted one of the two days they name. Reported rather than dropped, so a shrinking comparison is visible instead of silent.",
+      "minimum": 0,
+      "title": "Pairs Unresolved",
+      "type": "integer"
+    },
+    "run_id": {
+      "description": "The run that scored it.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "scorer_model": {
+      "const": "all-minilm-l6-v2-quantized",
+      "description": "Which encoder produced the cosines these cells were counted under.",
+      "title": "Scorer Model",
+      "type": "string"
+    },
+    "version": {
+      "default": "2026-09-21",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "date",
+    "run_id",
+    "applied_line",
+    "labeller",
+    "merged_and_one_story",
+    "merged_and_two_stories",
+    "apart_and_one_story",
+    "apart_and_two_stories",
+    "pairs_unresolved",
+    "labelled_two_story_pairs",
+    "scorer_model",
+    "cosine_weight",
+    "key_point_weight"
+  ],
+  "title": "MergeLineHoldoutScore",
+  "type": "object",
+  "version": "2026-09-21"
+}

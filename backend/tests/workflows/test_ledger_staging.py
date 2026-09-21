@@ -89,6 +89,12 @@ STORE_MODULES: Final = (ledger, traces)
 # a commit step may be staging for nothing.
 STORES_NOTHING_FILLS_YET: Final[Mapping[str, str]] = MappingProxyType(
     {
+        "state/content-similarity-judge/merge-line-holdout-scores": (
+            "the step that scores the applied merge line against the hand-marked holdout"
+        ),
+        "state/content-similarity-judge/metrics": (
+            "the content-similarity judge, on its way out of each unit of work it ran"
+        ),
         "state/llm-council/shard-outcomes": (
             "the council, on its way out of each unit of work it ran"
         ),

@@ -282,6 +282,8 @@ primitive pointed at the repository is the one accident nobody can undo.
 
 | `--target` | Bounded on a schedule by |
 | --- | --- |
+| `content-similarity-judge-merge-line-holdout-scores` | nothing today - one row a day |
+| `content-similarity-judge-metrics` | nothing today - one row per shard per night, and a night is a handful of shards |
 | `counterfactual-scores` | nothing today |
 | `feed-health` | `observability.feed_health_keep_months` |
 | `host-fingerprint` | `observability.host_fingerprint_keep_months` |
@@ -318,6 +320,15 @@ pipeline record - which units of work started, which finished, which stopped on
 their own clock - so a day removed from it takes away how one night went and
 nothing a tenant measured. A tenant's own readings are in a tenant's own store
 under that tenant's slug.
+
+**The two `content-similarity-judge` words are that last sentence made real, and
+they are in the vocabulary early for the same reason.** One is what that judge
+measured about its own night, so deleting a day of it takes away that judge's
+readings and leaves the council record beside it untouched. The other is a
+reading of the merge line rather than of any judge: the shipped scoring calls no
+model, and a day removed from it takes away one comparison against the
+hand-marked holdout. Both are named for the judge rather than the venue that ran
+it, because what a reading is ABOUT decides where it is filed.
 
 **`state/day-metrics/` and `state/traces/` are day-shaped and deliberately
 outside it.** They file `<DD>.json` and `<DD>-<run>-<shard>.jsonl`, which

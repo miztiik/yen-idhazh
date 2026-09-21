@@ -21,6 +21,7 @@ from idhazh.contracts.article import Article
 from idhazh.contracts.base import Contract
 from idhazh.contracts.collection_prune import CollectionPruneRow
 from idhazh.contracts.console_band import ConsoleBand
+from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.corpus import CorpusMeta, CorpusRow
 from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
@@ -41,6 +42,7 @@ from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.label_row import LabelRow
 from idhazh.contracts.machine_panels import MachinePanels
 from idhazh.contracts.machine_shard import MachineShardRow
+from idhazh.contracts.merge_line_holdout_score import MergeLineHoldoutScore
 from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.contracts.pipeline_tests import PipelineTestsConfig
 from idhazh.contracts.public_run_day import PublicRunDay
@@ -90,6 +92,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     Article,
     CollectionPruneRow,
     ConsoleBand,
+    ContentSimilarityJudgeMetrics,
     CorpusMeta,
     CorpusRow,
     CouncilShardOutcome,
@@ -110,6 +113,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     LabelRow,
     MachinePanels,
     MachineShardRow,
+    MergeLineHoldoutScore,
     ModelsConfig,
     ObservationIndexRow,
     PipelineTestsConfig,
