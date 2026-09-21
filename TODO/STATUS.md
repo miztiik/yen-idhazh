@@ -38,7 +38,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 | [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 11 | 11 | 6 |
-| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 13 | 16 | 2 |
+| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 14 | 15 | 2 |
 
 ## In flight - 0
 
@@ -87,10 +87,10 @@ section 3 is where it is answered.
 | #14 | 37 | C | The memory board drops the disputed mark | 2, 9 |
 | #19 | 37 | C | Which prompts get re-read, and how fast | 9 |
 | #20 | 37 | C | What is holding the runner's memory | 5, 9 |
-| #2 | 38 | D | The council knows which run it is | 1a |
 | #11b | 38 | K | The content-similarity judge reads its own margin | 11a |
+| #24 | 38 | N | The council runs verbs of its own over a tenant list | 2, 15a, 16 |
 
-## Waiting on another row - 91
+## Waiting on another row - 90
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -175,7 +175,6 @@ section 3 is where it is answered.
 | #13 | 38 | J | `leg` and `fold` leave the vocabulary | 12 is PENDING |
 | #14 | 38 | K | The judge fills the stamp | 11b is PENDING; 13 is PENDING |
 | #15b | 38 | L | The content-similarity judge fills its metrics and registers as a tenant | 14 is PENDING |
-| #24 | 38 | N | The council runs verbs of its own over a tenant list | 2 is PENDING |
 | #17 | 38 | O | The council runs the tenant and files its own outcome row | 24 is PENDING |
 | #25 | 38 | P | The config check moves to the tenant that owns the number | 24 is PENDING |
 | #18 | 38 | Q | The store groups under the judge that fills it | 17 is PENDING |
