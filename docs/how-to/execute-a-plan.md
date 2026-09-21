@@ -25,11 +25,13 @@ The agent that runs a plan **owns** it. It carries a row itself, or delegates th
 
 **Mark a row `IN-FLIGHT` on the trunk before the branch is cut, when more than one agent is working the plan.** A status written only on the row's own branch is invisible until that branch merges, which is the window the mark exists to cover. With one agent there is nobody to collide with, so the mark buys nothing and costs a push - record the status in the change that does the work instead.
 
-**Between selecting a row and dispatching it, check the row against the tree.** Both checks are searches, not an entry into the row's implementation, and the fix for either is an edit to the plan-doc.
+**Between selecting a row and dispatching it, check the row against the tree.** All three checks are reading, not an entry into the row's implementation, and the fix for any of them is an edit to the plan-doc.
 
 1. **Every symbol the row names has to exist.** Search the tree for each identifier, path and command the row quotes. A row naming something renamed, moved or never written sends a worker looking for it, and the worker either invents a substitute or stops and asks. Correct the row before dispatching, and say what it was corrected from.
 
 2. **The row's check has to be able to fail for the reason the row exists.** Run it against the base tree first. An oracle that already passes measures something other than the row, so the work reports a green that proves nothing. **Where the row's whole value is that behaviour does not change** - a refactor, a move, a rename - the check passes at both ends by design, and what must be able to fail is the property the change could break. Say which of the two the row is, and do not invent a failing check to satisfy a rule.
+
+3. **An oracle may also describe a world the row's own design forbids, and that one looks like diligence.** One row asked its check to drive a case where a step is skipped and assert the resulting count, while a decision two lines above it said that step always runs - so no input can produce that count, and the only way to make the check pass is to break the decision. A worker who trusts the brief will do exactly that, and the commit that comes back is green. **Read the oracle against the row's own decisions before dispatching**, and where the two disagree the oracle is what changes: it was written earlier, from a guess about the mechanism, and the decision is what somebody later settled.
 
 **When a row is delegated, the owner does not also implement it.** The owner's edits are then limited to the plan-doc and the merge: correcting a row before dispatch, filling `Worktree` and `Subagent`, and marking `IN-FLIGHT`. A page derived from every Reckoner at once is not on that list either (worker step 7). Do not remove or alter a worker's checkout while its tests or build are running.
 

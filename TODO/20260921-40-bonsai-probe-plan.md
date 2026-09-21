@@ -64,24 +64,27 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 6 | A trial state root, and what the run keeps | - | A | PENDING | - | - | - |
 | 7 | One dispatch, and the readings written up | 1,4,5,6 | D | PENDING | - | - | - |
 
-**Depends-on outside this plan:** two plans come first. Row #1 here needs pull request A1 of [TODO/20260921-41-lane-a-model-file-plan.md](20260921-41-lane-a-model-file-plan.md) - the model file a plain mapping, so a new entry needs no typed field - and then rows #1 and #5 of [TODO/20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md): the generated contract layer gone, and the installer able to resolve a build the model names. Rows #4 and #5 here need plan 39's row #10, which deletes the closed-world tests that refuse a new job standing a model server up. Nothing in this plan starts before all four are `DONE`.
+**Depends-on outside this plan:** two plans come first. Row #1 here needs pull request A of [TODO/20260921-41-lane-a-model-file-plan.md](20260921-41-lane-a-model-file-plan.md) - the model file a plain mapping, so a new entry needs no typed field - and row #1 of [TODO/20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md), the generated contract layer gone. **Row #1 here also absorbs plan 39 row 5**, the installer resolving a build the model names. That is a generic interface - any model file may name a build - and this plan is only the first file to use it; it owes one guard, stated in row #1 decision 6. Rows #4 and #5 here need row 6 of [TODO/20260921-42-lane-b-workflows-plan.md](20260921-42-lane-b-workflows-plan.md), which deletes the closed-world tests that refuse a new job standing a model server up. Nothing in this plan starts before all of those are `DONE`.
 
 ## Section 2 - Row #1 - The model entry, and whether it fits
 
-- **Scope:** A model entry for the 27B at the two-bit packing, naming its own runtime, its own turn envelope and a context window the machine can hold.
+- **Scope:** A model entry for the 27B at the two-bit packing, naming its own runtime, its own turn envelope and a context window the machine can hold - and the installer change that lets a named runtime resolve, absorbed from plan 39 row 5.
 - **Files touched:**
   - `config/models/bonsai-2-27b-pq2.json` (new)
+  - `.github/scripts/llama-cpp-pin.sh`, `.github/scripts/fetch-model-runtime.sh` (the installer resolves a release from whatever repository it is handed, defaulting to the repository-wide pin)
+  - the qualification gate, for the build-identity refusal in decision 6
   - `docs/reference/ci-model-runtime.md`
 - **Acceptance gates:** local - `python -m pytest backend/tests/contracts -q`, and `python -c "from idhazh import config; config.load('config')"` against a pointer set to the new file; CI - full suite. ESCALATE triggers 1 and 2 apply.
-- **Oracle:** the entry loads through `idhazh.config.load`, which runs the marker check against the sanitizer's pattern families, and the architecture the entry declares equals the architecture in the weights' own header. Both are answerable without the model server. What it cannot settle: whether the summaries are any good, or how fast it decodes - those need row #7.
+- **Oracle:** the entry loads through `idhazh.config.load`, which runs the marker check against the sanitizer's pattern families, and the architecture the entry declares equals the architecture in the weights' own header. **And the release address the installer resolves is byte-identical to today's for every model that names no runtime, and is the fork's address for the one that does** - both arms assert a string and download nothing. All three are answerable without the model server. What it cannot settle: whether the summaries are any good, or how fast it decodes - those need row #7.
 - **Tasks, in order:**
   1. Read the incumbent's peak server memory from the committed item health ledger, so the fit arithmetic starts from a measurement rather than a recollection.
   2. Pin the weights: repository, revision, file, digest and byte count, taken from the published file rather than from the card's prose.
   3. Read the architecture string out of the weights' own header and declare it.
   4. Record the turn envelope from the weights' own chat template, and check every marker against the sanitizer's families before writing the entry. A marker no family recognises is ESCALATE trigger 1.
   5. Set the context window from the card's memory table and step 1's reading, leaving headroom for the Python process on the same machine.
-  6. Name the runtime: the fork's repository, release tag, asset and digest.
+  6. Name the runtime: the fork's repository, release tag, asset and digest. Make the installer read those four from the entry's `<role>.runtime` block through the environment, never as a pasted argument (Guardrail #11), and fall back to the repository-wide pin when the block is absent - which is every model today.
   7. Set the sampling values the card publishes for this model, and the answer budget for a model that reasons before it answers.
+  8. Add the build-identity refusal in decision 6 before any dispatch runs.
 - **Decisions:**
 
  | # | Decision | Authority |
@@ -91,6 +94,8 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
  | 3 | The entry names its own runtime rather than moving the repository-wide pin. Production keeps the build it ships, so nothing this plan measures can change what the nightly run decodes on | Carmack |
  | 4 | Every number this entry records is about the fork's build, and the write-up says so. A reading taken on a binary production does not ship is a reading about that binary | Carmack, Guardrail #10 |
  | 5 | This model reasons before it answers and its lowest reasoning setting is unsupported, so the entry declares a thinking envelope and a separate thinking budget. `config/models/qwen3.5-9b-q4km-thinking.json` is the template, not the plain entry | Andre |
+ | 6 | **A per-model build opens a hole this row closes in the same change.** A fork binary loads a stock model file happily, and `validate.yml` job `qualify` decides publication, so a verdict could be measured on one binary and reported under another (Guardrail #10). The refusal is one assertion in the gate that publishes: **a qualification whose recorded build is not the build the qualified model entry declares** does not produce a verdict, and `UNRECORDED_BUILD` is refused outright. Not "not the repository pin" - that would pass a stock binary qualifying a model that declared a fork. `backend/idhazh/fingerprint.py:103` already records the build, so the reading exists | Carmack and Fowler, agreed 2026-09-21 |
+ | 7 | The repository-wide pin stays the default, so every current model resolves exactly the release it resolves today. **The interface is generic, not a fork special case**: any model file may name a build, and this plan is only the first file to use it | Carmack |
 
 - **Rejected alternatives:**
 
@@ -99,6 +104,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
  | 1 | Ship both packings as two entries in one row | Doubles the download and the dispatch before anything is known about either | One extra entry file and one extra dispatch. Take it if the first dispatch is inconclusive rather than failed | Carmack |
  | 2 | Keep the incumbent's declared context window | The card's own table puts a 27B at two bits near 13.7 GiB at a large window, against 16 GB shared with the Python process. The projected peak does not fit | Nothing to take - it is arithmetic, and row #1 task 1 re-checks it against a real reading | Carmack |
  | 3 | Run it on the pinned upstream build | That build refuses this packing outright, and silently produces unusable text for the neighbouring one | Nothing to take. It is why the fork exists | Carmack |
+ | 4 | A second pin file for the fork | Two files holding a build with nothing tying either to the model that needs it, and a fork binary loads an ordinary model file happily - a green run measured on a binary production does not ship | About 10 lines, and drift | Carmack |
 
 ## Section 3 - Row #2 - The test workflow takes named addresses
 

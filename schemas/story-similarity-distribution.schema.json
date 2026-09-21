@@ -45,6 +45,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added judged_dates. An older record reads its counted dates as its memory.",
+      "version": "2026-09-21T20:00",
+      "why": "A reset archives the counts, and which nights were read is not a count."
+    },
+    {
       "change": "decode_digest is gone. A record that still carries the key loads.",
       "version": "2026-09-21T14:00",
       "why": "It proved two runs asked alike, and this project does not claim that."
@@ -60,9 +65,9 @@
       "why": "Two samplers and two decode envelopes were counted as one population."
     },
     {
-      "change": "Initial shape: a fixed row of slots, three counts each, and the dates counted.",
+      "change": "Earlier changes are in this file's git history.",
       "version": "2026-09-18",
-      "why": "A fit that sorted every pair ever judged would cost more every day."
+      "why": "A changelog says what moved lately; git is the archive."
     }
   ],
   "description": "The band, slot by slot, and the dates already counted into it.",
@@ -173,6 +178,16 @@
       "description": "Whether a reasoning span ran in front of every verdict counted here. A column of its own because no other column moves with it: an envelope moves only the prompt, which nothing here stamps. Without it a record counted cold and a record counted after reasoning are one population.",
       "title": "Judge Thinks"
     },
+    "judged_dates": {
+      "default": [],
+      "description": "Every date this judge has ever counted, sorted, and kept when an instrument move archives the counts. The counts are thrown away because they answer a different question afterwards; the fact that a night was read is not a count, so it stays. This is the list the outstanding-nights answer is taken from, and it holds every date in `counted_dates`.",
+      "items": {
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+        "type": "string"
+      },
+      "title": "Judged Dates",
+      "type": "array"
+    },
     "key_point_weight": {
       "anyOf": [
         {
@@ -225,7 +240,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-21T14:00",
+      "default": "2026-09-21T20:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -239,5 +254,5 @@
   ],
   "title": "StorySimilarityDistribution",
   "type": "object",
-  "version": "2026-09-21T14:00"
+  "version": "2026-09-21T20:00"
 }

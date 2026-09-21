@@ -18,14 +18,17 @@ from __future__ import annotations
 
 import csv
 import io
+import statistics
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 from idhazh import assemble, config
 from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.council_shard_outcome import ShardOutcome
 from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
@@ -50,13 +53,29 @@ VERDICTS_DIRNAME: Final = "verdicts"
 
 @dataclass(frozen=True, slots=True)
 class ShardReport:
-    """What one shard did, for its log line and for the operator reading it."""
+    """What one shard did, what its instrument read, and what its calls cost.
+
+    One payload with three readers - the log line below, this judge's own metrics
+    store, and the venue's record of the unit that ran. They are gathered here
+    because here is where the readings are: a pair's tokens and its call count
+    are never written to the verdict file, so a later reader of that file could
+    not recover them.
+    """
 
     date: str
     shard: int
     owned: int
     judged: int
     usable: int
+
+    #: How many drawn pairs named an item the same-story window no longer reaches.
+    unreadable: int
+
+    #: How many judged pairs came back outside the grammar. Pairs rather than
+    #: calls: a pair whose two readings both came apart is one refusal, and
+    #: counting calls would put the funnel out on a real event.
+    refused: int
+
     path: Path
 
     #: How the shard ended. Reported rather than inferred: a shard that stopped on
@@ -64,10 +83,24 @@ class ShardReport:
     #: shard knows which of the two it was.
     outcome: ShardOutcome
 
+    #: How this judge's own instrument behaved over the unit, ready to ship. The
+    #: tenant carries it to the venue's shipping capability and reads no cell of
+    #: it by name.
+    metrics: ContentSimilarityJudgeMetrics
+
+    #: What the calls cost, for the venue's own row. `model_calls` is counted at
+    #: the seam rather than doubled from the pairs, because a pair read behind a
+    #: reasoning span makes four calls and not two.
+    model_calls: int
+    tokens_in: int
+    tokens_out: int
+    model_seconds: float
+
 
 def stage_judge_item_pairs(
     date: str,
     *,
+    run_id: str,
     shard: int,
     shards: int,
     settings: config.Settings,
@@ -81,6 +114,12 @@ def stage_judge_item_pairs(
     `shards` is read rather than ignored. A draw taken at eight shards and judged
     by four would leave half its pairs unread, every shard would report success,
     and the day would be counted as though the missing pairs had never been drawn.
+
+    **`run_id` is the council's own and is handed in.** It goes on every pair this
+    shard reads and on the instrument row beside them, because the column the draw
+    already carries names the digest run that published the day - so two judging
+    runs over one date would write the identical string there and a reader could
+    not tell which night produced which verdict.
 
     `deadline` is a `time.monotonic()` instant the caller hands over, and this
     shard reads no clock knob of its own. It is checked before a pair and never
@@ -113,6 +152,7 @@ def stage_judge_item_pairs(
 
     path = run_dir / VERDICTS_DIRNAME / f"{shard}.csv"
     judged: list[StorySimilarityPair] = []
+    readings: list[judge.Judged] = []
     unreadable = 0
     outcome = ShardOutcome.COMPLETED if drawn else ShardOutcome.NOTHING_TO_DO
     for row in drawn:
@@ -133,7 +173,8 @@ def stage_judge_item_pairs(
             unreadable += 1
             continue
         verdicts = judge.judge_pair(left, right, client=client, settings=settings)
-        judged.append(_with_the_verdict(row, verdicts, stamp=stamp))
+        readings.append(verdicts)
+        judged.append(_with_the_verdict(row, verdicts, stamp=stamp, run_id=run_id))
         if len(judged) % flush_every == 0:
             assemble.write_atomic(path, _as_csv(judged))
 
@@ -151,7 +192,7 @@ def stage_judge_item_pairs(
     # shard is the only place that sees them arriving one after another: a
     # decoder that came loose refuses every pair after it, and that is worth
     # reading in the run's log rather than only in the file afterwards.
-    refused = sum(1 for row in judged if row.grammar_applied is False)
+    refused = sum(1 for one in readings if not one.grammar_applied)
     if refused:
         LOG.warning(
             "judge-item-pairs shard=%s date=%s recorded %s of %s judged pair(s) whose "
@@ -172,19 +213,94 @@ def stage_judge_item_pairs(
         owned=len(drawn),
         judged=len(judged),
         usable=sum(1 for row in judged if row.usable),
+        unreadable=unreadable,
+        refused=refused,
         path=path,
         outcome=outcome,
+        metrics=_instrument_reading(
+            readings,
+            date=date,
+            run_id=run_id,
+            shard=shard,
+            dealt=len(drawn),
+            unreadable=unreadable,
+            stamp=stamp,
+        ),
+        model_calls=sum(one.calls for one in readings),
+        tokens_in=sum(one.prompt_tokens for one in readings),
+        tokens_out=sum(one.completion_tokens for one in readings),
+        model_seconds=sum(one.decode_seconds for one in readings),
     )
     LOG.info(
-        "judge-item-pairs shard=%s date=%s owned=%s judged=%s usable=%s outcome=%s",
+        "judge-item-pairs shard=%s date=%s run=%s owned=%s judged=%s usable=%s "
+        "unreadable=%s refused=%s outcome=%s",
         report.shard,
         report.date,
+        run_id,
         report.owned,
         report.judged,
         report.usable,
+        report.unreadable,
+        report.refused,
         report.outcome.value,
     )
     return report
+
+
+def _instrument_reading(
+    readings: Sequence[judge.Judged],
+    *,
+    date: str,
+    run_id: str,
+    shard: int,
+    dealt: int,
+    unreadable: int,
+    stamp: stamps.JudgeStamp,
+) -> ContentSimilarityJudgeMetrics:
+    """How this shard's own instrument behaved, as the row its store holds.
+
+    **`pairs_abandoned` is the remainder and never a counter.** A shard that
+    stopped on its deadline never reached those pairs, so no line on the way past
+    one could have counted it - and the contract is what holds the four terms to
+    adding up to what the shard was dealt.
+
+    **A rate over no rows is empty rather than zero.** A shard that read nothing
+    measured nothing, and a zero there would read as a shard that measured
+    everything and found nothing wrong.
+
+    `judge_id` is left to the contract's own default, which is the same one
+    member this judge's tenant module narrows its slug to. Naming it here would
+    make this module import the tenant that imports it.
+    """
+    read = [one for one in readings if one.grammar_applied]
+    agreed = [one for one in read if one.usable]
+    unclear = sum(1 for one in agreed if one.verdict is SameStoryVerdict.UNCLEAR)
+    margins = [one.first_token_margin for one in readings if one.first_token_margin is not None]
+    payload: dict[str, Any] = {
+        "judge_model": stamp.judge_model if readings else None,
+        "judge_temperature": stamp.judge_temperature,
+        "decode_digest": stamp.decode_digest,
+        "thinking_spans": 1 if stamp.thinks else 0,
+        "prompt_digest": stamp.prompt_digest,
+        "grammar_digest": stamp.grammar_digest,
+        "date": date,
+        "run_id": run_id,
+        "shard": shard,
+        "pairs_dealt": dealt,
+        "pairs_read": len(read),
+        "pairs_agreed": len(agreed),
+        "pairs_unreadable": unreadable,
+        "pairs_refused": len(readings) - len(read),
+        "pairs_abandoned": dealt - len(readings) - unreadable,
+        "disagreement_rate": (len(read) - len(agreed)) / len(read) if read else None,
+        "unclear_rate": unclear / len(agreed) if agreed else None,
+        "first_token_margin_median": statistics.median(margins) if margins else None,
+        "decode_seconds_total": sum(one.decode_seconds for one in readings) if readings else None,
+        "decode_seconds_max": max(
+            (one.decode_seconds_max for one in readings), default=None
+        ),
+    }
+    return ContentSimilarityJudgeMetrics.model_validate(payload)
 
 
 def _rows_this_shard_owns(
@@ -238,7 +354,11 @@ def _items_by_url_key(
 
 
 def _with_the_verdict(
-    drawn: StorySimilarityPair, verdicts: judge.Judged, *, stamp: stamps.JudgeStamp
+    drawn: StorySimilarityPair,
+    verdicts: judge.Judged,
+    *,
+    stamp: stamps.JudgeStamp,
+    run_id: str,
 ) -> StorySimilarityPair:
     """The drawn row with the judging columns filled in, config stamp and all.
 
@@ -255,6 +375,11 @@ def _with_the_verdict(
     still carries its clock, its window and `grammar_applied` false, and that is
     the whole point of recording the refusal: a shard that raised here left the
     pair absent, and absent already means nothing drew it.
+
+    **`judged_by_run_id` is filled here and nowhere else.** It is part of the
+    settlement key, so a re-judge of a pair lands beside the row it replaces
+    rather than being dropped as a repeat - which it would be while every row
+    carried the same empty cell.
     """
     return StorySimilarityPair.model_validate(
         drawn.model_dump(mode="json")
@@ -271,6 +396,7 @@ def _with_the_verdict(
             "grammar_applied": verdicts.grammar_applied,
             "first_token_probabilities": verdicts.first_token_window or None,
             "thinking_spans": verdicts.thinking_spans,
+            "judged_by_run_id": run_id,
         }
     )
 

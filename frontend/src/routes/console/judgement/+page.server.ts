@@ -9,7 +9,7 @@ import { mergeCountsOf, type JudgeDay, type LineDay, type MergeDay } from '$lib/
 import type { ScoreWeights } from '$lib/console/holdout';
 import { loadDay, publishedDates } from '$lib/server/payload';
 import { fittedLines, scoreRecord } from '$lib/server/similarity-ledger';
-import { holdoutReading } from '$lib/server/similarity-holdout';
+import { holdoutReading, mergeLineHoldoutScore } from '$lib/server/similarity-holdout';
 
 export const prerender = true;
 
@@ -80,6 +80,11 @@ export function load() {
 	// sit outside the window preset - so it has an entry of its own in
 	// `docs/concepts/growing-reads.md`.
 	const holdout = holdoutReading(weights);
+	// How the line stood against the marks, off the committed row rather than
+	// counted again here. Null where nobody has run the verb that writes it, or
+	// where the newest row is older than the widest preset reaches - and the panel
+	// says the line has not been scored rather than showing four zeros.
+	const scored = mergeLineHoldoutScore(widestDays);
 	return {
 		// Oldest first, the order every chart on this console draws a day axis in.
 		merges,
@@ -153,7 +158,11 @@ export function load() {
 			agreedScores: holdout.marks
 				.filter((mark) => mark.sameStory)
 				.map((mark) => Number(mark.score.toFixed(6))),
-			weights
+			weights,
+			// The committed reading, or null. Ten numbers, so the panel can print what
+			// the line did to the whole marked file on the day somebody scored it -
+			// which is the part a rebuild of this page cannot reconstruct.
+			scored
 		},
 		console,
 		// How many date labels the day axis may carry - `chart.tick_density`.

@@ -19,7 +19,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 
 | Plan | Rows | Landed | Live | Ready |
 | --- | --- | --- | --- | --- |
-| [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 11 | 7 | 4 | 4 |
+| [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 18 | 7 | 11 | 11 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
 | [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 7 | 3 | 4 | 1 |
 | [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 2 | 1 | 1 |
@@ -37,15 +37,20 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 4 |
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
-| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 23 | 6 | 4 |
-| [20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md) | 21 | 0 | 15 | 8 |
+| [20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md) | 21 | 0 | 7 | 4 |
 | [20260921-40-bonsai-probe-plan.md](20260921-40-bonsai-probe-plan.md) | 7 | 0 | 7 | 4 |
-| [20260921-41-lane-a-model-file-plan.md](20260921-41-lane-a-model-file-plan.md) | 7 | 0 | 7 | 1 |
+| [20260921-41-lane-a-model-file-plan.md](20260921-41-lane-a-model-file-plan.md) | 7 | 0 | 7 | 0 |
+| [20260921-42-lane-b-workflows-plan.md](20260921-42-lane-b-workflows-plan.md) | 11 | 0 | 11 | 2 |
 
-## In flight - 0
+## In flight - 5
 
-Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
-dispatches a row, so an empty table here and a busy worktree disagree.
+| Row | Plan | Group | Title | Worktree |
+| --- | --- | --- | --- | --- |
+| #1 | 41 | A | The server-log reader goes | `p41c` -> `p41a` |
+| #2 | 41 | A | The decode stamp and the dead fingerprint go | `p41a` |
+| #4 | 41 | A | Both decode caps go | `p41c` |
+| #6 | 41 | A | The engineering contract catches up | `p41a` |
+| #7 | 41 | B | The markers are derived at server start | `p41b` |
 
 ## Ready now - 47
 
@@ -59,6 +64,13 @@ section 3 is where it is answered.
 | #18 | 20260823-known-defects-plan | - | The truncation flag still cannot fire, now for a different reason | - |
 | #23 | 20260823-known-defects-plan | - | The canary day records no settings, so nothing renders the rules that say a setting moved | - |
 | #24 | 20260823-known-defects-plan | - | `failed_field` costs a cell on every row and answers nobody | - |
+| #25 | 20260823-known-defects-plan | - | `host_model` is a column nothing fills, and two rulings disagree about whether it should | - |
+| #26 | 20260823-known-defects-plan | - | The settlement-key check reads one constant twice, so it cannot see a key lose a cell | - |
+| #27 | 20260823-known-defects-plan | - | The decode stamp excludes the grammar but not the schema | - |
+| #28 | 20260823-known-defects-plan | - | The one-at-a-time guard tells the operator the wrong verb | - |
+| #29 | 20260823-known-defects-plan | - | A shard is called a `unit` in the council's workflow and its tests | - |
+| #30 | 20260823-known-defects-plan | - | A third spelling of the vector norm lives in the canary builder | - |
+| #31 | 20260823-known-defects-plan | - | The council's selection artifact is named for one date and carries several | - |
 | #5 | 20260827-summarizer-fine-tuning-plan | A | Reference set | 3 |
 | #3 | 12 | C | Numbers a reader can say out loud | 1b |
 | #3 | 13 | C | The fuse comes out, and one run is watched | 2, plan 12 row #1b |
@@ -85,14 +97,6 @@ section 3 is where it is answered.
 | #5 | 35 | A / search | Live-day search - instant + semantic (+ frontend `key_points` owner, C2) | - |
 | #7 | 35 | A / eval-core | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - |
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
-| #15b | 38 | L | The content-similarity judge fills its metrics and registers as a tenant | 6, 14, 15a |
-| #19 | 38 | R | Where the content-similarity judge's merge line stands against its holdout | 7, 18 |
-| #22 | 38 | U | The guard that stops a shard committing is renamed and re-reasoned | 16, 21a |
-| #23 | 38 | U | The council runs green with no judge in the repository | 15a, 17, 21a, 24, 25 |
-| #13 | 39 | - | The entry path is one action taking a model file | - |
-| #4 | 39 | - | The capability probe goes | - |
-| #14 | 39 | - | The image benchmark goes, and two heavy wheels with it | - |
-| #20 | 39 | - | One commit call in the workflow that has four | - |
 | #7 | 39 | - | Qualification asks each article once | - |
 | #8 | 39 | - | Both test pipelines commit what they produce | - |
 | #15 | 39 | - | The hosted span sink goes | - |
@@ -101,9 +105,10 @@ section 3 is where it is answered.
 | #2 | 40 | A | The test workflow takes named addresses | - |
 | #5 | 40 | A | The eight telemetry steps move across | - |
 | #6 | 40 | A | A trial state root, and what the run keeps | - |
-| #1 | 41 | A | The server-log reader goes | - |
+| #1 | 42 | M | The runner stops paying for a graphics card it does not have | - |
+| #3 | 42 | A | The capability probe goes | - |
 
-## Waiting on another row - 90
+## Waiting on another row - 89
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -179,24 +184,23 @@ section 3 is where it is answered.
 | #8 | 36 | W4 / apply-gate (alone) | Flip the flag: withhold = absent + item-health telemetry (E7 placement) | 7 is PENDING |
 | #12 | 36 | W3 / rejects-store | The rejects store + corpus fence (`state/rejects/`, 30-day prune) | 3 is PENDING; 7 is PENDING |
 | #13 | 36 | W4 / plan34-gaps | Retro: plan-34 latent gaps + the shared space-trap guard | 34 landed names no row; 6 is PENDING |
-| #21b | 38 | T | The content-similarity judge answers which nights it is behind on | 15b is PENDING |
-| #20 | 38 | V | The plan pointer | 19 is PENDING; 21b is PENDING; 23 is PENDING |
-| #5 | 39 | - | The installer stops naming a repository | 13 is PENDING; plan 41 PR A1 names no row |
-| #3 | 39 | - | The draft head goes | 13 is PENDING |
-| #9 | 39 | - | The benchmark workflow's closed-world tests go | 3 is PENDING; 4 is PENDING |
-| #10 | 39 | - | The workflow censuses go | 3 is PENDING; 4 is PENDING |
 | #17 | 39 | - | The utilities and evaluations nothing calls go | 7 is PENDING |
 | #1 | 39 | - | The generated contract layer goes | A names no row; B names no row; C names no row; D names no row |
 | #12 | 39 | - | The engineering contract and the pages catch up | 1 is PENDING |
 | #3 | 40 | B | One plan job, so a fan-out agrees what it is reading | 2 is PENDING |
 | #4 | 40 | C | The fan-out | 3 is PENDING |
 | #7 | 40 | D | One dispatch, and the readings written up | 1 is PENDING; 4 is PENDING; 5 is PENDING; 6 is PENDING |
-| #2 | 41 | A | The decode stamp and the dead fingerprint go | 1 is PENDING |
-| #3 | 41 | A | The draft head goes from the model shape | 2 is PENDING |
-| #4 | 41 | A | Both decode caps go | 3 is PENDING |
-| #5 | 41 | A | The model file carries llama-server's own flags | 4 is PENDING |
-| #6 | 41 | A | The engineering contract catches up | 5 is PENDING |
-| #7 | 41 | B | The markers are derived at server start | 6 is PENDING |
+| #3 | 41 | A | The draft head becomes a companion file | 2 is IN-FLIGHT |
+| #5 | 41 | A | The model file carries llama-server's own flags | 4 is IN-FLIGHT |
+| #2 | 42 | M | The plan job closes the clock it opens | 1 is PENDING |
+| #4 | 42 | A | The image benchmark goes | 3 is PENDING |
+| #5 | 42 | B | Five checks move into the thing they check | 2 is PENDING; 4 is PENDING |
+| #6 | 42 | B | Fourteen assertions go, and the lists become computed | 5 is PENDING |
+| #7 | 42 | C | The printer learns the whole file set, and the traversal closes | 6 is PENDING; plan 41 names no row |
+| #8 | 42 | C | The workflows read the model file instead of relaying it | 7 is PENDING |
+| #9 | 42 | C | The cache names the set, and the binary gets its own key | 8 is PENDING |
+| #10 | 42 | D | The benchmark arms learn the server died, and the repeat count is config | 9 is PENDING |
+| #11 | 42 | D | The harness keeps only what more than one module reads | 9 is PENDING |
 
 ## Finished - 18 plans with no live row
 

@@ -1406,7 +1406,9 @@ def test_a_config_with_no_judge_in_it_validates_and_stays_that_way() -> None:
 
     The council's own runner numbers are in their own block, so a file with no
     judge in it still says how long a judging shard may run and how many of them
-    there are.
+    there are. The roster is taken out with the block, because a file with no
+    judge in it registers none either - and a slug naming a judge that is not
+    there is refused by name on the night it runs.
     """
     none_at_all = AppConfig.model_validate({})
 
@@ -1416,6 +1418,7 @@ def test_a_config_with_no_judge_in_it_validates_and_stays_that_way() -> None:
 
     committed = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
     del committed["assemble"]["same_story"]["adaptive_dedup_threshold"]
+    committed["council"]["tenants"] = []
     without_a_judge = AppConfig.model_validate(committed)
 
     assert without_a_judge.assemble.same_story.adaptive_dedup_threshold is None

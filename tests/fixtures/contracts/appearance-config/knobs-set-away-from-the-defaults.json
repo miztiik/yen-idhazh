@@ -36,10 +36,10 @@
     "band_outlier_rows": 10,
     "bandwidth_min_kinds": 3,
     "chart_coverage_pct": 5.0,
-    "chart_height": 220,
+    "chart_height": 180,
     "chart_minutes_target": 6.0,
     "chart_rule_days": 14,
-    "chart_width": 760,
+    "chart_width": 600,
     "context_cut_off_reason": "length",
     "context_high_percentile": 99.0,
     "default_window_days": 30,
@@ -58,35 +58,43 @@
     "panel_groups": {
       "machine": [
         {
-          "id": "the-newest-run",
+          "id": "what-the-machine-was-doing",
           "panels": [
             "two-clocks",
-            "shard-board",
-            "memory-board",
-            "newest-run-tail"
-          ],
-          "title": "The newest run"
-        },
-        {
-          "id": "the-open-window",
-          "panels": [
-            "prompt-cache",
-            "context-headroom",
-            "outside-the-model-call",
-            "tail-trend",
-            "read-against-written",
-            "counterfactual-cost"
-          ],
-          "title": "The open window"
-        },
-        {
-          "id": "the-machines",
-          "panels": [
+            "processor-lost",
+            "disk-reads",
             "machine-cards",
             "reading-against-writing",
             "platform-mix"
           ],
-          "title": "The machines"
+          "title": "What the machine was doing"
+        },
+        {
+          "id": "where-the-time-went",
+          "panels": [
+            "shard-board",
+            "tail-trend"
+          ],
+          "title": "Where the time went"
+        },
+        {
+          "id": "how-close-to-the-limits",
+          "panels": [
+            "memory-board",
+            "memory-held",
+            "context-headroom"
+          ],
+          "title": "How close we are to the limits"
+        },
+        {
+          "id": "what-the-model-spends",
+          "panels": [
+            "article-cost",
+            "prompt-reuse",
+            "read-against-written",
+            "counterfactual-cost"
+          ],
+          "title": "What the model spends"
         }
       ],
       "pipelines": [
@@ -160,8 +168,8 @@
     "source_mark": true,
     "tagline": "A daily digest that checks its own work.",
     "theme_default": "dark",
-    "topic_pills_max": 8,
-    "visual_side": "trailing"
+    "topic_pills_max": 5,
+    "visual_side": "above"
   },
   "frame": {
     "breakpoints_px": [

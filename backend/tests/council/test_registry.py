@@ -44,16 +44,22 @@ def test_a_venue_with_no_slugs_hosts_nobody() -> None:
     assert registry.tenants(()) == ()
 
 
-def test_the_committed_config_registers_no_tenant() -> None:
-    """Read here rather than asserted as a magnitude: what matters is the shape.
+def test_every_slug_the_committed_config_registers_resolves() -> None:
+    """Read here rather than named: what matters is that the two sides agree.
 
-    A tenant registers itself by adding a slug to this list. Until one does, the
-    council hosts nobody, and that is the state every other test in the council
-    package runs against.
+    A tenant registers itself by adding a slug to this list, and a slug nothing
+    declares is refused by name. Caught here, a typo in that list costs a test
+    run; uncaught, it costs a whole night before anything says so.
+
+    The list is not asserted to be any particular length, and no slug in it is
+    spelled here. A council test that named a judge would be the roster this
+    whole design exists to remove.
     """
     council = config.load(CONFIG_DIR).app.council
 
-    assert registry.tenants(council.tenants) == ()
+    assert [host.judge_id for host in registry.tenants(council.tenants)] == list(
+        council.tenants
+    )
 
 
 def test_a_slug_resolves_to_the_module_that_declares_it(venue: Path) -> None:

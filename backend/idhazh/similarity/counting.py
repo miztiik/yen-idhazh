@@ -39,12 +39,22 @@ class SlotCounts:
 
 
 def empty_record(
-    knobs: SimilarityThresholdConfig, *, scorer: ScorerStamp, judge: JudgeStamp
+    knobs: SimilarityThresholdConfig,
+    *,
+    scorer: ScorerStamp,
+    judge: JudgeStamp,
+    judged_dates: Sequence[str] = (),
 ) -> StorySimilarityDistribution:
     """A record of the configured band, every count zero and no date counted.
 
     The stamps are written in at birth rather than on the first day counted, so a
     record that has counted nothing still says what it would have counted under.
+
+    `judged_dates` is what the caller carries over when this replaces a record an
+    instrument move archived. The counts do not come across, because they answer
+    a different question now; the list of nights already read does, because that
+    is not a count. Empty is the right default: a record with no predecessor has
+    read nothing.
 
     Built through `model_validate` because `JudgeStamp.judge_model` is a plain
     string: the stamp carries whatever `config/models/` names, and this is the
@@ -66,6 +76,7 @@ def empty_record(
             "judge_temperature": judge.judge_temperature,
             "judge_thinks": judge.thinks,
             "counted_dates": (),
+            "judged_dates": tuple(judged_dates),
             "slots": tuple(
                 ScoreSlot(bin_low=knobs.band_low + index * knobs.bin_width)
                 for index in range(slots)
@@ -129,6 +140,52 @@ def one_row_a_pair(rows: Sequence[StorySimilarityPair]) -> list[StorySimilarityP
     return [newest[key] for key in sorted(newest)]
 
 
+def rows_the_record_admits(
+    rows: Sequence[StorySimilarityPair], *, record: StorySimilarityDistribution
+) -> list[StorySimilarityPair]:
+    """Only the rows whose own stamp is the stamp the record counts under.
+
+    The day file is append-only and a re-judge leaves the older row in it, so a
+    day that was read twice under two instruments holds both readings. Adding
+    them together is the merge the stamp exists to prevent: the record says its
+    counts were taken under one model, one prompt, one grammar and one sampler,
+    and a row from any other one makes that sentence false with nothing able to
+    see it afterwards.
+
+    A row's reasoning span is a count and the record's is a flag, so the two are
+    compared as flags. A null on either side stays null: a row written before the
+    column existed says nobody recorded it rather than saying nothing ran, and it
+    only matches a record that says the same.
+    """
+    stamp = (
+        record.scorer_model,
+        record.cosine_weight,
+        record.key_point_weight,
+        record.judge_model,
+        record.prompt_digest,
+        record.grammar_digest,
+        record.judge_temperature,
+        record.decode_digest,
+        record.judge_thinks,
+    )
+    return [row for row in rows if _stamp_of(row) == stamp]
+
+
+def _stamp_of(row: StorySimilarityPair) -> tuple[object, ...]:
+    """The row's judging instrument, in the order the record stamps it."""
+    return (
+        row.scorer_model,
+        row.cosine_weight,
+        row.key_point_weight,
+        row.judge_model,
+        row.prompt_digest,
+        row.grammar_digest,
+        row.judge_temperature,
+        row.decode_digest,
+        None if row.thinking_spans is None else row.thinking_spans > 0,
+    )
+
+
 def day_counts(
     rows: Sequence[StorySimilarityPair], *, record: StorySimilarityDistribution
 ) -> dict[int, SlotCounts]:
@@ -138,9 +195,14 @@ def day_counts(
     when the two readings disagreed or the grammar could not be shown to have
     held, and a verdict nobody can stand behind still moves the line if it is
     counted - which is worse than having no verdict at all.
+
+    **The stamp filter runs before the de-duplication.** Both orders drop the
+    same rows, but only this one lets the right row win: filtering afterwards
+    lets a discarded row from the old instrument take the pair on recency and
+    then be thrown away, losing the fresh reading that was standing behind it.
     """
     counts: dict[int, SlotCounts] = {}
-    for row in one_row_a_pair(rows):
+    for row in one_row_a_pair(rows_the_record_admits(rows, record=record)):
         if not row.usable:
             continue
         index = slot_index(row.composite_score, record=record)
@@ -161,11 +223,16 @@ def count_day(
     *,
     date: str,
 ) -> StorySimilarityDistribution:
-    """The record with today added and `date` appended to `counted_dates`.
+    """The record with today added, and `date` appended to both date lists.
 
     Raises `ValueError` when the record already holds the date, so a re-run of
     this step is free rather than a day counted twice. The message names the date
     because that is the one thing the operator has to act on.
+
+    `judged_dates` is appended to here rather than anywhere else, because this is
+    the one verb that reads a night. `model_copy` skips the contract's own
+    validators, so the two lists are kept in step by this line and the boundary
+    check behind it, not by one of them.
     """
     if date in record.counted_dates:
         raise ValueError(f"the record already counted {date}")
@@ -173,6 +240,7 @@ def count_day(
     return record.model_copy(
         update={
             "counted_dates": tuple(sorted((*record.counted_dates, date))),
+            "judged_dates": tuple(sorted({*record.judged_dates, date})),
             "slots": tuple(
                 slot.model_copy(
                     update={

@@ -397,6 +397,62 @@ def test_a_record_written_under_the_old_date_key_still_loads_with_its_dates() ->
     assert "folded_dates" not in record.to_json()
 
 
+def test_a_record_written_before_the_memory_reads_its_counted_dates_as_its_memory() -> None:
+    """The read-side migration the new list owes, proved on a payload (section 11).
+
+    A record written before `judged_dates` existed had already read every date it
+    counted. Starting its memory empty would hand the council every one of those
+    nights back as outstanding the first time an instrument moved - a week of
+    repair jobs that cannot land, because the record still refuses a date twice.
+    """
+    payload = a_record(counted_dates=["2026-09-17", "2026-09-18"])
+
+    record = StorySimilarityDistribution.model_validate(payload)
+
+    assert record.judged_dates == ("2026-09-17", "2026-09-18")
+
+
+def test_a_record_written_under_the_old_date_key_seeds_its_memory_too() -> None:
+    """The rename runs first, so the older spelling still fills the memory.
+
+    A payload carrying only `folded_dates` is the one record that would otherwise
+    seed its memory from an empty `counted_dates` and forget every night it read.
+    """
+    payload = a_record()
+    payload["folded_dates"] = ["2026-09-17"]
+
+    record = StorySimilarityDistribution.model_validate(payload)
+
+    assert (record.counted_dates, record.judged_dates) == (("2026-09-17",), ("2026-09-17",))
+
+
+def test_a_memory_that_has_forgotten_a_counted_date_is_refused() -> None:
+    """A date counted but not remembered is a repair job that can never land.
+
+    The council would be told to judge the night again and the record would
+    refuse to count it, every night, for as long as the window reached it. The
+    two lists are written together, so a record where they have come apart was
+    built by something that updated one of them.
+    """
+    with pytest.raises(ValidationError, match="forgotten 2026-09-18"):
+        StorySimilarityDistribution.model_validate(
+            a_record(counted_dates=["2026-09-18"], judged_dates=["2026-09-17"])
+        )
+
+
+def test_a_memory_out_of_order_or_holding_a_date_twice_is_refused() -> None:
+    """Same two rules as the counts: a reader scans this list, and a date is one date."""
+    with pytest.raises(ValidationError, match="judged_dates is kept sorted"):
+        StorySimilarityDistribution.model_validate(
+            a_record(judged_dates=["2026-09-18", "2026-09-17"])
+        )
+
+    with pytest.raises(ValidationError, match="judged_dates already holds"):
+        StorySimilarityDistribution.model_validate(
+            a_record(judged_dates=["2026-09-17", "2026-09-17"])
+        )
+
+
 def test_a_fitted_row_written_under_the_old_held_reason_still_reads() -> None:
     """The ledger is append-only, so a row a run already wrote has to keep reading.
 

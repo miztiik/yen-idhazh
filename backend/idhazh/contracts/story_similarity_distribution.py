@@ -9,6 +9,13 @@ once, its counts are added, and the day tree is never read again.
 refused a second time rather than doubling its counts, so re-running a day costs
 nothing instead of damaging the record.
 
+`judged_dates` is the same list with a longer memory. The counts are archived and
+started again whenever an instrument moves, because they answer a different
+question afterwards - but which nights this judge has already read is not a
+count, so it survives that reset. It is what the council's outstanding-nights
+question is answered from, and it is why moving the model does not send every
+night in the window back to a runner.
+
 Six stamp fields say what a count here means - which encoder, at which weights,
 judged by which model, under which prompt and grammar. Change any of them and
 the counts describe a different question, so the record is archived rather than
@@ -83,6 +90,11 @@ class StorySimilarityDistribution(Contract):
     __schema_stem__: ClassVar[str] = "story-similarity-distribution"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21T20:00",
+            change="Added judged_dates. An older record reads its counted dates as its memory.",
+            why="A reset archives the counts, and which nights were read is not a count.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T14:00",
             change="decode_digest is gone. A record that still carries the key loads.",
             why="It proved two runs asked alike, and this project does not claim that.",
@@ -99,8 +111,8 @@ class StorySimilarityDistribution(Contract):
         ),
         ChangelogEntry(
             version="2026-09-18",
-            change="Initial shape: a fixed row of slots, three counts each, and the dates counted.",
-            why="A fit that sorted every pair ever judged would cost more every day.",
+            change="Earlier changes are in this file's git history.",
+            why="A changelog says what moved lately; git is the archive.",
         ),
     )
 
@@ -189,6 +201,16 @@ class StorySimilarityDistribution(Contract):
             "damaging."
         ),
     )
+    judged_dates: tuple[DateStamp, ...] = Field(
+        default=(),
+        description=(
+            "Every date this judge has ever counted, sorted, and kept when an instrument "
+            "move archives the counts. The counts are thrown away because they answer a "
+            "different question afterwards; the fact that a night was read is not a "
+            "count, so it stays. This is the list the outstanding-nights answer is taken "
+            "from, and it holds every date in `counted_dates`."
+        ),
+    )
     slots: tuple[ScoreSlot, ...] = Field(
         description=(
             "The band, slot by slot, lowest first. Fixed size: the record never grows as "
@@ -199,26 +221,36 @@ class StorySimilarityDistribution(Contract):
 
     @model_validator(mode="before")
     @classmethod
-    def _the_old_key_still_reads(cls, data: Any) -> Any:
-        """`folded_dates` was renamed to `counted_dates` on 2026-09-21. Both spellings load.
+    def _the_keys_an_earlier_build_wrote_still_read(cls, data: Any) -> Any:
+        """Two read-side migrations, in the order a payload needs them (section 11).
 
-        Nothing but the name moved, so the old value is carried across whole. The
-        model forbids unknown keys, so without this the committed record an
-        earlier build wrote would be refused outright and the day list behind the
-        fitted line would be lost (section 11). The next run rewrites the record
-        under the new key.
+        `folded_dates` was renamed to `counted_dates` on 2026-09-21, and nothing
+        but the name moved so the old value is carried across whole. The model
+        forbids unknown keys, so without this the committed record an earlier
+        build wrote would be refused outright and the day list behind the fitted
+        line would be lost. The next run rewrites the record under the new key.
 
-        `decode_digest` is dropped here in the same pass, and the two cases are
-        different: that column was deleted rather than renamed, so there is
-        nothing to carry the value into. The committed record and every archive
-        under `state/content-similarity-judge/archive/` still hold the key, and
-        both have to keep loading.
+        `judged_dates` is then filled from whatever the first step settled on. A
+        record written before the memory existed had already read every date it
+        counted, and starting the memory empty would hand the council every one
+        of those nights back as outstanding the first time an instrument moved.
+        The rename runs first, so a payload carrying only the older spelling
+        still seeds its memory rather than seeding it from nothing.
+
+        `decode_digest` is dropped last, and that case is different again: the
+        column was deleted rather than renamed, so there is nothing to carry the
+        value into. The committed record and every archive under
+        `state/content-similarity-judge/archive/` still hold the key, and both
+        have to keep loading.
         """
-        if isinstance(data, dict) and "folded_dates" in data and "counted_dates" not in data:
-            migrated = dict(data)
+        if not isinstance(data, dict):
+            return data
+        migrated = dict(data)
+        if "folded_dates" in migrated and "counted_dates" not in migrated:
             migrated["counted_dates"] = migrated.pop("folded_dates")
-            return without_retired_keys(migrated, *DROPPED_CELLS)
-        return without_retired_keys(data, *DROPPED_CELLS)
+        if "judged_dates" not in migrated and "counted_dates" in migrated:
+            migrated["judged_dates"] = migrated["counted_dates"]
+        return without_retired_keys(migrated, *DROPPED_CELLS)
 
     @model_validator(mode="after")
     def _the_band_divides_into_whole_slots(self) -> Self:
@@ -270,6 +302,29 @@ class StorySimilarityDistribution(Contract):
         if len(set(dates)) != len(dates):
             repeated = sorted({date for date in dates if dates.count(date) > 1})
             raise ValueError(f"counted_dates already holds {', '.join(repeated)}")
+        return self
+
+    @model_validator(mode="after")
+    def _the_memory_holds_every_date_the_counts_do(self) -> Self:
+        """The memory is a superset of the counts, sorted, and holds each date once.
+
+        A date counted but not remembered is a night the council would be told to
+        judge again while the record refuses to count it - a runner spent on work
+        that can never land. The two lists are written together, so a record
+        where they have come apart was built by something that updated one of
+        them, and that is worth refusing at the boundary rather than reading.
+        """
+        dates = list(self.judged_dates)
+        if dates != sorted(dates):
+            raise ValueError("judged_dates is kept sorted, so a reader can scan it")
+        if len(set(dates)) != len(dates):
+            repeated = sorted({date for date in dates if dates.count(date) > 1})
+            raise ValueError(f"judged_dates already holds {', '.join(repeated)}")
+        forgotten = sorted(set(self.counted_dates) - set(dates))
+        if forgotten:
+            raise ValueError(
+                f"judged_dates has forgotten {', '.join(forgotten)}, which counted_dates holds"
+            )
         return self
 
     def record_stamp(self) -> str:
