@@ -93,6 +93,7 @@ from idhazh.contracts.base import WORK_JOB
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.day_partition import day_files
 from idhazh.extract import TOKENS_PER_WORD
+from idhazh.llm.server import window
 
 #: The percentile the residual is reported at, beside the median and the two
 #: extremes. High enough to show the tail an average hides, low enough that a
@@ -526,7 +527,7 @@ def main() -> int:
         report(
             args.state,
             cap_tokens=settings.app.extract.truncation_cap_tokens,
-            context_tokens=settings.models.summarize.inference.n_ctx,
+            context_tokens=window(settings.models.summarize.server),
             output_tokens=calls.summarize_and_plan_budget_tokens(settings.app.summarize),
         )
     )

@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 import re
 import textwrap
+from collections.abc import Mapping
 from functools import lru_cache
 from pathlib import Path
 from string import Template
@@ -55,12 +56,11 @@ from idhazh.contracts.base import (
 from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
-from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.summarize import OverLengthAction, SummarizeConfig, SummaryBand
 from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.summary import LengthAction, Summary, SummaryStatus
 from idhazh.evals.metrics import restates_summary, verbatim_run
-from idhazh.llm.server import Completion, request_payload
+from idhazh.llm.server import Completion, request_payload, window
 from idhazh.sanitize import LINK_PLACEHOLDER, sanitize, untrusted_block
 
 PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "summarize.txt"
@@ -383,7 +383,7 @@ def user_turn(article: Article) -> str:
 
 def fits_context(
     article: Article,
-    inference: InferenceConfig,
+    server: Mapping[str, Any],
     prompt_config: SummarizeConfig | None = None,
     *,
     turns: TurnsConfig | None = None,
@@ -411,14 +411,14 @@ def fits_context(
         prompt_config, source_words=article.band_source_words, brief=article.brief
     )
     overhead = len(rendered.split()) * 2
-    return article.token_count + overhead < inference.n_ctx
+    return article.token_count + overhead < window(server)
 
 
 def build_request(
     article: Article,
     *,
     model_id: str,
-    inference: InferenceConfig,
+    request: Mapping[str, Any],
     turns: TurnsConfig,
     prompt_config: SummarizeConfig | None = None,
 ) -> dict[str, Any]:
@@ -440,7 +440,7 @@ def build_request(
             source_words=article.band_source_words,
             brief=article.brief,
         ),
-        inference=inference,
+        request=request,
         turns=turns,
     )
 

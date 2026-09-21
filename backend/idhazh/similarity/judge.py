@@ -41,6 +41,7 @@ from idhazh.llm.server import (
     answer_span,
     grammar_completion_payload,
     one_reply,
+    setting,
     thinking_span,
 )
 from idhazh.similarity import prompt
@@ -274,9 +275,8 @@ def decode_body(
         system=system,
         user=user,
         grammar=prompt.grammar(),
-        inference=entry.inference.model_copy(
-            update={"temperature": tuning.judge_temperature}
-        ),
+        server=entry.server,
+        request=entry.request | {"temperature": tuning.judge_temperature},
         turns=entry.turns,
         max_answer_tokens=prompt.REPLY_TOKENS,
         first_token_alternatives=len(prompt.first_token_prefixes()),
@@ -321,7 +321,7 @@ def read_once(
             thinking_span(
                 answer,
                 turns=entry.turns,
-                temperature=entry.inference.temperature,
+                temperature=setting(entry.request, "temperature"),
             )
         )
         reply = one_reply(

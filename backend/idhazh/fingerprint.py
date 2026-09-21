@@ -28,15 +28,13 @@ import os
 import platform
 from collections.abc import Mapping
 from pathlib import Path
-from types import MappingProxyType
-from typing import Final, NamedTuple
+from typing import Any, Final
 
 from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.fingerprint import PipelineInputs
-from idhazh.contracts.knobs.inference import InferenceConfig
-from idhazh.contracts.knobs.models import ModelEntry, ModelRef
+from idhazh.contracts.knobs.models import ModelRef
 from idhazh.contracts.knobs.turns import TurnsConfig
-from idhazh.llm.server import turn_markers_digest
+from idhazh.llm.server import SETTING_KEYS, setting, turn_markers_digest, window
 
 #: Sixty-four zeroes. It satisfies `Sha256`, so a manifest built on it validates,
 #: publishes, and still says nothing about which weights ran (Guardrail #10).
@@ -56,6 +54,10 @@ UNRECORDED_TEMPLATE: Final = "chat-template-not-recorded"
 #: value, so it gets its own spelling rather than being folded into one of the
 #: values it might resolve to.
 RUNTIME_DEFAULT: Final = "runtime-default"
+
+#: How the stamp spells a bare flag - one the file names with no argument, so
+#: the switch is on and there is no value to record beside it.
+SET: Final = "set"
 
 #: How the stamp spells a thinking span with no cap. Not `RUNTIME_DEFAULT`: that
 #: word says the runtime chose a number we did not, and this says there is no
@@ -135,7 +137,7 @@ def host_cpu(cpuinfo: Path = CPUINFO) -> str:
     return platform.processor() or platform.machine() or "unknown"
 
 
-def sampling_spelling(inference: InferenceConfig) -> str:
+def sampling_spelling(request: Mapping[str, Any]) -> str:
     """One canonical spelling of the decoding parameters.
 
     `seed` is enumerated as an input, and above temperature 0 it is the control
@@ -144,234 +146,95 @@ def sampling_spelling(inference: InferenceConfig) -> str:
     shift the words without shifting this string.
 
     **No span budget is here, because no span carries one.** The two decode caps
-    left the block on 2026-09-21, and what bounds a span now is the window and
-    the per-request timeout - both enumerated elsewhere. There is no reasoning
-    flag here either: what turns reasoning on is the closing marker on the turn
-    envelope, which arrives under `turn_markers_sha256`.
+    left the settings on 2026-09-21, and what bounds a span now is the window
+    and the per-request timeout - both enumerated elsewhere. There is no
+    reasoning flag here either: what turns reasoning on is the closing marker on
+    the turn envelope, which arrives under `turn_markers_sha256`.
+
+    A value the file leaves out records as `RUNTIME_DEFAULT`, for the reason a
+    missing flag does: what the server picks is a real and different choice from
+    pinning a number, and writing our guess at its default here would record a
+    guess as a measurement (Guardrail #10).
     """
-    return ";".join(
-        (
-            f"temperature={inference.temperature:.4f}",
-            f"top_p={inference.top_p:.4f}",
-            f"seed={inference.seed}",
-        )
-    )
+    spelled = []
+    for name, digits in (("temperature", 4), ("top_p", 4), ("seed", 0)):
+        value = setting(request, name)
+        if value is None:
+            spelled.append(f"{name}={RUNTIME_DEFAULT}")
+        elif digits:
+            spelled.append(f"{name}={float(value):.{digits}f}")
+        else:
+            spelled.append(f"{name}={value}")
+    return ";".join(spelled)
 
 
-def runtime_flags_spelling(inference: InferenceConfig) -> str:
+#: The server flags that can change arithmetic, prompt rendering or cache reuse,
+#: spelled as llama-server spells them. It enumerated this project's own field
+#: names until the model file started carrying the flags, so the recorded string
+#: moves once and the console reports the server switches moved on the first run
+#: after. That is a one-time true statement rather than a defect.
+DIGESTED_FLAGS: Final[tuple[str, ...]] = (
+    "-ctk",
+    "-ctv",
+    "-fa",
+    "-np",
+    "-tb",
+    "-cms",
+    "-ctxcp",
+    "-cram",
+    "--cache-prompt",
+    "--no-cache-prompt",
+    "-sps",
+    "--jinja",
+    "--no-jinja",
+    "--reasoning-preserve",
+    "--no-reasoning-preserve",
+)
+
+
+def runtime_flags_spelling(server: Mapping[str, Any]) -> str:
     """Canonical settings that can change arithmetic, prompt rendering or cache reuse.
 
     A cached prefix and a newly evaluated prefix need not take the same numeric
     path. Record the controls that choose between them as well as the cache
     type, attention kernel, slot count and prompt-thread count.
+
+    A bare flag records as `SET`. A flag the file leaves out records as
+    `RUNTIME_DEFAULT`, because "whatever the runtime picks" is a real and
+    different choice from pinning a value.
     """
-    values = {
-        "cache_type_k": inference.cache_type_k,
-        "cache_type_v": inference.cache_type_v,
-        "flash_attention": inference.flash_attention,
-        "n_parallel": inference.n_parallel,
-        "n_threads_batch": inference.n_threads_batch,
-        "checkpoint_min_step": inference.checkpoint_min_step,
-        "ctx_checkpoints": inference.ctx_checkpoints,
-        "cache_ram": inference.cache_ram,
-        "cache_prompt": inference.cache_prompt,
-        "slot_prompt_similarity": inference.slot_prompt_similarity,
-        "jinja": inference.jinja,
-        "reasoning_preserve": inference.reasoning_preserve,
-    }
-    return ";".join(
-        f"{name}={RUNTIME_DEFAULT if value is None else value}" for name, value in values.items()
-    )
+    return ";".join(f"{flag}={_flag_spelling(server, flag)}" for flag in DIGESTED_FLAGS)
 
 
-class Undigested(NamedTuple):
-    """Why one model-shaped knob sits outside the recorded manifest."""
-
-    moves_logits: bool
-    reason: str
-
-
-#: Every `InferenceConfig`, `ModelEntry` and `TurnsConfig` field the manifest
-#: does not carry, and why each one is out.
-#:
-#: Every field left here is one that cannot move an output. The five inference
-#: knobs that could - `cache_type_k`, `cache_type_v`, `flash_attention`,
-#: `n_parallel` and `n_threads_batch` - were listed here as known blind spots
-#: until 2026-08-26 and are now folded into `runtime_flags`.
-#:
-#: **The universe is all three shapes, not just `InferenceConfig`.** It was the
-#: inference block alone until 2026-09-13, which was closed over the wrong set
-#: the moment a model-shaped fact lived outside that block: `turns` moved onto
-#: the entry and would have sat in no stamp and in no closed set, with no test
-#: saying so. The envelope's own fields joined on 2026-09-14 for the same
-#: reason - naming `turns` answers for the block and for nothing inside it.
-#:
-#: The set is closed: a field that is neither here nor recorded fails the
-#: contract test in `backend/tests/test_fingerprint.py`.
-NOT_DIGESTED: Final[Mapping[str, Undigested]] = MappingProxyType(
-    {
-        "arch": Undigested(
-            False,
-            "The architecture written inside the weights. It is a property of the bytes "
-            "model_sha256 already carries, so it cannot move on its own - and it exists "
-            "to be compared against those bytes at start-up, not to describe the run.",
-        ),
-        "byte_count": Undigested(
-            False,
-            "How large the weights are. Two files of one size can hold different "
-            "tensors and two digests cannot, so the size says nothing the digest does "
-            "not say better. It exists to cross-check the entry against the file the "
-            "run opened, not to describe the run.",
-        ),
-        "cpu_range": Undigested(
-            False, "Chooses CPUs for fixed thread counts, not the weights or the prompt."
-        ),
-        "cpu_strict": Undigested(
-            False, "Keeps threads on their configured CPUs without changing the arithmetic."
-        ),
-        "declared_for": Undigested(
-            False,
-            "Names the weights the block is set for. The manifest already carries those "
-            "bytes as model_sha256, so recording it twice would say a swap happened "
-            "twice.",
-        ),
-        "file": Undigested(
-            False,
-            "The filename inside the repository. model_sha256 is the bytes that were "
-            "opened, and a rename cannot move one of them.",
-        ),
-        "hf_base_repo": Undigested(
-            False,
-            "Where a fine-tune would train from. Nothing in a digest run reads it, and "
-            "the weights it points at are not the weights that decoded.",
-        ),
-        "id": Undigested(
-            False,
-            "The alias the server is started under. It labels a run; model_sha256 says "
-            "which bytes produced it, and renaming the entry renames no logit.",
-        ),
-        "load_mode": Undigested(
-            False, "mmap and mlock move where the weights sit, not what they hold."
-        ),
-        "log_verbosity": Undigested(
-            False,
-            "How much the server says about itself. It cannot move a logit, and "
-            "recording it would report a change the day somebody turned the logging up.",
-        ),
-        "metrics": Undigested(
-            False, "Exposes an endpoint. It counts the decode, it does not change one."
-        ),
-        "poll": Undigested(False, "How the runtime waits for work. It calculates nothing."),
-        "priority": Undigested(
-            False, "Scheduler priority changes when work runs, not what it produces."
-        ),
-        "repo": Undigested(
-            False,
-            "Where the file was pulled from. The download is checked against "
-            "model_sha256, so the source cannot change what ran.",
-        ),
-        "revision": Undigested(
-            False,
-            "The hub commit the download names. It is what makes model_sha256 "
-            "reproducible; it is not a second statement about the bytes.",
-        ),
-        "startup_warmup": Undigested(
-            False, "A pass before the run. It decodes nothing that we keep."
-        ),
-        "request_timeout_minutes": Undigested(
-            False, "A clock bound on one call. It stops a call, it does not reword one."
-        ),
-        "thinking_kwarg": Undigested(
-            False,
-            "The name of the template variable chat_template_kwargs carries. The run's "
-            "two calls render their own prompt bytes and send no template keywords at "
-            "all, so no published word is decoded under it; it reaches only the "
-            "start-up probe and the chat route. What it would turn on is already "
-            "recorded - sampling carries thinking on or off, and the rendered prompt "
-            "ends on whichever reply opening that chose.",
-        ),
-    }
-)
-
-#: Where a `ModelEntry` or `TurnsConfig` field arrives in the manifest when it is
-#: not carried under its own name. The whole envelope is digested as
-#: `turn_markers_sha256` since 2026-09-14, which is the field that exists to
-#: carry it: `run_manifest.ModelUse` embeds the recorded `ModelRef`, which
-#: carries no markers at all.
-#:
-#: It used to fold into `prompt_sha256`, on the ground that
-#: `classify.calls.prompt_inputs` renders both turns through the envelope. That
-#: was true and it stopped being the whole of the envelope's reach: which of the
-#: two reply openings a call ends on, and the marker the thinking span stops at,
-#: both move an output without moving a rendered prompt. A rendered prompt still
-#: moves when a marker moves, so the envelope reaches the stamp twice - the
-#: claim written here is the one a test can check against a moved marker.
-#:
-#: `system_role` and `system_joiner` are in here for the same reason the markers
-#: are, and the reason is worth stating because the design once read the other
-#: way: a placement change moves the same bytes to a different address, so it
-#: was argued that the stamp could not see it. Since the prompt bytes became
-#: ours the stamp renders through the envelope, so it does - which is what makes
-#: a topology change as loud as a reworded instruction.
-MODEL_FIELD_SPELLING: Final[Mapping[str, str]] = MappingProxyType(
-    {
-        "inference": "sampling",
-        "sha256": "model_sha256",
-        "turns": "turn_markers_sha256",
-        "turn_opening": "turn_markers_sha256",
-        "turn_closing": "turn_markers_sha256",
-        "reply_opening": "turn_markers_sha256",
-        "reply_opening_thinking": "turn_markers_sha256",
-        "system_role": "turn_markers_sha256",
-        "system_joiner": "turn_markers_sha256",
-        "thinking_close": "turn_markers_sha256",
-    }
-)
+def _flag_spelling(server: Mapping[str, Any], flag: str) -> object:
+    if flag not in server:
+        return RUNTIME_DEFAULT
+    value = server[flag]
+    return SET if value is None else value
 
 
-def digested_inference_fields() -> frozenset[str]:
-    """The `InferenceConfig` knobs the manifest carries, read back from the manifest.
+def _recorded(server: Mapping[str, Any], name: str) -> int:
+    """One server setting the manifest records under this project's name for it.
 
-    Four reach `PipelineInputs` under their own name. The rest arrive folded
-    into one of the two canonical spellings, so the names come out of those
-    spellings rather than out of a third list somebody has to keep in step.
+    Absent raises rather than substituting a number. The manifest says what a
+    run decoded on, and a default written here would be this project's guess at
+    llama-server's default recorded as a measurement (Guardrail #10).
     """
-    defaults = InferenceConfig()
-    spellings = (sampling_spelling(defaults), runtime_flags_spelling(defaults))
-    folded = {pair.split("=", 1)[0] for spelling in spellings for pair in spelling.split(";")}
-    reaches_the_digest = frozenset(PipelineInputs.model_fields) | frozenset(folded)
-    return frozenset(InferenceConfig.model_fields) & reaches_the_digest
-
-
-def digested_model_fields() -> frozenset[str]:
-    """The declared model-shaped fields the manifest carries, read back from the manifest.
-
-    Both shapes, because the envelope is a nested block: `ModelEntry` holds
-    `turns` and `TurnsConfig` holds the strings that render a turn. Asking only
-    the outer shape would answer for `turns` as a whole and for none of the
-    fields inside it, so a seventh envelope field could land in no stamp and in
-    no closed set with nothing saying so.
-
-    `quantisation` reaches the manifest under its own name. The rest arrive
-    under a manifest field of a different name, and `MODEL_FIELD_SPELLING` is
-    where that is written down - each entry is checked against `PipelineInputs`,
-    so a manifest field that is renamed away drops its claim rather than keeping
-    it.
-    """
-    carried = frozenset(PipelineInputs.model_fields)
-    declared = frozenset(ModelEntry.model_fields) | frozenset(TurnsConfig.model_fields)
-    return frozenset(
-        name
-        for name in declared
-        if name in carried or MODEL_FIELD_SPELLING.get(name, "") in carried
-    )
+    value = setting(server, name)
+    if value is None:
+        raise ValueError(
+            f"the model file declares no {SETTING_KEYS[name]}, so this run has no "
+            f"{name} to record. Name it in the entry's server block"
+        )
+    return int(value)
 
 
 def build_inputs(
     *,
     model: ModelRef,
     model_sha256: str | None,
-    inference: InferenceConfig,
+    server: Mapping[str, Any],
+    request: Mapping[str, Any],
     truncation_cap_tokens: int,
     runtime_build: str,
     chat_template: str,
@@ -412,12 +275,12 @@ def build_inputs(
         turn_markers_sha256=turn_markers_digest(turns) if turns is not None else None,
         output_schema_sha256=text_digest(output_schema),
         truncation_cap_tokens=truncation_cap_tokens,
-        sampling=sampling_spelling(inference),
-        runtime_flags=runtime_flags_spelling(inference),
-        n_ctx=inference.n_ctx,
-        n_batch=inference.n_batch,
-        n_ubatch=inference.n_ubatch,
-        n_threads=inference.n_threads,
+        sampling=sampling_spelling(request),
+        runtime_flags=runtime_flags_spelling(server),
+        n_ctx=window(server),
+        n_batch=_recorded(server, "n_batch"),
+        n_ubatch=_recorded(server, "n_ubatch"),
+        n_threads=_recorded(server, "n_threads"),
         runner_class=runner_class,
         extractor_version=extractor_version,
         sanitizer_version=sanitizer_version,

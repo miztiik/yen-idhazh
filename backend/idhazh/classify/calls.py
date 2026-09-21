@@ -74,7 +74,6 @@ from idhazh.contracts.element import (
     derive_element_id,
 )
 from idhazh.contracts.knobs.extract import ElementsConfig
-from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.visual import CODE_STAMPED_FIELDS, VisualPlan, widest_json_characters
@@ -547,7 +546,8 @@ def build_label_request(
     table: ElementTable,
     *,
     model_id: str,
-    inference: InferenceConfig,
+    server: Mapping[str, Any],
+    request: Mapping[str, Any],
     turns: TurnsConfig,
     prompt_config: SummarizeConfig | None = None,
 ) -> dict[str, Any]:
@@ -557,7 +557,7 @@ def build_label_request(
     template, which is what lets the summarize-and-plan call open with them unchanged. The output
     budget is derived from this call's own grammar, as the summarize-and-plan call's is from both
     replies' bounds together. There is no role-level budget behind either: the
-    `inference` block carried one until 2026-09-21 and it sized neither shape.
+    settings block carried one until 2026-09-21 and it sized neither shape.
 
     `prompt_config` reaches the label call because the system turn carries both jobs
     now. Every number it spends is a config-level one, the same on every item,
@@ -571,7 +571,8 @@ def build_label_request(
         system=label_system_prompt(prompt_config),
         user=label_user_turn(article, table),
         output_schema=label_schema(),
-        inference=inference,
+        server=server,
+        request=request,
         turns=turns,
         max_answer_tokens=label_budget_tokens(),
     )
@@ -1376,7 +1377,7 @@ def build_summarize_and_plan_request(
     whole article would prefill a second time - roughly double the stage's wall clock
     for a wording nobody could measure the benefit of.
 
-    The two calls belong **adjacent, per item**. `models.summarize.inference`
+    The two calls belong **adjacent, per item**. the summarize entry
     pins `n_parallel` to 1, so the server holds one cache slot: every label call
     first and every summarize-and-plan call after would evict the prefix before it was reused,
     every time, with nothing in any log to say so. Owning the bytes makes a

@@ -378,7 +378,7 @@ def run_once(
         binary=SERVER_BINARY,
         weights=WEIGHTS_DIR / candidate_file,
         model=settings.models.summarize,
-        inference=settings.models.summarize.inference,
+        server=settings.models.summarize.server,
         port=port,
     )
     env = os.environ.copy()

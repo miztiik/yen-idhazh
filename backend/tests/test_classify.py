@@ -71,7 +71,6 @@ from idhazh.classify.calls import (
 from idhazh.contracts.article import Article
 from idhazh.contracts.element import ElementKind, ElementTable, Extractor
 from idhazh.contracts.knobs.extract import ElementsConfig
-from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.models import ModelEntry
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.turns import TurnsConfig
@@ -82,6 +81,7 @@ from idhazh.contracts.visual_decision import NoneReason, VisualKind
 from idhazh.elements import SpanDriftError, element_table
 from idhazh.extract import approx_tokens
 from idhazh.llm.server import Completion, continued_prompt, post, render_prompt, turn_markers
+from idhazh.llm.server import window as ctx_size
 from idhazh.visual_planner import plan_lost_to_the_budget, plan_lost_to_the_window
 
 RECORDED_PAYLOADS = FIXTURES_DIR / "planner" / "recorded-call-payloads.json"
@@ -133,7 +133,8 @@ def rebuilt_payloads(inputs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
         article,
         table,
         model_id=inputs["model_id"],
-        inference=InferenceConfig.model_validate(inputs["inference"]),
+        server=inputs["server"],
+        request=inputs["request"],
         turns=turns,
     )
     summarize_and_plan_call = build_summarize_and_plan_request(
@@ -272,7 +273,7 @@ class TestThePromptBytes:
         entry = configured()
         thinking = entry.turns.model_copy(update={"thinking_close": "</think>"})
 
-        assert entry.turns.declared_for == recorded["weights_sha256"]
+        assert entry.declared_for == recorded["weights_sha256"]
         assert render_prompt(system=system, user=user, turns=entry.turns) == (
             recorded["generation_prompt"]
         )
@@ -561,7 +562,7 @@ class TestTheLabelCallShape:
 class TestTheLabelCallsDerivedBudget:
     """Row #3g. The budget is arithmetic over this shape's own bounds.
 
-    Until 2026-09-13 it was `models.summarize.inference.max_output_tokens`, the
+    Until 2026-09-13 it was the retired `max_output_tokens`, the
     summariser role's number, which knows nothing about this reply - and one
     ordinary 346-word article lost its whole item to it on 2026-09-12.
     """
@@ -672,7 +673,8 @@ class TestTheLabelCallPrompting:
             dense,
             a_table(dense),
             model_id="m",
-            inference=entry.inference,
+            server=entry.server,
+            request=entry.request,
             turns=entry.turns,
         )
         markers = turn_markers(entry.turns)
@@ -1338,7 +1340,8 @@ def test_a_recorded_label_reply_labels_the_table_over_a_loopback_socket(
         article_ok,
         table,
         model_id="m",
-        inference=entry.inference,
+        server=entry.server,
+        request=entry.request,
         turns=entry.turns,
     )
     body = (LABEL_REPLIES / "labelled.json").read_bytes()
@@ -1479,7 +1482,7 @@ class TestTheInstructionsSitInFrontOfTheArticle:
         """The whole basis of the prefix cache, and the one way this row could
         have cost more than it saved.
 
-        `models.summarize.inference.n_parallel` is 1, so the server holds one
+        `-np` on the summarize entry is 1, so the server holds one
         cache slot. A system turn carrying anything the article picked would
         evict the article on every alternation between two variants, and the
         article is thousands of tokens where this row moved hundreds.
@@ -1494,7 +1497,8 @@ class TestTheInstructionsSitInFrontOfTheArticle:
                 article,
                 a_table(article),
                 model_id="m",
-                inference=entry.inference,
+                server=entry.server,
+                request=entry.request,
                 turns=entry.turns,
                 prompt_config=ask,
             )
@@ -1795,7 +1799,7 @@ class TestARepliedCutByTheBudget:
         for the other.
         """
         app = config.load(CONFIG_DIR).app
-        window = configured().inference.n_ctx
+        window = ctx_size(configured().server)
         asked_for = summarize_and_plan_budget_tokens(app.summarize)
         body = json.loads(read_text(SUMMARIZE_AND_PLAN_REPLIES / "cut-in-the-plan.json"))
         content = body["choices"][0]["message"]["content"]

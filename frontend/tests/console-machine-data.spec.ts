@@ -523,7 +523,7 @@ test.describe('the ledgers this reads are the committed ones', () => {
 		const models = JSON.parse(
 			readFileSync(join(HERE, '..', '..', 'config', config.models_file), 'utf8')
 		) as { summarize: { inference: { n_ctx: number } } };
-		expect(limits.contextWindow).toBe(models.summarize.inference.n_ctx);
+		expect(limits.contextWindow).toBe(models.summarize.server['--ctx-size']);
 		expect(limits.jobTimeoutSeconds).toBe(config.run.shard_timeout_minutes * 60);
 	});
 

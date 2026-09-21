@@ -28,12 +28,11 @@ revision was the mutable string `main`.
 from __future__ import annotations
 
 import statistics
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Final
+from typing import Any, Final
 
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
-from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
 from idhazh.contracts.knobs.turns import TurnsConfig
@@ -48,6 +47,7 @@ from idhazh.contracts.qualification import (
     ItemScore,
     QualificationShard,
 )
+from idhazh.llm.server import setting, window
 
 #: The finish reason a complete reply carries. Anything else means the runtime
 #: stopped for its own reasons, and a summary cut off mid-sentence is not a
@@ -381,7 +381,7 @@ def publishable_length(
 
 def context_fit(
     observations: Sequence[ItemObservation],
-    inference: InferenceConfig,
+    server: Mapping[str, Any],
     *,
     turns: TurnsConfig | None = None,
 ) -> GateOutcome:
@@ -393,7 +393,7 @@ def context_fit(
     estimate taken from another model family.
 
     **Nothing is reserved for the reply, because nothing caps it.** The two
-    decode budgets left `inference` on 2026-09-21, so what the reply gets is
+    decode budgets left the settings on 2026-09-21, so what the reply gets is
     whatever the window has left after the prompt - which is exactly what this
     measures. A request with no headroom at all is still refused; what this gate
     no longer promises is that the headroom is enough.
@@ -402,9 +402,10 @@ def context_fit(
     it ran, and an envelope that thinks spends its reasoning inside this same
     sequence rather than beside it.
     """
-    overflow = [o for o in observations if o.prompt_tokens >= inference.n_ctx]
+    n_ctx = window(server)
+    overflow = [o for o in observations if o.prompt_tokens >= n_ctx]
     under_reserved = [
-        o for o in observations if o.fits_context_predicted and o.prompt_tokens >= inference.n_ctx
+        o for o in observations if o.fits_context_predicted and o.prompt_tokens >= n_ctx
     ]
     widest = max((o.prompt_tokens for o in observations), default=0)
     return _outcome(
@@ -414,8 +415,8 @@ def context_fit(
             f"widest request {widest} tokens, no reply reserve; "
             f"{len(overflow)} overflowed, {len(under_reserved)} under-reserved"
         ),
-        threshold=f"< n_ctx {inference.n_ctx}; fits_context over-reserves",
-        source=f"{_CONFIG} models.summarize.inference.n_ctx",
+        threshold=f"< n_ctx {n_ctx}; fits_context over-reserves",
+        source=f"{_CONFIG} models.summarize.server --ctx-size",
         detail=(
             "a request that does not fit is not a shorter summary, it is a reply "
             "cut off before it closed its JSON"
@@ -563,7 +564,7 @@ def gates(
     *,
     evaluation: EvaluationConfig,
     summarize: SummarizeConfig,
-    inference: InferenceConfig,
+    server: Mapping[str, Any],
     run: RunConfig,
     budget_: Budget,
     required_canaries: int,
@@ -586,7 +587,7 @@ def gates(
         schema_validity(corpus.observations),
         injection_canaries(corpus.canaries, required=required_canaries),
         publishable_length(corpus.observations, summarize),
-        context_fit(corpus.observations, inference, turns=turns),
+        context_fit(corpus.observations, server, turns=turns),
         identity(shards),
         budget(budget_),
         scored_denominator(corpus, evaluation=evaluation, run=run),
@@ -604,7 +605,7 @@ def _mean(values: Iterable[float]) -> float:
 
 
 def wording_spread(
-    observations: Sequence[ItemObservation], *, inference: InferenceConfig, repeats: int
+    observations: Sequence[ItemObservation], *, request: Mapping[str, Any], repeats: int
 ) -> list[Diagnostic]:
     """How far apart the repeats of one item landed, above zero temperature.
 
@@ -620,7 +621,8 @@ def wording_spread(
     Empty at `temperature == 0`, where every repeat is the same words by
     construction and a row saying so is a row nobody can act on.
     """
-    if inference.temperature == 0:
+    temperature = setting(request, "temperature", 0)
+    if temperature == 0:
         return []
     by_item: dict[str, set[str]] = {}
     successes: dict[str, int] = {}
@@ -635,7 +637,7 @@ def wording_spread(
     return [
         Diagnostic(
             name="items_whose_repeats_differed",
-            value=f"{len(varied)} of {len(counted)} at temperature {inference.temperature}",
+            value=f"{len(varied)} of {len(counted)} at temperature {temperature}",
             unit="articles",
             denominator=len(counted),
         ),

@@ -401,7 +401,7 @@ function writeItemHealthCanary() {
 	 * the first article would get the same total as one that did not.
 	 *
 	 * Both pinning settings are real: `config/models/qwen3.5-9b-q4km.json` sets
-	 * `inference.load_mode` and the other four leave it null, so neither value
+	 * `-lm` and the other four leave it out, so neither value
 	 * here is a setting the repository cannot produce.
 	 */
 	const MEMORY_DAYS = new Map([
@@ -458,7 +458,7 @@ function writeItemHealthCanary() {
 	 * one for the Python process, one for the whole cgroup, and the window the
 	 * prompt had to fit. Each one ends in the item id's own spread, so a reader
 	 * checking the page against this file can see which row a figure came from.
-	 * `n_ctx_configured` is the committed `inference.n_ctx`, because a fixture
+	 * `n_ctx_configured` is the committed `--ctx-size`, because a fixture
 	 * that disagreed with the config would draw a context share no run had.
 	 *
 	 * `kernelRecorded` is what puts the newest day's kernel account on the row

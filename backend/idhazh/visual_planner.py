@@ -110,7 +110,7 @@ def plan_lost_to_the_window(
     It is a separate member because it asks an operator for different work. A
     budget cut is the reply shape's own arithmetic and the fix is in the
     grammar. This one is the article in front of the reply, and the fix is
-    `models.summarize.inference.n_ctx` beside `extract.truncation_cap_tokens` -
+    `--ctx-size` on the summarize entry beside `extract.truncation_cap_tokens` -
     two knobs, one decision. A run of these says the window is too narrow for
     the cap, which is a sentence no count of `output_budget_cut` can make.
     """

@@ -24,6 +24,7 @@ from idhazh.fingerprint import (
 )
 from idhazh.llm.server import (
     DEFAULT_ENDPOINT,
+    request_timeout_seconds,
 )
 from idhazh.stages import common
 from idhazh.stages.common import LOG, Fetcher, _ask_the_model, _fetch_one, _load_plan, silent_tracer
@@ -47,7 +48,7 @@ def _summarize_one(
     number.
     """
     trace = tracer if tracer is not None else silent_tracer()
-    inference = settings.models.summarize.inference
+    request = settings.models.summarize.request
     turns = settings.models.summarize.turns
     model_id = settings.models.summarize.id
     with trace.span(telemetry.SpanName.SUMMARIZE) as stage_span:
@@ -56,7 +57,7 @@ def _summarize_one(
             payload = summarize.build_request(
                 article,
                 model_id=model_id,
-                inference=inference,
+                request=request,
                 turns=turns,
                 prompt_config=settings.app.summarize,
             )
@@ -69,7 +70,7 @@ def _summarize_one(
             article,
             model_id=model_id,
             endpoint=endpoint,
-            timeout=inference.request_timeout_minutes * 60,
+            timeout=request_timeout_seconds(request),
             prompt_digest=prompt_digest,
             run_id=run_id,
             trace=trace,

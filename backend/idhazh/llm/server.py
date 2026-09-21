@@ -30,12 +30,12 @@ from dataclasses import dataclass, replace
 from functools import lru_cache
 from pathlib import Path
 from string import Template
+from types import MappingProxyType
 from typing import IO, Any, Final
 from urllib import request
 from urllib.parse import urlsplit, urlunsplit
 
 from idhazh.contracts.base import derive_text_digest
-from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.models import ModelEntry, ModelRef
 from idhazh.contracts.knobs.turns import SystemPlacement, TurnsConfig
 
@@ -389,25 +389,80 @@ class Completion:
         return bool(self.reasoning.strip())
 
 
+#: Our name for a value, and the key the model file spells it under. These are
+#: the settings this project reads BY NAME rather than handing to the server
+#: whole. Four of them are persisted under our names on the run record and drawn
+#: in words on a console panel, so a rename would move a published string and an
+#: alias does not.
+SETTING_KEYS: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "n_ctx": "--ctx-size",
+        "n_batch": "--batch-size",
+        "n_ubatch": "--ubatch-size",
+        "n_threads": "--threads",
+        "n_parallel": "-np",
+        "load_mode": "-lm",
+        "temperature": "temperature",
+        "top_p": "top_p",
+        "seed": "seed",
+        "request_timeout_minutes": "request_timeout_minutes",
+    }
+)
+
+
+def setting(block: Mapping[str, Any], name: str, default: Any = None) -> Any:
+    """One value out of a settings block, under this project's name for it."""
+    return block.get(SETTING_KEYS[name], default)
+
+
+def window(server: Mapping[str, Any]) -> int:
+    """The window one sequence gets. Required, because this project computes on it."""
+    return int(server[SETTING_KEYS["n_ctx"]])
+
+
+def request_timeout_seconds(request: Mapping[str, Any]) -> float:
+    """How long one POST may wait. Required: no server-side default bounds it."""
+    return float(request[SETTING_KEYS["request_timeout_minutes"]]) * 60
+
+
+def caches_the_prompt(server: Mapping[str, Any]) -> bool:
+    """Does a request built for this server ask the slot to keep the prefix?
+
+    The server flag and the request key are one decision, so they are read off
+    one place. llama-server keeps an enabled prompt cache unless the file turns
+    it off, and the build's own default is not readable off `/props` - so a
+    request states the answer rather than inheriting one that could flip with no
+    log saying why.
+    """
+    return "--no-cache-prompt" not in server
+
+
 def server_argv(
     *,
     binary: Path,
     weights: Path,
     model: ModelRef,
-    inference: InferenceConfig,
+    server: Mapping[str, Any],
     port: int = DEFAULT_PORT,
 ) -> list[str]:
     """The exact process the run stands up.
 
-    The only function in this repository that spells a `llama-server` flag.
-    Every workflow that starts a server imports it; nothing renders the same
-    list a second time, because a second rendering is a second server.
+    The only function in this repository that spells a `llama-server` flag, and
+    it spells four. Everything else comes out of the entry's `server` block
+    verbatim: a key is a flag, and a value that is not null is the argument
+    beside it. Naming one more option is a key in the model file and no edit
+    here.
 
-    The list is built from config, not written out by hand at the call site, so
-    one config edit moves the local server and the workflow together.
+    A flag this build does not accept is refused by llama-server at start-up,
+    which names it and does not start. A sampling value cannot reach this list
+    at all, because it lives in the `request` block and nothing here reads one.
 
-    Not every knob here reaches the stamp. `idhazh.fingerprint.NOT_DIGESTED`
-    names the ones that do not and says which of them can still move the words.
+    The four below stay in code because no key in the file produces them: the
+    weights and the alias are the run's own, the port is the caller's, and the
+    context-shift refusal is a correctness rule rather than a setting. Without
+    it the server silently drops the middle of an oversized prompt and answers
+    about a document it no longer holds, which scores as a hallucination and
+    names the wrong cause.
     """
     argv = [
         str(binary),
@@ -415,70 +470,14 @@ def server_argv(
         str(weights),
         "--alias",
         model.id,
-        "--ctx-size",
-        str(inference.n_ctx),
-        # Without this the server silently drops the middle of an oversized
-        # prompt and answers about a document it no longer holds, which scores
-        # as a hallucination and names the wrong cause. Refusing is the signal.
         "--no-context-shift",
-        "--batch-size",
-        str(inference.n_batch),
-        "--ubatch-size",
-        str(inference.n_ubatch),
-        "--threads",
-        str(inference.n_threads),
         "--port",
         str(port),
     ]
-    if inference.n_parallel is not None:
-        argv.extend(("-np", str(inference.n_parallel)))
-    if inference.flash_attention is not None:
-        argv.extend(("-fa", inference.flash_attention))
-    if inference.load_mode is not None:
-        argv.extend(("-lm", inference.load_mode))
-    if inference.cache_type_k is not None:
-        argv.extend(("-ctk", inference.cache_type_k))
-    if inference.cache_type_v is not None:
-        argv.extend(("-ctv", inference.cache_type_v))
-    if inference.priority is not None:
-        argv.extend(("--prio", str(inference.priority)))
-    if inference.poll is not None:
-        argv.extend(("--poll", str(inference.poll)))
-    if inference.n_threads_batch is not None:
-        argv.extend(("-tb", str(inference.n_threads_batch)))
-    if inference.cpu_range is not None:
-        argv.extend(("--cpu-range", inference.cpu_range))
-    if inference.cpu_strict is not None:
-        argv.extend(("--cpu-strict", str(inference.cpu_strict)))
-    if inference.checkpoint_min_step is not None:
-        argv.extend(("-cms", str(inference.checkpoint_min_step)))
-    if inference.ctx_checkpoints is not None:
-        argv.extend(("-ctxcp", str(inference.ctx_checkpoints)))
-    if inference.cache_ram is not None:
-        argv.extend(("-cram", str(inference.cache_ram)))
-    if inference.slot_prompt_similarity is not None:
-        argv.extend(("-sps", str(inference.slot_prompt_similarity)))
-    if inference.cache_prompt is not None:
-        argv.append("--cache-prompt" if inference.cache_prompt else "--no-cache-prompt")
-    if inference.jinja is not None:
-        argv.append("--jinja" if inference.jinja else "--no-jinja")
-    if inference.reasoning_preserve is not None:
-        argv.append(
-            "--reasoning-preserve" if inference.reasoning_preserve else "--no-reasoning-preserve"
-        )
-    # What the server says about itself. At the runtime default of 3 it prints
-    # twelve lines and none of them names the attention state, the KV buffer or
-    # the compute buffer, so a check on any of those reads the flag we passed
-    # rather than what the runtime did with it.
-    if inference.log_verbosity is not None:
-        argv.extend(("-lv", str(inference.log_verbosity)))
-    # Loopback only, and only inside a CI job. It opens no surface a reader can
-    # reach, and it is the only place the context high-water mark and the
-    # busy-slot average are published at all.
-    if inference.metrics:
-        argv.append("--metrics")
-    if not inference.startup_warmup:
-        argv.append("--no-warmup")
+    for flag, value in server.items():
+        argv.append(flag)
+        if value is not None:
+            argv.append(str(value))
     return argv
 
 
@@ -488,7 +487,7 @@ def request_payload(
     system: str,
     user: str,
     output_schema: dict[str, Any],
-    inference: InferenceConfig,
+    request: Mapping[str, Any],
     turns: TurnsConfig,
     schema_name: str = "summary",
 ) -> dict[str, Any]:
@@ -523,9 +522,9 @@ def request_payload(
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
-        "temperature": inference.temperature,
-        "top_p": inference.top_p,
-        "seed": inference.seed,
+        "temperature": setting(request, "temperature"),
+        "top_p": setting(request, "top_p"),
+        "seed": setting(request, "seed"),
         "stream": False,
         "response_format": {
             "type": "json_schema",
@@ -546,7 +545,8 @@ def completion_payload(
     system: str,
     user: str,
     output_schema: dict[str, Any],
-    inference: InferenceConfig,
+    server: Mapping[str, Any],
+    request: Mapping[str, Any],
     turns: TurnsConfig,
     max_answer_tokens: int,
 ) -> dict[str, Any]:
@@ -558,23 +558,23 @@ def completion_payload(
     route does - `response_format` is accepted and ignored here, which is a
     silent loss of the only control that matters, so it is never sent.
 
-    **The budget is handed in rather than read off `inference`**, for the same
+    **The budget is handed in rather than read off the entry**, for the same
     reason `continued_completion_payload` takes one: a rendered call is held to
     a shape of its own, and a budget sized for some other shape cuts a reply
     that did exactly what the grammar allowed. It is the caller's own
     grammar-derived number and there is no role-level cap behind it: the
-    `inference` block carried two until 2026-09-21 and neither bounded this
-    route.
+    settings block carried two until 2026-09-21 and neither bounded this route.
 
     **This is the answer span, whether or not one is thought in front of it.**
     Under a thinking envelope `thinking_span` derives span one from this body
     and `answer_span` puts this body's own shape back on the same slot, so the
     budget here is never a share of a combined number.
 
-    `cache_prompt` is explicit on every request. Unset inference preserves
-    enabled caching; an explicit boolean reaches both the startup flag and
-    this request. The build's default is not readable off `/props`, so inheriting
-    a default that flipped could re-read every prompt with no log saying why.
+    `cache_prompt` is explicit on every request, and `caches_the_prompt` reads
+    it off the same block the startup flag comes from so the two cannot
+    disagree. The build's own default is not readable off `/props`, so
+    inheriting a default that flipped could re-read every prompt with no log
+    saying why.
 
     `model` is carried although a single-model server ignores it. It is the one
     field that says which weights the body was built for, and a payload read out
@@ -583,12 +583,12 @@ def completion_payload(
     return {
         "model": model_id,
         "prompt": render_prompt(system=system, user=user, turns=turns),
-        "temperature": inference.temperature,
-        "top_p": inference.top_p,
-        "seed": inference.seed,
+        "temperature": setting(request, "temperature"),
+        "top_p": setting(request, "top_p"),
+        "seed": setting(request, "seed"),
         "n_predict": max_answer_tokens,
         "stream": False,
-        "cache_prompt": True if inference.cache_prompt is None else inference.cache_prompt,
+        "cache_prompt": caches_the_prompt(server),
         "json_schema": output_schema,
     }
 
@@ -599,7 +599,8 @@ def grammar_completion_payload(
     system: str,
     user: str,
     grammar: str,
-    inference: InferenceConfig,
+    server: Mapping[str, Any],
+    request: Mapping[str, Any],
     turns: TurnsConfig,
     max_answer_tokens: int,
     first_token_alternatives: int,
@@ -636,14 +637,14 @@ def grammar_completion_payload(
     return {
         "model": model_id,
         "prompt": render_prompt(system=system, user=user, turns=turns),
-        "temperature": inference.temperature,
-        "top_p": inference.top_p,
-        "seed": inference.seed,
+        "temperature": setting(request, "temperature"),
+        "top_p": setting(request, "top_p"),
+        "seed": setting(request, "seed"),
         "n_predict": max_answer_tokens,
         "n_probs": first_token_alternatives,
         "post_sampling_probs": post_sampling_probs,
         "stream": False,
-        "cache_prompt": True if inference.cache_prompt is None else inference.cache_prompt,
+        "cache_prompt": caches_the_prompt(server),
         "grammar": grammar,
     }
 
@@ -1219,7 +1220,7 @@ def the_window_is_inside_the_trained_window(*, n_ctx: int, trained: int) -> None
         )
     if n_ctx > trained:
         raise ProbeRefusedError(
-            f"models.summarize.inference.n_ctx is {n_ctx} and the weights were trained "
+            f"models.summarize.server --ctx-size is {n_ctx} and the weights were trained "
             f"for {trained}. The server will not refuse a prompt in between, so every "
             "item past the trained length would degrade with nothing red"
         )
@@ -1450,7 +1451,6 @@ def prove_the_entry(
     (`CLAUDE.md` section 4) - and it means the probe is held to whatever shape
     the caller really uses rather than to a copy of it.
     """
-    inference = model.inference
     ours = render_prompt(system=PROBE_SYSTEM, user=PROBE_USER, turns=model.turns)
     theirs = _rendered_by_the_server(endpoint, turns=model.turns, timeout=timeout)
     the_render_agrees(
@@ -1465,7 +1465,8 @@ def prove_the_entry(
         system=PROBE_SYSTEM,
         user=PROBE_USER,
         output_schema=schema,
-        inference=inference,
+        server=model.server,
+        request=model.request,
         turns=model.turns,
         max_answer_tokens=PROBE_OUTPUT_TOKENS,
     )
@@ -1489,6 +1490,6 @@ def prove_the_entry(
         declared=model.arch, reported=gguf_architecture(weights)
     )
     the_window_is_inside_the_trained_window(
-        n_ctx=inference.n_ctx,
+        n_ctx=window(model.server),
         trained=trained_context(_ask(models_url(endpoint), None, timeout=timeout)),
     )

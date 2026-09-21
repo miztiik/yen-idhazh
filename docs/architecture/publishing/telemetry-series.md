@@ -598,7 +598,7 @@ ledger had been committed for four days with no page reading a cell of it.
 | Read and write speed | `server_prompt_tokens` over `server_prompt_seconds`, and the item ledger's `output_tokens` over its summed `decode_ms` | sum over sum, never a mean of per-shard rates |
 | Read spread | the fastest shard's read rate over the slowest | one run only; a run of one shard reports nothing |
 | How much text the model has to read again each time | the item ledger's `input_tokens` against its `cached_tokens` | share of every token the prompt needed, read or reused |
-| How close the longest text came to the model's limit | the largest `input_tokens + output_tokens` any item recorded, against `models.summarize.inference.n_ctx` | the longest sequence any shard saw. A maximum, not a sum |
+| How close the longest text came to the model's limit | the largest `input_tokens + output_tokens` any item recorded, against `--ctx-size` on the summarize entry | the longest sequence any shard saw. A maximum, not a sum |
 | Job clock | the machine record's `job_seconds` against `run.shard_timeout_minutes` | the slowest shard. A run's wall clock is its slowest shard |
 | The processor | the machine record's `cpu_model` | text, per shard, and never averaged |
 | Busy and load | the item ledger's `cpu_busy_pct`, the machine record's `model_load_ms` | lowest, slowest |

@@ -30,6 +30,8 @@ from conftest import (
     FIXTURES_DIR,
     REPO_ROOT,
     RecordedEndpoint,
+    a_request,
+    a_server,
     llama_server_flags,
     read_text,
 )
@@ -48,7 +50,6 @@ from idhazh.contracts.base import (
 from idhazh.contracts.call_cost import CallKind
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
-from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.summarize import (
     LengthPolicy,
@@ -88,6 +89,7 @@ from idhazh.llm.server import (
     thinking_span,
     trained_context,
     turn_markers,
+    window,
 )
 from idhazh.sanitize import (
     FENCE_CLOSE,
@@ -201,7 +203,7 @@ def summarised(name: str, source: str = "ok") -> Summary:
 def test_the_system_prompt_never_carries_the_article() -> None:
     """Decision 1: article text goes in the user turn, or the fence means nothing."""
     payload = build_request(
-        article(), model_id="m", inference=InferenceConfig(), turns=built_turns()
+        article(), model_id="m", request=a_request(), turns=built_turns()
     )
     system = payload["messages"][0]
     assert system["role"] == "system"
@@ -236,13 +238,12 @@ def test_the_prompt_tells_the_model_the_block_is_data() -> None:
 
 
 def test_decoding_parameters_come_from_config_and_nowhere_else() -> None:
-    inference = InferenceConfig()
     payload = request_payload(
         model_id="m",
         system="s",
         user="u",
         output_schema={},
-        inference=inference,
+        request=a_request(),
         turns=built_turns(),
     )
     assert payload["temperature"] == 0.0
@@ -261,13 +262,13 @@ def test_the_chat_route_sends_no_token_cap_on_either_envelope() -> None:
     no context shift, and what bounds the wait is the per-request timeout -
     both per item, both loud.
     """
-    inference = InferenceConfig()
+    request = a_request()
     quiet = request_payload(
         model_id="m",
         system="s",
         user="u",
         output_schema={},
-        inference=inference,
+        request=request,
         turns=built_turns(),
     )
     loud = request_payload(
@@ -275,7 +276,7 @@ def test_the_chat_route_sends_no_token_cap_on_either_envelope() -> None:
         system="s",
         user="u",
         output_schema={},
-        inference=inference,
+        request=request,
         turns=built_turns(thinking_close="</think>"),
     )
 
@@ -291,7 +292,7 @@ def test_thinking_is_off_in_the_request() -> None:
         system="s",
         user="u",
         output_schema={},
-        inference=InferenceConfig(),
+        request=a_request(),
         turns=configured_turns(),
     )
     assert payload["chat_template_kwargs"] == {"enable_thinking": False}
@@ -304,7 +305,7 @@ def test_the_declared_closing_marker_is_what_asks_the_template_to_think() -> Non
         system="s",
         user="u",
         output_schema={},
-        inference=InferenceConfig(),
+        request=a_request(),
         turns=built_turns(thinking_close="</think>"),
     )
     assert payload["chat_template_kwargs"] == {"enable_thinking": True}
@@ -323,7 +324,7 @@ def test_a_template_that_reads_no_keyword_is_sent_none() -> None:
         system="s",
         user="u",
         output_schema={},
-        inference=InferenceConfig(),
+        request=a_request(),
         turns=built_turns(thinking_kwarg=None),
     )
     assert "chat_template_kwargs" not in payload
@@ -336,7 +337,7 @@ def test_the_keyword_the_request_carries_is_the_one_the_entry_names() -> None:
         system="s",
         user="u",
         output_schema={},
-        inference=InferenceConfig(),
+        request=a_request(),
         turns=built_turns(thinking_kwarg="reasoning"),
     )
     assert payload["chat_template_kwargs"] == {"reasoning": False}
@@ -349,7 +350,7 @@ def test_the_output_shape_is_enforced_by_the_decoder() -> None:
         system="s",
         user="u",
         output_schema=output_schema(),
-        inference=InferenceConfig(),
+        request=a_request(),
         turns=built_turns(),
     )
     assert payload["response_format"]["type"] == "json_schema"
@@ -358,6 +359,7 @@ def test_the_output_shape_is_enforced_by_the_decoder() -> None:
 
 
 def test_the_server_is_started_from_config_not_by_hand() -> None:
+    """Four flags are written in code and the rest are the entry's, emitted in order."""
     from idhazh.contracts.knobs.models import ModelRef
     from idhazh.llm.server import DEFAULT_PORT
 
@@ -367,7 +369,7 @@ def test_the_server_is_started_from_config_not_by_hand() -> None:
         binary=binary,
         weights=weights,
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
-        inference=InferenceConfig(),
+        server=a_server(**{"--metrics": None}),
     )
     assert argv == [
         str(binary),
@@ -375,17 +377,17 @@ def test_the_server_is_started_from_config_not_by_hand() -> None:
         str(weights),
         "--alias",
         "m",
+        "--no-context-shift",
+        "--port",
+        str(DEFAULT_PORT),
         "--ctx-size",
         "8192",
-        "--no-context-shift",
         "--batch-size",
         "512",
         "--ubatch-size",
         "512",
         "--threads",
         "4",
-        "--port",
-        str(DEFAULT_PORT),
         "--metrics",
     ]
 
@@ -402,7 +404,7 @@ def test_the_server_refuses_an_oversized_prompt_rather_than_shifting_it() -> Non
         binary=Path("bin/llama-server"),
         weights=Path("models/w.gguf"),
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
-        inference=InferenceConfig(),
+        server=a_server(**{"--metrics": None}),
     )
 
     assert "--no-context-shift" in argv
@@ -422,7 +424,7 @@ def test_no_speculative_flag_reaches_the_server() -> None:
         binary=Path("bin/llama-server"),
         weights=Path("models/w.gguf"),
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
-        inference=InferenceConfig(),
+        server=a_server(**{"--metrics": None}),
     )
 
     assert not [flag for flag in argv if flag.startswith(("--spec-", "--draft"))]
@@ -466,7 +468,7 @@ def test_server_argv_names_the_port_it_was_given() -> None:
         binary=Path("bin/llama-server"),
         weights=Path("models/w.gguf"),
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
-        inference=InferenceConfig(),
+        server=a_server(**{"--metrics": None}),
         port=8181,
     )
 
@@ -741,19 +743,25 @@ def test_exactly_one_function_spells_a_llama_server_flag() -> None:
     drifted the moment a flag landed on one copy and not the other. The install
     moved one step earlier and the copy is gone.
 
-    Closed-world: the flags come from `server_argv` itself, so a new one joins
-    this search without anybody remembering to add it, and the file set is
-    compared by equality rather than by membership. The workflow half of the
-    same Oracle is
+    **What a second builder would have to restate is the flags written in code.**
+    Everything else comes out of the entry's `server` block verbatim, so a flag
+    appearing in a run's stamp or in a fixture is data rather than a second
+    answer to what the server runs. The three below are written in this
+    repository rather than in a model file, and none of them is a name an
+    ordinary command-line tool takes - so a file spelling one is a file deciding
+    how an inference server starts. `--model` is left out for the opposite
+    reason: four unrelated tools take a `--model` option and none of them starts
+    a server.
+    The workflow half of the same Oracle is
     `workflows/test_model_server_jobs.py::test_every_job_that_starts_a_server_reaches_the_one_argv_builder`.
     """
-    every_flag = llama_server_flags()
-    assert "--ctx-size" in every_flag and "--no-context-shift" in every_flag
+    written_in_code = ("--alias", "--no-context-shift", "--port")
+    assert set(written_in_code) <= llama_server_flags() | {"--alias", "--port"}
 
     spellers = {
         path.relative_to(REPO_ROOT).as_posix()
         for path in REPO_ROOT.glob("backend/**/*.py")
-        if any(f'"{flag}"' in path.read_text(encoding="utf-8") for flag in every_flag)
+        if any(f'"{flag}"' in path.read_text(encoding="utf-8") for flag in written_in_code)
     }
     # The builder, and the test that pins what it builds. A third file is a
     # second answer to what the server runs.
@@ -859,16 +867,18 @@ def test_runtime_sweep_flags_are_emitted_only_when_configured() -> None:
         binary=Path("bin/llama-server"),
         weights=Path("models/w.gguf"),
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
-        inference=InferenceConfig(
-            n_parallel=1,
-            flash_attention="on",
-            load_mode="mmap+mlock",
-            cache_type_k="q8_0",
-            cache_type_v="q8_0",
-            priority=2,
-            poll=100,
-            n_threads_batch=4,
-            startup_warmup=True,
+        server=a_server(
+            **{
+                "-np": 1,
+                "-fa": "on",
+                "-lm": "mmap+mlock",
+                "-ctk": "q8_0",
+                "-ctv": "q8_0",
+                "--prio": 2,
+                "--poll": 100,
+                "-tb": 4,
+                "--metrics": None,
+            }
         ),
     )
 
@@ -910,7 +920,7 @@ def test_the_server_is_asked_to_describe_itself_only_when_configured() -> None:
         binary=Path("bin/llama-server"),
         weights=Path("models/w.gguf"),
         model=model,
-        inference=InferenceConfig(),
+        server=a_server(),
     )
     assert "-lv" not in quiet
 
@@ -918,7 +928,7 @@ def test_the_server_is_asked_to_describe_itself_only_when_configured() -> None:
         binary=Path("bin/llama-server"),
         weights=Path("models/w.gguf"),
         model=model,
-        inference=InferenceConfig(log_verbosity=4),
+        server=a_server(**{"-lv": 4}),
     )
     assert loud[loud.index("-lv") + 1] == "4"
 
@@ -937,7 +947,7 @@ def test_every_committed_role_starts_a_server_that_names_its_own_settings() -> N
             binary=Path("bin/llama-server"),
             weights=Path(f"models/{entry.file}"),
             model=entry,
-            inference=entry.inference,
+            server=entry.server,
         )
         assert argv[argv.index("-lv") + 1] == "4", f"{role} starts a server that says nothing"
 
@@ -980,7 +990,7 @@ def test_no_placeholder_survives_into_a_rendered_prompt() -> None:
 def test_a_recorded_brief_uses_the_brief_band_even_when_the_source_is_longer() -> None:
     source = article().model_copy(update={"brief": True, "word_count": 190})
     payload = build_request(
-        source, model_id="m", inference=InferenceConfig(), turns=built_turns()
+        source, model_id="m", request=a_request(), turns=built_turns()
     )
     system = payload["messages"][0]["content"]
 
@@ -1005,7 +1015,7 @@ def test_a_cut_long_read_is_still_asked_for_a_long_read_summary() -> None:
         }
     )
     system = build_request(
-        source, model_id="m", inference=InferenceConfig(), turns=built_turns()
+        source, model_id="m", request=a_request(), turns=built_turns()
     )["messages"][0]["content"]
     assert f"{top.target_words_min} to {top.target_words_max} words" in system
 
@@ -1015,7 +1025,7 @@ def test_an_article_written_before_the_field_keeps_its_post_cap_band() -> None:
     ask = SummarizeConfig()
     older = article().model_copy(update={"word_count": 1900, "source_word_count": None})
     system = build_request(
-        older, model_id="m", inference=InferenceConfig(), turns=built_turns()
+        older, model_id="m", request=a_request(), turns=built_turns()
     )["messages"][0]["content"]
     band = ask.band_for(1900)
     assert f"{band.target_words_min} to {band.target_words_max} words" in system
@@ -1572,7 +1582,8 @@ class TestTwoSpansOnOneCall:
             system="S",
             user="U",
             output_schema=output_schema(),
-            inference=InferenceConfig(),
+            server=a_server(),
+            request=a_request(),
             turns=self.turns(),
             max_answer_tokens=ANSWER_BUDGET,
         )
@@ -1716,7 +1727,8 @@ class TestAConstrainedCallerGetsBothSpans:
             "system": "S",
             "user": "U",
             "grammar": 'root ::= "YES" | "NO" | "UNCLEAR"',
-            "inference": InferenceConfig(),
+            "server": a_server(),
+            "request": a_request(),
             "turns": self.turns(),
             "max_answer_tokens": 4,
             "first_token_alternatives": 3,
@@ -1729,7 +1741,8 @@ class TestAConstrainedCallerGetsBothSpans:
             system="S",
             user="U",
             output_schema=output_schema(),
-            inference=InferenceConfig(),
+            server=a_server(),
+            request=a_request(),
             turns=self.turns(),
             max_answer_tokens=ANSWER_BUDGET,
         )
@@ -1758,7 +1771,7 @@ class TestAConstrainedCallerGetsBothSpans:
         it repeats itself, and the repetition ends at the window rather than at
         the marker it is looping instead of writing.
         """
-        answer = self.grammar_body(inference=InferenceConfig(temperature=0.0))
+        answer = self.grammar_body(request=a_request(temperature=0.0))
 
         stated = thinking_span(answer, turns=self.turns(), temperature=0.7)
         carried = thinking_span(answer, turns=self.turns())
@@ -1886,7 +1899,8 @@ class TestTheThinkingReachesNothing:
             system="S",
             user="U",
             output_schema=output_schema(),
-            inference=InferenceConfig(),
+            server=a_server(),
+            request=a_request(),
             turns=turns,
             max_answer_tokens=900,
         )
@@ -2827,13 +2841,13 @@ def test_a_truncated_source_is_carried_onto_the_summary() -> None:
 
 
 def test_an_article_inside_the_context_budget_fits() -> None:
-    assert fits_context(article(), InferenceConfig())
+    assert fits_context(article(), a_server())
 
 
 def test_an_article_that_would_be_cut_off_mid_reply_does_not_fit() -> None:
     """Prompt plus reply must fit, or the reply ends mid-sentence and looks fine."""
     oversized = article().model_copy(update={"token_count": 8000})
-    assert not fits_context(oversized, InferenceConfig())
+    assert not fits_context(oversized, a_server())
 
 
 def test_the_biggest_article_the_extractor_hands_over_still_fits() -> None:
@@ -2845,7 +2859,7 @@ def test_the_biggest_article_the_extractor_hands_over_still_fits() -> None:
     from idhazh.contracts.knobs.extract import ExtractConfig
 
     capped = article().model_copy(update={"token_count": ExtractConfig().truncation_cap_tokens})
-    assert fits_context(capped, InferenceConfig())
+    assert fits_context(capped, a_server())
 
 
 def test_the_summary_of_an_ok_article_carries_the_items_identity() -> None:
@@ -3205,7 +3219,7 @@ class TestTheServerProvesTheEntry:
         trained = trained_context(self.models("inside_the_trained_window"))
 
         assert trained == 262144
-        the_window_is_inside_the_trained_window(n_ctx=entry.inference.n_ctx, trained=trained)
+        the_window_is_inside_the_trained_window(n_ctx=window(entry.server), trained=trained)
 
     def test_a_window_past_the_trained_window_refuses_the_run(self) -> None:
         trained = trained_context(self.models("a_short_native_window"))
@@ -3214,7 +3228,7 @@ class TestTheServerProvesTheEntry:
             the_window_is_inside_the_trained_window(n_ctx=49152, trained=trained)
 
         said = str(refusal.value)
-        assert "n_ctx is 49152" in said and "trained for 32768" in said
+        assert "--ctx-size is 49152" in said and "trained for 32768" in said
 
     def test_a_server_that_names_no_trained_window_refuses_the_run(self) -> None:
         """Case 5 has no skip either. An unread proof is not a proof."""

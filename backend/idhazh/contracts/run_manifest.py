@@ -312,6 +312,11 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21T03:00",
+            change="The embedded settings become plain mappings, and two blocks replace one.",
+            why="A record carrying a retired option name has to keep reading.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T02:00",
             change="The embedded inference block loses both decode caps; an old run reads.",
             why="Neither number bounded anything the window and the timeout did not.",
@@ -328,11 +333,6 @@ class RunManifest(Contract):
         ),
         ChangelogEntry(
             version="2026-09-19",
-            change="A run records `shards`, the shard count the plan derived.",
-            why="A denominator taken off the numerator's own rows can never disagree.",
-        ),
-        ChangelogEntry(
-            version="2026-08-21",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
         ),

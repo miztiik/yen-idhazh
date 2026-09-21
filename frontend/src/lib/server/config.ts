@@ -458,11 +458,10 @@ const SAME_STORY_FLOOR = 0.94;
 // `SameStoryConfig`'s own defaults for the two terms of the score. The whole of
 // it on the cosine, which is how the floor above was measured.
 const SAME_STORY_WEIGHTS = { cosine_weight: 1.0, key_point_weight: 0.0 };
-// The CONTRACT default, not the committed window. `config/idhazh.json` pins
-// `models.summarize.inference.n_ctx` at 49152 since 2026-09-13 and every real
-// page reads that; this only fires for a checkout with no config file, and such
-// a checkout runs the summarizer on `InferenceConfig`'s own default of 8192.
-// Moving it to the committed value would have the console name a window the
+// The value a checkout with no config file runs on. `config/models/` pins
+// `--ctx-size` at 65536 and every real page reads that; this only fires for a
+// checkout with no model file at all, and such a checkout summarizes nothing.
+// Naming the committed window here would have the console state a window the
 // unconfigured pipeline does not use.
 const INFERENCE_DEFAULTS: InferenceConfig = { n_ctx: 8192 };
 const RETENTION_DEFAULTS: RetentionConfig = { site_budget_mb: 800 };
@@ -656,9 +655,13 @@ interface RawConfig {
 	models_file?: string;
 }
 
-/** The active model's own file. Only the one block a console panel reads. */
+/** The active model's own file. Only the one flag a console panel reads.
+ *
+ * The key is llama-server's own spelling, because that is what the file
+ * carries: an entry's `server` block is the flags the binary is started with,
+ * emitted verbatim. */
 interface RawModels {
-	summarize?: { inference?: Partial<InferenceConfig> };
+	summarize?: { server?: Record<string, unknown> };
 }
 
 /** Keys the `digest` block carries that no page reads.
@@ -936,7 +939,9 @@ export function visualsConfig(): VisualsConfig {
 	return { min_chart_points: raw().visuals?.min_chart_points ?? VISUALS_DEFAULTS.min_chart_points };
 }
 
-export function inferenceConfig(): InferenceConfig {	return { ...INFERENCE_DEFAULTS, ...(models().summarize?.inference ?? {}) };
+export function inferenceConfig(): InferenceConfig {
+	const declared = models().summarize?.server?.['--ctx-size'];
+	return typeof declared === 'number' ? { n_ctx: declared } : { ...INFERENCE_DEFAULTS };
 }
 
 export function retentionConfig(): RetentionConfig {

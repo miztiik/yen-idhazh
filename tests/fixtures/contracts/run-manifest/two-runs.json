@@ -62,7 +62,9 @@
             },
             "quantisation": "Q4_K_M",
             "repo": "Qwen/Qwen3-8B-GGUF",
+            "request": {},
             "revision": null,
+            "server": {},
             "sha256": null
           },
           "role": "summarize"
@@ -106,7 +108,9 @@
             },
             "quantisation": "Q4_K_M",
             "repo": "Qwen/Qwen3-4B-GGUF",
+            "request": {},
             "revision": null,
+            "server": {},
             "sha256": null
           },
           "role": "route"
@@ -214,7 +218,9 @@
             },
             "quantisation": "Q4_K_M",
             "repo": "Qwen/Qwen3-8B-GGUF",
+            "request": {},
             "revision": null,
+            "server": {},
             "sha256": null
           },
           "role": "summarize"

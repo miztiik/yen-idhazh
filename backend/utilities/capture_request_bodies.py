@@ -46,13 +46,14 @@ ALTERNATIVES = 3
 def bodies(config: ModelsConfig) -> dict[str, Any]:
     """Every route's body for one entry, keyed by the route that posts it."""
     entry = config.summarize
-    inference, turns = entry.inference, entry.turns
+    server, request, turns = entry.server, entry.request, entry.turns
     completion = completion_payload(
         model_id=entry.id,
         system=SYSTEM,
         user=USER,
         output_schema=SCHEMA,
-        inference=inference,
+        server=server,
+        request=request,
         turns=turns,
         max_answer_tokens=BUDGET,
     )
@@ -62,7 +63,7 @@ def bodies(config: ModelsConfig) -> dict[str, Any]:
             system=SYSTEM,
             user=USER,
             output_schema=SCHEMA,
-            inference=inference,
+            request=request,
             turns=turns,
         ),
         "completion": completion,
@@ -71,7 +72,8 @@ def bodies(config: ModelsConfig) -> dict[str, Any]:
             system=SYSTEM,
             user=USER,
             grammar=GRAMMAR,
-            inference=inference,
+            server=server,
+            request=request,
             turns=turns,
             max_answer_tokens=BUDGET,
             first_token_alternatives=ALTERNATIVES,

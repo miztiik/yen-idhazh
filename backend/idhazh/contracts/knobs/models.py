@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Annotated, Any, ClassVar, Final, Self
+from typing import Any, ClassVar, Final
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import Field, model_validator
 
 from idhazh.contracts.base import (
     ChangelogEntry,
@@ -17,7 +17,6 @@ from idhazh.contracts.base import (
     Slug,
     without_retired_keys,
 )
-from idhazh.contracts.knobs.inference import SUPERSEDED_INFERENCE_NAMES, InferenceConfig
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 from idhazh.contracts.knobs.turns import TurnsConfig
 
@@ -73,15 +72,32 @@ class ModelRef(Model):
             "intend to fine-tune needs it."
         ),
     )
-    inference: InferenceConfig = Field(
-        default_factory=InferenceConfig,
+    inference: dict[str, Any] = Field(
+        default_factory=dict,
         description=(
-            "The runtime this entry's weights are served on. It sits on the entry for "
-            "the same reason `hf_base_repo` does: held apart, a model swap moves the "
-            "weights and leaves the numbers, and llama-server starts on them without "
-            "raising. `ModelsConfig` refuses a block whose declared_for is not this "
-            "entry's sha256, so a default block under measured weights is refused "
-            "rather than inherited."
+            "What a run recorded under the one settings block, before llama-server's "
+            "own flags and the request values were split into the two blocks beside "
+            "this one. A plain mapping and nothing writes it: a record written under "
+            "the typed shape carries keys this build no longer names, and a typed "
+            "field would refuse every one of them."
+        ),
+    )
+    server: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "llama-server's own flags, spelled exactly as the binary spells them - "
+            "`--ctx-size`, `-fa`, `--no-warmup`. A null value is a bare flag with no "
+            "argument. Emitted verbatim, so naming one more option is a key here and "
+            "no edit anywhere else, and a flag this build does not accept is refused "
+            "by llama-server at start-up with the flag named."
+        ),
+    )
+    request: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "What goes in a request body rather than on the command line, under this "
+            "project's own names. A sampling value cannot reach the command line "
+            "because the builder reads only the block above."
         ),
     )
 
@@ -147,6 +163,17 @@ class ModelEntry(ModelRef):
             "still accepts and nothing else can see is wrong."
         ),
     )
+    declared_for: Sha256 | None = Field(
+        default=None,
+        description=(
+            "The weights this entry's settings and markers were derived against - the "
+            "sha256 the entry itself carries. Every number and every marker below is a "
+            "measurement about one model on one runner, so the entry states which bytes "
+            "they were put in front of. Change the weights strings in place and this is "
+            "left behind holding the old digest, which is the one event the field "
+            "exists to make loud. Absent means an entry nobody has measured yet."
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -158,13 +185,34 @@ class ModelEntry(ModelRef):
         name is refused and the message says where the knob went. There the
         block is a payload an earlier run wrote, and refusing it would stop
         today's build reading yesterday's run.
+
+        An empty settings mapping is what this shape serialises to, because it
+        inherits the recorded one from `ModelRef`. Refusing that would make a
+        config file fail to reload the bytes it just wrote.
         """
         if isinstance(data, dict):
-            refuse_a_removed_knob("models.<role>", data, RETIRED_ENTRY_NAMES)
-            refuse_a_removed_knob(
-                "models.<role>.inference", data.get("inference"), SUPERSEDED_INFERENCE_NAMES
-            )
+            typed = {key: value for key, value in data.items() if key != "inference" or value}
+            refuse_a_removed_knob("models.<role>", typed, SUPERSEDED_ENTRY_NAMES)
         return data
+
+
+#: The entry keys a person may no longer write, and where each one went. Each is
+#: refused by name rather than by "extra inputs are not permitted", which tells
+#: an operator nothing about where their number went.
+#:
+#: `inference` held one typed block that both named llama-server's flags under
+#: this project's own spellings and carried the request values. The file now
+#: spells the flags as the binary spells them, so nineteen keys that existed to
+#: be translated have no translation left to do.
+#:
+#: **This map refuses a config file and never a run record.** `ModelRef` is the
+#: shape an earlier run wrote and it still reads `inference` as a plain mapping.
+SUPERSEDED_ENTRY_NAMES: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "inference": "models.<role>.server and models.<role>.request",
+        "draft": "",
+    }
+)
 
 
 #: The `models` keys this block used to carry. `inference` held a single
@@ -175,34 +223,7 @@ class ModelEntry(ModelRef):
 #: older spelling `route` named the retired small model; the two calls on
 #: `summarize` replaced it, so nothing answers for them.
 SUPERSEDED_MODELS_NAMES: Final[Mapping[str, str]] = MappingProxyType(
-    {"inference": "models.<role>.inference", "route": "", "visual_planner": ""}
-)
-
-
-#: Where the active model's whole entry lives, relative to `config/`. Pinned to
-#: one directory and to `.json` by the schema rather than checked in the loader:
-#: the value is an operator's edit that becomes a path this build opens, so the
-#: grammar is what rules out a traversal, an absolute path and a Windows
-#: separator (CLAUDE.md section 2).
-MODELS_FILE_PATTERN: Final = r"^models/[a-z0-9]+(?:[.-][a-z0-9]+)*\.json$"
-
-
-ModelsFile = Annotated[str, StringConstraints(pattern=MODELS_FILE_PATTERN)]
-
-
-#: What an operator does next when one of an entry's two declared blocks names
-#: weights the entry does not. The check is the same for both; only the repair
-#: differs, so each block carries its own clause rather than a second copy of
-#: the rule.
-_REDERIVE_THE_NUMBERS: Final = (
-    "Every setting in that block was measured against one model on one runner, "
-    "so re-derive them for these weights"
-)
-
-
-_RERECORD_THE_MARKERS: Final = (
-    "Every marker in that block was recorded off the server that renders these "
-    "turns, so re-record them for these weights"
+    {"inference": "models.<role>.server", "route": "", "visual_planner": ""}
 )
 
 
@@ -230,6 +251,11 @@ class ModelsConfig(Contract):
     __schema_stem__: ClassVar[str] = "models-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21T04:00",
+            change="The settings split into llama-server's own flags and the request values.",
+            why="Nineteen keys existed only to be translated into a flag.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T03:00",
             change="Both inference decode caps go; a run that pinned one still reads.",
             why="Each sent a number where the runtime's own default is already unbounded.",
@@ -246,11 +272,6 @@ class ModelsConfig(Contract):
         ),
         ChangelogEntry(
             version="2026-09-20",
-            change="Add optional CPU, cache, checkpoint and template controls.",
-            why="Each model can declare the runtime settings it needs.",
-        ),
-        ChangelogEntry(
-            version="2026-09-14",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
         ),
@@ -309,62 +330,3 @@ class ModelsConfig(Contract):
     @classmethod
     def _a_removed_key_is_refused_by_name(cls, data: Any) -> Any:
         return refuse_a_removed_knob("models", data, SUPERSEDED_MODELS_NAMES)
-
-    @model_validator(mode="after")
-    def _a_second_entry_decodes_on_the_weights_the_server_holds(self) -> Self:
-        """An entry nobody stands a server up for has to name the running weights.
-
-        One llama-server, one file. An entry naming a second set of weights would
-        either double what the runner's cache carries - the largest fixed cost in
-        the pipeline (Guardrail #2) - or, worse, decode against whatever the
-        running server happens to hold while the row records the id it asked for.
-        Nothing raises in that case and every verdict is attributed to a model
-        that never saw the pair.
-
-        What a second entry is free to move is the decode: its temperature, its
-        budgets, its turn markers and whether it opens a reasoning channel.
-        """
-        for role, entry in self.entries():
-            if role in type(self).roles() or entry.sha256 == self.summarize.sha256:
-                continue
-            raise ValueError(
-                f"models.{role} names weights {entry.sha256 or 'nothing at all'} and "
-                f"models.summarize names {self.summarize.sha256 or 'nothing at all'}. "
-                f"No server is started for models.{role}, so it decodes on the weights "
-                "the summariser's server holds - name those, or make it a role of its own"
-            )
-        return self
-
-    @model_validator(mode="after")
-    def _every_block_names_the_weights_it_is_declared_for(self) -> Self:
-        """A settings block belongs to one entry's bytes, and says which.
-
-        The swap this refuses is five strings edited in place: repo, file,
-        revision, digest and id, with the blocks underneath them untouched. That
-        raises nothing on its own, and the run then stands a server up on numbers
-        derived for weights it never opened.
-
-        **Two blocks, one rule, one loop.** `inference` and `turns` are both
-        measurements about one model, so the check is the same for both and only
-        the repair differs - re-derive the numbers, or re-record the markers off
-        the server that applies them.
-
-        Both digests absent is legal and means an entry nobody has measured yet.
-        The stamp already refuses to run on one: `idhazh.fingerprint.build_inputs`
-        stops when the weights have no recorded digest.
-        """
-        for role, entry in self.entries():
-            for block, declared, repair in (
-                ("inference", entry.inference.declared_for, _REDERIVE_THE_NUMBERS),
-                ("turns", entry.turns.declared_for, _RERECORD_THE_MARKERS),
-            ):
-                if declared == entry.sha256:
-                    continue
-                raise ValueError(
-                    f"models.{role}.{block} is declared for "
-                    f"{declared or 'no weights at all'}, and models.{role} names "
-                    f"{entry.sha256 or 'no weights at all'}. {repair} and set "
-                    f"models.{role}.{block}.declared_for to the digest the entry "
-                    "carries - or put the entry back"
-                )
-        return self

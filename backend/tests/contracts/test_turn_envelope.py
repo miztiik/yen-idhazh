@@ -9,6 +9,7 @@ import pytest
 from conftest import CONFIG_DIR
 from pydantic import ValidationError
 
+from idhazh.config import refuse_a_model_nothing_could_run
 from idhazh.contracts.knobs.models import ModelEntry, ModelRef, ModelsConfig
 from idhazh.contracts.run_manifest import ModelRole, ModelUse
 
@@ -27,20 +28,21 @@ def test_a_model_swap_can_no_longer_inherit_markers_nothing_declared_for_it() ->
     turn structure that the decoder's grammar still accepts, so the run
     publishes a plausible day and nothing anywhere raises.
 
-    The swap here is the half-done one - `inference` re-declared for the new
-    weights and `turns` left behind - because a swap that moved neither block is
-    already refused by the settings gate above and would prove nothing here.
+    The swap is the one an operator really makes: five strings edited in place
+    with the markers underneath them untouched. One digest on the entry now
+    answers for the settings and the markers together, because both are
+    measurements about one model and the repair is the same sentence.
     """
     committed = committed_models()
-    assert committed.summarize.turns.declared_for == committed.summarize.sha256
+    assert committed.summarize.declared_for == committed.summarize.sha256
 
-    raw = swapped_summarizer()
-    raw["summarize"]["inference"]["declared_for"] = "1" * 64
-    with pytest.raises(ValidationError) as raised:
-        ModelsConfig.model_validate(raw)
+    with pytest.raises(ValueError) as raised:
+        refuse_a_model_nothing_could_run(
+            "models/x.json", ModelsConfig.model_validate(swapped_summarizer())
+        )
     message = str(raised.value)
-    assert "models.summarize.turns" in message, "the message names the block"
-    assert "re-record them for these weights" in message, "and what to do about it"
+    assert "models.summarize is declared for" in message, "the message names the entry"
+    assert "re-derive them for these weights" in message, "and what to do about it"
     assert "1" * 64 in message, "and the weights the entry now names"
 
 
