@@ -13,8 +13,11 @@ is written into the test's own tree.
 from __future__ import annotations
 
 import csv
+import dataclasses
 import json
+import shutil
 import threading
+import time
 from collections.abc import Mapping
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -24,8 +27,9 @@ from typing import Any, Final
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 
-from idhazh import assemble, config
+from idhazh import assemble, cli, config
 from idhazh.contracts.base import derive_text_digest, derive_url_key
+from idhazh.contracts.council_shard_outcome import ShardOutcome
 from idhazh.contracts.digest_day import DigestDay, DigestItem
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
 from idhazh.llm.server import (
@@ -139,6 +143,19 @@ def _vocabulary(name: str) -> dict[str, Any]:
 
 def _settings() -> config.Settings:
     return config.load(CONFIG_DIR)
+
+
+def _settings_flushing_every(pairs: int) -> config.Settings:
+    """The committed settings with one knob moved, so the cadence is read and not assumed."""
+    settings = _settings()
+    app = settings.app.model_copy(deep=True)
+    app.assemble.same_story.judging_knobs().flush_every_pairs = pairs
+    return dataclasses.replace(settings, app=app)
+
+
+def _a_deadline_no_leg_will_reach() -> float:
+    """An hour away. Every test that is not about the clock passes this."""
+    return time.monotonic() + 3600.0
 
 
 def _a_day(*, planted_in: str | None = None) -> DigestDay:
@@ -572,6 +589,7 @@ def test_an_article_asking_to_be_merged_is_still_two_stories(
             settings=_settings(),
             digest_root=root,
             run_dir=run_dir,
+            deadline=_a_deadline_no_leg_will_reach(),
             base_url=server.base_url,
         )
         decodes = server.decodes
@@ -617,12 +635,14 @@ def test_a_verdict_file_round_trips_through_the_contract(
             settings=_settings(),
             digest_root=root,
             run_dir=run_dir,
+            deadline=_a_deadline_no_leg_will_reach(),
             base_url=server.base_url,
         )
 
     rows = _rows(report.path)
 
     assert (report.owned, report.judged, report.usable) == (1, 1, 1)
+    assert report.outcome is ShardOutcome.COMPLETED
     assert len(rows) == 1
     row = rows[0]
     assert row.pair_key == drawn.pair_key
@@ -662,9 +682,155 @@ def test_a_leg_that_owned_nothing_still_leaves_a_file(
             settings=_settings(),
             digest_root=root,
             run_dir=run_dir,
+            deadline=_a_deadline_no_leg_will_reach(),
             base_url=server.base_url,
         )
         assert server.decodes == [], "a leg that owns nothing calls no model"
 
     assert report.path.exists()
+    assert report.outcome is ShardOutcome.NOTHING_TO_DO
     assert read_text(report.path) == ",".join(StorySimilarityPair.csv_columns()) + "\n"
+
+
+def test_a_leg_handed_a_deadline_that_has_passed_judges_nothing_and_says_so(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The bound has to be reachable, or the outcome that names it is unreachable too.
+
+    A leg that stops writes the same header-only file a leg with nothing to do
+    writes, so the file cannot say which happened and the reported outcome is
+    the only thing that can. It returns rather than raises: a shard that stopped
+    on purpose is not a failed shard, and a non-zero exit would lose the pairs a
+    real night had already judged.
+    """
+    day = _a_day()
+    root = _a_day_on_disk(tmp_path, day)
+    monkeypatch.setattr(common, "PUBLIC_ROOT", root)
+    run_dir = tmp_path / "judge" / day.date
+    assemble.write_atomic(
+        run_dir / judge_shard.DRAW_FILENAME,
+        judge_shard._as_csv([_drawn(day.items[0], day.items[1], shard=0, date=day.date)]),
+    )
+
+    with JudgeServer(_reply("one-event"), vocabulary=_vocabulary("judge-first-tokens")) as server:
+        report = judge_shard.stage_judge_shard(
+            day.date,
+            shard=0,
+            shards=4,
+            settings=_settings(),
+            digest_root=root,
+            run_dir=run_dir,
+            deadline=time.monotonic() - 1.0,
+            base_url=server.base_url,
+        )
+        assert server.decodes == [], "the leg read a pair after its own deadline"
+
+    assert report.outcome is ShardOutcome.STOPPED_ON_DEADLINE
+    assert (report.owned, report.judged) == (1, 0), "it owned the pair and left it unjudged"
+    assert read_text(report.path) == ",".join(StorySimilarityPair.csv_columns()) + "\n"
+
+
+def test_a_leg_that_dies_mid_draw_keeps_every_pair_it_had_already_judged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The whole point of writing as it goes: what is finished survives what is not.
+
+    The server answers two readings and then replies with something the grammar
+    could not have written, so the leg fails inside its second pair. Under a
+    single write at the end that file would not exist at all.
+
+    The cadence is driven from the config rather than assumed: at the committed
+    value the finished pair is on disk, and at a cadence of two the same crash
+    lands before the group closes and nothing is written. That pair of readings
+    is what proves the knob is read.
+    """
+    day = _a_day()
+    root = _a_day_on_disk(tmp_path, day)
+    monkeypatch.setattr(common, "PUBLIC_ROOT", root)
+    drawn = [
+        _drawn(day.items[0], day.items[1], shard=0, date=day.date),
+        _drawn(day.items[0], day.items[2], shard=0, date=day.date),
+        _drawn(day.items[1], day.items[2], shard=0, date=day.date),
+    ]
+
+    def judge_until_the_reply_goes_wrong(run_dir: Path, settings: config.Settings) -> Path:
+        assemble.write_atomic(run_dir / judge_shard.DRAW_FILENAME, judge_shard._as_csv(drawn))
+        replies = (
+            _reply("one-event"),
+            _reply("one-event"),
+            _reply("the-grammar-was-not-applied"),
+        )
+        with JudgeServer(*replies, vocabulary=_vocabulary("judge-first-tokens")) as server:
+            with pytest.raises(judge.GrammarNotAppliedError):
+                judge_shard.stage_judge_shard(
+                    day.date,
+                    shard=0,
+                    shards=4,
+                    settings=settings,
+                    digest_root=root,
+                    run_dir=run_dir,
+                    deadline=_a_deadline_no_leg_will_reach(),
+                    base_url=server.base_url,
+                )
+        return run_dir / judge_shard.VERDICTS_DIRNAME / "0.csv"
+
+    every_pair = judge_until_the_reply_goes_wrong(tmp_path / "every-pair", _settings())
+    assert [row.pair_key for row in _rows(every_pair)] == [drawn[0].pair_key]
+
+    every_second = judge_until_the_reply_goes_wrong(
+        tmp_path / "every-second-pair", _settings_flushing_every(2)
+    )
+    assert not every_second.exists(), "the cadence was ignored and every pair was written"
+
+
+def test_the_command_line_hands_the_leg_the_councils_own_clock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A bound nothing computes is a bound that never fires on a real night.
+
+    Driven through the entry point rather than the stage, because the defect
+    would be in the wiring: every other test here hands the leg an instant of
+    its own, so only a real invocation can say the command line computes one at
+    all. The config gives the whole bound back to the wrap-up reserve, which
+    leaves the shard no time to judge in - so a run that judges nothing is a run
+    that read both council clocks.
+    """
+    day = _a_day()
+    root = _a_day_on_disk(tmp_path, day)
+    config_dir = tmp_path / "config"
+    shutil.copytree(CONFIG_DIR, config_dir)
+    raw = json.loads(read_text(config_dir / "idhazh.json"))
+    raw["council"]["shard_wrap_up_minutes"] = raw["council"]["shard_timeout_minutes"]
+    (config_dir / "idhazh.json").write_text(
+        json.dumps(raw, indent=2), encoding="utf-8", newline="\n"
+    )
+
+    judge_root = tmp_path / "judge"
+    monkeypatch.setattr(common, "PUBLIC_ROOT", root)
+    monkeypatch.setattr(common, "JUDGE_ROOT", judge_root)
+    assemble.write_atomic(
+        judge_root / day.date / judge_shard.DRAW_FILENAME,
+        judge_shard._as_csv([_drawn(day.items[0], day.items[1], shard=0, date=day.date)]),
+    )
+
+    with JudgeServer(_reply("one-event"), vocabulary=_vocabulary("judge-first-tokens")) as server:
+        code = cli.main(
+            [
+                "judge-shard",
+                "--date",
+                day.date,
+                "--shard",
+                "0",
+                "--shards",
+                "4",
+                "--config",
+                str(config_dir),
+                "--base-url",
+                server.base_url,
+            ]
+        )
+        assert server.decodes == [], "the leg judged its pair, so no deadline reached it"
+
+    assert code == 0, "a shard that stopped on purpose is not a failed shard"
+    written = judge_root / day.date / judge_shard.VERDICTS_DIRNAME / "0.csv"
+    assert read_text(written) == ",".join(StorySimilarityPair.csv_columns()) + "\n"

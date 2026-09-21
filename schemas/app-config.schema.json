@@ -1907,6 +1907,13 @@
           "title": "Fall Weight",
           "type": "number"
         },
+        "flush_every_pairs": {
+          "default": 1,
+          "description": "How many pairs a judging shard finishes before it writes its verdict file again. Every pair, because the file holds one shard's slice of pair_budget - 50 rows at the committed numbers - and rewriting 50 rows is not measurable beside a pair that costs 110.98 s. It buys the case the cadence exists for: a shard that stops on its clock, or dies, still leaves every pair it had already judged. Counted in pairs because a pair is the unit this judge stops between. Raise it only if a run ever shows the rewrite costing anything.",
+          "minimum": 1,
+          "title": "Flush Every Pairs",
+          "type": "integer"
+        },
         "judge_temperature": {
           "default": 0.0,
           "description": "How far the judge's sampler may stray from the likeliest word. 0.0, because every pair is read twice with the two summaries swapped and the two readings are then compared: at 0.0 a disagreement is position bias, which is the thing disagreement_max gates on. Above 0.0 the same pair can answer differently with nothing swapped at all, so the comparison measures sampling noise instead and the gate stops meaning what its own name says. It sits here rather than on models.summarize.inference because that entry pins its temperature for writing summaries, which is a different job on the same weights.",
@@ -1952,7 +1959,7 @@
         },
         "pair_budget": {
           "default": 200,
-          "description": "How many pairs a day may be judged. 200 pairs judged twice is 400 calls, which at the council's committed four shards is 100 calls on each, which at 77.6 seconds a call is 2 hours 9 minutes of model time a shard. That figure is derived from 9.85 tokens a second measured on a stock runner, not from a judge call; row 17 measures a real one. Raising it is a job-timeout question before it is a quality one, and a validator refuses a value that does not fit council.shard_timeout_minutes.",
+          "description": "How many pairs a day may be judged. 200 pairs over the council's committed four shards is 50 pairs a shard, which at the worst pair measured - 110.98 s on 2026-09-18 - is 1 hour 32 minutes of model time a shard, and 1 hour 19 minutes at the measured average of 94.53 s (docs/reference/benchmarks/what-a-judge-pair-costs.md). Raising it is a job-timeout question before it is a quality one, and a validator refuses a value that does not fit council.shard_timeout_minutes.",
           "minimum": 1,
           "title": "Pair Budget",
           "type": "integer"
@@ -2535,6 +2542,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "assemble.same_story.adaptive_dedup_threshold.flush_every_pairs, default 1.",
+      "version": "2026-09-21T04:30",
+      "why": "A shard that stops early kept nothing, and pairs are the only unit it has."
+    },
+    {
       "change": "observability.host_fingerprint_bandwidth_cache_multiple, additive, default 2.",
       "version": "2026-09-21T01:00",
       "why": "The probe and the console grade a row by it, so it cannot be two numbers."
@@ -2548,11 +2560,6 @@
       "change": "observability.host_fingerprint_bandwidth_mib renamed to ..._floor_mib.",
       "version": "2026-09-20T01:00",
       "why": "The probe now derives its buffer from the cache, so the value is a floor."
-    },
-    {
-      "change": "observability.host_fingerprint_keep_months, additive, default null.",
-      "version": "2026-09-19T09:00",
-      "why": "state/host-fingerprint/ was the one committed ledger with no age at all."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2636,7 +2643,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-21T01:00",
+      "default": "2026-09-21T04:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2647,5 +2654,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-21T01:00"
+  "version": "2026-09-21T04:30"
 }
