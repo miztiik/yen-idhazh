@@ -89,10 +89,7 @@ class AppConfig(Contract):
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
             version="2026-09-21T15:00",
-            change=(
-                "council.first_night, council.repair_window_nights and "
-                "council.repair_dates_a_night, additive."
-            ),
+            change="council.first_night, repair_window_nights and repair_dates_a_night, additive.",
             why="A night plans the older dates its tenants are behind on, inside a bounded window.",
         ),
         ChangelogEntry(
