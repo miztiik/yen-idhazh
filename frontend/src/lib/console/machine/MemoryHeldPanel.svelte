@@ -109,23 +109,29 @@
 
 					{#if day.brackets.length > 0}
 						<div class="brackets" data-memory-brackets={day.brackets.length}>
-							{#if day.overlapBytes > 0}
-								<span
-									class="shared"
-									style="width: {day.overlapWidth}"
-									data-memory-overlap={day.overlapBytes}
-								></span>
-							{/if}
-							{#each day.brackets as bracket (bracket.key)}
-								<p class="bracket" data-memory-bracket={bracket.key}>
+							<div class="reaches">
+								{#if day.overlapBytes > 0}
+									<span
+										class="shared"
+										style="width: {day.overlapWidth}"
+										data-memory-overlap={day.overlapBytes}
+									></span>
+								{/if}
+								{#each day.brackets as bracket (bracket.key)}
 									<span
 										class="reach {bracket.key}"
 										style="width: {bracket.width}"
 										data-memory-bracket-bar={bracket.key}
 									></span>
-									<span class="tag">{bracket.label} <strong>{bracket.figure}</strong></span>
-								</p>
-							{/each}
+								{/each}
+							</div>
+							<ul class="keys">
+								{#each day.brackets as bracket (bracket.key)}
+									<li data-memory-bracket={bracket.key}>
+										<span class="tag">{bracket.label} <strong>{bracket.figure}</strong></span>
+									</li>
+								{/each}
+							</ul>
 						</div>
 						{#if day.overlapBytes > 0}
 							<p class="overlap">
@@ -284,12 +290,19 @@
 	}
 
 	.brackets {
-		position: relative;
 		margin: var(--space-3) 0 0;
 	}
 
-	/* What both brackets claim at once, drawn across both rows so the overlap is
-	   something a reader sees rather than something they are told. */
+	/* The two bars sit one directly under the other and both start at the bar's
+	   origin, so the stretch they both claim is a block a reader sees rather
+	   than an arithmetic they are asked to take on trust. */
+	.reaches {
+		position: relative;
+		display: grid;
+		gap: 3px;
+		padding: 2px 0;
+	}
+
 	.shared {
 		position: absolute;
 		inset-block: 0;
@@ -298,15 +311,8 @@
 		border-inline-end: 1px dashed var(--color-rule-strong);
 	}
 
-	.bracket {
-		position: relative;
-		margin: 0 0 var(--space-2);
-		font-size: var(--text-sm);
-		line-height: var(--leading-sm);
-		color: var(--color-text-secondary);
-	}
-
 	.reach {
+		position: relative;
 		display: block;
 		height: 4px;
 		border-radius: 2px;
@@ -317,7 +323,6 @@
 
 	.tag {
 		display: block;
-		margin-top: 2px;
 	}
 
 	.disagree {
