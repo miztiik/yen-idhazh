@@ -31,12 +31,11 @@ the fetch, so the pin has to be readable without downloading anything.
 
 Two shared scripts read it, and the split is about what a job actually needs.
 `.github/scripts/install-llama-runtime.sh` sources the pin, installs the build
-and checks the archive; that is the runtime half on its own, and it is cached
-under its own key. `.github/scripts/fetch-model-runtime.sh` sources that one and
-then downloads the weights the calling step names through `env`. One script that
-always downloaded a model would tie the two cache keys together, and a
-`WEIGHTS_FILE` allowed to be empty would make the refusals every caller depends
-on optional.
+and checks the archive; that is the runtime half on its own.
+`.github/scripts/fetch-model-runtime.sh` sources that one and then downloads the
+weights the calling step names through `env`, so the pin lands in the same shell
+both halves run in. Folding the two together would need a `WEIGHTS_FILE` allowed
+to be empty, which would make the refusals every caller depends on optional.
 
 **`digest.yml`, `idhazh-pipeline-tests.yaml` and `validate.yml` are on those
 scripts.** `measure.yml` is the one still declaring the three variables
