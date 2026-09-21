@@ -39,13 +39,15 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 | [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 11 | 11 | 4 |
 | [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 16 | 13 | 3 |
+| [20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md) | 15 | 0 | 15 | 5 |
+| [20260921-40-bonsai-probe-plan.md](20260921-40-bonsai-probe-plan.md) | 7 | 0 | 7 | 4 |
 
 ## In flight - 0
 
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 35
+## Ready now - 44
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -88,8 +90,17 @@ section 3 is where it is answered.
 | #12 | 38 | J | The four verbs name their work | 9, 24 |
 | #17 | 38 | O | The council runs the tenant and files its own outcome row | 5, 15a, 24 |
 | #25 | 38 | P | The config check moves to the tenant that owns the number | 9, 24 |
+| #1 | 39 | A | The generated contract layer goes | - |
+| #4 | 39 | A | The capability probe goes | - |
+| #11 | 39 | A | The server-log reader goes | - |
+| #14 | 39 | A | The image benchmark goes, and two heavy wheels with it | - |
+| #15 | 39 | A | The hosted span sink goes | - |
+| #1 | 40 | A | The model entry, and whether it fits | - |
+| #2 | 40 | A | The test workflow takes named addresses | - |
+| #5 | 40 | A | The eight telemetry steps move across | - |
+| #6 | 40 | A | A trial state root, and what the run keeps | - |
 
-## Waiting on another row - 89
+## Waiting on another row - 102
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -182,6 +193,19 @@ section 3 is where it is answered.
 | #22 | 38 | U | The guard that stops a shard committing is renamed and re-reasoned | 21a is PENDING |
 | #23 | 38 | U | The council runs green with no judge in the repository | 17 is PENDING; 21a is PENDING; 25 is PENDING |
 | #20 | 38 | V | The plan pointer | 19 is PENDING; 21b is PENDING; 23 is PENDING |
+| #2 | 39 | B | The model file is plain JSON | 1 is PENDING |
+| #3 | 39 | B | The draft head goes | 1 is PENDING |
+| #5 | 39 | C | The installer stops naming a repository | 2 is PENDING |
+| #6 | 39 | C | The startup probe keeps one check | 2 is PENDING |
+| #7 | 39 | B | Qualification asks each article once | 1 is PENDING |
+| #8 | 39 | B | Both test pipelines commit what they produce | 1 is PENDING |
+| #9 | 39 | C | The benchmark workflow's closed-world tests go | 3 is PENDING; 4 is PENDING |
+| #10 | 39 | C | The workflow censuses go | 3 is PENDING; 4 is PENDING |
+| #12 | 39 | B | The engineering contract and the pages catch up | 1 is PENDING |
+| #13 | 39 | D | The entry path is one script and one action | 2 is PENDING; 3 is PENDING; 4 is PENDING; 5 is PENDING |
+| #3 | 40 | B | One plan job, so a fan-out agrees what it is reading | 2 is PENDING |
+| #4 | 40 | C | The fan-out | 3 is PENDING |
+| #7 | 40 | D | One dispatch, and the readings written up | 1 is PENDING; 4 is PENDING; 5 is PENDING; 6 is PENDING |
 
 ## Finished - 18 plans with no live row
 
