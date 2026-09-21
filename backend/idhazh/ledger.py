@@ -147,12 +147,32 @@ VALIDATION_DIRNAME: Final = "validation"
 SCORES_DIRNAME: Final = "scores"
 SCORE_INDEX_DIRNAME: Final = "score-index"
 
-#: The one nested store under `state/`. Everything the adaptive merge line writes
-#: hangs off this word - the scored pairs, the fitted lines, the hand-marked
-#: holdout and the score record - so a reader of the commit step sees the whole
-#: feature's footprint in one prefix rather than in four unrelated top-level
-#: names.
-STORY_SIMILARITY_DIRNAME: Final = "story-similarity"
+#: The council's own prefix, and the one store under it that records how a night
+#: went. Nested for the reason the judge's prefix below is: everything the venue
+#: writes about itself hangs off one word, so a commit step stages one prefix and
+#: a reader sees the whole footprint in one place.
+#:
+#: Two directory levels under `state/` and no more. The day inventory globs one
+#: level and two, so a third would be invisible to it and the miss would be
+#: silent.
+COUNCIL_DIRNAME: Final = "llm-council"
+SHARD_OUTCOMES_DIRNAME: Final = "shard-outcomes"
+
+#: The content-similarity judge's own prefix, and every store under it. The judge
+#: slug is the group, so everything that judge produces hangs off one word: the
+#: pairs it scored, the line fitted from them, the record those pairs are folded
+#: into, the hand-marked holdout the line is measured against, how its instrument
+#: behaved over a unit of work, and how the line stands against that holdout.
+#: They are the judge's rather than the council's, because what a reading is
+#: ABOUT decides where it is filed and never what executed it - and a reader of
+#: the commit step sees the whole footprint in one prefix.
+#:
+#: Two directory levels and no more, for the reason the council's prefix carries:
+#: the day inventory globs one level and two, so a third would be invisible to it
+#: and the miss would be silent.
+CONTENT_SIMILARITY_JUDGE_DIRNAME: Final = "content-similarity-judge"
+JUDGE_METRICS_DIRNAME: Final = "metrics"
+MERGE_LINE_HOLDOUT_SCORES_DIRNAME: Final = "merge-line-holdout-scores"
 SCORED_PAIRS_DIRNAME: Final = "scored-pairs"
 FITTED_THRESHOLDS_DIRNAME: Final = "fitted-thresholds"
 SIMILARITY_HOLDOUT_FILENAME: Final = "holdout-pairs.csv"
@@ -163,30 +183,6 @@ SCORE_DISTRIBUTION_FILENAME: Final = "score-distribution.json"
 #: archive is written only on the rare day a stamp changed - `git add` on a path
 #: the checkout does not hold aborts the whole step.
 SCORE_ARCHIVE_DIRNAME: Final = "archive"
-
-#: The council's own prefix, and the one store under it that records how a night
-#: went. Nested for the reason `state/story-similarity/` is: everything the venue
-#: writes about itself hangs off one word, so a commit step stages one prefix and
-#: a reader sees the whole footprint in one place.
-#:
-#: Two directory levels under `state/` and no more. The day inventory globs one
-#: level and two, so a third would be invisible to it and the miss would be
-#: silent.
-COUNCIL_DIRNAME: Final = "llm-council"
-SHARD_OUTCOMES_DIRNAME: Final = "shard-outcomes"
-
-#: The content-similarity judge's own prefix, and the two stores under it. One
-#: is how its instrument behaved over a unit of work; the other is how the line
-#: it produces stands against a hand-marked holdout. Both are the judge's rather
-#: than the council's, because what a reading is ABOUT decides where it is filed
-#: and never what executed it.
-#:
-#: Two directory levels and no more, for the reason the council's prefix carries:
-#: the day inventory globs one level and two, so a third would be invisible to it
-#: and the miss would be silent.
-CONTENT_SIMILARITY_JUDGE_DIRNAME: Final = "content-similarity-judge"
-JUDGE_METRICS_DIRNAME: Final = "metrics"
-MERGE_LINE_HOLDOUT_SCORES_DIRNAME: Final = "merge-line-holdout-scores"
 
 FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
 
@@ -643,9 +639,9 @@ def counterfactual_scores_path(state_dir: Path, date: str) -> Path:
 
 
 def scored_pairs_relpath(date: str) -> str:
-    """`state/story-similarity/scored-pairs/<YYYY>/<MM>/<DD>.csv` - POSIX, for a log line."""
+    """`state/content-similarity-judge/scored-pairs/<YYYY>/<MM>/<DD>.csv` - POSIX, for a log line."""
     stem = f"{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
-    return f"{STATE_DIRNAME}/{STORY_SIMILARITY_DIRNAME}/{SCORED_PAIRS_DIRNAME}/{stem}"
+    return f"{STATE_DIRNAME}/{CONTENT_SIMILARITY_JUDGE_DIRNAME}/{SCORED_PAIRS_DIRNAME}/{stem}"
 
 
 def scored_pairs_path(state_dir: Path, date: str) -> Path:
@@ -656,14 +652,14 @@ def scored_pairs_path(state_dir: Path, date: str) -> Path:
     deletes by day. A month file would make the fold read weeks it has already
     counted.
     """
-    root = state_dir / STORY_SIMILARITY_DIRNAME / SCORED_PAIRS_DIRNAME
+    root = state_dir / CONTENT_SIMILARITY_JUDGE_DIRNAME / SCORED_PAIRS_DIRNAME
     return root / date[:4] / date[5:7] / f"{date[8:10]}.csv"
 
 
 def fitted_thresholds_relpath(date: str) -> str:
-    """`state/story-similarity/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` - POSIX, for a log line."""
+    """`state/content-similarity-judge/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` - POSIX, for a log line."""
     stem = f"{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
-    return f"{STATE_DIRNAME}/{STORY_SIMILARITY_DIRNAME}/{FITTED_THRESHOLDS_DIRNAME}/{stem}"
+    return f"{STATE_DIRNAME}/{CONTENT_SIMILARITY_JUDGE_DIRNAME}/{FITTED_THRESHOLDS_DIRNAME}/{stem}"
 
 
 def fitted_thresholds_path(state_dir: Path, date: str) -> Path:
@@ -674,13 +670,13 @@ def fitted_thresholds_path(state_dir: Path, date: str) -> Path:
     back off the record is one `rm`. The guard's own read is the last fourteen
     rows, which `day_partition` answers by walking days backwards.
     """
-    root = state_dir / STORY_SIMILARITY_DIRNAME / FITTED_THRESHOLDS_DIRNAME
+    root = state_dir / CONTENT_SIMILARITY_JUDGE_DIRNAME / FITTED_THRESHOLDS_DIRNAME
     return root / date[:4] / date[5:7] / f"{date[8:10]}.csv"
 
 
 def similarity_holdout_relpath() -> str:
-    """`state/story-similarity/holdout-pairs.csv` - the POSIX form, for a log line."""
-    return f"{STATE_DIRNAME}/{STORY_SIMILARITY_DIRNAME}/{SIMILARITY_HOLDOUT_FILENAME}"
+    """`state/content-similarity-judge/holdout-pairs.csv` - the POSIX form, for a log line."""
+    return f"{STATE_DIRNAME}/{CONTENT_SIMILARITY_JUDGE_DIRNAME}/{SIMILARITY_HOLDOUT_FILENAME}"
 
 
 def similarity_holdout_path(state_dir: Path) -> Path:
@@ -691,7 +687,7 @@ def similarity_holdout_path(state_dir: Path) -> Path:
     pairs somebody has sat down and marked, never with the archive (Guardrail
     #12).
     """
-    return state_dir / STORY_SIMILARITY_DIRNAME / SIMILARITY_HOLDOUT_FILENAME
+    return state_dir / CONTENT_SIMILARITY_JUDGE_DIRNAME / SIMILARITY_HOLDOUT_FILENAME
 
 
 def score_distribution_path(state_dir: Path) -> Path:
@@ -702,12 +698,15 @@ def score_distribution_path(state_dir: Path) -> Path:
     into it. That is the whole point - the fit reads a file of a size that never
     changes instead of sorting every pair ever judged (Guardrail #12).
     """
-    return state_dir / STORY_SIMILARITY_DIRNAME / SCORE_DISTRIBUTION_FILENAME
+    return state_dir / CONTENT_SIMILARITY_JUDGE_DIRNAME / SCORE_DISTRIBUTION_FILENAME
 
 
 def score_distribution_archive_relpath(stamp: str) -> str:
-    """`state/story-similarity/archive/<stamp>.json` - POSIX, for a log line."""
-    return f"{STATE_DIRNAME}/{STORY_SIMILARITY_DIRNAME}/{SCORE_ARCHIVE_DIRNAME}/{stamp}.json"
+    """`state/content-similarity-judge/archive/<stamp>.json` - POSIX, for a log line."""
+    return (
+        f"{STATE_DIRNAME}/{CONTENT_SIMILARITY_JUDGE_DIRNAME}/"
+        f"{SCORE_ARCHIVE_DIRNAME}/{stamp}.json"
+    )
 
 
 def score_distribution_archive_path(state_dir: Path, stamp: str) -> Path:
@@ -718,7 +717,7 @@ def score_distribution_archive_path(state_dir: Path, stamp: str) -> Path:
     different questions and get two files; one input moved back to what it was
     and the archive it produces is the file already there.
     """
-    root = state_dir / STORY_SIMILARITY_DIRNAME / SCORE_ARCHIVE_DIRNAME
+    root = state_dir / CONTENT_SIMILARITY_JUDGE_DIRNAME / SCORE_ARCHIVE_DIRNAME
     return root / f"{stamp}.json"
 
 
@@ -2077,8 +2076,8 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     The run's own cover is a month file too, and it is still one file: a run
     appends under one date, and one date is in one month.
 
-    `state/story-similarity/fitted-thresholds/` is registered before anything
-    writes it, for the reason `state/feed-retirements.csv` was: the settlement
+    `state/content-similarity-judge/fitted-thresholds/` is registered before
+    anything writes it, for the reason `state/feed-retirements.csv` was: the settlement
     runs over whatever it finds, a missing file settles to nothing, and
     registering the shape rather than its first writer is what stops two stale
     checkouts leaving one date fitted twice. Its sibling `scored-pairs/` joins on
@@ -2158,13 +2157,13 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
         *(
             KeyedLedger(path, STORY_SIMILARITY_THRESHOLD_KEY, FittedSimilarityThreshold)
             for path in day_partition.day_files(
-                state_dir / STORY_SIMILARITY_DIRNAME / FITTED_THRESHOLDS_DIRNAME
+                state_dir / CONTENT_SIMILARITY_JUDGE_DIRNAME / FITTED_THRESHOLDS_DIRNAME
             )
         ),
         *(
             KeyedLedger(path, STORY_SIMILARITY_PAIR_KEY, StorySimilarityPair)
             for path in day_partition.day_files(
-                state_dir / STORY_SIMILARITY_DIRNAME / SCORED_PAIRS_DIRNAME
+                state_dir / CONTENT_SIMILARITY_JUDGE_DIRNAME / SCORED_PAIRS_DIRNAME
             )
         ),
         *(

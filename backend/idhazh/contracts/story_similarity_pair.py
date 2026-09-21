@@ -12,7 +12,7 @@ section 0a).
 
 The row is persisted twice on the way through: `backend/var/judge/<date>/draw.csv`
 holds the day's draw before a judging leg reads it, and
-`state/story-similarity/scored-pairs/<YYYY>/<MM>/<DD>.csv` holds what came back.
+`state/content-similarity-judge/scored-pairs/<YYYY>/<MM>/<DD>.csv` holds what came back.
 One shape for both, because the second file is the first one with the judge's
 columns filled in.
 """

@@ -39,7 +39,7 @@ single file. Everything else is already the engine's - `migrate_header` refuses 
 heading this build cannot place, keeps a row no reader could place and raises,
 and re-files through the contract's own reader rather than cell by cell.
 
-    python backend/utilities/widen_ledger_header.py --target story-similarity-scored-pairs
+    python backend/utilities/widen_ledger_header.py --target content-similarity-judge-scored-pairs
     python backend/utilities/widen_ledger_header.py --target <store> --no-dry-run
 
 Exit code 1 when a file could not be re-filed, so a shell can gate on it.

@@ -4,7 +4,7 @@
 
 Read pairs of articles the merge line has to decide between, and record whether
 each pair is one news event or two. The marks land in
-`state/story-similarity/holdout-pairs.csv`, which is the fixed floor every fitted
+`state/content-similarity-judge/holdout-pairs.csv`, which is the fixed floor every fitted
 merge line has to stay above.
 
 The rule the floor guards is in
@@ -159,7 +159,7 @@ with a guess.
 
 ```powershell
 python backend/utilities/sample_sheet.py --draw-root backend/var/judge --line 0.94 `
-  --harvest state/story-similarity/holdout-pairs.csv `
+  --harvest state/content-similarity-judge/holdout-pairs.csv `
   --labeller claude-opus-4.6 --labelled-on 2026-09-19
 ```
 
@@ -182,7 +182,7 @@ It prints what landed, and what did not:
 
 ```text
 INFO:idhazh:sample_sheet harvested 200 labelled pairs to
-state/story-similarity/holdout-pairs.csv, 0 labels matched no drawn pair
+state/content-similarity-judge/holdout-pairs.csv, 0 labels matched no drawn pair
 ```
 
 A non-zero tail count means a `pair_key` in a batch file is not in this draw.

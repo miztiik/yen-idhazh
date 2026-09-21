@@ -66,7 +66,7 @@ state/visual-prunes/**/*.csv text eol=lf merge=union
 # marks, which is a pair marked same-story and different-story at once. A text
 # merge stops the push and asks, which is the right answer when the writer is a
 # person.
-state/story-similarity/holdout-pairs.csv text eol=lf merge=text
+state/content-similarity-judge/holdout-pairs.csv text eol=lf merge=text
 
 # The training window. Deliberately NOT `merge=union`: it is a rolling window
 # rather than an append-only ledger, so the union of two rolls is a file that

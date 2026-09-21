@@ -7,7 +7,7 @@ headlines and both summaries side by side.
 
 It calls no model, opens no socket and decides nothing. Nothing in the pipeline
 reads what it writes. The labels a reader produces from it are pasted back into
-`state/story-similarity/holdout-pairs.csv`, which the console's holdout panel
+`state/content-similarity-judge/holdout-pairs.csv`, which the console's holdout panel
 draws and which nothing else consumes.
 
 **It samples across the line, not across the four judged cells.** The sheet the

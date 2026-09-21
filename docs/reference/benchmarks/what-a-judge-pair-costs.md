@@ -8,7 +8,7 @@ two summaries swapped - and not one model call.
 
 Measured on 2026-09-18 over the 82 pairs of run `2026-09-18-35339202390`, on four
 stock `ubuntu-latest` runners, on `Qwen3.5-9B-Q4_K_M`. The rows are committed at
-`state/story-similarity/scored-pairs/2026/09/18.csv`, so every figure below can
+`state/content-similarity-judge/scored-pairs/2026/09/18.csv`, so every figure below can
 be recomputed from the repository.
 
 Before this run the judge's budget was sized from 77.6 seconds a call, which is a
@@ -105,7 +105,7 @@ The column is written by every judging night, so a later run needs no new
 instrument - only a different day file:
 
 ```powershell
-python -c "import csv,statistics as s; v=[float(r['decode_seconds']) for r in csv.DictReader(open('state/story-similarity/scored-pairs/2026/09/18.csv',newline='',encoding='utf-8'))]; print(len(v), min(v), s.fmean(v), max(v), s.pstdev(v))"
+python -c "import csv,statistics as s; v=[float(r['decode_seconds']) for r in csv.DictReader(open('state/content-similarity-judge/scored-pairs/2026/09/18.csv',newline='',encoding='utf-8'))]; print(len(v), min(v), s.fmean(v), max(v), s.pstdev(v))"
 ```
 
 A re-run replaces this page rather than adding a second one.
