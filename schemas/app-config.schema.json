@@ -1991,7 +1991,7 @@
         },
         "pair_budget": {
           "default": 200,
-          "description": "How many pairs a day may be judged. 200 pairs over the council's committed four shards is 50 pairs a shard, which at the worst pair measured - 110.98 s on 2026-09-18 - is 1 hour 32 minutes of model time a shard, and 1 hour 19 minutes at the measured average of 94.53 s (docs/reference/benchmarks/what-a-judge-pair-costs.md). Raising it is a job-timeout question before it is a quality one, and a validator refuses a value that does not fit council.shard_timeout_minutes.",
+          "description": "How many pairs a day may be judged. 200 pairs over the council's committed four shards is 50 pairs a shard, which at the worst pair measured - 110.98 s on 2026-09-18 - is 1 hour 32 minutes of model time a shard, and 1 hour 19 minutes at the measured average of 94.53 s (docs/reference/benchmarks/what-a-judge-pair-costs.md). Raising it is a job-timeout question before it is a quality one, and this judge refuses a value that does not fit the window the council leaves a unit to work in - checked when the council resolves this judge, not when config is read, because the per-pair cost is this judge's own measurement.",
           "minimum": 1,
           "title": "Pair Budget",
           "type": "integer"
@@ -2574,6 +2574,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "The judging-budget fit check left this contract for the tenant that owns it.",
+      "version": "2026-09-21T12:40",
+      "why": "Reading config pulled one judge's measured pair cost into every reader."
+    },
+    {
       "change": "council.tenants and council.shard_preamble_minutes, additive.",
       "version": "2026-09-21T11:30",
       "why": "The venue registers a tenant from config and knows what a job spends before it."
@@ -2587,11 +2592,6 @@
       "change": "assemble.same_story.adaptive_dedup_threshold.flush_every_pairs, default 1.",
       "version": "2026-09-21T04:30",
       "why": "A shard that stops early kept nothing, and pairs are the only unit it has."
-    },
-    {
-      "change": "observability.host_fingerprint_bandwidth_cache_multiple, additive, default 2.",
-      "version": "2026-09-21T01:00",
-      "why": "The probe and the console grade a row by it, so it cannot be two numbers."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2675,7 +2675,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-21T11:30",
+      "default": "2026-09-21T12:40",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2686,5 +2686,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-21T11:30"
+  "version": "2026-09-21T12:40"
 }

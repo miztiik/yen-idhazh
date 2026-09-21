@@ -74,6 +74,33 @@ Three things follow, and each is the reason a simpler design was refused.
 - **Removing a judge is a config edit and a directory delete.** Never a router
   edit.
 
+### Resolving is also when a tenant may refuse the night
+
+A tenant module may declare
+`refuse_a_night_this_tenant_cannot_finish`, and the resolver calls it on the
+tenant that answered to the slug - on that one and on no other. A tenant nobody
+registered cannot stop a night it is not in, even though the search has to import
+it to read its slug.
+
+**The planning job resolves every registered slug before it can build its
+matrix**, so a refusal lands there: before the matrix exists, before any job is
+dispatched, and before a runner has restored a model's weights. "Before a model
+call" would be a weaker claim - it is also true of a point after a cache restore
+and a server start, which is most of what a wasted job costs.
+
+**It is not an eighth member of the tenancy protocol.** The protocol is what a
+tenant presents while it runs; this is asked before it does. A tenant whose work
+has no cost to weigh against the venue's clock declares nothing and is asked
+nothing.
+
+The content-similarity judge is what declares one today, in
+[../../../backend/idhazh/similarity/budget.py](../../../backend/idhazh/similarity/budget.py):
+its draw of pairs, at its own measured per-pair cost, against the window below.
+The number is that judge's reading, so the check is that judge's too. Until
+2026-09-21 it was a validator on `AppConfig`, which put one judge's measurement
+in the import closure of every module that reads config - the council's own
+included. Owner ruling, 2026-09-21.
+
 ## The matrix is a flat list of cells
 
 The planning job asks
@@ -143,6 +170,13 @@ At the committed numbers the arithmetic is 200 minus 13 minus 12, so a unit has
 job's own 200, so its deadline lands at about minute 188 - twelve minutes before
 GitHub would kill it, which is exactly the reserve.
 
+**175 minutes is also what a tenant's own fit check weighs its draw against.**
+It reads the window from the same function the clock does rather than from a
+second copy of the subtraction. Until 2026-09-21 the check compared against the
+whole 200, so a draw that fit the bound and not the work was accepted at config
+load and cut off at runtime - the 25 minutes between the two is the gap that
+admitted it.
+
 ### Design rationale: the preamble is a clock, not a bigger bound
 
 Until 2026-09-21 the window was the bound less the reserve, and the zero was the
@@ -163,7 +197,8 @@ the council's policy, set against the platform's 6 h job ceiling and the nightly
 schedule. A bound derived from a measured per-pair cost would be the coupling
 this page exists to refuse, one layer down: a second judge with different
 economics would move a number that is not its to move. A tenant that cannot fit
-inside the window is refused by its own fit check. Owner ruling, 2026-09-21.
+inside the window is refused by its own fit check, raised when the planning job
+resolves it. Owner ruling, 2026-09-21.
 
 **Nothing in the council checks the instant it handed over.** Only the tenant
 knows what a unit of work is and where stopping leaves a readable result, so the

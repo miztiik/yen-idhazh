@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import math
 import re
 from pathlib import Path
 from typing import Final
@@ -22,14 +21,12 @@ from idhazh.contracts.call_cost import CallKind
 from idhazh.contracts.knobs import placement
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
-from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.observability import LoggingConfig, LogLevel, ObservabilityConfig
 from idhazh.contracts.knobs.placement import (
     HOLDOUT_TWO_STORY_MAX,
-    SECONDS_A_JUDGED_PAIR,
     SameStoryConfig,
     SimilarityThresholdConfig,
 )
@@ -48,6 +45,7 @@ from idhazh.measured import LABEL_SCAFFOLD_TOKENS as _LABEL_SCAFFOLD
 from idhazh.measured import PROMPT_OVERHEAD_TOKENS as _PROMPT_OVERHEAD
 from idhazh.measured import SUMMARIZE_AND_PLAN_SEAM_TOKENS as _SUMMARIZE_AND_PLAN_SEAM
 from idhazh.measured import WORST_TOKENS_A_WORD as _WORST_TOKENS
+from idhazh.similarity import budget
 
 from ._fixtures import (
     APP_CONFIG_EVERY_KNOB_DIFFERS,
@@ -1302,56 +1300,33 @@ def test_a_band_that_cannot_draw_the_hardest_labelled_pair_is_refused() -> None:
     assert committed.judging_knobs().band_low < HOLDOUT_TWO_STORY_MAX
 
 
-def test_a_pair_budget_that_cannot_finish_inside_a_shard_is_refused() -> None:
-    """A shard GitHub kills uploads nothing, so the day's whole draw is lost.
+def test_no_judges_own_measurement_reaches_the_shared_config_contract() -> None:
+    """A measured figure one judge produced may not sit where every reader loads it.
 
-    A literal ceiling cannot see the timeout, so the bound is arithmetic over
-    two blocks - the tenant's budget against the council's clock and width. The
-    bite proof is the trade the message names: raise the timeout and the refused
-    budget starts validating.
+    `AppConfig` is imported by everything that reads config, the council's own
+    modules included. While it held the judge's per-pair cost, a repository with
+    no judge in it could not read its own config - and the check that cost fed
+    could not move without moving the contract every stage validates against.
 
-    The boundary is derived from the measured pair cost rather than written
-    down, so a later reading moves this test with it instead of freezing the
-    number this one was written against.
-    """
-    with pytest.raises(ValidationError, match=re.escape("council.shard_timeout_minutes")):
-        AppConfig.model_validate(
-            {"assemble": {"same_story": {"adaptive_dedup_threshold": {"pair_budget": 1000}}}}
-        )
-
-    def with_budget(budget: int, *, minutes: int = 200) -> AppConfig:
-        return AppConfig.model_validate(
-            {
-                "council": {"shard_timeout_minutes": minutes},
-                "assemble": {"same_story": {"adaptive_dedup_threshold": {"pair_budget": budget}}},
-            }
-        )
-
-    council = CouncilConfig()
-    pairs_a_shard = math.floor(council.shard_timeout_minutes * 60 / SECONDS_A_JUDGED_PAIR)
-    fits = pairs_a_shard * council.shards
-
-    assert with_budget(fits) is not None
-    with pytest.raises(ValidationError, match=f"pair_budget {fits + 1}"):
-        with_budget(fits + 1)
-    assert with_budget(fits + 1, minutes=council.shard_timeout_minutes + 10) is not None
-
-
-def test_the_judges_own_bound_is_the_only_thing_its_measurement_sizes() -> None:
-    """One judge's reading may not re-size a budget nobody measured.
-
-    `SECONDS_A_CALL` is derived from summarising articles and sizes work outside
-    this judge, so the judge carries its own measured figure instead of moving
-    the shared one. This holds the separation from both ends: the committed
-    config still validates, and nothing in `app_config` reads the shared number
-    any more.
+    Asserted over the module's whole namespace rather than one name, so a second
+    judge's reading imported here fails the same way. Both names are known
+    judge-owned readings today: the derived per-call figure and the measured
+    per-pair one.
     """
     assert AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")) is not None
-    assert not hasattr(app_config, "SECONDS_A_CALL"), (
-        "the judge's fit check is reading the shared per-call figure again, so moving "
-        "the judge's measurement would re-size every other budget derived from it"
+
+    reached = sorted(
+        name
+        for name in vars(app_config)
+        if name.startswith("SECONDS_A_") or name.endswith("_A_JUDGED_PAIR")
     )
-    assert SECONDS_A_JUDGED_PAIR < 2 * placement.SECONDS_A_CALL, (
+
+    assert reached == [], (
+        f"{reached} reached the shared config contract, so every module that reads "
+        "config now carries one judge's measurement - and moving that measurement "
+        "would re-size budgets nobody measured"
+    )
+    assert budget.SECONDS_A_JUDGED_PAIR < 2 * placement.SECONDS_A_CALL, (
         "a measured pair costs less than the derived figure doubled, which is why the "
         "derived one was an unlabelled margin rather than a reading"
     )
