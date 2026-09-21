@@ -1036,6 +1036,23 @@ test.describe('Row #21 - the context panel says what the limit already costs', (
 		]);
 	});
 
+	test('no rows at all is an absence the panel can name, never a zero', () => {
+		// The state a fresh clone and a wiped ledger are both in. Every figure is
+		// null rather than 0: a limit nothing ran under has no share, and a zero
+		// share would read as a limit nothing needs.
+		const { runs, span } = contextCost([], OPTIONS);
+		expect(runs).toEqual([]);
+		expect(span.rowsRead).toBe(0);
+		expect(span.items).toBe(0);
+		expect(span.limits).toEqual([]);
+		expect(span.largest).toBeNull();
+		expect(span.unusedPct, 'an unread limit reported a share').toBeNull();
+		expect(span.timesMedian).toBeNull();
+		expect(span.calls).toBe(0);
+		expect(span.cutOff).toBe(0);
+		expect(span.reasons).toEqual([]);
+	});
+
 	test('the strip prints both ends and names the percentile in words', () => {
 		const { runs } = contextCost(canaryHealth(), OPTIONS);
 		const columns = contextColumns(runs, CANARY_LIMIT, OPTIONS.percentile);
