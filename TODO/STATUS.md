@@ -19,7 +19,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 
 | Plan | Rows | Landed | Live | Ready |
 | --- | --- | --- | --- | --- |
-| [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 9 | 7 | 2 | 2 |
+| [20260823-known-defects-plan.md](20260823-known-defects-plan.md) | 11 | 7 | 4 | 4 |
 | [20260827-summarizer-fine-tuning-plan.md](20260827-summarizer-fine-tuning-plan.md) | 10 | 4 | 6 | 1 |
 | [20260905-12-readable-visuals-plan.md](20260905-12-readable-visuals-plan.md) | 7 | 3 | 4 | 1 |
 | [20260905-13-switch-on-deletion-plan.md](20260905-13-switch-on-deletion-plan.md) | 3 | 2 | 1 | 1 |
@@ -47,7 +47,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 46
+## Ready now - 48
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -57,6 +57,8 @@ section 3 is where it is answered.
 | --- | --- | --- | --- | --- |
 | #2 | 20260823-known-defects-plan | - | The faithfulness thresholds have no labelled error rate | - |
 | #18 | 20260823-known-defects-plan | - | The truncation flag still cannot fire, now for a different reason | - |
+| #23 | 20260823-known-defects-plan | - | The canary day records no settings, so nothing renders the rules that say a setting moved | - |
+| #24 | 20260823-known-defects-plan | - | `failed_field` costs a cell on every row and answers nobody | - |
 | #5 | 20260827-summarizer-fine-tuning-plan | A | Reference set | 3 |
 | #3 | 12 | C | Numbers a reader can say out loud | 1b |
 | #3 | 13 | C | The fuse comes out, and one run is watched | 2, plan 12 row #1b |
@@ -198,9 +200,9 @@ section 3 is where it is answered.
 | #7 | 41 | B | The model's own template writes the markers | 6 is PENDING |
 | #8 | 41 | B | The startup probe keeps the render check | 7 is PENDING |
 
-## Finished - 19 plans with no live row
+## Finished - 18 plans with no live row
 
-20260815-digest-pipeline-plan.md, 20260905-01-visible-chart-plan.md, 20260905-02-retire-the-route-name-plan.md, 20260905-03-console-backfill-plan.md, 20260905-04-site-cap-defence-plan.md, 20260905-05-span-tree-plan.md, 20260905-06-fewer-better-articles-plan.md, 20260905-07-better-summaries-plan.md, 20260905-08-element-table-plan.md, 20260905-09-pin-the-runtime-plan.md, 20260905-10-visual-plan-contract-plan.md, 20260905-11-two-call-planner-plan.md, 20260906-constant-cost-reads-plan.md, 20260907-growing-reads-window-plan.md, 20260910-24-day-sharded-ledgers-plan.md, 20260911-26-retire-prerender-plan.md, 20260913-reference-dataset-2-plan.md, 20260914-29-found-once-plan.md, 20260920-37-honest-machine-telemetry-plan.md
+20260815-digest-pipeline-plan.md, 20260905-01-visible-chart-plan.md, 20260905-02-retire-the-route-name-plan.md, 20260905-03-console-backfill-plan.md, 20260905-04-site-cap-defence-plan.md, 20260905-05-span-tree-plan.md, 20260905-06-fewer-better-articles-plan.md, 20260905-07-better-summaries-plan.md, 20260905-08-element-table-plan.md, 20260905-09-pin-the-runtime-plan.md, 20260905-10-visual-plan-contract-plan.md, 20260905-11-two-call-planner-plan.md, 20260906-constant-cost-reads-plan.md, 20260907-growing-reads-window-plan.md, 20260910-24-day-sharded-ledgers-plan.md, 20260911-26-retire-prerender-plan.md, 20260913-reference-dataset-2-plan.md, 20260914-29-found-once-plan.md
 
 ## See also
 
