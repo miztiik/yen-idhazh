@@ -45,12 +45,6 @@ _FILES: Final[tuple[str, ...]] = ("idhazh.json", "sources.json", "taxonomy.json"
 #: nothing in the run reads a value out of it.
 _APPEARANCE_FILE: Final = "appearance.json"
 
-#: The turn envelope lived here until 2026-09-13 and now lives on the model
-#: entry (`models.<role>.turns`). The path is checked rather than forgotten
-#: because the package location is exactly where somebody would put it back, and
-#: a file nothing reads is a set of markers an operator believes are live.
-RETIRED_TURN_MARKERS: Final = Path(__file__).parent / "prompts" / "turn_markers.json"
-
 #: The roles `idhazh.llm.server.TurnMarkers.conversation` substitutes into the
 #: turn opening. A marker is checked as the bytes an attacker would have to
 #: write into an article, and those bytes carry a role.
@@ -137,13 +131,6 @@ class Settings:
 
 def load(config_dir: Path = DEFAULT_CONFIG_DIR) -> Settings:
     """A fresh clone runs on the committed defaults; a missing file is a failure, not a default."""
-    if RETIRED_TURN_MARKERS.exists():
-        raise ValueError(
-            f"{RETIRED_TURN_MARKERS.name} is back in backend/idhazh/prompts/ and nothing "
-            "reads it. The turn envelope is models.<role>.turns in the file "
-            "config/idhazh.json points models_file at, pinned to the weights by "
-            "declared_for - delete this file and edit the entry"
-        )
     read = {name: (config_dir / name).read_text(encoding="utf-8") for name in _FILES}
     app = AppConfig.from_json(read["idhazh.json"])
     read[app.models_file] = models_path(config_dir, app).read_text(encoding="utf-8")

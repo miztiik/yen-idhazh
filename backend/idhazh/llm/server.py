@@ -25,10 +25,8 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
 from string import Template
@@ -360,48 +358,6 @@ def continued_prompt(prompt: str, *, reply: str, user: str, turns: TurnsConfig) 
     markers = turn_markers(turns)
     opening = markers.opening_of(prompt)
     return prompt + reply + markers.turn_closing + markers.turn("user", user) + opening
-
-
-class FlashAttention(StrEnum):
-    """What the server's own log says happened to attention. Three states, not two."""
-
-    ACTIVE = "active"
-    REFUSED = "refused"
-    #: The log does not settle it - almost always because `log_verbosity` was
-    #: left null, so the model-loader block was never printed. It is a failure
-    #: of the check, never a report that attention was off.
-    UNREADABLE = "unreadable"
-
-
-#: What llama-server was ASKED for, which is not what it did. With no `-fa` flag
-#: it prints `auto`, and `auto` is the non-answer this reader exists to refuse.
-FLASH_ASKED: Final = re.compile(r"flash_attn\s*=\s*(\w+)")
-
-#: The decision itself, printed only when `auto` left one to make - so it is
-#: absent from both explicit cases and present in neither of their logs.
-FLASH_FUSED: Final = "resolve_fused_ops: Flash Attention enabled"
-
-
-def flash_attention_state(server_log: str) -> FlashAttention:
-    """Read the attention state off the server, not off the flag we handed it.
-
-    Both lines print at `-lv 4` and neither prints at the runtime default of 3,
-    so a log taken from a quiet server answers `UNREADABLE` rather than
-    `REFUSED`. That distinction is the whole point: a reader that took a missing
-    line for "off" would turn a forgotten verbosity into a finding about
-    attention. Measured 2026-09-09, three runs a case and zero spread -
-    `docs/reference/pipeline-cost.md`.
-    """
-    asked = FLASH_ASKED.search(server_log)
-    if asked is None:
-        return FlashAttention.UNREADABLE
-    if asked.group(1) == "enabled":
-        return FlashAttention.ACTIVE
-    if asked.group(1) == "disabled":
-        return FlashAttention.REFUSED
-    if asked.group(1) == "auto" and FLASH_FUSED in server_log:
-        return FlashAttention.ACTIVE
-    return FlashAttention.UNREADABLE
 
 
 @dataclass(frozen=True, slots=True)

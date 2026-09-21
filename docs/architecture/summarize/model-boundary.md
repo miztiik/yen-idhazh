@@ -199,8 +199,9 @@ The envelope reached the entry on 2026-09-13. Before that it was one global
 file, `backend/idhazh/prompts/turn_markers.json`, with no model key - so a
 model whose turns differ was a source edit, and one process holding two
 candidates would have rendered both with the first one's markers. The lookup is
-keyed by the entry now, and config load refuses that path if the file comes
-back.
+keyed by the entry now. Config load checked that path for a returning file
+until 2026-09-21; the check went because nothing can recreate the file, and a
+guard against an event with no mechanism is nine lines nobody can trigger.
 
 ## The inward shim
 
