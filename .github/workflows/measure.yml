@@ -46,7 +46,7 @@ on:
         description: 'How many real links to measure for the length distribution'
         default: '200'
       runtime_candidate:
-        description: 'llama-server runtime candidate, or a case set'
+        description: 'llama-server runtime candidate, or a case set like draft_depth'
         type: choice
         default: baseline
         options:
@@ -61,17 +61,19 @@ on:
           - threads
           - threads_batch
           - np2_inflight
+          - no_draft
+          - draft_depth
       runtime_repeats:
         description: 'Repeats per case. A named candidate runs two cases, so 3 does not fit the job timeout - use 2'
         default: '3'
       # The corpus is what the job timeout is actually spent in, and a case set
-      # multiplies it: four cases at two repeats is eight passes rather than the
-      # four a named candidate costs. At the 13.1 minutes an article the slowest
-      # pass has recorded, eight passes over the committed three articles is 314
-      # minutes against a 330 minute timeout, and two articles is 210. Empty
-      # follows `bench.corpus_items`.
+      # multiplies it: `draft_depth` runs FOUR cases, so two repeats is eight
+      # passes rather than the four a named candidate costs. At the 13.1 minutes
+      # an article the slowest pass has recorded, eight passes over the
+      # committed three articles is 314 minutes against a 330 minute timeout,
+      # and two articles is 210. Empty follows `bench.corpus_items`.
       runtime_corpus_items:
-        description: 'Articles per repeat, overruling bench.corpus_items for this run'
+        description: 'Articles per repeat, overruling bench.corpus_items for this run. Use 2 for draft_depth'
         default: ''
       # Breadth comes from several jobs rather than a longer one. Eight passes
       # over five articles is about 524 minutes against a 360-minute platform

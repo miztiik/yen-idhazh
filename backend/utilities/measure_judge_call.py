@@ -58,6 +58,7 @@ from idhazh.llm.server import (
     completion_url,
     derive_turn_markers,
     post,
+    request_timeout_seconds,
     token_pieces,
 )
 from idhazh.similarity import judge, prompt
@@ -350,7 +351,7 @@ def judge_calls(
     measurement taken through a broken instrument is worse than none.
     """
     entry = judge.entry_of(settings)
-    timeout = entry.inference.request_timeout_minutes * 60.0
+    timeout = request_timeout_seconds(entry.request)
     prompt.first_token_openings(partial(token_pieces, base_url, timeout=timeout))
     markers = derive_turn_markers(base_url, entry=entry, timeout=timeout)
     client = partial(post, endpoint=completion_url(base_url), timeout=timeout)
@@ -720,7 +721,7 @@ def conditions_of(
         "Processor": silicon.host_cpu_model() or "not reported by this host",
         "Runner": args.runner,
         "Weights": f"`{entry.file}`, id `{entry.id}`",
-        "Declared for": entry.inference.declared_for or "unset",
+        "Declared for": entry.declared_for or "unset",
         "Judge prompt": f"sha256 `{prompt.prompt_digest()[:16]}`",
         "Grammar": f"`{prompt.grammar()}`, sha256 `{prompt.grammar_digest()[:16]}`",
         "Day the pairs came from": f"`{args.day}`" if args.day else "re-rendered, not recorded",

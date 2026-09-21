@@ -28,6 +28,7 @@ from ._harness import (
     SUBSTITUTED_DATE,
     _action_call,
     _declared_steps,
+    _effective_shell,
     _job,
     _load_workflows,
     _local_action_inputs,
@@ -319,21 +320,21 @@ def test_every_fanout_output_the_workflow_reads_is_one_the_emitter_prints(
     )
 
 
-def test_a_matrix_with_no_cells_never_reaches_the_strategy_evaluator(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_a_matrix_with_no_cells_never_reaches_the_strategy_evaluator() -> None:
     """An empty matrix is a job Actions refuses to build, so the guard has to exist.
 
-    With no tenant registered the emitter prints an empty list, which is the
-    night the venue is designed to run. Without the guard that legal night would
-    red on a strategy evaluation nobody could read, and the failure would look
-    like a broken workflow rather than a room with no case in it.
+    A night with nobody registered fans out to no cells, which is a legal night
+    the venue is designed to run. Without the guard it would red on a strategy
+    evaluation nobody could read, and the failure would look like a broken
+    workflow rather than a room with no case in it.
+
+    What the emitter prints on such a night is asked in
+    `backend/tests/council/test_council_matrix.py`, against a config written
+    there: the committed one registers a judge, so it cannot answer that
+    question here.
     """
     judge = _job(_judges(), "judge")
 
-    assert _emitted(capsys)["matrix"] == "[]", (
-        "no tenant is registered, so the committed config fans out to no cells"
-    )
     assert _normalize_condition(judge["if"], "the judging job") == (
         "needs.draw.outputs.matrix != '[]'"
     )
@@ -368,10 +369,14 @@ def test_a_cell_carries_its_tenant_its_date_and_its_own_width(
     """
     shard = _script(_step(_judges(), "judge", "name", "Run this unit of the tenant's work"), "")
     emitted = _emitted(capsys)
+    cells = json.loads(emitted["matrix"])
 
     for value in ("tenant", "date", "shard", "shards"):
         assert f"matrix.{value}" in shard, f"the unit is never told which {value} it is"
-    assert json.loads(emitted["matrix"]) == [], "the committed config hosts nobody"
+    assert cells, "the committed config registers a tenant, so tonight fans out to cells"
+    assert all(set(cell) == {"tenant", "date", "shard", "shards"} for cell in cells), (
+        "a cell the unit reads four values off has to carry all four and nothing else"
+    )
     assert json.loads(emitted["dates"]) == [SUBSTITUTED_DATE]
 
 
@@ -489,18 +494,24 @@ def test_reading_an_artifact_is_a_scope_the_permissions_block_grants() -> None:
         assert settings["github-token"] == "${{ secrets.GITHUB_TOKEN }}"
 
 
-def test_no_unit_commits() -> None:
-    """Many units pushing into one union-merged file buys many races and many rebases.
+def test_no_shard_commits() -> None:
+    """A row a shard commits during the run is invisible to the job that counts them.
 
-    One settle is one push, so two processes never write one path: no merge
-    driver to trust, no union stacking to census afterwards, and no key to
-    settle across units.
+    Every checkout in this file names no ref, so each job is pinned to the commit
+    the run was triggered at. The collecting job decides whether every shard
+    reported by counting what it downloaded, and it is reading a tree from 22:00
+    - a row pushed at 22:40 is not in it. The artifact is the only way across,
+    and no config edit can retire that.
+
+    Read through the shell CLOSURE rather than off the `run:` body. `_steps`
+    resolves the composite action the model block moved into, and
+    `_effective_shell` follows the shipped scripts that action calls, so a commit
+    issued one delegation away is still seen.
     """
-    bodies = [
-        _script(step, "a judge step") for step in _steps(_judges(), "judge") if "run" in step
-    ]
+    shells = [_effective_shell(step) for step in _steps(_judges(), "judge")]
 
-    assert not [body for body in bodies if "commit-and-push.sh" in body]
+    assert [shell for shell in shells if shell], "the judging job runs no shell to search"
+    assert not [shell for shell in shells if Path(COMMIT_SCRIPT).name in shell]
 
 
 def test_the_night_makes_one_commit_call_over_the_paths_its_tenants_named() -> None:

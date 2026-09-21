@@ -86,6 +86,6 @@ def judge_inputs(settings: config.Settings) -> JudgeStamp:
         judge_model=entry.id,
         prompt_digest=prompt.prompt_digest(),
         grammar_digest=prompt.grammar_digest(),
-        judge_temperature=judge.decode_settings(settings).temperature,
+        judge_temperature=float(judge.decode_settings(settings)["temperature"]),
         thinks=entry.thinks,
     )

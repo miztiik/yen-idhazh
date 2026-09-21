@@ -24,31 +24,26 @@ from __future__ import annotations
 
 import inspect
 import re
-from collections.abc import Iterable
 from pathlib import Path
 from string import Template
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR
+from conftest import CONFIG_DIR, a_request, a_server
 
 from idhazh import config
 from idhazh.classify import calls
 from idhazh.contracts.base import Contract
 from idhazh.contracts.fingerprint import PipelineInputs
-from idhazh.contracts.knobs.inference import InferenceConfig
-from idhazh.contracts.knobs.models import ModelEntry, ModelRef, ModelsConfig
+from idhazh.contracts.knobs.models import ModelRef, ModelsConfig
 from idhazh.corpus import read_rows, scored_from_items
 from idhazh.fingerprint import (
+    DIGESTED_FLAGS,
     MACHINE_INPUTS,
-    MODEL_FIELD_SPELLING,
-    NOT_DIGESTED,
     PLACEHOLDER_DIGEST,
     PROSE_INPUTS,
     UNRECORDED_BUILD,
     build_inputs,
-    digested_inference_fields,
-    digested_model_fields,
     host_cpu,
     prose_changed_alone,
     runner_class,
@@ -68,9 +63,7 @@ HEX64 = re.compile(r"[0-9a-f]{64}")
 #: of the stamp was a blind spot. Row #10 digested them on 2026-08-26, folded
 #: into `runtime_flags`, riding the model swap's fingerprint reset rather than
 #: spending a second one. This list is what stops a quiet reversal.
-RULED_LOGIT_MOVERS: Final[frozenset[str]] = frozenset(
-    {"cache_type_k", "cache_type_v", "flash_attention", "n_parallel", "n_threads_batch"}
-)
+RULED_LOGIT_MOVERS: Final[frozenset[str]] = frozenset({"-ctk", "-ctv", "-fa", "-np", "-tb"})
 
 #: `sha256` here is what config expected. What the runtime opened is the
 #: separate `model_sha256` argument, and the two are deliberately unequal.
@@ -109,7 +102,8 @@ def stamp_with(
     return build_inputs(
         model=CONFIGURED_MODEL,
         model_sha256=model_sha256,
-        inference=InferenceConfig(),
+        server=a_server(),
+        request=a_request(),
         truncation_cap_tokens=2500,
         runtime_build="llama.cpp-b4200",
         chat_template="{{ messages }}",
@@ -172,67 +166,18 @@ def test_the_record_is_stable_across_construction_order() -> None:
     assert rebuilt.changed_inputs(inputs) == ()
 
 
-# --- Contract tier: the inference knobs are a closed world ------------------
-
-
-def unclassified_knobs(knobs: Iterable[str]) -> frozenset[str]:
-    """Names that neither reach the stamp nor sit in `NOT_DIGESTED`."""
-    return (
-        frozenset(knobs)
-        - digested_inference_fields()
-        - digested_model_fields()
-        - frozenset(NOT_DIGESTED)
-    )
-
-
-def model_shaped_fields() -> frozenset[str]:
-    """The whole universe the closed set has to answer for.
-
-    Both shapes, not just the inference block. It was that block alone until
-    2026-09-13, which was closed over the wrong set the moment a model-shaped
-    fact lived on the entry - a field in no stamp and in no closed set, with
-    nothing saying so.
-    """
-    return frozenset(InferenceConfig.model_fields) | frozenset(ModelEntry.model_fields)
-
-
-def test_every_inference_knob_is_digested_or_written_down_as_undigested() -> None:
-    """A knob nobody classified is a drift source nobody recorded."""
-    missing = unclassified_knobs(model_shaped_fields())
-    assert not missing, (
-        "classify these in idhazh.fingerprint.NOT_DIGESTED, or digest them in "
-        f"PipelineInputs: {sorted(missing)}"
-    )
-
-
-def test_a_new_knob_nobody_classified_fails_the_check() -> None:
-    """The check has to bite, or the closed world is only a comment."""
-    with_an_unclassified_knob = [*model_shaped_fields(), "cache_reuse"]
-    assert unclassified_knobs(with_an_unclassified_knob) == {"cache_reuse"}
-
-
-def test_no_knob_is_both_digested_and_written_down_as_undigested() -> None:
-    """A knob in both places means one of the two statements is false."""
-    assert not digested_inference_fields() & frozenset(NOT_DIGESTED)
-    assert not digested_model_fields() & frozenset(NOT_DIGESTED)
-
-
-def test_the_undigested_set_names_only_real_knobs() -> None:
-    """A renamed knob leaves a stale name here, and the stale name proves nothing."""
-    assert frozenset(NOT_DIGESTED) <= model_shaped_fields()
-    assert frozenset(MODEL_FIELD_SPELLING) <= model_shaped_fields()
+# --- Contract tier: the flags that can move an output ----------------------
 
 
 def test_the_turn_envelope_reaches_the_stamp_by_both_routes_it_claims() -> None:
     """The envelope is digested, and both routes are checked rather than asserted.
 
-    `MODEL_FIELD_SPELLING` claims the closing marker arrives as
-    `turn_markers_sha256`. The claim is worth nothing unless a moved marker
-    moves that digest, so the marker is moved and the two digests compared - and
-    the rendered prompt is compared beside it, because a marker that renders
-    into a prompt moves both.
+    The envelope arrives as `turn_markers_sha256`. The claim is worth nothing
+    unless a moved marker moves that digest, so the marker is moved and the two
+    digests compared - and the rendered prompt is compared beside it, because a
+    marker that renders into a prompt moves both. Driven from a built envelope,
+    so it says nothing about what the committed config happens to hold.
     """
-    assert MODEL_FIELD_SPELLING["thinking_close"] == "turn_markers_sha256"
     markers = a_built_envelope()
     moved = a_built_envelope(turn_closing="<|end_of_turn|>\n")
 
@@ -283,66 +228,42 @@ def test_a_stamp_that_was_handed_an_envelope_carries_its_digest() -> None:
     )
 
 
-def test_every_undigested_knob_carries_a_reason() -> None:
-    assert all(entry.reason.strip() for entry in NOT_DIGESTED.values())
+def test_every_ruled_logit_mover_is_still_enumerated_in_the_stamp() -> None:
+    """Five flags were ruled drift sources on 2026-08-25 and digested a day later.
+
+    The model file spells them as llama-server does now, so the ruling is held
+    against the flag rather than against a field name. A flag dropped from
+    `DIGESTED_FLAGS` would retire a known drift source with nothing saying so.
+    """
+    assert RULED_LOGIT_MOVERS <= frozenset(DIGESTED_FLAGS)
 
 
-@pytest.mark.parametrize("knob", sorted(RULED_LOGIT_MOVERS))
-def test_a_ruled_blind_spot_is_digested_or_still_flagged(knob: str) -> None:
-    """Marking one of these safe would retire a known drift source without a reason."""
-    entry = NOT_DIGESTED.get(knob)
-    assert knob in digested_inference_fields() or (entry is not None and entry.moves_logits), (
-        f"{knob} was ruled a logit mover: digest it, or keep moves_logits=True"
-    )
-
-
-def test_the_folded_knobs_are_digested_through_their_spellings() -> None:
-    """They reach the stamp folded into two fields, not under their own names."""
-    folded = digested_inference_fields() - frozenset(PipelineInputs.model_fields)
-    assert folded == {
-        "temperature",
-        "top_p",
-        "seed",
-        "checkpoint_min_step",
-        "ctx_checkpoints",
-        "cache_ram",
-        "cache_prompt",
-        "slot_prompt_similarity",
-        "jinja",
-        "reasoning_preserve",
-        *RULED_LOGIT_MOVERS,
-    }
-
-
-def test_every_ruled_logit_mover_now_reaches_the_stamp() -> None:
-    assert RULED_LOGIT_MOVERS <= digested_inference_fields()
-    assert not RULED_LOGIT_MOVERS & frozenset(NOT_DIGESTED)
-
-
-@pytest.mark.parametrize(
-    "moved",
-    [
-        InferenceConfig(cache_type_k="q8_0"),
-        InferenceConfig(cache_type_v="q8_0"),
-        InferenceConfig(flash_attention="on"),
-        InferenceConfig(n_parallel=2),
-        InferenceConfig(n_threads_batch=8),
-    ],
-    ids=sorted(RULED_LOGIT_MOVERS),
-)
-def test_a_moved_runtime_knob_moves_the_stamp(moved: InferenceConfig) -> None:
+@pytest.mark.parametrize("flag", sorted(RULED_LOGIT_MOVERS))
+def test_a_moved_runtime_flag_moves_the_stamp(flag: str) -> None:
     """The whole point of digesting them: a quantised cache or a second slot can
     rewrite a summary, and the stamp used to hold still while it did."""
-    assert runtime_flags_spelling(moved) != runtime_flags_spelling(InferenceConfig())
+    assert runtime_flags_spelling(a_server(**{flag: "q8_0"})) != runtime_flags_spelling(a_server())
 
 
-def test_a_null_runtime_knob_spells_apart_from_a_pinned_one() -> None:
-    """Null means the runtime picks, which is a different choice from pinning a
+def test_a_flag_the_file_leaves_out_spells_apart_from_a_pinned_one() -> None:
+    """Absent means the runtime picks, which is a different choice from pinning a
     value - so it gets its own spelling rather than one of the values it may
-    resolve to."""
-    spelling = runtime_flags_spelling(InferenceConfig())
-    assert "cache_type_k=runtime-default" in spelling
-    assert "n_threads_batch=runtime-default" in spelling
+    resolve to. A bare flag is neither, and spells as set."""
+    spelling = runtime_flags_spelling(a_server())
+    assert "-ctk=runtime-default" in spelling
+    assert "-tb=runtime-default" in spelling
+    assert "--jinja=set" in runtime_flags_spelling(a_server(**{"--jinja": None}))
+
+
+def test_a_moved_sampling_value_moves_the_sampling_spelling() -> None:
+    assert sampling_spelling(a_request()) == sampling_spelling(a_request())
+    assert sampling_spelling(a_request(temperature=0.7)) != sampling_spelling(a_request())
+    assert sampling_spelling(a_request(seed=7)) != sampling_spelling(a_request())
+
+
+def test_a_request_that_pins_nothing_records_the_runtime_default() -> None:
+    """A model file may stay silent on a sampler, and the stamp says so."""
+    assert sampling_spelling({}) == "temperature=runtime-default;top_p=runtime-default;seed=runtime-default"
 
 
 # --- The one alarm that survives the retired gate ---------------------------
@@ -451,17 +372,6 @@ def test_a_deliberately_unbounded_read_declares_its_cover(
 
 
 # --- Building the stamp -----------------------------------------------------
-
-
-def test_sampling_has_exactly_one_spelling() -> None:
-    assert sampling_spelling(InferenceConfig()) == sampling_spelling(InferenceConfig())
-
-
-def test_a_moved_decoding_knob_moves_the_sampling_spelling() -> None:
-    assert sampling_spelling(InferenceConfig(temperature=0.7)) != sampling_spelling(
-        InferenceConfig()
-    )
-    assert sampling_spelling(InferenceConfig(seed=7)) != sampling_spelling(InferenceConfig())
 
 
 def test_the_stamp_digests_the_weights_that_loaded_not_the_ones_configured() -> None:

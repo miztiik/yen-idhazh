@@ -296,10 +296,98 @@ console is where the loop is watched once it starts
 | `state/content-similarity-judge/score-distribution.json` | Across everything judged so far, how many YES, NO and UNCLEAR readings sit in each slice of the band? |
 | `state/content-similarity-judge/fitted-thresholds/` | On this day, what did the record propose, what shaped it, and what did the run apply? |
 | `state/content-similarity-judge/holdout-pairs.csv` | Which pairs did a person mark, and which way? |
+| `state/content-similarity-judge/metrics/` | Over one unit of one night, how did this judge's own instrument behave - what was it dealt, what did it read, and what did that cost? |
 
 The fields, the types and the bounds are in
 [../contracts/schemas.md](../contracts/schemas.md). How each store is partitioned,
 and why, is in [../../concepts/partitions.md](../../concepts/partitions.md).
+
+### This judge is a tenant, and the venue knows nothing about it
+
+The council hosts judges and depends on none of them
+([llm-council.md](llm-council.md#the-venue-and-its-tenants-are-separate-things)).
+This judge registers by putting its slug in `council.tenants` and declaring
+itself in
+[../../../backend/idhazh/similarity/tenant.py](../../../backend/idhazh/similarity/tenant.py),
+which binds the venue's three units of work to the four stages above: pick the
+work, judge one unit of it, then count and fit. That module imports the venue;
+nothing in the venue imports it.
+
+**The funnel closes, and the contract is what holds it closed.** Every pair a
+unit was dealt ends exactly one of four ways - read, refused by the grammar,
+unreachable because the day either item ran on has aged out, or never reached
+because the unit stopped on its own clock. The four added together are what the
+unit was dealt, and a row where they do not is refused before it is written. The
+abandoned term is why: without it the identity would go red on exactly the unit
+the deadline exists to let report at all.
+
+**A rate over no rows is empty rather than zero.** A unit that read nothing
+measured nothing; a zero would say it measured everything and found nothing
+wrong.
+
+**A unit ships its row as it finishes and commits nothing.** The row goes out as
+an artifact, the collecting job appends it to the store above, and the trip
+belongs to the venue - so a unit the platform killed has still handed over every
+reading it took.
+
+### The nights this judge says it is behind on
+
+The council asks each tenant which nights inside its window are outstanding
+([llm-council.md](llm-council.md#tonight-and-the-older-nights-it-repairs)) and
+this judge answers from the record, which is one file of a fixed size. No day
+file is opened and no directory is listed, so the answer costs the same on the
+thousandth night as on the first (`CLAUDE.md` Guardrail #12).
+
+**A night is outstanding when the record has never read it.** The record keeps
+two date lists for that. `counted_dates` is the days whose verdicts are in the
+counts, and it is what makes a re-run free. `judged_dates` is every day the
+record has ever read, and it is what an instrument move leaves behind.
+
+| The list | What it holds | What a reset does to it |
+| --- | --- | --- |
+| `counted_dates` | the days behind the counts in this record | emptied, with the counts |
+| `judged_dates` | every day this judge has ever counted | kept |
+
+**The reset is why there are two lists rather than one.** Move the model, the
+prompt, a weight or the sampler and the counts are archived, because they answer
+a different question afterwards. Which nights were read is not a count, so it
+comes across. Without that, retuning the scorer on a Monday would have the
+council dispatch every night of its window that week - and every one of those
+jobs would append its rows and then be refused, because the record still counts
+a date once.
+
+**What it does name is the night that lost a unit.** Three units of four
+reporting is the failure this repair path exists for: every row those three
+judged was appended, and the date stayed out of both lists because a partial day
+cannot be counted and cannot be topped up later. That date comes back here, and
+the next council night judges it again from the top.
+
+**A judge with no record yet names nothing.** A tenant raises the council's
+floor for itself by naming no night from before it arrived, and a judge with no
+record has not arrived on any of them. An operator who wants one of those nights
+judged names the date, which replaces the plan outright.
+
+**The counting step admits only rows the record's own stamp matches**, and that
+filter runs before the one-row-a-pair de-duplication. The day file is
+append-only, so a day judged twice under two instruments holds both readings;
+adding them together would make the record's own stamp a lie with nothing able
+to separate them afterwards. Filtering first is what lets the right row win - a
+discarded row from the old instrument is the more recent one, so filtering
+second would let it take the pair on recency and then be thrown away, losing the
+fresh reading standing behind it.
+
+**One caller has the two in the other order, and it is safe today for a reason
+worth writing down.** `set_merge_line` hands the counting step rows it has
+already de-duplicated, so on that path the stamp filter runs second. It cannot
+bite on a run: the counting verb moves the record to tonight's stamp before
+`set_merge_line` reads the day, so tonight's rows are both the admitted ones and
+the newest ones, and either order gives the same answer. What makes it worth a
+sentence is that the safety is a property of the order the two verbs run in,
+not of either one - change which verb moves the stamp, or read a day the record
+has not been moved to, and the path starts counting a row the stamp refuses.
+Correcting it moves what `pairs_in_band`, `pairs_judged`, `pairs_usable` and the
+two rates mean on rows already committed, so it is a schema change rather than a
+tidy-up (`CLAUDE.md` section 11).
 
 ## How the line moves: down fast, up slow
 
@@ -351,7 +439,19 @@ flowchart TD
 
 `/console/judgement/` draws the margin above, and to draw it the route's build-time `load` scores every hand-marked pair itself. Nothing else in the console scores anything, and the reason is narrow: **no run has ever scored these pairs**. They are a person's marks rather than judged pairs, and nothing writes a score for them anywhere, so this is the first derivation and not a second opinion about one. A judged pair is the opposite case - its score is already on its row, and recomputing that in a page would be two verdicts about one number.
 
-**Two terms are reproduced and two overrides are not.** The panel computes `cosine_weight * cosine + key_point_weight * key_point_overlap`, which is exactly what the floor is applied to. It does not reproduce the two overrides in `_pair_terms`: a matching reduced headline joining at 1.0, and a clash of figures refusing outright. Neither is a function of the line - they fire or they do not whatever the floor is set to - so neither can move the margin the panel measures.
+**The four cells are the exception, and since 2026-09-21 they come off a committed row.** `python -m idhazh score-merge-line-holdout` counts what the line did to every marked pair and writes one row into `state/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>.csv`. The page reads that row and prints it; it does not count the cells again. **Two answers to one question is what the commit exists to stop** - and a reading that exists only while a page renders cannot be held against one taken a month earlier. What the page still derives is the per-pair score, because no row carries one and the panel draws a dot for each.
+
+**It scores the line, not the judge.** The marks carry no verdict and the step calls no model. A pair is joined exactly when the weighted score reaches the line, which is the one branch of the diagram above that the line decides. How well a judge agrees with the marks is a different measurement with a different budget, and no row here answers it.
+
+**On a date with no row the panel says the line has not been scored.** A person types the verb, so a tree where nobody has run it has no row at all - and four zeros would read as a line that merged nothing rather than as a reading nobody took.
+
+**Counts, and never one rate.** With 196 of the 200 marks on one side, always answering "one story" scores 98 percent and measures nothing. The row carries the four cells and the negative population beside them, so every rate a reader derives is derived with the denominator it came from in view (Guardrail #10). The two directions of a mistake stay apart for the reason the Editor gives above: a missed group shows the reader one story twice, a false merge hides one of them.
+
+**The reading is refused below half the marked file.** Retention deletes published days the marked file still names, so a run can resolve almost nothing and still produce four cells that add up - and four small cells read as a line that got nearly everything right. `HOLDOUT_RESOLVED_SHARE_MIN` is a constant beside `HOLDOUT_TWO_STORY_MAX` in `backend/idhazh/contracts/knobs/placement.py` rather than a knob in `config/`, because it says what makes the reading mean anything and a share that can be tuned down is a share somebody tunes down on the morning the reading goes red (owner, 2026-09-21).
+
+**`HOLDOUT_TWO_STORY_MAX` has one declaration and one instrument.** The constant is what the config validator reads, because a validator cannot open a CSV; the verb retakes the reading on its way past and prints both numbers when they disagree. It stores nothing - a committed copy would be the second source the constant is not allowed to have (Guardrail #10).
+
+**Two terms are reproduced and two overrides are not.** The panel and the verb both compute `cosine_weight * cosine + key_point_weight * key_point_overlap`, which is exactly what the floor is applied to. Neither reproduces the two overrides in `_pair_terms`: a matching reduced headline joining at 1.0, and a clash of figures refusing outright. Neither is a function of the line - they fire or they do not whatever the floor is set to - so neither can move the margin the panel measures, and counting them would credit the line with a merge it did not make.
 
 **What that costs the reader, stated.** A pair somebody marked apart whose headlines reduce identically would be merged at 1.0 whatever the line is, and the panel would show it sitting harmlessly below the rule. None of the four marked-apart pairs is such a pair today: all four score below 1.0 on their words, and none of them clashes on a figure either. That is a reading of today's file and not a property of the design, so it is the thing to re-check when a mark is added.
 

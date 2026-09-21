@@ -367,11 +367,11 @@ export async function load() {
 		flowNote: flow.reason,
 		grid,
 		// Every day the pipeline that writes the summaries changed, derived once here
-		// over the whole ledger and handed to the charts a change can move. Derived
-		// per component it would be derived three times off three different day
-		// lists, and two of them would eventually disagree about when it happened.
-		// The manifests carry each run's recorded inputs; the score rows carry the
-		// digest the days before 2026-09-12 were stamped with.
+		// over the widest window preset and handed to the charts a change can move.
+		// Derived per component it would be derived three times off three different
+		// day lists, and two of them would eventually disagree about when it happened.
+		// The manifests carry each run's recorded inputs and the score rows carry a
+		// digest; which of the two a day holds is what decides how it is read.
 		modelChanges: pipelineChanges(rows, manifests),
 		floorPct,
 		itemCeiling,

@@ -252,6 +252,19 @@ COUNTERFACTUAL_SCORE_KEY: Final = ("date", "run_id", "vertical", "url_key")
 #: for a preference rule to choose between.
 STORY_SIMILARITY_THRESHOLD_KEY: Final = ("date", "run_id")
 
+#: What makes two merge-line holdout rows the same record. One run scores one
+#: line against one marked file on one date, so a second row under those two
+#: cells is a second attempt at one execution rather than a second answer. The
+#: marks are hand-written and the day payloads are committed, so two attempts
+#: count the same cells and the first row wins.
+#:
+#: Spelled here as four strings and nothing else. The shape they name is
+#: `idhazh.contracts.merge_line_holdout_score`, and this module may not import
+#: it: a council verb reaches this module for its own row types, and a judge
+#: contract arriving through it would put a judge in the council's import
+#: closure (`backend/tests/council/test_council_runs_without_a_judge.py`).
+MERGE_LINE_HOLDOUT_SCORE_KEY: Final = ("date", "run_id")
+
 #: What makes two judged-pair rows the same record. `run_id` is in the key
 #: because two runs of one day judge the same pair against different articles,
 #: and both readings are facts worth keeping. Drop it and the settlement would

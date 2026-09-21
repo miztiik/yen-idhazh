@@ -432,30 +432,45 @@ One opaque hex token affords exactly one operation - equality - which is the
 gate's operation and the only one. A set of named values affords reading, and a
 boundary drawn from them can say which input moved. Ruled by Fowler, 2026-09-12.
 
-**The days committed before 2026-09-12 are read from the score ledger's own
-`pipeline_fingerprint` column**, behind `RECORDED_INPUTS_FROM` in
-`frontend/src/lib/server/model-work.ts`. A hard date split rather than "prefer
-whichever is present": the two shapes always compare unequal, so an overlap
-would invent a boundary. **The cutover day itself is never a boundary**, because
-its predecessor's identity comes from one store and its own from the other. The
-historical branch retires once the oldest day the widest console window can show
-is on or after that date, and the removal condition is written on the line that
-declares it. What retiring it costs: the nine boundaries the committed months
-hold become unreachable from the console, and an operator who wants them reads
-the CSV.
+**The days that recorded their identity as a digest are read from the score
+ledger's own `pipeline_fingerprint` column**, and the days that recorded a named
+input manifest are read from `run.json`. `identitiesByDate` in
+`frontend/src/lib/server/model-work.ts` tags each day with which record it
+carries. A split on the records rather than "prefer whichever is present": the
+two shapes always compare unequal, so an overlap would invent a boundary.
+**Two days recorded different ways are never a boundary**, because the store
+changed there and the pipeline need not have. A day carrying both is a day
+something replayed, and the manifest wins - a record that can name a field beats
+one that can only say a field moved. The digest arm retires once no score row
+the widest console window can reach carries one, and the removal condition is
+written on the line that declares the field. What retiring it costs: the nine
+boundaries the digest arm finds come off the chart, and an operator who wants
+them reads the CSV.
+
+**This was a hardcoded date until 2026-09-21** - `RECORDED_INPUTS_FROM =
+'2026-09-12'`, with three gates hanging off it. It was a day early. The last
+stamped day is 2026-09-12 and the first day carrying a manifest is 2026-09-13,
+so 2026-09-12 was invisible to the chart and the seam cost two comparisons
+rather than the one its own comment claimed. Measured 2026-09-21 on a developer
+machine over the committed archive: the record split compares **30 dates against
+the date rule's 29** and finds the **same 15 boundaries** - nine out of the
+digest arm and six out of the manifest arm. So the recovered day cost nothing
+and the two rules agree everywhere else. **No committed day carries both
+records**, so the precedence above is held by the tests rather than by the
+archive.
 
 **The record is now the branch that draws, and both branches are live.**
-Measured 2026-09-21 over the committed archive: **20 of 120 run entries carry a
-recorded input manifest, across 7 of the 30 committed days** - 13 to 18 and 20
-September. Over those seven days the prompt took **6 distinct values**, and
-2026-09-15 moved seven settings at once: the article extractor, the context
+Re-counted 2026-09-21 over the committed archive: **22 of 122 run entries carry
+a recorded input manifest, across 8 of the 31 committed days** - 13 to 18, 20
+and 21 September. Over those eight days the prompt took **6 distinct values**,
+and 2026-09-15 moved seven settings at once: the article extractor, the context
 size, the prompt, the sampling settings, the sanitizer, the truncation cap and
-the turn markers. One of the seven days, 2026-09-20, recorded a manifest and
+the turn markers. One of the eight days, 2026-09-20, recorded a manifest and
 moved nothing, which is the state that tells a reader the instrument was
-working. The historical branch still draws every day before the cutover, and the
-commit that dropped `pipeline_fingerprint` from nine contracts left it on
-`EvalRow` - which is `state/scores/`, the file `payload.ts` reads at build time
-and hands to this module - rather than on the published projection of that
+working. The digest arm still draws every day whose score rows carry a stamp,
+and the commit that dropped `pipeline_fingerprint` from nine contracts left it
+on `EvalRow` - which is `state/scores/`, the file `payload.ts` reads at build
+time and hands to this module - rather than on the published projection of that
 ledger, which nothing under `frontend/src/` opened and which was deleted on
 2026-09-16. Dropping it would make this panel report that nothing moved across
 the days before the record existed, which is a wrong answer where the design
@@ -470,12 +485,14 @@ boundaries: 23, 24, 26, 27 and 29 August. Comparing only the previous day's last
 stamp against this day's first would have found two, and would have called
 2026-08-26 a single unchanged day while it ran three pipelines.
 
-**Derived once on the server, over the whole ledger, and passed down.**
+**Derived once on the server, over the widest window preset, and passed down.**
 `pipelineChanges` in `$lib/server/model-work` is the one derivation and
 `/console/`'s load calls it; a component that derived its own would be deriving
 it off its own day list, and two of them would eventually disagree about when it
-happened. Over the whole ledger rather than the window, so a chart opening on
-the day after a change still knows the change happened.
+happened. Over the widest preset rather than the open one, so a chart opening on
+the day after a change still knows the change happened - `evalRows` hands it 91
+day files and `loadManifests` 90 manifests, both bounded by their own callers
+(`docs/concepts/growing-reads.md`). It opens no file itself.
 
 **The rule is dashed, in the neutral rule ink, and never on the health ramp.** A
 pipeline change is an event, not a verdict. It sits on the leading edge of the

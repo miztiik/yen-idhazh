@@ -7,7 +7,7 @@ from pathlib import Path
 
 from idhazh import config
 from idhazh.classify.calls import summarize_and_plan_schema
-from idhazh.llm.server import prove_the_entry
+from idhazh.llm.server import prove_the_entry, request_timeout_seconds
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -19,7 +19,7 @@ def main(argv: list[str] | None = None) -> int:
     prove_the_entry(
         model=entry,
         output_schema=summarize_and_plan_schema(),
-        timeout=entry.inference.request_timeout_minutes * 60,
+        timeout=request_timeout_seconds(entry.request),
     )
     print("the markers came off this server's own template and the decoder is still bound")
     return 0

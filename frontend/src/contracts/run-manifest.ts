@@ -2,6 +2,40 @@
 // Never hand-edited: the drift gate regenerates it and fails on any diff
 // (CLAUDE.md section 1a). Edit the Pydantic model instead.
 
+/**
+ * One more file these weights need, and the flag that hands it to the server.
+ *
+ * A model is not always one file. Google ships a multi-token-prediction head
+ * beside the gemma weights; another family ships a projector, an adapter or a
+ * vocoder. Each is the same fact - bytes from a hub repository, verified, then
+ * named on the command line - so each is an entry here rather than a typed
+ * block of its own with its own five fields and its own argv branch.
+ *
+ * `flag` is what makes this a declaration rather than a download list. The
+ * builder emits `<flag> <landed path>` and knows nothing about what the file
+ * is for, so a projector or an adapter is a config-only change. A companion
+ * with no flag is a file that must simply be present.
+ */
+export interface CompanionFile {
+	/** Hugging Face repository the file is pulled from. */
+	repo: string;
+
+	/** The hub commit the file is fetched at. Never a branch: a branch gets whatever was uploaded last, under a digest that still reads the old bytes. */
+	revision: string;
+
+	/** The file name inside the repository, and one path segment. It becomes a path under the models directory and a shell argument beside it. */
+	file: string;
+
+	/** Required, with no exception. A blank digest makes `sha256sum --check` report 'no properly formatted checksum lines found', which names neither the entry nor the field. */
+	sha256: string;
+
+	/** How many bytes the hub reports. Absent where nobody has fetched it yet. */
+	byte_count?: number | null;
+
+	/** The llama-server flag that takes this file's landed path. Absent means the file must be present and is named by nothing on the command line. */
+	flag?: string | null;
+}
+
 /** Which config bytes a run read. A silently edited knob changes every output. */
 export interface ConfigDigest {
 	path: string;
@@ -9,101 +43,14 @@ export interface ConfigDigest {
 	sha256: string;
 }
 
-/** Decoding is pinned here so a change of output is a reviewable diff. */
-export interface InferenceConfig {
-	/** The window one sequence gets. The default stays 8192 because it is the conservative window for weights nobody has put in front of a runner; each model file sets its own window. Whether its KV cache fits is decided by what the machine has free, not by the process's resident memory alone - docs/reference/pipeline-cost.md. */
-	n_ctx?: number;
-
-	n_threads?: number;
-
-	n_batch?: number;
-
-	n_ubatch?: number;
-
-	/** llama-server -np. None omits the flag and keeps the runtime default. */
-	n_parallel?: number | null;
-
-	/** llama-server -tb. None omits the flag and lets it follow n_threads. */
-	n_threads_batch?: number | null;
-
-	/** llama-server --cpu-range, inclusive lo-hi. None omits the flag. */
-	cpu_range?: string | null;
-
-	/** llama-server --cpu-strict, 0 or 1. None omits the flag. */
-	cpu_strict?: number | null;
-
-	/** If false, emit --no-warmup. True lets llama-server warm at startup. */
-	startup_warmup?: boolean;
-
-	/** If true, emit --metrics and llama-server serves its counters on /metrics. On by default: without them a run cannot say how close it came to n_ctx, and a concurrency result has no busy-slot number to read it by. */
-	metrics?: boolean;
-
-	/** llama-server -fa. None omits the flag and leaves the runtime on auto. */
-	flash_attention?: 'on' | 'off' | null;
-
-	/** llama-server -lm. None omits the flag and keeps the runtime default. */
-	load_mode?: 'mmap+mlock' | null;
-
-	/** llama-server -ctk. None omits the flag and keeps full-precision KV. */
-	cache_type_k?: 'q8_0' | null;
-
-	/** llama-server -ctv. None omits the flag and keeps full-precision KV. */
-	cache_type_v?: 'q8_0' | null;
-
-	/** llama-server --prio. None omits the flag and keeps normal priority. */
-	priority?: number | null;
-
-	/** llama-server --poll. None omits the flag and keeps the runtime default. */
-	poll?: number | null;
-
-	/** llama-server -cms, in tokens; 0 means no minimum. None omits the flag. */
-	checkpoint_min_step?: number | null;
-
-	/** llama-server -ctxcp, maximum checkpoints per slot. None omits the flag. */
-	ctx_checkpoints?: number | null;
-
-	/** llama-server -cram, in MiB; -1 is unlimited and 0 disables the cache. None omits the flag. */
-	cache_ram?: number | null;
-
-	/** llama-server --cache-prompt or --no-cache-prompt. None omits the flag and preserves the completion requests' existing enabled cache. */
-	cache_prompt?: boolean | null;
-
-	/** llama-server -sps, shared-prefix fraction. None omits the flag. */
-	slot_prompt_similarity?: number | null;
-
-	/** llama-server --jinja or --no-jinja. None omits the flag. */
-	jinja?: boolean | null;
-
-	/** llama-server --reasoning-preserve or --no-reasoning-preserve. None omits the flag. */
-	reasoning_preserve?: boolean | null;
-
-	/** llama-server -lv. None omits the flag and keeps the runtime default of 3, which prints twelve lines and none of them names flash attention, the KV buffer or the compute buffer. At 4 the whole model-loader block comes back, which is what lets a check read the attention state off the server's own line instead of off the flag we passed it. Measured 2026-09-09 on a 12th Gen Intel Core i7-1265U against llama.cpp b10444, three runs a case and zero spread: one server start goes from 12 lines and 1,085 bytes to about 206 lines and 16,011 bytes. That is a job artifact kept for two days, never a committed file. It changes what the server says about itself and nothing about what it decodes, so idhazh.fingerprint leaves it out of the stamp. */
-	log_verbosity?: number | null;
-
-	/** How far the sampler may stray from the likeliest token. The default is 0.0 for the reason n_ctx's default is conservative: a temperature is a reading of one model's weights, and a number that suited one family applied to weights nobody has run is a setting somebody will trust. Every committed entry pins its own. Above 0.0 the seed stops being dead code and becomes the control that decides which token is drawn - docs/architecture/contracts/determinism.md. */
-	temperature?: number;
-
-	/** The share of probability mass the sampler may draw from. 1.0 is the whole distribution, which is not a second temperature and does not contradict one: temperature reshapes the distribution and this truncates its tail, so 1.0 leaves the truncation off and lets temperature alone decide. Lowering both is two instruments aimed at one effect, and then neither reading says which of them moved the words. */
-	top_p?: number;
-
-	/** Which sample the sampler draws. It is the whole of the repeatability story above temperature 0: same inputs and same seed is the same reply, same inputs and a different seed is a different one. At temperature 0 it is dead code and nothing reads it, which is what it was until 2026-09-17. It is enumerated in the fingerprint either way, so a change of sampler cannot move the words without moving the stamp. */
-	seed?: number;
-
-	/** One summarizer POST may wait this long. Sized from the measured worst 8B long article plus one cold prompt prefix, doubled; the shard timeout remains the outer bound. With no decode cap set anywhere, this and the window are the two bounds a runaway decode meets - each per item, each loud, and each already recorded. */
-	request_timeout_minutes?: number;
-
-	/** The weights this block is set for - the sha256 of the entry that carries it. Every number here is a measurement about one model on one runner, never a property of the pipeline, so the entry states which bytes the numbers were put in front of. Swap the weights and this is left behind, which is the one event the field exists to make loud. It says a person paired these numbers with these bytes; where the numbers came from is docs/concepts/config.md, because a runner and a date cannot be checked by a validator and a field nothing checks is a comment. */
-	declared_for?: string | null;
-}
-
 /**
  * Which weights, from where. Per-item payloads carry only the `id`.
  *
  * **This is the shape a run recorded**, and `run_manifest.ModelUse` embeds it.
- * `ModelEntry` below is the shape a person declares in `config/`. The turn
- * envelope belongs to the second and not to this one: no `model_ref` a run has
- * ever written carries markers, and a field required here would stop today's
- * build reading yesterday's run (`CLAUDE.md` section 11).
+ * `ModelEntry` below is the shape a person declares in `config/`. What a
+ * reasoning span is closed with belongs to the second and not to this one: no
+ * `model_ref` a run has ever written carries it, and a field required here
+ * would stop today's build reading yesterday's run (`CLAUDE.md` section 11).
  */
 export interface ModelRef {
 	id: string;
@@ -127,8 +74,20 @@ export interface ModelRef {
 	/** The safetensors repository a fine-tune trains against, when this entry names a GGUF conversion of somebody else's weights. It sits here rather than in `finetune` because the two strings describe the same model: held apart, a model swap moves one and leaves the other, and a LoRA adapter loads onto a mismatched base without raising. Optional - only an entry we intend to fine-tune needs it. */
 	hf_base_repo?: string | null;
 
-	/** The runtime this entry's weights are served on. It sits on the entry for the same reason `hf_base_repo` does: held apart, a model swap moves the weights and leaves the numbers, and llama-server starts on them without raising. `ModelsConfig` refuses a block whose declared_for is not this entry's sha256, so a default block under measured weights is refused rather than inherited. */
-	inference?: InferenceConfig;
+	/** What a run recorded under the one settings block, before llama-server's own flags and the request values were split into the two blocks beside this one. A plain mapping and nothing writes it: a record written under the typed shape carries keys this build no longer names, and a typed field would refuse every one of them. */
+	inference?: Record<string, unknown>;
+
+	/** llama-server's own flags, spelled exactly as the binary spells them - `--ctx-size`, `-fa`, `--no-warmup`. A null value is a bare flag with no argument. Emitted verbatim, so naming one more option is a key here and no edit anywhere else, and a flag this build does not accept is refused by llama-server at start-up with the flag named. */
+	server?: Record<string, unknown>;
+
+	/** What goes in a request body rather than on the command line, under this project's own names. A sampling value cannot reach the command line because the builder reads only the block above. */
+	request?: Record<string, unknown>;
+
+	/** Every extra file these weights need beside the GGUF the entry names. The weights themselves stay in the fields above, because moving them here would move `declared_for`, the health check and `--model` for no gain. */
+	companion_files?: CompanionFile[];
+
+	/** What a run recorded when the draft head was a typed block of its own. A plain mapping and nothing writes it: six committed run records carry it, the reader forbids an extra key, and the head is now a companion file with its decode settings in the server block. */
+	draft?: Record<string, unknown> | null;
 }
 
 export const MODEL_ROLE = ['summarize', 'route'] as const;

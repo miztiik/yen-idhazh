@@ -214,9 +214,7 @@ class RunRecord(Model):
             "tree, not the published site and not what the Pages cap is measured against."
         ),
     )
-    site_files: int = Field(
-        ge=0, description="Files under frontend/public/digest/ after this run."
-    )
+    site_files: int = Field(ge=0, description="Files under frontend/public/digest/ after this run.")
 
     evaluation_enabled: bool | None = Field(
         default=None,
@@ -312,14 +310,19 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21T03:00",
+            change="The embedded settings become plain mappings, and two blocks replace one.",
+            why="A record carrying a retired option name has to keep reading.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T02:00",
             change="The embedded inference block loses both decode caps; an old run reads.",
             why="Neither number bounded anything the window and the timeout did not.",
         ),
         ChangelogEntry(
             version="2026-09-21",
-            change="The embedded ModelRef loses `draft`; six records that carry it still read.",
-            why="The draft head is gone, and nothing replaces the field it was declared in.",
+            change="The embedded ModelRef gains companion files; `draft` becomes a plain mapping.",
+            why="Six records name a draft head, and the head is now one companion among several.",
         ),
         ChangelogEntry(
             version="2026-09-20",
@@ -328,11 +331,6 @@ class RunManifest(Contract):
         ),
         ChangelogEntry(
             version="2026-09-19",
-            change="A run records `shards`, the shard count the plan derived.",
-            why="A denominator taken off the numerator's own rows can never disagree.",
-        ),
-        ChangelogEntry(
-            version="2026-08-21",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
         ),

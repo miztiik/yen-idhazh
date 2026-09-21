@@ -100,7 +100,7 @@ def test_the_first_two_turns_are_the_bytes_the_run_really_sends(
     request = summarize.build_request(
         article,
         model_id=models.summarize.id,
-        inference=models.summarize.inference,
+        request=models.summarize.request,
         markers=committed_markers(),
         prompt_config=app.summarize,
     )

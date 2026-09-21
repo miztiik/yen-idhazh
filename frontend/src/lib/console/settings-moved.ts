@@ -31,21 +31,6 @@ export interface RecordedRunDay {
 	records: readonly { inputs: unknown }[];
 }
 
-/** The first day a run recorded its inputs by name instead of as a digest.
- *
- * Before it, a day's identity is the score ledger's `pipeline_fingerprint`,
- * which can say that something moved and never which. On and after it, it is
- * the run's own input manifest, which can. A hard split, never "prefer whichever
- * is present": the two shapes always compare unequal, so an overlap would invent
- * a boundary that nothing caused.
- *
- * Remove the historical branch in `$lib/server/model-work` once the oldest day
- * the widest console window can show is on or after this date. Until then the
- * boundaries the committed ledger holds are still reachable, and a chart with no
- * rules over a window that contains them would read as "nothing moved".
- */
-export const RECORDED_INPUTS_FROM = '2026-09-12';
-
 /** Every input the run record enumerates, and the words a reader gets for it.
  *
  * Declaration order is `PipelineInputs`' own, so a readout naming several reads
@@ -98,15 +83,15 @@ export interface SettingsMoved {
  * skipped rather than read as a day nothing moved on (`CLAUDE.md` Guardrail
  * #10, and the same refusal Row #10 made of a zero theft figure).
  *
- * Days before the record existed are not read at all. Their identity is a
- * digest on the score ledger, which can say that something moved and never
- * which - so naming a field there would be a guess.
+ * A run that recorded no inputs is skipped by the check below rather than by a
+ * date. Before the record existed every run carries a null, so the two rules
+ * remove the same days - and the check says why the day is skipped where a date
+ * could only say when.
  */
 export function settingsMoved(runs: readonly RecordedRunDay[]): SettingsMoved[] {
 	const names = Object.keys(SETTING_WORDS);
 	const byDate = new Map<string, Map<string, Set<string>>>();
 	for (const day of runs) {
-		if (day.date < RECORDED_INPUTS_FROM) continue;
 		for (const record of day.records) {
 			const inputs = record.inputs;
 			if (inputs === null || inputs === undefined || typeof inputs !== 'object') continue;

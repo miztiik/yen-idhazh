@@ -24,8 +24,7 @@ from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.extract import ElementsConfig
-from idhazh.contracts.knobs.inference import InferenceConfig
-from idhazh.contracts.knobs.models import ModelRef
+from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.summary import Summary
@@ -141,34 +140,60 @@ def read_text(path: Path) -> str:
     """Read without newline translation, so a CRLF drift fails the comparison."""
     return path.read_bytes().decode("utf-8")
 
-def llama_server_flags() -> frozenset[str]:
-    """Every flag `server_argv` can emit, taken from `server_argv`.
 
-    Two tests hold the one-builder Oracle from opposite sides, and a listed set
-    would be a third place a flag has to be remembered. Every optional knob is
-    filled in, so a flag that only appears when a knob is set is still counted.
+def a_server(**flags: Any) -> dict[str, Any]:
+    """A settings block for a case whose subject is not the settings.
+
+    It carries the one flag configuration load requires and the three the run
+    record writes down, so a builder gets a block a person could have written.
+    Every other flag is llama-server's own default, which is what a model file
+    saying nothing about it means.
     """
-    argv = server_argv(
-        binary=Path("bin/llama-server"),
-        weights=Path("models/w.gguf"),
-        model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
-        inference=InferenceConfig(
-            n_parallel=1,
-            flash_attention="on",
-            load_mode="mmap+mlock",
-            cache_type_k="q8_0",
-            cache_type_v="q8_0",
-            priority=2,
-            poll=50,
-            n_threads_batch=4,
-            log_verbosity=4,
-            startup_warmup=False,
-        ),
-    )
+    return {
+        "--ctx-size": 8192,
+        "--batch-size": 512,
+        "--ubatch-size": 512,
+        "--threads": 4,
+        **flags,
+    }
+
+
+def a_request(**values: Any) -> dict[str, Any]:
+    """The request half of the same thing, at the values a greedy decode uses."""
+    return {
+        "temperature": 0.0,
+        "top_p": 1.0,
+        "seed": 0,
+        "request_timeout_minutes": 22.1,
+        **values,
+    }
+
+
+def llama_server_flags() -> frozenset[str]:
+    """Every flag a committed entry starts its server with, plus the four in code.
+
+    Read off the entries rather than listed here, because the entries are where
+    the flags live: `server_argv` emits the `server` block verbatim and spells
+    four of its own. Every committed file is read, so a flag only one model sets
+    is still counted.
+    """
+    emitted: set[str] = set()
+    for path in sorted((CONFIG_DIR / "models").glob("*.json")):
+        entry = ModelsConfig.from_json(read_text(path)).summarize
+        emitted |= set(
+            server_argv(
+                binary=Path("bin/llama-server"),
+                weights=Path("models/w.gguf"),
+                model=entry,
+                server=entry.server,
+            )
+        )
     # llama-bench and the image bench take these two under the same spelling,
     # so they say nothing about which server a caller started.
     return frozenset(
-        token for token in argv if token.startswith("-") and token not in {"--model", "--threads"}
+        token
+        for token in emitted
+        if token.startswith("-") and token not in {"--model", "--threads"}
     )
 
 
@@ -461,6 +486,7 @@ def label_payload(article: Article) -> dict[str, Any]:
         article,
         a_table(article),
         model_id="m",
-        inference=entry.inference,
+        server=entry.server,
+        request=entry.request,
         markers=committed_markers(),
     )

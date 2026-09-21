@@ -1,5 +1,71 @@
 {
   "$defs": {
+    "CompanionFile": {
+      "additionalProperties": false,
+      "description": "One more file these weights need, and the flag that hands it to the server.\n\nA model is not always one file. Google ships a multi-token-prediction head\nbeside the gemma weights; another family ships a projector, an adapter or a\nvocoder. Each is the same fact - bytes from a hub repository, verified, then\nnamed on the command line - so each is an entry here rather than a typed\nblock of its own with its own five fields and its own argv branch.\n\n`flag` is what makes this a declaration rather than a download list. The\nbuilder emits `<flag> <landed path>` and knows nothing about what the file\nis for, so a projector or an adapter is a config-only change. A companion\nwith no flag is a file that must simply be present.",
+      "properties": {
+        "byte_count": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How many bytes the hub reports. Absent where nobody has fetched it yet.",
+          "title": "Byte Count"
+        },
+        "file": {
+          "description": "The file name inside the repository, and one path segment. It becomes a path under the models directory and a shell argument beside it.",
+          "minLength": 1,
+          "title": "File",
+          "type": "string"
+        },
+        "flag": {
+          "anyOf": [
+            {
+              "pattern": "^--[a-z0-9-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The llama-server flag that takes this file's landed path. Absent means the file must be present and is named by nothing on the command line.",
+          "title": "Flag"
+        },
+        "repo": {
+          "description": "Hugging Face repository the file is pulled from.",
+          "minLength": 1,
+          "title": "Repo",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The hub commit the file is fetched at. Never a branch: a branch gets whatever was uploaded last, under a digest that still reads the old bytes.",
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Revision",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Required, with no exception. A blank digest makes `sha256sum --check` report 'no properly formatted checksum lines found', which names neither the entry nor the field.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo",
+        "revision",
+        "file",
+        "sha256"
+      ],
+      "title": "CompanionFile",
+      "type": "object"
+    },
     "ConfigDigest": {
       "additionalProperties": false,
       "description": "Which config bytes a run read. A silently edited knob changes every output.",
@@ -23,351 +89,9 @@
       "title": "ConfigDigest",
       "type": "object"
     },
-    "InferenceConfig": {
-      "additionalProperties": false,
-      "description": "Decoding is pinned here so a change of output is a reviewable diff.",
-      "properties": {
-        "cache_prompt": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "llama-server --cache-prompt or --no-cache-prompt. None omits the flag and preserves the completion requests' existing enabled cache.",
-          "title": "Cache Prompt"
-        },
-        "cache_ram": {
-          "anyOf": [
-            {
-              "minimum": -1,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "llama-server -cram, in MiB; -1 is unlimited and 0 disables the cache. None omits the flag.",
-          "title": "Cache Ram"
-        },
-        "cache_type_k": {
-          "anyOf": [
-            {
-              "const": "q8_0",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "llama-server -ctk. None omits the flag and keeps full-precision KV.",
-          "title": "Cache Type K"
-        },
-        "cache_type_v": {
-          "anyOf": [
-            {
-              "const": "q8_0",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "llama-server -ctv. None omits the flag and keeps full-precision KV.",
-          "title": "Cache Type V"
-        },
-        "checkpoint_min_step": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "llama-server -cms, in tokens; 0 means no minimum. None omits the flag.",
-          "title": "Checkpoint Min Step"
-        },
-        "cpu_range": {
-          "anyOf": [
-            {
-              "pattern": "^[0-9]+-[0-9]+$",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "llama-server --cpu-range, inclusive lo-hi. None omits the flag.",
-          "title": "Cpu Range"
-        },
-        "cpu_strict": {
-          "anyOf": [
-            {
-              "maximum": 1,
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "llama-server --cpu-strict, 0 or 1. None omits the flag.",
-          "title": "Cpu Strict"
-        },
-        "ctx_checkpoints": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "llama-server -ctxcp, maximum checkpoints per slot. None omits the flag.",
-          "title": "Ctx Checkpoints"
-        },
-        "declared_for": {
-          "anyOf": [
-            {
-              "pattern": "^[0-9a-f]{64}$",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The weights this block is set for - the sha256 of the entry that carries it. Every number here is a measurement about one model on one runner, never a property of the pipeline, so the entry states which bytes the numbers were put in front of. Swap the weights and this is left behind, which is the one event the field exists to make loud. It says a person paired these numbers with these bytes; where the numbers came from is docs/concepts/config.md, because a runner and a date cannot be checked by a validator and a field nothing checks is a comment.",
-          "title": "Declared For"
-        },
-        "flash_attention": {
-          "anyOf": [
-            {
-              "enum": [
-                "on",
-                "off"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "llama-server -fa. None omits the flag and leaves the runtime on auto.",
-          "title": "Flash Attention"
-        },
-        "jinja": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "llama-server --jinja or --no-jinja. None omits the flag.",
-          "title": "Jinja"
-        },
-        "load_mode": {
-          "anyOf": [
-            {
-              "const": "mmap+mlock",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "llama-server -lm. None omits the flag and keeps the runtime default.",
-          "title": "Load Mode"
-        },
-        "log_verbosity": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "llama-server -lv. None omits the flag and keeps the runtime default of 3, which prints twelve lines and none of them names flash attention, the KV buffer or the compute buffer. At 4 the whole model-loader block comes back, which is what lets a check read the attention state off the server's own line instead of off the flag we passed it. Measured 2026-09-09 on a 12th Gen Intel Core i7-1265U against llama.cpp b10444, three runs a case and zero spread: one server start goes from 12 lines and 1,085 bytes to about 206 lines and 16,011 bytes. That is a job artifact kept for two days, never a committed file. It changes what the server says about itself and nothing about what it decodes, so idhazh.fingerprint leaves it out of the stamp.",
-          "title": "Log Verbosity"
-        },
-        "metrics": {
-          "default": true,
-          "description": "If true, emit --metrics and llama-server serves its counters on /metrics. On by default: without them a run cannot say how close it came to n_ctx, and a concurrency result has no busy-slot number to read it by.",
-          "title": "Metrics",
-          "type": "boolean"
-        },
-        "n_batch": {
-          "default": 512,
-          "minimum": 1,
-          "title": "N Batch",
-          "type": "integer"
-        },
-        "n_ctx": {
-          "default": 8192,
-          "description": "The window one sequence gets. The default stays 8192 because it is the conservative window for weights nobody has put in front of a runner; each model file sets its own window. Whether its KV cache fits is decided by what the machine has free, not by the process's resident memory alone - docs/reference/pipeline-cost.md.",
-          "minimum": 512,
-          "title": "N Ctx",
-          "type": "integer"
-        },
-        "n_parallel": {
-          "anyOf": [
-            {
-              "minimum": 1,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "llama-server -np. None omits the flag and keeps the runtime default.",
-          "title": "N Parallel"
-        },
-        "n_threads": {
-          "default": 4,
-          "minimum": 1,
-          "title": "N Threads",
-          "type": "integer"
-        },
-        "n_threads_batch": {
-          "anyOf": [
-            {
-              "minimum": 1,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "llama-server -tb. None omits the flag and lets it follow n_threads.",
-          "title": "N Threads Batch"
-        },
-        "n_ubatch": {
-          "default": 512,
-          "minimum": 1,
-          "title": "N Ubatch",
-          "type": "integer"
-        },
-        "poll": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "llama-server --poll. None omits the flag and keeps the runtime default.",
-          "title": "Poll"
-        },
-        "priority": {
-          "anyOf": [
-            {
-              "maximum": 3,
-              "minimum": -1,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "llama-server --prio. None omits the flag and keeps normal priority.",
-          "title": "Priority"
-        },
-        "reasoning_preserve": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "llama-server --reasoning-preserve or --no-reasoning-preserve. None omits the flag.",
-          "title": "Reasoning Preserve"
-        },
-        "request_timeout_minutes": {
-          "default": 22.1,
-          "description": "One summarizer POST may wait this long. Sized from the measured worst 8B long article plus one cold prompt prefix, doubled; the shard timeout remains the outer bound. With no decode cap set anywhere, this and the window are the two bounds a runaway decode meets - each per item, each loud, and each already recorded.",
-          "exclusiveMinimum": 0.0,
-          "title": "Request Timeout Minutes",
-          "type": "number"
-        },
-        "seed": {
-          "default": 0,
-          "description": "Which sample the sampler draws. It is the whole of the repeatability story above temperature 0: same inputs and same seed is the same reply, same inputs and a different seed is a different one. At temperature 0 it is dead code and nothing reads it, which is what it was until 2026-09-17. It is enumerated in the fingerprint either way, so a change of sampler cannot move the words without moving the stamp.",
-          "title": "Seed",
-          "type": "integer"
-        },
-        "slot_prompt_similarity": {
-          "anyOf": [
-            {
-              "maximum": 1.0,
-              "minimum": 0.0,
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "llama-server -sps, shared-prefix fraction. None omits the flag.",
-          "title": "Slot Prompt Similarity"
-        },
-        "startup_warmup": {
-          "default": true,
-          "description": "If false, emit --no-warmup. True lets llama-server warm at startup.",
-          "title": "Startup Warmup",
-          "type": "boolean"
-        },
-        "temperature": {
-          "default": 0.0,
-          "description": "How far the sampler may stray from the likeliest token. The default is 0.0 for the reason n_ctx's default is conservative: a temperature is a reading of one model's weights, and a number that suited one family applied to weights nobody has run is a setting somebody will trust. Every committed entry pins its own. Above 0.0 the seed stops being dead code and becomes the control that decides which token is drawn - docs/architecture/contracts/determinism.md.",
-          "minimum": 0.0,
-          "title": "Temperature",
-          "type": "number"
-        },
-        "top_p": {
-          "default": 1.0,
-          "description": "The share of probability mass the sampler may draw from. 1.0 is the whole distribution, which is not a second temperature and does not contradict one: temperature reshapes the distribution and this truncates its tail, so 1.0 leaves the truncation off and lets temperature alone decide. Lowering both is two instruments aimed at one effect, and then neither reading says which of them moved the words.",
-          "exclusiveMinimum": 0.0,
-          "maximum": 1.0,
-          "title": "Top P",
-          "type": "number"
-        }
-      },
-      "title": "InferenceConfig",
-      "type": "object"
-    },
     "ModelRef": {
       "additionalProperties": false,
-      "description": "Which weights, from where. Per-item payloads carry only the `id`.\n\n**This is the shape a run recorded**, and `run_manifest.ModelUse` embeds it.\n`ModelEntry` below is the shape a person declares in `config/`. The turn\nenvelope belongs to the second and not to this one: no `model_ref` a run has\never written carries markers, and a field required here would stop today's\nbuild reading yesterday's run (`CLAUDE.md` section 11).",
+      "description": "Which weights, from where. Per-item payloads carry only the `id`.\n\n**This is the shape a run recorded**, and `run_manifest.ModelUse` embeds it.\n`ModelEntry` below is the shape a person declares in `config/`. What a\nreasoning span is closed with belongs to the second and not to this one: no\n`model_ref` a run has ever written carries it, and a field required here\nwould stop today's build reading yesterday's run (`CLAUDE.md` section 11).",
       "properties": {
         "byte_count": {
           "anyOf": [
@@ -382,6 +106,29 @@
           "default": null,
           "description": "How many bytes those weights are, as the hub reports them. Optional: an entry nobody has fetched yet declares none, and the run then records the size it opened on both sides rather than comparing a number to itself. It sits beside sha256 because it is the same kind of fact and has the same source, and because a qualification that had to be told it on the command line was a fact about these weights living somewhere other than the file that names them.",
           "title": "Byte Count"
+        },
+        "companion_files": {
+          "default": [],
+          "description": "Every extra file these weights need beside the GGUF the entry names. The weights themselves stay in the fields above, because moving them here would move `declared_for`, the health check and `--model` for no gain.",
+          "items": {
+            "$ref": "#/$defs/CompanionFile"
+          },
+          "title": "Companion Files",
+          "type": "array"
+        },
+        "draft": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What a run recorded when the draft head was a typed block of its own. A plain mapping and nothing writes it: six committed run records carry it, the reader forbids an extra key, and the head is now a companion file with its decode settings in the server block.",
+          "title": "Draft"
         },
         "file": {
           "minLength": 1,
@@ -408,8 +155,10 @@
           "type": "string"
         },
         "inference": {
-          "$ref": "#/$defs/InferenceConfig",
-          "description": "The runtime this entry's weights are served on. It sits on the entry for the same reason `hf_base_repo` does: held apart, a model swap moves the weights and leaves the numbers, and llama-server starts on them without raising. `ModelsConfig` refuses a block whose declared_for is not this entry's sha256, so a default block under measured weights is refused rather than inherited."
+          "additionalProperties": true,
+          "description": "What a run recorded under the one settings block, before llama-server's own flags and the request values were split into the two blocks beside this one. A plain mapping and nothing writes it: a record written under the typed shape carries keys this build no longer names, and a typed field would refuse every one of them.",
+          "title": "Inference",
+          "type": "object"
         },
         "quantisation": {
           "minLength": 1,
@@ -421,6 +170,12 @@
           "minLength": 1,
           "title": "Repo",
           "type": "string"
+        },
+        "request": {
+          "additionalProperties": true,
+          "description": "What goes in a request body rather than on the command line, under this project's own names. A sampling value cannot reach the command line because the builder reads only the block above.",
+          "title": "Request",
+          "type": "object"
         },
         "revision": {
           "anyOf": [
@@ -435,6 +190,12 @@
           "default": null,
           "description": "The hub commit the weights are fetched at. A download that names a branch gets whatever was uploaded last, so the bytes can change under a config that still records the old sha256.",
           "title": "Revision"
+        },
+        "server": {
+          "additionalProperties": true,
+          "description": "llama-server's own flags, spelled exactly as the binary spells them - `--ctx-size`, `-fa`, `--no-warmup`. A null value is a bare flag with no argument. Emitted verbatim, so naming one more option is a key here and no edit anywhere else, and a flag this build does not accept is refused by llama-server at start-up with the flag named.",
+          "title": "Server",
+          "type": "object"
         },
         "sha256": {
           "anyOf": [
@@ -975,14 +736,19 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "The embedded settings become plain mappings, and two blocks replace one.",
+      "version": "2026-09-21T03:00",
+      "why": "A record carrying a retired option name has to keep reading."
+    },
+    {
       "change": "The embedded inference block loses both decode caps; an old run reads.",
       "version": "2026-09-21T02:00",
       "why": "Neither number bounded anything the window and the timeout did not."
     },
     {
-      "change": "The embedded ModelRef loses `draft`; six records that carry it still read.",
+      "change": "The embedded ModelRef gains companion files; `draft` becomes a plain mapping.",
       "version": "2026-09-21",
-      "why": "The draft head is gone, and nothing replaces the field it was declared in."
+      "why": "Six records name a draft head, and the head is now one companion among several."
     },
     {
       "change": "Embedded inference gains CPU, cache, checkpoint and template controls.",
@@ -990,13 +756,8 @@
       "why": "Run records must carry the settings a model used."
     },
     {
-      "change": "A run records `shards`, the shard count the plan derived.",
-      "version": "2026-09-19",
-      "why": "A denominator taken off the numerator's own rows can never disagree."
-    },
-    {
       "change": "Earlier changes are in this file's git history.",
-      "version": "2026-08-21",
+      "version": "2026-09-19",
       "why": "A changelog says what moved lately; git is the archive."
     }
   ],
@@ -1016,7 +777,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-21T02:00",
+      "default": "2026-09-21T03:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1028,5 +789,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-09-21T02:00"
+  "version": "2026-09-21T03:00"
 }

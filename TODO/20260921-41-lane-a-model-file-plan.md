@@ -15,10 +15,11 @@ Execute per docs/how-to/execute-a-plan.md: one owner, one worktree per pull requ
 | Hard scope - in | Delete the reader that parses the server's log. Delete the decode stamp whole, and the dead run fingerprint with it. Delete the draft-head fields. Delete both decode caps and the arithmetic that reconciled them. Make the model file carry llama-server's own flag spellings in a server block, with a request block beside it for the four values that are not server flags - which deletes the translation tables, the deny list and the import-time assertion together. Delete the run-identity closure, which has no production caller. Derive each model's turn markers from its own template at server start, holding them in memory, which deletes the turn block, its eight keys and the check that audited our copy of it. Amend the two clauses of the engineering contract this plan contradicts, in the pull request that contradicts them. |
 | Hard scope - out | See the table below. |
 | Supersedes | Plan 39 rows 2, 6, 11, 16, 18, 21, the model-shape half of row 3, and the Guardrail #3 and section 11 clauses of row 12. Those rows are `COLLAPSED` in plan 39's Reckoner and are not executed from there. |
-| Hands to Lane B | Plan 39 row 5 (the installer stops naming a repository) runs as Lane B's last row, behind row 13 and behind pull request A of this plan - it adds `<role>.runtime` to the model file, which the typed shape refuses until row 5 here lands. Plan 39 row 3's workflow half is absorbed by row 13. The two log-format assertions at `backend/tests/workflows/test_model_server_jobs.py:446` and `:487` belong to plan 39 row 10, not to row 1 here. |
+| Hands to plan 42 | **Row 3 here also deletes `backend/tests/workflows/test_runtime_accepts.py`.** That module imports `SpeculationType`, which row 3 removes, and a deleted import raises at test collection rather than at an assertion - so the row that removes the symbol removes its reader. **`companion_files` is declared here and read by [`20260921-42-lane-b-workflows-plan.md`](20260921-42-lane-b-workflows-plan.md)** - that plan's section 1b lists the six items it is waiting on, and its row 7 onwards cannot start until this plan is DONE. **`tests/fixtures/runtime/b10598-llama-server-help.txt` stays until row 4 here rules on the prediction count**; `backend/tests/test_summarize.py:1776` asserts against it and `backend/idhazh/llm/server.py` cites it at lines 98, 629 and 806. |
+| Hands to plan 42 as well | Plan 39 row 3's workflow half is plan 42 row 4, and it adds no key to the model file. Plan 39 row 5 (`<role>.runtime`) sits in plan 40 row 1, so nothing in this plan waits on it. The two log-format assertions at `backend/tests/workflows/test_model_server_jobs.py:446` and `:487` belong to plan 42 row 6, not to row 1 here. |
 | ESCALATE triggers | (1) Row 7 moves the turn-marker boundary check from configuration load to server start. It must still run in every process that decodes, before the first article, and refuse identically. If it cannot, stop - that is Guardrail #11's control, and only its position moves. (2) Row 5 retypes `ModelRef.inference`, which all 34 committed `run.json` files embed; the run manifest's version stamp and changelog line ship in the same commit or the row stops. (3) Row 3 deletes `ModelRef.draft`, which 6 committed run records carry; the read-side line ships in the same commit or the row stops. (4) Rows 2 and 4 remove columns from committed ledgers; each uses that ledger's retired-cell mechanism, and where none exists the row builds one rather than rewriting committed data by hand. (5) `MODELS_FILE_PATTERN` must survive byte-identical. (6) Row 6 amends `CLAUDE.md`; it lands inside pull request A, never after. (7) Any row that would raise a runner budget figure (Guardrail #2). |
 | Chosen strategy | Two pull requests, split at the prompt path. A carries everything that cannot change a rendered prompt. B carries the markers, which is the only change here that can, so a moved prompt has exactly one candidate cause. Fowler rules the contracts, Carmack the runtime, Andre the decode surface. |
-| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 1.` |
+| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 1.` **Two preconditions before any dispatch, both from `docs/reference/agent-notes/shell-and-tools.md:121-129`, and this plan has already been stopped once by ignoring them.** First, prove delegation works with one real read-only nested invocation - the refusal is silent, not an error. Second, every brief says: commit before any long gate, and leave the full suite to CI. And read section 1c before selecting a row. |
 
 ### Hard scope - out
 
@@ -53,7 +54,7 @@ Seven rows, two pull requests. Read this before the tables.
 
 1. Delete the reader that parses the model server's log, and the dead retired-marker guard beside it.
 2. Delete the decode stamp whole, and the run fingerprint nothing calls.
-3. Delete the draft-head fields, with the one read-side line six committed run records need.
+3. The draft head becomes a companion file, with the one read-side retype six committed run records need.
 4. Delete both decode caps, the arithmetic that reconciled them, and the item-health column one of them fed.
 5. Let the model file carry llama-server's own flag spellings. The translation tables, the deny list and the import-time assertion never exist; the run-identity closure goes with them.
 6. Amend Guardrail #3 and section 11 of the engineering contract, inside the pull request that contradicts them.
@@ -65,19 +66,32 @@ Seven rows, two pull requests. Read this before the tables.
 
 | # | Row title | PR | Depends-on | Parallel-group | Status | Worktree | PR link | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The server-log reader goes | A | - | A | DONE | p41a | - | worker |
-| 2 | The decode stamp and the dead fingerprint go | A | 1 | A | DONE | p41a | - | worker |
-| 3 | The draft head goes from the model shape | A | 2 | A | PENDING | - | - | - |
-| 4 | Both decode caps go | A | 3 | A | PENDING | - | - | - |
-| 5 | The model file carries llama-server's own flags | A | 4 | A | PENDING | - | - | - |
-| 6 | The engineering contract catches up | A | 5 | A | PENDING | - | - | - |
+| 1 | The server-log reader goes | A | - | A | DONE | `p41a` | - | worker |
+| 2 | The decode stamp and the dead fingerprint go | A | 1 | A | DONE | `p41a` | - | worker |
+| 3 | The draft head becomes a companion file | A | 2 | A | DONE | `p41a` | - | owner |
+| 4 | Both decode caps go | A | 3 | A | DONE | `p41a` | - | worker |
+| 5 | The model file carries llama-server's own flags | A | 4 | A | DONE | `p41a` | - | worker |
+| 6 | The engineering contract catches up | A | 5 | A | DONE | `p41a` | - | worker |
 | 7 | The markers are derived at server start | B | 6 | B | DONE | `p41b` | - | owner |
+
+## Section 1c - The adoption, and what it found
+
+**Resolved 2026-09-21.** An interrupted run had left work in three checkouts with nothing pushed. The adoption kept every commit, and the two rows the Reckoner had flagged were redone rather than rebased.
+
+**Row 3 had deleted the draft head instead of relocating it**, and `config/models/gemma-4-e4b-qat-no-draft.json` with it. Rebasing that commit would have destroyed a live capability with nothing red to say so: Google ships `mtp-gemma-4-E4B-it.gguf` beside the gemma weights, and the deleted file was the only committed control for the A/B pair that measures what the head is worth. Both are back, the head as a `companion_files` entry with a `flag` bridge.
+
+**Row 5 had left the runtime sweep patching `inference`**, a block it had just removed from the file, so every sweep case would have raised. The sweep now patches the server block, and the `no_draft` candidate and `draft_depth` case set came back with it.
+
+Two local checks lie on this machine and neither is a regression. `test_start_script_limit_checks_preserve_other_startup_errors` needs a llama.cpp build that only the main checkout has under `backend/bin/`, so it fails in every worktree. `test_gate_lock.py` goes red when two suites run at once and green alone - the fan-out false red `docs/reference/agent-notes/gates-and-builds.md` describes.
+
+Why the first run ended half-done is recorded where a later reader will find it, in `docs/reference/agent-notes/shell-and-tools.md`: a worker cannot delegate until the harness allows it and the refusal is silent, and a worker that starts a long gate returns an empty report with its work uncommitted. **The fix is in the brief: commit before any long gate, and leave the full suite to CI.**
+
 
 ### The two pull requests
 
 | PR | Rows | Can it change a rendered prompt | What proves it |
 | --- | --- | --- | --- |
-| **A - the model file stops being a type** | 1, 2, 3, 4, 5, 6 | no | the command line and the request body built from each of the five committed model files, against fixtures captured before any edit |
+| **A - the model file stops being a type** | 1, 2, 3, 4, 5, 6 | no | the command line and the request body built from each of the five committed model files, against fixtures captured before any edit. Row 3's arm: the head's landed path still reaches `--spec-draft-model`, now from a `flag` key |
 | **B - the markers come from the model** | 7 | **yes, and it is the only one here that can** | the rendered prompt for each committed entry is byte-identical to the one the hand-typed markers produced, driven from a recorded server response |
 
 **Why two and not one.** Row 7 is the only change that can move a rendered prompt. Landing it alone means a moved prompt has exactly one candidate cause. Pull request A's base is main and B's base is A's merge commit.
@@ -115,7 +129,24 @@ Two blocks under each role:
 
 **Nine keys this project reads by name** - `n_ctx`, `n_batch`, `n_threads`, `n_parallel`, `load_mode`, `temperature`, `top_p`, `seed`, `request_timeout_minutes` - reach their readers through one nine-entry alias map from our name to the flag name, declared once beside the builder. Four of them are persisted under our names on the run record and drawn in words on a console panel, which is why the alias map exists rather than a rename.
 
-Entry-level keys keep their current names: `id`, `repo`, `revision`, `file`, `sha256`, `byte_count`, `arch`. `<role>.runtime` arrives with Lane B and is not declared here. `turns` leaves entirely in row 7.
+Entry-level keys keep their current names: `id`, `repo`, `revision`, `file`, `sha256`, `byte_count`, `arch`. `<role>.runtime` arrives with plan 40 row 1 and is not declared here. `turns` leaves entirely in row 7.
+
+**`companion_files` is a third block under each role, beside `server` and `request`** - a list naming every extra file the model needs. This is not a new capability: `config/models/gemma-4-e4b-qat.json:5-15` already declares a multi-token-prediction head its publisher ships, and today the file can hold exactly one such entry because `DRAFT_FIELDS` welds the arity at two. The weights stay where they are - retyping them into the list would move `inference.declared_for`, the health check and `--model` for no gain.
+
+| Key | Required | Rule |
+| --- | --- | --- |
+| `repo` | yes | one bare word, of the form `owner/name` |
+| `revision` | yes | 40 hexadecimal characters. Never a branch name |
+| `file` | yes | one bare word **and one path segment**: no `/`, no `\`, not `.`, not `..`, not starting with `.` |
+| `sha256` | yes | 64 hexadecimal characters, no exception. Three fields is a file fetched against a blank digest, which `sha256sum --check` reports as "no properly formatted checksum lines found", naming neither the entry nor the field |
+| `byte_count` | no | integer at least 1 |
+| `flag` | no | matching `--[a-z0-9-]+`. The server flag that takes this file's landed path, emitted as `<flag> <landed path>` |
+
+**`flag` is the bridge, and it is why the block is not just a download list.** `--spec-draft-model` needs a runner path a config file cannot spell - `backend/idhazh/llm/server.py:582` computes it today as `str(weights.parent / model.draft.file)`. With `flag`, the builder emits `<flag> <landed path>` for every companion that declares one and knows nothing about drafts, so a LoRA adapter (`--lora`), a multimodal projector (`--mmproj`) or a vocoder is a config-only change. A companion with no `flag` is a file that must simply be present.
+
+**The four speculation settings move into the `server` block**, spelled as llama-server spells them: `--spec-type`, `--spec-draft-n-max`, `--spec-draft-n-min`, `--spec-draft-p-min`. They are decode settings; the companion entry says where bytes come from and what they hash to, and nothing else.
+
+**The landed path is computed in exactly one function**, declared in `backend/idhazh/llm/server.py`, which `backend/utilities/model_refs.py` imports - the direction `backend/utilities/llama_argv.py:1-5` already uses. Row 5 here emits `<flag> <landed path>`; plan 42 row 8 guarantees the path exists and the bytes match. **Unwritten, the two plans invent it separately and drift.**
 
 **Deleted from the file**: `declared_for` on the turns block, `draft`, `max_answer_tokens`, `max_think_tokens`, and every key's old name once the server block carries the flag. All five committed files are rewritten once, mechanically, in row 5.
 
@@ -205,7 +236,7 @@ The section 1a, section 9 and section 10 amendments stay with plan 39 row 1, bec
  | 1 | Whether an optimisation engaged is the runtime's business, and this project asked by parsing a log line at a raised verbosity | Carmack |
  | 2 | **The census runs before the deletion, not after.** `flash_attention_state` has no caller in the tree today, so no console surface loses a field and no browser smoke is owed - but the row proves that rather than assuming it | Carmack and Fowler |
  | 3 | `RETIRED_TURN_MARKERS` guards against a file deleted on 2026-09-13 reappearing. Nine lines, no consumer, and no mechanism that could recreate it. It rides with this row because this row already opens the loader | Fowler |
- | 4 | The two log-format assertions in `backend/tests/workflows/test_model_server_jobs.py` are not about this reader. They check a workflow's log-matching step, which is plan 39 row 10's subject | Carmack |
+ | 4 | The two log-format assertions in `backend/tests/workflows/test_model_server_jobs.py` are not about this reader. They check a workflow's log-matching step, which is plan 42 row 6's subject | Carmack |
  | 5 | The error-body classifier stays. It sorts a failure into this project's own taxonomy | Fowler |
 
 - **Rejected alternatives:**
@@ -245,9 +276,10 @@ The section 1a, section 9 and section 10 amendments stay with plan 39 row 1, bec
  | 1 | Delete only the dead summarize half | Leaves the judge half, which is the part with committed columns, and leaves the function alive to be reused | The same argument again later | Fowler |
  | 2 | Keep it as a cheap audit trail | It answers no question a person asks, and it would move on every sampler sweep once more sampler keys arrive - a re-archive per experiment for a reading nobody uses | About 80 lines across six files and a column on three ledgers | Owner |
 
-## Section 4 - Row #3 - The draft head goes from the model shape
+## Section 4 - Row #3 - The draft head becomes a companion file
 
-- **Scope:** Delete the draft-head configuration from the model shape and the command-line builder, and add the one read-side line that keeps six committed run records loading.
+- **Scope:** Relocate the draft-head configuration - its five source fields into one `companion_files` entry, its four decode fields into the `server` block - delete the enumerated speculation kind and its bounds, and retype `ModelRef.draft` so six committed run records keep loading.
+- **Corrected 2026-09-21.** An earlier draft of this row deleted the draft head outright, on the ground that a 2026-09-12 measurement found it changes the output on nine articles of nine. That measurement argues against enabling it by default; it does not argue against the file existing. `config/models/gemma-4-e4b-qat.json:5-15` declares `mtp-gemma-4-E4B-it.gguf`, **a multi-token-prediction head the model's own publisher ships beside the weights** - `backend/idhazh/contracts/knobs/models.py:30` says so, and `docs/reference/benchmarks/what-the-draft-head-is-worth.md` is a page about that file. A model json that cannot name its companion files cannot describe that model.
 - **Files touched:**
   - `backend/idhazh/contracts/knobs/models.py` (the draft shape, its enumerated kinds, the entry field)
   - the module declaring `ModelRef` (the read-side line)
@@ -257,25 +289,32 @@ The section 1a, section 9 and section 10 amendments stay with plan 39 row 1, bec
   - `backend/tests/test_summarize.py`, `backend/tests/test_fingerprint.py`
   - the documentation pages that describe it
 - **Acceptance gates:** local - `python -m pytest backend/tests -q -k 'summarize or fingerprint or model'`; CI - full suite. ESCALATE trigger 3 applies.
-- **Oracle:** a committed `run.json` carrying a draft head parses after the change, asserted against one of the six real files; and no Python module or contract mentions a draft head, a speculation kind or a speculative argument, proved by census. The first half can fail and is why this is its own row. What it cannot settle: whether the workflow wiring is gone - that half is Lane B's.
+- **Oracle:** a committed `run.json` carrying a draft head parses after the change, asserted against one of the six real files; and the command line built from `config/models/gemma-4-e4b-qat.json` still names the head's landed path under `--spec-draft-model`, now emitted from its `flag` key rather than from a typed field. Both can fail. What it cannot settle: whether the workflow wiring is gone - that half is plan 42 rows 8 and 9.
 - **Decisions:**
 
  | # | Decision | Authority |
  | --- | --- | --- |
- | 1 | It is deleted rather than kept unused. A measurement on 2026-09-12 found it changes the output on nine articles of nine, so it was never a free speed-up | Owner ruling 2026-09-21 |
- | 2 | **The row splits at the seam its own scope carries.** The model-shape half runs here because it edits the files row 5 rewrites. The fetch half - a companion-file list, a download loop and an installer publishing each landed path - touches no contract module and runs in Lane B with row 13 | Carmack and Fowler |
- | 3 | The census closes twice: here for the Python and contract surface, and again at Lane B's close, because the fetch half is what makes speculative decoding reachable again as configuration | Carmack |
+ | 1 | **The block relocates; it is not deleted.** The 2026-09-12 measurement found the head is not output-identical, which argues against enabling it by default and never against the file existing. The publisher ships it, a benchmark page measures it, and `gemma-4-e4b-qat-no-draft.json` exists solely as its control | Owner ruling 2026-09-21 |
+ | 2 | **Five source fields go to one `companion_files` entry** - `repo`, `revision`, `file`, `sha256`, `byte_count` - per C1 | Carmack and Fowler |
+ | 3 | **Four decode fields go to the `server` block** as `--spec-type`, `--spec-draft-n-max`, `--spec-draft-n-min`, `--spec-draft-p-min` | Carmack |
+ | 4 | **`SpeculationType` still dies**, and so does `DraftConfig._a_minimum_above_the_maximum_drafts_nothing`. Row 5 removes every bound and every enumerated choice from the file, so `--spec-type` is one more key the binary refuses by name at start-up | Carmack |
+ | 5 | **`ModelRef.draft` is retyped to `Mapping[str, Any] \| None = None`, not deleted**, sharing row 5's version stamp and changelog line. Six committed `run.json` files carry it and the reader forbids extra keys. New records stop writing it because the config key is gone | Fowler |
+ | 6 | **`backend/tests/contracts/test_model_registry.py:396` is rewritten** from a `draft is None` assertion to a `companion_files` one. It reads a typed field this row removes | Fowler |
+ | 7 | **`test_runtime_accepts.py` is deleted here**, in the commit that removes `SpeculationType`. It imports that symbol, and a deleted import raises at collection, taking the module rather than one assertion | Fowler |
+ | 8 | The census closes twice: here for the Python and contract surface, and again at plan 42's close for `.github/` and the workflow tests | Carmack |
 
 - **Rejected alternatives:**
 
  | # | Option | Why rejected | What it would cost to take | Authority |
  | --- | --- | --- | --- | --- |
- | 1 | Delete the field with no read-side line | Six committed run records carry it and the reader forbids extra keys, so the next build cannot read yesterday's record. CLAUDE.md section 11 names that a release blocker | A broken read of six committed payloads | Fowler |
- | 2 | Keep the argument builder and drop only the configuration | Leaves code nothing can reach | About 25 lines kept and a dead branch | Carmack |
+ | 1 | Delete the draft head outright | The model's publisher ships the file, a committed entry declares it, a benchmark page measures it, and a control entry exists for the comparison. Deleting configuration does not make an unqualified configuration safer; it destroys the instrument that would settle it | The only committed A/B pair for this question, and a candidate whose slowest shard moves from 67 to 85 percent of its own timeout | Carmack |
+ | 2 | Delete `ModelRef.draft` with no read-side line | Six committed run records carry it and the reader forbids extra keys, so the next build cannot read yesterday's record. CLAUDE.md section 11 names that a release blocker | A broken read of six committed payloads | Fowler |
+ | 3 | Keep the typed draft shape and add a companion list beside it | Two ways to declare the same file and a rule about which wins | About 40 lines and a reader who cannot tell which half of the file they are in | Fowler |
 
 ## Section 5 - Row #4 - Both decode caps go
 
-- **Scope:** Delete `max_answer_tokens` and `max_think_tokens`, the addition that summed them, the rule that a null cap means omitting the key, the two route-specific spellings, and the item-health column one of them fed.
+- **Scope:** Delete `max_answer_tokens` and `max_think_tokens`, the addition that summed them, the rule that a null cap means omitting the key, the two route-specific spellings, and the item-health column one of them fed - and decide whether the thinking span still sends a prediction count at all.
+- **The decision this row must make, because another plan hangs off it:** `backend/idhazh/llm/server.py:824` reads `UNCAPPED_N_PREDICT if max_think_tokens is None else max_think_tokens`. Deleting the cap collapses that to the constant `-1`. **Either the span keeps sending `-1`, in which case `UNCAPPED_N_PREDICT` keeps a production caller and `backend/tests/test_summarize.py:1776` keeps its subject; or the span stops sending `n_predict` entirely - which is the honest end state, since `-1` is llama-server's own default - in which case `UNCAPPED_N_PREDICT` dies and `tests/fixtures/runtime/b10598-llama-server-help.txt` loses its last assertion.** Name the choice in the decisions table. Plan 42 ESCALATE trigger 6 keeps that fixture until this row rules, and its six other citations - three code comments in `server.py` and three doc lines - are repointed by whichever arm is taken.
 - **Files touched:**
   - `backend/idhazh/llm/server.py` (both request builders, the span builder, the sum branch and the omit-the-key branch)
   - `backend/idhazh/stages/common.py` (the parameter and its default of zero), `two_calls.py`, `backend/idhazh/summarize.py`, `backend/idhazh/similarity/judge.py`

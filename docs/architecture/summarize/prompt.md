@@ -380,7 +380,7 @@ nobody could measure. The reuse is asserted on the bytes and never on a
 is and would read as partial success when the prompt had been built in the wrong
 order.
 
-**The two calls belong adjacent, per item.** `models.summarize.inference` pins
+**The two calls belong adjacent, per item.** the summarize entry pins
 `n_parallel` to 1, so the server holds one cache slot. Every label call first and
 every summarize-and-plan call afterwards would evict the prefix before it was reused, every time,
 and nothing in any log would say so. Owning the bytes makes a mis-ordering more
@@ -682,7 +682,7 @@ runner. The session that took them is
 | plus the label call's own output budget | 50,094 | `label_budget_tokens()` is 6,491 |
 | plus the seam the summarize-and-plan call adds in front of its reply | 50,152 | `idhazh.measured.SUMMARIZE_AND_PLAN_SEAM_TOKENS` |
 | plus the reply the summarize-and-plan call's grammar may write | **54,887** | `summarize_and_plan_budget_tokens()` is 4,735 |
-| `models.summarize.inference.n_ctx` | 65,536 | the active model file |
+| `--ctx-size` on the summarize entry | 65,536 | the active model file |
 | **spare** | **10,649** | 84 percent of the window used |
 
 **The label call's reply is paid twice** - once as its own decode, once again inside
@@ -861,7 +861,7 @@ unbreakable ceiling would leave no window for the article it is summarising.
 **A budget is also a clock, and this one is close to a bound.** At the 6.01
 tokens a second the configured summarizer decodes at on `ubuntu-latest`
 (2026-08-23), 4,735 tokens is 13.1 minutes, against a
-`models.summarize.inference.request_timeout_minutes` of 22.1 and a
+`models.summarize.request.request_timeout_minutes` of 22.1 and a
 `run.shard_timeout_minutes` of 200. So a single reply that ran to the
 brake would not trip the request timeout, and fifteen of them would spend the
 whole shard. The grammar closes the object long before that on every

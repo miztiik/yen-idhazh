@@ -25,7 +25,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from math import exp
 from typing import Any, Final
@@ -33,7 +33,6 @@ from typing import Any, Final
 from idhazh import config
 from idhazh.contracts.base import fit_field
 from idhazh.contracts.digest_day import DigestItem
-from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.models import ModelEntry
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
 from idhazh.llm.server import (
@@ -43,6 +42,7 @@ from idhazh.llm.server import (
     answer_span,
     grammar_completion_payload,
     one_reply,
+    setting,
     thinking_span,
 )
 from idhazh.similarity import prompt
@@ -247,7 +247,7 @@ def entry_of(settings: config.Settings) -> ModelEntry:
     return settings.models.judge or settings.models.summarize
 
 
-def decode_settings(settings: config.Settings) -> InferenceConfig:
+def decode_settings(settings: config.Settings) -> Mapping[str, Any]:
     """The sampler one judging call decodes under, decided in one place.
 
     **The temperature is the judging knob's, not the entry's.** The entry pins
@@ -262,9 +262,7 @@ def decode_settings(settings: config.Settings) -> InferenceConfig:
     one case worth seeing.
     """
     tuning = settings.app.assemble.same_story.judging_knobs()
-    return entry_of(settings).inference.model_copy(
-        update={"temperature": tuning.judge_temperature}
-    )
+    return entry_of(settings).request | {"temperature": tuning.judge_temperature}
 
 
 def decode_body(
@@ -286,7 +284,8 @@ def decode_body(
         system=system,
         user=user,
         grammar=prompt.grammar(),
-        inference=decode_settings(settings),
+        server=entry_of(settings).server,
+        request=decode_settings(settings),
         markers=markers,
         max_answer_tokens=prompt.REPLY_TOKENS,
         first_token_alternatives=len(prompt.first_token_prefixes()),
@@ -333,7 +332,7 @@ def read_once(
             thinking_span(
                 answer,
                 markers=markers,
-                temperature=entry.inference.temperature,
+                temperature=setting(entry.request, "temperature"),
             )
         )
         reply = one_reply(

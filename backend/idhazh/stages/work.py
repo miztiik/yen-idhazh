@@ -48,6 +48,9 @@ from idhazh.llm.server import (
     DEFAULT_ENDPOINT,
     derive_turn_markers,
     props,
+    request_timeout_seconds,
+    setting,
+    window,
 )
 from idhazh.sanitize import SANITIZER_VERSION
 from idhazh.stages import common
@@ -148,21 +151,20 @@ def _shard_cells(
     key filled from two places is a key that can disagree with itself.
     """
     model = settings.models.summarize
-    inference = model.inference
     return {
         "shard": shard,
         "shard_item_count": shard_item_count,
         **facts.shard_cells(),
         "model_id": model.id,
         "model_quantisation": model.quantisation,
-        "n_ctx_configured": inference.n_ctx,
-        "n_parallel": inference.n_parallel,
-        "n_threads": inference.n_threads,
-        "n_batch": inference.n_batch,
-        "weights_pinned": inference.load_mode == "mmap+mlock",
+        "n_ctx_configured": window(model.server),
+        "n_parallel": setting(model.server, "n_parallel"),
+        "n_threads": setting(model.server, "n_threads"),
+        "n_batch": setting(model.server, "n_batch"),
+        "weights_pinned": setting(model.server, "load_mode") == "mmap+mlock",
         "label_budget_tokens": calls.label_budget_tokens(),
         "summary_budget_tokens": calls.summarize_and_plan_budget_tokens(settings.app.summarize),
-        "temperature": inference.temperature,
+        "temperature": setting(model.request, "temperature"),
     }
 
 
@@ -308,16 +310,16 @@ def stage_work(
         now=assemble.utc_now,
     )
     read_url = fetcher or common.live_fetcher(settings, tracer=tracer)
-    inference = settings.models.summarize.inference
     model = settings.models.summarize
-    observed = props(model_endpoint, timeout=inference.request_timeout_minutes * 60)
+    observed = props(model_endpoint, timeout=request_timeout_seconds(model.request))
     markers = derive_turn_markers(
-        model_endpoint, entry=model, timeout=inference.request_timeout_minutes * 60
+        model_endpoint, entry=model, timeout=request_timeout_seconds(model.request)
     )
     inputs = build_inputs(
         model=model,
         model_sha256=model.sha256,
-        inference=inference,
+        server=model.server,
+        request=model.request,
         truncation_cap_tokens=settings.app.extract.truncation_cap_tokens,
         runtime_build=runtime_build(),
         chat_template=str(observed.get("chat_template") or UNRECORDED_TEMPLATE),

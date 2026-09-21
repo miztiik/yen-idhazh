@@ -295,18 +295,22 @@ def test_a_daily_run_refuses_a_draft_head_that_declares_only_half_of_itself(
     pointer = "models/probe.json"
     (tmp_path / "config" / "models").mkdir(parents=True)
     models = _committed_models()
-    models["summarize"]["draft"] = {
-        "repo": "publisher/head-GGUF",
-        "revision": "8c5a9e4fd5482e2be20fe0bf013b4c262a8f4265",
-        "file": "head.gguf",
-        "sha256": "",
-    }
+    models["summarize"]["companion_files"] = [
+        {
+            "repo": "publisher/head-GGUF",
+            "revision": "8c5a9e4fd5482e2be20fe0bf013b4c262a8f4265",
+            "file": "head.gguf",
+            "sha256": "",
+        }
+    ]
     (tmp_path / "config" / pointer).write_text(json.dumps(models), encoding="utf-8")
     (tmp_path / "config" / "idhazh.json").write_text(
         json.dumps({MODELS_POINTER_KEY: pointer}), encoding="utf-8"
     )
 
-    with pytest.raises(SystemExit, match=re.escape("models.summarize.draft.sha256")):
+    with pytest.raises(
+        SystemExit, match=re.escape("models.summarize.companion_files.0.sha256")
+    ):
         model_refs.configured_rows(tmp_path, with_draft=True)
 
 
@@ -588,7 +592,7 @@ def test_a_declared_draft_head_is_published_and_named_in_the_cache_key(
         "sha256": "b" * 64,
     }
     published = _candidate_outputs(
-        filename, job_name, step_id, tmp_path, _an_entry(draft=draft)
+        filename, job_name, step_id, tmp_path, _an_entry(companion_files=[draft])
     )
 
     for field, value in draft.items():
@@ -622,7 +626,9 @@ def test_a_draft_head_that_declares_no_digest_is_refused(
     filename: str, job_name: str, step_id: str, prefix: str, tmp_path: Path
 ) -> None:
     """A head with no digest would be downloaded unchecked, which is the one thing we never do."""
-    entry = _an_entry(draft={"repo": "p/M", "revision": "0" * 40, "file": "mtp.gguf"})
+    entry = _an_entry(
+        companion_files=[{"repo": "p/M", "revision": "0" * 40, "file": "mtp.gguf"}]
+    )
 
-    with pytest.raises(SystemExit, match=r"draft\.sha256"):
+    with pytest.raises(SystemExit, match=r"companion_files\.0\.sha256"):
         _candidate_outputs(filename, job_name, step_id, tmp_path, entry)

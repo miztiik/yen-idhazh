@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Annotated, Any, ClassVar, Final, Self
+from typing import Any, ClassVar, Final, Self
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import Field, model_validator
 
 from idhazh.contracts.base import (
     ChangelogEntry,
@@ -15,10 +15,72 @@ from idhazh.contracts.base import (
     Model,
     Sha256,
     Slug,
-    without_retired_keys,
 )
-from idhazh.contracts.knobs.inference import SUPERSEDED_INFERENCE_NAMES, InferenceConfig
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
+
+
+class CompanionFile(Model):
+    """One more file these weights need, and the flag that hands it to the server.
+
+    A model is not always one file. Google ships a multi-token-prediction head
+    beside the gemma weights; another family ships a projector, an adapter or a
+    vocoder. Each is the same fact - bytes from a hub repository, verified, then
+    named on the command line - so each is an entry here rather than a typed
+    block of its own with its own five fields and its own argv branch.
+
+    `flag` is what makes this a declaration rather than a download list. The
+    builder emits `<flag> <landed path>` and knows nothing about what the file
+    is for, so a projector or an adapter is a config-only change. A companion
+    with no flag is a file that must simply be present.
+    """
+
+    repo: str = Field(min_length=1, description="Hugging Face repository the file is pulled from.")
+    revision: CommitSha = Field(
+        description=(
+            "The hub commit the file is fetched at. Never a branch: a branch gets "
+            "whatever was uploaded last, under a digest that still reads the old bytes."
+        )
+    )
+    file: str = Field(
+        min_length=1,
+        description=(
+            "The file name inside the repository, and one path segment. It becomes a "
+            "path under the models directory and a shell argument beside it."
+        ),
+    )
+    sha256: Sha256 = Field(
+        description=(
+            "Required, with no exception. A blank digest makes `sha256sum --check` "
+            "report 'no properly formatted checksum lines found', which names neither "
+            "the entry nor the field."
+        )
+    )
+    byte_count: int | None = Field(
+        default=None,
+        ge=1,
+        description="How many bytes the hub reports. Absent where nobody has fetched it yet.",
+    )
+    flag: str | None = Field(
+        default=None,
+        pattern=r"^--[a-z0-9-]+$",
+        description=(
+            "The llama-server flag that takes this file's landed path. Absent means "
+            "the file must be present and is named by nothing on the command line."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _the_file_name_stays_inside_the_models_directory(self) -> CompanionFile:
+        """The name is joined to a directory, so the grammar is the only guard.
+
+        Guardrail #11: this value reaches a filesystem path and a shell argument.
+        """
+        name = self.file
+        if name.split() != [name]:
+            raise ValueError(f"companion file name is empty or not one word: {name!r}")
+        if "/" in name or "\\" in name or name.startswith("."):
+            raise ValueError(f"companion file name is not one path segment: {name!r}")
+        return self
 
 
 class ModelRef(Model):
@@ -72,43 +134,51 @@ class ModelRef(Model):
             "intend to fine-tune needs it."
         ),
     )
-    inference: InferenceConfig = Field(
-        default_factory=InferenceConfig,
+    inference: dict[str, Any] = Field(
+        default_factory=dict,
         description=(
-            "The runtime this entry's weights are served on. It sits on the entry for "
-            "the same reason `hf_base_repo` does: held apart, a model swap moves the "
-            "weights and leaves the numbers, and llama-server starts on them without "
-            "raising. `ModelsConfig` refuses a block whose declared_for is not this "
-            "entry's sha256, so a default block under measured weights is refused "
-            "rather than inherited."
+            "What a run recorded under the one settings block, before llama-server's "
+            "own flags and the request values were split into the two blocks beside "
+            "this one. A plain mapping and nothing writes it: a record written under "
+            "the typed shape carries keys this build no longer names, and a typed "
+            "field would refuse every one of them."
         ),
     )
-
-    @model_validator(mode="before")
-    @classmethod
-    def _a_run_written_under_a_retired_entry_key_still_reads(cls, data: Any) -> Any:
-        """The read-side migration a run record is owed (`CLAUDE.md` section 11).
-
-        Six committed `run.json` files name a draft head, and `extra="forbid"`
-        would refuse every one of them the day the field went. Dropped rather
-        than renamed: nothing replaces it, so there is no number to carry.
-
-        It is silent here and loud on `ModelEntry`, which is the same split
-        `InferenceConfig` draws - there a payload an earlier run wrote, here a
-        block a person typed, and accepting the second in silence teaches a knob
-        that nothing reads.
-        """
-        return without_retired_keys(data, *RETIRED_ENTRY_NAMES)
-
-
-#: The entry keys a `run.json` written before 2026-09-21 carries and nothing
-#: carries now. A draft head is not a decoding knob priced on cost alone: two
-#: paired dispatches on 2026-09-12 changed the summary on nine articles of nine
-#: with the head on, so it was never the output-identical speed-up its publisher
-#: claims. The turn block was a hand-transcribed copy of the model's own chat
-#: template, and the server now reads those markers off the template itself.
-#: Nothing replaces either.
-RETIRED_ENTRY_NAMES: Final[Mapping[str, str]] = MappingProxyType({"draft": "", "turns": ""})
+    server: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "llama-server's own flags, spelled exactly as the binary spells them - "
+            "`--ctx-size`, `-fa`, `--no-warmup`. A null value is a bare flag with no "
+            "argument. Emitted verbatim, so naming one more option is a key here and "
+            "no edit anywhere else, and a flag this build does not accept is refused "
+            "by llama-server at start-up with the flag named."
+        ),
+    )
+    request: dict[str, Any] = Field(
+        default_factory=dict,
+        description=(
+            "What goes in a request body rather than on the command line, under this "
+            "project's own names. A sampling value cannot reach the command line "
+            "because the builder reads only the block above."
+        ),
+    )
+    companion_files: tuple[CompanionFile, ...] = Field(
+        default=(),
+        description=(
+            "Every extra file these weights need beside the GGUF the entry names. The "
+            "weights themselves stay in the fields above, because moving them here "
+            "would move `declared_for`, the health check and `--model` for no gain."
+        ),
+    )
+    draft: Mapping[str, Any] | None = Field(
+        default=None,
+        description=(
+            "What a run recorded when the draft head was a typed block of its own. A "
+            "plain mapping and nothing writes it: six committed run records carry it, "
+            "the reader forbids an extra key, and the head is now a companion file "
+            "with its decode settings in the server block."
+        ),
+    )
 
 
 class ModelEntry(ModelRef):
@@ -116,9 +186,9 @@ class ModelEntry(ModelRef):
 
     **This is the shape a person declares**, and `ModelsConfig` is made of it.
     It is `ModelRef` plus the two facts about this model's reasoning that the
-    model's own chat template cannot hand back - so a config entry that gets one
-    wrong fails here, and a `run.json` written before either existed still
-    reads.
+    model's own chat template cannot hand back, and the digest those facts and
+    the settings were derived against - so a config entry that gets one wrong
+    fails here, and a `run.json` written before any of them existed still reads.
 
     The markers that open and close a turn are not here. They are read off the
     template itself at server start (`idhazh.llm.server.derive_turn_markers`),
@@ -164,6 +234,17 @@ class ModelEntry(ModelRef):
             "entry refuses the pair."
         ),
     )
+    declared_for: Sha256 | None = Field(
+        default=None,
+        description=(
+            "The weights this entry's settings and markers were derived against - the "
+            "sha256 the entry itself carries. Every number and every marker below is a "
+            "measurement about one model on one runner, so the entry states which bytes "
+            "they were put in front of. Change the weights strings in place and this is "
+            "left behind holding the old digest, which is the one event the field "
+            "exists to make loud. Absent means an entry nobody has measured yet."
+        ),
+    )
 
     @property
     def thinks(self) -> bool:
@@ -205,13 +286,44 @@ class ModelEntry(ModelRef):
         name is refused and the message says where the knob went. There the
         block is a payload an earlier run wrote, and refusing it would stop
         today's build reading yesterday's run.
+
+        An empty settings mapping is what this shape serialises to, because it
+        inherits the recorded blocks from `ModelRef`. Refusing those would make
+        a config file fail to reload the bytes it just wrote, so a superseded
+        name is refused only when it carries a value.
         """
         if isinstance(data, dict):
-            refuse_a_removed_knob("models.<role>", data, RETIRED_ENTRY_NAMES)
-            refuse_a_removed_knob(
-                "models.<role>.inference", data.get("inference"), SUPERSEDED_INFERENCE_NAMES
-            )
+            typed = {
+                key: value
+                for key, value in data.items()
+                if key not in SUPERSEDED_ENTRY_NAMES or value
+            }
+            refuse_a_removed_knob("models.<role>", typed, SUPERSEDED_ENTRY_NAMES)
         return data
+
+
+#: The entry keys a person may no longer write, and where each one went. Each is
+#: refused by name rather than by "extra inputs are not permitted", which tells
+#: an operator nothing about where their number went.
+#:
+#: `inference` held one typed block that both named llama-server's flags under
+#: this project's own spellings and carried the request values. The file now
+#: spells the flags as the binary spells them, so nineteen keys that existed to
+#: be translated have no translation left to do.
+#:
+#: `turns` was a hand-transcribed copy of the model's own chat template. The
+#: server reads those markers off the template it renders through, so there is
+#: nothing left for a person to write down and nothing to point them at.
+#:
+#: **This map refuses a config file and never a run record.** `ModelRef` is the
+#: shape an earlier run wrote and it still reads `inference` as a plain mapping.
+SUPERSEDED_ENTRY_NAMES: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "inference": "models.<role>.server and models.<role>.request",
+        "draft": "models.<role>.companion_files and models.<role>.server",
+        "turns": "",
+    }
+)
 
 
 #: The `models` keys this block used to carry. `inference` held a single
@@ -222,27 +334,9 @@ class ModelEntry(ModelRef):
 #: older spelling `route` named the retired small model; the two calls on
 #: `summarize` replaced it, so nothing answers for them.
 SUPERSEDED_MODELS_NAMES: Final[Mapping[str, str]] = MappingProxyType(
-    {"inference": "models.<role>.inference", "route": "", "visual_planner": ""}
+    {"inference": "models.<role>.server", "route": "", "visual_planner": ""}
 )
 
-
-#: Where the active model's whole entry lives, relative to `config/`. Pinned to
-#: one directory and to `.json` by the schema rather than checked in the loader:
-#: the value is an operator's edit that becomes a path this build opens, so the
-#: grammar is what rules out a traversal, an absolute path and a Windows
-#: separator (CLAUDE.md section 2).
-MODELS_FILE_PATTERN: Final = r"^models/[a-z0-9]+(?:[.-][a-z0-9]+)*\.json$"
-
-
-ModelsFile = Annotated[str, StringConstraints(pattern=MODELS_FILE_PATTERN)]
-
-
-#: What an operator does next when an entry's declared block names weights the
-#: entry does not.
-_REDERIVE_THE_NUMBERS: Final = (
-    "Every setting in that block was measured against one model on one runner, "
-    "so re-derive them for these weights"
-)
 
 class ModelsConfig(Contract):
     """`config/models/<name>.json` - one whole model, in one file of its own.
@@ -268,9 +362,19 @@ class ModelsConfig(Contract):
     __schema_stem__: ClassVar[str] = "models-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-09-21T04:00",
+            version="2026-09-21T06:00",
             change="The turn block goes; two keys move onto the entry and a run still reads.",
             why="The markers are the model's own template, so the server reads them off it.",
+        ),
+        ChangelogEntry(
+            version="2026-09-21T05:00",
+            change="The draft head becomes a companion file; its decode settings join `server`.",
+            why="A file that cannot name what a publisher ships cannot describe that model.",
+        ),
+        ChangelogEntry(
+            version="2026-09-21T04:00",
+            change="The settings split into llama-server's own flags and the request values.",
+            why="Nineteen keys existed only to be translated into a flag.",
         ),
         ChangelogEntry(
             version="2026-09-21T03:00",
@@ -278,17 +382,7 @@ class ModelsConfig(Contract):
             why="Each sent a number where the runtime's own default is already unbounded.",
         ),
         ChangelogEntry(
-            version="2026-09-21T02:00",
-            change="The draft head goes from the entry; a run that named one still reads.",
-            why="It changed the summary on nine articles of nine, so it never was a free speed-up.",
-        ),
-        ChangelogEntry(
             version="2026-09-21",
-            change="Add an optional judge entry, decoding on the served role's weights.",
-            why="The judge could only open a thinking channel by moving the summariser too.",
-        ),
-        ChangelogEntry(
-            version="2026-09-14",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
         ),
@@ -324,9 +418,7 @@ class ModelsConfig(Contract):
         """
         return tuple(
             sorted(
-                name
-                for name, field in cls.model_fields.items()
-                if field.annotation is ModelEntry
+                name for name, field in cls.model_fields.items() if field.annotation is ModelEntry
             )
         )
 
@@ -339,62 +431,9 @@ class ModelsConfig(Contract):
         of testing each one.
         """
         declared = ((name, getattr(self, name)) for name in sorted(type(self).model_fields))
-        return tuple(
-            (name, entry) for name, entry in declared if isinstance(entry, ModelEntry)
-        )
+        return tuple((name, entry) for name, entry in declared if isinstance(entry, ModelEntry))
 
     @model_validator(mode="before")
     @classmethod
     def _a_removed_key_is_refused_by_name(cls, data: Any) -> Any:
         return refuse_a_removed_knob("models", data, SUPERSEDED_MODELS_NAMES)
-
-    @model_validator(mode="after")
-    def _a_second_entry_decodes_on_the_weights_the_server_holds(self) -> Self:
-        """An entry nobody stands a server up for has to name the running weights.
-
-        One llama-server, one file. An entry naming a second set of weights would
-        either double what the runner's cache carries - the largest fixed cost in
-        the pipeline (Guardrail #2) - or, worse, decode against whatever the
-        running server happens to hold while the row records the id it asked for.
-        Nothing raises in that case and every verdict is attributed to a model
-        that never saw the pair.
-
-        What a second entry is free to move is the decode: its temperature, its
-        budgets, and whether it opens a reasoning channel.
-        """
-        for role, entry in self.entries():
-            if role in type(self).roles() or entry.sha256 == self.summarize.sha256:
-                continue
-            raise ValueError(
-                f"models.{role} names weights {entry.sha256 or 'nothing at all'} and "
-                f"models.summarize names {self.summarize.sha256 or 'nothing at all'}. "
-                f"No server is started for models.{role}, so it decodes on the weights "
-                "the summariser's server holds - name those, or make it a role of its own"
-            )
-        return self
-
-    @model_validator(mode="after")
-    def _every_block_names_the_weights_it_is_declared_for(self) -> Self:
-        """A settings block belongs to one entry's bytes, and says which.
-
-        The swap this refuses is five strings edited in place: repo, file,
-        revision, digest and id, with the block underneath them untouched. That
-        raises nothing on its own, and the run then stands a server up on numbers
-        derived for weights it never opened.
-
-        Both digests absent is legal and means an entry nobody has measured yet.
-        The stamp already refuses to run on one: `idhazh.fingerprint.build_inputs`
-        stops when the weights have no recorded digest.
-        """
-        for role, entry in self.entries():
-            declared = entry.inference.declared_for
-            if declared == entry.sha256:
-                continue
-            raise ValueError(
-                f"models.{role}.inference is declared for "
-                f"{declared or 'no weights at all'}, and models.{role} names "
-                f"{entry.sha256 or 'no weights at all'}. {_REDERIVE_THE_NUMBERS} and set "
-                f"models.{role}.inference.declared_for to the digest the entry "
-                "carries - or put the entry back"
-            )
-        return self

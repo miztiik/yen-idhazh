@@ -1,5 +1,8 @@
 """What does the record hold after a day is counted into it, and what is refused?
 
+The arithmetic, and the collecting job that applies it: what it appends beside
+the record is part of what a counted day leaves behind.
+
 Every record and every row here is built in the test that uses it. Nothing walks
 the committed day tree: the arithmetic is about one record and a handful of rows,
 and a fixture that grows with the archive would make these slower every week
@@ -8,20 +11,37 @@ and a fixture that grows with the archive would make these slower every week
 
 from __future__ import annotations
 
+import csv
 import dataclasses
+import io
 import json
+from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
+from idhazh import assemble, config, ledger
+from idhazh.contracts.base import derive_text_digest, derive_url_key
+from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.knobs.placement import SimilarityThresholdConfig
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
-from idhazh.similarity import counting
+from idhazh.council import metrics_sink
+from idhazh.similarity import counting, tenant
 from idhazh.similarity.stamps import JudgeStamp, ScorerStamp
+from idhazh.similarity.tenant import JUDGE_ID
+from idhazh.stages import count_verdicts
+from idhazh.stages.judge_item_pairs import VERDICTS_DIRNAME
 
 DATE: Final = "2026-09-18"
+
+#: The night before the one these tests count, used where a test needs two nights
+#: it can tell apart by name.
+AN_EARLIER_DATE: Final = "2026-09-17"
+
+#: The name the council night these tests settle files its rows under.
+A_COUNCIL_RUN: Final = f"{DATE}-9"
 
 #: A twelve-slot band, wide enough to tell an edge from a middle and small enough
 #: that a failing assertion names a slot a reader can count to.
@@ -42,38 +62,78 @@ def a_record() -> StorySimilarityDistribution:
     return counting.empty_record(KNOBS, scorer=a_scorer(), judge=a_judge())
 
 
+def a_pair(index: int) -> tuple[str, str, str]:
+    """Two addresses in stored order and the identity they digest to.
+
+    A row names its pair by a digest of its own two address keys and the contract
+    recomputes it, so a test that needs two pairs it can tell apart moves the
+    addresses rather than the digest.
+    """
+    low, high = sorted(
+        (
+            derive_url_key(f"https://left.example/{index}"),
+            derive_url_key(f"https://right.example/{index}"),
+        )
+    )
+    return low, high, derive_text_digest(low + high)
+
+
 def a_row(
     *,
     score: float,
     verdict: SameStoryVerdict = SameStoryVerdict.NO,
     usable: bool = True,
-    pair_key: str | None = None,
-    run_id: str = f"{DATE}-1",
+    pair: int | None = None,
+    run_id: str | None = None,
     judged_by_run_id: str | None = None,
+    judge: JudgeStamp | None = None,
+    date: str = DATE,
 ) -> StorySimilarityPair:
     """One judged pair, re-cast from the committed contract fixture.
 
     Read inside the helper rather than at module scope, so a fixture that stops
     parsing fails the test that asked for a row instead of every test here.
+
+    **Every stamp column is written from the instrument the record is born
+    under**, because the count step admits only rows whose stamp is the record's
+    own. The fixture carries its own digests and a null sampler, so a row taken
+    from it unchanged is a row from a different instrument - a real case, and the
+    `judge` argument is how a test asks for it rather than getting it by default.
     """
     raw = json.loads(
         read_text(
             CONTRACT_FIXTURES_DIR / "story-similarity-pair" / "judged-the-same-in-both-orders.json"
         )
     )
+    scorer, stamped = a_scorer(), judge if judge is not None else a_judge()
+    left, right, key = (
+        (raw["left_url_key"], raw["right_url_key"], raw["pair_key"])
+        if pair is None
+        else a_pair(pair)
+    )
     return StorySimilarityPair.model_validate(
         raw
         | {
             "version": StorySimilarityPair.schema_version(),
-            "date": DATE,
-            "run_id": run_id,
+            "date": date,
+            "run_id": run_id if run_id is not None else f"{date}-1",
             "judged_by_run_id": judged_by_run_id,
             "composite_score": score,
             "cosine": score,
             "verdict": verdict.value,
             "verdict_swapped": verdict.value,
             "usable": usable,
-            "pair_key": pair_key or raw["pair_key"],
+            "left_url_key": left,
+            "right_url_key": right,
+            "pair_key": key,
+            "scorer_model": scorer.scorer_model,
+            "cosine_weight": scorer.cosine_weight,
+            "key_point_weight": scorer.key_point_weight,
+            "judge_model": stamped.judge_model,
+            "prompt_digest": stamped.prompt_digest,
+            "grammar_digest": stamped.grammar_digest,
+            "judge_temperature": stamped.judge_temperature,
+            "thinking_spans": int(stamped.thinks),
         }
     )
 
@@ -245,3 +305,327 @@ def test_a_stamped_re_judge_beats_the_unstamped_rows_it_replaces() -> None:
 
     assert [row.verdict for row in kept] == [SameStoryVerdict.NO]
     assert [row.run_id for row in counting.one_row_a_pair(rows[::2])] == [f"{DATE}-2"]
+
+
+def a_metrics_row(
+    *, shard: int, dealt: int = 2, date: str = DATE
+) -> ContentSimilarityJudgeMetrics:
+    """One unit's instrument reading, with a funnel that closes."""
+    return ContentSimilarityJudgeMetrics.model_validate(
+        {
+            "date": date,
+            "run_id": f"{date}-9",
+            "shard": shard,
+            "pairs_dealt": dealt,
+            "pairs_read": dealt,
+            "pairs_agreed": dealt,
+            "pairs_unreadable": 0,
+            "pairs_refused": 0,
+            "pairs_abandoned": 0,
+            "disagreement_rate": 0.0,
+            "unclear_rate": 0.0,
+            "first_token_margin_median": 0.5,
+            "decode_seconds_total": 3.5 + shard,
+            "decode_seconds_max": 2.0,
+        }
+    )
+
+
+def a_verdict_file(rows: list[StorySimilarityPair]) -> str:
+    """What a unit leaves behind, written through the contract's own columns."""
+    out = io.StringIO()
+    writer = csv.DictWriter(out, fieldnames=StorySimilarityPair.csv_columns(), lineterminator="\n")
+    writer.writeheader()
+    for row in rows:
+        writer.writerow(row.csv_row())
+    return out.getvalue()
+
+
+def a_night(
+    root: Path, *, units: int, date: str = DATE, verdicts_a_unit: int = 0
+) -> tuple[Path, Path, list[ContentSimilarityJudgeMetrics]]:
+    """A night's units as they leave a runner: a verdict file and a shipped row each.
+
+    The verdict files carry a header and `verdicts_a_unit` rows under it. Zero is
+    the default because most of what these ask is what the collecting job does
+    with what the units shipped rather than how a verdict is counted; a test that
+    needs a day file with something in it says how much.
+    """
+    shipped = root / "shipped"
+    judge_root = root / "judge"
+    written = [a_metrics_row(shard=unit, date=date) for unit in range(units)]
+    for unit, row in enumerate(written):
+        metrics_sink.ship_judge_metrics(row, judge_id=JUDGE_ID, shard=unit, out_dir=shipped)
+        assemble.write_atomic(
+            judge_root / date / VERDICTS_DIRNAME / f"{unit}.csv",
+            a_verdict_file(
+                [
+                    a_row(score=0.55, pair=unit * 16 + index, date=date)
+                    for index in range(verdicts_a_unit)
+                ]
+            ),
+        )
+    return shipped, judge_root, written
+
+
+def test_the_row_the_collecting_job_lands_is_the_row_the_unit_shipped(tmp_path: Path) -> None:
+    """Cell for cell, and the whole file is compared rather than a column of it.
+
+    Both ends render through the contract's own columns, so a column one side
+    knows about and the other does not shows up here as a line that is no longer
+    the line the unit wrote - which is the one failure a spot check of two cells
+    would walk straight past.
+    """
+    settings = config.load(CONFIG_DIR)
+    state = tmp_path / "state"
+    shipped, judge_root, written = a_night(tmp_path, units=settings.app.council.shards)
+
+    report = count_verdicts.stage_count_verdicts(
+        DATE,
+        run_id=A_COUNCIL_RUN,
+        judge_id=JUDGE_ID,
+        shipped_root=shipped,
+        settings=settings,
+        state_dir=state,
+        judge_root=judge_root,
+    )
+
+    landed = read_text(ledger.content_similarity_judge_metrics_path(state, DATE)).splitlines()
+    out_of_the_units = [
+        read_text(shipped / JUDGE_ID / f"{unit}.csv").splitlines()
+        for unit in range(len(written))
+    ]
+
+    assert report.metrics_appended == len(written)
+    assert report.counted is True, "every unit reported, so the day is counted"
+    assert landed[0] == ",".join(ContentSimilarityJudgeMetrics.csv_columns())
+    assert landed[1:] == [unit[1] for unit in out_of_the_units]
+    assert all(unit[0] == landed[0] for unit in out_of_the_units), (
+        "the units and the store name their columns differently, so a row moved "
+        "between them would be read one cell out of place"
+    )
+
+
+def test_the_readings_land_on_a_night_the_record_refused_to_count(tmp_path: Path) -> None:
+    """A unit that ran and a day that cannot be counted are two different facts.
+
+    Holding the readings back until the record accepts the day would delete the
+    evidence of the first to record the second - and the night a unit dies is
+    exactly the night an operator opens this store to find out why.
+    """
+    settings = config.load(CONFIG_DIR)
+    state = tmp_path / "state"
+    shipped, judge_root, written = a_night(tmp_path, units=1)
+
+    report = count_verdicts.stage_count_verdicts(
+        DATE,
+        run_id=A_COUNCIL_RUN,
+        judge_id=JUDGE_ID,
+        shipped_root=shipped,
+        settings=settings,
+        state_dir=state,
+        judge_root=judge_root,
+    )
+
+    assert settings.app.council.shards > len(written), "a night short of a unit"
+    assert (report.counted, report.held_reason) == (False, "shards_missing")
+    assert report.metrics_appended == 1
+    assert ledger.content_similarity_judge_metrics_path(state, DATE).exists()
+
+
+def test_a_night_whose_units_shipped_nothing_appends_nothing(tmp_path: Path) -> None:
+    """An empty upload is a night with no tenant, never a run to fail."""
+    settings = config.load(CONFIG_DIR)
+    state = tmp_path / "state"
+
+    report = count_verdicts.stage_count_verdicts(
+        DATE,
+        run_id=A_COUNCIL_RUN,
+        judge_id=JUDGE_ID,
+        shipped_root=tmp_path / "nothing-was-uploaded",
+        settings=settings,
+        state_dir=state,
+        judge_root=tmp_path / "judge",
+    )
+
+    assert report.metrics_appended == 0
+    assert not ledger.content_similarity_judge_metrics_path(state, DATE).exists()
+
+
+def a_ruler_moved(settings: config.Settings) -> config.Settings:
+    """The committed settings with the scorer's two weights swapped over.
+
+    A real instrument move: the same pair scores differently, so the counts taken
+    under the old weights answer a different question and the record is archived.
+    """
+    app = settings.app.model_copy(deep=True)
+    app.assemble.same_story.cosine_weight = 0.8
+    app.assemble.same_story.key_point_weight = 0.2
+    return dataclasses.replace(settings, app=app)
+
+
+def counted_by(
+    date: str, *, root: Path, state: Path, settings: config.Settings, units: int
+) -> count_verdicts.CountReport:
+    """Run one night of `units` units through the collecting job.
+
+    Every unit ships a reading and leaves one verdict behind, so a night short of
+    a unit still puts rows in the day file - which is the shape the dominant
+    failure produces and the one an outstanding-night answer has to see through.
+    """
+    shipped, judge_root, _ = a_night(root, units=units, date=date, verdicts_a_unit=1)
+    return count_verdicts.stage_count_verdicts(
+        date,
+        run_id=f"{date}-9",
+        judge_id=JUDGE_ID,
+        shipped_root=shipped,
+        settings=settings,
+        state_dir=state,
+        judge_root=judge_root,
+    )
+
+
+def test_the_night_that_lost_a_unit_is_the_night_this_judge_asks_for_again(
+    tmp_path: Path,
+) -> None:
+    """The council asks what this judge is behind on, and this is the answer.
+
+    Two nights, and the difference between them is the one the answer turns on.
+    One had every unit report and was counted. The other lost a unit, so its
+    rows landed and the date did not: counting three units of four cannot be
+    repaired later, because the record counts a date once. That date is what a
+    repair job is for, and the counted one is not - naming it would spend a
+    runner on a night that can never be counted twice.
+
+    Driven against a store this test built, never the committed one, so it costs
+    the same when the archive is a year deep (CLAUDE.md section 13).
+    """
+    settings = config.load(CONFIG_DIR)
+    state = tmp_path / "state"
+    shards = settings.app.council.shards
+
+    whole = counted_by(
+        DATE, root=tmp_path / "whole", state=state, settings=settings, units=shards
+    )
+    short = counted_by(
+        AN_EARLIER_DATE,
+        root=tmp_path / "short",
+        state=state,
+        settings=settings,
+        units=shards - 1,
+    )
+
+    answered = tenant.TENANT.nights_outstanding(
+        window=(AN_EARLIER_DATE, DATE), state_dir=state
+    )
+
+    assert (whole.counted, short.counted) == (True, False)
+    assert len(ledger.load_story_similarity_pairs(state, AN_EARLIER_DATE)) == shards - 1, (
+        "the units that did report still wrote their verdicts to the day file"
+    )
+    assert answered == (AN_EARLIER_DATE,)
+
+
+def test_the_date_memory_survives_the_reset_that_empties_the_counts(tmp_path: Path) -> None:
+    """A night already read is never asked for again, whatever happened to its counts.
+
+    Moving a weight archives the record and starts the counts from zero, because
+    they answer a different question under the new ruler. The nights already read
+    come across, so the council is not handed a week of repair jobs the day
+    somebody retunes the scorer - and every one of those jobs would be wasted,
+    because the record still refuses to count a date twice.
+    """
+    settings = config.load(CONFIG_DIR)
+    state = tmp_path / "state"
+    shards = settings.app.council.shards
+    counted_by(DATE, root=tmp_path / "first", state=state, settings=settings, units=shards)
+
+    after = counted_by(
+        AN_EARLIER_DATE,
+        root=tmp_path / "second",
+        state=state,
+        settings=a_ruler_moved(settings),
+        units=shards,
+    )
+    record = StorySimilarityDistribution.from_json(
+        read_text(ledger.score_distribution_path(state))
+    )
+
+    assert after.archived is not None, "the weights moved, so the counts were archived"
+    assert record.counted_dates == (AN_EARLIER_DATE,), "the counts start again from this night"
+    assert record.judged_dates == (AN_EARLIER_DATE, DATE), "and both nights are remembered"
+    assert (
+        tenant.TENANT.nights_outstanding(window=(AN_EARLIER_DATE, DATE), state_dir=state) == ()
+    )
+
+
+def test_a_judge_with_no_record_yet_names_no_night(tmp_path: Path) -> None:
+    """Before the first day is counted there is no record, so there is nothing to be behind on.
+
+    A tenant raises the council's floor for itself by naming no night from before
+    it arrived, and a judge with no record has not arrived on any of them. The
+    other answer - every night in the window - would have a judge that moved in
+    today dispatch a week of repair jobs for nights it was never asked to read.
+    An operator who wants one of them judged names the date, which replaces the
+    plan outright.
+    """
+    answered = tenant.TENANT.nights_outstanding(
+        window=(AN_EARLIER_DATE, DATE), state_dir=tmp_path / "nothing-was-counted-yet"
+    )
+
+    assert answered == ()
+
+
+def test_a_row_from_another_instrument_is_counted_nowhere() -> None:
+    """The record says one model, one prompt and one sampler produced every count.
+
+    A re-judge leaves the older row in the append-only day file, so a day read
+    twice under two instruments holds both readings. Adding them together makes
+    the record's own stamp a lie, and no later read can pull them apart again.
+    """
+    record = a_record()
+    elsewhere = dataclasses.replace(a_judge(), judge_temperature=0.7)
+
+    counted = counting.count_day(
+        record,
+        [
+            a_row(score=0.55, pair=1),
+            a_row(score=0.55, pair=2, judge=elsewhere),
+        ],
+        date=DATE,
+    )
+
+    slot = counted.slots[counting.slot_index(0.55, record=record) or 0]
+    assert slot.different_count == 1, "one row was judged under the record's own instrument"
+
+
+def test_a_stale_row_does_not_take_the_pair_from_the_fresh_one() -> None:
+    """Why the stamp filter runs before the de-duplication rather than after it.
+
+    Both rows are the same pair. The one from the old instrument was judged by
+    the later run, so on recency it wins the pair - and filtering afterwards
+    would then throw it away and count nothing, losing the reading that was
+    standing behind it. Filtering first leaves the fresh row to win uncontested.
+    """
+    record = a_record()
+    rows = [
+        a_row(score=0.55, run_id=f"{DATE}-1", judged_by_run_id=f"{DATE}-1"),
+        a_row(
+            score=0.55,
+            run_id=f"{DATE}-2",
+            judged_by_run_id=f"{DATE}-9",
+            judge=dataclasses.replace(a_judge(), judge_temperature=0.7),
+        ),
+    ]
+
+    counted = counting.count_day(record, rows, date=DATE)
+
+    slot = counted.slots[counting.slot_index(0.55, record=record) or 0]
+    assert slot.different_count == 1, "the fresh row was counted, not discarded with the stale one"
+
+
+def test_counting_a_day_writes_it_to_both_date_lists() -> None:
+    """The two lists are kept in step here, because this is the verb that reads a night."""
+    counted = counting.count_day(a_record(), [a_row(score=0.55)], date=DATE)
+
+    assert (counted.counted_dates, counted.judged_dates) == ((DATE,), (DATE,))

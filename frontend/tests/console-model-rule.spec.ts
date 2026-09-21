@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { join, resolve } from 'node:path';
 
 import { modelRules } from '../src/lib/charts/frame';
-import { pipelineChanges, RECORDED_INPUTS_FROM } from '../src/lib/server/model-work';
+import { pipelineChanges } from '../src/lib/server/model-work';
 import { readDayShards } from '../src/lib/server/payload';
 
 /**
@@ -50,15 +50,15 @@ function canaryScores(): Record<string, string>[] {
  * is a second implementation of it on purpose - a check that calls the code it
  * is checking only proves the code is deterministic.
  *
- * It reads the score ledger's stamp, so it speaks only for days before
- * `RECORDED_INPUTS_FROM`. That is the same half of the split the function under
- * test reads from there.
+ * It reads the score ledger's stamp, so it speaks only for days a run recorded
+ * that way. That is the same half of the split the function under test reads
+ * from a stamped row, and a day recorded as a named manifest is invisible to
+ * both.
  */
 function boundariesFrom(rows: Record<string, string>[]): string[] {
 	const seen = new Map<string, string[]>();
 	for (const row of rows) {
 		if (!row.date || !row.pipeline_fingerprint) continue;
-		if (row.date >= RECORDED_INPUTS_FROM) continue;
 		seen.set(row.date, [...(seen.get(row.date) ?? []), row.pipeline_fingerprint]);
 	}
 	const dates = [...seen.keys()].sort();
@@ -171,19 +171,19 @@ test.describe('the boundary, as arithmetic', () => {
 });
 
 /**
- * The half that reads the run record, which is what a day after the cutover has.
+ * The half that reads the run record, which is what a day carrying one has.
  *
  * `pipeline_fingerprint` stopped being written on 2026-09-12, so a chart that
  * only read the score ledger would report "nothing moved" for ever. What is
  * compared now is each run's recorded input manifest, and the comparison can say
  * which input moved where a digest could only say that one did.
+ *
+ * The dates here are arbitrary and consecutive. Nothing in the rule turns on
+ * what they are: the eligibility of a day is decided by which record it carries,
+ * so a case built on a date would be testing a fact about the calendar.
  */
 test.describe('the boundary, after the inputs became a record', () => {
-	const after = (days: number) => {
-		const day = new Date(`${RECORDED_INPUTS_FROM}T00:00:00Z`);
-		day.setUTCDate(day.getUTCDate() + days);
-		return day.toISOString().slice(0, 10);
-	};
+	const [first, second, third] = ['2026-03-01', '2026-03-02', '2026-03-03'];
 	const runDay = (date: string, ...inputs: (Record<string, unknown> | null)[]) => ({
 		date,
 		records: inputs.map((one) => ({ inputs: one }))
@@ -194,40 +194,59 @@ test.describe('the boundary, after the inputs became a record', () => {
 			pipelineChanges(
 				[],
 				[
-					runDay(after(0), { prompt_sha256: 'aaa' }),
-					runDay(after(1), { prompt_sha256: 'aaa' }),
-					runDay(after(2), { prompt_sha256: 'bbb' })
+					runDay(first, { prompt_sha256: 'aaa' }),
+					runDay(second, { prompt_sha256: 'aaa' }),
+					runDay(third, { prompt_sha256: 'bbb' })
 				]
 			)
-		).toEqual([after(2)]);
+		).toEqual([third]);
 	});
 
 	test('a run that recorded nothing contributes no identity', () => {
 		expect(
-			pipelineChanges([], [runDay(after(0), { prompt_sha256: 'aaa' }), runDay(after(1), null)])
+			pipelineChanges([], [runDay(first, { prompt_sha256: 'aaa' }), runDay(second, null)])
 		).toEqual([]);
 	});
 
-	test('the cutover day is never a boundary, because the store changed and not the pipeline', () => {
-		// The day before reads the score ledger's digest and the day itself reads
-		// the run record. The two shapes always compare unequal, so a rule there
-		// would mark a change nothing caused.
+	test('a stamped day against a recorded day is never a boundary, whatever the dates are', () => {
+		// One day's identity is a digest and the next one's is a named manifest.
+		// The two shapes always compare unequal, so a rule there would mark a
+		// change nothing caused. It is the records that decide this, so the case
+		// holds at the one real changeover and at any other pair.
 		expect(
 			pipelineChanges(
-				[{ date: '2026-09-11', pipeline_fingerprint: 'aaa' }],
-				[runDay(RECORDED_INPUTS_FROM, { prompt_sha256: 'aaa' })]
+				[{ date: first, pipeline_fingerprint: 'aaa' }],
+				[runDay(second, { prompt_sha256: 'aaa' })]
 			)
 		).toEqual([]);
 	});
 
-	test('a score row on or after the cutover is ignored, so no day is counted twice', () => {
+	test('a day carrying both records reads the manifest and ignores the digest', () => {
+		// What a replay leaves behind: `assemble` rewrites run.json unconditionally,
+		// so re-running it over a stamped day gives that day a manifest too. Reading
+		// both would compare a digest against a manifest and invent a boundary.
 		expect(
 			pipelineChanges(
 				[
-					{ date: after(0), pipeline_fingerprint: 'aaa' },
-					{ date: after(1), pipeline_fingerprint: 'bbb' }
+					{ date: first, pipeline_fingerprint: 'aaa' },
+					{ date: second, pipeline_fingerprint: 'bbb' }
 				],
-				[runDay(after(0), { prompt_sha256: 'x' }), runDay(after(1), { prompt_sha256: 'x' })]
+				[runDay(first, { prompt_sha256: 'x' }), runDay(second, { prompt_sha256: 'x' })]
+			)
+		).toEqual([]);
+	});
+
+	test('a digest that moves under a manifest that does not is still no boundary', () => {
+		// The same shape as above with the stamps deliberately disagreeing, so a
+		// reader can see the precedence is doing the work rather than the values
+		// happening to match.
+		expect(
+			pipelineChanges(
+				[
+					{ date: first, pipeline_fingerprint: 'aaa' },
+					{ date: second, pipeline_fingerprint: 'zzz' }
+				],
+				[runDay(first, { prompt_sha256: 'x' }), runDay(second, { prompt_sha256: 'x' })]
 			)
 		).toEqual([]);
 	});

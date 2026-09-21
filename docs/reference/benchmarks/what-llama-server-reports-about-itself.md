@@ -209,11 +209,11 @@ and nothing else reads, and no byte of it reaches the 1 GB published site
 (Guardrail #2) or the repository. The daily workflow already uploads
 `llama-server.log` as a two-day artifact, well inside the 500 MB allowance.
 
-**`log_verbosity` is not fingerprint-digested**, and sits in
-`idhazh.fingerprint.NOT_DIGESTED` with that reason written next to it. A log
+**`-lv` is not fingerprint-digested**, and is absent from
+`idhazh.fingerprint.DIGESTED_FLAGS` for that reason. A log
 level cannot move a logit, so digesting it would have invalidated every earlier
 work identity on the day somebody turned the logging up - which is what
-`n_threads_batch` was refused for on the other side of the same argument.
+`-tb` was refused for on the other side of the same argument.
 
 ## See also
 

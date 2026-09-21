@@ -59,6 +59,7 @@ from idhazh.llm.server import (
     is_context_exceeded,
     one_reply,
     post,
+    request_timeout_seconds,
     thinking_span,
 )
 from idhazh.sanitize import SANITIZER_VERSION, sanitize
@@ -520,15 +521,17 @@ def _one_call(
     runs one decode where the digest's runs two: there is no prompt of ours to
     stop at a marker and continue under a grammar.
     """
-    inference = settings.models.summarize.inference
+    request = settings.models.summarize.request
     markers = derive_turn_markers(
-        endpoint, entry=settings.models.summarize, timeout=inference.request_timeout_minutes * 60
+        endpoint,
+        entry=settings.models.summarize,
+        timeout=request_timeout_seconds(request),
     )
     model_id = settings.models.summarize.id
     payload = summarize.build_request(
         article,
         model_id=model_id,
-        inference=inference,
+        request=request,
         markers=markers,
         prompt_config=settings.app.summarize,
     )
@@ -537,7 +540,7 @@ def _one_call(
     no_reply = FailureCode.MODEL_UNREACHABLE
     try:
         completion = post(
-            payload, endpoint=endpoint, timeout=inference.request_timeout_minutes * 60
+            payload, endpoint=endpoint, timeout=request_timeout_seconds(request)
         )
     except HTTPError as error:
         body = error.read().decode("utf-8", errors="replace")

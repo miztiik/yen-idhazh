@@ -163,7 +163,7 @@ def measure(
             "a reading taken against weights the config does not declare is not a reading"
         )
     argv = server_argv(
-        binary=binary, weights=weights, model=entry, inference=entry.inference, port=port
+        binary=binary, weights=weights, model=entry, server=entry.server, port=port
     )
     # Both routes are derived from one address, so the port the server was
     # started on and the port a request goes to cannot disagree.

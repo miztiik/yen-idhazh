@@ -34,7 +34,7 @@ no-thinking figure and stays comparable. What follows is what turning it on
 costs.
 
 **No budget is sent, and none can be set.** The two decode caps left
-`models.<role>.inference` on 2026-09-21, so the span ends where the model writes
+the entry's settings on 2026-09-21, so the span ends where the model writes
 its closing marker and the window is the only other thing that stops it. Owner
 ruling, 2026-09-17: the 256 that used to sit there was carried over from no
 reading of any of these weights, it was below every published thinking budget we
@@ -356,7 +356,7 @@ them was reachable from a stage: `work` made one summarizer call an item and the
 separate `visuals` job drew the pictures on the small model.
 
 **`work` sends both, adjacently, per item**, and that adjacency is a correctness
-rule rather than a layout taste: `models.summarize.inference` pins `n_parallel`
+rule rather than a layout taste: the summarize entry pins `n_parallel`
 to 1, so the server holds one cache slot, and every label call first with every
 summarize-and-plan call afterwards would evict the prefix before it was reused -
 on every item, with nothing in any log to say so.

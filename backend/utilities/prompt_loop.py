@@ -56,6 +56,7 @@ from idhazh.llm.server import (
     post,
     props,
     request_payload,
+    request_timeout_seconds,
 )
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
@@ -362,10 +363,10 @@ class LiveSummarizer:
     def summarize(self, prompt: str, items: Sequence[FrozenItem]) -> list[ItemSummary]:
         ask = self._settings.app.summarize
         entry = self._settings.models.summarize
-        inference = entry.inference
+        request = entry.request
         model_id = entry.id
         markers = derive_turn_markers(
-            self._endpoint, entry=entry, timeout=inference.request_timeout_minutes * 60
+            self._endpoint, entry=entry, timeout=request_timeout_seconds(request)
         )
         produced: list[ItemSummary] = []
         for item in items:
@@ -373,7 +374,7 @@ class LiveSummarizer:
             payload = summarize.build_request(
                 article,
                 model_id=model_id,
-                inference=inference,
+                request=request,
                 markers=markers,
                 prompt_config=ask,
             )
@@ -381,7 +382,7 @@ class LiveSummarizer:
                 prompt, ask, source_words=article.band_source_words, brief=article.brief
             )
             completion = post(
-                payload, endpoint=self._endpoint, timeout=inference.request_timeout_minutes * 60
+                payload, endpoint=self._endpoint, timeout=request_timeout_seconds(request)
             )
             draft = summarize.parse_draft(
                 completion.content,
@@ -460,20 +461,20 @@ class ModelJudge:
 
     def _call(self, user: str, schema: dict[str, object], schema_name: str) -> dict[str, object]:
         entry = self._settings.models.summarize
-        inference = entry.inference
+        request = entry.request
         payload = request_payload(
             model_id=entry.id,
             system=_JUDGE_SYSTEM,
             user=user,
             output_schema=schema,
-            inference=inference,
+            request=request,
             markers=derive_turn_markers(
-                self._endpoint, entry=entry, timeout=inference.request_timeout_minutes * 60
+                self._endpoint, entry=entry, timeout=request_timeout_seconds(request)
             ),
             schema_name=schema_name,
         )
         completion = post(
-            payload, endpoint=self._endpoint, timeout=inference.request_timeout_minutes * 60
+            payload, endpoint=self._endpoint, timeout=request_timeout_seconds(request)
         )
         parsed = json.loads(completion.content)
         if not isinstance(parsed, dict):

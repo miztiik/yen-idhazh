@@ -210,7 +210,7 @@ cut-off reply so the state a shrinking budget reaches is drawn rather than
 argued about.
 
 **The row states the finding and does not act on it.** The limit is
-`models.summarize.inference.n_ctx` and cutting it is the owner's call. The
+`--ctx-size` on the summarize entry and cutting it is the owner's call. The
 panel's job is to make the slack impossible to miss.
 
 **The panel is about the worst run in the span, not the newest**, which is why

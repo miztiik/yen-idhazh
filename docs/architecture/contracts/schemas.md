@@ -44,6 +44,16 @@ The union alone cannot be tested against at run time, and a reader that has to n
 
 `frontend/src/lib/payload/types.ts` mirrors `schemas/digest-day.schema.json`, `digest-view`, `search-index` and `visual-data` by hand, and the published reading surface is typed from it. It is not converted yet: several of its types narrow the contract on purpose (`DigestViewItem` is a `Pick`, and `markup` is a build-time field that is deliberately not in the schema), so replacing it is a design change to the reading path rather than a rename. The chart view models under `frontend/src/lib/charts/` that share a name with a `machine-panels` definition are the same kind of case - `console-machine-panels.spec.ts` checks them against the schema at run time instead.
 
+## The model file has no generated schema
+
+`config/models/<name>.json` is validated by `ModelsConfig` and is deliberately absent from `contracts/export.py`, so no `models-config.schema.json` and no `frontend/src/contracts/models-config.ts` exist. **A configuration file this project authors needs no declared shape** (`CLAUDE.md` Guardrail #3, owner ruling 2026-09-21): nothing but this repository writes one and nothing but this repository reads one, so a generated schema restates a model that is already its only reader, and a generated frontend type restates a file the frontend opens by hand.
+
+What the entry still declares is what this project's own code names: the weights, the architecture, the turn envelope, and the digest the settings were derived against. **What it does not declare is the settings themselves.** The `server` block is llama-server's own flags, spelled as the binary spells them and emitted verbatim, and the `request` block is the four values that go in a request body. A typed field for a value this project hands straight to another program is a second spelling somebody has to keep in step - and llama-server refuses a flag it does not accept at every server start, which names it and does not start.
+
+Two keys are required and both are refused by name at configuration load, in `idhazh.config.refuse_a_model_nothing_could_run`: `server["--ctx-size"]`, because this project does real arithmetic on the window and the published site reads it at build time, and `request["request_timeout_minutes"]`, because four call sites multiply it by sixty and llama-server has no default to fall back on. Everything else is optional, and absent means the server's own default.
+
+**The recorded shape keeps the old key.** `ModelRef.inference` is a plain mapping so a `run.json` an earlier run wrote - carrying a weights digest, a decode cap and option names no build declares now - still reads (section 11).
+
 ## Why the models, and not the schemas, are the source
 
 A JSON Schema is a good interchange format and a poor authoring format: it cannot express a cross-field invariant readably, it has no place to put a validator, and nobody catches a typo in it at edit time. A Pydantic model is typed at authoring time, carries its invariants as code, and is directly usable by the producer that writes the payload. Generating downward from it means the validation the backend enforces and the types the frontend trusts cannot disagree.
@@ -65,7 +75,6 @@ The shapes, and where each one lives once written:
 | Model | Schema | Persisted as |
 | --- | --- | --- |
 | `AppConfig` | `app-config` | `config/idhazh.json` |
-| `ModelsConfig` | `models-config` | `config/models/<name>.json`, one file per model. Which one is active is `AppConfig.models_file` ([../../concepts/config.md](../../concepts/config.md)), so this is the one document whose persisted path is a value rather than a literal. |
 | `AppearanceConfig` | `appearance-config` | `config/appearance.json` |
 | `Sources` | `sources` | `config/sources.json` |
 | `Taxonomy` | `taxonomy` | `config/taxonomy.json` |
@@ -422,6 +431,7 @@ The shapes carry rules a JSON Schema cannot express, and each one is a defect cl
 - **pydantic-core's regex engine has no look-around.** It is the Rust engine, not Python's `re`. A `StringConstraints(pattern=...)` containing `(?!` or `(?<=` raises `SchemaError` when the class is built, so the failure arrives at import time rather than at validation. Spell an explicit segment grammar instead of a negative lookahead.
 - **A pattern on a shape the decoder sees must bound its own length.** `llama.cpp`'s schema-to-grammar converter honours a `pattern` **or** a length bound, never both, and the pattern wins. So `maxLength: 22` beside `^[a-z]+-...$` is dropped on the way to the grammar, and the decoder is handed a state with no exit it will ever choose - `[a-z]+` admits no space and no capital, so a model writing an English phrase cannot leave it. One reply on 2026-09-14 wrote 15,472 characters into that 22-character field and burned 15.8 minutes of a 4 vCPU runner, on an item that had already decided it wanted no picture. That makes a loose quantifier an availability surface reachable from any fetched page ([../sources/trust-boundary.md](../sources/trust-boundary.md)), so `backend/tests/contracts/test_decoder_grammar.py` builds every schema the pipeline sends a decoder, walks every string, and fails on any `pattern` holding `+`, `*` or `{n,}`. Write `{1,8}` rather than `+`, and derive the number from whatever really bounds it.
 - **Generate the schema in validation mode, not serialization mode.** `model_json_schema(mode="serialization")` marks every field required, which would make "a config file may omit a knob" a lie in the published schema. The exporter uses validation mode and post-processes only `version`.
+- **`DateStamp` counts digits and nothing else.** `DATE_PATTERN` in `backend/idhazh/contracts/base.py` is `^\d{4}-\d{2}-\d{2}$`, so `2026-13-45` is a valid `DateStamp` everywhere in this repository, and the caller that reaches for `date.fromisoformat` is where it finally fails - with a bare `ValueError` naming neither the field nor the payload. The pattern cannot bound a month or a day without look-around, which pydantic-core's engine does not have, so the check belongs to whichever function turns the string into a date. **A field typed `DateStamp` is not a field that has been checked**; bound it where you use it, and say so on the line.
 
 ## `$id` is relative, on purpose
 

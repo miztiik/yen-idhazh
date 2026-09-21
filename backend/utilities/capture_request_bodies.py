@@ -65,13 +65,14 @@ def markers_for(model_file: str) -> TurnMarkers:
 def bodies(config: ModelsConfig, *, markers: TurnMarkers) -> dict[str, Any]:
     """Every route's body for one entry, keyed by the route that posts it."""
     entry = config.summarize
-    inference = entry.inference
+    server, request = entry.server, entry.request
     completion = completion_payload(
         model_id=entry.id,
         system=SYSTEM,
         user=USER,
         output_schema=SCHEMA,
-        inference=inference,
+        server=server,
+        request=request,
         markers=markers,
         max_answer_tokens=BUDGET,
     )
@@ -81,7 +82,7 @@ def bodies(config: ModelsConfig, *, markers: TurnMarkers) -> dict[str, Any]:
             system=SYSTEM,
             user=USER,
             output_schema=SCHEMA,
-            inference=inference,
+            request=request,
             markers=markers,
         ),
         "completion": completion,
@@ -90,7 +91,8 @@ def bodies(config: ModelsConfig, *, markers: TurnMarkers) -> dict[str, Any]:
             system=SYSTEM,
             user=USER,
             grammar=GRAMMAR,
-            inference=inference,
+            server=server,
+            request=request,
             markers=markers,
             max_answer_tokens=BUDGET,
             first_token_alternatives=ALTERNATIVES,

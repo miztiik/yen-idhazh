@@ -482,7 +482,7 @@ class TestTheSequenceIsWalkedItemMajor:
     ) -> None:
         """The whole prefix cache rests on this, and nothing else would catch it.
 
-        `models.summarize.inference` pins `n_parallel` to 1, so the server holds
+        the summarize entry pins `n_parallel` to 1, so the server holds
         one cache slot. Every label call first and every summarize-and-plan call afterwards would
         evict the prefix before it was reused - on every item, on an ordinary
         HTTP 200, with nothing in any log to say so. The run would get slower and

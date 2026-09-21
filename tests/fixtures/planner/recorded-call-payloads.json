@@ -3,22 +3,21 @@
   "inputs": {
     "article": "tests/fixtures/contracts/article/ok.json",
     "elements_max_per_article": 256,
+    "label_reply": "tests/fixtures/completions/label/labelled.json",
     "model_id": "a-model-id",
-    "inference": {
+    "request": {
       "temperature": 0.2,
       "top_p": 0.85,
-      "seed": 7,
-      "max_answer_tokens": 777
+      "seed": 7
     },
+    "server": {},
     "turns": {
-      "declared_for": null,
       "reply_opening": "<|im_start|>assistant\n<think>\n\n</think>\n\n",
       "reply_opening_thinking": "<|im_start|>assistant\n<think>\n",
       "thinking_close": "</think>",
       "turn_closing": "<|im_end|>\n",
       "turn_opening": "<|im_start|>$role\n"
-    },
-    "label_reply": "tests/fixtures/completions/label/labelled.json"
+    }
   },
   "label_call": {
     "model": "a-model-id",

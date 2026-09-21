@@ -72,19 +72,19 @@ Twenty rows. Read this before the tables.
 
 | # | Row title | Lane | Depends-on | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 13 | The entry path is one action taking a model file | B | - | PENDING | - | - | - |
+| 13 | The entry path is one action taking a model file | - | - | COLLAPSED - plan 42 row 5 carries the half that pays; the one-action half is priced in plan 42 section 0 | - | - | - |
 | 2 | The model file is plain JSON | - | - | COLLAPSED - plan 41 row 4 | - | - | - |
-| 5 | The installer stops naming a repository | B | 13, plan 41 PR A1 | PENDING | - | - | - |
+| 5 | The installer stops naming a repository | - | - | COLLAPSED - a generic interface, carried today by plan 40 row 1 as the first model file to use it; the guard it owes is named in plan 42 section 0 | - | - | - |
 | 16 | The thinking budget goes; the two-span call stays | - | - | COLLAPSED - plan 41 row 5 | - | - | - |
 | 18 | The model's own template renders the prompt | - | - | COLLAPSED - plan 41 row 7 | - | - | - |
 | 6 | The startup probe keeps one check, then none | - | - | COLLAPSED - plan 41 row 8 | - | - | - |
-| 11 | The server-log reader goes | - | - | COLLAPSED - plan 41 row 1; its two workflow log assertions moved to row 10 | - | - | - |
-| 3 | The draft head goes | B | 13 | PENDING - workflow half only; the model shape half is plan 41 row 3 | - | - | - |
-| 4 | The capability probe goes | B | - | PENDING | - | - | - |
-| 9 | The benchmark workflow's closed-world tests go | B | 3,4 | PENDING | - | - | - |
-| 10 | The workflow censuses go | B | 3,4 | PENDING | - | - | - |
-| 14 | The image benchmark goes, and two heavy wheels with it | B | - | PENDING | - | - | - |
-| 20 | One commit call in the workflow that has four | B | - | PENDING | - | - | - |
+| 11 | The server-log reader goes | - | - | COLLAPSED - plan 41 row 1; its two workflow log assertions moved to plan 42 row 7 | - | - | - |
+| 3 | The draft head goes | - | - | COLLAPSED - plan 42 row 4; the model shape half is plan 41 row 3 | - | - | - |
+| 4 | The capability probe goes | - | - | COLLAPSED - plan 42 rows 1 and 2 | - | - | - |
+| 9 | The benchmark workflow's closed-world tests go | - | - | COLLAPSED - plan 42 row 6 | - | - | - |
+| 10 | The workflow censuses go | - | - | COLLAPSED - plan 42 row 7 | - | - | - |
+| 14 | The image benchmark goes, and two heavy wheels with it | - | - | COLLAPSED - plan 42 row 3; one wheel, not two | - | - | - |
+| 20 | One commit call in the workflow that has four | - | - | COLLAPSED - descoped; zero of the four calls can merge, priced in plan 42 section 0 | - | - | - |
 | 7 | Qualification asks each article once | C | - | PENDING | - | - | - |
 | 17 | The utilities and evaluations nothing calls go | C | 7 | PENDING | - | - | - |
 | 8 | Both test pipelines commit what they produce | C | - | PENDING | - | - | - |
@@ -94,23 +94,23 @@ Twenty rows. Read this before the tables.
 | 1 | The generated contract layer goes | E | A,B,C,D | PENDING | - | - | - |
 | 12 | The engineering contract and the pages catch up | E | 1 | PENDING - sections 1a, 9 and 10 only; the schema-declaration guardrail and section 11 moved to plan 41 row 6 | - | - | - |
 
-**Lane A is executed from [`20260921-41-lane-a-model-file-plan.md`](20260921-41-lane-a-model-file-plan.md), not from here.** That plan carries the rows above marked `COLLAPSED`, in two pull requests, with the contracts they need declared. The rows stay listed here so their numbers still resolve.
+**Lane A is executed from [`20260921-41-lane-a-model-file-plan.md`](20260921-41-lane-a-model-file-plan.md) and Lane B from [`20260921-42-lane-b-workflows-plan.md`](20260921-42-lane-b-workflows-plan.md), not from here.** Those plans carry the rows above marked `COLLAPSED`, with the contracts they need declared. The rows stay listed here so their numbers still resolve.
 
 ### The lanes, and why each is one pull request
 
 | Lane | Rows | The file they share | Parallel with |
 | --- | --- | --- | --- |
 | **A - the model file** | moved to plan 41 | `backend/idhazh/llm/server.py`, `backend/idhazh/contracts/knobs/`, `config/models/` | B, C, D |
-| **B - the workflows** | 13, 3, 4, 9, 10, 14, 20, 5 | `.github/`, `backend/tests/workflows/_harness.py` | C, D |
+| **B - the workflows** | moved to plan 42 | `.github/`, `backend/tests/workflows/_harness.py` | C, D |
 | **C - the ledgers and evaluations** | 7, 17, 8 | `backend/idhazh/evals/qualify.py`, `backend/idhazh/contracts/qualification.py`, `backend/idhazh/ledger.py` | B, D |
 | **D - the site and the sink** | 15, 19 | `frontend/tests/`, `backend/idhazh/telemetry/` | B, C |
 | **E - last, alone** | 1, 12 | every contract module and the engineering contract | nothing |
 
 **Lane E runs alone and last.** Row #1 touches a generated twin of every contract the other lanes edit, so running it beside them is a conflict on every file that moved.
 
-**Lane B's row #5 is its last row and waits on plan 41's first pull request**, because it adds a key to the model file that the typed shape refuses until that shape is gone.
+**Plan 42 pull request B1 must merge before plan 41 pull request A**, because a test plan 42 deletes imports a name plan 41 deletes, and a deleted import raises at test collection.
 
-**Parallel N = 3 here, plus plan 41.** Lanes B, C and D run at once, one worker each, one pull request each. A worker carries its lane's rows in order in one worktree.
+**Parallel N = 2 here, plus plans 41 and 42.** Lanes C and D run at once, one worker each, one pull request each. A worker carries its lane's rows in order in one worktree.
 
 ## Section 1b - The contracts, declared before any code
 

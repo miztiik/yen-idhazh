@@ -162,18 +162,25 @@ def test_every_candidate_the_form_offers_is_one_the_sweep_knows() -> None:
 def test_a_case_writes_its_patch_into_the_entry_the_pointer_names(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Every candidate is an `inference` knob, and the scratch config is where it lands.
+    """A candidate spells llama-server's own flag, and lands in the server block.
 
     A patch written anywhere else would validate and measure the unchanged
-    server under the candidate's name.
+    server under the candidate's name. The head's case reaches outside that
+    block, so it is checked here too: taking the companion away must take its
+    speculation flags with it, or the server refuses to start.
     """
     scratch = tmp_path / "candidate-config"
     shutil.copytree(CONFIG_DIR, scratch)
     monkeypatch.setattr(runtime_sweep, "CANDIDATE_CONFIG", scratch)
     monkeypatch.setattr(runtime_sweep, "CONFIG_ROOT", tmp_path / "configs")
 
-    written = runtime_sweep.write_config("np1-1", {"n_parallel": 1})
+    written = runtime_sweep.write_config("np1-1", {"-np": 1})
 
     pointer = json.loads((written / "idhazh.json").read_text(encoding="utf-8"))["models_file"]
     entry = json.loads((written / pointer).read_text(encoding="utf-8"))["summarize"]
-    assert entry["inference"]["n_parallel"] == 1
+    assert entry["server"]["-np"] == 1
+
+    head_off = runtime_sweep.write_config("head-off-1", {"companion_files": []})
+    off = json.loads((head_off / pointer).read_text(encoding="utf-8"))["summarize"]
+    assert off["companion_files"] == []
+    assert not [flag for flag in off["server"] if flag.startswith("--spec-")]
