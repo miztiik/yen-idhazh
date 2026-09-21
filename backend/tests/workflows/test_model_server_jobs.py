@@ -6,6 +6,7 @@ import os
 import re
 import subprocess
 from pathlib import Path
+from typing import Final
 
 import pytest
 from conftest import REPO_ROOT, llama_server_flags, read_text
@@ -33,14 +34,10 @@ from ._harness import (
     MODEL_SERVER_STEPS,
     PYTHON_PROCS_FIELDS,
     PYTHON_PROCS_FILE,
-    RSS_SAMPLE_FIELDS,
     RSS_SAMPLE_FILE,
     RUNTIME_IDENTITY_JOBS,
     RUNTIME_IDENTITY_STEP,
-    RUNTIME_LOG_CAPTURES,
-    RUNTIME_LOG_LINES,
     RUNTIME_LOG_SUMMARY_STEPS,
-    RUNTIME_LOG_UNCLAIMED_TAG,
     SAMPLE_MEMORY_STEP,
     SAMPLE_SCRIPT,
     SCRAPE_STEP,
@@ -68,6 +65,10 @@ from ._harness import (
 )
 
 pytestmark = pytest.mark.workflow
+
+#: The step that prints what it found in llama-server's own log, and how much of
+#: the log that was.
+LOG_SUMMARY_STEP: Final = "Prompt cache log summary"
 
 
 def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
@@ -300,6 +301,94 @@ def _work_step(name: str) -> str:
     return _digest_step("work", name)
 
 
+def _run_work_step(name: str, tmp_path: Path) -> str:
+    """Run one step of the work job for real, in a directory holding its inputs."""
+    shell = _bash()
+    assert shell is not None
+    body = _script(_step(_load_workflows()["digest.yml"], "work", "name", name), name)
+    completed = subprocess.run(
+        [shell, "-c", body],
+        cwd=tmp_path,
+        env=_isolated_env(tmp_path),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return completed.stdout + completed.stderr
+
+
+@requires_bash
+def test_the_operator_print_finds_its_columns_wherever_the_sampler_puts_them(
+    tmp_path: Path,
+) -> None:
+    """Run the print over a reordered header, not over a table restating the order.
+
+    It used to read `rss-samples.tsv` by POSITION, and a column inserted
+    anywhere but the end shifted every field after it - the job log then
+    reported `python_procs`, a count of three, as a peak in kilobytes. Nothing
+    failed and the number was out by six orders of magnitude.
+
+    The agreement was held by a mapping written down in the test file, so the
+    sampler and its reader agreed with a third copy rather than with each other.
+    Reading the header by name kills the class: this drives the real step over
+    the same samples in two different column orders and expects one answer.
+    """
+    columns = _sample_header()
+    sample = {name: 1000 + index * 111 for index, name in enumerate(columns)}
+    sample["ts"] = 1
+
+    def _reading(order: list[str]) -> str:
+        rows = ["\t".join(order), "\t".join(str(sample[name]) for name in order)]
+        (tmp_path / RSS_SAMPLE_FILE).write_text("\n".join(rows) + "\n", encoding="utf-8")
+        return _run_work_step(MEMORY_SUMMARY_STEP, tmp_path)
+
+    written = _reading(columns)
+    reordered = _reading([columns[0], *reversed(columns[1:])])
+
+    expected = (
+        f"peak llama VmHWM {sample['llama_vmhwm_kb']} kB, "
+        f"peak python VmHWM {sample['python_vmhwm_kb']} kB, "
+        f"most the two held at once {sample['llama_vmrss_kb'] + sample['python_vmrss_kb']} kB"
+    )
+    assert expected in written, written
+    assert expected in reordered, (
+        f"{MEMORY_SUMMARY_STEP} reads {RSS_SAMPLE_FILE} by position, so moving a "
+        f"column moved the number it reports:\n{reordered}"
+    )
+
+
+@requires_bash
+def test_the_log_summary_says_how_much_of_the_log_it_matched(tmp_path: Path) -> None:
+    """The count that would have caught a pattern matching one line in forty.
+
+    `^(srv|slot) ` matched nothing and had never matched anything: every line
+    llama-server prints opens with a timestamp and a level letter, so the tag is
+    the third field. The step still printed on every run, because the
+    `n_ctx_slot` alternative beside it does match - which is why nobody noticed
+    the other half was dead.
+
+    A fixture of captured logs checked our pattern against a build we had
+    already run. The count checks it against the build the run is on, every run,
+    and says so the day llama.cpp renames a field.
+    """
+    matching = (
+        "0.03.804.331 I srv    load_model: initializing, n_slots = 1, "
+        "n_ctx_slot = 8192, kv_unified = 'false'",
+        "3.09.738.586 I slot get_availabl: id  0 | task -1 | selected slot by LCP "
+        "similarity, f_sim_best = 0.926 (> 0.100 thold), f_keep = 0.782",
+    )
+    unmatched = "0.00.061.210 I cmn    common_init_from_params: setting dry_penalty_last_n"
+    (tmp_path / SERVER_LOG_FILE).write_text(
+        "\n".join([*matching, unmatched]) + "\n", encoding="utf-8"
+    )
+
+    printed = _run_work_step(LOG_SUMMARY_STEP, tmp_path)
+
+    assert f"matched {len(matching)} of 3" in printed, printed
+    for line in matching:
+        assert line in printed, f"the step would not print {line!r}"
+
+
 def _sample_header() -> list[str]:
     """The columns the memory sampler writes, in the order it writes them."""
     script = read_text(SAMPLE_SCRIPT)
@@ -336,34 +425,6 @@ def test_both_model_server_jobs_sample_memory_with_the_one_shared_script() -> No
             f"the {job_name} job must sample the server its own start step wrote"
         )
         assert "nohup" in script, f"the {job_name} sampler must outlive its own step"
-
-
-def test_the_memory_sampler_and_its_reader_agree_on_the_columns() -> None:
-    """One writer, one reader, and the reader reads by position.
-
-    `rss-samples.tsv` is written by the sampler and printed by the operator step
-    in the same job. That print reads by POSITION, so a column inserted anywhere
-    but the end shifts every field after it and the job log reports
-    `python_procs` - a count of three - as a peak in kilobytes. Nothing fails,
-    and the number is off by six orders of magnitude.
-
-    That is why the sampler appends a new column at the END of the row. Nothing
-    held it there until this test.
-    """
-    header = _sample_header()
-    assert header[0] == "ts", header
-    assert len(header) == len(set(header)), f"a column name is written twice: {header}"
-
-    operator = _work_step(MEMORY_SUMMARY_STEP)
-    assert RSS_SAMPLE_FILE in operator, f"{MEMORY_SUMMARY_STEP} must read {RSS_SAMPLE_FILE}"
-    for field, column in sorted(RSS_SAMPLE_FIELDS.items()):
-        assert f"${field}" in operator, f"{MEMORY_SUMMARY_STEP} no longer reads field {field}"
-        assert header[field - 1] == column, (
-            f"{MEMORY_SUMMARY_STEP} reads field {field} as {column}, "
-            f"and the sampler now writes {header[field - 1]} there"
-        )
-
-
 def test_the_kernel_peak_is_written_once_and_printed_by_the_operator_step() -> None:
     """Two readings of a live kernel counter would not agree, so only one is taken.
 
@@ -428,83 +489,6 @@ def test_the_sampler_names_every_python_process_it_counts() -> None:
     upload = _artifact_upload(_load_workflows()["digest.yml"], "work", "runtime-log-${{ matrix.shard }}")
     uploaded = str(_mapping(upload.get("with"), "runtime log upload").get("path"))
     assert PYTHON_PROCS_FILE in uploaded, "a roll-call nobody can download answers nothing"
-
-
-def _log_summary_pattern(job_name: str, step_name: str, log_file: str) -> re.Pattern[str]:
-    """The `grep -E` the cache summary step runs, as this test can run it too.
-
-    Read out of the workflow rather than restated here. A pattern a test writes
-    down for itself agrees with itself and proves nothing.
-    """
-    found = re.search(
-        rf"grep -E '([^']*)' {re.escape(log_file)}", _digest_step(job_name, step_name)
-    )
-    assert found, f"{step_name} must grep {log_file} for the lines the runtime prints"
-    return re.compile(found.group(1))
-
-
-def test_the_cache_log_summary_matches_the_lines_the_runtime_actually_prints() -> None:
-    """The pattern that found one line in forty, and the captures that say so.
-
-    `^(srv|slot) ` matched nothing and had never matched anything. Every line
-    llama-server prints opens with a timestamp and a level letter, so the tag is
-    the third field:
-
-        0.03.804.331 I srv    load_model: initializing, n_slots = 1, ...
-
-    The step still printed something on every run, because the `n_ctx_slot`
-    alternative beside it does match - which is why nobody noticed the other
-    half was dead. Measured over the four committed captures: the old anchor
-    found 1 line of 40 and it was the `n_ctx_slot` one, so 37 lines of prefix
-    reuse went unprinted on every shard of every run.
-
-    Driven from real captures rather than from hand-written text, because a
-    pattern nobody ran against a real line is how this got here (Guardrail #7). The
-    four strings in `RUNTIME_LOG_LINES` are checked as well, for the two field
-    spellings no capture carries.
-    """
-    assert RUNTIME_LOG_CAPTURES, "the committed captures this pattern is checked against are gone"
-
-    for job_name, (step_name, log_file) in sorted(RUNTIME_LOG_SUMMARY_STEPS.items()):
-        pattern = _log_summary_pattern(job_name, step_name, log_file)
-
-        for line in RUNTIME_LOG_LINES:
-            assert pattern.search(line), f"{step_name} would not print {line!r}"
-
-        for capture in RUNTIME_LOG_CAPTURES:
-            lines = read_text(capture).splitlines()
-            missed = [line for line in lines if not pattern.search(line)]
-            unclaimed = [line for line in missed if f" {RUNTIME_LOG_UNCLAIMED_TAG} " in line]
-            assert missed == unclaimed, (
-                f"{step_name} would not print these lines of {capture.name}: {missed[:3]}"
-            )
-            assert len(lines) - len(missed) > len(lines) // 2, (
-                f"{step_name} prints {len(lines) - len(missed)} of {len(lines)} lines "
-                f"of {capture.name}, which is not a summary of the log"
-            )
-
-
-def test_the_prefix_reuse_fields_match_a_real_line_too() -> None:
-    """The other half of the same step, and this half was never broken.
-
-    `f_sim_best` and `f_keep` are greped as `<field> = <number>` and both do
-    match: llama-server prints them on one line together, and the two `grep -oE`
-    passes take one number each. Checked because the anchor above was not, and
-    "the rest of the step is fine" was an assumption until now.
-    """
-    for job_name, (step_name, log_file) in sorted(RUNTIME_LOG_SUMMARY_STEPS.items()):
-        script = _digest_step(job_name, step_name)
-        found = re.search(rf'grep -oE "\$\{{field\}} ([^"]*)" {re.escape(log_file)}', script)
-        assert found, f"{step_name} must grep each field as a name and a number"
-        fields = re.search(r"for field in ([a-z_ ]+); do", script)
-        assert fields, f"{step_name} must name the fields it loops over"
-
-        for field in fields.group(1).split():
-            pattern = re.compile(f"{field} {found.group(1)}")
-            seen = sum(len(pattern.findall(read_text(path))) for path in RUNTIME_LOG_CAPTURES)
-            assert seen, f"{step_name} finds no {field} in any committed capture"
-
-
 def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
     """A server on one port and a stage posting to another is every item failing.
 

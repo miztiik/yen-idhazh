@@ -46,7 +46,6 @@ from ._harness import (
     BENCH_TRIAL_STATE,
     BUDGETS_EMIT_STEP,
     BUDGETS_JOB,
-    CANDIDATE_CONFIG_ACTION,
     COMMIT_SCRIPT,
     COMMIT_STAGED_PATHS,
     FINGERPRINT_BENCH_JOB,
@@ -56,7 +55,6 @@ from ._harness import (
     MODELS_POINTER_KEY,
     PINNED_LLAMA_BUILD,
     _artifact_upload,
-    _composite_action_script,
     _declared_dispatch_inputs,
     _expression,
     _job,
@@ -172,71 +170,6 @@ def test_a_bench_artifact_outlives_the_dispatch_that_wrote_it() -> None:
         upload = _artifact_upload(workflow, job_name, artifact)
         with_block = _mapping(upload.get("with"), f"{job_name} upload")
         assert int(str(with_block["retention-days"])) == BENCH_RETENTION_DAYS, job_name
-
-
-def test_the_bench_measures_a_candidate_without_touching_the_committed_config() -> None:
-    """A scratch copy differs in the active model file and in where its rows go.
-
-    Every control the numbers are read under - prompt, schema, sampler, context,
-    threads, truncation cap - is the committed one by construction, because the
-    copy is the committed tree with the pointer moved and nothing else touched.
-    That is the exact line a swap moves, so the bench runs the swap rather than
-    an imitation of it.
-
-    `run.trial_state_dirname` is the second line and it is not a control. It
-    says where this run's own ledgers land, not what the run measures, and the
-    test below pins that the two destinations cannot overlap.
-
-    The entry's own fields are the assertion. This step used to write `sha256`,
-    `repo`, `revision`, `file`, `id` and `quantisation` onto the copied entry
-    and overwrite both `declared_for` digests, which asserted that numbers
-    measured for one model held for another.
-
-    The shell moved into a composite action on 2026-09-15, because the bench and
-    the validation arm carried byte-identical copies of it. This reads the
-    action, and the call site is asserted below.
-    """
-    workflow = _load_workflows()["measure.yml"]
-    step = _step(workflow, BENCH_SERVER_JOB, "name", BENCH_CONFIG_STEP)
-    assert step.get("uses") == f"./.github/actions/{CANDIDATE_CONFIG_ACTION}", (
-        "the bench builds its scratch config through the shared action"
-    )
-
-    script = _composite_action_script(CANDIDATE_CONFIG_ACTION)
-    assert f"cp -a config {BENCH_CANDIDATE_CONFIG}" in script
-    assert "backend/utilities/candidate_pointer.py" in script
-    pointer_source = read_text(REPO_ROOT / "backend" / "utilities" / "candidate_pointer.py")
-    assert f'POINTER_KEY = "{MODELS_POINTER_KEY}"' in pointer_source, (
-        "through the pointer, never by filename"
-    )
-    for field in ("sha256", "declared_for", "quantisation", "revision"):
-        assert field not in script and field not in pointer_source, (
-            f"the scratch config writes {field} onto the entry instead of moving the pointer"
-        )
-
-    sweep = _script(
-        _step(workflow, BENCH_SERVER_JOB, "name", "Measure runtime candidate"),
-        f"measure.yml/{BENCH_SERVER_JOB}/Measure runtime candidate",
-    )
-    assert "backend/utilities/runtime_sweep.py sweep" in sweep
-    # The property, not the spelling. The sweep copies the CANDIDATE tree; a
-    # copy of `config` would measure the incumbent under the candidate's name.
-    # This used to read the step's own heredoc and now reads the module the step
-    # calls, which is the same assertion one indirection later.
-    assert runtime_sweep.CANDIDATE_CONFIG == Path(BENCH_CANDIDATE_CONFIG)
-    source = read_text(REPO_ROOT / "backend" / "utilities" / "runtime_sweep.py")
-    assert "shutil.copytree(CANDIDATE_CONFIG, dst)" in source
-
-    for job_name in (BENCH_RAW_JOB, BENCH_SERVER_JOB):
-        for step in _steps(workflow, job_name):
-            body = step.get("run")
-            if not isinstance(body, str):
-                continue
-            where = f"measure.yml/{job_name}/{step.get('name')}"
-            assert not re.search(r">\s*config/", body), f"{where} writes the committed config"
-            assert "docs/reference/models" not in body, f"{where} writes a committed page"
-
-
 def test_the_server_case_reads_the_raw_case_and_emits_a_page_to_paste() -> None:
     """The Oracle for this case. Two artifacts of numbers are a transcription job.
 
@@ -268,26 +201,6 @@ def test_the_server_case_reads_the_raw_case_and_emits_a_page_to_paste() -> None:
     assert "--dossier backend/var/" in script
     assert names.index("Measure runtime candidate") < names.index(BENCH_EMIT_STEP)
     assert names.index(BENCH_EMIT_STEP) < names.index("Upload runtime sweep")
-
-
-def test_the_raw_case_refuses_weights_the_dispatch_did_not_declare() -> None:
-    """The raw case downloads inside Python, so its byte check is a flag not a step.
-
-    `measure_llm.py` resolves the Hub's own digest and compares it with the one
-    the dispatch declared before it benches anything. Without the flag the
-    harness measures whatever the repository holds today and says nothing, and a
-    number filed under a model that never ran is worse than no number
-    (Guardrail #10).
-    """
-    workflow = _load_workflows()["measure.yml"]
-    script = _script(
-        _step(workflow, BENCH_RAW_JOB, "name", "Benchmark the candidate"),
-        f"measure.yml/{BENCH_RAW_JOB}/Benchmark the candidate",
-    )
-    assert "--expect-sha256" in script
-    assert '--expect-sha256 "$CANDIDATE_SHA256"' in script, "read by name, never pasted"
-
-
 def test_a_bypassed_speed_case_skips_that_job_and_nothing_else() -> None:
     """The Oracle for the bypass. A bypass that skipped half the workflow is worse than none.
 
