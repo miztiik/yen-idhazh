@@ -150,22 +150,6 @@ def test_the_repeat_count_is_dispatchable_and_the_floor_is_enforced_in_code() ->
         )
 
 
-def test_the_draft_head_is_a_case_the_bench_can_pair_on_one_machine() -> None:
-    """Two dispatches landed on two processors and answered nothing.
-
-    On 2026-09-15 the cases differed by 5.3 percent across runs while the same
-    `llama-bench` decode test on the same weights differed by 8.8 percent
-    between two machines both reporting EPYC 7763. A paired case cancels the
-    machine, and needs no second download because both open the same weights.
-    """
-    assert "no_draft" in RUNTIME_CANDIDATES
-
-    update, workers = runtime_sweep.candidate_update("no_draft", threads=4, threads_batch=4)
-
-    assert update == {"draft": None}
-    assert workers == 1
-
-
 def test_every_candidate_the_form_offers_is_one_the_sweep_knows() -> None:
     """A name in the dropdown the module refuses is an hour spent to reach a typo."""
     for name in sorted(RUNTIME_CANDIDATES):
@@ -175,24 +159,21 @@ def test_every_candidate_the_form_offers_is_one_the_sweep_knows() -> None:
         runtime_sweep.candidate_update("no-such-case", threads=4, threads_batch=4)
 
 
-def test_a_case_that_changes_the_draft_head_reaches_outside_inference(
+def test_a_case_writes_its_patch_into_the_entry_the_pointer_names(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """`draft` is a sibling of `inference`, not a knob inside it.
+    """Every candidate is an `inference` knob, and the scratch config is where it lands.
 
-    Applying it to `inference` writes a key the models contract refuses, so the
-    case would die on a validation error rather than measure anything. It is
-    written rather than indexed because an entry that declares no draft head
-    has no such key to index.
+    A patch written anywhere else would validate and measure the unchanged
+    server under the candidate's name.
     """
     scratch = tmp_path / "candidate-config"
     shutil.copytree(CONFIG_DIR, scratch)
     monkeypatch.setattr(runtime_sweep, "CANDIDATE_CONFIG", scratch)
     monkeypatch.setattr(runtime_sweep, "CONFIG_ROOT", tmp_path / "configs")
 
-    written = runtime_sweep.write_config("no_draft-1", {"draft": None})
+    written = runtime_sweep.write_config("np1-1", {"n_parallel": 1})
 
     pointer = json.loads((written / "idhazh.json").read_text(encoding="utf-8"))["models_file"]
     entry = json.loads((written / pointer).read_text(encoding="utf-8"))["summarize"]
-    assert entry["draft"] is None
-    assert "draft" not in entry["inference"], "the patch went to inference and would be refused"
+    assert entry["inference"]["n_parallel"] == 1

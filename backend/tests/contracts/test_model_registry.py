@@ -386,20 +386,23 @@ def test_a_second_entry_naming_other_weights_is_refused() -> None:
     assert "decodes on the weights the summariser's server holds" in str(raised.value)
 
 
-def test_the_same_weights_are_offered_with_the_draft_head_and_without() -> None:
-    """Turning speculation off is a pointer change, never an edit to an entry.
+def test_a_run_manifest_that_named_a_draft_head_still_reads() -> None:
+    """The read side: six committed `run.json` files carry `draft` on `model_ref`.
 
-    Editing `draft` in place is a change somebody has to remember to undo, and
-    a run that publishes is not where that is discovered.
+    `frontend/src/lib/server/payload.ts` opens every one of them at each build,
+    and `Model` forbids a key it no longer declares - so without the migration
+    the field left in a commit that today's build could not read yesterday's run
+    with (`CLAUDE.md` section 11). Proved by putting the key back rather than by
+    reading a committed day, so it cannot age out of retention.
     """
-    drafted = ModelsConfig.from_json(read_text(CONFIG_DIR / "models/gemma-4-e4b-qat.json"))
-    plain = ModelsConfig.from_json(read_text(CONFIG_DIR / "models/gemma-4-e4b-qat-no-draft.json"))
+    current = json.loads(read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json"))
+    for run in current["runs"]:
+        for used in run["models"]:
+            used["model_ref"]["draft"] = None
 
-    assert drafted.summarize.draft is not None
-    assert plain.summarize.draft is None
-    assert plain.summarize.sha256 == drafted.summarize.sha256, "a different model, not a switch"
-    assert plain.summarize.inference == drafted.summarize.inference, "the settings must not drift"
-    assert plain.summarize.turns == drafted.summarize.turns
+    parsed = RunManifest.model_validate(current)
+
+    assert not hasattr(parsed.runs[0].models[0].model_ref, "draft")
 
 
 def test_a_run_manifest_written_before_the_settings_moved_still_reads() -> None:

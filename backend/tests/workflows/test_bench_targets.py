@@ -767,83 +767,13 @@ def test_the_bench_corpus_size_is_a_knob_and_the_cut_follows_it(
         runtime_sweep.freeze_corpus("2026-09-17", items=2)
 
 
-def test_the_draft_depth_set_runs_four_cases_and_no_baseline() -> None:
-    """The reference is the head being OFF, not the unchanged server.
+def test_a_named_candidate_runs_the_baseline_and_rejects_a_difference() -> None:
+    """A named candidate answers what a setting costs, so it runs two cases."""
+    plan = runtime_sweep.case_plan("np1", threads=4, threads_batch=4)
 
-    The question is what the head does to the words, so the only honest zero is
-    the case that has no head. A baseline case would be a fifth pass over the
-    corpus answering a question two earlier dispatches already answered.
-    """
-    plan = runtime_sweep.case_plan(runtime_sweep.DRAFT_DEPTH, threads=4, threads_batch=4)
-
-    labels = [label for label, _, _ in plan.cases]
-    assert labels == ["head_off", "n_max_1", "n_max_2", "n_max_4"]
-    assert plan.reference == runtime_sweep.HEAD_OFF
-    assert sweep_verdict.BASELINE not in labels, "a case set runs no baseline"
-    assert plan.between_cases == sweep_verdict.BETWEEN_CASES_IS_THE_READING
-
-
-def test_every_draft_depth_case_is_pinned_to_temperature_zero() -> None:
-    """The single control the whole run rests on.
-
-    At the committed 0.2 the sampler alone reworded six of seven articles
-    between two readings of ONE configuration, so the head's effect and the
-    sampler's noise arrive as one number nobody can split. Three cases pinned
-    and one forgotten is a run that looks valid and measures nothing.
-    """
-    plan = runtime_sweep.case_plan(runtime_sweep.DRAFT_DEPTH, threads=4, threads_batch=4)
-
-    assert [update["temperature"] for _, update, _ in plan.cases] == [0.0, 0.0, 0.0, 0.0]
-
-
-def test_a_named_candidate_still_runs_the_baseline_and_rejects_a_difference() -> None:
-    """The existing two-case sweep is unchanged by the case-set path."""
-    plan = runtime_sweep.case_plan("no_draft", threads=4, threads_batch=4)
-
-    assert [label for label, _, _ in plan.cases] == [sweep_verdict.BASELINE, "no_draft"]
+    assert [label for label, _, _ in plan.cases] == [sweep_verdict.BASELINE, "np1"]
     assert plan.reference == sweep_verdict.BASELINE
     assert plan.between_cases == sweep_verdict.BETWEEN_CASES_REJECTS
-
-
-def test_a_depth_case_moves_n_max_and_keeps_the_weights_that_identify_the_head(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A case moves ONE field. The repository, the revision and the two digests
-    that say which bytes the head is stay exactly where they were, or the entry
-    stops naming the weights it measured."""
-    scratch = tmp_path / "candidate-config"
-    shutil.copytree(REPO_ROOT / "config", scratch)
-    candidate_pointer.point_at("models/gemma-4-e4b-qat.json", scratch=scratch)
-    monkeypatch.setattr(runtime_sweep, "CANDIDATE_CONFIG", scratch)
-    monkeypatch.setattr(runtime_sweep, "CONFIG_ROOT", tmp_path / "configs")
-    declared = json.loads(
-        read_text(REPO_ROOT / "config" / "models" / "gemma-4-e4b-qat.json")
-    )["summarize"]["draft"]
-
-    written = runtime_sweep.write_config("n_max_4-1", {"draft": {"n_max": 4}, "temperature": 0.0})
-
-    payload = json.loads((written / "models" / "gemma-4-e4b-qat.json").read_text(encoding="utf-8"))
-    draft = payload["summarize"]["draft"]
-    assert draft["n_max"] == 4, "the case moved the depth"
-    for key in ("repo", "revision", "file", "sha256", "spec_type"):
-        assert draft[key] == declared[key], f"{key} identifies the head and may not move"
-    assert payload["summarize"]["inference"]["temperature"] == 0.0
-
-
-def test_the_head_off_case_removes_the_draft_block_entirely(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Null is one model and no speculation, which is what case A has to be."""
-    scratch = tmp_path / "candidate-config"
-    shutil.copytree(REPO_ROOT / "config", scratch)
-    candidate_pointer.point_at("models/gemma-4-e4b-qat.json", scratch=scratch)
-    monkeypatch.setattr(runtime_sweep, "CANDIDATE_CONFIG", scratch)
-    monkeypatch.setattr(runtime_sweep, "CONFIG_ROOT", tmp_path / "configs")
-
-    written = runtime_sweep.write_config("head_off-1", {"draft": None, "temperature": 0.0})
-
-    payload = json.loads((written / "models" / "gemma-4-e4b-qat.json").read_text(encoding="utf-8"))
-    assert payload["summarize"]["draft"] is None
 
 
 def test_the_dispatch_corpus_size_is_written_into_the_config_every_stage_reads(

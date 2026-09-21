@@ -9,57 +9,6 @@ export interface ConfigDigest {
 	sha256: string;
 }
 
-/**
- * A second, much smaller set of weights that guesses ahead of the first.
- *
- * **Speculative decoding is output-identical by construction, and this
- * configuration is not doing that.** The target is supposed to verify every
- * drafted token and reject any it would not have produced, so the text is the
- * text the target would have written alone. The publisher of these weights
- * makes exactly that claim for this head and this flag. Two paired dispatches
- * refused it on nine of nine articles: every summary changed when the head was
- * on. Whether the cause is the head, the acceptance rule or the pinned
- * llama.cpp build is unmeasured -
- * `docs/reference/benchmarks/what-the-draft-head-is-worth.md` holds the
- * readings and what is still open.
- *
- * **So this block is not a decoding knob priced on cost alone.** Until a
- * configuration is shown to be output-identical, turning the head on or off is
- * a model change and the configuration that was qualified is the one that has
- * to publish.
- *
- * What it can also do is waste time. A draft the target keeps rejecting costs a
- * forward pass per rejected token and returns nothing, so the acceptance rate
- * is the number that says whether it paid. `llama-server` publishes it:
- * `llamacpp:spec_decode_num_accepted_tokens_total` over
- * `llamacpp:spec_decode_num_draft_tokens_total`, both already in the
- * `/metrics` body a shard reads at job end.
- */
-export interface DraftConfig {
-	/** Hugging Face repository the draft GGUF is in. */
-	repo: string;
-
-	/** The hub commit. Required here and optional on ModelRef: a block somebody added by hand is a block that can pin properly from the start. */
-	revision: string;
-
-	file: string;
-
-	/** Refused before the server starts, like the target's. */
-	sha256: string;
-
-	byte_count?: number | null;
-
-	spec_type?: SpeculationType;
-
-	/** How many tokens are drafted before the target verifies. The runtime's own default. Higher drafts further ahead and wastes more when the draft is wrong, so it is a bet on how predictable the text is. */
-	n_max?: number;
-
-	n_min?: number;
-
-	/** Below this probability the draft stops guessing and lets the target decode. 0.0 is the runtime default and means never stop early. */
-	p_min?: number;
-}
-
 /** Decoding is pinned here so a change of output is a reviewable diff. */
 export interface InferenceConfig {
 	/** The window one sequence gets. The default stays 8192 because it is the conservative window for weights nobody has put in front of a runner; each model file sets its own window. Whether its KV cache fits is decided by what the machine has free, not by the process's resident memory alone - docs/reference/pipeline-cost.md. */
@@ -186,9 +135,6 @@ export interface ModelRef {
 
 	/** The runtime this entry's weights are served on. It sits on the entry for the same reason `hf_base_repo` does: held apart, a model swap moves the weights and leaves the numbers, and llama-server starts on them without raising. `ModelsConfig` refuses a block whose declared_for is not this entry's sha256, so a default block under measured weights is refused rather than inherited. */
 	inference?: InferenceConfig;
-
-	/** A second, smaller set of weights that drafts tokens this entry's model then verifies. Null is the default and means one model and no speculation. It sits beside `inference` rather than inside it because it names weights of its own - a repository, a commit, a filename and a digest - and a block that fetches a file is not a decoding knob. On `ModelRef` rather than `ModelEntry` so a run record says whether the day was drafted; a run that cannot answer that cannot explain its own throughput. */
-	draft?: DraftConfig | null;
 }
 
 export const MODEL_ROLE = ['summarize', 'route'] as const;
@@ -343,29 +289,6 @@ export interface RunRecord {
 export const RUN_STATUS = ['completed', 'partial', 'failed'] as const;
 
 export type RunStatus = (typeof RUN_STATUS)[number];
-
-/**
- * Which kind of speculation the runtime is told to use.
- *
- * Only the three this project can actually stand up. Build b10598 accepts
- * eleven - the full list is `none`, `draft-simple`, `draft-eagle3`,
- * `draft-mtp`, `draft-dflash`, `draft-dspark` and five `ngram-*` variants,
- * read off `llama-server --help` by `.github/workflows/probe.yml` on
- * 2026-09-15. The ones left out either need a purpose-built draft head
- * nobody has published for our weights, or a lookup cache nothing here
- * writes. A closed choice is what stops an operator naming one of them and
- * getting a server that starts and drafts nothing.
- *
- * `draft-mtp` is here because the head now exists: Unsloth publishes a
- * multi-token-prediction head for the Gemma entry, and the publisher's guide
- * names this exact value. Naming `draft-simple` for that head instead is not
- * a slow server, it is a dead one - every request failed on
- * `decode() failed: failed to process speculative batch`, five of five, on
- * run 34941400155.
- */
-export const SPECULATION_TYPE = ['draft-simple', 'draft-mtp', 'ngram-simple'] as const;
-
-export type SpeculationType = (typeof SPECULATION_TYPE)[number];
 
 export interface VerticalCount {
 	id: string;

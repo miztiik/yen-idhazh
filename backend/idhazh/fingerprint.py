@@ -240,15 +240,6 @@ NOT_DIGESTED: Final[Mapping[str, Undigested]] = MappingProxyType(
             "bytes as model_sha256, so recording it twice would say a swap happened "
             "twice.",
         ),
-        "draft": Undigested(
-            False,
-            "The second, smaller set of weights that guesses ahead. It cannot move a "
-            "published word, and that is a property of the mechanism rather than a "
-            "hope: the target model verifies every drafted token and rejects any it "
-            "would not itself have produced, so a drafted run and an undrafted run "
-            "write the same text. What it moves is how long the run took, which "
-            "state/host-fingerprint/ records with the acceptance rate beside it.",
-        ),
         "file": Undigested(
             False,
             "The filename inside the repository. model_sha256 is the bytes that were "

@@ -1,6 +1,6 @@
 # Models
 
-**Last Updated**: 2026-09-16
+**Last Updated**: 2026-09-21
 One row a model. Each row points at that model's **dossier** - the page holding
 that model's identity and its one current reading of every quantity, with the
 hardware that took it, the date and the spread.
@@ -70,15 +70,13 @@ git grep -n -E '"(id|file|sha256)"' -- config/models/
 The first names the active file; the second prints the configuration id, the
 weight file and the SHA-256 the runtime checks the downloaded bytes against.
 
-**One model can have more than one file, and two models do.**
-`gemma-4-e4b-qat.json` runs its multi-token draft head;
-`gemma-4-e4b-qat-no-draft.json` is the same weights with `draft` null.
+**One model can have more than one file, and one model does.**
 `qwen3.5-9b-q4km-thinking.json` is the incumbent's file with
 `turns.thinking_close` declared, so the same weights reason before they answer.
-Each pair carries one `sha256`, so the second command above prints the same
+The pair carries one `sha256`, so the second command above prints the same
 digest twice - that is a pair working, not a duplicate. Which one is in force is
 the `models_file` line, and nothing else has to change to move between them
-([../architecture/summarize/model-boundary.md](../architecture/summarize/model-boundary.md#a-second-smaller-model-that-guesses-ahead)).
+([../architecture/summarize/model-boundary.md](../architecture/summarize/model-boundary.md)).
 
 **A second file earns no second dossier.** This index is organised by subject -
 one page a model - so a file that names weights already on a page is described
@@ -106,7 +104,7 @@ definitions.
 ## See also
 
 - [models/qwen3.5-9b-q4km.md](models/qwen3.5-9b-q4km.md) - the configured summarizer.
-- [models/gemma-4-e4b-qat.md](models/gemma-4-e4b-qat.md) - a benched candidate, and the one that declares a draft head.
+- [models/gemma-4-e4b-qat.md](models/gemma-4-e4b-qat.md) - a benched candidate.
 - [models/ornith-1.5-9b-q5km.md](models/ornith-1.5-9b-q5km.md) - a benched candidate.
 - [pipeline-cost.md](pipeline-cost.md) - the instrument log: everything measured that is not a property of one model.
 - [documentation-structure.md](documentation-structure.md) - where each kind of page lives, and what a dossier may not hold.

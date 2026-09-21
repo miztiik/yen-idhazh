@@ -23,83 +23,6 @@
       "title": "ConfigDigest",
       "type": "object"
     },
-    "DraftConfig": {
-      "additionalProperties": false,
-      "description": "A second, much smaller set of weights that guesses ahead of the first.\n\n**Speculative decoding is output-identical by construction, and this\nconfiguration is not doing that.** The target is supposed to verify every\ndrafted token and reject any it would not have produced, so the text is the\ntext the target would have written alone. The publisher of these weights\nmakes exactly that claim for this head and this flag. Two paired dispatches\nrefused it on nine of nine articles: every summary changed when the head was\non. Whether the cause is the head, the acceptance rule or the pinned\nllama.cpp build is unmeasured -\n`docs/reference/benchmarks/what-the-draft-head-is-worth.md` holds the\nreadings and what is still open.\n\n**So this block is not a decoding knob priced on cost alone.** Until a\nconfiguration is shown to be output-identical, turning the head on or off is\na model change and the configuration that was qualified is the one that has\nto publish.\n\nWhat it can also do is waste time. A draft the target keeps rejecting costs a\nforward pass per rejected token and returns nothing, so the acceptance rate\nis the number that says whether it paid. `llama-server` publishes it:\n`llamacpp:spec_decode_num_accepted_tokens_total` over\n`llamacpp:spec_decode_num_draft_tokens_total`, both already in the\n`/metrics` body a shard reads at job end.",
-      "properties": {
-        "byte_count": {
-          "anyOf": [
-            {
-              "minimum": 1,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Byte Count"
-        },
-        "file": {
-          "minLength": 1,
-          "title": "File",
-          "type": "string"
-        },
-        "n_max": {
-          "default": 3,
-          "description": "How many tokens are drafted before the target verifies. The runtime's own default. Higher drafts further ahead and wastes more when the draft is wrong, so it is a bet on how predictable the text is.",
-          "maximum": 64,
-          "minimum": 1,
-          "title": "N Max",
-          "type": "integer"
-        },
-        "n_min": {
-          "default": 0,
-          "maximum": 64,
-          "minimum": 0,
-          "title": "N Min",
-          "type": "integer"
-        },
-        "p_min": {
-          "default": 0.0,
-          "description": "Below this probability the draft stops guessing and lets the target decode. 0.0 is the runtime default and means never stop early.",
-          "maximum": 1.0,
-          "minimum": 0.0,
-          "title": "P Min",
-          "type": "number"
-        },
-        "repo": {
-          "description": "Hugging Face repository the draft GGUF is in.",
-          "minLength": 1,
-          "title": "Repo",
-          "type": "string"
-        },
-        "revision": {
-          "description": "The hub commit. Required here and optional on ModelRef: a block somebody added by hand is a block that can pin properly from the start.",
-          "pattern": "^[0-9a-f]{40}$",
-          "title": "Revision",
-          "type": "string"
-        },
-        "sha256": {
-          "description": "Refused before the server starts, like the target's.",
-          "pattern": "^[0-9a-f]{64}$",
-          "title": "Sha256",
-          "type": "string"
-        },
-        "spec_type": {
-          "$ref": "#/$defs/SpeculationType",
-          "default": "draft-simple"
-        }
-      },
-      "required": [
-        "repo",
-        "revision",
-        "file",
-        "sha256"
-      ],
-      "title": "DraftConfig",
-      "type": "object"
-    },
     "InferenceConfig": {
       "additionalProperties": false,
       "description": "Decoding is pinned here so a change of output is a reviewable diff.",
@@ -480,18 +403,6 @@
           "default": null,
           "description": "How many bytes those weights are, as the hub reports them. Optional: an entry nobody has fetched yet declares none, and the run then records the size it opened on both sides rather than comparing a number to itself. It sits beside sha256 because it is the same kind of fact and has the same source, and because a qualification that had to be told it on the command line was a fact about these weights living somewhere other than the file that names them.",
           "title": "Byte Count"
-        },
-        "draft": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/DraftConfig"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "A second, smaller set of weights that drafts tokens this entry's model then verifies. Null is the default and means one model and no speculation. It sits beside `inference` rather than inside it because it names weights of its own - a repository, a commit, a filename and a digest - and a block that fetches a file is not a decoding knob. On `ModelRef` rather than `ModelEntry` so a run record says whether the day was drafted; a run that cannot answer that cannot explain its own throughput."
         },
         "file": {
           "minLength": 1,
@@ -1016,16 +927,6 @@
       "title": "RunStatus",
       "type": "string"
     },
-    "SpeculationType": {
-      "description": "Which kind of speculation the runtime is told to use.\n\nOnly the three this project can actually stand up. Build b10598 accepts\neleven - the full list is `none`, `draft-simple`, `draft-eagle3`,\n`draft-mtp`, `draft-dflash`, `draft-dspark` and five `ngram-*` variants,\nread off `llama-server --help` by `.github/workflows/probe.yml` on\n2026-09-15. The ones left out either need a purpose-built draft head\nnobody has published for our weights, or a lookup cache nothing here\nwrites. A closed choice is what stops an operator naming one of them and\ngetting a server that starts and drafts nothing.\n\n`draft-mtp` is here because the head now exists: Unsloth publishes a\nmulti-token-prediction head for the Gemma entry, and the publisher's guide\nnames this exact value. Naming `draft-simple` for that head instead is not\na slow server, it is a dead one - every request failed on\n`decode() failed: failed to process speculative batch`, five of five, on\nrun 34941400155.",
-      "enum": [
-        "draft-simple",
-        "draft-mtp",
-        "ngram-simple"
-      ],
-      "title": "SpeculationType",
-      "type": "string"
-    },
     "VerticalCount": {
       "additionalProperties": false,
       "properties": {
@@ -1095,6 +996,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "The embedded ModelRef loses `draft`; six records that carry it still read.",
+      "version": "2026-09-21",
+      "why": "The draft head is gone, and nothing replaces the field it was declared in."
+    },
+    {
       "change": "Embedded inference gains CPU, cache, checkpoint and template controls.",
       "version": "2026-09-20",
       "why": "Run records must carry the settings a model used."
@@ -1108,11 +1014,6 @@
       "change": "A run records the merge line it grouped the day at.",
       "version": "2026-09-18",
       "why": "The line moves now, so a published day has to say which one shaped it."
-    },
-    {
-      "change": "The embedded ModelRef's inference.seed is the sampling control.",
-      "version": "2026-09-17T02:00",
-      "why": "It follows models-config, where every entry now pins temperature 0.2."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -1136,7 +1037,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-20",
+      "default": "2026-09-21",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1148,5 +1049,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-09-20"
+  "version": "2026-09-21"
 }

@@ -1,6 +1,6 @@
 # The model on a runner
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-21
 
 How a job gets the inference runtime and the weights, and how it proves it got
 the ones it asked for. Every value here is exact: a pin, a cache key, a digest,
@@ -100,13 +100,12 @@ in [ci-environment.md](ci-environment.md#platform-limits-that-shape-the-workflow
 ### `probe.yml` asks the build what it accepts
 
 The pin says which binary runs. It does not say what that binary understands,
-and a models entry naming a speculation kind the build cannot drive fails late
-and quietly: the server starts, loads the draft head, drafts nothing, and the
-job spends its hour before anybody reads the flag back. `probe.yml` installs the
-same asset the three runtime arms install, runs `llama-server --help`, prints
-the speculation lines to the job summary, and keeps the whole help text as a
-30-day artifact - so the next question about this build is answered by
-downloading that artifact rather than by a second run.
+and an entry naming a flag or a value the build cannot drive fails late and
+quietly: the server starts and the job spends its hour before anybody reads the
+flag back. `probe.yml` installs the same asset the three runtime arms install,
+runs `llama-server --help`, prints what it found to the job summary, and keeps
+the whole help text as a 30-day artifact - so the next question about this build
+is answered by downloading that artifact rather than by a second run.
 
 It is a `workflow_dispatch` with no scheduled trigger and it loads no weights,
 so it costs about a minute of runner time. It takes no input for a build,

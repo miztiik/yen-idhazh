@@ -312,6 +312,11 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21",
+            change="The embedded ModelRef loses `draft`; six records that carry it still read.",
+            why="The draft head is gone, and nothing replaces the field it was declared in.",
+        ),
+        ChangelogEntry(
             version="2026-09-20",
             change="Embedded inference gains CPU, cache, checkpoint and template controls.",
             why="Run records must carry the settings a model used.",
@@ -325,11 +330,6 @@ class RunManifest(Contract):
             version="2026-09-18",
             change="A run records the merge line it grouped the day at.",
             why="The line moves now, so a published day has to say which one shaped it.",
-        ),
-        ChangelogEntry(
-            version="2026-09-17T02:00",
-            change="The embedded ModelRef's inference.seed is the sampling control.",
-            why="It follows models-config, where every entry now pins temperature 0.2.",
         ),
         ChangelogEntry(
             version="2026-08-21",

@@ -45,8 +45,7 @@ WEIGHTS_DIR = Path("backend/models")
 CAPTURES_ROOT = ROOT / CAPTURES_DIRNAME
 
 #: What each named candidate changes about the server it starts. Every value is
-#: an `inference` knob except `draft`, which is a sibling of `inference` and is
-#: lifted one level up by `write_config`.
+#: an `inference` knob.
 CANDIDATE_UPDATES: dict[str, tuple[dict[str, Any], int]] = {
     "baseline": ({}, 1),
     "np1": ({"n_parallel": 1}, 1),
@@ -57,10 +56,6 @@ CANDIDATE_UPDATES: dict[str, tuple[dict[str, Any], int]] = {
     "kv_q8": ({"cache_type_k": "q8_0", "cache_type_v": "q8_0"}, 1),
     "prio_poll": ({"priority": 2, "poll": 100}, 1),
     "np2_inflight": ({"n_parallel": 2, "n_ctx": 16384}, 2),
-    # The one candidate that reaches outside `inference`. A model file declaring
-    # no draft head answers the question it exists for: what the head is worth,
-    # measured on ONE machine instead of across two dispatches.
-    "no_draft": ({"draft": None}, 1),
 }
 
 #: Two knobs whose value an operator types, so each is bounded where it is read.
@@ -83,44 +78,9 @@ class CaseSet(NamedTuple):
     between_cases: str
 
 
-#: The case that answers whether the head changes the words, and whether `n_max`
-#: is what controls it. The publisher of these exact weights says it cannot:
-#: "The drafter shares the target's KV cache and does not change the output (the
-#: target verifies every drafted token)." Two paired dispatches refused that on
-#: nine of nine articles. The one difference on record between their setup and
-#: ours is the drafted depth - their command passes 4 and the entry pins 2 - and
-#: nobody had run it.
-DRAFT_DEPTH = "draft_depth"
-
-#: The reference the other three are read against. Not the baseline: the
-#: question is what the head does to the text, so the case with no head is the
-#: only honest zero.
-HEAD_OFF = "head_off"
-
-CASE_SETS: dict[str, CaseSet] = {
-    DRAFT_DEPTH: CaseSet(
-        cases=(
-            (HEAD_OFF, {"draft": None}),
-            ("n_max_1", {"draft": {"n_max": 1}}),
-            ("n_max_2", {"draft": {"n_max": 2}}),
-            ("n_max_4", {"draft": {"n_max": 4}}),
-        ),
-        reference=HEAD_OFF,
-        # **Temperature 0, pinned once and unoverridable.** Every committed entry
-        # runs at 0.2, where the seed decides which token is drawn and the
-        # sampler alone reworded six of seven articles between two readings of
-        # ONE configuration on 2026-09-17. At 0.2 the head's effect and the
-        # sampler's noise arrive as a single number nobody can split. At 0 a
-        # changed summary can only be the head. It is declared here rather than
-        # repeated into each case because three cases pinned and one forgotten
-        # is a run that looks valid and measures nothing.
-        shared={"temperature": 0.0},
-        # The whole question is whether the cases disagree, so a disagreement is
-        # the reading rather than a defect. Two repeats of ONE case that
-        # disagree is still the model being unstable, and still fatal.
-        between_cases=sweep_verdict.BETWEEN_CASES_IS_THE_READING,
-    ),
-}
+#: No case set is declared today. The one that was - four drafted depths read
+#: against a server with the head off - went with the draft head on 2026-09-21.
+CASE_SETS: dict[str, CaseSet] = {}
 
 
 class CasePlan(NamedTuple):
@@ -232,22 +192,7 @@ def write_config(label: str, update: dict[str, Any]) -> Path:
     pointer = json.loads((dst / "idhazh.json").read_text(encoding="utf-8"))["models_file"]
     path = dst / pointer
     payload = json.loads(path.read_text(encoding="utf-8"))
-    inference = dict(update)
-    # Written through `update` rather than indexed, because an entry declaring
-    # no draft head has no such key and this is the one line allowed to make one.
-    if "draft" in inference:
-        draft = inference.pop("draft")
-        if draft is None:
-            payload["summarize"]["draft"] = None
-        else:
-            # A mapping PATCHES the declared head rather than replacing it, so a
-            # case can move one field and leave the repository, the revision and
-            # the two digests that identify the weights where they are. A
-            # wholesale replacement would drop them and the entry would not
-            # validate - which is the correct failure, but a case set exists to
-            # move `n_max` and nothing else.
-            payload["summarize"]["draft"] = {**(payload["summarize"].get("draft") or {}), **draft}
-    payload["summarize"]["inference"].update(inference)
+    payload["summarize"]["inference"].update(update)
     path.write_text(ModelsConfig.model_validate(payload).to_json(), encoding="utf-8")
     return dst
 
