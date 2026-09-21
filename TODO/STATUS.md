@@ -169,7 +169,7 @@ section 3 is where it is answered.
 | #12 | 37 | C | What one article costs the machine | - |
 | #21 | 37 | C | What the context window actually costs | - |
 | #22 | 37 | C | Dotted rules where a setting moved | 21 is UNKNOWN |
-| #17 | 37 | D | Every published column names its reader | 10 is PENDING; 11 is PENDING; 12 is UNKNOWN; 13 is PENDING; 14 is PENDING; 19 is PENDING; 20 is PENDING; 21 is UNKNOWN; 22 is PENDING |
+| #17 | 37 | D | Every published column names its reader | 10 is PENDING; 11 is PENDING; 12 is UNKNOWN; 13 is PENDING; 14 is PENDING; 19 is PENDING; 20 is PENDING; 21 is UNKNOWN; 22 is UNKNOWN |
 | #18 | 37 | E | Docs, the living-page corrections, and the orphan sweep | all names no row |
 | #12 | 38 | J | The four verbs name their work | 24 is PENDING |
 | #13 | 38 | J | `leg` and `fold` leave the vocabulary | 12 is PENDING |
