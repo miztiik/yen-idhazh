@@ -355,7 +355,7 @@ export function scoredNote(scored: ScoredHoldout | null): string {
 	if (scored === null) {
 		return (
 			'The line has not been scored against these marks. ' +
-			'`idhazh score-merge-line-holdout` is what writes that reading down.'
+			'Run idhazh score-merge-line-holdout to write that reading down.'
 		);
 	}
 	const wrong = scored.mergedAndTwoStories;
