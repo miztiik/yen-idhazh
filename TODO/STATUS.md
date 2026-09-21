@@ -37,10 +37,11 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 4 |
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
-| [20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md) | 21 | 0 | 7 | 4 |
+| [20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md) | 21 | 0 | 1 | 0 |
 | [20260921-40-bonsai-probe-plan.md](20260921-40-bonsai-probe-plan.md) | 7 | 0 | 7 | 4 |
 | [20260921-41-lane-a-model-file-plan.md](20260921-41-lane-a-model-file-plan.md) | 7 | 0 | 7 | 0 |
-| [20260921-42-lane-b-workflows-plan.md](20260921-42-lane-b-workflows-plan.md) | 11 | 2 | 9 | 1 |
+| [20260921-42-lane-b-workflows-plan.md](20260921-42-lane-b-workflows-plan.md) | 11 | 4 | 7 | 1 |
+| [20260921-43-the-ledgers-and-the-generated-layer-plan.md](20260921-43-the-ledgers-and-the-generated-layer-plan.md) | 7 | 0 | 7 | 2 |
 
 ## In flight - 5
 
@@ -52,7 +53,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | #6 | 41 | A | The engineering contract catches up | `p41a` |
 | #7 | 41 | B | The markers are derived at server start | `p41b` |
 
-## Ready now - 46
+## Ready now - 44
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -97,17 +98,15 @@ section 3 is where it is answered.
 | #5 | 35 | A / search | Live-day search - instant + semantic (+ frontend `key_points` owner, C2) | - |
 | #7 | 35 | A / eval-core | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - |
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
-| #7 | 39 | - | Qualification asks each article once | - |
-| #8 | 39 | - | Both test pipelines commit what they produce | - |
-| #15 | 39 | - | The hosted span sink goes | - |
-| #19 | 39 | - | One console route list, not nine | - |
 | #1 | 40 | A | The model entry, and whether it fits | - |
 | #2 | 40 | A | The test workflow takes named addresses | - |
 | #5 | 40 | A | The eight telemetry steps move across | - |
 | #6 | 40 | A | A trial state root, and what the run keeps | - |
-| #3 | 42 | A | The capability probe goes | - |
+| #5 | 42 | B | Five checks move into the thing they check | 2, 4 |
+| #1 | 43 | - | The replay count leaves the dispatch surface | - |
+| #4 | 43 | - | Nine console specs visit every route the site serves | - |
 
-## Waiting on another row - 88
+## Waiting on another row - 89
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -183,22 +182,23 @@ section 3 is where it is answered.
 | #8 | 36 | W4 / apply-gate (alone) | Flip the flag: withhold = absent + item-health telemetry (E7 placement) | 7 is PENDING |
 | #12 | 36 | W3 / rejects-store | The rejects store + corpus fence (`state/rejects/`, 30-day prune) | 3 is PENDING; 7 is PENDING |
 | #13 | 36 | W4 / plan34-gaps | Retro: plan-34 latent gaps + the shared space-trap guard | 34 landed names no row; 6 is PENDING |
-| #17 | 39 | - | The utilities and evaluations nothing calls go | 7 is PENDING |
-| #1 | 39 | - | The generated contract layer goes | A names no row; B names no row; C names no row; D names no row |
-| #12 | 39 | - | The engineering contract and the pages catch up | 1 is PENDING |
+| #15 | 39 | - | The hosted span sink goes | - |
 | #3 | 40 | B | One plan job, so a fan-out agrees what it is reading | 2 is PENDING |
 | #4 | 40 | C | The fan-out | 3 is PENDING |
 | #7 | 40 | D | One dispatch, and the readings written up | 1 is PENDING; 4 is PENDING; 5 is PENDING; 6 is PENDING |
 | #3 | 41 | A | The draft head becomes a companion file | 2 is IN-FLIGHT |
 | #5 | 41 | A | The model file carries llama-server's own flags | 4 is IN-FLIGHT |
-| #4 | 42 | A | The image benchmark goes | 3 is PENDING |
-| #5 | 42 | B | Five checks move into the thing they check | 4 is PENDING |
 | #6 | 42 | B | Fourteen assertions go, and the lists become computed | 5 is PENDING |
 | #7 | 42 | C | The printer learns the whole file set, and the traversal closes | 6 is PENDING; plan 41 names no row |
 | #8 | 42 | C | The workflows read the model file instead of relaying it | 7 is PENDING |
 | #9 | 42 | C | The cache names the set, and the binary gets its own key | 8 is PENDING |
 | #10 | 42 | D | The benchmark arms learn the server died, and the repeat count is config | 9 is PENDING |
 | #11 | 42 | D | The harness keeps only what more than one module reads | 9 is PENDING |
+| #2 | 43 | - | The utilities with no caller go, and the search evaluation is bounded | 1 is PENDING |
+| #3 | 43 | - | The pipeline test commits what it produced | 2 is PENDING |
+| #5 | 43 | - | The generated contract layer goes | 1 is PENDING; 2 is PENDING; 3 is PENDING; 4 is PENDING; plan 41 names no row; plan 42 names no row |
+| #6 | 43 | - | The engineering contract and the pages catch up | 5 is PENDING; plan 41 names no row |
+| #7 | 43 | - | The dependency's beneficiary line says what it buys | 5 is PENDING |
 
 ## Finished - 18 plans with no live row
 
