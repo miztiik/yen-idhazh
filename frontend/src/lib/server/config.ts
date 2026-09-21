@@ -570,7 +570,7 @@ const PANEL_GROUP_DEFAULTS: PanelGroups = {
 		{
 			id: 'what-the-model-spends',
 			title: 'What the model spends',
-			panels: ['prompt-cache', 'read-against-written', 'counterfactual-cost']
+			panels: ['article-cost', 'prompt-cache', 'read-against-written', 'counterfactual-cost']
 		}
 	]
 };
