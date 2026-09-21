@@ -504,6 +504,11 @@ class AppearanceConfig(Contract):
             why="The panel now reads one span a request rather than one column a day.",
         ),
         ChangelogEntry(
+            version="2026-09-21T19:00",
+            change="console.panel_groups.machine gains the processor-lost panel.",
+            why="A busy figure cannot be read without the share the host gave elsewhere.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T18:00",
             change="console.panel_groups.machine gains the disk-reads panel.",
             why="Memory taken back off the model is paid for on every later article.",
@@ -512,11 +517,6 @@ class AppearanceConfig(Contract):
             version="2026-09-21T14:00",
             change="console.panel_groups.machine gains memory-held, additive.",
             why="What the machine's memory holds is a question the ceiling panel does not answer.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T12:00",
-            change="console.panel_groups.machine gains the article-cost panel.",
-            why="What one article costs has to be priceable before the run that pays it.",
         ),
         ChangelogEntry(
             version="2026-08-29",

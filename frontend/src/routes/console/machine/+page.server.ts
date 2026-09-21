@@ -21,6 +21,13 @@ import {
 } from '$lib/console/machine/context-cost';
 import { promptReuse, type PromptReuse } from '$lib/console/machine/prompt-reuse';
 import { articleCost, type ArticleCost } from '$lib/console/machine/article-cost';
+import {
+	processorLostOverDays,
+	processorLostOverShards,
+	type LostThresholds,
+	type ProcessorLostRun,
+	type ProcessorLostSpan
+} from '$lib/console/machine/processor-lost';
 import { diskReads, type DiskReads } from '$lib/console/machine/disk-reads';
 import { costChart, costOverDays, DEFAULT_COST_SHAPE } from '$lib/charts/cost';
 import { memoryHeld } from '$lib/console/machine/memory-held';
@@ -91,6 +98,10 @@ export interface MachineWindow {
 	 * memory and model time, each as a range. Three figures and a few counts, so
 	 * a preset carries it rather than the rows behind it. */
 	articleCost: ArticleCost;
+	/** What the host gave to another tenant over this span, a tile a day. Tiles
+	 * and counts, never the rows: a day is one small object however many articles
+	 * it ran. */
+	processorLost: ProcessorLostSpan;
 	/** Whether the machine took the model's memory back over this span: one
 	 * reading a day, the disk copies beside it, and what the runs recorded about
 	 * holding that memory down. One tile a day is small enough to carry per
@@ -131,6 +142,7 @@ const DRAWN_PANELS = [
 	'prompt-reuse',
 	'context-headroom',
 	'two-clocks',
+	'processor-lost',
 	'disk-reads',
 	'machine-cards',
 	'platform-mix',
@@ -223,6 +235,16 @@ export async function load() {
 		...new Set([...counters.runs.map((run) => run.date), ...health.map((row) => row.date ?? '')])
 	].filter((date) => date !== '');
 
+	// The two shares a stolen-processor tile is drawn against, out of
+	// `console.*` rather than typed into the module (Guardrail #6). Both are
+	// declared estimates and say so where they are declared: no committed row
+	// separates what the host took from what we spent, because until the split
+	// landed the busy figure held both.
+	const lostThresholds: LostThresholds = {
+		marked: console_.processor_lost_pct_marked,
+		named: console_.processor_lost_pct_named
+	};
+
 	/** One span, and every figure that reads a span. */
 	function answer(days: number): MachineWindow {
 		const span = windowOfDays(dates, today, days, console_.today_anchor);
@@ -246,6 +268,9 @@ export async function load() {
 		// what share of the processors an article kept busy, and only the record
 		// says how many processors that share was taken across.
 		const perArticle = articleCost(healthRows, inSpan(fingerprints));
+		// Day grain here because a day tile is a fact about a span. The run grain is
+		// a snapshot and is worked out once, outside every span.
+		const lostToTenants = processorLostOverDays(healthRows, lostThresholds);
 		// The one instrument that can see the machine taking the model's memory
 		// back: those pages are file pages, so they leave a memory reading and
 		// touch no swap counter on the way out. Both marks come off `console`
@@ -291,6 +316,7 @@ export async function load() {
 			}),
 			reuse: promptReuse(healthRows, healthTable.columns),
 			articleCost: perArticle,
+			processorLost: lostToTenants,
 			diskReads: disk,
 			// Counted once a preset here rather than in a browser, which holds no
 			// ledger to count. At most eight kinds a span, so five presets is forty
@@ -363,6 +389,14 @@ export async function load() {
 	// 2026-09-21; both drew the per-shard high-water mark the page no longer
 	// trusts, so both went and the panel is one builder call.
 	const memory = memoryBoard(newest, health);
+	// The run grain of the stolen-processor panel, on the same terms as the two
+	// boards above: whether the loss landed on one part of a run or across all
+	// of it is a question about that run, and a span cannot narrow it.
+	const lostByShard: ProcessorLostRun = processorLostOverShards(
+		health,
+		newest === null ? null : { runId: newest.runId, date: newest.date },
+		lostThresholds
+	);
 	// One bar a day, over every day the widest preset reaches, so the panel can
 	// take the open span off the control without this deriving a second time.
 	// Split from `memoryBoard` on purpose: that panel asks how near one run came
@@ -455,6 +489,8 @@ export async function load() {
 		settingsMoved: settingsMoved(manifests),
 		board,
 		memory,
+		processorLostByShard: lostByShard,
+		processorLostThresholds: lostThresholds,
 		memoryHeld: held,
 		newestRunId: newest?.runId ?? null,
 		split,

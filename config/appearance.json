@@ -44,6 +44,7 @@
           "id": "what-the-machine-was-doing",
           "panels": [
             "two-clocks",
+            "processor-lost",
             "disk-reads",
             "machine-cards",
             "reading-against-writing",
