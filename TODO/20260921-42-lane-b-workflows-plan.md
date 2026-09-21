@@ -2,9 +2,9 @@
 
 **Last Updated**: 2026-09-21
 
-**Level**: 4 (the model file becomes the only place a download is declared, a path-traversal hole in the fetch path closes, the weights cache key changes shape, about 2,300 lines of workflow test leave the tree, the work shard stops installing a graphics-card build of PyTorch onto a machine with no graphics card, and the 2,361-line test-support module is cut to what more than one module reads.)
+**Level**: 5, and two rows are why. **Row 7 strengthens Guardrail #11's control** - it closes a path-traversal hole in the field checker that every download path runs through, which is the trust boundary and a Level-5 surface by CLAUDE.md section 6. **Row 9 changes a cache key five callers share**, and a half-done change leaves a key whose skip condition lies. Every other row here is Level 2 or 3 and runs AUTO once the user authorizes; those two PAUSE for the owner before their pull request opens (docs/how-to/execute-a-plan.md, section Escalation).
 
-Execute per docs/how-to/execute-a-plan.md: a work pool of owners, one worktree per pull request, a pull request is ready when its `Depends-on` are DONE and its owned files are disjoint from every pull request in flight; Parallel N = 2, which is the peak the file ownership in section 1 allows; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 2 rows in flight - two is the peak the per-row `Files touched` lists allow and section 1's readiness table says why - refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
 ## Section 0 - Operating contract
 
@@ -22,7 +22,7 @@ Execute per docs/how-to/execute-a-plan.md: a work pool of owners, one worktree p
 | Hands to plan 41 | Six items this plan does not own, listed in section 1b. **The largest is the `companion_files` shape itself: plan 41 declares it, plan 42 declares its reader.** |
 | ESCALATE triggers | (1) Row 8 moves the fetch off the environment relay. **The unconditional restore-time check survives as a workflow step with no `if:`** - if the only digest check ends up inside the script, stop: the script runs behind `cache-hit != 'true'`, so a restored entry would never be checked again, which is the exact case that step exists for. (2) Row 9 changes the cache key shape. The two cache paths must be **disjoint** (`backend/models` and `backend/bin`), or a hit on one key restores files the other owns and its skip condition lies. (3) Row 7 closes a path-traversal hole. Its refusal cases ship with it, in the same commit. (4) Row 6 converts written lists to computed ones. Every converted check asserts its computed list is **non-empty**, or the row stops. (5) Row 5 moves five checks out of tests. Each move ships in the same commit as the deletion it replaces. (6) **`tests/fixtures/runtime/b10598-llama-server-help.txt` is not deleted by any row here** - see C3. (7) Any row that would raise a runner budget figure (Guardrail #2). |
 | Chosen strategy | Six pull requests in four waves, grouped so no two in flight own a file in common. Carmack rules the runtime and the fetch path, Fowler the contracts, the test tiers and the module structure, Andre the evaluation integrity. |
-| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 2.` |
+| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 2.` Two, not the default four, because rows 1 to 4 are the only ones with no predecessor and they fall into exactly two disjoint file sets. Section 1's readiness table is the dispatcher's input. |
 
 ### Hard scope - out
 
@@ -89,8 +89,8 @@ Eleven rows, six pull requests, four waves.
 
 | # | Row title | PR | Depends-on | Parallel-group | Status | Worktree | PR link | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The runner stops paying for a graphics card it does not have | P1 | - | A | PENDING | - | - | - |
-| 2 | The plan job closes the clock it opens | P1 | 1 | A | PENDING | - | - | - |
+| 1 | The runner stops paying for a graphics card it does not have | P1 | - | **M** | PENDING | - | - | - |
+| 2 | The plan job closes the clock it opens | P1 | 1 | **M** | PENDING | - | - | - |
 | 3 | The capability probe goes | P2 | - | A | PENDING | - | - | - |
 | 4 | The image benchmark goes | P2 | 3 | A | PENDING | - | - | - |
 | 5 | Five checks move into the thing they check | P3 | 2, 4 | B | PENDING | - | - | - |
@@ -120,7 +120,70 @@ Eleven rows, six pull requests, four waves.
 
 **Why P5 and P6 are two pull requests.** P5 is behavioural and P6 is structural, and they own disjoint files, so they run at once in the last wave.
 
-**Peak workers: 2.** The pool never has more than two ready pull requests with disjoint files.
+**Peak workers: 2.** The pool never has more than two ready rows with disjoint file lists.
+
+### Readiness, computed rather than read off a letter
+
+**A row is ready when every `Depends-on` is DONE and its `Files touched` list shares no entry with a row already in flight.** `Parallel-group` is the author's hint; the file lists in sections 2 to 12 are the fact, and the owner diffs them before every dispatch (docs/how-to/execute-a-plan.md, section Parallel fan-out). What that computes to here:
+
+| At this point | Ready together | Held, and why |
+| --- | --- | --- |
+| start | **1 and 3** | 2 waits on 1; 4 waits on 3 |
+| after 1 and 3 return | **2 and 4** | 5 shares `digest.yml` with 2 and `test_bench_targets.py` with 4 |
+| after P1 and P2 merge | **5**, then **6** | one worker, one branch. 7 waits on plan 41 |
+| after P3 merges and plan 41 is DONE | **7**, then **8**, then **9** | P4 owns every workflow file, so nothing runs beside it. That is arithmetic, not caution |
+| after P4 merges | **10 and 11** | disjoint files, and one is behavioural while the other is structural |
+
+**Group M runs alone and does not overlap a merge into `digest.yml`.** Row 1's oracle is the next nightly run's own job log, so any other change landing in `digest.yml` between its merge and that nightly makes the timing unattributable - which is the whole reason row 1 is not bundled with the deletions.
+
+### What each row's oracle is, so the owner knows what to run against the base tree
+
+The contract asks the owner to run a row's check against the base tree before dispatching, and to say which of two kinds it is (docs/how-to/execute-a-plan.md, section The owner, point 2).
+
+| Row | Kind | What must be able to fail |
+| --- | --- | --- |
+| 1 | **runner-only** | nothing local can fail it. The nightly's install log is the check, and it is read after the merge |
+| 2 | fails on the base tree | today no host-fingerprint row carries `job=plan` with a `job_seconds` |
+| 3, 4 | fails on the base tree | the census finds `probe.yml` and `diffusers` today |
+| 5 | fails on the base tree | each of the five new unit tests fails with its move reverted |
+| 6 | fails on the base tree | a throwaway server-starting workflow fails the suite today, on five constants |
+| 7 | fails on the base tree | the traversal cases pass today, which is the defect |
+| 8 | **runner-only for the download half**; the grep half fails on the base tree | a dispatch is the only thing that can prove the loop fetches |
+| 9 | **runner-only, and it needs two dispatches** | a miss then a hit. The hit is the half that fails quietly |
+| 10 | fails on the base tree | a dead server takes 900 s and 600 s to notice |
+| 11 | **behaviour must not change** | the collected test count is identical at both ends by design; what must not break is that every moved name still has its importer. Do not invent a failing check to satisfy a rule |
+
+### The page that owns each surface, so a worker does not re-route
+
+`docs/agents/bootstrap.md` routes. For this plan it resolves to four pages and no more.
+
+| Surface a row touches | Page that owns it |
+| --- | --- |
+| a workflow, a gate, or what CI runs - **every row** | [`docs/how-to/run-the-gates.md`](../docs/how-to/run-the-gates.md) |
+| a persisted shape - rows 2 and 10 | `CLAUDE.md` section 11, then the model under `backend/idhazh/contracts/` |
+| which model runs, or a figure that belongs to one - rows 7, 8, 9 | [`docs/reference/models.md`](../docs/reference/models.md), and the dossier it points at |
+| anything fetched text reaches - row 7 | `CLAUDE.md` Guardrail #11 |
+
+The two reference pages this plan **writes** are [`docs/reference/ci-model-runtime.md`](../docs/reference/ci-model-runtime.md) (rows 3, 8, 11) and [`docs/reference/github-actions.md`](../docs/reference/github-actions.md) (rows 3, 8).
+
+### The gates, named once so no row repeats them
+
+Every command below is from [`docs/how-to/run-the-gates.md`](../docs/how-to/run-the-gates.md). A row's Acceptance gates line names which of these apply; it never introduces a new one.
+
+| Check | Command |
+| --- | --- |
+| the named module | `.\.venv\Scripts\python.exe -m pytest -n 0 backend/tests/<module>.py` |
+| lint and types | `.\.venv\Scripts\python.exe -m ruff check .` then `.\.venv\Scripts\python.exe -m mypy` |
+| shell, for rows 8, 9, 10 | `.\.venv\Scripts\shellcheck.exe --severity=style (Get-ChildItem .github/scripts/*.sh).FullName` - **PowerShell does not expand a glob, so the paths are handed over literally** |
+| the expensive ones, when two workers are live | wrap in `python backend/utilities/gate_lock.py -- <command>`. `ruff`, `mypy` and `shellcheck` stay unwrapped |
+| documentation load, for rows 3, 8, 11 | `python backend/utilities/doc_load.py` before and after |
+
+**`ruff format` is not a gate.** The full suite belongs to CI; a list of acceptance gates is not an instruction to repeat every CI job locally.
+
+### Two traps that cost a merge, named so nobody meets them cold
+
+1. **No pull request here may carry `TODO/STATUS.md`.** It is generated from every plan's Reckoner by one job on `main` after a merge, and the gates job **fails any pull request that touches it** (`docs/reference/agent-notes/gates-and-builds.md:232`). A worker stamps its own Reckoner line and nothing else. If a merge of `origin/main` picks the page up anyway, take the trunk's copy - `git checkout origin/main -- TODO/STATUS.md` - rather than re-deriving one, because its section headings carry computed counts and a textual merge can be internally inconsistent and still merge cleanly.
+2. **No pull-request body here may contain a continuous-integration skip marker, even inside a code span or a table cell.** A squash merge folds the whole body into the commit message and GitHub scans all of it. Measured 2026-09-12: one merge carried such a marker inside a table row that was arguing against using it, and the push created zero workflow runs - not the suite, and not the Pages publication the change never touched (`gates-and-builds.md:244`). Several rows here discuss workflow triggers, so this is a live risk rather than a general caution.
 
 ## Section 1a - The contracts, declared before any code
 

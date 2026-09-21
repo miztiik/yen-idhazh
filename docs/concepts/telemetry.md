@@ -540,6 +540,10 @@ There is a second reason, and it bites in production rather than in year two. A 
 
 ## Design rationale
 
+**This subsystem keeps the word `fold`, and the judging council had it taken away, on 2026-09-21.** `CLAUDE.md` section 0b says a word earns a name only when its ordinary English meaning is what the thing does, and a borrowed second name is deleted rather than replaced. The judging council was calling one shard of its work a `leg` and its collecting job a `fold`; both went, because `shard` was already the column and the action is counting. **The fold here is a different thing that happens to share the spelling** - it collects segments many writers left in transit and compacts them into one day file, which is the ordinary meaning of folding things together, and no other name in this repository is already doing that job. So the scrub stopped at the boundary between the two subsystems rather than at the word.
+
+This is written down for the next person applying the plain-meaning test. **Taking the word here too would have turned a twelve-file vocabulary change into a sixty-five-file rewrite of the digest run**, and the test would not have been the reason - the reason would have been a search-and-replace that did not stop to ask which subsystem it was standing in. If this fold is ever renamed, it is because a reader could not tell what it did, never because a sibling lost the same spelling. Authority: owner, 2026-09-21.
+
 Logging the emitted envelope, rather than a separate hand-written message, exists so a log and a persisted payload can never disagree - the classic debugging failure where the log says one thing and the file on disk says another. The cost is that log lines are structured rather than chatty; the benefit is that they are greppable, replayable, and true. Authority: Fowler.
 
 Treating the Actions run log as the log store, rather than shipping logs anywhere, is what keeps Guardrail #1 intact end to end: a project with no runtime backend should not acquire one for observability. Authority: Carmack.
