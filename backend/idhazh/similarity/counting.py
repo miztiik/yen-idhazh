@@ -64,7 +64,6 @@ def empty_record(
             "prompt_digest": judge.prompt_digest,
             "grammar_digest": judge.grammar_digest,
             "judge_temperature": judge.judge_temperature,
-            "decode_digest": judge.decode_digest,
             "judge_thinks": judge.thinks,
             "counted_dates": (),
             "slots": tuple(
@@ -217,7 +216,6 @@ def inputs_changed(
         (record.prompt_digest, judge.prompt_digest),
         (record.grammar_digest, judge.grammar_digest),
         (record.judge_temperature, judge.judge_temperature),
-        (record.decode_digest, judge.decode_digest),
         (record.judge_thinks, judge.thinks),
         (record.band_low, knobs.band_low),
         (record.band_high, knobs.band_high),

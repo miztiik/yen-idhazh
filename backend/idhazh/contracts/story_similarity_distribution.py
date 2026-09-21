@@ -30,8 +30,13 @@ from idhazh.contracts.base import (
     canonical_json,
     derive_text_digest,
     records_json,
+    without_retired_keys,
 )
-from idhazh.contracts.story_similarity_pair import JudgeModelId, ScorerModelId
+from idhazh.contracts.story_similarity_pair import (
+    DROPPED_CELLS,
+    JudgeModelId,
+    ScorerModelId,
+)
 
 #: How far off its own grid a slot edge may sit before the record is refused.
 #: A band divided into 120 slots is 120 additions of a float, so the top edge
@@ -77,6 +82,11 @@ class StorySimilarityDistribution(Contract):
 
     __schema_stem__: ClassVar[str] = "story-similarity-distribution"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-21T14:00",
+            change="decode_digest is gone. A record that still carries the key loads.",
+            why="It proved two runs asked alike, and this project does not claim that.",
+        ),
         ChangelogEntry(
             version="2026-09-21T12:00",
             change="`folded_dates` is now `counted_dates`. The old key still reads.",
@@ -162,24 +172,13 @@ class StorySimilarityDistribution(Contract):
             "means: a sampler nobody recorded, not a sampler set to nothing."
         ),
     )
-    decode_digest: Sha256 | None = Field(
-        default=None,
-        description=(
-            "sha256 of what the judging call asked the decoder to do, minus the prompt, "
-            "the grammar and the model name - each of which is stamped here in a column "
-            "of its own. It catches a sampler field that moved with no other column "
-            "moving, which is a change to what a verdict means that the six named "
-            "values cannot see."
-        ),
-    )
     judge_thinks: bool | None = Field(
         default=None,
         description=(
             "Whether a reasoning span ran in front of every verdict counted here. A "
-            "column of its own because `decode_digest` cannot see it: the only posted "
-            "key a thinking envelope moves is the prompt, and the prompt is excluded. "
-            "Without it a record counted cold and a record counted after reasoning are "
-            "one population."
+            "column of its own because no other column moves with it: an envelope "
+            "moves only the prompt, which nothing here stamps. Without it a record "
+            "counted cold and a record counted after reasoning are one population."
         ),
     )
     counted_dates: tuple[DateStamp, ...] = Field(
@@ -208,12 +207,18 @@ class StorySimilarityDistribution(Contract):
         earlier build wrote would be refused outright and the day list behind the
         fitted line would be lost (section 11). The next run rewrites the record
         under the new key.
+
+        `decode_digest` is dropped here in the same pass, and the two cases are
+        different: that column was deleted rather than renamed, so there is
+        nothing to carry the value into. The committed record and every archive
+        under `state/content-similarity-judge/archive/` still hold the key, and
+        both have to keep loading.
         """
         if isinstance(data, dict) and "folded_dates" in data and "counted_dates" not in data:
             migrated = dict(data)
             migrated["counted_dates"] = migrated.pop("folded_dates")
-            return migrated
-        return data
+            return without_retired_keys(migrated, *DROPPED_CELLS)
+        return without_retired_keys(data, *DROPPED_CELLS)
 
     @model_validator(mode="after")
     def _the_band_divides_into_whole_slots(self) -> Self:
@@ -270,20 +275,25 @@ class StorySimilarityDistribution(Contract):
     def record_stamp(self) -> str:
         """Everything that decides what a count in this record means.
 
-        **The read-side migration for the three decode values is this method.**
+        **The read-side migration for the two decode values is this method.**
         A record written before they existed carries them null, loads under this
         build, and stamps to a value it never stamped to - so the first day
         counted after the widening archives it and counts on from zero. That
         reset is by construction rather than by an input moving, it happens once,
         and it is the price of the two populations this record used to merge in
         silence.
+
+        **A value leaving moves the stamp the same way.** `decode_digest` was in
+        this payload until 2026-09-21, so the first record counted after that
+        archives under its old name and the new one starts empty. Nothing ever
+        re-derives an archive's name, so every file already written stays
+        readable under the name it has.
         """
         payload: dict[str, Any] = {
             "band_high": self.band_high,
             "band_low": self.band_low,
             "bin_width": self.bin_width,
             "cosine_weight": self.cosine_weight,
-            "decode_digest": self.decode_digest,
             "grammar_digest": self.grammar_digest,
             "judge_model": self.judge_model,
             "judge_temperature": self.judge_temperature,

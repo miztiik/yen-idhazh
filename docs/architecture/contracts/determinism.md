@@ -52,7 +52,7 @@ The declared inputs are the weights digest, the quantisation, the runtime build,
 
 **Prompts and templates are digested, never stored.** A prompt in a committed payload would put text into a permanent record that nothing downstream needs, and the digest answers the only question anyone asks of it: did it move?
 
-**`PipelineInputs.fingerprint()` is called by nothing, and it stays.** Rows in `state/scores/` written before the manifest replaced the digest still carry that stamp, and this method is the one way to rebuild it - so a reader comparing a historical row against the inputs beside it does the arithmetic the writer did rather than a second one. What a live run wants is `changed_inputs`, which names the input that moved where a digest can only say that one did.
+**There is one comparison and it is `changed_inputs`.** It names the input that moved, which is what a reader and the console's model-change boundary both need; a digest over the whole record could only say that one did. `PipelineInputs.fingerprint()` was that digest, and it went on 2026-09-21 with the decode stamp beside it - nothing called either, and both existed to answer "did two runs ask for the same thing?", which is a question about determinism and not a property this pipeline claims. Rows in `state/scores/` written before the manifest replaced the digest still carry their own stamp; nothing rebuilds one, and expanding them was never possible in any case (see the rejected alternatives below).
 
 ## The one alarm
 

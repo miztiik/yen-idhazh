@@ -87,9 +87,9 @@ class Reading:
     #: the column that holds them. Empty where the server reported none.
     first_token_window: str = ""
     #: How many reasoning spans ran in front of the answer - 0 cold, 1 under a
-    #: thinking envelope. `decode_digest` cannot see the difference, because the
-    #: only posted key an envelope moves is the prompt and the prompt is not
-    #: stamped, so the count is carried rather than derived later.
+    #: thinking envelope. No other cell on the row moves with it, because the
+    #: only posted key an envelope moves is the prompt, so the count is carried
+    #: rather than derived later.
     thinking_spans: int = 0
     #: What the reasoning span wrote, held for the length of this call and
     #: persisted nowhere. It is model-written text about two strangers' web

@@ -65,13 +65,11 @@ from idhazh.llm.server import (
     PROBE_SYSTEM,
     PROBE_USER,
     UNCAPPED_N_PREDICT,
-    UNSTAMPED_REQUEST_KEYS,
     Completion,
     ProbeRefusedError,
     answer_span,
     completion_payload,
     continued_completion_payload,
-    decode_digest,
     decoding_still_constrains,
     gguf_architecture,
     grammar_completion_payload,
@@ -1845,34 +1843,6 @@ class TestAConstrainedCallerGetsBothSpans:
         assert second["grammar"] == answer["grammar"], "the control is back on, one span later"
         assert second["prompt"].endswith("both wires name one filing\n</think>\n\n")
 
-    def test_every_posted_key_is_either_stamped_or_named_as_unstamped(self) -> None:
-        """The digest is defined by what it leaves out, so nothing falls between.
-
-        A fixed count would be one route's key set and would go red the day a
-        builder sends one more field. This moves each posted value in turn and
-        asks whether the stamp noticed, which is the property itself rather than
-        a number standing in for it.
-        """
-        for route, posted in (("grammar", self.grammar_body()), ("schema", self.schema_body())):
-            baseline = decode_digest(posted)
-            for name in posted:
-                moved = dict(posted)
-                moved[name] = "something else entirely"
-                noticed = decode_digest(moved) != baseline
-
-                assert noticed is (name not in UNSTAMPED_REQUEST_KEYS), f"{route}.{name}"
-
-    def test_the_stamp_is_the_same_for_two_items_decoded_the_same_way(self) -> None:
-        """A stamp that never repeats cannot say two items were decoded alike."""
-        one = self.grammar_body(user="the first pair of headlines")
-        two = self.grammar_body(user="a completely different pair")
-
-        assert one["prompt"] != two["prompt"]
-        assert decode_digest(one) == decode_digest(two)
-        assert decode_digest(self.grammar_body(inference=InferenceConfig(seed=7))) != decode_digest(
-            one
-        ), "a sampler knob that moved has to move the stamp"
-
     def test_the_probability_mode_is_in_the_body_rather_than_left_to_the_build(self) -> None:
         """Which distribution comes back is a decision, and nothing pins the build.
 
@@ -1934,8 +1904,6 @@ class TestAConstrainedCallerGetsBothSpans:
         assert [choice.token for choice in verdict.first_token_choices] == ["YES", "NO", "UN"]
         assert merged.content == "YES", "the answer's word"
         assert merged.completion_tokens == 35, "the pair's cost: 34 thought and 1 answered"
-        assert merged.decode_sha256 == decode_digest(span_two), "span two's own stamp"
-        assert merged.decode_sha256 != decode_digest(span_one)
 
 
 class TestTheThinkingReachesNothing:

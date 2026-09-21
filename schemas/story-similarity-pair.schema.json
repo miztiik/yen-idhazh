@@ -16,6 +16,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "decode_digest is gone. Its heading is carried and dropped on read.",
+      "version": "2026-09-21T14:00",
+      "why": "It proved two runs asked alike, and this project does not claim that."
+    },
+    {
       "change": "Descriptions say shard where they said leg. No field moved.",
       "version": "2026-09-21T13:00",
       "why": "`leg` was a second name for the shard this row already carries a column for."
@@ -64,20 +69,6 @@
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
       "title": "Date",
       "type": "string"
-    },
-    "decode_digest": {
-      "anyOf": [
-        {
-          "pattern": "^[0-9a-f]{64}$",
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "sha256 of the canonical JSON of every key the caller posted that is not excluded. Taken from the payload rather than from config, because a digest built off config cannot see a payload-builder defect. The prompt is excluded because it differs every row and would make this a pair id; the grammar and the model reference are excluded because each has a column here already.",
-      "title": "Decode Digest"
     },
     "decode_seconds": {
       "anyOf": [
@@ -284,7 +275,7 @@
         }
       ],
       "default": null,
-      "description": "How many reasoning spans the file-order call decoded before its answer - 0 for a cold answer, 1 under a thinking envelope. A column of its own because `decode_digest` cannot see the envelope: the only posted key a thinking envelope moves is the prompt, and the prompt is excluded. Without this cell a margin taken after reasoning and one taken cold are one population.",
+      "description": "How many reasoning spans the file-order call decoded before its answer - 0 for a cold answer, 1 under a thinking envelope. A column of its own because no other cell on this row moves with it: an envelope moves only the prompt, which nothing stamps. Without this cell a margin taken after reasoning and one taken cold are one population.",
       "title": "Thinking Spans"
     },
     "usable": {
@@ -318,7 +309,7 @@
       "description": "What the judge said with the same two items in the other order. Two readings of one pair, which is what makes disagreement measurable."
     },
     "version": {
-      "default": "2026-09-21T13:00",
+      "default": "2026-09-21T14:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -341,5 +332,5 @@
   ],
   "title": "StorySimilarityPair",
   "type": "object",
-  "version": "2026-09-21T13:00"
+  "version": "2026-09-21T14:00"
 }

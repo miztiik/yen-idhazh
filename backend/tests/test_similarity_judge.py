@@ -37,9 +37,7 @@ from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimila
 from idhazh.council.deadline import compute_shard_deadline
 from idhazh.llm.server import (
     TokenChoice,
-    answer_span,
     completion_url,
-    decode_digest,
     parse_completion,
     post,
     render_prompt,
@@ -824,26 +822,6 @@ def test_a_pair_whose_first_reading_was_refused_still_makes_its_second_call() ->
     assert result.grammar_applied is False, "one call outside the grammar makes the pair false"
 
 
-def test_the_decode_digest_cannot_tell_the_two_envelopes_apart() -> None:
-    """Why the envelope needs a column and a stamp field of its own.
-
-    The only posted key a reasoning span moves is the prompt, and the prompt is
-    the one key the decode stamp excludes - so the answer body and the answer
-    body with a thought spliced in front of it digest to the same value. Without
-    a field saying which envelope ran, a record counted cold and a record counted
-    after reasoning are one population with nothing able to separate them.
-    """
-    settings = _settings_judging_behind_a_thinking_span()
-    entry = judge.entry_of(settings)
-    answer = judge.decode_body(
-        settings, system=prompt.system_turn(), user=prompt.blank_user_turn()
-    )
-    behind_a_thought = answer_span(answer, thought="a reason", turns=entry.turns)
-
-    assert behind_a_thought["prompt"] != answer["prompt"]
-    assert decode_digest(behind_a_thought) == decode_digest(answer)
-
-
 def test_a_settings_with_no_judge_role_decodes_one_span_and_says_so() -> None:
     """The committed default. A fresh clone judges exactly as it judges today."""
     day = _a_day()
@@ -1014,7 +992,6 @@ def test_a_verdict_file_round_trips_through_the_contract(
     assert row.decode_seconds is not None
     assert row.judge_id == "content-similarity-judge"
     assert row.judge_temperature == stamp.judge_temperature
-    assert row.decode_digest == stamp.decode_digest
     assert row.grammar_applied is True
     assert row.thinking_spans == 0, "the committed entry declares no reasoning span"
     assert row.first_token_probabilities is not None

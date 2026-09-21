@@ -593,17 +593,6 @@ for 25 alternatives, and asking for the post-sampling numbers returns no window
 at all - [which probabilities the server
 returns](../../reference/benchmarks/which-probabilities-the-server-returns.md).
 
-**The decode stamp is defined by what it leaves out.** Three keys are excluded
-and everything else posted is in it, so a caller that starts sending a new
-sampler field is stamped under a new digest without anybody remembering to
-maintain a list. The prompt is out because `prompt_sha256` already carries it
-and a stamp that never repeats cannot say two items were decoded alike; the
-grammar is out because respelling one literal would move it without the sampler
-being asked for anything different; the model name is out because the bytes are
-stamped as `model_sha256`. The stamp is taken over the body that went out
-rather than over the config block somebody wrote down, because the two disagree
-exactly when a builder drops a key.
-
 ## What is wrong with the boundary today
 
 Both shims exist and both work, and the schema constrains the decode on both

@@ -34,7 +34,25 @@ from idhazh.contracts.base import (
     UrlKey,
     canonical_json,
     derive_text_digest,
+    without_retired_keys,
 )
+
+#: Headings a committed day file still carries that this row no longer names and
+#: that nothing replaced. `decode_digest` went on 2026-09-21: it proved two runs
+#: asked the decoder for the same thing, and this project does not claim
+#: determinism, so the value answered no question a person asks
+#: (`docs/architecture/contracts/determinism.md`).
+#:
+#: **This is a contract, not a courtesy.** `ledger.migrate_header` refuses any
+#: heading that is neither a current column nor one the reader carries, so a
+#: column deleted above without an entry here leaves every committed day file
+#: unappendable and unrepairable at once.
+#:
+#: **Both sides of the row read this one set.** A committed day file reaches it
+#: through `ledger.STORY_SIMILARITY_PAIR_CARRIED`; a JSON payload reaches it
+#: through the before-validator on the row. A removal declared once is therefore
+#: honoured wherever the row is read.
+DROPPED_CELLS: Final[frozenset[str]] = frozenset({"decode_digest"})
 
 #: How far a recomputed composite may sit from the one on the row before the row
 #: is refused. The score is a sum of two products of floats, so the rule and the
@@ -131,6 +149,11 @@ class StorySimilarityPair(Contract):
 
     __schema_stem__: ClassVar[str] = "story-similarity-pair"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-21T14:00",
+            change="decode_digest is gone. Its heading is carried and dropped on read.",
+            why="It proved two runs asked alike, and this project does not claim that.",
+        ),
         ChangelogEntry(
             version="2026-09-21T13:00",
             change="Descriptions say shard where they said leg. No field moved.",
@@ -303,7 +326,7 @@ class StorySimilarityPair(Contract):
             "instead."
         ),
     )
-    # Seven columns at the TAIL, declared here rather than inherited from
+    # Six columns at the TAIL, declared here rather than inherited from
     # `judge_call.JudgeConfigStamp`. Pydantic collects a base class's fields
     # first, so inheriting would put them at the HEAD of the header and every
     # committed row would be read one cell out of place.
@@ -321,16 +344,6 @@ class StorySimilarityPair(Contract):
         description=(
             "The sampler temperature both calls ran at, as the number it was set to. An "
             "operator reading a row needs the value, not a digest of it."
-        ),
-    )
-    decode_digest: Sha256 | None = Field(
-        default=None,
-        description=(
-            "sha256 of the canonical JSON of every key the caller posted that is not "
-            "excluded. Taken from the payload rather than from config, because a digest "
-            "built off config cannot see a payload-builder defect. The prompt is excluded "
-            "because it differs every row and would make this a pair id; the grammar and "
-            "the model reference are excluded because each has a column here already."
         ),
     )
     grammar_applied: bool | None = Field(
@@ -359,9 +372,9 @@ class StorySimilarityPair(Contract):
         description=(
             "How many reasoning spans the file-order call decoded before its answer - 0 "
             "for a cold answer, 1 under a thinking envelope. A column of its own because "
-            "`decode_digest` cannot see the envelope: the only posted key a thinking "
-            "envelope moves is the prompt, and the prompt is excluded. Without this cell a "
-            "margin taken after reasoning and one taken cold are one population."
+            "no other cell on this row moves with it: an envelope moves only the prompt, "
+            "which nothing stamps. Without this cell a margin taken after reasoning and "
+            "one taken cold are one population."
         ),
     )
     judged_by_run_id: RunId | None = Field(
@@ -374,6 +387,21 @@ class StorySimilarityPair(Contract):
             "repeat. Empty on every row written before this column existed."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _without_the_columns_this_row_stopped_naming(cls, data: Any) -> Any:
+        """The read-side migration `CLAUDE.md` section 11 owes a removed column.
+
+        A judging shard seals a draw before it reads it and the archive keeps a
+        payload for as long as anybody wants to look at it, so a key this row
+        stopped naming is one `extra="forbid"` would refuse on a payload that is
+        exactly what its author meant to write.
+
+        The keys come from `DROPPED_CELLS` rather than from a list of their own,
+        so the CSV side and the JSON side cannot name different sets.
+        """
+        return without_retired_keys(data, *DROPPED_CELLS)
 
     @model_validator(mode="after")
     def _the_pair_is_ordered_and_named_by_its_own_contents(self) -> Self:

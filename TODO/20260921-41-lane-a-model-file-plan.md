@@ -65,8 +65,8 @@ Seven rows, two pull requests. Read this before the tables.
 
 | # | Row title | PR | Depends-on | Parallel-group | Status | Worktree | PR link | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The server-log reader goes | A | - | A | PENDING | - | - | - |
-| 2 | The decode stamp and the dead fingerprint go | A | 1 | A | PENDING | - | - | - |
+| 1 | The server-log reader goes | A | - | A | DONE | p41a | - | worker |
+| 2 | The decode stamp and the dead fingerprint go | A | 1 | A | DONE | p41a | - | worker |
 | 3 | The draft head goes from the model shape | A | 2 | A | PENDING | - | - | - |
 | 4 | Both decode caps go | A | 3 | A | PENDING | - | - | - |
 | 5 | The model file carries llama-server's own flags | A | 4 | A | PENDING | - | - | - |

@@ -1,13 +1,14 @@
-"""Can a store whose contract grew columns be appended to again, and is the pass repeatable?
+"""Can a store whose contract MOVED its columns be appended to again, and is the pass repeatable?
 
 The oracle is the append. A read-only check cannot see the header equality test
-that makes a narrow store unappendable, so every case here puts a narrow file on
+that makes a stale store unappendable, so every case here puts a stale file on
 disk, proves the append refuses it, re-files it, and proves the append lands.
+Both directions are covered: a header narrower than the contract, and one wider.
 
-Everything is driven from one small committed fixture, read inside the test that
+Everything is driven from two small committed fixtures, read inside the test that
 needs it. Nothing walks the committed store (`CLAUDE.md` section 13) - the
-question is what the utility does to a file, and a fixture holds a narrow header
-the archive can no longer produce.
+question is what the utility does to a file, and a fixture holds a header the
+archive can no longer produce.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ import pytest
 from conftest import FIXTURES_DIR
 
 from idhazh import ledger
-from idhazh.contracts.story_similarity_pair import StorySimilarityPair
+from idhazh.contracts.story_similarity_pair import DROPPED_CELLS, StorySimilarityPair
 from idhazh.telemetry import prune
 from utilities import widen_ledger_header
 
@@ -30,12 +31,24 @@ TARGET = "content-similarity-judge-scored-pairs"
 #: The header this store carried before the judge-call stamp was appended.
 NARROW = FIXTURES_DIR / "state" / "scored-pairs-before-the-stamp.csv"
 
+#: The header it carried while `decode_digest` was a column, taken off the
+#: committed day file as it stood before that column left on 2026-09-21.
+WIDE = FIXTURES_DIR / "state" / "scored-pairs-carrying-the-decode-digest.csv"
+
 
 def a_narrow_day(state_dir: Path) -> Path:
     """One day file at the pre-widening header, where the store's own path helper puts it."""
     path = ledger.scored_pairs_path(state_dir, DATE)
     path.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(NARROW, path)
+    return path
+
+
+def a_wide_day(state_dir: Path) -> Path:
+    """One day file still carrying the column this contract stopped naming."""
+    path = ledger.scored_pairs_path(state_dir, DATE)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(WIDE, path)
     return path
 
 
@@ -107,6 +120,79 @@ def test_a_second_pass_over_a_widened_store_writes_nothing(tmp_path: Path) -> No
     assert [entry.changed for entry in first] == [True]
     assert [entry.changed for entry in second] == [False]
     assert path.read_bytes() == settled
+
+
+def test_a_day_still_carrying_a_dropped_column_refuses_the_append_until_it_is_re_filed(
+    tmp_path: Path,
+) -> None:
+    """The other direction, and the one a deletion needs.
+
+    `require_matching_header` compares widths, so a file one column WIDER than
+    the contract is as dead to the next append as one that is narrower - and the
+    raise costs the run its whole commit step, every ledger staged beside this
+    one included.
+    """
+    path = a_wide_day(tmp_path)
+    fresh = a_fresh_pair(path)
+    assert set(ledger.read_header(path)) - set(StorySimilarityPair.csv_columns()) == DROPPED_CELLS
+
+    with pytest.raises(ValueError, match="Migrate the ledger"):
+        ledger.append_story_similarity_pairs(tmp_path, DATE, [fresh])
+
+    widen_ledger_header.widen(TARGET, state_dir=tmp_path, write=True)
+
+    assert ledger.append_story_similarity_pairs(tmp_path, DATE, [fresh]) == 1
+    assert ledger.read_header(path) == StorySimilarityPair.csv_columns()
+
+
+def test_without_the_carried_entry_the_same_file_refuses_to_re_file(tmp_path: Path) -> None:
+    """The bite proof for the test above, and the reason the entry ships in this commit.
+
+    `migrate_header` refuses any heading it cannot place rather than dropping
+    cells silently, so a column deleted from the contract without an entry in
+    `STORY_SIMILARITY_PAIR_CARRIED` leaves every committed day file unappendable
+    AND unrepairable at once.
+
+    The carried set is passed empty here rather than edited, which is the same
+    call the re-file makes with the entry missing.
+    """
+    path = a_wide_day(tmp_path)
+    before = path.read_bytes()
+
+    with pytest.raises(ValueError, match="cannot place"):
+        ledger.migrate_header(
+            path,
+            StorySimilarityPair.csv_columns(),
+            ledger.refiler(StorySimilarityPair),
+            carried=(),
+        )
+
+    assert path.read_bytes() == before, "the refusal moves nothing"
+    assert DROPPED_CELLS <= ledger.STORY_SIMILARITY_PAIR_CARRIED, (
+        "the entry that makes the re-file above succeed"
+    )
+
+
+def test_re_filing_a_dropped_column_away_keeps_every_cell_the_contract_still_names(
+    tmp_path: Path,
+) -> None:
+    """A dropped cell goes and nothing beside it moves.
+
+    Read by name, so a row that lost the wrong cell fails here rather than
+    passing a width check that only counts columns.
+    """
+    path = a_wide_day(tmp_path)
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        before = list(csv.DictReader(handle))
+
+    widen_ledger_header.widen(TARGET, state_dir=tmp_path, write=True)
+
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        after = list(csv.DictReader(handle))
+    assert len(after) == len(before)
+    for old, new in zip(before, after, strict=True):
+        assert set(old) - set(new) == DROPPED_CELLS
+        assert new == {name: cell for name, cell in old.items() if name not in DROPPED_CELLS}
 
 
 def test_a_dry_run_reports_what_a_live_run_writes_and_writes_nothing(tmp_path: Path) -> None:

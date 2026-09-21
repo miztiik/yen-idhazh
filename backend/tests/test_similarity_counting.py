@@ -35,8 +35,7 @@ def a_scorer() -> ScorerStamp:
 
 def a_judge() -> JudgeStamp:
     return JudgeStamp(judge_model="qwen3-5-9b-q4-k-m", prompt_digest="a" * 64,
-                      grammar_digest="b" * 64, judge_temperature=0.0,
-                      decode_digest="c" * 64, thinks=False)
+                      grammar_digest="b" * 64, judge_temperature=0.0, thinks=False)
 
 
 def a_record() -> StorySimilarityDistribution:
@@ -168,7 +167,7 @@ def test_a_changed_scorer_stamp_archives_and_starts_empty() -> None:
     )
 
 
-@pytest.mark.parametrize("field", ["judge_temperature", "decode_digest", "thinks"])
+@pytest.mark.parametrize("field", ["judge_temperature", "thinks"])
 def test_every_value_the_record_stamps_is_a_value_the_detector_sees(field: str) -> None:
     """A stamp column the detector cannot see is a stamp that lies.
 
@@ -178,7 +177,6 @@ def test_every_value_the_record_stamps_is_a_value_the_detector_sees(field: str) 
     record = a_record()
     after = {
         "judge_temperature": dataclasses.replace(a_judge(), judge_temperature=0.2),
-        "decode_digest": dataclasses.replace(a_judge(), decode_digest="d" * 64),
         "thinks": dataclasses.replace(a_judge(), thinks=True),
     }[field]
 
@@ -191,15 +189,13 @@ def test_every_value_the_record_stamps_is_a_value_the_detector_sees(field: str) 
 def test_a_record_written_before_the_decode_columns_resets_once() -> None:
     """The read-side migration, and what it costs.
 
-    A record written under the older shape carries the three decode values null,
+    A record written under the older shape carries the two decode values null,
     loads here, and stamps to a value it never stamped to - so the first day
     after the widening archives it and counts on from zero. That is the reset,
     it is by construction rather than by an input moving, and it happens once.
     """
     record = a_record()
-    older = record.model_copy(
-        update={"judge_temperature": None, "decode_digest": None, "judge_thinks": None}
-    )
+    older = record.model_copy(update={"judge_temperature": None, "judge_thinks": None})
 
     assert older.record_stamp() != record.record_stamp()
     assert counting.inputs_changed(older, knobs=KNOBS, scorer=a_scorer(), judge=a_judge()) == (

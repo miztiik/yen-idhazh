@@ -262,7 +262,6 @@ def _with_the_verdict(
             "grammar_digest": stamp.grammar_digest,
             "decode_seconds": verdicts.decode_seconds,
             "judge_temperature": stamp.judge_temperature,
-            "decode_digest": stamp.decode_digest,
             "grammar_applied": verdicts.grammar_applied,
             "first_token_probabilities": verdicts.first_token_window or None,
             "thinking_spans": verdicts.thinking_spans,

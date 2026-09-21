@@ -115,40 +115,40 @@ def a_different_value(value: object) -> object:
     return f"{text}-moved"
 
 
-# --- The Oracle: the stamp is not blind ------------------------------------
+# --- The Oracle: the record is not blind ------------------------------------
 
 
 @pytest.mark.parametrize("field", sorted(PipelineInputs.model_fields))
-def test_every_declared_input_moves_the_fingerprint(field: str) -> None:
-    """A declared input that does not move the digest is a silent drift source."""
+def test_every_declared_input_is_named_when_it_moves(field: str) -> None:
+    """A declared input the comparison cannot see is a silent drift source."""
     inputs = recorded_inputs()
     moved = inputs.model_copy(update={field: a_different_value(getattr(inputs, field))})
-    assert moved.fingerprint() != inputs.fingerprint(), f"{field} does not reach the digest"
+    assert moved.changed_inputs(inputs) == (field,), f"{field} is not compared"
 
 
-def test_the_truncation_cap_alone_moves_the_fingerprint() -> None:
+def test_the_truncation_cap_alone_is_named_when_it_moves() -> None:
     """The named trap: a cap change is a config edit that rewrites every summary."""
     inputs = recorded_inputs()
     widened = inputs.model_copy(update={"truncation_cap_tokens": inputs.truncation_cap_tokens * 2})
-    assert widened.fingerprint() != inputs.fingerprint()
+    assert widened.changed_inputs(inputs) == ("truncation_cap_tokens",)
 
 
 def test_host_cpu_is_recorded_but_never_digested() -> None:
-    """Including it would make every runner a different stamp, hiding the violation.
+    """Including it would make every runner a different record, hiding the violation.
 
     Structural rather than filtered: it is not a field of the manifest at all, so
-    there is no code path on which it could reach the digest.
+    there is no code path on which it could reach the comparison.
     """
     assert "host_cpu" not in PipelineInputs.model_fields
     assert "host_cpu" not in recorded_inputs().model_dump(mode="json")
 
 
-def test_the_digest_is_stable_across_construction_order() -> None:
+def test_the_record_is_stable_across_construction_order() -> None:
     inputs = recorded_inputs()
     rebuilt = PipelineInputs.model_validate(
         dict(reversed(list(inputs.model_dump(mode="json").items())))
     )
-    assert rebuilt.fingerprint() == inputs.fingerprint()
+    assert rebuilt.changed_inputs(inputs) == ()
 
 
 # --- Contract tier: the inference knobs are a closed world ------------------
@@ -522,7 +522,7 @@ def test_an_unpinned_build_stamps_apart_from_a_pinned_one() -> None:
     inputs = recorded_inputs()
     unpinned = inputs.model_copy(update={"runtime_build": UNRECORDED_BUILD})
     pinned = inputs.model_copy(update={"runtime_build": "b10598"})
-    assert unpinned.fingerprint() != pinned.fingerprint()
+    assert unpinned.changed_inputs(pinned) == ("runtime_build",)
 
 
 def test_the_runner_class_comes_from_the_runner_and_not_from_a_literal() -> None:
