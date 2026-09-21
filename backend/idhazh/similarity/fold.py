@@ -229,7 +229,7 @@ def inputs_changed(
 
 
 def archive_stem(record: StorySimilarityDistribution) -> str:
-    """The `<stamp>` of `state/story-similarity/archive/<stamp>.json`.
+    """The `<stamp>` of `state/content-similarity-judge/archive/<stamp>.json`.
 
     The record's own stamp rather than a date: the stamp is what the counts
     inside it were taken under, so two archives from one day are two different

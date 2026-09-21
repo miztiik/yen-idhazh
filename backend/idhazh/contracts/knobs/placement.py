@@ -36,7 +36,7 @@ SUPERSEDED_ASSEMBLE_NAMES: Final[Mapping[str, str]] = MappingProxyType(
 _WEIGHTS_TOLERANCE: Final = 1e-9
 
 #: The highest score the labelled set marks as TWO stories. Measured 2026-09-19
-#: over the 200 pairs in `state/story-similarity/holdout-pairs.csv`, labelled by
+#: over the 200 pairs in `state/content-similarity-judge/holdout-pairs.csv`, labelled by
 #: claude-opus-4.6 reading each pair's title and summary; 196 one story, 4 two
 #: stories, and the four are all the same lake-renaming cluster. Counts are
 #: deterministic and have no spread.

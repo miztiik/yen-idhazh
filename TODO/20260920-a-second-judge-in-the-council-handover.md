@@ -49,11 +49,11 @@ it reads like corroboration, which is the trap.
 | Run gates | `disagreement_max` `0.15`, `unclear_max` `0.35` | A run past either is not usable |
 | Budget knobs | `pair_budget` `200` | In `config/idhazh.json` under `assemble.same_story.adaptive_dedup_threshold`. `shards` `4` and `shard_timeout_minutes` `200` moved to the top-level `council` block on 2026-09-21; the old addresses are refused by name |
 | Model registry | `config/models/` | Five entries: two Gemma-4-E4B-QAT variants, `ornith-1.5-9b-q5km`, two Qwen3.5-9B-Q4KM variants |
-| The benchmark | `state/story-similarity/holdout-pairs.csv` | 200 labelled pairs. Written only by `backend/utilities/sample_sheet.py`, an operator tool. No pipeline path appends to it |
+| The benchmark | `state/content-similarity-judge/holdout-pairs.csv` | 200 labelled pairs. Written only by `backend/utilities/sample_sheet.py`, an operator tool. No pipeline path appends to it |
 | The runbook | [`docs/how-to/label-the-similarity-holdout.md`](../docs/how-to/label-the-similarity-holdout.md) | How a sheet is drawn, labelled and harvested |
 
-**The council has never run.** `state/story-similarity/fitted-thresholds/` and
-`state/story-similarity/scored-pairs/` each hold one file and both are headers
+**The council has never run.** `state/content-similarity-judge/fitted-thresholds/` and
+`state/content-similarity-judge/scored-pairs/` each hold one file and both are headers
 with zero data rows. Every number below about judging comes from the design, not
 from a run, and the first scheduled run is what turns any of it real.
 
