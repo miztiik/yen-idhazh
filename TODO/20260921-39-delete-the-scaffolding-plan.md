@@ -28,18 +28,17 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | The ten qualification gates | Validate keeps its verdict | This plan changes how many times they are asked, never what they ask |
 | `server_argv` as the one place an option is spelled | One function every server start goes through | Row #2 shrinks it to spelling a dictionary. Deleting it would make each caller spell options itself, which is more code, not less |
 
-### The measurements this plan rests on
+### What a change costs today
 
 | Reading | Value | Where |
 | --- | --- | --- |
-| Generated JSON schema | 24,639 lines across 66 files | `schemas/` |
-| Generated TypeScript | 9,640 lines across 66 files | `frontend/src/contracts/` |
-| Import statements in the whole site that reach a generated file | 3 | `frontend/src/lib/server/config.ts`, `frontend/src/lib/server/host-fingerprint.ts` |
-| Generated TypeScript files nothing imports | 62 of 66, about 8,700 lines | the same census |
-| Shapes the site needs and keeps its own copy of | at least four - the day payload, the search index, the console band, the day metrics | `frontend/src/lib/day-shape.ts`, `assist/index.ts`, `console/band.ts`, `server/payload.ts` |
+| Edits to name one more llama-server option | six, across five files | a typed field, a branch in the argv builder, a regenerated schema, a version stamp, a changelog line, a test |
+| Places a new model must be wired into a workflow | seven, in three files | only the nightly run and the council call the shared block; the rest carry copies |
+| Import statements in the whole site that reach a generated contract | 3 of 66 files | `frontend/src/lib/server/config.ts`, `frontend/src/lib/server/host-fingerprint.ts` |
+| Shapes the site needs and keeps its own copy of instead | at least four | `frontend/src/lib/day-shape.ts`, `assist/index.ts`, `console/band.ts`, `server/payload.ts` |
 | Fields on the inference block that are only a llama-server option | 24 of 31 | `backend/idhazh/contracts/knobs/inference.py` lines 17-133 |
+| Fields on the turn envelope that re-implement the model's own chat template | 8 | `backend/idhazh/contracts/knobs/turns.py` |
 | Gates whose verdict changes when the replay count falls to one | none of ten | scores compute under `if repeat == 1` at `backend/idhazh/stages/qualify.py:529`; canaries run on shard 0 only |
-| Draft-head surface | about 600 lines across contracts, argv builder, fetch script, four workflows and two model files | measured 2026-09-21 |
 | Cost of a two-address dispatch that fails | 40 to 50 minutes | owner estimate 2026-09-21 |
 
 ## Section 1 - Status Reckoner
@@ -61,6 +60,7 @@ Ordered by execution, not by row number. The row numbers are identities and do n
 | 9 | The benchmark workflow's closed-world tests go | 3,4 | C | PENDING | - | - | - |
 | 11 | The server-log reader goes | - | A | PENDING | - | - | - |
 | 17 | The utilities and evaluations nothing calls go | - | A | PENDING | - | - | - |
+| 18 | The server renders the prompt, not us | 16 | C | PENDING | - | - | - |
 | 7 | Qualification asks each article once | - | A | PENDING | - | - | - |
 | 8 | Both test pipelines commit what they produce | - | A | PENDING | - | - | - |
 | 1 | The generated contract layer goes | 2,3,6,16 | D | PENDING | - | - | - |
@@ -595,3 +595,36 @@ Four proposals were declined. Keeping the capability probe until the fork is pro
  | 1 | Keep the retrieval evaluation as the only search-quality measure | An evaluation whose input grows with the archive and whose bar is a hand-bumped date is a maintenance cost wearing a measurement's clothes | About 990 lines, and a test that goes red because somebody published a day | Fowler |
  | 2 | Delete the two counterweight score fields as well | A faithfulness floor with no counterweight rewards copying the source, which is the failure the counterweights exist to see | About 40 lines, and a quality signal that moves the wrong way | Andre |
  | 3 | Delete the commit-and-push script, also large | It has eight call sites and a test that drives the real script through race and rebase cases against real repositories. That is this project's own code being wrong, which is what the plan's rule keeps a check for | A retry loop in five workflows, none of them executable in a test | Fowler |
+
+## Section 19 - Row #18 - The server renders the prompt, not us
+
+- **Scope:** Stop re-implementing each model's chat template in configuration. Send the conversation as messages to the chat endpoint and let llama-server apply the model's own template, which retires the turn envelope and the one remaining startup check with it.
+- **Files touched:**
+  - `backend/idhazh/contracts/knobs/turns.py` (deleted)
+  - `backend/idhazh/llm/server.py` (`render_prompt`, `continued_prompt`, `turn_markers`, `turn_markers_digest`, `the_render_agrees`, the completion payload builders)
+  - `backend/idhazh/config.py` (the marker check finds the markers in the model's own template instead of in our file)
+  - `backend/idhazh/stages/common.py`, `two_calls.py`, `backend/idhazh/similarity/judge.py`
+  - `backend/idhazh/fingerprint.py` (the envelope digest)
+  - `config/models/` (every entry loses its turn block)
+  - `backend/tests/contracts/test_turn_envelope.py`, `backend/tests/test_summarize.py`, `test_classify.py`
+  - `docs/architecture/` pages describing the envelope
+- **Acceptance gates:** local - `python -m pytest backend/tests -k 'summarize or classify or judge or config' -q`; CI - full suite, and one real pipeline-test dispatch before the row closes.
+- **Oracle:** the prompt the server receives, tokenised, is the same sequence for a committed model entry before and after - driven from a recorded server response so nothing touches the network. **And the prefix cache still serves the second call of an article**, asserted on the cached-token count the record already derives. The second half is the risk, and it is the half that can fail.
+- **The finding:** the eight turn-envelope fields are a hand-copy of the model's own chat template. llama-server applies that template itself when told to, and the chat endpoint takes a message list. The constant for that endpoint is already in the code; production rewrites it to the raw-prompt endpoint and sends text we built. Copying a template by hand is why a new model needs its markers recorded, why they can be wrong, and why a startup check exists to compare our copy against the original.
+- **Decisions:**
+
+ | # | Decision | Authority |
+ | --- | --- | --- |
+ | 1 | The template is the model's, not ours. A configuration field that restates somebody else's file is the same mistake as a schema that restates a Pydantic model | Owner ruling 2026-09-21 |
+ | 2 | The one surviving startup check retires here, and only here. It exists to prove our copy matches the original; with no copy there is nothing to prove | Andre |
+ | 3 | **The trust boundary moves, it does not weaken.** The sanitizer still refuses any marker family it cannot strip; it now reads the markers out of the template the server reports rather than out of our file. Guardrail #11 is unchanged in force | Andre, Guardrail #11 |
+ | 4 | This row runs after the two-span call is gone, because raw-prompt control existed for two reasons and that is one of them | Carmack |
+ | 5 | If the prefix cache stops serving the second call, the row stops and reports. Prompt caching is a measurable share of prefill, and losing it silently is the one outcome that would make this a bad trade | Carmack |
+
+- **Rejected alternatives:**
+
+ | # | Option | Why rejected | What it would cost to take | Authority |
+ | --- | --- | --- | --- | --- |
+ | 1 | Keep rendering ourselves | Every new model needs its markers transcribed by hand, they can be silently wrong, and a startup check exists solely to catch that | Eight configuration fields, the rendering machinery and the check, kept forever | Owner |
+ | 2 | Do this before the Bonsai run | The new model's markers would have to be transcribed first, which is exactly the work this row deletes. Doing it first is better, and it is why this row is not last | Andre |
+ | 3 | Keep the raw-prompt path for the judge only | Two prompt paths is the drift this project keeps finding in other places | About 80 lines kept, and one model family rendering differently from the rest | Fowler |
