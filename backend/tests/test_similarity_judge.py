@@ -35,7 +35,9 @@ from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
 from idhazh.llm.server import (
     TokenChoice,
+    answer_span,
     completion_url,
+    decode_digest,
     parse_completion,
     post,
     render_prompt,
@@ -703,6 +705,26 @@ def test_a_thinking_entry_reads_its_verdict_off_the_answer_span() -> None:
     assert decodes[1]["grammar"] == prompt.grammar()
     assert decodes[1]["prompt"] == decodes[0]["prompt"] + reading.thinking + close
     assert reading.first_token_margin is not None, "the margin is read off the answer's window"
+
+
+def test_the_decode_digest_cannot_tell_the_two_envelopes_apart() -> None:
+    """Why the envelope needs a column and a stamp field of its own.
+
+    The only posted key a reasoning span moves is the prompt, and the prompt is
+    the one key the decode stamp excludes - so the answer body and the answer
+    body with a thought spliced in front of it digest to the same value. Without
+    a field saying which envelope ran, a record counted cold and a record counted
+    after reasoning are one population with nothing able to separate them.
+    """
+    settings = _settings_judging_behind_a_thinking_span()
+    entry = judge.entry_of(settings)
+    answer = judge.decode_body(
+        settings, system=prompt.system_turn(), user=prompt.blank_user_turn()
+    )
+    behind_a_thought = answer_span(answer, thought="a reason", turns=entry.turns)
+
+    assert behind_a_thought["prompt"] != answer["prompt"]
+    assert decode_digest(behind_a_thought) == decode_digest(answer)
 
 
 def test_a_settings_with_no_judge_role_decodes_one_span_and_says_so() -> None:
