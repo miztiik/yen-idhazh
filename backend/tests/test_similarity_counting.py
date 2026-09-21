@@ -133,7 +133,6 @@ def a_row(
             "prompt_digest": stamped.prompt_digest,
             "grammar_digest": stamped.grammar_digest,
             "judge_temperature": stamped.judge_temperature,
-            "decode_digest": stamped.decode_digest,
             "thinking_spans": int(stamped.thinks),
         }
     )

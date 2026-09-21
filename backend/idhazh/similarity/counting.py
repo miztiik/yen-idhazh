@@ -165,7 +165,6 @@ def rows_the_record_admits(
         record.prompt_digest,
         record.grammar_digest,
         record.judge_temperature,
-        record.decode_digest,
         record.judge_thinks,
     )
     return [row for row in rows if _stamp_of(row) == stamp]
@@ -181,7 +180,6 @@ def _stamp_of(row: StorySimilarityPair) -> tuple[object, ...]:
         row.prompt_digest,
         row.grammar_digest,
         row.judge_temperature,
-        row.decode_digest,
         None if row.thinking_spans is None else row.thinking_spans > 0,
     )
 

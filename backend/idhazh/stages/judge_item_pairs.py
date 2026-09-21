@@ -279,7 +279,6 @@ def _instrument_reading(
     payload: dict[str, Any] = {
         "judge_model": stamp.judge_model if readings else None,
         "judge_temperature": stamp.judge_temperature,
-        "decode_digest": stamp.decode_digest,
         "thinking_spans": 1 if stamp.thinks else 0,
         "prompt_digest": stamp.prompt_digest,
         "grammar_digest": stamp.grammar_digest,
