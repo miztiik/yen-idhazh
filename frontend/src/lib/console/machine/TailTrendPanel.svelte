@@ -10,6 +10,7 @@
 	import Panel from '$lib/components/Panel.svelte';
 	import {
 		latencyColumns,
+		seconds,
 		PERCENTILES,
 		type LatencyHistory,
 		type LatencyRun
@@ -130,6 +131,21 @@
 			? ''
 			: `${shortDate(tailRuns[0].date)} to ${shortDate(tailRuns[tailRuns.length - 1].date)}`
 	);
+
+	/** How far the newest run's slow end sits from its own middle.
+	 *
+	 * The five plots show whether that gap is moving; a reader who wanted to
+	 * know how wide it is today was reading it off a curve by eye. Printed, it
+	 * is one number rather than a comparison of two heights. The ends are the
+	 * lowest and the highest percentile drawn, so a change to `PERCENTILES`
+	 * moves the sentence with the plots. */
+	const newest = $derived(tailRuns.at(-1) ?? null);
+	const spread = $derived.by(() => {
+		const middle = newest?.ms[0] ?? 0;
+		const slowest = newest?.ms.at(-1) ?? 0;
+		if (newest === null || middle <= 0 || slowest <= 0) return null;
+		return { run: newest, middle, slowest, times: slowest / middle };
+	});
 </script>
 
 <div
@@ -317,6 +333,16 @@
 					{tooFew.map((run) => `${run.runId} (${run.items})`).join(', ')}.
 				{/if}
 			</p>
+
+			{#if spread !== null}
+				<p class="reads" data-latency-spread={spread.times.toFixed(2)}>
+					On {spread.run.runId}, the newest run drawn, the slowest articles took
+					<strong>{spread.times.toFixed(1)} times as long</strong>
+					as the middle one: {seconds(spread.slowest / 1000)} against
+					{seconds(spread.middle / 1000)}. That is how wide the spread is today; the plots above
+					are whether it is widening.
+				</p>
+			{/if}
 
 			<ul class="sr-only" data-latency-values>
 				{#each tailRuns as run (run.runId)}

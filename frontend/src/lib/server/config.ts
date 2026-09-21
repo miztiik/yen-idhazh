@@ -538,18 +538,12 @@ const PANEL_GROUP_DEFAULTS: PanelGroups = {
 		{
 			id: 'what-the-machine-was-doing',
 			title: 'What the machine was doing',
-			panels: [
-				'two-clocks',
-				'machine-cards',
-				'reading-against-writing',
-				'platform-mix',
-				'outside-the-model-call'
-			]
+			panels: ['two-clocks', 'machine-cards', 'reading-against-writing', 'platform-mix']
 		},
 		{
 			id: 'where-the-time-went',
 			title: 'Where the time went',
-			panels: ['shard-board', 'newest-run-tail', 'tail-trend']
+			panels: ['shard-board', 'tail-trend']
 		},
 		{
 			id: 'how-close-to-the-limits',

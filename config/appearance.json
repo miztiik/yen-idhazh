@@ -40,18 +40,12 @@
       "machine": [
         {
           "id": "what-the-machine-was-doing",
-          "panels": [
-            "two-clocks",
-            "machine-cards",
-            "reading-against-writing",
-            "platform-mix",
-            "outside-the-model-call"
-          ],
+          "panels": ["two-clocks", "machine-cards", "reading-against-writing", "platform-mix"],
           "title": "What the machine was doing"
         },
         {
           "id": "where-the-time-went",
-          "panels": ["shard-board", "newest-run-tail", "tail-trend"],
+          "panels": ["shard-board", "tail-trend"],
           "title": "Where the time went"
         },
         {

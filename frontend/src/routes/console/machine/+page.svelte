@@ -16,9 +16,9 @@
 	 * answered on the server, because the browser holds no ledger to re-aggregate.
 	 *
 	 * **A panel about one run does not follow it.** The shard board, the
-	 * reading-against-writing split, the clock check and the latency curves are
-	 * snapshots of one run or one day, and narrowing a span cannot narrow a
-	 * single run. Each names what it is about instead.
+	 * reading-against-writing split and the clock check are snapshots of one run
+	 * or one day, and narrowing a span cannot narrow a single run. Each names
+	 * what it is about instead.
 	 *
 	 * **Absence is drawn as absence.** `job_seconds` and `cpu_model` are empty on
 	 * 24 of the 54 committed rows and the three host cells on 34 of them, because
@@ -44,8 +44,6 @@
 	import MachineCardsPanel from '$lib/console/machine/MachineCardsPanel.svelte';
 	import MachineSplitPanel from '$lib/console/machine/MachineSplitPanel.svelte';
 	import MemoryBoardPanel from '$lib/console/machine/MemoryBoardPanel.svelte';
-	import NewestRunTailPanel from '$lib/console/machine/NewestRunTailPanel.svelte';
-	import OutsideModelCallPanel from '$lib/console/machine/OutsideModelCallPanel.svelte';
 	import PlatformMixPanel from '$lib/console/machine/PlatformMixPanel.svelte';
 	import PromptCachePanel from '$lib/console/machine/PromptCachePanel.svelte';
 	import ReadAgainstWrittenPanel from '$lib/console/machine/ReadAgainstWrittenPanel.svelte';
@@ -249,17 +247,6 @@
 				chart={data.chart}
 				{windowDays}
 			/>
-		{:else if id === 'outside-the-model-call'}
-			<OutsideModelCallPanel
-				cpuBusy={data.host.cpuBusy}
-				modelLoad={data.host.modelLoad}
-				cpuBusySpan={view.cpuBusySpan}
-				modelLoadSpan={view.modelLoadSpan}
-				parallelSlots={view.parallelSlots}
-				chartWidthPx={data.chart.width_px}
-				{windowDays}
-				days={view.days}
-			/>
 		{:else if id === 'tail-trend'}
 			<TailTrendPanel
 				rows={data.series.latency}
@@ -271,15 +258,6 @@
 				days={view.days}
 				floor={data.latency.floor}
 				tooFew={data.latency.tooFew}
-			/>
-		{:else if id === 'newest-run-tail'}
-			<NewestRunTailPanel
-				newestTail={data.newestTail}
-				svg={data.percentileSvg}
-				floor={data.latency.floor}
-				shardRows={data.latency.shardRows}
-				itemRows={data.latency.itemRows}
-				chart={data.chart}
 			/>
 		{:else if id === 'read-against-written'}
 			<ReadAgainstWrittenPanel

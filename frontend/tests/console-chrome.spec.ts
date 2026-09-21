@@ -420,24 +420,10 @@ test('a route in a state says which state, in the owner words', async ({ page })
 	}
 });
 
-test('the machine route never prints a zero where the ledger holds no answer', async ({ page }) => {
-	await page.goto('/console/machine/', { waitUntil: 'domcontentloaded' });
-
-	// `data-host-value` carries the cell's own reading. Empty is absent, and an
-	// absent cell has to say so in words - a zero there would report a processor
-	// that never idled and a server that used no memory.
-	const cells = await page
-		.locator('[data-host-value]')
-		.evaluateAll((nodes) =>
-			nodes.map((node) => ({
-				value: node.getAttribute('data-host-value') ?? '',
-				text: (node.textContent ?? '').trim()
-			}))
-		);
-	expect(cells.length).toBeGreaterThan(0);
-	for (const cell of cells) {
-		if (cell.value !== '') continue;
-		expect(cell.text).toContain('Not recorded on this run.');
-		expect(cell.text).not.toMatch(/(^|[^\d])0([^\d.%]|$)/);
-	}
-});
+// The route-wide sweep for a nought standing in for an absent reading lived
+// here, and its only instrument was the host panel's own `data-host-value`
+// cells. With that panel gone the sweep had nothing to walk. What is left is
+// the per-panel rule, which is where the fault would be written: the memory
+// board's absent cells in `console-memory-board.spec.ts` and the shard cells in
+// `console-machine-data.spec.ts`. What nobody checks now is a NEW panel landing
+// on this route with the fault, which is a check the panel that lands owes.

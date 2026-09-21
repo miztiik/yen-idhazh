@@ -669,8 +669,8 @@ to stop them sharing a path, not to teach every reader to spot the collision.**
 [frontend/src/lib/charts/machine.ts](../../../frontend/src/lib/charts/machine.ts)
 reads `summarize_ms` off the item ledger and returns one ladder per run: one
 value per configured percentile, in whole milliseconds, over every run the ledger
-holds. Two panels read that one array, which is what stops "how long is the tail
-today" and "is the tail growing" from being two different numbers about one run.
+holds. One panel reads that array, so "how long is the tail today" and "is the
+tail growing" cannot be two different numbers about one run.
 
 **Five plots, one a percentile, on ONE shared scale.** Five lines on one chart at
 five percentiles of one measure is a bundle a reader untangles by colour;
@@ -690,18 +690,22 @@ column sets.
 **One rule a boundary, down all five at once.** A model or prompt change moves
 the whole distribution, so a rule per plot would be one event drawn five times.
 
-**The aggregate stays, for the newest run only.** "How long is the tail today" is
-a different question from "is the tail growing", and the aggregate is the only
-place one run's whole distribution is visible at once. It is the last entry of
-the same array the plots draw. Authority: Andre.
+**How wide the gap is today is printed, not drawn a second time.** A panel of
+its own drew the newest run's whole ladder as one curve, and every value on it
+was the last column of the plots above - so the two could never disagree and one
+of them was redundant. What the curve was being read for is a single number, and
+the plots now print it: how many times the slowest articles of the newest run
+drawn took over its middle one. **What the reader loses:** one run's ladder as a
+single shape. Reading straight down one column of the five plots is the same
+ladder, which is what the shared scale was built for. Authority: Andre, and
+Susan 2026-09-20 for the removal.
 
 **A run under `console.min_attempts_for_rate` is printed, never drawn.** A p99
 over four items is the fourth item. Runs below the floor are named with their
 counts under the plots.
 
 **No new chart type.** The small multiples are hand-written SVG, which needs no
-registration at all, and the aggregate is the line chart already registered in
-`frontend/src/lib/charts/core.ts`.
+registration at all.
 
 ## Degrade rules
 
