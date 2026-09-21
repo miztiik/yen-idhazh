@@ -1,6 +1,6 @@
 # Growing Reads
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 One question, asked of every read:
 
 > **Does this read cost more when a run appended more?**
@@ -268,6 +268,7 @@ listed: its cover is its argument. These are `backend/`'s;
 | `retention._dated_days` | the expired day directories only | it grows with the **backlog**, not with the archive, and shrinks as the prune works |
 | `build_reference_dataset.archive_candidates` | every committed `digest.json` under `frontend/public/digest/` | the candidate pool for the frozen reference set has to be every article the pipeline has published, because the set is drawn on **outlet diversity** and a window would hide the outlets that publish rarely. It is a verb a person types, off the daily path and run once a set (2026-09-13) |
 | `item_health_provenance.archive_columns` | every day file of `state/item-health/` | the question is whether ANY run has ever written a column, and a window answers only for the days inside it - so it would report a column retired last year and a column nothing was ever wired to fill as the same thing. It is a verb a person types, off the daily path, and what it prints is pasted into [the column report](../architecture/sources/item-health-columns.md). No test repeats it (`CLAUDE.md` section 13) |
+| `empty_column_census.census` | every day file of `state/item-health/` and of `state/host-fingerprint/` | same question as the row above, asked of every published ledger rather than one, and crossed with the reader map on each contract so that a column with neither a reader nor a writer exits non-zero. A window cannot answer it for the same reason, and a test cannot hold it for a second one: an assertion that a column is empty goes red the day it first fills, which is a date rather than an edit. It is a verb a person types, off the daily path. Measured 2026-09-21: 29 day files and 14,026 item rows, 6 day files and 76 host rows |
 | `sample_sheet.index` | every committed `digest.json` under `frontend/public/digest/` | a drawn pair can straddle midnight, so its two articles are not always on the draw's own date - resolving against that date alone lost 2,035 of the 2,804 pairs drawn over 29 days. It is a verb a person types when labelling the holdout ([../how-to/label-the-similarity-holdout.md](../how-to/label-the-similarity-holdout.md)), off the daily path, and nothing in the pipeline reads what it writes |
 
 **Two reads on this table are scheduled by nothing, and that is the whole of

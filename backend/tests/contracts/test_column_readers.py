@@ -109,13 +109,22 @@ def test_the_rule_bites_when_a_column_arrives_naming_nobody() -> None:
     The two tests above pass today, which says nothing about whether they could
     fail. This one adds a column the maps have never heard of and holds the
     checker to naming it - so the green above is a reading rather than a habit.
+
+    It looks for its own fault rather than counting them, so that a real fault
+    in the maps fails the tests that own it and leaves this one saying what it
+    came to say.
     """
     columns = (*ItemHealthRow.csv_columns(), A_COLUMN_NOBODY_READS)
 
     faults = reader_faults(ITEM_READERS, UNREAD_CELLS, columns)
 
-    assert len(faults) == 1, faults
-    assert faults[0].startswith(f"{A_COLUMN_NOBODY_READS} is a column of this row")
+    named = [
+        fault
+        for fault in faults
+        if fault.startswith(f"{A_COLUMN_NOBODY_READS} is a column of this row")
+    ]
+    assert len(named) == 1, faults
+    assert "add it to COLUMN_READERS" in named[0]
 
 
 def test_the_rule_bites_when_an_entry_outlives_its_column() -> None:
@@ -124,8 +133,12 @@ def test_the_rule_bites_when_an_entry_outlives_its_column() -> None:
 
     faults = reader_faults(ITEM_READERS, UNREAD_CELLS, kept)
 
-    named = [f"{dropped} is named but is not a column of this row" in f for f in faults]
-    assert named.count(True) == 1, faults
+    named = [
+        fault
+        for fault in faults
+        if fault.startswith(f"{dropped} is named but is not a column of this row")
+    ]
+    assert len(named) == 1, faults
 
 
 @pytest.mark.parametrize(
