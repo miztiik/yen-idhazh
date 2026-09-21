@@ -66,7 +66,7 @@ export interface StorySimilarityPair {
 	/** Whether the two readings agree. Only an agreed pair is folded into the record; a disagreement is a reading about the judge rather than about the pair. */
 	usable?: boolean;
 
-	/** The gap between the highest and the second-highest probability at the first generated position, on the file-order call. A margin near zero means the grammar chose and the model did not. */
+	/** The gap between the two likeliest VERDICTS at the first generated position of the file-order call, over the mass the grammar admits there. Each returned token is summed into the verdict its text opens, a token opening more than one is dropped as naming none, and what is left is renormalised. A margin near zero means the grammar chose and the model did not; empty means fewer than two verdicts took any mass, which a one-word window and a window of illegal tokens both are. Rows stamped before 2026-09-21T12:00 carry a raw gap between the top two TOKENS of a three-wide window instead, which subtracted one verdict from itself whenever a vocabulary spelled it two ways. */
 	first_token_margin?: number | null;
 
 	/** Which model judged. A Literal for the same reason the scorer is one. */
@@ -93,7 +93,7 @@ export interface StorySimilarityPair {
 	/** Whether BOTH calls of this pair opened inside the grammar. The grain here is a pair, so one call that came back outside it makes this false. Empty until a judge has read the pair: a pair nothing decoded is a different fact from a decode the grammar did not hold. */
 	grammar_applied?: boolean | null;
 
-	/** What the decoder said it could have written at the first generated position of the FILE-ORDER call, named so because a pair makes two calls and a singular column must say which. `first_token_margin` is the gap this window's top two leave, so the window is what lets that number be re-derived rather than trusted. */
+	/** What the decoder said it could have written at the first generated position of the FILE-ORDER call, named so because a pair makes two calls and a singular column must say which. `first_token_margin` is bucketed and renormalised out of this window, so the window is what lets that number be re-derived rather than trusted - and it is the only thing that lets a later change to the margin rule be replayed over rows already written. */
 	first_token_probabilities?: string | null;
 
 	/** How many reasoning spans the file-order call decoded before its answer - 0 for a cold answer, 1 under a thinking envelope. A column of its own because `decode_digest` cannot see the envelope: the only posted key a thinking envelope moves is the prompt, and the prompt is excluded. Without this cell a margin taken after reasoning and one taken cold are one population. */

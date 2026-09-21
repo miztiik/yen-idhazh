@@ -355,6 +355,37 @@ def test_every_model_file_loads_and_not_only_the_one_the_pointer_names() -> None
         assert entry.turns.declared_for == entry.sha256, path.name
 
 
+def test_no_committed_file_declares_a_second_entry() -> None:
+    """The optional entry is off by default, and the default is what ships.
+
+    A knob whose default flipped in the same commit that declared it is a
+    feature nobody agreed to run (Guardrail #6). This one is filled the day a
+    replay says a reasoned verdict is a better verdict, and not before.
+    """
+    for path in sorted((CONFIG_DIR / "models").glob("*.json")):
+        declared = ModelsConfig.from_json(read_text(path))
+        assert declared.judge is None, path.name
+        assert [name for name, _ in declared.entries()] == ["summarize"], path.name
+
+
+def test_a_second_entry_naming_other_weights_is_refused() -> None:
+    """No server is started for it, so it decodes on whatever the running one holds.
+
+    Nothing raises in that case: every reply parses, every row writes, and every
+    verdict is filed against a model that never saw the pair.
+    """
+    raw = committed_models_raw()
+    elsewhere = json.loads(json.dumps(raw["summarize"]))
+    elsewhere["sha256"] = "f" * 64
+    elsewhere["inference"]["declared_for"] = "f" * 64
+    elsewhere["turns"]["declared_for"] = "f" * 64
+
+    ModelsConfig.model_validate(raw | {"judge": raw["summarize"]})
+    with pytest.raises(ValidationError) as raised:
+        ModelsConfig.model_validate(raw | {"judge": elsewhere})
+    assert "decodes on the weights the summariser's server holds" in str(raised.value)
+
+
 def test_the_same_weights_are_offered_with_the_draft_head_and_without() -> None:
     """Turning speculation off is a pointer change, never an edit to an entry.
 

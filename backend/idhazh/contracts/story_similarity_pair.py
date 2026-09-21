@@ -132,6 +132,11 @@ class StorySimilarityPair(Contract):
     __schema_stem__: ClassVar[str] = "story-similarity-pair"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21T12:00",
+            change="first_token_margin is a renormalised per-verdict gap over a 25-wide window.",
+            why="A raw top-two gap over three tokens subtracted one verdict from itself.",
+        ),
+        ChangelogEntry(
             version="2026-09-21",
             change="Added the judge-call stamp columns and the judging run id, and keyed on it.",
             why="A verdict named no sampler, and a re-judge collided with the row it replaced",
@@ -254,9 +259,16 @@ class StorySimilarityPair(Contract):
         ge=0.0,
         le=1.0,
         description=(
-            "The gap between the highest and the second-highest probability at the first "
-            "generated position, on the file-order call. A margin near zero means the "
-            "grammar chose and the model did not."
+            "The gap between the two likeliest VERDICTS at the first generated "
+            "position of the file-order call, over the mass the grammar admits there. "
+            "Each returned token is summed into the verdict its text opens, a token "
+            "opening more than one is dropped as naming none, and what is left is "
+            "renormalised. A margin near zero means the grammar chose and the model did "
+            "not; empty means fewer than two verdicts took any mass, which a one-word "
+            "window and a window of illegal tokens both are. Rows stamped before "
+            "2026-09-21T12:00 carry a raw gap between the top two TOKENS of a "
+            "three-wide window instead, which subtracted one verdict from itself "
+            "whenever a vocabulary spelled it two ways."
         ),
     )
     judge_model: JudgeModelId | None = Field(
@@ -329,9 +341,10 @@ class StorySimilarityPair(Contract):
         description=(
             "What the decoder said it could have written at the first generated position "
             "of the FILE-ORDER call, named so because a pair makes two calls and a "
-            "singular column must say which. `first_token_margin` is the gap this "
-            "window's top two leave, so the window is what lets that number be re-derived "
-            "rather than trusted."
+            "singular column must say which. `first_token_margin` is bucketed and "
+            "renormalised out of this window, so the window is what lets that number be "
+            "re-derived rather than trusted - and it is the only thing that lets a later "
+            "change to the margin rule be replayed over rows already written."
         ),
     )
     thinking_spans: int | None = Field(

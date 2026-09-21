@@ -25,7 +25,7 @@ from pydantic import ValidationError
 
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig
-from idhazh.contracts.knobs.models import ModelEntry, ModelsConfig
+from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.turns import TURN_ROLE, TurnsConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
 from idhazh.contracts.run_manifest import ConfigDigest
@@ -87,6 +87,10 @@ def refuse_markers_the_boundary_cannot_hold(models_file: str, models: ModelsConf
     finding out too late. So the question is asked once, over the markers the
     entry declares, before anything is fetched.
 
+    **Every entry the file declares, not only the served roles.** A second entry
+    is rendered into a prompt exactly as the first one is, so an entry whose
+    markers a forged turn survives is the same hole wherever it sits.
+
     **It cannot be a validator on `TurnsConfig`.** `backend/idhazh/contracts/`
     is the bottom of the dependency graph and may import no other subpackage
     (`CLAUDE.md` section 4), so a contract cannot ask the sanitizer anything. It
@@ -94,8 +98,7 @@ def refuse_markers_the_boundary_cannot_hold(models_file: str, models: ModelsConf
     reads `config/`, and it already refuses a models file for a shape the
     contract caught.
     """
-    for role in ModelsConfig.roles():
-        entry: ModelEntry = getattr(models, role)
+    for role, entry in models.entries():
         for field, marker in _forgeable_markers(entry.turns):
             surviving = why_a_forged_turn_would_survive(marker)
             if surviving is None:

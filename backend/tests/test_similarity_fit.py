@@ -69,7 +69,12 @@ def a_scorer() -> ScorerStamp:
 
 def a_judge() -> JudgeStamp:
     return JudgeStamp(
-        judge_model="qwen3-5-9b-q4-k-m", prompt_digest="a" * 64, grammar_digest="b" * 64
+        judge_model="qwen3-5-9b-q4-k-m",
+        prompt_digest="a" * 64,
+        grammar_digest="b" * 64,
+        judge_temperature=0.0,
+        decode_digest="c" * 64,
+        thinks=False,
     )
 
 

@@ -78,6 +78,11 @@ class StorySimilarityDistribution(Contract):
     __schema_stem__: ClassVar[str] = "story-similarity-distribution"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21",
+            change="Added judge_temperature, decode_digest and judge_thinks, and stamped them.",
+            why="Two samplers and two decode envelopes were counted as one population.",
+        ),
+        ChangelogEntry(
             version="2026-09-18",
             change="Initial shape: a fixed row of slots, three counts each, and the dates folded.",
             why="A fit that sorted every pair ever judged would cost more every day.",
@@ -142,6 +147,35 @@ class StorySimilarityDistribution(Contract):
     grammar_digest: Sha256 | None = Field(
         default=None,
         description="sha256 of the grammar the verdicts were produced under.",
+    )
+    judge_temperature: float | None = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "The sampler temperature every verdict in this record was decoded at. Null "
+            "on a record written before the column existed, which is the one value it "
+            "means: a sampler nobody recorded, not a sampler set to nothing."
+        ),
+    )
+    decode_digest: Sha256 | None = Field(
+        default=None,
+        description=(
+            "sha256 of what the judging call asked the decoder to do, minus the prompt, "
+            "the grammar and the model name - each of which is stamped here in a column "
+            "of its own. It catches a sampler field that moved with no other column "
+            "moving, which is a change to what a verdict means that the six named "
+            "values cannot see."
+        ),
+    )
+    judge_thinks: bool | None = Field(
+        default=None,
+        description=(
+            "Whether a reasoning span ran in front of every verdict counted here. A "
+            "column of its own because `decode_digest` cannot see it: the only posted "
+            "key a thinking envelope moves is the prompt, and the prompt is excluded. "
+            "Without it a record counted cold and a record counted after reasoning are "
+            "one population."
+        ),
     )
     folded_dates: tuple[DateStamp, ...] = Field(
         default=(),
@@ -212,14 +246,25 @@ class StorySimilarityDistribution(Contract):
         return self
 
     def record_stamp(self) -> str:
-        """The five things that decide what a count in this record means."""
+        """Everything that decides what a count in this record means.
+
+        **The read-side migration for the three decode values is this method.**
+        A record written before they existed carries them null, loads under this
+        build, and stamps to a value it never stamped to - so the first fold
+        after the widening archives it and counts on from zero. That reset is by
+        construction rather than by an input moving, it happens once, and it is
+        the price of the two populations this record used to merge in silence.
+        """
         payload: dict[str, Any] = {
             "band_high": self.band_high,
             "band_low": self.band_low,
             "bin_width": self.bin_width,
             "cosine_weight": self.cosine_weight,
+            "decode_digest": self.decode_digest,
             "grammar_digest": self.grammar_digest,
             "judge_model": self.judge_model,
+            "judge_temperature": self.judge_temperature,
+            "judge_thinks": self.judge_thinks,
             "key_point_weight": self.key_point_weight,
             "prompt_digest": self.prompt_digest,
             "scorer_model": self.scorer_model,

@@ -302,4 +302,6 @@ export interface ModelsConfig {
 	version?: string;
 
 	summarize: ModelEntry;
+
+	judge?: ModelEntry | null;
 }

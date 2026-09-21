@@ -28,7 +28,7 @@ from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.council_shard_outcome import ShardOutcome
 from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
-from idhazh.llm.server import DEFAULT_ENDPOINT, completion_url, post, token_ids
+from idhazh.llm.server import DEFAULT_ENDPOINT, completion_url, post, token_pieces
 from idhazh.similarity import judge, prompt
 from idhazh.stages.assemble import _earlier_days
 from idhazh.stages.common import LOG, _load_day
@@ -85,15 +85,17 @@ def stage_judge_shard(
     days come through `_earlier_days`, which reads `common.PUBLIC_ROOT`. A caller
     pointing one somewhere else has to move the other with it.
     """
-    entry = settings.models.summarize
+    entry = judge.entry_of(settings)
     timeout = entry.inference.request_timeout_minutes * 60.0
     flush_every = settings.app.assemble.same_story.judging_knobs().flush_every_pairs
     drawn = _rows_this_leg_owns(run_dir / DRAW_FILENAME, shard=shard, shards=shards)
-    # Asked once a leg, before any pair is judged. A vocabulary that opens two of
-    # the three words with one token costs nothing visible and makes
-    # `first_token_margin` meaningless for the whole day, so it is a precondition
-    # rather than a per-call check.
-    prompt.first_token_ids(partial(token_ids, base_url, timeout=timeout))
+    # Asked once a leg, before any pair is judged. A verdict every returned token
+    # could belong to another verdict too can never take any of the window's
+    # mass, so `first_token_margin` reports a gap between the other two as though
+    # that one had been weighed - which costs nothing visible and makes the
+    # column wrong for the whole day. It is a precondition rather than a
+    # per-call check.
+    prompt.first_token_openings(partial(token_pieces, base_url, timeout=timeout))
     client = partial(post, endpoint=completion_url(base_url), timeout=timeout)
     items = _items_by_url_key(
         date,

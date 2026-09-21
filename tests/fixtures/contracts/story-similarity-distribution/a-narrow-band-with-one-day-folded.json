@@ -3,11 +3,14 @@
   "band_low": 0.88,
   "bin_width": 0.001,
   "cosine_weight": 1.0,
+  "decode_digest": null,
   "folded_dates": [
     "2026-09-18"
   ],
   "grammar_digest": "c0426bfa5af2e178d25538a7710f36187a35ae540a9e4293072d866b17df756b",
   "judge_model": "qwen3-5-9b-q4-k-m",
+  "judge_temperature": null,
+  "judge_thinks": null,
   "key_point_weight": 0.0,
   "prompt_digest": "ae894804f944af7d20770aaeac592245089f908f2f983a16219eb77b761f6246",
   "scorer_model": "all-minilm-l6-v2-quantized",

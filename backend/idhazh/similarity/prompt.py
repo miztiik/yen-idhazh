@@ -49,13 +49,32 @@ SECOND_LABEL: Final = "Second:"
 #: by ours before the model starts writing.
 REASK: Final = "Do these two report on the exact same event? Answer YES, NO or UNCLEAR."
 
-#: What the decoder may emit, and the whole of it. The optional leading space is
-#: not politeness: most vocabularies spell ` YES` and `YES` as different tokens,
-#: and many chat templates end the assistant header in a way that makes the
+#: The one opening the grammar spends before a verdict word. It is not
+#: politeness: most vocabularies spell ` YES` and `YES` as different tokens, and
+#: many chat templates end the assistant header in a way that makes the
 #: space-prefixed one the model's natural first choice. A grammar admitting only
 #: the bare literal would force a pick among three tokens the model considered
 #: unlikely, the reply would still parse, and nothing downstream could tell.
-GRAMMAR: Final = 'root ::= " "? ("YES" | "NO" | "UNCLEAR")'
+OPTIONAL_OPENING: Final = " "
+
+#: Every string the decoder may emit, and the whole of it: each verdict bare and
+#: each verdict behind the optional opening. Built from the enum rather than
+#: listed, because the margin rule buckets a window against this tuple and a
+#: second hand-written list is a second thing to keep in step with the grammar.
+LEGAL_REPLIES: Final[tuple[str, ...]] = tuple(
+    f"{opening}{verdict.value}"
+    for opening in ("", OPTIONAL_OPENING)
+    for verdict in SameStoryVerdict
+)
+
+#: What the decoder may emit, as the GBNF it is held to. Rendered from the same
+#: enum `LEGAL_REPLIES` is, so the grammar and the set a window is read against
+#: cannot drift apart. The exact string is asserted in the test module: it is
+#: digested onto every row and into the record's own stamp, so a respelling that
+#: admits the same words would still archive the record.
+GRAMMAR: Final = 'root ::= " "? ({})'.format(
+    " | ".join(f'"{verdict.value}"' for verdict in SameStoryVerdict)
+)
 
 #: How many tokens one reply may spend. Derived from the grammar rather than
 #: chosen: the longest string it admits is a space and `UNCLEAR`, and no
@@ -68,6 +87,12 @@ REPLY_TOKENS: Final = 4
 #: server that is about to decode, because the answer is a property of the
 #: weights rather than of this repository.
 Tokenizer = Callable[[str], Sequence[int]]
+
+#: Turns a string into the tokens a vocabulary reads it as, as text. The margin
+#: is bucketed on what a token SPELLS rather than on an id, because the server
+#: reports both beside each alternative and the spelling is what says which
+#: verdict a token opens.
+TextTokenizer = Callable[[str], Sequence[str]]
 
 
 @lru_cache(maxsize=1)
@@ -129,6 +154,18 @@ def grammar() -> str:
     return GRAMMAR
 
 
+def blank_user_turn() -> str:
+    """The user turn's shape with nothing in it, for a caller with no pair to hand.
+
+    The same rendering the digest covers, which is what makes it safe to build a
+    request body around when the question is about the ask rather than about two
+    items - the stamp digests the body minus its prompt, so what stands in for
+    the pair changes nothing it reads and a second rendering would still have to
+    be kept in step with this one.
+    """
+    return _rendered("", "")
+
+
 def prompt_text() -> str:
     """Everything the model reads that is not the pair itself.
 
@@ -142,7 +179,7 @@ def prompt_text() -> str:
     pair, they differ on every call, and a digest that moved with them would say
     nothing at all about the ask.
     """
-    return "\n".join((system_turn(), _rendered("", "")))
+    return "\n".join((system_turn(), blank_user_turn()))
 
 
 def prompt_digest() -> str:
@@ -155,32 +192,76 @@ def grammar_digest() -> str:
     return derive_text_digest(grammar())
 
 
-def first_token_ids(tokenizer: Tokenizer) -> tuple[int, int, int]:
-    """The id each verdict word opens with, asked of the vocabulary that will write it.
+@lru_cache(maxsize=1)
+def first_token_prefixes() -> frozenset[str]:
+    """Every non-empty prefix of a legal reply, which is what the grammar admits here.
 
-    Encoded rather than tabulated. A table of ids is right for exactly one set of
-    weights and says nothing at all when the weights move, and the property these
-    defend is the one a single probability read rests on: `first_token_margin`
-    reports a three-way distribution off one position, which it can only do while
-    the three words still differ there.
-
-    The refusal is the point of the function. A vocabulary that opens two of them
-    with the same token does not fail anything visible - every reply still parses
-    and every row still writes - it just makes one column meaningless for as long
-    as nobody looks.
+    This is the size of the alternatives window the judge asks for. A window
+    sized to the three verdict WORDS is sized to the answer set, and the answer
+    set is not what sits at the first generated position: a token is a prefix of
+    a legal string, so ` UNC` and `N` are both things the grammar can open with
+    and neither is a verdict. Twenty-five of them come out of six strings, and
+    the number is derived here rather than written down anywhere.
     """
-    yes, no, unclear = (_opening_id(tokenizer, verdict) for verdict in SameStoryVerdict)
-    if len({yes, no, unclear}) != 3:
+    return frozenset(
+        reply[:length] for reply in LEGAL_REPLIES for length in range(1, len(reply) + 1)
+    )
+
+
+def verdicts_opened_by(token: str) -> frozenset[SameStoryVerdict]:
+    """Which verdicts a returned token could be the start of.
+
+    One leading space is spent first, for the reason the grammar admits one. What
+    is left is matched as a prefix, never as a spelling: a vocabulary that writes
+    ` UNCLEAR` as ` UNC` plus `LEAR` gives UNCLEAR no probability at all under a
+    rule that compares whole words, and the column then reports a two-way gap as
+    a three-way one.
+
+    **An empty remainder opens all three, and the caller drops it.** A lone space
+    and a lone empty token are both prefixes of every legal reply, so neither
+    names a verdict; counting one into all three would add the same mass three
+    times. Measured on 2026-09-21, the empty token is really in the window - it
+    came back at rank 4 of 25
+    (`docs/reference/benchmarks/what-the-margin-rule-changes.md`).
+
+    An empty set is a token the grammar could not have opened with at all.
+    """
+    text = token[1:] if token.startswith(OPTIONAL_OPENING) else token
+    if not text:
+        return frozenset(SameStoryVerdict)
+    return frozenset(
+        verdict for verdict in SameStoryVerdict if verdict.value.startswith(text)
+    )
+
+
+def first_token_openings(tokenizer: TextTokenizer) -> dict[SameStoryVerdict, str]:
+    """The token each verdict opens with that opens no other, asked of the vocabulary.
+
+    Asked rather than tabulated. A table of tokens is right for exactly one set of
+    weights and says nothing when the weights move, and the property it defends is
+    the one the margin rests on: a verdict that no returned token can be
+    attributed to scores zero for ever, and the column then reports a two-way gap
+    between the other two as though the third had been considered and rejected.
+
+    Both spellings are asked for and one attributable opening is enough. A
+    vocabulary that spells ` YES` as a lone space plus `YES` opens that spelling
+    with a token naming no verdict, and YES is still readable through its bare
+    spelling - which is the case the retired bare-word check could not see,
+    because it never asked about the space-prefixed strings at all.
+    """
+    found: dict[SameStoryVerdict, str] = {}
+    for reply in LEGAL_REPLIES:
+        tokens = tokenizer(reply)
+        if not tokens:
+            raise ValueError(f"this vocabulary encodes {reply!r} as no tokens at all")
+        opened = verdicts_opened_by(tokens[0])
+        if len(opened) == 1:
+            found.setdefault(next(iter(opened)), tokens[0])
+    unreadable = [verdict.value for verdict in SameStoryVerdict if verdict not in found]
+    if unreadable:
         raise ValueError(
-            "this vocabulary opens two of YES, NO and UNCLEAR with the same token "
-            f"(YES={yes}, NO={no}, UNCLEAR={unclear}), so one probability read at the "
-            "first generated position cannot tell the three apart"
+            f"this vocabulary opens every spelling of {', '.join(unreadable)} with a "
+            "token that opens another verdict too, so no probability read at the first "
+            "generated position can tell the three apart"
         )
-    return yes, no, unclear
-
-
-def _opening_id(tokenizer: Tokenizer, verdict: SameStoryVerdict) -> int:
-    ids = tokenizer(verdict.value)
-    if not ids:
-        raise ValueError(f"this vocabulary encodes {verdict.value} as no tokens at all")
-    return ids[0]
+    return found
