@@ -1202,7 +1202,7 @@ def test_a_band_that_opens_above_todays_floor_is_refused() -> None:
         )
 
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).assemble.same_story
-    assert committed.adaptive_dedup_threshold.band_low < committed.floor_min
+    assert committed.judging_knobs().band_low < committed.floor_min
 
 
 def test_a_daily_step_that_outruns_the_band_is_refused() -> None:
@@ -1245,22 +1245,39 @@ def test_a_config_that_makes_the_line_rise_faster_than_it_falls_is_refused() -> 
         SimilarityThresholdConfig(max_down_bins=3, max_up_bins=10)
 
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    knobs = committed.assemble.same_story.adaptive_dedup_threshold
+    knobs = committed.assemble.same_story.judging_knobs()
     assert knobs.fall_weight > knobs.rise_weight
     assert knobs.max_down_bins > knobs.max_up_bins
 
 
 def test_a_config_still_spelling_a_retired_threshold_knob_is_refused() -> None:
-    """Both knobs changed unit as well as name, so a rename in place would read wrong.
+    """Two knobs changed unit as well as name, and one changed owner.
 
     `max_down_step` was a score and `max_down_bins` is a count of slots, so an
     operator who moves 0.005 across untouched has written a step two hundred
     times too small. "extra inputs are not permitted" would not have told them.
+
+    `shards` left this block for `council` on 2026-09-21, so its replacement is
+    printed as a whole path - a person sent to a block-relative name would be
+    sent to a key inside the block the knob just left.
     """
     with pytest.raises(ValidationError, match="max_down_bins"):
         SimilarityThresholdConfig.model_validate({"max_down_step": 0.005})
     with pytest.raises(ValidationError, match="fall_weight"):
         SimilarityThresholdConfig.model_validate({"smoothing_weight": 0.15})
+    with pytest.raises(ValidationError, match=re.escape("council.shards")):
+        SimilarityThresholdConfig.model_validate({"shards": 4})
+
+
+def test_a_config_still_spelling_the_judging_bound_under_run_is_refused() -> None:
+    """The bound left `run` for `council`, and a stale file is answered by name.
+
+    "extra inputs are not permitted" would leave an operator hunting for a
+    number that is still there under another address, and a shard with no bound
+    runs to the platform's 6 h ceiling before anything says so.
+    """
+    with pytest.raises(ValidationError, match=re.escape("council.shard_timeout_minutes")):
+        AppConfig.model_validate({"run": {"judge_shard_timeout_minutes": 200}})
 
 
 def test_a_band_that_cannot_draw_the_hardest_labelled_pair_is_refused() -> None:
@@ -1279,17 +1296,18 @@ def test_a_band_that_cannot_draw_the_hardest_labelled_pair_is_refused() -> None:
         )
 
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).assemble.same_story
-    assert committed.adaptive_dedup_threshold.band_low < HOLDOUT_TWO_STORY_MAX
+    assert committed.judging_knobs().band_low < HOLDOUT_TWO_STORY_MAX
 
 
-def test_a_pair_budget_that_cannot_finish_inside_a_leg_is_refused() -> None:
-    """A leg GitHub kills uploads nothing, so the day's whole draw is lost.
+def test_a_pair_budget_that_cannot_finish_inside_a_shard_is_refused() -> None:
+    """A shard GitHub kills uploads nothing, so the day's whole draw is lost.
 
     A literal ceiling cannot see the timeout, so the bound is arithmetic over
-    two blocks. The bite proof is the trade the message names: raise the timeout
-    and the refused budget starts validating.
+    two blocks - the tenant's budget against the council's clock and width. The
+    bite proof is the trade the message names: raise the timeout and the refused
+    budget starts validating.
     """
-    with pytest.raises(ValidationError, match="judge_shard_timeout_minutes"):
+    with pytest.raises(ValidationError, match=re.escape("council.shard_timeout_minutes")):
         AppConfig.model_validate(
             {"assemble": {"same_story": {"adaptive_dedup_threshold": {"pair_budget": 1000}}}}
         )
@@ -1297,7 +1315,7 @@ def test_a_pair_budget_that_cannot_finish_inside_a_leg_is_refused() -> None:
     def with_budget(budget: int, *, minutes: int = 200) -> AppConfig:
         return AppConfig.model_validate(
             {
-                "run": {"judge_shard_timeout_minutes": minutes},
+                "council": {"shard_timeout_minutes": minutes},
                 "assemble": {"same_story": {"adaptive_dedup_threshold": {"pair_budget": budget}}},
             }
         )
@@ -1349,19 +1367,46 @@ def test_the_feature_ships_off_and_a_fresh_clone_publishes_what_it_always_did() 
 
     Nothing reads this block yet, so the switch is the whole of the promise: a
     clone that has never heard of the fitted line publishes exactly the groups
-    `floor_min` produced before the block existed.
+    `floor_min` produced before the block existed. A clone with no judge in it
+    has no block at all, which reaches the same day by the shorter road.
     """
-    fresh = AppConfig.model_validate({}).assemble.same_story.adaptive_dedup_threshold
+    fresh = AppConfig.model_validate({}).assemble.same_story
     committed = AppConfig.from_json(
         read_text(CONFIG_DIR / "idhazh.json")
-    ).assemble.same_story.adaptive_dedup_threshold
+    ).assemble.same_story.judging_knobs()
 
-    assert fresh.enabled is False
+    assert fresh.adaptive_dedup_threshold is None
     assert committed.enabled is False
-    assert fresh == committed, "the committed file spells the defaults it ships"
+    assert committed == SimilarityThresholdConfig(), "the committed file spells the defaults"
 
     for name in ("enabled", "step_change_guard_enforced"):
         described = SimilarityThresholdConfig.model_fields[name].description or ""
         assert "Removal condition" in described, (
             f"adaptive_dedup_threshold.{name} has no removal condition on its own line"
         )
+
+
+def test_a_config_with_no_judge_in_it_validates_and_stays_that_way() -> None:
+    """The zero-judge condition, expressed as a config test.
+
+    A block built by a default factory cannot express "no judge is configured":
+    absent and present-at-defaults read the same afterwards, so the condition
+    would be asserted and never tested. The block is optional and defaults to
+    absent, so the absence survives validation and this test can fail.
+
+    The council's own runner numbers are in their own block, so a file with no
+    judge in it still says how long a judging shard may run and how many of them
+    there are.
+    """
+    none_at_all = AppConfig.model_validate({})
+
+    assert none_at_all.assemble.same_story.adaptive_dedup_threshold is None
+    assert none_at_all.council.shard_timeout_minutes >= 1
+    assert none_at_all.council.shards >= 1
+
+    committed = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    del committed["assemble"]["same_story"]["adaptive_dedup_threshold"]
+    without_a_judge = AppConfig.model_validate(committed)
+
+    assert without_a_judge.assemble.same_story.adaptive_dedup_threshold is None
+    assert without_a_judge.council == AppConfig.model_validate({}).council

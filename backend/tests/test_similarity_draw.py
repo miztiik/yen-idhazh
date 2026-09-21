@@ -417,7 +417,7 @@ def test_the_draw_samples_the_config_band_and_never_the_line_a_fit_applied(
     monkeypatch.setattr(common, "PUBLIC_ROOT", digest_root)
     settings = config.load(CONFIG_DIR)
     same_story = settings.app.assemble.same_story
-    tuning = same_story.adaptive_dedup_threshold
+    tuning = same_story.judging_knobs()
 
     def drawn_with(floor: float, out: str) -> Draw:
         assemble_block = settings.app.assemble.model_copy(
