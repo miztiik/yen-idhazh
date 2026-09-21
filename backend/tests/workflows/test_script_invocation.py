@@ -44,6 +44,23 @@ def _calls() -> list[tuple[str, str, bool]]:
     return found
 
 
+def _sourced() -> set[str]:
+    """Every script that another shipped script sources, which no step spells out.
+
+    `fetch-model-runtime.sh` sources the install half so the pin lands in the
+    same shell both run in. A sourced script is reached through its sourcer, and
+    needs no mode of its own.
+    """
+    found: set[str] = set()
+    for path in SCRIPTS_DIR.glob("*.sh"):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            stripped = line.lstrip()
+            if stripped.startswith("#") or not stripped.startswith((". ", "source ")):
+                continue
+            found.update(match.group("name") for match in SCRIPT_CALL.finditer(line))
+    return found
+
+
 def _committed_modes() -> dict[str, str]:
     """The mode git recorded for each shipped script, by filename.
 
@@ -100,16 +117,20 @@ def test_every_shipped_script_is_one_a_workflow_runs() -> None:
     """`.github/scripts/` holds a step, not a tool (`docs/reference/repository-layout.md`).
 
     It is also what makes the mode check above complete rather than merely
-    green: a script no workflow names is a script whose mode nothing here would
+    green: a script nothing reaches is a script whose mode nothing here would
     ever look at, and a workflow naming a script that is not shipped is a step
     that fails on the runner over a path nobody can grep for.
+
+    A step is not the only way in. A script another shipped script sources runs
+    inside that one's shell, so it is reached without a workflow naming it.
     """
     shipped = {path.name for path in SCRIPTS_DIR.glob("*.sh")}
     assert shipped, "the directory ships nothing, so no workflow can be reaching it"
 
     named = {name for _, name, _ in _calls()}
-    assert named == shipped, (
-        "every shipped script is run by a workflow and every script a workflow "
-        f"names is shipped: workflows name {sorted(named - shipped)} that are not "
-        f"here, and {sorted(shipped - named)} is here and run by nothing"
+    reached = named | _sourced()
+    assert reached == shipped, (
+        "every shipped script is reached and every script a workflow names is "
+        f"shipped: workflows name {sorted(named - shipped)} that are not "
+        f"here, and {sorted(shipped - reached)} is here and reached by nothing"
     )
