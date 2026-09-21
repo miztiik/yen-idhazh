@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from pathlib import Path
 from typing import Final
@@ -14,19 +15,21 @@ from pydantic import ValidationError
 from idhazh import config
 from idhazh.classify import dag
 from idhazh.classify.calls import label_budget_tokens, summarize_and_plan_budget_tokens
-from idhazh.contracts import story_similarity_distribution
+from idhazh.contracts import app_config, story_similarity_distribution
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.appearance_config import AppearanceConfig, ChartConfig
 from idhazh.contracts.call_cost import CallKind
 from idhazh.contracts.knobs import placement
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
+from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.knobs.observability import LoggingConfig, LogLevel, ObservabilityConfig
 from idhazh.contracts.knobs.placement import (
     HOLDOUT_TWO_STORY_MAX,
+    SECONDS_A_JUDGED_PAIR,
     SameStoryConfig,
     SimilarityThresholdConfig,
 )
@@ -1306,6 +1309,10 @@ def test_a_pair_budget_that_cannot_finish_inside_a_shard_is_refused() -> None:
     two blocks - the tenant's budget against the council's clock and width. The
     bite proof is the trade the message names: raise the timeout and the refused
     budget starts validating.
+
+    The boundary is derived from the measured pair cost rather than written
+    down, so a later reading moves this test with it instead of freezing the
+    number this one was written against.
     """
     with pytest.raises(ValidationError, match=re.escape("council.shard_timeout_minutes")):
         AppConfig.model_validate(
@@ -1320,10 +1327,34 @@ def test_a_pair_budget_that_cannot_finish_inside_a_shard_is_refused() -> None:
             }
         )
 
-    assert with_budget(308) is not None
-    with pytest.raises(ValidationError, match="pair_budget 309"):
-        with_budget(309)
-    assert with_budget(309, minutes=210) is not None
+    council = CouncilConfig()
+    pairs_a_shard = math.floor(council.shard_timeout_minutes * 60 / SECONDS_A_JUDGED_PAIR)
+    fits = pairs_a_shard * council.shards
+
+    assert with_budget(fits) is not None
+    with pytest.raises(ValidationError, match=f"pair_budget {fits + 1}"):
+        with_budget(fits + 1)
+    assert with_budget(fits + 1, minutes=council.shard_timeout_minutes + 10) is not None
+
+
+def test_the_judges_own_bound_is_the_only_thing_its_measurement_sizes() -> None:
+    """One judge's reading may not re-size a budget nobody measured.
+
+    `SECONDS_A_CALL` is derived from summarising articles and sizes work outside
+    this judge, so the judge carries its own measured figure instead of moving
+    the shared one. This holds the separation from both ends: the committed
+    config still validates, and nothing in `app_config` reads the shared number
+    any more.
+    """
+    assert AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")) is not None
+    assert not hasattr(app_config, "SECONDS_A_CALL"), (
+        "the judge's fit check is reading the shared per-call figure again, so moving "
+        "the judge's measurement would re-size every other budget derived from it"
+    )
+    assert SECONDS_A_JUDGED_PAIR < 2 * placement.SECONDS_A_CALL, (
+        "a measured pair costs less than the derived figure doubled, which is why the "
+        "derived one was an unlabelled margin rather than a reading"
+    )
 
 
 def test_the_two_contract_modules_share_one_grid_tolerance() -> None:

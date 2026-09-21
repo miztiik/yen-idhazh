@@ -51,10 +51,23 @@ HOLDOUT_TWO_STORY_MAX: Final = 0.9407
 #: Wall clock for one judge call at 764 read tokens, in seconds. Derived from the
 #: repository's own reading of 9.85 tokens a second - median over 4,117 timed
 #: rows, slowest 8.25, fastest 44.71, taken 2026-09-09 on a stock ubuntu-latest
-#: (docs/reference/pipeline-cost.md). It is here because pair_budget is bounded
-#: against the leg timeout and that arithmetic needs a seconds-a-call figure with
-#: a source. Row 17 replaces it with a reading taken on the judge prompt itself.
+#: (docs/reference/pipeline-cost.md). A derived figure rather than a judge
+#: reading, which is why the judge no longer sizes its own budget from it. It
+#: stays because the budgets that still read it have no reading of their own, and
+#: moving it would re-size work nobody measured.
 SECONDS_A_CALL: Final = 77.6
+
+#: Wall clock for one judged pair - both readings of it - in seconds. The worst
+#: pair measured rather than the average one, because a bound has to survive a bad
+#: night: 110.98 s against a mean of 94.53 and a best of 72.80, population sd
+#: 7.84, over the 82 pairs of run 2026-09-18-35339202390. Judged 2026-09-18 across
+#: four stock ubuntu-latest runners on Qwen3.5-9B-Q4_K_M, and the four shards'
+#: means spread 88.24 to 99.89 s - a 13.2 percent difference from the machine
+#: alone (docs/reference/benchmarks/what-a-judge-pair-costs.md). Denominated in
+#: pairs and not calls: a pair's second call re-reads the first one's prompt
+#: prefix, so halving this would be a guess with the direction known and the size
+#: unknown.
+SECONDS_A_JUDGED_PAIR: Final = 110.98
 
 #: The knobs `adaptive_dedup_threshold` used to carry, and where each one went.
 #: Two changed unit as well as name: the fall cap is counted in slots of
@@ -232,13 +245,26 @@ class SimilarityThresholdConfig(Model):
         default=200,
         ge=1,
         description=(
-            "How many pairs a day may be judged. 200 pairs judged twice is 400 calls, which "
-            "at the council's committed four shards is 100 calls on each, which at 77.6 "
-            "seconds a call is 2 hours 9 minutes of model time a shard. That figure is "
-            "derived from 9.85 tokens a second measured on a stock runner, not from a judge "
-            "call; row 17 measures a real one. Raising it is a job-timeout question before "
-            "it is a quality one, and a validator refuses a value that does not fit "
-            "council.shard_timeout_minutes."
+            "How many pairs a day may be judged. 200 pairs over the council's committed "
+            "four shards is 50 pairs a shard, which at the worst pair measured - 110.98 s "
+            "on 2026-09-18 - is 1 hour 32 minutes of model time a shard, and 1 hour 19 "
+            "minutes at the measured average of 94.53 s "
+            "(docs/reference/benchmarks/what-a-judge-pair-costs.md). Raising it is a "
+            "job-timeout question before it is a quality one, and a validator refuses a "
+            "value that does not fit council.shard_timeout_minutes."
+        ),
+    )
+    flush_every_pairs: int = Field(
+        default=1,
+        ge=1,
+        description=(
+            "How many pairs a judging shard finishes before it writes its verdict file "
+            "again. Every pair, because the file holds one shard's slice of pair_budget - "
+            "50 rows at the committed numbers - and rewriting 50 rows is not measurable "
+            "beside a pair that costs 110.98 s. It buys the case the cadence exists for: a "
+            "shard that stops on its clock, or dies, still leaves every pair it had "
+            "already judged. Counted in pairs because a pair is the unit this judge stops "
+            "between. Raise it only if a run ever shows the rewrite costing anything."
         ),
     )
     judge_temperature: float = Field(
