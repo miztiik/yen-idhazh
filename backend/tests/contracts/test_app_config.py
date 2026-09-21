@@ -21,6 +21,7 @@ from idhazh.contracts.call_cost import CallKind
 from idhazh.contracts.knobs import placement
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
+from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.models import ModelsConfig
@@ -1416,3 +1417,39 @@ def test_a_config_with_no_judge_in_it_validates_and_stays_that_way() -> None:
 
     assert without_a_judge.assemble.same_story.adaptive_dedup_threshold is None
     assert without_a_judge.council == AppConfig.model_validate({}).council
+
+
+def test_the_whole_range_of_the_repair_cap_loads() -> None:
+    """A knob whose top half will not load is a lying bound.
+
+    Dates are a PARALLEL axis - one job a date, each under its own
+    `shard_timeout_minutes` - so nothing multiplies a per-shard time budget by
+    this number. A check that did would refuse a config the knob's own bound
+    admits, and would be comparing parallel work against a per-job clock.
+    """
+    field = CouncilConfig.model_fields["repair_dates_a_night"]
+    lowest = next(bound.ge for bound in field.metadata if hasattr(bound, "ge"))
+    highest = next(bound.le for bound in field.metadata if hasattr(bound, "le"))
+
+    for value in range(lowest, highest + 1):
+        loaded = AppConfig.model_validate({"council": {"repair_dates_a_night": value}})
+        assert loaded.council.repair_dates_a_night == value
+
+
+def test_the_council_carries_its_own_window_its_floor_and_its_cap() -> None:
+    """Three knobs the venue owns, because all three price a runner.
+
+    What counts as behind is the tenant's - only it knows what it has read - but
+    how far back the council asks, how far back it may reach at all, and how
+    many older dates one night repairs are the venue's, because each one is
+    another job a tenant a shard.
+    """
+    committed = AppConfig.model_validate(json.loads(read_text(CONFIG_DIR / "idhazh.json"))).council
+    fresh = AppConfig.model_validate({}).council
+
+    assert committed.repair_window_nights == fresh.repair_window_nights
+    assert committed.first_night == fresh.first_night
+    assert committed.repair_dates_a_night == fresh.repair_dates_a_night
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", committed.first_night), (
+        "the floor is a date the window arithmetic can read"
+    )

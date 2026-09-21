@@ -122,6 +122,9 @@
     "zoom_factor": 1.5
   },
   "council": {
+    "first_night": "2026-09-19",
+    "repair_dates_a_night": 1,
+    "repair_window_nights": 7,
     "shard_preamble_minutes": 13,
     "shard_timeout_minutes": 200,
     "shard_wrap_up_minutes": 12,

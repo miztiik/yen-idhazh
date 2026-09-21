@@ -117,6 +117,11 @@ class Tenant(Protocol):
         The council owns the window - its floor, its length and its per-night cap.
         The tenant owns what is missing and why, under its own stamp rule and its
         own reset semantics.
+
+        A tenant that moved in after the council's own first night raises the
+        floor for itself here, by naming no date from before it arrived. Answer
+        only inside the window: a date from outside one is a job the council
+        never priced, and it is refused by name rather than run.
         """
         ...
 
