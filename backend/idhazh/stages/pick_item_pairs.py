@@ -1,7 +1,8 @@
-"""Score one published day's borderline pairs and write the draw the legs judge.
+"""Which item pairs from one published day are worth judging, picked and written down.
 
-One stage, one module. `idhazh.cli` chooses which stage runs and holds no stage
-body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
+One stage, one module. The router does not name it: the council reaches it
+through the tenant that owns this judge (CLAUDE.md section 1a, "A router is the
+sharpest case").
 
 It calls no model, opens no socket and reads nothing under `state/`. Every
 verdict column it writes is empty: this step says which pairs are worth a
@@ -89,7 +90,7 @@ def _as_csv(rows: list[StorySimilarityPair]) -> str:
     return buffer.getvalue()
 
 
-def stage_judge_draw(
+def stage_pick_item_pairs(
     date: str,
     *,
     run_id: str,
@@ -136,7 +137,9 @@ def stage_judge_draw(
     day = _load_day(assemble.day_dir(digest_root, date) / "digest.json")
     if day is None:
         LOG.warning(
-            "judge draw found no published day to read date=%s out=%s", date, draw_relpath(date)
+            "pick-item-pairs found no published day to read date=%s out=%s",
+            date,
+            draw_relpath(date),
         )
         assemble.write_atomic(path, _as_csv([]))
         return draw.Draw(taken=[], pairs_in_band=0)
@@ -171,7 +174,7 @@ def stage_judge_draw(
     ]
     assemble.write_atomic(path, _as_csv(rows))
     LOG.info(
-        "judge draw date=%s run=%s in_band=%s drawn=%s budget=%s shards=%s out=%s",
+        "pick-item-pairs date=%s run=%s in_band=%s drawn=%s budget=%s shards=%s out=%s",
         date,
         run_id,
         drawn.pairs_in_band,
