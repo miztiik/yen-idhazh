@@ -137,6 +137,19 @@ export interface BoardRow {
 	memory: RangeMark;
 	/** A typical item's CPU against the shard's worst, on nought to a hundred. */
 	cpu: RangeMark;
+	/** A typical item's stolen share against the shard's worst, on the same
+	 * nought to a hundred the busy share is drawn on - the two are halves of one
+	 * reading and a second domain would invite a comparison that is not there.
+	 *
+	 * Beside the busy share rather than in a column of its own: a busy figure is
+	 * only readable once a reader knows how much of the interval we were given,
+	 * and a shard that lost a tenth of its processor explains the read rate two
+	 * cells to its left. */
+	stolen: RangeMark;
+	/** Items of the shard that recorded a stolen share. Zero on a shard that ran
+	 * before the ledger split it out of the busy share, which is why an empty
+	 * mark here is not a host that took nothing. */
+	stolenItems: number;
 	/** The highest load any of the shard's items ended under. */
 	loadMax: number | null;
 	/** Cores the host let the job see. The load figure's denominator. */
@@ -392,6 +405,8 @@ export function shardBoard(
 			cpuBusyPct: shard.cpuBusyPct,
 			memory: rangeMark(shard.rssMedianBytes, shard.peakRssBytes, memoryScaleBytes),
 			cpu: rangeMark(shard.cpuBusyMedianPct, shard.cpuBusyMaxPct, 100),
+			stolen: rangeMark(shard.cpuStolenMedianPct, shard.cpuStolenMaxPct, 100),
+			stolenItems: shard.cpuStolenItems,
 			loadMax: shard.loadMax,
 			cores: shard.cores,
 			load: targetMarks(shard.loadMax, shard.cores ?? 0, 'lower-is-better'),

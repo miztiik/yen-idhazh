@@ -139,6 +139,17 @@ export interface ShardCounters {
 	cpuBusyMedianPct: number | null;
 	/** The busiest any one item's model window got. */
 	cpuBusyMaxPct: number | null;
+	/** The middle item's share of its interval that the host gave to another
+	 * tenant's machine while ours was ready to run. */
+	cpuStolenMedianPct: number | null;
+	/** The worst any one item lost that way. What a slow shard is checked
+	 * against: a long clock at a normal busy share and a high stolen share is a
+	 * shared box rather than our own work. */
+	cpuStolenMaxPct: number | null;
+	/** Items of the shard that recorded the stolen share at all. Zero where the
+	 * shard ran before the ledger split it out of the busy share, which is a
+	 * different fact from a host that took nothing. */
+	cpuStolenItems: number;
 	/** llama-server's own memory high-water mark over the shard's items. */
 	peakRssBytes: number | null;
 	/** The middle item's high-water mark. Paired with `peakRssBytes` it is a
@@ -373,6 +384,9 @@ interface ItemFold {
 	busy: number[];
 	rss: number[];
 	cpuBusyMaxPct: number | null;
+	/** Every item's own stolen share, on the same terms as `busy`. */
+	stolen: number[];
+	cpuStolenMaxPct: number | null;
 	loadMax: number | null;
 	swapFreeMinBytes: number | null;
 	swapTotalBytes: number | null;
@@ -404,6 +418,8 @@ function emptyFold(): ItemFold {
 		busy: [],
 		rss: [],
 		cpuBusyMaxPct: null,
+		stolen: [],
+		cpuStolenMaxPct: null,
 		loadMax: null,
 		swapFreeMinBytes: null,
 		swapTotalBytes: null,
@@ -456,6 +472,14 @@ function foldItem(carry: ItemFold, row: Record<string, string>): void {
 	}
 	const busyMax = measured(row.cpu_busy_max);
 	if (busyMax !== null) carry.cpuBusyMaxPct = Math.max(carry.cpuBusyMaxPct ?? busyMax, busyMax);
+	// A row written before 2026-09-20 carries no stolen share, and the absence is
+	// kept as an absence: a zero here would say the host took nothing from a run
+	// whose busy figure was holding both halves at the time.
+	const stolen = measured(row.cpu_steal_pct);
+	if (stolen !== null) {
+		carry.stolen.push(stolen);
+		carry.cpuStolenMaxPct = Math.max(carry.cpuStolenMaxPct ?? stolen, stolen);
+	}
 	const peak = measured(row.llama_rss_peak_bytes);
 	if (peak !== null) {
 		carry.peakRssBytes = Math.max(carry.peakRssBytes ?? 0, peak);
@@ -548,6 +572,9 @@ function shardCounters(
 		cores: host.cores,
 		cpuBusyMedianPct: median(fold.busy),
 		cpuBusyMaxPct: fold.cpuBusyMaxPct,
+		cpuStolenMedianPct: median(fold.stolen),
+		cpuStolenMaxPct: fold.cpuStolenMaxPct,
+		cpuStolenItems: fold.stolen.length,
 		peakRssBytes: fold.peakRssBytes,
 		rssMedianBytes: median(fold.rss),
 		loadMax: fold.loadMax,

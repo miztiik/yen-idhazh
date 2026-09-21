@@ -557,6 +557,7 @@ const PANEL_GROUP_DEFAULTS: PanelGroups = {
 			title: 'What the machine was doing',
 			panels: [
 				'two-clocks',
+				'processor-lost',
 				'disk-reads',
 				'machine-cards',
 				'reading-against-writing',

@@ -187,6 +187,9 @@
 				data-shard-mem-max={row.memory.max ?? ''}
 				data-shard-cpu-median={row.cpu.median ?? ''}
 				data-shard-cpu-max={row.cpu.max ?? ''}
+				data-shard-stolen-median={row.stolen.median ?? ''}
+				data-shard-stolen-max={row.stolen.max ?? ''}
+				data-shard-stolen-state={row.stolen.empty ? 'unrecorded' : 'measured'}
 				data-shard-swap-state={row.swapState}
 				data-shard-swap-free={row.swapFreeBytes ?? ''}
 				data-shard-swap-total={row.swapTotalBytes ?? ''}
@@ -402,6 +405,49 @@
 							</span>
 							<span class="range-figure tabular-nums" data-shard-figure="cpu-range">
 								{terse(row.cpu, percent, ' busy')}
+							</span>
+						{/if}
+					</p>
+					<!-- The other half of the same reading. A busy share cannot be read
+					     without it: a shard the host kept off the processor for a tenth
+					     of every interval takes about a tenth longer for the same work,
+					     and every other figure on its row reads as normal while it does.
+					     An empty mark here is a shard that ran before the ledger split
+					     the two, never a host that took nothing. -->
+					<p
+						class="range-line"
+						title="Shard {row.shard} stolen: {spread(row.stolen, percent, ' of the interval')}."
+					>
+						<span class="cell-label" data-shard-name="stolen-range" aria-hidden="true">
+							Given to another tenant
+						</span>
+						{#if row.stolen.empty}
+							<span class="absent" data-shard-figure="stolen-range" data-shard-stolen-items={row.stolenItems}>
+								Not recorded on this shard
+							</span>
+						{:else}
+							<span
+								class="range"
+								role="img"
+								aria-label="Shard {row.shard} given to another tenant, {spread(
+									row.stolen,
+									percent,
+									' of the interval'
+								)}"
+							>
+								<span class="range-fill stolen-fill" style="inline-size: {row.stolen.medianWidth}"
+								></span>
+								{#if row.stolen.max !== null}
+									<span class="range-notch" style="inset-inline-start: {row.stolen.notchWidth}"
+									></span>
+								{/if}
+							</span>
+							<span
+								class="range-figure tabular-nums"
+								data-shard-figure="stolen-range"
+								data-shard-stolen-items={row.stolenItems}
+							>
+								{terse(row.stolen, percent, ' stolen')}
 							</span>
 						{/if}
 					</p>
@@ -675,6 +721,13 @@
 	   it sits under and a shared colour would read as one series drawn twice. */
 	.range-fill.queue-fill {
 		background: var(--chart-5);
+	}
+
+	/* Its own hue again, and the reason is the one above turned round: a stolen
+	   share sits directly under the busy share, so drawing the two in one colour
+	   would read as one bar wrapping rather than as two readings. */
+	.range-fill.stolen-fill {
+		background: var(--chart-4);
 	}
 
 	/* The worst reading, as a mark across the track rather than a second bar. A

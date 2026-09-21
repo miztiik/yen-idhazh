@@ -83,7 +83,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 4 | The sampler stops calling theft our work | 2, 3 | B | DONE | p37r4 | - | worker |
 | 9 | Panels grouped by the decision they serve | 7 | B | DONE | p37r9 | #981 | worker |
 | 5 | `ItemHealthRow` gains three columns and loses one | 4 | C | DONE | p37r5 | #982 | worker |
-| 10 | Did another tenant take the processor | 5, 8, 9 | C | PENDING | - | - | - |
+| 10 | Did another tenant take the processor | 5, 8, 9 | C | IN REVIEW | p37r10 | #1010 | worker |
 | 11 | Is the kernel taking the model's weights back | 5, 8, 9 | C | IN REVIEW | p37r11 | #1008 | worker |
 | 12 | What one article costs the machine | 9 | C | IN REVIEW | p37r12 | #1001 | - |
 | 13 | Two panels leave the page | 9 | C | PENDING | - | - | - |
