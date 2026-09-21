@@ -4,8 +4,9 @@
  * article carries the earlier ones forward into the later prompt, so the
  * largest single call is the whole of what that article ever held open - and
  * adding the calls together reports a length the server never saw. Measured
- * 2026-09-21 over the committed item rows, the two figures differ by 1.9x, so
- * the difference decides whether the limit looks half-used or a fifth-used.
+ * 2026-09-21 over the 1,312 committed item rows that carry both figures, the
+ * two differ by 1.92x at the middle row, which decides whether the limit looks
+ * two fifths used or a fifth used.
  *
  * Nothing here is keyed to how many calls an article makes. A slot is measured
  * when the ledger filled it, the peak is the largest of whatever was filled,

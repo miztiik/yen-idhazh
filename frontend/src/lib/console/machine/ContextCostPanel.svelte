@@ -334,17 +334,19 @@
 			     anything was ever cut short. -->
 			<p class="reads" data-context-cost data-context-unused-pct={cost.unusedPct ?? ''}>
 				{#if cost.unusedPct === null || cost.largest === null}
-					{cost.items} of the {cost.rowsRead} articles these {days} days recorded carried both the
-					limit they ran under and their own tokens, which is too few to say what the limit cost.
+					{cost.items} of the {cost.rowsRead} item rows these {days} days recorded carried both the
+					limit they ran under and an article's own tokens, which is too few to say what the limit
+					cost.
 				{:else}
 					The longest article of these {days} days held
 					<strong>{grouped(cost.largest)}</strong>
-					tokens, which is {cost.largestPct}% of the {grouped(limit)} the server was given -
+					tokens, which is {cost.largestPct}% of the {grouped(limit)} the server allows -
 					<strong>{cost.unusedPct}% of the limit has never been used, not once</strong>. A middle
 					article held {grouped(cost.median ?? 0)}, so the limit is
 					<strong>{cost.timesMedian}</strong> times the article it usually reads. Measured over
-					{cost.items} of the {cost.rowsRead} articles these days recorded; the rest are older than
-					the cells this reads.
+					{cost.items}
+					{cost.items === 1 ? 'article' : 'articles'}, out of {cost.rowsRead} item rows read: the
+					rest recorded no limit or no call of their own.
 				{/if}
 			</p>
 
