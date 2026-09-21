@@ -448,81 +448,13 @@ jobs:
           name: plan
           path: backend/var/run/${{ needs.plan.outputs.date }}/
 
-      # Restored once per JOB, not once per run. Every worker pays it, and it is
-      # the single largest fixed cost in the pipeline. Every shard shares this
-      # one key, so raising the shard count adds restores, never cache bytes.
-      #
-      # The key names every part of what it holds. The fetch below only runs on
-      # a miss, so a key that omits one of them turns a fetch step into dead code
-      # and serves the old bytes: without the build a cached binary stays frozen
-      # until the entry is evicted, without the weights a config change to
-      # `models.summarize` restores the previous model under the new alias, and
-      # without the revision two uploads of one filename share an entry - which
-      # would leave a repinned config stuck on a hit whose bytes fail the check
-      # below on every run until the entry expires.
-      # `v4` because the weights part moved from a workflow `env` copy to the
-      # plan job's output. Adding the revision changes the key again, so the
-      # first run after this refetches once.
-      - name: Cache weights and runtime
-        id: weights
-        uses: actions/cache@v6
-        with:
-          path: |
-            backend/models
-            backend/bin
-          key: llm-${{ needs.plan.outputs.summarize_file }}-${{ needs.plan.outputs.summarize_revision }}-${{ needs.plan.outputs.llama_cpp_build }}-v4
-
-      # One shared step. It sources the runtime install, which sources the pin,
-      # so this workflow spells no part of either - and every value it reads
-      # arrives through `env` rather than pasted into it. The refs used to be
-      # substituted straight into the download URL, and a value pasted into a
-      # program is text before it is a value (Guardrail #11).
-      #
-      # The lookup is authenticated, because every shard asks at once and
-      # anonymous api.github.com allows 60 requests an hour - a ceiling of eight
-      # shards makes that eight askers on a cold cache, not four.
-      #
-      # Why the script names an immutable revision and why `-f` is load-bearing
-      # are written in the script, once, rather than here and in four other
-      # callers.
-      - name: Fetch runtime and weights
-        if: steps.weights.outputs.cache-hit != 'true'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          WEIGHTS_REPO: ${{ needs.plan.outputs.summarize_repo }}
-          WEIGHTS_REVISION: ${{ needs.plan.outputs.summarize_revision }}
-          WEIGHTS_FILE: ${{ needs.plan.outputs.summarize_file }}
-          DRAFT_REPO: ${{ needs.plan.outputs.draft_repo }}
-          DRAFT_REVISION: ${{ needs.plan.outputs.draft_revision }}
-          DRAFT_FILE: ${{ needs.plan.outputs.draft_file }}
-        run: bash .github/scripts/fetch-model-runtime.sh
-
-      # No `if:`. This runs on a cache hit as well as a miss, because a restored
-      # entry is the one case where nobody watched the bytes arrive. It sits
-      # before the server starts, so wrong weights cost one step instead of a
-      # shard of summaries filed under a model that never ran (Guardrail #10).
-      #
-      # The draft head, where the entry declares one, is fetched and checked in
-      # the same step and to the same standard. A draft that fails its digest
-      # would be a second set of weights nobody verified proposing tokens to the
-      # one we did - and because the target verifies every draft, the run would
-      # publish correct text and no error while paying for a guess that never
-      # lands. Silent and expensive is the worst pair.
-      - name: Verify the weights
-        run: |
-          set -euo pipefail
-          EXPECTED=$(python -c 'import json, pathlib; config = json.load(open("config/idhazh.json", encoding="utf-8")); models = json.load(open(pathlib.Path("config") / config["models_file"], encoding="utf-8")); print(models["summarize"]["sha256"] or "")')
-          if [ -z "$EXPECTED" ]; then
-            echo "config records no sha256 for models.summarize" >&2
-            exit 1
-          fi
-          echo "${EXPECTED}  backend/models/${{ needs.plan.outputs.summarize_file }}" | sha256sum --check
-          if [ -n "${{ needs.plan.outputs.draft_file }}" ]; then
-            echo "${{ needs.plan.outputs.draft_sha256 }}  backend/models/${{ needs.plan.outputs.draft_file }}" | sha256sum --check
-          fi
-
-      # Before the server, on purpose: the bandwidth probe wants a gigabyte and an
-      # idle machine, and once llama-server holds the memory it has neither.
+      # Before the model block, and the reason is unchanged: the bandwidth probe
+      # wants a gigabyte and an idle machine, and once llama-server holds the
+      # memory it has neither. It sat between the digest check and the server
+      # start until the block became one action, which cannot be entered
+      # halfway. Nothing the probe measures moved with it - the restore ahead of
+      # it is disk traffic that has finished by the time this step runs, and the
+      # memory it needs is held by no process either side of the move.
       - name: What machine this job drew
         run: |
           set -euo pipefail
@@ -531,43 +463,25 @@ jobs:
             --shard ${{ matrix.shard }} \
             --job work
 
-      - name: Start the model
-        env:
-          LLAMA_WEIGHTS: backend/models/${{ needs.plan.outputs.summarize_file }}
-        run: |
-          .github/scripts/start-llama-server.sh summarize llama-server
-
-      - name: Check model health
-        run: |
-          set -euo pipefail
-          for _ in $(seq 1 120); do
-            curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" && break
-            sleep 5
-          done
-          # Assert it, do not hope. Without this the loop simply ends, every
-          # item fails as "model unreachable", and the run publishes an empty
-          # day that looks like a quiet news day.
-          curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null || {
-            echo "llama-server never became healthy" >&2
-            tail -50 llama-server.log >&2
-            exit 1
-          }
-          # Healthy says a server answers. It does not say which weights it
-          # answers for, and every summary and eval row is filed under the
-          # config alias whether or not the server agrees.
-          MODEL_ALIAS=$(python -c 'import json, pathlib; config = json.load(open("config/idhazh.json", encoding="utf-8")); models = json.load(open(pathlib.Path("config") / config["models_file"], encoding="utf-8")); print(models["summarize"]["id"])')
-          curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" \
-            | jq -e --arg alias "$MODEL_ALIAS" '[.data[].id] | index($alias) != null' > /dev/null || {
-            echo "the server does not serve ${MODEL_ALIAS}" >&2
-            curl -s "http://127.0.0.1:${LLAMA_PORT}/v1/models" >&2 || true
-            exit 1
-          }
-          curl -sf "http://127.0.0.1:${LLAMA_PORT}/props" \
-            | jq -e --arg file "${{ needs.plan.outputs.summarize_file }}" '[.. | strings | select(endswith($file))] | length > 0' > /dev/null || {
-            echo "the loaded weights are not ${{ needs.plan.outputs.summarize_file }}" >&2
-            curl -s "http://127.0.0.1:${LLAMA_PORT}/props" >&2 || true
-            exit 1
-          }
+      # The cache, the fetch, the digest check, the server and the health probe.
+      # One action, shared with `llm-council.yml`, which ran the same five steps
+      # as a second copy - so the two share one cache entry by construction
+      # rather than by a test comparing two literals.
+      #
+      # The port is handed over rather than inherited: it has one home, the
+      # workflow `env` above, and this is the line that carries it in.
+      - uses: ./.github/actions/model-server
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          port: ${{ env.LLAMA_PORT }}
+          weights_repo: ${{ needs.plan.outputs.summarize_repo }}
+          weights_revision: ${{ needs.plan.outputs.summarize_revision }}
+          weights_file: ${{ needs.plan.outputs.summarize_file }}
+          llama_cpp_build: ${{ needs.plan.outputs.llama_cpp_build }}
+          draft_repo: ${{ needs.plan.outputs.draft_repo }}
+          draft_revision: ${{ needs.plan.outputs.draft_revision }}
+          draft_file: ${{ needs.plan.outputs.draft_file }}
+          draft_sha256: ${{ needs.plan.outputs.draft_sha256 }}
 
       # Healthy says a server answers and the step above says which file it
       # opened. Neither says the entry is true. Row #2 moved the turn envelope
