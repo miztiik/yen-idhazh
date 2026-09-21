@@ -105,6 +105,23 @@ def _today() -> str:
     return assemble.utc_now()[:10]
 
 
+def _council_run(parser: argparse.ArgumentParser, stage: str, given: str | None) -> str:
+    """The run a council verb is, refused rather than invented when a step forgets it.
+
+    Refused here and not defaulted, because every value this could reach for
+    belongs to somebody else: a digest run's id claims a machine and a clock the
+    council never drew, and a name minted per verb splits one night's rows across
+    as many addresses as there are verbs.
+    """
+    if given is None:
+        parser.error(
+            f"{stage} needs --run-id: the council mints its own in its planning job, "
+            "and a row filed under a digest run's id claims a machine and a clock "
+            "this night never drew"
+        )
+    return given
+
+
 #: Every verb this router accepts, and the whole of what `--help` lists. Named
 #: here rather than inline so that the workflows can be held against it: a
 #: workflow step spelling a verb this tuple does not carry is a run that dies
@@ -280,6 +297,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             "every run of every workflow here, and no second execution can compute "
             "it. Left out, the run counts off the last committed manifest, which two "
             "overlapping runs were able to read the same answer from."
+        ),
+    )
+    parser.add_argument(
+        "--run-id",
+        default=None,
+        help=(
+            "Which run this is, for the council's verbs. The council mints its own "
+            "name once in its planning job and hands it to every verb that writes a "
+            "row, so a night's rows cannot arrive under two addresses. A digest run "
+            "computes its own from --execution instead."
         ),
     )
     parser.add_argument(
@@ -537,6 +564,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # are worth a model's time, and a later step is what spends it.
         judge_draw.stage_judge_draw(
             args.date or _today(),
+            run_id=_council_run(parser, args.stage, args.run_id),
             settings=settings,
             digest_root=args.digest_root,
             out_dir=args.out_dir,
@@ -548,6 +576,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # calls no model, and opens no socket.
         judge_fold.stage_judge_fold(
             args.date or _today(),
+            run_id=_council_run(parser, args.stage, args.run_id),
             settings=settings,
             state_dir=args.state_root,
         )
@@ -558,6 +587,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # record this reads. Nothing reads the line it writes until row 9.
         judge_fit.stage_judge_fit(
             args.date or _today(),
+            run_id=_council_run(parser, args.stage, args.run_id),
             settings=settings,
             state_dir=args.state_root,
             digest_root=args.digest_root,
