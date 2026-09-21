@@ -1,8 +1,8 @@
 """How many YES and NO verdicts does each slot of the record hold, once today is added?
 
 Pure arithmetic over a fixed row of slots. Nothing here opens a file, calls a
-model or looks at a clock - `idhazh.stages.judge_fold` does the reading and the
-writing, and this module answers only the counting question.
+model or looks at a clock - `idhazh.stages.count_verdicts` does the reading and
+the writing, and this module answers only the counting question.
 
 The record is the whole input to the fit, so it is rewritten whole and never
 appended to. A day goes in once: `fold_day` refuses a date the record already

@@ -46,6 +46,17 @@ A_RUN = "2026-09-21-35534060762"
 #: zero-tenant arm fails this file rather than shipping untested.
 COUNCIL_VERBS = ("council-prepare", "council-settle")
 
+#: The stage modules the content-similarity judge owns, spelled one by one. A
+#: shared prefix used to stand in for the list, and a stage is now named for the
+#: work it does rather than for whose loop it is in - so a prefix would go blind
+#: to three of these four and the dictum would read green over a real import.
+JUDGE_STAGE_MODULES = (
+    "idhazh.stages.pick_item_pairs",
+    "idhazh.stages.judge_item_pairs",
+    "idhazh.stages.count_verdicts",
+    "idhazh.stages.set_merge_line",
+)
+
 
 @pytest.fixture
 def venue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
@@ -384,8 +395,8 @@ def test_no_judge_module_is_in_the_import_closure_of_a_council_verb() -> None:
     """The dictum, measured rather than argued.
 
     What is imported is the module every council verb's body lives in, and what
-    is counted is any module under the content-similarity judge or any stage
-    named for one.
+    is counted is any module under the content-similarity judge and each of the
+    four stage modules that judge owns.
 
     Three of that judge's CONTRACTS do arrive, through `idhazh.ledger`, which is
     the one registry of CSV rows and which the tenancy protocol reads its row
@@ -393,7 +404,7 @@ def test_no_judge_module_is_in_the_import_closure_of_a_council_verb() -> None:
     here is that no judge's CODE is reachable from a council verb.
     """
     found = _judge_modules_reached(
-        "idhazh.council.session", ("idhazh.similarity", "idhazh.stages.judge")
+        "idhazh.council.session", ("idhazh.similarity", *JUDGE_STAGE_MODULES)
     )
 
     assert found == [], f"a council verb imports {found}"
@@ -406,7 +417,7 @@ def test_the_router_no_longer_carries_a_judges_stage() -> None:
     spelled in the router's own tuple, which is how the four judge verbs
     survived the first cut. Both halves are held here.
     """
-    found = _judge_modules_reached("idhazh.cli", ("idhazh.stages.judge",))
+    found = _judge_modules_reached("idhazh.cli", JUDGE_STAGE_MODULES)
 
     assert found == [], f"the router still imports {found}"
     assert not [verb for verb in cli.STAGES if verb.startswith("judge")]

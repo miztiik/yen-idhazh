@@ -113,10 +113,10 @@ STORES_NOTHING_FILLS_YET: Final[Mapping[str, str]] = MappingProxyType(
 # too.
 MODULES_ONLY_A_TENANT_REACHES: Final[Mapping[str, str]] = MappingProxyType(
     {
-        "idhazh.stages.judge_fit": (
+        "idhazh.stages.set_merge_line": (
             "the content-similarity judge, once its slug is registered as a tenant"
         ),
-        "idhazh.stages.judge_fold": (
+        "idhazh.stages.count_verdicts": (
             "the content-similarity judge, once its slug is registered as a tenant"
         ),
     }

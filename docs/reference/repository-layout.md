@@ -1,6 +1,6 @@
 # Repository Layout
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 
 Every top-level directory, what it holds, who writes it, and whether a reader
 ever sees it. Read this before adding a directory, or when deciding where a new
@@ -209,6 +209,16 @@ redirect left on `cli` raises instead of binding a copy no stage reads - which
 is now true of every stage-owned name rather than these nine alone, so the
 suite-walking guard that policed the difference is gone with the difference.
 
+**A stage module is named for the work it does, never for the loop that runs
+it.** Four of them were `judge_draw`, `judge_shard`, `judge_fold` and
+`judge_fit`: one family prefix naming the single loop that happened to call
+them. The prefix said which loop a stage was in and nothing about what the stage
+answers, so the directory listing told a reader nothing, and a second judge
+writing the same four steps could only repeat the prefix and lie or break the
+pattern. Renamed on 2026-09-21 to `pick_item_pairs`, `judge_item_pairs`,
+`count_verdicts` and `set_merge_line`. The test is the directory listing: read a
+filename and you know what the code inside answers, whoever calls it.
+
 ## Rejected alternatives
 
 | Option | Why rejected |
@@ -223,6 +233,7 @@ suite-walking guard that policed the difference is gone with the difference.
 | A `decisions/` directory of ADR files | A decision filed away from the thing it governs is a decision the next reader does not find. |
 | Moving the stages out one at a time, as each plan row happened to touch one | The rows land over weeks and each one adds a module while the file it left keeps growing, so the collision stays and nobody can say when it ends. The whole file was mechanical to move and the suite proves it: one commit, one answer. |
 | A `stages/` module per plan rather than per stage | A plan is a schedule, not a shape. The stage is the unit the router dispatches and the unit a test drives, so it is the unit the file follows. |
+| Keeping a family prefix on the stage modules one loop calls | The prefix is what tied four stages to one caller, and the caller is the part most likely to change. It also hands the next loop that needs the same four steps a choice between a name that lies and a name that breaks the pattern. |
 
 ## See also
 

@@ -38,7 +38,7 @@ from idhazh.similarity import fit, fold
 from idhazh.similarity.stamps import JudgeStamp, ScorerStamp
 from idhazh.stages import common
 from idhazh.stages.common import _load_day
-from idhazh.stages.judge_fit import merge_count, stage_judge_fit
+from idhazh.stages.set_merge_line import merge_count, stage_set_merge_line
 
 DATE: Final = "2026-09-18"
 
@@ -614,7 +614,7 @@ def test_a_row_is_written_on_a_day_nothing_moved(
     state = tmp_path / "state"
     settings = config.load(config.REPO_ROOT / "config")
 
-    row = stage_judge_fit(
+    row = stage_set_merge_line(
         DATE, run_id=COUNCIL_RUN, settings=settings, state_dir=state, digest_root=digest_root
     )
 
@@ -637,7 +637,7 @@ def test_a_day_that_never_published_is_not_a_run_to_fail(
     monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "digest")
 
     assert (
-        stage_judge_fit(
+        stage_set_merge_line(
             DATE,
             run_id=COUNCIL_RUN,
             settings=config.load(config.REPO_ROOT / "config"),
@@ -669,7 +669,7 @@ def test_the_row_is_written_from_a_date_and_a_run_id_the_council_minted(
     state = tmp_path / "state"
     minted = council_run_id(opened_on=COUNCIL_DAY, platform_run_id=PLATFORM_RUN)
 
-    stage_judge_fit(
+    stage_set_merge_line(
         DATE,
         run_id=minted,
         settings=config.load(config.REPO_ROOT / "config"),
