@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from idhazh.contracts.base import Model, Slug
+from idhazh.contracts.base import DateStamp, Model, Slug
 
 
 class CouncilConfig(Model):
-    """The clocks, the fan-out width and the tenant list one judging night runs under.
+    """The clocks, the width, the nights covered and the tenants one judging night runs under.
 
     A top-level block rather than a knob under a tenant, because every number
     here prices a runner: a checkout, an install, a weights restore and a matrix
@@ -76,6 +76,45 @@ class CouncilConfig(Model):
             "server on one runner does not fit at all. The ceiling of 8 is what a GitHub "
             "matrix job costs rather than a measured limit. A tenant may narrow it "
             "downward, so this is the ceiling and the default rather than an instruction."
+        ),
+    )
+    first_night: DateStamp = Field(
+        default="2026-09-19",
+        description=(
+            "The first night this council existed, and the floor under every window it "
+            "asks about. Before it a date carries no verdict because nothing was judging, "
+            "which is not the same thing as a night that died - and the plan has no way to "
+            "tell the two apart without this. The council's store holds one day file "
+            "against 30 published days, so an unfloored window names every one of those "
+            "days on its first run and buys a backfill nobody asked for. A tenant that "
+            "moved in later raises the floor for itself, by naming no night from before it "
+            "arrived; this is the floor it gets by default."
+        ),
+    )
+    repair_window_nights: int = Field(
+        default=7,
+        ge=1,
+        le=30,
+        description=(
+            "How many nights back the council asks its tenants about, ending the night "
+            "before tonight. This tuple of dates is the whole of what a tenant is handed, "
+            "so it bounds the tenant's read as well as the council's own (CLAUDE.md "
+            "Guardrail #12). 7, because a night that died on a Friday is still repairable "
+            "the following Thursday, and a date still unjudged after a week is one a "
+            "person should look at rather than one the next run should keep retrying."
+        ),
+    )
+    repair_dates_a_night: int = Field(
+        default=1,
+        ge=0,
+        le=4,
+        description=(
+            "How many older dates one night may repair, on top of tonight. Dates are a "
+            "parallel axis - one job a date a shard a tenant, each under its own "
+            "shard_timeout_minutes - so this buys matrix width rather than wall clock. At "
+            "4 shards and 2 tenants, 1 repair is 16 jobs against the platform's 20-job "
+            "ceiling and 2 repairs is 24, which runs in two waves. 1, because a cap with no "
+            "floor under the window only slows a backfill down instead of stopping it."
         ),
     )
     tenants: tuple[Slug, ...] = Field(

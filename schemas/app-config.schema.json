@@ -679,8 +679,31 @@
     },
     "CouncilConfig": {
       "additionalProperties": false,
-      "description": "The clocks, the fan-out width and the tenant list one judging night runs under.\n\nA top-level block rather than a knob under a tenant, because every number\nhere prices a runner: a checkout, an install, a weights restore and a matrix\nshard. No tenant can see any of them.\n\nUntil 2026-09-21 the bound sat in `run`, which is the digest pipeline's, and\nthe width sat inside the content-similarity judge's own block - so a\nrepository with no judge configured had no width to size its matrix by and\nno clock to stop a shard on.",
+      "description": "The clocks, the width, the nights covered and the tenants one judging night runs under.\n\nA top-level block rather than a knob under a tenant, because every number\nhere prices a runner: a checkout, an install, a weights restore and a matrix\nshard. No tenant can see any of them.\n\nUntil 2026-09-21 the bound sat in `run`, which is the digest pipeline's, and\nthe width sat inside the content-similarity judge's own block - so a\nrepository with no judge configured had no width to size its matrix by and\nno clock to stop a shard on.",
       "properties": {
+        "first_night": {
+          "default": "2026-09-19",
+          "description": "The first night this council existed, and the floor under every window it asks about. Before it a date carries no verdict because nothing was judging, which is not the same thing as a night that died - and the plan has no way to tell the two apart without this. The council's store holds one day file against 30 published days, so an unfloored window names every one of those days on its first run and buys a backfill nobody asked for. A tenant that moved in later raises the floor for itself, by naming no night from before it arrived; this is the floor it gets by default.",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "First Night",
+          "type": "string"
+        },
+        "repair_dates_a_night": {
+          "default": 1,
+          "description": "How many older dates one night may repair, on top of tonight. Dates are a parallel axis - one job a date a shard a tenant, each under its own shard_timeout_minutes - so this buys matrix width rather than wall clock. At 4 shards and 2 tenants, 1 repair is 16 jobs against the platform's 20-job ceiling and 2 repairs is 24, which runs in two waves. 1, because a cap with no floor under the window only slows a backfill down instead of stopping it.",
+          "maximum": 4,
+          "minimum": 0,
+          "title": "Repair Dates A Night",
+          "type": "integer"
+        },
+        "repair_window_nights": {
+          "default": 7,
+          "description": "How many nights back the council asks its tenants about, ending the night before tonight. This tuple of dates is the whole of what a tenant is handed, so it bounds the tenant's read as well as the council's own (CLAUDE.md Guardrail #12). 7, because a night that died on a Friday is still repairable the following Thursday, and a date still unjudged after a week is one a person should look at rather than one the next run should keep retrying.",
+          "maximum": 30,
+          "minimum": 1,
+          "title": "Repair Window Nights",
+          "type": "integer"
+        },
         "shard_preamble_minutes": {
           "default": 13,
           "description": "How much of shard_timeout_minutes is gone before the judging process starts. The job clock starts at provisioning; the process starts after a checkout, a weights cache restore, a checksum verify and a health poll, and all four are the venue's own fixed cost. 13 minutes is one minute above the worst case those four steps have been measured at, which is 12.1 minutes: provisioning 0.41, cache restore up to 1.58, checksum verify 0.12, and a health poll bounded at 10. Without it the in-process deadline lands AFTER GitHub's own kill on a slow model load, and the reserve below protects nothing.",
@@ -2574,6 +2597,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "council.first_night, repair_window_nights and repair_dates_a_night, additive.",
+      "version": "2026-09-21T15:00",
+      "why": "A night plans the older dates its tenants are behind on, inside a bounded window."
+    },
+    {
       "change": "council descriptions say shard where they said leg. No knob moved.",
       "version": "2026-09-21T13:00",
       "why": "`leg` was a second name for the shard the council already sizes by."
@@ -2587,11 +2615,6 @@
       "change": "council.tenants and council.shard_preamble_minutes, additive.",
       "version": "2026-09-21T11:30",
       "why": "The venue registers a tenant from config and knows what a job spends before it."
-    },
-    {
-      "change": "console.context_high_percentile and console.context_cut_off_reason, additive.",
-      "version": "2026-09-21T05:00",
-      "why": "The context panel draws two ends a run and names what a cut-off looks like."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2675,7 +2698,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-21T13:00",
+      "default": "2026-09-21T15:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2686,5 +2709,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-21T13:00"
+  "version": "2026-09-21T15:00"
 }

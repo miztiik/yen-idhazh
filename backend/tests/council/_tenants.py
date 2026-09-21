@@ -144,6 +144,67 @@ class ScriptedTenant:
 TENANT = ScriptedTenant()
 '''
 
+#: A tenant that is behind on a named set of nights and on no others.
+#:
+#: `TENANT_SOURCE` answers the whole window, which says nothing about a union of
+#: two different answers. This one intersects the window it is handed with what
+#: the test wrote, which is what a real tenant does: it answers about its own
+#: store and stays inside the window it was asked about. A tenant that moved in
+#: later is the same object with a shorter list.
+BEHIND_SOURCE: Final = '''
+"""One tenant that is behind on the nights a test says it is behind on."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from idhazh.contracts.base import DateStamp, RunId
+from idhazh.contracts.council_shard_outcome import ShardOutcome
+from idhazh.council.tenancy import ShardResult
+
+JUDGE_ID = "{slug}"
+
+#: The nights this tenant never counted. Answered only where the council asked.
+BEHIND_ON = {behind_on}
+
+#: A night this tenant answers with whether the council asked about it or not,
+#: which is the tenant bug the plan refuses by name.
+UNASKED = {unasked}
+
+
+@dataclass
+class BelatedTenant:
+    """A tenant that files nothing and knows only which nights it owes."""
+
+    judge_id: str = JUDGE_ID
+    shard_count: int = {shard_count}
+    committed_paths: tuple[str, ...] = ()
+
+    def nights_outstanding(self, *, window: tuple[DateStamp, ...]) -> tuple[DateStamp, ...]:
+        owed = tuple(night for night in window if night in BEHIND_ON)
+        return owed + UNASKED
+
+    def prepare(self, *, date: DateStamp, run_id: RunId) -> ShardResult:
+        return ShardResult(outcome=ShardOutcome.NOTHING_TO_DO)
+
+    def run_shard(
+        self,
+        *,
+        date: DateStamp,
+        run_id: RunId,
+        shard: int,
+        shards: int,
+        deadline: float,
+    ) -> ShardResult:
+        return ShardResult(outcome=ShardOutcome.COMPLETED)
+
+    def settle(self, *, date: DateStamp, run_id: RunId) -> ShardResult:
+        return ShardResult(outcome=ShardOutcome.NOTHING_TO_DO)
+
+
+TENANT = BelatedTenant()
+'''
+
 
 def a_venue(
     root: Path,
@@ -207,6 +268,38 @@ def a_scripted_venue(
             dead_units=repr(dead_units),
             outcome=outcome,
             model_calls=repr(model_calls),
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
+def a_belated_venue(
+    root: Path,
+    *,
+    package: str,
+    slug: str,
+    behind_on: tuple[str, ...],
+    unasked: tuple[str, ...] = (),
+    shard_count: int = 1,
+) -> None:
+    """Write one tenant under `root` that owes the nights `behind_on` names.
+
+    It answers only where the council asked, so a night outside the window it is
+    handed is simply not reported. `unasked` is the tenant bug: a date it names
+    whether the council asked about it or not.
+    """
+    (root / package).mkdir(parents=True, exist_ok=True)
+    (root / package / "__init__.py").write_text("", encoding="utf-8", newline="\n")
+    inside = root / package / slug.replace("-", "_")
+    inside.mkdir(parents=True, exist_ok=True)
+    (inside / "__init__.py").write_text("", encoding="utf-8", newline="\n")
+    (inside / "tenant.py").write_text(
+        BEHIND_SOURCE.format(
+            slug=slug,
+            behind_on=repr(behind_on),
+            unasked=repr(unasked),
+            shard_count=shard_count,
         ),
         encoding="utf-8",
         newline="\n",

@@ -62,6 +62,18 @@ RUN_ID_OUTPUT: Final = "run_id"
 FANOUT_STEP: Final = "fanout"
 FANOUT_COMMAND: Final = "backend/utilities/council_matrix.py"
 
+#: The step that says which dates tonight judges, and the council module behind
+#: it. The module is the council's own, so the plan resolves in a repository
+#: with no judge in it.
+PLAN_STEP: Final = "plan"
+PLAN_COMMAND: Final = "python -m idhazh.council.night_plan"
+DATES_OUTPUT: Final = "dates"
+
+#: How long an upload outlives the run that wrote it. The committed cap repairs
+#: one older date, so three nights keeps a dead night's work reachable for as
+#: long as the plan can still name that night.
+VERDICT_RETENTION_DAYS: Final = 3
+
 #: Every verb this workflow runs. All three are the council's own and every one
 #: of them writes under a name the council minted, so every one is handed it.
 COUNCIL_VERBS: Final = ("council-prepare", "council-settle", "council-shard")
@@ -242,6 +254,47 @@ def test_the_matrix_is_emitted_by_the_utility_and_not_computed_in_the_file() -> 
     assert "adaptive_dedup_threshold" not in fanout
 
 
+def test_the_planning_job_asks_the_night_plan_which_dates_tonight_judges() -> None:
+    """Tonight, plus whatever its tenants say they are behind on.
+
+    The council asks and never looks, so this step needs no tenant to run - and
+    a night with nobody registered plans tonight and nothing else. A date
+    computed in the file instead would be one answer the tenants never saw.
+    """
+    plan = _step(_judges(), "draw", "id", PLAN_STEP)
+    environment = plan.get("env")
+    script = _script(plan, "the night plan step")
+
+    assert PLAN_COMMAND in script
+    assert isinstance(environment, dict)
+    assert environment["TONIGHT"] == "${{ steps.decide.outputs.date }}"
+    assert environment["DISPATCH_DATE"] == "${{ inputs.date }}", (
+        "a dispatched date replaces the plan, and it arrives through env rather than "
+        "pasted into the command"
+    )
+    assert "${{" not in script, "a value pasted into the command is not a value read by name"
+
+
+def test_every_date_the_plan_names_reaches_the_matrix() -> None:
+    """A plan of two dates that fans out to one judges half the night it planned.
+
+    The list is turned into one `--date` an entry rather than word-split into
+    the command line, so a date can never arrive as two - and the fan-out reads
+    the plan's output rather than the single date the planning job opened on.
+    """
+    fanout = _step(_judges(), "draw", "id", FANOUT_STEP)
+    environment = fanout.get("env")
+    script = _script(fanout, "the fanout step")
+
+    assert isinstance(environment, dict)
+    assert environment["NIGHT_DATES"] == f"${{{{ steps.{PLAN_STEP}.outputs.{DATES_OUTPUT} }}}}"
+    assert "steps.decide.outputs.date" not in str(environment), (
+        "the fan-out takes the plan's dates, not the one date the night opened on"
+    )
+    assert "asked+=(--date" in script
+    assert 'python3 backend/utilities/council_matrix.py "${asked[@]}"' in script
+
+
 def test_every_fanout_output_the_workflow_reads_is_one_the_emitter_prints(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -395,6 +448,47 @@ def test_every_artifact_this_night_writes_is_named_for_the_cell_that_wrote_it() 
     ), "a unit re-uploads the selection it downloaded"
 
 
+def test_what_a_night_wrote_outlives_the_run_that_wrote_it() -> None:
+    """One day expired before the next scheduled run had even started.
+
+    A run that judged a whole night and then died before committing left its
+    verdicts in artifacts nothing could still reach, so the only repair was to
+    judge the date again from nothing. Three nights covers the committed cap of
+    one older date. At about 27 KB a shard file, a week of four shards is under
+    a megabyte.
+    """
+    uploads = _uploads("judge", METRICS_ARTIFACT) + _uploads("draw", SELECTION_ARTIFACT)
+
+    assert uploads, "the night uploads nothing at all"
+    for upload in uploads:
+        settings = upload.get("with")
+        assert isinstance(settings, dict)
+        assert int(str(settings["retention-days"])) == VERDICT_RETENTION_DAYS
+
+
+def test_reading_an_artifact_is_a_scope_the_permissions_block_grants() -> None:
+    """A declared block sets every scope it does not list to none.
+
+    So the read has to be named, and it is named read-only. The default
+    credential carries it and reaches each download by hand: no stored token is
+    introduced, and `contents: write` stays the only write the night has.
+    """
+    granted = _judges().get("permissions")
+    downloads = [
+        step
+        for job in ("judge", "collect")
+        for step in _steps(_judges(), job)
+        if str(step.get("uses", "")).startswith("actions/download-artifact@")
+    ]
+
+    assert granted == {"contents": "write", "actions": "read"}
+    assert downloads, "nothing downloads an artifact"
+    for step in downloads:
+        settings = step.get("with")
+        assert isinstance(settings, dict)
+        assert settings["github-token"] == "${{ secrets.GITHUB_TOKEN }}"
+
+
 def test_no_unit_commits() -> None:
     """Many units pushing into one union-merged file buys many races and many rebases.
 
@@ -465,6 +559,20 @@ def test_the_collecting_job_settles_every_date_inside_one_job() -> None:
     assert environment["COUNCIL_DATES"] == "${{ needs.draw.outputs.dates }}"
     assert "while read" in script, "the dates are looped rather than taken one at a time"
     assert "idhazh council-settle" in script
+
+
+def test_the_one_commit_message_names_every_date_the_night_settled() -> None:
+    """A two-date night that says one date sends a reader to the wrong commit.
+
+    One job, one push, one message - so the message carries the whole list the
+    planning job named rather than the single date the night opened on.
+    """
+    environment = _step(_judges(), "collect", "name", COMMIT_STEP).get("env")
+
+    assert isinstance(environment, dict)
+    assert environment["COMMIT_MESSAGE"] == (
+        "council: ${{ join(fromJSON(needs.draw.outputs.dates), ' ') }}"
+    )
 
 
 def test_the_night_mints_one_name_and_publishes_it_to_the_later_jobs() -> None:

@@ -44,6 +44,13 @@ on:
 
 permissions:
   contents: write
+  # Reading an artifact an EARLIER run wrote needs this scope, and a declared
+  # block sets every scope it does not list to none. Read-only, and no stored
+  # token: the default credential carries it. Nothing in this file crosses a run
+  # today - a dead night is repaired by judging its date again, which is what
+  # the night plan below is for - so this is the scope that keeps the cheaper
+  # recovery open rather than one a step here already uses.
+  actions: read
 
 concurrency:
   group: llm-council
@@ -108,6 +115,29 @@ jobs:
             exit 1
           fi
           echo "date=$DATE" >> "$GITHUB_OUTPUT"
+
+      # Which dates tonight covers: tonight, plus the older nights the tenants
+      # say they are behind on, inside a window the council owns. The council
+      # ASKS - it opens no tenant's store - so a night with nobody registered
+      # plans tonight and nothing else, and every step below still runs.
+      #
+      # This is how a dead night is repaired, and it needs nobody to notice: the
+      # next run finds the gap because finding the gap is how it picks its work.
+      # A dispatched date replaces the plan outright, because a person naming a
+      # date is asserting something the plan cannot know.
+      - id: plan
+        name: Say which dates tonight judges
+        env:
+          TONIGHT: ${{ steps.decide.outputs.date }}
+          # Through `env`, not pasted into the command. A value read by name is
+          # a value, whatever it contains.
+          DISPATCH_DATE: ${{ inputs.date }}
+        run: |
+          set -euo pipefail
+          python -m idhazh.council.night_plan \
+            --tonight "$TONIGHT" \
+            --dispatched "${DISPATCH_DATE:-}" \
+            | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
       # The name every row this night writes is filed under, minted once here.
       # A job output for the same reason the bound is: the later jobs read it
@@ -176,10 +206,16 @@ jobs:
       - id: fanout
         name: Say what tonight fans out to and what it will commit
         env:
-          JUDGED_DATE: ${{ steps.decide.outputs.date }}
+          NIGHT_DATES: ${{ steps.plan.outputs.dates }}
         run: |
           set -euo pipefail
-          python3 backend/utilities/council_matrix.py --date "$JUDGED_DATE" \
+          # Built as an array rather than by word splitting: the plan's answer
+          # is a list and it stays one, so a date can never arrive as two.
+          asked=()
+          while read -r judged; do
+            asked+=(--date "$judged")
+          done < <(echo "$NIGHT_DATES" | jq -r '.[]')
+          python3 backend/utilities/council_matrix.py "${asked[@]}" \
             | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
       # Every tenant picks its own work, once a date, before any unit runs. It
@@ -207,7 +243,12 @@ jobs:
           name: council-selection-${{ steps.decide.outputs.date }}
           path: backend/var/council
           if-no-files-found: warn
-          retention-days: 1
+          # Three nights, so what a night wrote is still reachable while the
+          # plan can still name that night's date. One day expired before the
+          # next scheduled run even started, which threw away the work of a run
+          # that died between judging and committing. A shard file is about
+          # 27 KB, so a week of four shards is under a megabyte.
+          retention-days: 3
 
   judge:
     needs: draw
@@ -249,6 +290,9 @@ jobs:
           pattern: council-selection-*
           merge-multiple: true
           path: backend/var/council
+          # Passed rather than inherited. The `permissions` block above names
+          # what this credential may do, and an artifact read is one of them.
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       # The cache, the fetch, the digest check, the server and the health probe.
       # One action, shared with `digest.yml`, which ran the same five steps as a
@@ -312,7 +356,9 @@ jobs:
             backend/var/council
             !backend/var/council/*/selection
           if-no-files-found: warn
-          retention-days: 1
+          # The same three nights the selection keeps, and for the same reason:
+          # a unit's verdicts outlive the run that produced them.
+          retention-days: 3
 
   collect:
     needs: [draw, judge]
@@ -346,6 +392,7 @@ jobs:
           pattern: council-*
           merge-multiple: true
           path: backend/var/council
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       # One job looping the dates rather than one job a date. Two jobs of one
       # run pushing `main` would race each other, and the workflow-level
@@ -375,7 +422,10 @@ jobs:
       - name: Commit what the night's tenants wrote
         if: needs.draw.outputs.committed_paths != ''
         env:
-          COMMIT_MESSAGE: "council: ${{ needs.draw.outputs.date }}"
+          # Every date the night settled, not just the one it opened on. A
+          # message naming one date on a two-date commit sends a reader looking
+          # for the other night's rows in a commit that does not mention it.
+          COMMIT_MESSAGE: "council: ${{ join(fromJSON(needs.draw.outputs.dates), ' ') }}"
           NOTHING_STAGED_MESSAGE: "the night's tenants wrote nothing"
           PUSH_FAILED_MESSAGE: "could not push what the night judged after three attempts"
           COMMITTED_PATHS: ${{ needs.draw.outputs.committed_paths }}

@@ -4,8 +4,9 @@
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
-that runs at 22:00 UTC and reads yesterday. This page says what the venue is and
-what it obliges; what each judge decides is on the page that owns that judge.
+that runs at 22:00 UTC and reads yesterday, plus any older night its tenants say
+they are behind on. This page says what the venue is and what it obliges; what
+each judge decides is on the page that owns that judge.
 
 **This page does not hold a verdict rule.** The same-story fold, its slots, its
 walk and its damping are
@@ -42,6 +43,10 @@ runtime was one tenant's vocabulary.
 | `council-prepare` | every tenant picks its own work | once a date, in the planning job, before any unit runs |
 | `council-shard` | one tenant runs one unit of that work, under the venue's clock | one job a cell of the matrix |
 | `council-settle` | every tenant counts, fits, or does nothing | once a date, in the collecting job, after every unit has reported |
+
+There is a fourth member of the tenancy protocol and no verb behind it:
+`nights_outstanding` is a question, asked once in the planning job, and the
+section below says what the council does with the answers.
 
 **Removing the imports was not the whole cut.** The four verb names also sat in
 the router's own tuple of what it accepts, in a flag's help text, and in four
@@ -100,6 +105,97 @@ The number is that judge's reading, so the check is that judge's too. Until
 2026-09-21 it was a validator on `AppConfig`, which put one judge's measurement
 in the import closure of every module that reads config - the council's own
 included. Owner ruling, 2026-09-21.
+
+## Tonight, and the older nights it repairs
+
+A night judges **tonight, plus the older nights its tenants say they are behind
+on**. [../../../backend/idhazh/council/night_plan.py](../../../backend/idhazh/council/night_plan.py)
+builds that list in the planning job and the fan-out turns it into one `--date`
+an entry, so the matrix, the artifact names and the collecting job all carry it
+without any of them changing shape.
+
+**The council asks; it does not look.** It calls `nights_outstanding(window=...)`
+on every registered tenant and unions what comes back. It opens no tenant's
+store, so it needs to know nothing about how a tenant files anything - and
+**with nobody registered the union is empty and tonight is the whole plan**.
+Every step below still runs on that one date.
+
+Three knobs draw the boundary, and all three are the council's because each one
+is another job a tenant a shard.
+
+| The knob | What it sets | Committed |
+| --- | --- | --- |
+| `council.repair_window_nights` | how many nights back the council asks about, ending the night before tonight | 7 |
+| `council.first_night` | the floor no window reaches past | 2026-09-19 |
+| `council.repair_dates_a_night` | how many older dates one night may repair, on top of tonight | 1 |
+
+**What counts as behind is the tenant's**, because only the tenant knows what it
+has read. **The window is the council's**, because only the council knows what a
+runner costs.
+
+**The floor is why a first run does not backfill a month.** The council's store
+holds one day file against 30 published days, so an unfloored window names every
+one of those days as outstanding and nothing can tell "this night died" from
+"the council did not exist yet". The same sentence applies to a tenant that
+moves in later: on the council's floor alone it would report every date back to
+the venue's own birth. **So a tenant raises the floor for itself**, by naming no
+night from before it arrived. The council's floor is the default it gets.
+
+**The cap keeps the newest gap and drops the oldest.** A date that can never
+succeed then holds the ones behind it out only until the window slides past it;
+oldest-first, that one date would keep every newer date waiting for as long as it
+stayed in range. A cap without the floor would only slow a 29-date backfill down
+to 29 nights.
+
+**The window is the whole of what a tenant is handed**, so the cost of asking
+does not rise as the store fills up (`CLAUDE.md` Guardrail #12). A tenant that
+answers with a date the council did not ask about is refused by name: the
+council prices the window, so a date from outside one is a job nobody budgeted
+for, and it would reach a runner as silently as a date that was asked for.
+
+**A repaired date costs wall clock, not headroom.** `timeout-minutes` is per
+job, and every date is its own job - so nothing multiplies the per-shard time
+budget by the date cap. A check that did would be comparing parallel work
+against a per-job clock, and it would refuse a config the knob's own bound
+admits: 50 pairs at the measured 94.53 s over 3 dates is 14,179 s against a
+12,000 s bound, which would reject `repair_dates_a_night = 2` while the knob
+allows 4. What the cap does buy is matrix width: at 4 shards and 2 tenants, one
+repair is 16 jobs against the platform's 20-job ceiling and two is 24, which
+runs in two waves.
+
+**A dispatched date replaces the plan outright.** A person naming a date is
+asserting something the plan cannot know, so no tenant is asked and no older
+night rides along.
+
+### Design rationale: nobody has to notice a dead night
+
+**No operator action repairs a dead night, and there is no alarm to read.** The
+next run finds the gap because finding the gap is how it picks its work. An
+alarm plus a person re-dispatching fails exactly when it is needed - a run that
+dies quietly is one nobody is watching for - and the council cannot re-trigger
+itself either, because the default credential cannot start a run and a stored
+personal token is a secret this repository does not keep.
+
+The house pattern is "the next run finishes the dead run's work". **The
+mechanism here is new**: the digest run's catch-up drains whatever is waiting and
+takes no date at all, so there was no code to copy, only the principle.
+
+**An instrument change is still a person's decision, and it already is one.**
+The model entry, the temperature, the prompt and the grammar all reach a runner
+through a reviewed commit. A person approves the instrument at that commit, not
+at 22:00 on a runner.
+
+Two things the workflow needed for this, and neither is a stored secret.
+`permissions:` declares `actions: read` beside `contents: write`, because a
+declared block sets every scope it does not list to none and reading an artifact
+needs that one; the default credential carries it and reaches each download by
+hand. And **the uploads keep three nights instead of one**. One day expired
+before the next scheduled run had even started, so a run that judged a whole
+night and then died before committing left its verdicts where nothing could
+reach them. A shard file is about 27 KB, so a week of four shards is under a
+megabyte. Nothing in the workflow reads across a run today - a dead night is
+repaired by judging its date again - so the scope keeps the cheaper recovery
+open rather than powering one that already exists.
 
 ## The matrix is a flat list of cells
 
