@@ -45,7 +45,7 @@
 	import MachineSplitPanel from '$lib/console/machine/MachineSplitPanel.svelte';
 	import MemoryBoardPanel from '$lib/console/machine/MemoryBoardPanel.svelte';
 	import PlatformMixPanel from '$lib/console/machine/PlatformMixPanel.svelte';
-	import PromptCachePanel from '$lib/console/machine/PromptCachePanel.svelte';
+	import PromptReusePanel from '$lib/console/machine/PromptReusePanel.svelte';
 	import ReadAgainstWrittenPanel from '$lib/console/machine/ReadAgainstWrittenPanel.svelte';
 	import ShardBoardPanel from '$lib/console/machine/ShardBoardPanel.svelte';
 	import TailTrendPanel from '$lib/console/machine/TailTrendPanel.svelte';
@@ -209,12 +209,11 @@
 			<MemoryBoardPanel board={data.memory} span={view.peakRssSpan} windowDays={view.days} />
 		{:else if id === 'reading-against-writing'}
 			<MachineSplitPanel split={data.split} />
-		{:else if id === 'prompt-cache'}
-			<PromptCachePanel
-				cacheDays={view.cacheDays}
+		{:else if id === 'prompt-reuse'}
+			<PromptReusePanel
+				reuse={view.reuse}
 				days={view.days}
 				{windowDays}
-				svg={data.cacheSvg}
 				chart={data.chart}
 			/>
 		{:else if id === 'context-headroom'}

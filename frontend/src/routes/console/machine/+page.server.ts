@@ -1,7 +1,5 @@
 import { renderToSvg } from '$lib/server/chart-render';
 import {
-	cacheByDay,
-	cacheChart,
 	clockAgreement,
 	clocksChart,
 	memoryBoard,
@@ -10,7 +8,6 @@ import {
 	shardBoard,
 	workChart,
 	DEFAULT_WORK_UNIT,
-	type CacheDay,
 	type CostRate,
 	type LatencyRun,
 	type ReadWriteSummary,
@@ -22,6 +19,7 @@ import {
 	type ContextRun,
 	type ContextSpan
 } from '$lib/console/machine/context-cost';
+import { promptReuse, type PromptReuse } from '$lib/console/machine/prompt-reuse';
 import { costChart, costOverDays, DEFAULT_COST_SHAPE } from '$lib/charts/cost';
 import { splitByMachine } from '$lib/charts/machine-split';
 import { machineCards, type MachineCards } from '$lib/charts/machine-cards';
@@ -90,7 +88,9 @@ export interface MachineWindow {
 	/** What the MACHINE record was doing, which is a different instrument from
 	 * the counters above and can be in a different state on the same day. */
 	machineRecord: RecordingNotes;
-	cacheDays: CacheDay[];
+	/** The spread of prompt reuse and reading speed over the span's items, one
+	 * entry per request the ledger's own columns name. */
+	reuse: PromptReuse;
 	peakRssSpan: FigureSpan;
 	/** What kinds of machine the platform gave us over this span, and how often. */
 	fleet: FleetView;
@@ -135,7 +135,7 @@ const DRAWN_PANELS = [
 	'shard-board',
 	'memory-board',
 	'reading-against-writing',
-	'prompt-cache',
+	'prompt-reuse',
 	'context-headroom',
 	'two-clocks',
 	'machine-cards',
@@ -174,7 +174,11 @@ export async function load() {
 	const chart = chartConfig();
 	const limits = machineLimits();
 	const counters = loadMachineCounters(days);
-	const health = itemHealthRows(days).rows;
+	// The header as well as the rows: how many requests an article makes is a
+	// fact the ledger's own column names carry, and the reuse panel reads it off
+	// them rather than off a constant anybody would have to remember to change.
+	const healthTable = itemHealthRows(days);
+	const health = healthTable.rows;
 	const observability = observabilityConfig();
 	const today = new Date().toISOString().slice(0, 10);
 
@@ -279,7 +283,7 @@ export async function load() {
 				lost: lostInSpan,
 				figures: 'machine record'
 			}),
-			cacheDays: cacheByDay(runs),
+			reuse: promptReuse(healthRows, healthTable.columns),
 			// The newest run's own reading is a snapshot and sits on the memory
 			// board; this says whether that reading was unusual over the span.
 			peakRssSpan: spanOf(runs.map((run) => run.peakRssBytes.value)),
@@ -388,7 +392,6 @@ export async function load() {
 		inputPerMillion: observability.cost_input_per_million,
 		outputPerMillion: observability.cost_output_per_million
 	};
-	const cache = cacheChart(opening.cacheDays);
 	// Drawn at the unit the panel opens on, so the first paint and the radio that
 	// is already checked agree before a script has run.
 	const workPlot = workChart(opening.tokens, opening.work, DEFAULT_WORK_UNIT);
@@ -436,8 +439,6 @@ export async function load() {
 		newestRunId: newest?.runId ?? null,
 		split,
 		machines,
-		cacheSvg: await draw(cache, chart.height_px),
-		cacheGrid: cache.grid,
 		clocks,
 		clocksSvg: await draw(clocksPlot, chart.height_px),
 		latency: {
