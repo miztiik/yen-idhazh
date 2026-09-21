@@ -149,6 +149,11 @@ jobs:
     needs: scope
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      # For the in-flight check below, and read-only. A job-level block replaces
+      # the workflow's, so `contents` is restated rather than inherited.
+      actions: read
     steps:
       # Two commits rather than one, for the plan-queue check below. A pull
       # request is checked out as a merge commit whose first parent is the base
@@ -162,6 +167,40 @@ jobs:
       # below it is about code, and a documentation change skips all of it.
       - name: Whitespace
         run: git diff --check HEAD^1 HEAD
+
+      # A contract change merged into a live pipeline run takes that run's
+      # digest. `commit-and-push.sh` rebuilds the day against `origin/main`
+      # after a lost push race, so it runs the code at the tip over per-item
+      # payloads sealed hours earlier by the code the run started with. Five
+      # scheduled runs a day at 164 to 184 minutes each, so the window is most
+      # of the day and timing the merge by hand has already failed twice -
+      # `docs/architecture/publishing/committing.md` holds the account.
+      #
+      # This is as close to a lock across two workflows as the platform gets:
+      # it refuses, and a re-run once the pipeline finishes clears it. It
+      # cannot stop a merge nobody ran a check on, so it lowers the odds
+      # rather than closing them. Every persisted shape is declared under one
+      # directory (Guardrail #3), which is why one path answers the question.
+      - name: A contract change waits for the run that is reading the old one
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet HEAD^1 HEAD -- backend/idhazh/contracts; then
+            exit 0
+          fi
+          live=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/digest.yml/runs?status=in_progress" \
+            --jq '.workflow_runs[].html_url')
+          if [ -z "$live" ]; then
+            echo "no Content refresh run is live, so this contract change may merge"
+            exit 0
+          fi
+          echo "$live" >&2
+          echo "a Content refresh run is reading the contract this branch moves." >&2
+          echo "Wait for it to finish, then re-run this check - merging now costs it a digest." >&2
+          exit 1
 
       - uses: actions/setup-node@v7
         if: needs.scope.outputs.code == 'true'
