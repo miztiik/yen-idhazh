@@ -85,16 +85,16 @@ Twenty rows. Read this before the tables.
 | 10 | The workflow censuses go | - | - | COLLAPSED - plan 42 row 7 | - | - | - |
 | 14 | The image benchmark goes, and two heavy wheels with it | - | - | COLLAPSED - plan 42 row 3; one wheel, not two | - | - | - |
 | 20 | One commit call in the workflow that has four | - | - | COLLAPSED - descoped; zero of the four calls can merge, priced in plan 42 section 0 | - | - | - |
-| 7 | Qualification asks each article once | C | - | PENDING | - | - | - |
-| 17 | The utilities and evaluations nothing calls go | C | 7 | PENDING | - | - | - |
-| 8 | Both test pipelines commit what they produce | C | - | PENDING | - | - | - |
+| 7 | Qualification asks each article once | - | - | COLLAPSED - plan 43 row 1 carries the half that pays; cutting to one pass is refused and priced in plan 43 section 0 | - | - | - |
+| 17 | The utilities and evaluations nothing calls go | - | - | COLLAPSED - plan 43 row 2; the census says ten, not eleven, and `plan_status.py` and the search evaluation are out | - | - | - |
+| 8 | Both test pipelines commit what they produce | - | - | COLLAPSED - plan 43 row 3; a day file, not a day directory | - | - | - |
 | 21 | One request builder, and the pipeline stops naming a server | - | - | COLLAPSED - the address clause is plan 41 row 2; the transport change is out of this plan, priced in plan 41 section 0 | - | - | - |
-| 15 | The hosted span sink goes | D | - | PENDING | - | - | - |
-| 19 | One console route list, not nine | D | - | PENDING | - | - | - |
-| 1 | The generated contract layer goes | E | A,B,C,D | PENDING | - | - | - |
-| 12 | The engineering contract and the pages catch up | E | 1 | PENDING - sections 1a, 9 and 10 only; the schema-declaration guardrail and section 11 moved to plan 41 row 6 | - | - | - |
+| 15 | The hosted span sink goes | - | - | **REFUSED** - it overturns an owner ruling recorded at `docs/concepts/telemetry.md:553`. Priced in plan 43 section 0; the one real finding is plan 43 row 7 | - | - | - |
+| 19 | One console route list, not nine | - | - | COLLAPSED - plan 43 row 4 keeps the coverage hole it found; the single-list design is refused, `frontend/src/lib/console/band.ts:131` | - | - | - |
+| 1 | The generated contract layer goes | - | - | COLLAPSED - plan 43 row 5, with the 14 files this row did not name | - | - | - |
+| 12 | The engineering contract and the pages catch up | - | - | COLLAPSED - plan 43 row 6; sections 1a, 9 and 10 only, and it no longer restates the clauses plan 41 row 6 owns | - | - | - |
 
-**Lane A is executed from [`20260921-41-lane-a-model-file-plan.md`](20260921-41-lane-a-model-file-plan.md) and Lane B from [`20260921-42-lane-b-workflows-plan.md`](20260921-42-lane-b-workflows-plan.md), not from here.** Those plans carry the rows above marked `COLLAPSED`, with the contracts they need declared. The rows stay listed here so their numbers still resolve.
+**No row is executed from here.** Lane A is executed from [`20260921-41-lane-a-model-file-plan.md`](20260921-41-lane-a-model-file-plan.md), Lane B from [`20260921-42-lane-b-workflows-plan.md`](20260921-42-lane-b-workflows-plan.md), and lanes C, D and E from [`20260921-43-the-ledgers-and-the-generated-layer-plan.md`](20260921-43-the-ledgers-and-the-generated-layer-plan.md). Those plans carry the rows above, with the contracts they need declared. The rows stay listed here so their numbers still resolve.
 
 ### The lanes, and why each is one pull request
 
@@ -102,15 +102,15 @@ Twenty rows. Read this before the tables.
 | --- | --- | --- | --- |
 | **A - the model file** | moved to plan 41 | `backend/idhazh/llm/server.py`, `backend/idhazh/contracts/knobs/`, `config/models/` | B, C, D |
 | **B - the workflows** | moved to plan 42 | `.github/`, `backend/tests/workflows/_harness.py` | C, D |
-| **C - the ledgers and evaluations** | 7, 17, 8 | `backend/idhazh/evals/qualify.py`, `backend/idhazh/contracts/qualification.py`, `backend/idhazh/ledger.py` | B, D |
-| **D - the site and the sink** | 15, 19 | `frontend/tests/`, `backend/idhazh/telemetry/` | B, C |
-| **E - last, alone** | 1, 12 | every contract module and the engineering contract | nothing |
+| **C - the ledgers and evaluations** | moved to plan 43 | `backend/idhazh/evals/`, `backend/idhazh/contracts/qualification.py`, `backend/idhazh/ledger.py` | B, D |
+| **D - the site and the sink** | moved to plan 43 | `frontend/tests/console-*.spec.ts` | B, C |
+| **E - last, alone** | moved to plan 43 | every contract module and the engineering contract | nothing |
 
 **Lane E runs alone and last.** Row #1 touches a generated twin of every contract the other lanes edit, so running it beside them is a conflict on every file that moved.
 
 **Plan 42 pull request B1 must merge before plan 41 pull request A**, because a test plan 42 deletes imports a name plan 41 deletes, and a deleted import raises at test collection.
 
-**Parallel N = 2 here, plus plans 41 and 42.** Lanes C and D run at once, one worker each, one pull request each. A worker carries its lane's rows in order in one worktree.
+**Parallel N = 0 here.** This plan dispatches nothing. Plans 41, 42 and 43 carry every row and each sets its own pool.
 
 ## Section 1b - The contracts, declared before any code
 
