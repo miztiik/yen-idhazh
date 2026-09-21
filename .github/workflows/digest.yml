@@ -101,6 +101,17 @@ jobs:
       draft_sha256: ${{ steps.models.outputs.draft_sha256 }}
       llama_cpp_build: ${{ steps.runtime.outputs.llama_cpp_build }}
     steps:
+      # First, before the checkout, for the reason written above the shard's own
+      # stamp: the number then covers the checkout and the install as well as the
+      # feed reads. That is the whole question - the case for splitting this job
+      # rests on a figure nothing in this repository can check, and this is the
+      # instrument. The job-clock step below subtracts this stamp and files the
+      # difference onto the host row this job already opens.
+      - name: Stamp the plan clock
+        run: |
+          set -euo pipefail
+          echo "JOB_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v7
@@ -334,6 +345,29 @@ jobs:
           echo "shards=$SHARDS" >> "$GITHUB_OUTPUT"
           echo "matrix=$(seq 0 $((SHARDS - 1)) | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
 
+      # The other end of `What machine this job drew`, exactly as in `work`: the
+      # probe opens the row before anything heavy, and what the job cost is only
+      # knowable near its end, so this writes a second row of the same key and
+      # the fold in assemble unites them.
+      #
+      # Before the commit step and not after the artifact upload, because the
+      # commit below is what carries this row off the runner - a segment written
+      # after it goes in the bin with the machine. So the number stops short of
+      # the commit and the upload, which is the same bound the shard's clock has.
+      #
+      # No `--server-log` and no `--counters-file`: this job stands no model
+      # server up, so the three cells they fill stay empty. An empty cell says
+      # the reading was not taken, where a zero would claim a job that read no
+      # tokens.
+      - name: What this job cost
+        run: |
+          set -euo pipefail
+          python -m idhazh job-clock \
+            --date "${{ steps.decide.outputs.date }}" \
+            --job plan \
+            --shard 0 \
+            --job-started-at "${JOB_STARTED_AT:-}"
+
       # The plan job writes the sight and health ledgers, so the plan job commits
       # them - not assemble. A run that dies in the worker still saw what it saw,
       # and the next run needs that: first sight is the only age an undated
@@ -435,11 +469,20 @@ jobs:
       # builds the server command. It used to run after that step, and the whole
       # reason a second copy of the flag list existed was to be readable from a
       # job that had not installed the package yet.
+      #
+      # `torch` comes from the processor-only index first, and the extra then
+      # finds it already satisfied. The default PyPI wheel for Linux carries the
+      # graphics-card runtime, and this runner has no graphics card (Guardrail
+      # #2) - so every shard of every run downloaded and unpacked a few gigabytes
+      # it could never execute. The index is the one `measure.yml` already names.
+      # It cannot go in the extra: a local version pinned there would follow a
+      # developer whose machine does have a card.
       - name: Install
         run: |
           if [ "${{ needs.plan.outputs.faithfulness }}" = "false" ]; then
             pip install -e .
           else
+            pip install --index-url https://download.pytorch.org/whl/cpu torch
             pip install -e ".[faithfulness]"
           fi
 

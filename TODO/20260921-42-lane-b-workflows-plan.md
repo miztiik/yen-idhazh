@@ -89,8 +89,8 @@ Eleven rows, six pull requests, four waves.
 
 | # | Row title | PR | Depends-on | Parallel-group | Status | Worktree | PR link | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The runner stops paying for a graphics card it does not have | P1 | - | **M** | PENDING | - | - | - |
-| 2 | The plan job closes the clock it opens | P1 | 1 | **M** | PENDING | - | - | - |
+| 1 | The runner stops paying for a graphics card it does not have | P1 | - | **M** | DONE | p42p1 | - | P1 |
+| 2 | The plan job closes the clock it opens | P1 | 1 | **M** | DONE | p42p1 | - | P1 |
 | 3 | The capability probe goes | P2 | - | A | PENDING | - | - | - |
 | 4 | The image benchmark goes | P2 | 3 | A | PENDING | - | - | - |
 | 5 | Five checks move into the thing they check | P3 | 2, 4 | B | PENDING | - | - | - |

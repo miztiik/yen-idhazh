@@ -239,8 +239,14 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
+      # The same two lines as the daily run, for the same reason: the default
+      # PyPI `torch` wheel for Linux is the graphics-card build and this runner
+      # has no graphics card (Guardrail #2). The extra finds torch already
+      # satisfied and installs the rest.
       - name: Install
-        run: pip install -e ".[faithfulness]"
+        run: |
+          pip install --index-url https://download.pytorch.org/whl/cpu torch
+          pip install -e ".[faithfulness]"
 
       - uses: actions/download-artifact@v8
         with:
