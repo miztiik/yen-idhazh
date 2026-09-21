@@ -269,7 +269,7 @@ def test_load_published_answers_the_same_from_either_header(tmp_path: Path) -> N
     into a day file here because that is the only shape the reader opens now -
     the bytes are the ones the flat file held, and the path is the one a run
     would write them to. The header check guards the writer only -
-    `require_matching_header` is called from `_append` and from nothing on the
+    `require_matching_header` is called from `extend_ledger_file` and from nothing on the
     read path - and that is what made narrowing the row one commit rather than
     an expand-migrate-contract sequence (CLAUDE.md section 11). It still runs
     because a fork or a stale branch can hold a wide ledger, and this says what
@@ -294,9 +294,9 @@ def test_load_published_answers_the_same_from_either_header(tmp_path: Path) -> N
 
 
 def test_the_state_ledgers_append_blind_and_the_reads_absorb_a_repeat(tmp_path: Path) -> None:
-    """`ledger._append` writes every row it is handed. Its callers own the repeats.
+    """`ledger.extend_ledger_file` writes every row it is handed. Its callers own the repeats.
 
-    Pinned because the promise in `ledger._append` names those callers, and a
+    Pinned because the promise in `ledger.extend_ledger_file` names those callers, and a
     dedupe quietly added here would make that docstring wrong while every test
     still passed. The eval ledger is the other half of the contrast: it refuses
     an observation it already holds, because a row there is a measurement rather
@@ -1358,7 +1358,7 @@ def test_the_header_check_reads_one_line_whatever_the_file_holds(
 ) -> None:
     """The append asks a question a merge can only change, so it reads line 1.
 
-    `_append` writes rows into a file that exists and a header only into one that
+    `extend_ledger_file` writes rows into a file that exists and a header only into one that
     does not, so an append cannot put a second header in a file. Scanning every
     line on every append therefore asks a question whose answer cannot have moved
     since the last merge - and the merge is where the settlement now runs.

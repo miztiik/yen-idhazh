@@ -109,6 +109,11 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: never read again, so deleting a day of them takes nothing away from the fit;
 #: deleting a fitted row takes a day out of the guard's median and out of what
 #: step 4 compares against. Either can go on its own.
+#:
+#: **`llm-council-shard-outcomes` is here before anything writes it.** The shape
+#: and the path land ahead of the step that appends to them (Guardrail #3), and a
+#: store an operator cannot name is a store a day cannot be taken out of. A range
+#: over a store with no file selects nothing and says so.
 TARGETS: Final[Mapping[str, str]] = MappingProxyType(
     dict(
         sorted(
@@ -120,6 +125,9 @@ TARGETS: Final[Mapping[str, str]] = MappingProxyType(
                 ledger.VISUAL_PRUNES_DIRNAME: ledger.VISUAL_PRUNES_DIRNAME,
                 score_writer.INDEX_DIRNAME: score_writer.INDEX_DIRNAME,
                 score_writer.LEDGER_DIRNAME: score_writer.LEDGER_DIRNAME,
+                f"{ledger.COUNCIL_DIRNAME}-{ledger.SHARD_OUTCOMES_DIRNAME}": (
+                    f"{ledger.COUNCIL_DIRNAME}/{ledger.SHARD_OUTCOMES_DIRNAME}"
+                ),
                 f"{ledger.STORY_SIMILARITY_DIRNAME}-{ledger.SCORED_PAIRS_DIRNAME}": (
                     f"{ledger.STORY_SIMILARITY_DIRNAME}/{ledger.SCORED_PAIRS_DIRNAME}"
                 ),

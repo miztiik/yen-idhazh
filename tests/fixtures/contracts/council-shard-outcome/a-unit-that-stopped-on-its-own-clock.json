@@ -1,0 +1,16 @@
+{
+  "date": "2026-09-19",
+  "host_model": "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz",
+  "judge_id": "content-similarity-judge",
+  "model_calls": 386,
+  "model_seconds": 18102.5,
+  "outcome": "stopped_on_deadline",
+  "run_id": "2026-09-20-35550001",
+  "seconds_spent": 18422.75,
+  "shard": 2,
+  "shards": 4,
+  "started_at": "2026-09-20T22:04:11Z",
+  "tokens_in": 1044820,
+  "tokens_out": 3860,
+  "version": "2026-09-21"
+}

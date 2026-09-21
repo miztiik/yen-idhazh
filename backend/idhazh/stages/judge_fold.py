@@ -66,7 +66,8 @@ def stage_judge_fold(
     until somebody re-dispatches the date; folding a partial day costs a quarter
     of it permanently, with nothing saying so.
     """
-    knobs = settings.app.assemble.same_story.adaptive_dedup_threshold
+    knobs = settings.app.assemble.same_story.judging_knobs()
+    shards = settings.app.council.shards
     state = state_dir if state_dir is not None else config.REPO_ROOT / ledger.STATE_DIRNAME
     root = judge_root if judge_root is not None else common.JUDGE_ROOT
     verdicts = root / date / VERDICTS_DIRNAME
@@ -94,10 +95,10 @@ def stage_judge_fold(
         record = fold.empty_record(knobs, scorer=scorer, judge=judge)
         LOG.info("judge fold date=%s archived=%s was=%s now=%s", date, stem, *moved)
 
-    if len(present) < knobs.shards:
+    if len(present) < shards:
         report = FoldReport(
             date=date,
-            legs_expected=knobs.shards,
+            legs_expected=shards,
             legs_present=len(present),
             rows_appended=appended,
             folded=False,
@@ -108,7 +109,7 @@ def stage_judge_fold(
         assemble.write_atomic(record_path, fold.fold_day(record, rows, date=date).to_json())
         report = FoldReport(
             date=date,
-            legs_expected=knobs.shards,
+            legs_expected=shards,
             legs_present=len(present),
             rows_appended=appended,
             folded=True,
