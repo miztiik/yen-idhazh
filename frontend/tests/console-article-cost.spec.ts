@@ -350,16 +350,25 @@ test.describe('the panel, on the canary', () => {
 
 	test('processor time is printed beside the hour it has to fit inside', async ({ page }) => {
 		// Decision 4: a processor-second is unreadable on its own. The hour is
-		// recomputed here from the same machine records the page joined to.
+		// recomputed here from the same machine records the page joined to, and so
+		// is the count of articles it buys - a share of an hour rounds to nothing
+		// as soon as an article is cheap, and nothing reads as free.
 		await page.goto('/console/machine/');
+		await expect(page.locator(`[data-window-preset="${WIDEST}"] input`)).toBeEnabled();
 		await widen(page, WIDEST);
 
 		const counts = [...new Set(countsBy('threads').values())];
 		const hour = runnerHourSeconds(counts);
 		expect(hour, 'the canary names no processor count at all').not.toBeNull();
-		await expect(page.locator(`${PANEL} [data-article-cost="processor"]`)).toContainText(
-			`${grouped(hour!)} processor-seconds`
-		);
+
+		const span = await shownSpan(page);
+		const health = canaryHealth().filter((row) => within(row, span.start, span.end));
+		const many = hour! / middle(processorSecondsFrom(health, countsBy('threads')));
+		const said = many < 10 ? many.toFixed(1) : grouped(Math.round(many));
+
+		const processor = page.locator(`${PANEL} [data-article-cost="processor"]`);
+		await expect(processor).toContainText(`${grouped(hour!)} processor-seconds`);
+		await expect(processor).toContainText(`${said} articles at the middle figure`);
 	});
 
 	test('a figure the fixture cannot fill prints a dash and the reason, not a zero', async ({

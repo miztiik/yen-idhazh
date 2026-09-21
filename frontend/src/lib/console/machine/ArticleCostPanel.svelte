@@ -40,10 +40,16 @@
 		return `${sign}${grouped(Number(Math.abs(value).toFixed(1)))} MiB`;
 	}
 
-	/** A whole-number-and-a-tenth share, for the hour a processor figure is read
-	 * against. */
-	function share(part: number, whole: number): string {
-		return `${((part / whole) * 100).toFixed(1)}%`;
+	/** How many articles a runner-hour buys at the middle figure.
+	 *
+	 * A share of an hour was the first thing printed here and it rounds to `0.0%`
+	 * the moment an article is cheap, which reads as free. A count answers the
+	 * question an operator actually came with - how many more of these fit in the
+	 * hour I am paying for - and it never degenerates.
+	 */
+	function fits(hour: number, each: number): string {
+		const many = hour / each;
+		return many < 10 ? many.toFixed(1) : grouped(Math.round(many));
 	}
 
 	const processor = $derived(cost.processorSeconds);
@@ -122,13 +128,15 @@
 							processor.high
 						)}.
 					</p>
-					{#if hour !== null}
+					{#if hour !== null && processor.mid > 0}
 						<p class="against">
 							One hour of this runner supplies {grouped(hour)} processor-seconds across its {cost
 								.processors.length === 1
 								? `${cost.processors[0]} processors`
-								: `smallest machine's ${Math.min(...cost.processors)} processors`}, so the middle
-							article above used {share(processor.mid, hour)} of an hour.
+								: `smallest machine's ${Math.min(...cost.processors)} processors`}, which is {fits(
+								hour,
+								processor.mid
+							)} articles at the middle figure above.
 						</p>
 					{/if}
 				{/if}
