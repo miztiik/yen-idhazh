@@ -60,6 +60,9 @@ DAY_PATHS: Final[dict[str, Callable[[Path, str], Path]]] = {
     ledger.VISUAL_PRUNES_DIRNAME: ledger.visual_prunes_path,
     score_writer.INDEX_DIRNAME: score_writer.index_path,
     score_writer.LEDGER_DIRNAME: score_writer.ledger_path,
+    f"{ledger.COUNCIL_DIRNAME}-{ledger.SHARD_OUTCOMES_DIRNAME}": (
+        ledger.council_shard_outcomes_path
+    ),
     f"{ledger.STORY_SIMILARITY_DIRNAME}-{ledger.SCORED_PAIRS_DIRNAME}": (
         ledger.scored_pairs_path
     ),

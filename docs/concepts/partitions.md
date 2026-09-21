@@ -1,13 +1,13 @@
 # Partitions
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 A **partition** is one file holding one period of a collection that grows. The
 directory is the collection and the name says the period - `<YYYY-MM>` for a month,
 `<YYYY>/<MM>/<DD>` for a day. A reader opens the periods its window names and skips
 the rest. A writer appends to the period its own date names and leaves the rest
 alone.
 
-**A month is the usual unit here and it is not the only one.** Seven collections
+**A month is the usual unit here and it is not the only one.** Eight collections
 partition by **day** instead, and the first two below are the same series - the
 state ledger is derived from the published tree:
 
@@ -20,6 +20,7 @@ state ledger is derived from the published tree:
 | `state/counterfactual-scores/<YYYY>/<MM>/<DD>.csv` | `ledger.append_counterfactual_scores` |
 | `state/story-similarity/scored-pairs/<YYYY>/<MM>/<DD>.csv` | none yet - the shape and the path land ahead of the step that appends to them (Guardrail #3) |
 | `state/story-similarity/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` | none yet, for the same reason |
+| `state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv` | none yet, for the same reason |
 
 Every rule on this page reads the same with "day" in place of "month": a writer
 appends to the day its own date names, a reader opens the days its window names,
@@ -181,6 +182,7 @@ Authority: owner, 2026-09-06.
 | Visual prunes | `state/visual-prunes/<YYYY>/<MM>/<DD>.csv` | `ledger.append_visual_prunes` | Partitioned by **day**, and the one collection here whose read will never carry a window - the question is the whole series. It files by day anyway, for the two things the grain buys with no read time at all: two runs collide on a file only when they are the same day, and taking a day back off the record is one `rm` rather than an edit inside a shared file, which its own `merge=union` line cannot express. |
 | Scored pairs | `state/story-similarity/scored-pairs/<YYYY>/<MM>/<DD>.csv` | none yet | Partitioned by **day**, and the first collection here that nests one directory deeper than `state/` - the whole adaptive merge line hangs off `state/story-similarity/`, so a commit step stages one prefix. A day is closed once its pairs have been folded into the score record, which happens once. The shape, the path and the header ship ahead of the step that appends to them (Guardrail #3). |
 | Fitted thresholds | `state/story-similarity/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` | none yet | Partitioned by **day** for the reason its sibling is, and unlike that sibling its read does carry a window: the step-change guard takes a median over the newest `step_change_window_rows` written rows, and `assemble` looks back `applied_lookback_days` for a line to apply. Closed once the run's date leaves the day. |
+| Council shard outcomes | `state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv` | none yet | Partitioned by **day**, and it is the one collection here whose day is **not** the day its writer ran: a row files by the digest date it judged, so one night's run appends to every date its plan covered and a day is closed once no later night still names it. Nested one directory deeper than `state/` for the reason the adaptive merge line is - everything the council records about itself hangs off one prefix, so a commit step stages one path. Two directory levels and no more: the day inventory globs one level and two, so a third would be invisible to it and the miss would be silent. The shape, the path and the header ship ahead of the step that appends to them (Guardrail #3). |
 | Model validation | `state/<run.trial_state_dirname>/validation/<YYYY>/<MM>/<DD>.csv` | `stages.compact.stage_compact`, folding the segment `stages.qualify_decide` or `stages.decide` writes | Partitioned by **day** since 2026-09-18, where it was `state/validation-<date>.csv` at the root of `state/`. The old path was a hardcoded string joined to the repository root, so no config could move it and a trial dispatch wrote production state. Closed once the run's date leaves the day. Two candidates can be dispatched at once, so neither opens the day file: each writes its own segment and the fold settles them against `VALIDATION_KEY`. |
 
 The two collections with nothing committed are not aspirational. Both writers ship and

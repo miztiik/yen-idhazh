@@ -1,0 +1,16 @@
+{
+  "date": "2026-09-20",
+  "host_model": "AMD EPYC 7763 64-Core Processor",
+  "judge_id": "paper-judge",
+  "model_calls": null,
+  "model_seconds": null,
+  "outcome": "nothing_to_do",
+  "run_id": "2026-09-20-35550001",
+  "seconds_spent": 3.5,
+  "shard": 0,
+  "shards": 1,
+  "started_at": "2026-09-20T22:04:11Z",
+  "tokens_in": null,
+  "tokens_out": null,
+  "version": "2026-09-21"
+}
