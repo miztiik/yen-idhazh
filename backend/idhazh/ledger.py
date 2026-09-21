@@ -639,7 +639,10 @@ def counterfactual_scores_path(state_dir: Path, date: str) -> Path:
 
 
 def scored_pairs_relpath(date: str) -> str:
-    """`state/content-similarity-judge/scored-pairs/<YYYY>/<MM>/<DD>.csv` - POSIX, for a log line."""
+    """`state/content-similarity-judge/scored-pairs/<YYYY>/<MM>/<DD>.csv`.
+
+    POSIX, for a log line.
+    """
     stem = f"{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
     return f"{STATE_DIRNAME}/{CONTENT_SIMILARITY_JUDGE_DIRNAME}/{SCORED_PAIRS_DIRNAME}/{stem}"
 
@@ -657,7 +660,10 @@ def scored_pairs_path(state_dir: Path, date: str) -> Path:
 
 
 def fitted_thresholds_relpath(date: str) -> str:
-    """`state/content-similarity-judge/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` - POSIX, for a log line."""
+    """`state/content-similarity-judge/fitted-thresholds/<YYYY>/<MM>/<DD>.csv`.
+
+    POSIX, for a log line.
+    """
     stem = f"{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
     return f"{STATE_DIRNAME}/{CONTENT_SIMILARITY_JUDGE_DIRNAME}/{FITTED_THRESHOLDS_DIRNAME}/{stem}"
 
