@@ -71,7 +71,7 @@ Seven rows, two pull requests. Read this before the tables.
 | 4 | Both decode caps go | A | 3 | A | PENDING | - | - | - |
 | 5 | The model file carries llama-server's own flags | A | 4 | A | PENDING | - | - | - |
 | 6 | The engineering contract catches up | A | 5 | A | PENDING | - | - | - |
-| 7 | The markers are derived at server start | B | 6 | B | PENDING | - | - | - |
+| 7 | The markers are derived at server start | B | 6 | B | DONE | `p41b` | - | owner |
 
 ### The two pull requests
 
