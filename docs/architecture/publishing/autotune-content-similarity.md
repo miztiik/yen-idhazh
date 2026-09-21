@@ -138,7 +138,7 @@ push the job past the 6 h ceiling GitHub kills a job at, and a shape that only
 fits on a median day is a shape that finds out on a busy one.
 
 **The name is about where this goes rather than where it is** - owner ruling,
-2026-09-18. The legs shard a list today and never confer, so `judges` would be
+2026-09-18. The shards split a list today and never confer, so `judges` would be
 the more literal word for what is on disk. What is coming is not one question:
 this loop argues a case, and a case needs something to adjudicate it - a judge,
 a jury or a plain heuristic - and some of those paths put a person in the loop.
@@ -156,11 +156,11 @@ flowchart TD
   end
   subgraph council["llm-council.yml - the draw and judge jobs"]
     draw["Score every cross-source pair again.<br/>Keep the ones inside the band.<br/>Take every pair above the line first,<br/>then fill the budget in hash order"]
-    legs["One leg a shard, one model server each.<br/>Read every pair twice, the two summaries<br/>the other way round the second time"]
+    shards["One job a shard, one model server each.<br/>Read every pair twice, the two summaries<br/>the other way round the second time"]
   end
-  subgraph foldjob["llm-council.yml - the fold job"]
-    rows[("Every reading the legs returned,<br/>one committed row a pair")]
-    legsin{"Did every leg<br/>report?"}
+  subgraph collectjob["llm-council.yml - the collect job"]
+    rows[("Every reading the shards returned,<br/>one committed row a pair")]
+    reported{"Did every shard<br/>report?"}
     inputs{"Do the band, the slot width and<br/>both model stamps still<br/>match the config?"}
     archive["Archive the record.<br/>Start an empty one"]
     agree{"Did this pair's two<br/>readings agree?"}
@@ -177,11 +177,11 @@ flowchart TD
     fitrow[("One fitted row a day, written<br/>even when nothing moved")]
   end
   day --> draw
-  draw --> legs
-  legs --> rows
-  rows --> legsin
-  legsin -- "no, legs_missing" --> hold
-  legsin -- "yes" --> inputs
+  draw --> shards
+  shards --> rows
+  rows --> reported
+  reported -- "no, shards_missing" --> hold
+  reported -- "yes" --> inputs
   inputs -- "no, inputs_changed" --> archive
   archive --> hold
   inputs -- "yes" --> agree
@@ -211,8 +211,8 @@ flowchart TD
   classDef sysPublish fill:#1a1e27,stroke:#3f8fb8,stroke-width:1.5px,color:#a5d6ea;
   classDef sysModel fill:#1a1e27,stroke:#9b6bd6,stroke-width:1.5px,color:#cfb0f0;
   classDef sysEval fill:#1a1e27,stroke:#c79a2e,stroke-width:1.5px,color:#f0d79a;
-  class draw,legs,archive,count,walk,damp,clamped,usefit,usefloor stage;
-  class pick,agree,legsin,inputs,sheet,steady,shape decision;
+  class draw,shards,archive,count,walk,damp,clamped,usefit,usefloor stage;
+  class pick,agree,reported,inputs,sheet,steady,shape decision;
   class drop,hold warn;
   class day,rows,record,fitrow store;
   class pub sysPublish;
@@ -248,13 +248,13 @@ committed block is 120 slots. That record is the whole input to the fit, so the
 fit costs the same on the thousandth day as on the tenth, and a reader who takes
 the walk to mean "sort every pair ever judged" has put back the growing read this
 shape exists to avoid ([../../concepts/growing-reads.md](../../concepts/growing-reads.md)).
-A date goes in once: a second fold of one date is refused, which is what makes
-re-running a day free rather than damaging.
+A date goes in once: a date already on the record is refused a second time, which
+is what makes re-running a day free rather than damaging.
 
 **Five reasons hold the line, and a held day is an ordinary day.** The row is
 still written, it carries yesterday's line, and it names what stopped the fit.
 Three of them are the gates the fit asks of the record and of the judge; the
-other two are the fold's own refusal, handed up.
+other two are the collecting job's own refusal, handed up.
 `gates` in [../../../backend/idhazh/similarity/fit.py](../../../backend/idhazh/similarity/fit.py)
 asks all five in one fixed order, so two runs over one held day name the same
 reason and an operator comparing two rows is comparing one answer. `none` is the
@@ -263,7 +263,7 @@ sixth value the column can carry and it is not a hold: it says a fit ran.
 | Reason | What it says |
 | --- | --- |
 | `inputs_changed` | The encoder, a scoring weight, a band edge or the slot width no longer matches what the counts were filed under. The old record is archived, an empty one starts, and the line freezes until that one fills. A config edit is a person acting on purpose, so the run records it rather than vetoing it. |
-| `legs_missing` | A judging leg returned nothing. Its siblings' rows are still committed, but the day is not folded at all, because the record counts a date once and a partial fold would put the missing leg's verdicts out of reach for ever. A re-dispatch of that date folds it cleanly. |
+| `shards_missing` | A judging shard returned nothing. Its siblings' rows are still committed, but the day is not counted into the record at all, because the record counts a date once and a partial day would put the missing shard's verdicts out of reach for ever. A re-dispatch of that date counts it cleanly. |
 | `sheet_too_small` | Too few NO readings, too few merges looked at, or too few days. `minimum_negatives`, `minimum_above_line` and `minimum_days` are the three, and this reason comes before the judge's own health because on a young record every later gate is being asked of a sample too small to answer it. |
 | `judge_unstable` | Too many pairs came back with two different answers in the two orders. `disagreement_max` is the bar. |
 | `judge_uncertain` | Too large a share of the usable verdicts read UNCLEAR. `unclear_max` is the bar. |
@@ -282,7 +282,7 @@ rather than enforced - `step_change_guard_enforced` is off, so the row carries
 `daily_shift` and `typical_shift` for a person to read while nobody has yet
 measured what a normal day looks like.
 
-**Nothing has been judged yet.** The committed record carries no folded dates and
+**Nothing has been judged yet.** The committed record carries no counted dates and
 `enabled` is false, so every published day is still grouped at `floor_min` and
 every number above describes a mechanism rather than a history. The operator
 console is where the loop is watched once it starts
@@ -462,7 +462,7 @@ cap only slows it, letting the spike persist at cap speed until the evidence
 turns. So both mechanisms stay and both are directional.
 
 **The caps are slot counts because a decimal cannot be checked.** `10 slots down,
-3 up` is a count against the same grid the record is folded on, so a reader can
+3 up` is a count against the same grid the record counts on, so a reader can
 hold the cap and the line in the same unit. `0.010` reads as a precision the fit
 does not have, and `four percent of the range` reads as an answer nobody can
 verify.
@@ -522,14 +522,14 @@ more every day the archive grows, which is the cost Guardrail #12 exists to
 catch. The record is the whole input, so the fit's cost is set by the band and
 the slot width and by nothing that accumulates.
 
-**The legs are CI jobs, not processes on one runner.** The runner is 2 physical
+**The shards are CI jobs, not processes on one runner.** The runner is 2 physical
 cores behind 4 logical CPUs, and one `llama-server` on the configured weights
 peaks near the runner's whole memory
 ([../../reference/models/qwen3.5-9b-q4km.md](../../reference/models/qwen3.5-9b-q4km.md)).
-A second server on one runner does not fit at all, never mind four. The legs also
-commit nothing: one job downloads every leg's verdicts and makes one push, so
+A second server on one runner does not fit at all, never mind four. The shards also
+commit nothing: one job downloads every shard's verdicts and makes one push, so
 there is no merge driver to trust, no union stacking to census afterwards, and no
-leg that can die having pushed half its rows.
+shard that can die having pushed half its rows.
 
 **The confidence column is a gap between verdicts, and it was a gap between
 tokens until 2026-09-21.** The judge asks the decoder what else it could have

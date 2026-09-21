@@ -2,11 +2,11 @@
 
 A fixed row of slots and three counts in each. The record is the whole input to
 the fit, so the fit reads one file of a size that never changes rather than
-sorting every pair ever judged (CLAUDE.md Guardrail #12): a day is folded in
+sorting every pair ever judged (CLAUDE.md Guardrail #12): a day is counted in
 once, its counts are added, and the day tree is never read again.
 
-`folded_dates` is what makes a re-run free. A second fold of a date already on
-the record is refused rather than doubling its counts, so re-running a day costs
+`counted_dates` is what makes a re-run free. A date already on the record is
+refused a second time rather than doubling its counts, so re-running a day costs
 nothing instead of damaging the record.
 
 Six stamp fields say what a count here means - which encoder, at which weights,
@@ -78,13 +78,18 @@ class StorySimilarityDistribution(Contract):
     __schema_stem__: ClassVar[str] = "story-similarity-distribution"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21T12:00",
+            change="`folded_dates` is now `counted_dates`. The old key still reads.",
+            why="Borrowed vocabulary for the count this field already holds.",
+        ),
+        ChangelogEntry(
             version="2026-09-21",
             change="Added judge_temperature, decode_digest and judge_thinks, and stamped them.",
             why="Two samplers and two decode envelopes were counted as one population.",
         ),
         ChangelogEntry(
             version="2026-09-18",
-            change="Initial shape: a fixed row of slots, three counts each, and the dates folded.",
+            change="Initial shape: a fixed row of slots, three counts each, and the dates counted.",
             why="A fit that sorted every pair ever judged would cost more every day.",
         ),
     )
@@ -117,7 +122,7 @@ class StorySimilarityDistribution(Contract):
         default=None,
         description=(
             "Which encoder produced the scores these counts were filed under. Null until "
-            "the first fold."
+            "the first day is counted."
         ),
     )
     cosine_weight: float | None = Field(
@@ -138,7 +143,7 @@ class StorySimilarityDistribution(Contract):
     )
     judge_model: JudgeModelId | None = Field(
         default=None,
-        description="Which model produced these verdicts. Null until the first fold.",
+        description="Which model produced these verdicts. Null until the first day is counted.",
     )
     prompt_digest: Sha256 | None = Field(
         default=None,
@@ -177,11 +182,11 @@ class StorySimilarityDistribution(Contract):
             "one population."
         ),
     )
-    folded_dates: tuple[DateStamp, ...] = Field(
+    counted_dates: tuple[DateStamp, ...] = Field(
         default=(),
         description=(
-            "Every date already counted, sorted. A second fold of one date is refused "
-            "rather than doubling its counts, which makes a re-run free instead of "
+            "Every date already counted, sorted. A date already here is refused a second "
+            "time rather than doubling its counts, which makes a re-run free instead of "
             "damaging."
         ),
     )
@@ -192,6 +197,23 @@ class StorySimilarityDistribution(Contract):
             "(Guardrail #12)."
         )
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _the_old_key_still_reads(cls, data: Any) -> Any:
+        """`folded_dates` was renamed to `counted_dates` on 2026-09-21. Both spellings load.
+
+        Nothing but the name moved, so the old value is carried across whole. The
+        model forbids unknown keys, so without this the committed record an
+        earlier build wrote would be refused outright and the day list behind the
+        fitted line would be lost (section 11). The next run rewrites the record
+        under the new key.
+        """
+        if isinstance(data, dict) and "folded_dates" in data and "counted_dates" not in data:
+            migrated = dict(data)
+            migrated["counted_dates"] = migrated.pop("folded_dates")
+            return migrated
+        return data
 
     @model_validator(mode="after")
     def _the_band_divides_into_whole_slots(self) -> Self:
@@ -235,14 +257,14 @@ class StorySimilarityDistribution(Contract):
         return self
 
     @model_validator(mode="after")
-    def _a_date_is_folded_once(self) -> Self:
+    def _a_date_is_counted_once(self) -> Self:
         """A repeated date is a day counted twice, which no later read can undo."""
-        dates = list(self.folded_dates)
+        dates = list(self.counted_dates)
         if dates != sorted(dates):
-            raise ValueError("folded_dates is kept sorted, so a reader can scan it")
+            raise ValueError("counted_dates is kept sorted, so a reader can scan it")
         if len(set(dates)) != len(dates):
             repeated = sorted({date for date in dates if dates.count(date) > 1})
-            raise ValueError(f"folded_dates already holds {', '.join(repeated)}")
+            raise ValueError(f"counted_dates already holds {', '.join(repeated)}")
         return self
 
     def record_stamp(self) -> str:
@@ -250,10 +272,11 @@ class StorySimilarityDistribution(Contract):
 
         **The read-side migration for the three decode values is this method.**
         A record written before they existed carries them null, loads under this
-        build, and stamps to a value it never stamped to - so the first fold
-        after the widening archives it and counts on from zero. That reset is by
-        construction rather than by an input moving, it happens once, and it is
-        the price of the two populations this record used to merge in silence.
+        build, and stamps to a value it never stamped to - so the first day
+        counted after the widening archives it and counts on from zero. That
+        reset is by construction rather than by an input moving, it happens once,
+        and it is the price of the two populations this record used to merge in
+        silence.
         """
         payload: dict[str, Any] = {
             "band_high": self.band_high,

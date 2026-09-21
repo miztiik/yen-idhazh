@@ -5,7 +5,7 @@ model or looks at a clock - `idhazh.stages.count_verdicts` does the reading and
 the writing, and this module answers only the counting question.
 
 The record is the whole input to the fit, so it is rewritten whole and never
-appended to. A day goes in once: `fold_day` refuses a date the record already
+appended to. A day goes in once: `count_day` refuses a date the record already
 holds, which is what makes re-running a day free instead of damaging.
 """
 
@@ -41,10 +41,10 @@ class SlotCounts:
 def empty_record(
     knobs: SimilarityThresholdConfig, *, scorer: ScorerStamp, judge: JudgeStamp
 ) -> StorySimilarityDistribution:
-    """A record of the configured band, every count zero and no date folded.
+    """A record of the configured band, every count zero and no date counted.
 
-    The stamps are written in at birth rather than on the first fold, so a record
-    that has counted nothing still says what it would have counted under.
+    The stamps are written in at birth rather than on the first day counted, so a
+    record that has counted nothing still says what it would have counted under.
 
     Built through `model_validate` because `JudgeStamp.judge_model` is a plain
     string: the stamp carries whatever `config/models/` names, and this is the
@@ -66,7 +66,7 @@ def empty_record(
             "judge_temperature": judge.judge_temperature,
             "decode_digest": judge.decode_digest,
             "judge_thinks": judge.thinks,
-            "folded_dates": (),
+            "counted_dates": (),
             "slots": tuple(
                 ScoreSlot(bin_low=knobs.band_low + index * knobs.bin_width)
                 for index in range(slots)
@@ -156,24 +156,24 @@ def day_counts(
     return counts
 
 
-def fold_day(
+def count_day(
     record: StorySimilarityDistribution,
     rows: Sequence[StorySimilarityPair],
     *,
     date: str,
 ) -> StorySimilarityDistribution:
-    """The record with today added and `date` appended to `folded_dates`.
+    """The record with today added and `date` appended to `counted_dates`.
 
     Raises `ValueError` when the record already holds the date, so a re-run of
     this step is free rather than a day counted twice. The message names the date
     because that is the one thing the operator has to act on.
     """
-    if date in record.folded_dates:
+    if date in record.counted_dates:
         raise ValueError(f"the record already counted {date}")
     counts = day_counts(rows, record=record)
     return record.model_copy(
         update={
-            "folded_dates": tuple(sorted((*record.folded_dates, date))),
+            "counted_dates": tuple(sorted((*record.counted_dates, date))),
             "slots": tuple(
                 slot.model_copy(
                     update={

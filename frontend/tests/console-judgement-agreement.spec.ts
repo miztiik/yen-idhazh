@@ -152,8 +152,8 @@ test.describe('what the record still needs', () => {
 		// the rows would draw a shorter, tidier picture of a record that had
 		// stopped filling, and the gap is the fact this strip exists to show.
 		const dates = await page
-			.locator(`${GATES} [data-fold-day]`)
-			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-fold-day') ?? ''));
+			.locator(`${GATES} [data-counted-day]`)
+			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-counted-day') ?? ''));
 
 		expect(dates.length).toBeGreaterThan(1);
 		for (let index = 1; index < dates.length; index += 1) {
@@ -178,7 +178,7 @@ test.describe('what the record still needs', () => {
 		// takes the categorical hue, and the warning fill waits for the day a hold
 		// stops being expected.
 		if ((await page.locator(GATES).getAttribute('data-gates-met')) === 'yes') return;
-		expect(await page.locator(`${GATES} [data-fold-state="held"]`).count()).toBe(0);
+		expect(await page.locator(`${GATES} [data-counted-state="held"]`).count()).toBe(0);
 	});
 
 	test('every square carries a sentence, so colour is never the only signal', async ({
@@ -187,7 +187,7 @@ test.describe('what the record still needs', () => {
 		await open(page);
 
 		const titles = await page
-			.locator(`${GATES} [data-fold-day]`)
+			.locator(`${GATES} [data-counted-day]`)
 			.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('title') ?? ''));
 
 		expect(titles.length).toBeGreaterThan(0);

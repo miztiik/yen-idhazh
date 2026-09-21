@@ -88,6 +88,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21T13:00",
+            change="council descriptions say shard where they said leg. No knob moved.",
+            why="`leg` was a second name for the shard the council already sizes by.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T12:40",
             change="The judging-budget fit check left this contract for the tenant that owns it.",
             why="Reading config pulled one judge's measured pair cost into every reader.",
@@ -101,11 +106,6 @@ class AppConfig(Contract):
             version="2026-09-21T05:00",
             change="console.context_high_percentile and console.context_cut_off_reason, additive.",
             why="The context panel draws two ends a run and names what a cut-off looks like.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T04:30",
-            change="assemble.same_story.adaptive_dedup_threshold.flush_every_pairs, default 1.",
-            why="A shard that stops early kept nothing, and pairs are the only unit it has.",
         ),
         ChangelogEntry(
             version="2026-08-21",

@@ -70,7 +70,7 @@ class JudgeServer:
     Not a mock. Every byte it answers with was read out of `tests/fixtures/`, and
     the code under test builds a real request body, posts it over a real socket
     and reads a real envelope back. What it adds over the shared
-    `RecordedEndpoint` is a route: a judging leg asks `/tokenize` before it asks
+    `RecordedEndpoint` is a route: a judging shard asks `/tokenize` before it asks
     `/completions`, and a player answering both out of one queue would hand a
     verdict back to a tokenisation.
 
@@ -160,7 +160,7 @@ def _spells(vocabulary: dict[str, Any]) -> Callable[[str], list[str]]:
     """A recorded `/tokenize` reply read as the spellings it carries.
 
     The fixture is the server's own reply shape, so the same file drives the
-    loopback route a leg really asks and the unit test that asks nothing.
+    loopback route a shard really asks and the unit test that asks nothing.
     """
     return lambda reply: [str(token["piece"]) for token in vocabulary[reply]["tokens"]]
 
@@ -192,7 +192,7 @@ def _settings_judging_behind_a_thinking_span() -> config.Settings:
     return dataclasses.replace(settings, models=models)
 
 
-def _a_deadline_no_leg_will_reach() -> float:
+def _a_deadline_no_shard_will_reach() -> float:
     """An hour away. Every test that is not about the clock passes this."""
     return time.monotonic() + 3600.0
 
@@ -557,7 +557,7 @@ def test_the_decode_is_sent_at_the_judging_knob_and_not_the_entry() -> None:
         assert body["seed"] == settings.models.summarize.inference.seed
 
 
-def test_a_reply_the_grammar_could_not_have_written_fails_the_leg() -> None:
+def test_a_reply_the_grammar_could_not_have_written_fails_the_shard() -> None:
     """No prose path, on purpose.
 
     A parser that read `so the answer is YES` back into a YES would restore the
@@ -572,7 +572,7 @@ def test_a_reply_the_grammar_could_not_have_written_fails_the_leg() -> None:
             )
 
 
-def test_a_first_token_outside_the_grammar_fails_the_leg() -> None:
+def test_a_first_token_outside_the_grammar_fails_the_shard() -> None:
     """A word that parses and a first position that does not is a reply somebody patched.
 
     Under the grammar those two cannot differ - it binds the decode from the first
@@ -766,8 +766,8 @@ def test_a_verdict_is_the_word_and_at_most_one_leading_space() -> None:
             judge.verdict_of(refused)
 
 
-def test_a_leg_reads_only_the_rows_it_owns(tmp_path: Path) -> None:
-    """Four legs over eight rows is two rows a leg, and no row read twice."""
+def test_a_shard_reads_only_the_rows_it_owns(tmp_path: Path) -> None:
+    """Four shards over eight rows is two rows a shard, and no row read twice."""
     day = _a_day()
     rows = [
         _drawn(day.items[0], day.items[1], shard=index % 4, date=day.date) for index in range(8)
@@ -775,21 +775,21 @@ def test_a_leg_reads_only_the_rows_it_owns(tmp_path: Path) -> None:
     path = tmp_path / judge_item_pairs.DRAW_FILENAME
     assemble.write_atomic(path, judge_item_pairs._as_csv(rows))
 
-    owned = [judge_item_pairs._rows_this_leg_owns(path, shard=leg, shards=4) for leg in range(4)]
+    owned = [judge_item_pairs._rows_this_shard_owns(path, shard=shard, shards=4) for shard in range(4)]
 
-    assert [len(leg) for leg in owned] == [2, 2, 2, 2]
-    assert sum(len(leg) for leg in owned) == len(rows)
+    assert [len(shard) for shard in owned] == [2, 2, 2, 2]
+    assert sum(len(shard) for shard in owned) == len(rows)
 
 
-def test_a_draw_taken_for_more_legs_than_this_run_has_is_refused(tmp_path: Path) -> None:
-    """Dropping half a draw silently is a day that folds as though it never drew them."""
+def test_a_draw_taken_for_more_shards_than_this_run_has_is_refused(tmp_path: Path) -> None:
+    """Dropping half a draw silently is a day counted as though it never drew them."""
     day = _a_day()
     rows = [_drawn(day.items[0], day.items[1], shard=index, date=day.date) for index in range(8)]
     path = tmp_path / judge_item_pairs.DRAW_FILENAME
     assemble.write_atomic(path, judge_item_pairs._as_csv(rows))
 
-    with pytest.raises(ValueError, match="drawn for more legs"):
-        judge_item_pairs._rows_this_leg_owns(path, shard=0, shards=4)
+    with pytest.raises(ValueError, match="drawn for more shards"):
+        judge_item_pairs._rows_this_shard_owns(path, shard=0, shards=4)
 
 
 def test_an_article_asking_to_be_merged_is_still_two_stories(
@@ -819,7 +819,7 @@ def test_an_article_asking_to_be_merged_is_still_two_stories(
             settings=_settings(),
             digest_root=root,
             run_dir=run_dir,
-            deadline=_a_deadline_no_leg_will_reach(),
+            deadline=_a_deadline_no_shard_will_reach(),
             base_url=server.base_url,
         )
         decodes = server.decodes
@@ -829,7 +829,7 @@ def test_an_article_asking_to_be_merged_is_still_two_stories(
     assert written[0].usable is True
 
     assert PLANTED not in prompt.system_turn(), "it never reaches the instructions"
-    assert decodes, "the leg posted nothing, so this proves nothing"
+    assert decodes, "the shard posted nothing, so this proves nothing"
     for body in decodes:
         rendered = str(body["prompt"])
         blocks = _fenced(rendered)
@@ -847,7 +847,7 @@ def test_a_verdict_file_round_trips_through_the_contract(
     """Row 7 reads this file with `from_csv_row` and needs no second parser.
 
     It also proves the eight judging columns are filled together: the contract
-    refuses a verdict that does not name the judge behind it, so a leg that wrote
+    refuses a verdict that does not name the judge behind it, so a shard that wrote
     one and forgot the digests could not get a row past this.
     """
     day = _a_day()
@@ -867,7 +867,7 @@ def test_a_verdict_file_round_trips_through_the_contract(
             settings=_settings(),
             digest_root=root,
             run_dir=run_dir,
-            deadline=_a_deadline_no_leg_will_reach(),
+            deadline=_a_deadline_no_shard_will_reach(),
             base_url=server.base_url,
         )
 
@@ -889,13 +889,13 @@ def test_a_verdict_file_round_trips_through_the_contract(
     assert StorySimilarityPair.from_csv_row(row.csv_row()) == row
 
 
-def test_a_leg_that_owned_nothing_still_leaves_a_file(
+def test_a_shard_that_owned_nothing_still_leaves_a_file(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A header and no rows says the leg ran. A missing file says the leg died.
+    """A header and no rows says the shard ran. A missing file says the shard died.
 
-    Row 7 refuses to fold a day that is missing a leg, so the two have to look
-    different from the fold's side.
+    A day with a missing shard is not counted into the record, so the two have to
+    look different from the collecting job's side.
     """
     day = _a_day()
     root = _a_day_on_disk(tmp_path, day)
@@ -914,22 +914,22 @@ def test_a_leg_that_owned_nothing_still_leaves_a_file(
             settings=_settings(),
             digest_root=root,
             run_dir=run_dir,
-            deadline=_a_deadline_no_leg_will_reach(),
+            deadline=_a_deadline_no_shard_will_reach(),
             base_url=server.base_url,
         )
-        assert server.decodes == [], "a leg that owns nothing calls no model"
+        assert server.decodes == [], "a shard that owns nothing calls no model"
 
     assert report.path.exists()
     assert report.outcome is ShardOutcome.NOTHING_TO_DO
     assert read_text(report.path) == ",".join(StorySimilarityPair.csv_columns()) + "\n"
 
 
-def test_a_leg_handed_a_deadline_that_has_passed_judges_nothing_and_says_so(
+def test_a_shard_handed_a_deadline_that_has_passed_judges_nothing_and_says_so(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The bound has to be reachable, or the outcome that names it is unreachable too.
 
-    A leg that stops writes the same header-only file a leg with nothing to do
+    A shard that stops writes the same header-only file a shard with nothing to do
     writes, so the file cannot say which happened and the reported outcome is
     the only thing that can. It returns rather than raises: a shard that stopped
     on purpose is not a failed shard, and a non-zero exit would lose the pairs a
@@ -955,20 +955,20 @@ def test_a_leg_handed_a_deadline_that_has_passed_judges_nothing_and_says_so(
             deadline=time.monotonic() - 1.0,
             base_url=server.base_url,
         )
-        assert server.decodes == [], "the leg read a pair after its own deadline"
+        assert server.decodes == [], "the shard read a pair after its own deadline"
 
     assert report.outcome is ShardOutcome.STOPPED_ON_DEADLINE
     assert (report.owned, report.judged) == (1, 0), "it owned the pair and left it unjudged"
     assert read_text(report.path) == ",".join(StorySimilarityPair.csv_columns()) + "\n"
 
 
-def test_a_leg_that_dies_mid_draw_keeps_every_pair_it_had_already_judged(
+def test_a_shard_that_dies_mid_draw_keeps_every_pair_it_had_already_judged(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The whole point of writing as it goes: what is finished survives what is not.
 
     The server answers two readings and then replies with something the grammar
-    could not have written, so the leg fails inside its second pair. Under a
+    could not have written, so the shard fails inside its second pair. Under a
     single write at the end that file would not exist at all.
 
     The cadence is driven from the config rather than assumed: at the committed
@@ -1003,7 +1003,7 @@ def test_a_leg_that_dies_mid_draw_keeps_every_pair_it_had_already_judged(
                     settings=settings,
                     digest_root=root,
                     run_dir=run_dir,
-                    deadline=_a_deadline_no_leg_will_reach(),
+                    deadline=_a_deadline_no_shard_will_reach(),
                     base_url=server.base_url,
                 )
         return run_dir / judge_item_pairs.VERDICTS_DIRNAME / "0.csv"
@@ -1017,13 +1017,13 @@ def test_a_leg_that_dies_mid_draw_keeps_every_pair_it_had_already_judged(
     assert not every_second.exists(), "the cadence was ignored and every pair was written"
 
 
-def test_the_leg_stops_on_the_instant_the_councils_own_clocks_describe(
+def test_the_shard_stops_on_the_instant_the_councils_own_clocks_describe(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A deadline already gone is a leg that judges nothing and still ships a file.
+    """A deadline already gone is a shard that judges nothing and still ships a file.
 
     The instant is computed the way the council's own verb computes it, from a
-    config that gives the whole bound back to the wrap-up reserve - so the leg
+    config that gives the whole bound back to the wrap-up reserve - so the shard
     has no time to judge in and the file it leaves is a header and no rows.
     Whether the command line computes the instant at all is the venue's
     question, and `backend/tests/council/test_session.py` is where it is asked.
@@ -1057,7 +1057,7 @@ def test_the_leg_stops_on_the_instant_the_councils_own_clocks_describe(
             deadline=compute_shard_deadline(settings.app.council, started=time.monotonic()),
             base_url=server.base_url,
         )
-        assert server.decodes == [], "the leg judged its pair, so no deadline reached it"
+        assert server.decodes == [], "the shard judged its pair, so no deadline reached it"
 
     written = judge_root / day.date / judge_item_pairs.VERDICTS_DIRNAME / "0.csv"
     assert read_text(written) == ",".join(StorySimilarityPair.csv_columns()) + "\n"

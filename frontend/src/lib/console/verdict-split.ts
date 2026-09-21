@@ -23,7 +23,7 @@ export interface ScoreRecord {
 	bandHigh: number;
 	binWidth: number;
 	slots: RecordSlot[];
-	daysFolded: number;
+	daysCounted: number;
 }
 
 /** The four cells of the 2x2, split at the line the day was built with. */

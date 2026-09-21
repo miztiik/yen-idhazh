@@ -11,7 +11,7 @@ line it eventually moves is fitted deterministically off counts (CLAUDE.md
 section 0a).
 
 The row is persisted twice on the way through: `backend/var/judge/<date>/draw.csv`
-holds the day's draw before a judging leg reads it, and
+holds the day's draw before a judging shard reads it, and
 `state/content-similarity-judge/scored-pairs/<YYYY>/<MM>/<DD>.csv` holds what came back.
 One shape for both, because the second file is the first one with the judge's
 columns filled in.
@@ -132,6 +132,11 @@ class StorySimilarityPair(Contract):
     __schema_stem__: ClassVar[str] = "story-similarity-pair"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21T13:00",
+            change="Descriptions say shard where they said leg. No field moved.",
+            why="`leg` was a second name for the shard this row already carries a column for.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T12:00",
             change="first_token_margin is a renormalised per-verdict gap over a 25-wide window.",
             why="A raw top-two gap over three tokens subtracted one verdict from itself.",
@@ -158,8 +163,8 @@ class StorySimilarityPair(Contract):
     shard: int = Field(
         ge=0,
         description=(
-            "Which judging leg owns this row. index mod shards, never a contiguous block, "
-            "so a truncated draw still spreads evenly across the legs."
+            "Which judging shard owns this row. index mod shards, never a contiguous "
+            "block, so a truncated draw still spreads evenly across them."
         ),
     )
     pair_key: Sha256 = Field(
@@ -235,7 +240,7 @@ class StorySimilarityPair(Contract):
     verdict: SameStoryVerdict | None = Field(
         default=None,
         description=(
-            "What the judge said with the items in file order. Empty until a judging leg "
+            "What the judge said with the items in file order. Empty until a judging shard "
             "has read the pair."
         ),
     )
@@ -249,7 +254,7 @@ class StorySimilarityPair(Contract):
     usable: bool = Field(
         default=False,
         description=(
-            "Whether the two readings agree. Only an agreed pair is folded into the "
+            "Whether the two readings agree. Only an agreed pair is counted into the "
             "record; a disagreement is a reading about the judge rather than about the "
             "pair."
         ),
@@ -294,7 +299,8 @@ class StorySimilarityPair(Contract):
         ge=0.0,
         description=(
             "Wall clock for both calls on this pair. A per-pair reading, so a day's spread "
-            "is readable off the day file; the leg bound is sized off its own run instead."
+            "is readable off the day file; the shard bound is sized off its own run "
+            "instead."
         ),
     )
     # Seven columns at the TAIL, declared here rather than inherited from

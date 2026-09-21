@@ -50,7 +50,7 @@ export interface FittedLine {
 	unclearRate: number;
 	/** How many distinct pairs the day file holds - what the draw dealt. */
 	pairsInBand: number | null;
-	/** How many pairs a judging leg read. The denominator both rates share, so a
+	/** How many pairs a judging shard read. The denominator both rates share, so a
 	 * panel can print it in the same sentence as the share. Null where the row
 	 * carries no answer, which is a different fact from a day that judged none. */
 	pairsJudged: number | null;
@@ -60,7 +60,7 @@ export interface FittedLine {
 	negativesOnRecord: number;
 	/** Judged pairs at or above the applied line. The precision reading. */
 	aboveLineOnRecord: number;
-	/** How many dates the record has folded. */
+	/** How many dates the record has counted. */
 	daysOnRecord: number;
 	/** What the cosine was worth in the record this fit read. Null on a row
 	 * written before the column existed, so the caller falls back to the
@@ -133,7 +133,7 @@ export function fittedLines(
 	return [...newest.values()].sort((left, right) => left.date.localeCompare(right.date));
 }
 
-/** The whole score record, or null where no day has folded one.
+/** The whole score record, or null where no day has been counted into one.
  *
  * `state/content-similarity-judge/score-distribution.json` is read whole and that is the
  * point of its shape: 120 slots is a fixed size whatever the archive grows to,
@@ -151,7 +151,7 @@ export function scoreRecord(root: string = STATE_ROOT): ScoreRecord | null {
 			bandLow: Number(raw.band_low ?? 0),
 			bandHigh: Number(raw.band_high ?? 1),
 			binWidth: Number(raw.bin_width ?? 0.001),
-			daysFolded: Array.isArray(raw.folded_dates) ? raw.folded_dates.length : 0,
+			daysCounted: Array.isArray(raw.counted_dates) ? raw.counted_dates.length : 0,
 			slots: slots.map((slot: Record<string, unknown>) => ({
 				binLow: Number(slot.bin_low ?? 0),
 				same: Number(slot.same_count ?? 0),

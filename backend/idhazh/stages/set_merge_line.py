@@ -27,7 +27,7 @@ from idhazh.contracts.fitted_similarity_threshold import (
 )
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict, ScorerModelId
-from idhazh.similarity import fit, fold
+from idhazh.similarity import counting, fit
 from idhazh.similarity.stamps import ScorerStamp, judge_inputs, scorer_inputs
 from idhazh.stages import common
 from idhazh.stages.common import LOG, _load_day
@@ -56,7 +56,7 @@ def _ruler(
 
     Off the record rather than off the config, because the row is a statement
     about evidence already counted. The config is only reached for a record that
-    has never been stamped, which `fold.empty_record` does at birth - so this
+    has never been stamped, which `counting.empty_record` does at birth - so this
     falls back on the first run of a fresh clone and never after it.
     """
     return (
@@ -111,7 +111,7 @@ def stage_set_merge_line(
     record = (
         StorySimilarityDistribution.from_json(record_path.read_text(encoding="utf-8"))
         if record_path.exists()
-        else fold.empty_record(knobs, scorer=scorer, judge=judge)
+        else counting.empty_record(knobs, scorer=scorer, judge=judge)
     )
 
     window = max(knobs.settled_window_days, knobs.step_change_window_rows * 2)
@@ -122,7 +122,7 @@ def stage_set_merge_line(
     ]
     previous = earlier[-1].applied if earlier else same_story.floor_min
 
-    day_rows = fold.one_row_a_pair(ledger.load_story_similarity_pairs(state, date))
+    day_rows = counting.one_row_a_pair(ledger.load_story_similarity_pairs(state, date))
     judged = [row for row in day_rows if row.verdict is not None]
     usable = [row for row in judged if row.usable]
     disagreement = (
@@ -137,30 +137,30 @@ def stage_set_merge_line(
     )
 
     # `inputs_changed` first: a record taken under a different encoder, weight or
-    # ask is not evidence about the question today is asking, whoever folded it.
-    # Then the fold's own refusal, which this re-derives rather than receives -
-    # the two verbs are two processes, and `folded_dates` is where the fold wrote
-    # its answer down.
-    moved = fold.inputs_changed(record, knobs=knobs, scorer=scorer, judge=judge)
+    # ask is not evidence about the question today is asking, whoever counted it.
+    # Then the collecting job's own refusal, which this re-derives rather than
+    # receives - the two verbs are two processes, and `counted_dates` is where
+    # that job wrote its answer down.
+    moved = counting.inputs_changed(record, knobs=knobs, scorer=scorer, judge=judge)
     if moved is not None:
-        fold_held: HeldReason | None = HeldReason.INPUTS_CHANGED
-    elif date not in record.folded_dates:
-        fold_held = HeldReason.LEGS_MISSING
+        collect_held: HeldReason | None = HeldReason.INPUTS_CHANGED
+    elif date not in record.counted_dates:
+        collect_held = HeldReason.SHARDS_MISSING
     else:
-        fold_held = None
+        collect_held = None
 
     held = fit.gates(
         record,
         knobs=knobs,
         above_line=fit.judged_at_or_above(record, previous),
-        days=len(record.folded_dates),
+        days=len(record.counted_dates),
         disagreement_rate=disagreement,
         unclear_rate=unclear,
-        fold_held=fold_held,
+        collect_held=collect_held,
     )
     proposal = fit.fit_line(record, discard_share=knobs.discard_share)
     shift = fit.daily_shift(
-        record, fold.day_counts(day_rows, record=record), discard_share=knobs.discard_share
+        record, counting.day_counts(day_rows, record=record), discard_share=knobs.discard_share
     )
     typical = fit.typical_shift(earlier, window_rows=knobs.step_change_window_rows)
 
@@ -234,7 +234,7 @@ def stage_set_merge_line(
         unclear_rate=unclear,
         negatives_on_record=fit.negatives_on(record),
         above_line_on_record=fit.judged_at_or_above(record, shaped.applied),
-        days_on_record=len(record.folded_dates),
+        days_on_record=len(record.counted_dates),
         merge_count=merge_count(day),
         scorer_model=scorer_model,
         cosine_weight=cosine_weight,

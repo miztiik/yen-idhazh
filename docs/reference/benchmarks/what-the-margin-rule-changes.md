@@ -35,7 +35,7 @@ weighed.
 | Build | `b10444-5f754ea0e`, read off `/props` on the running process |
 | Prompt | The judge's own system turn and the first two items of `tests/fixtures/contracts/digest-day`, rendered through the entry's turn markers |
 | Grammar | `root ::= " "? ("YES" \| "NO" \| "UNCLEAR")`, unchanged by this work - its digest is still `c1d1b9dc`, which is what every committed row and the record itself carry |
-| Sampler | `temperature` 0.0, `top_p` 1.0, `seed` 0 - the judging knob's temperature, as a leg sends it |
+| Sampler | `temperature` 0.0, `top_p` 1.0, `seed` 0 - the judging knob's temperature, as a shard sends it |
 | Machine | 12th Gen Intel Core i7-1265U, 10 cores and 12 threads, 31.8 GiB. **Not the production runner** - what a token window contains is a property of the weights and the build rather than of the host, so a developer box answers this and could not answer a throughput one (Guardrail #2) |
 | Date | 2026-09-21. Weights loaded in 15.2 s |
 | Spread | Zero on the live arm. Three runs at each width returned identical logprobs to sixteen significant figures, which is what temperature 0.0 and a fixed seed should give. The census arm is a count of a fixed file, so it has no spread to report |

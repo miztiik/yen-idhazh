@@ -76,10 +76,10 @@ QUALIFICATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "qualificatio
 
 
 #: Where a day's judging leaves its draw and its verdicts. A sibling of
-#: `VAR_ROOT` rather than a child: a judging leg is not a work shard, it
+#: `VAR_ROOT` rather than a child: judging is not part of the digest run, it
 #: downloads none of the run artifacts, and the two trees are uploaded and
 #: retained separately. Nothing here is ever committed - a drawn row carries no
-#: verdict yet and the legs rewrite it, while a row reaches `state/` once,
+#: verdict yet and the shards rewrite it, while a row reaches `state/` once,
 #: already judged, and is never edited afterwards. `state/**/*.csv` merges by
 #: union, so committing a row that is later rewritten would stack both versions
 #: with nothing to say which is current. The relative spelling is the one a log

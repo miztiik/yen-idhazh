@@ -4,18 +4,18 @@ Every seconds figure the same-story judging rests on is derived rather than
 measured. `SimilarityThresholdConfig.SECONDS_A_CALL` is 764 read tokens divided
 by a read rate taken on the summarizer, on a different prompt at a different
 length. Three load-bearing numbers sit on it: how many pairs a day may be
-judged, how long a judging leg may run, and the ruling that the judging cannot
+judged, how long a judging shard may run, and the ruling that the judging cannot
 live inside the daily digest job. This is the run that replaces the derivation
 with a reading.
 
 **It times the warm path, not one call.** The first call faults the weights in
-and opens a cold slot; a leg pays that once and pays the warm path ninety-nine
+and opens a cold slot; a shard pays that once and pays the warm path ninety-nine
 times. So call 1 is reported by name and held out of every statistic, and the
 figure a bound is sized off is the median of what came after it.
 
 **It reads three instruments and says when they disagree.** The server's own
 `prompt_ms` and `predicted_ms`, the server's claim about how much of the prompt
-it reused, and a stopwatch around the request. The stopwatch is what a leg's
+it reused, and a stopwatch around the request. The stopwatch is what a shard's
 budget is actually spent in, and it is the tiebreak: `cached_tokens` is a claim
 and a clock is a measurement.
 
@@ -56,7 +56,7 @@ from idhazh.similarity import judge, prompt
 from idhazh.telemetry import silicon
 
 #: How many calls one run takes: 50 pairs, each read twice. Twenty would give a
-#: median and nothing about the tail, and a leg bound has to be sized off the
+#: median and nothing about the tail, and a shard bound has to be sized off the
 #: tail. A hundred puts ten readings in the top decile, which is thin and is a
 #: reading rather than a guess.
 DEFAULT_CALLS: Final = 100
@@ -74,7 +74,7 @@ DEFAULT_CALLS: Final = 100
 DEFAULT_BUDGET_MINUTES: Final = 185
 
 #: Where the run writes, line by line as each call returns. Beside the judging
-#: leg's own tree rather than inside it: a leg's draw and verdicts are pipeline
+#: shard's own tree rather than inside it: a shard's draw and verdicts are pipeline
 #: output and this is a measurement of the machine. Neither is committed.
 BENCH_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "judge-bench"
 CALLS_FILENAME: Final = "calls.jsonl"
@@ -93,7 +93,7 @@ ORDER_SWAPPED: Final = "swapped"
 #:
 #: `different-pairs` is the real workload: the same system turn in front of a
 #: different user turn every time, which is the only prefix two judge calls in a
-#: leg ever share.
+#: shard ever share.
 BLOCK_SAME_PROMPT: Final = "same-prompt"
 BLOCK_DIFFERENT_PAIRS: Final = "different-pairs"
 
@@ -202,7 +202,7 @@ class Series:
 
 @dataclass(frozen=True, slots=True)
 class WarmPrefix:
-    """Is the shared system turn read once a leg, or once a call?
+    """Is the shared system turn read once a shard, or once a call?
 
     Two instruments and a verdict. `repeat_saving` is the stopwatch: what share
     of the first call's prefill the immediate repeat did not pay. `cached_tokens`
@@ -306,7 +306,7 @@ class KeepsTheEnvelope:
     prefill, decode, the token counts, what the slot held - are on the envelope
     it read them from. Wrapping the client is what lets the measurement drive
     the shipped call path rather than a second copy of it, which would measure a
-    prompt no leg will ever send.
+    prompt no shard will ever send.
     """
 
     def __init__(self, inner: judge.Client) -> None:
@@ -334,9 +334,9 @@ def judge_calls(
     show for the two hours it did spend.
 
     The first pair is read twice in file order, back to back. Every pair after
-    it is read once in each order, which is what a judging leg does.
+    it is read once in each order, which is what a judging shard does.
 
-    The vocabulary check runs once before any pair, exactly as the leg runs it.
+    The vocabulary check runs once before any pair, exactly as the shard runs it.
     A verdict no returned token can be attributed to takes none of the window's
     mass, so `first_token_margin` reports a gap between the other two, and a
     measurement taken through a broken instrument is worse than none.
@@ -546,7 +546,7 @@ def summarise(
     """The statistics, with call 1 named and held out of every one of them.
 
     Call 1 is the cold path: an empty slot, a cold page cache, and the weights
-    being faulted in off disk. A leg pays it once and pays the warm path
+    being faulted in off disk. A shard pays it once and pays the warm path
     ninety-nine times, so averaging it in would size a bound off a call that
     happens once.
     """
@@ -587,7 +587,7 @@ def number(value: float | None, *, places: int = 1) -> str:
 def seconds_and_minutes(milliseconds: float | None) -> str:
     """A duration said twice, because neither spelling answers on its own.
 
-    Seconds is what a call costs and minutes is what a leg costs, and the whole
+    Seconds is what a call costs and minutes is what a shard costs, and the whole
     question here is the second one.
     """
     if milliseconds is None:
@@ -649,7 +649,7 @@ def render(summary: Summary, *, conditions: Mapping[str, str]) -> str:
         "",
         f"**The cold call.** {_cold_call(summary.cold)}",
         "",
-        "## Is the instruction block read once a leg or once a call?",
+        "## Is the instruction block read once a shard or once a call?",
         "",
         f"- **The stopwatch.** The first call prefilled in "
         f"{number(prefix.first_prefill_ms)} ms and the immediate repeat of the same prompt "
@@ -679,7 +679,7 @@ def _agreement(prefix: WarmPrefix) -> str:
     if prefix.agreed is None:
         return "One of the two said nothing, so this run settles it neither way."
     if prefix.agreed and prefix.clock_says_reused:
-        return "Yes. Both say the prefix is reused, so the instruction block is read once a leg."
+        return "Yes. Both say the prefix is reused, so the instruction block is read once a shard."
     if prefix.agreed:
         return "Yes. Both say nothing is reused, so every call pays the whole prompt."
     return (

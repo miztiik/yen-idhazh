@@ -3,7 +3,7 @@
 A digest says that an input moved. These say WHICH one, which is what a reader
 of a line the run refused to move needs to know: the encoder changed, or a
 weight did, or the judge read a reworded ask, or a reasoning span ran in front
-of the verdict. `scorer_stamp` and `judge_stamp` in the contract fold the same
+of the verdict. `scorer_stamp` and `judge_stamp` in the contract combine the same
 values into the one digest the places that need one use, so the two can never
 disagree.
 
@@ -74,7 +74,7 @@ def scorer_inputs(settings: config.Settings) -> ScorerStamp:
 def judge_inputs(settings: config.Settings) -> JudgeStamp:
     """The ruler this run judges with, read off the config and the prompt's own text.
 
-    The model is `judge.entry_of`, which is the entry a judging leg decodes with.
+    The model is `judge.entry_of`, which is the entry a judging shard decodes with.
     Both digests are taken over the rendered text rather than over a file, so a
     checkout's newline convention cannot archive a record.
 

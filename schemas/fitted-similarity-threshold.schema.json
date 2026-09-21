@@ -20,7 +20,7 @@
         "inputs_changed",
         "judge_unstable",
         "judge_uncertain",
-        "legs_missing"
+        "shards_missing"
       ],
       "title": "HeldReason",
       "type": "string"
@@ -30,6 +30,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "held_reason `legs_missing` is now `shards_missing`. The old value still reads.",
+      "version": "2026-09-21",
+      "why": "`leg` was a second name for the shard the rest of this feature already names."
+    },
     {
       "change": "smoothing_weight splits into fall_weight and rise_weight; max_up_step added.",
       "version": "2026-09-19",
@@ -118,7 +123,7 @@
       "type": "string"
     },
     "days_on_record": {
-      "description": "How many dates the record has folded.",
+      "description": "How many dates the record has counted.",
       "minimum": 0,
       "title": "Days On Record",
       "type": "integer"
@@ -179,7 +184,7 @@
         }
       ],
       "default": null,
-      "description": "Which model produced the verdicts this fit read. Empty on a held day whose record has never been folded.",
+      "description": "Which model produced the verdicts this fit read. Empty on a held day whose record has never counted a date.",
       "title": "Judge Model"
     },
     "key_point_weight": {
@@ -214,19 +219,19 @@
       "type": "integer"
     },
     "pairs_in_band": {
-      "description": "How many distinct pairs the day file holds - what the draw dealt the legs, after pair_budget cut the band down. Equal to the budget on a day that hit the cap, which is how a truncated day reads as partial rather than as a quiet one. The count before the budget is not persisted anywhere, so no writer could put it here.",
+      "description": "How many distinct pairs the day file holds - what the draw dealt the shards, after pair_budget cut the band down. Equal to the budget on a day that hit the cap, which is how a truncated day reads as partial rather than as a quiet one. The count before the budget is not persisted anywhere, so no writer could put it here.",
       "minimum": 0,
       "title": "Pairs In Band",
       "type": "integer"
     },
     "pairs_judged": {
-      "description": "How many pairs a judging leg actually read.",
+      "description": "How many pairs a judging shard actually read.",
       "minimum": 0,
       "title": "Pairs Judged",
       "type": "integer"
     },
     "pairs_usable": {
-      "description": "How many of those got two agreeing readings. Only these were folded.",
+      "description": "How many of those got two agreeing readings. Only these were counted.",
       "minimum": 0,
       "title": "Pairs Usable",
       "type": "integer"
@@ -327,7 +332,7 @@
       "type": "number"
     },
     "version": {
-      "default": "2026-09-19",
+      "default": "2026-09-21",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -360,5 +365,5 @@
   ],
   "title": "FittedSimilarityThreshold",
   "type": "object",
-  "version": "2026-09-19"
+  "version": "2026-09-21"
 }
