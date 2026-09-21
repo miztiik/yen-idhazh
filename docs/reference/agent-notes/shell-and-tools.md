@@ -1,6 +1,6 @@
 # Agent Notes - Shell and Tools
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-21
 Traps in PowerShell, MSYS, the editor's own file and search tools, the Python
 environment, npm and the libraries that lie about what they returned. Index and
 scope: [../agent-notes.md](../agent-notes.md).
@@ -119,6 +119,14 @@ MSYS_NO_PATHCONV=1 git show 'origin/main:docs/a.md' # the fallback, per shell
 ## Nested subagents
 
 **A worker cannot delegate until the harness is configured to let it, and the failure is silent refusal rather than an error.** In VS Code, enable `chat.subagents.allowInvocationsFromSubagents` in the active user or workspace settings. Every custom agent that delegates must include `agent` in its `tools` list; a prompt carrying its own `tools` list must include it too, because that list takes precedence. If an `agents` list is present it must allow the requested delegate. Verify with one real, read-only nested invocation before relying on it - see [VS Code's nested-subagent documentation](https://code.visualstudio.com/docs/agents/run/subagents#_nested-subagents).
+
+**A worker that starts a ten-minute gate returns one useless line and leaves its work uncommitted.** The nested turn ends while the suite is still running, so the report carries nothing and no pull request exists - which reads exactly like a worker that did no work. It is not: the edits are sitting in the worktree, and re-dispatching the row throws them away. Three workers on one plan ended this way. Ask the worktree before concluding anything:
+
+```powershell
+git -C <the worker's worktree> status --porcelain
+```
+
+The fix belongs in the brief rather than in the tool: tell a worker to commit before any long gate, and to leave the full browser project to CI.
 
 ## The Python environment
 
