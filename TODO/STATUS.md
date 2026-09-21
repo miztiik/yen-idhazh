@@ -41,7 +41,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260921-40-bonsai-probe-plan.md](20260921-40-bonsai-probe-plan.md) | 7 | 0 | 7 | 4 |
 | [20260921-41-lane-a-model-file-plan.md](20260921-41-lane-a-model-file-plan.md) | 7 | 0 | 7 | 0 |
 | [20260921-42-lane-b-workflows-plan.md](20260921-42-lane-b-workflows-plan.md) | 11 | 4 | 7 | 1 |
-| [20260921-43-the-ledgers-and-the-generated-layer-plan.md](20260921-43-the-ledgers-and-the-generated-layer-plan.md) | 7 | 0 | 7 | 2 |
+| [20260921-43-the-ledgers-and-the-generated-layer-plan.md](20260921-43-the-ledgers-and-the-generated-layer-plan.md) | 7 | 0 | 7 | 3 |
 
 ## In flight - 5
 
@@ -53,7 +53,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | #6 | 41 | A | The engineering contract catches up | `p41a` |
 | #7 | 41 | B | The markers are derived at server start | `p41b` |
 
-## Ready now - 44
+## Ready now - 45
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -103,10 +103,11 @@ section 3 is where it is answered.
 | #5 | 40 | A | The eight telemetry steps move across | - |
 | #6 | 40 | A | A trial state root, and what the run keeps | - |
 | #5 | 42 | B | Five checks move into the thing they check | 2, 4 |
-| #1 | 43 | - | The replay count leaves the dispatch surface | - |
-| #4 | 43 | - | Nine console specs visit every route the site serves | - |
+| #1 | 43 | A | The replay count leaves the dispatch surface | - |
+| #2 | 43 | B | The unreferenced utilities go, and the search evaluation is bounded | - |
+| #4 | 43 | C | Nine console specs visit every route the site serves | - |
 
-## Waiting on another row - 89
+## Waiting on another row - 88
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -194,11 +195,10 @@ section 3 is where it is answered.
 | #9 | 42 | C | The cache names the set, and the binary gets its own key | 8 is PENDING |
 | #10 | 42 | D | The benchmark arms learn the server died, and the repeat count is config | 9 is PENDING |
 | #11 | 42 | D | The harness keeps only what more than one module reads | 9 is PENDING |
-| #2 | 43 | - | The utilities with no caller go, and the search evaluation is bounded | 1 is PENDING |
-| #3 | 43 | - | The pipeline test commits what it produced | 2 is PENDING |
-| #5 | 43 | - | The generated contract layer goes | 1 is PENDING; 2 is PENDING; 3 is PENDING; 4 is PENDING; plan 41 names no row; plan 42 names no row |
-| #6 | 43 | - | The engineering contract and the pages catch up | 5 is PENDING; plan 41 names no row |
-| #7 | 43 | - | The dependency's beneficiary line says what it buys | 5 is PENDING |
+| #3 | 43 | A | The pipeline test commits what it produced | 1 is PENDING |
+| #5 | 43 | D | The generated contract layer goes | 1 is PENDING; 2 is PENDING; 3 is PENDING; 4 is PENDING |
+| #6 | 43 | D | The engineering contract and the pages catch up | 5 is PENDING |
+| #7 | 43 | D | The dependency's beneficiary line says what it buys | 5 is PENDING |
 
 ## Finished - 18 plans with no live row
 
