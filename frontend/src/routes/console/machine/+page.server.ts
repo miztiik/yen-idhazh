@@ -337,10 +337,9 @@ export async function load() {
 	// single run into something smaller.
 	const newest: MachineRun | null = counters.runs[0] ?? null;
 	const board = shardBoard(newest, limits.jobTimeoutSeconds, console_.chart_width);
-	// Item grain and shard grain from one call, because a panel that offers two
-	// grains built from two derivations can show two answers to one question. The
-	// window grain is the span the loop above already derived for every preset,
-	// which this panel reads rather than deriving a second time.
+	// One run, item by item. The board had a shard grain and a window grain until
+	// 2026-09-21; both drew the per-shard high-water mark the page no longer
+	// trusts, so both went and the panel is one builder call.
 	const memory = memoryBoard(newest, health);
 	// One group a machine, never one figure over all of them. Measured 2026-09-17
 	// over the committed counters ledger, 86 of the 90 runs that name a processor
