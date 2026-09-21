@@ -78,11 +78,12 @@ vocabulary offered one, and on the reply measured here it did exactly that.
 ## What this cannot settle
 
 **How far the two readings differ across the 82 rows.** The committed rows carry
-`first_token_probabilities` empty - the column was added on 2026-09-21 and
-nothing has filled it yet - so there is no window on those rows to re-read, and
-one reply is not a distribution. **The instrument that could answer it is a
-re-judge of the same 82 pairs, priced at 82 x 94.53 s = 2.15 h on the judging
-runner.** Nothing on this page should be read as a claim about the population.
+`first_token_probabilities` empty - the column was added on 2026-09-21 and the
+judge that fills it landed after those rows were judged - so there is no window
+on those rows to re-read, and one reply is not a distribution. **The instrument
+that could answer it is a re-judge of the same 82 pairs, priced at 82 x 94.53 s
+= 2.15 h on the judging runner.** Nothing on this page should be read as a claim
+about the population.
 
 **Whether a reasoned verdict is a better verdict.** Not measured, and not
 estimated either. The plumbing for a reasoning span in front of the answer ships

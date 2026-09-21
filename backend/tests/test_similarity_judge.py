@@ -506,7 +506,7 @@ def test_two_agreeing_unclear_readings_are_usable() -> None:
 def test_two_readings_the_grammar_did_not_hold_are_not_an_agreement() -> None:
     """Two nulls are two failures, not one answer given twice.
 
-    Comparing them as equal would mark the pair usable, and the fold would then
+    Comparing them as equal would mark the pair usable, and the record would then
     count a verdict nobody gave. The contract refuses such a row outright, so the
     shard would die at its own writer - which is the defect arriving one layer
     too late to name.
@@ -1029,7 +1029,7 @@ def test_a_verdict_file_round_trips_through_the_contract(
 def test_a_pair_the_grammar_did_not_hold_is_written_down_and_the_shard_reads_on(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The refusal reaches the row, the pair after it is still judged, and the fold drops it.
+    """The refusal reaches the row, the pair after it is still judged, and nothing counts it.
 
     Absence on this store already means nothing drew the pair. A shard that died
     on a loose decoder wrote that same absence over every pair behind it, so an
@@ -1087,7 +1087,7 @@ def test_a_pair_the_grammar_did_not_hold_is_written_down_and_the_shard_reads_on(
     assert held.grammar_applied is True, "the shard read the pair after the refused one"
     assert held.usable is True
     assert sum(slot.same + slot.different + slot.unclear for slot in counted.values()) == 1, (
-        "the fold counted the refused pair as a verdict"
+        "the day's count took the refused pair as a verdict"
     )
 
 

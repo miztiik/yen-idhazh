@@ -83,7 +83,7 @@ class Reading:
     #: word that arrived has to be one the grammar admits, and the likeliest
     #: first token has to be an opening of that word.
     grammar_applied: bool = True
-    #: The decoder's own alternatives at the answer's opening, already folded to
+    #: The decoder's own alternatives at the answer's opening, already fitted to
     #: the column that holds them. Empty where the server reported none.
     first_token_window: str = ""
     #: How many reasoning spans ran in front of the answer - 0 cold, 1 under a
@@ -213,10 +213,10 @@ def first_token_window(choices: Sequence[TokenChoice]) -> str:
     Empty where the server reported no alternatives, which is the same silence
     `first_token_margin` answers null for.
 
-    The token text is model-written, so it is folded to the column's own
+    The token text is model-written, so it is fitted to the column's own
     character class and length and lands as a quoted CSV value - never a key,
     never a name, never a path (Guardrail #11). A window long enough to be cut by
-    that fold stops being readable as JSON and stays readable as evidence, which
+    that fit stops being readable as JSON and stays readable as evidence, which
     is the better of the two losses.
     """
     if not choices:
@@ -409,7 +409,7 @@ def judge_pair(
 
     **A null verdict agrees with nothing, including another null.** Two readings
     that both came back outside the grammar say the decoder came loose twice, and
-    reading that as agreement would mark the pair usable and fold a verdict
+    reading that as agreement would mark the pair usable and count a verdict
     nobody gave.
     """
     meter = _Meter()

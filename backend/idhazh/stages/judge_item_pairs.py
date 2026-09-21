@@ -140,11 +140,11 @@ def stage_judge_item_pairs(
             unreadable,
         )
 
-    # A refused pair is judged, written and counted here, and dropped by the fold
-    # for having no agreed verdict. It is warned about because the shard is the
-    # only place that sees them arriving one after another: a decoder that came
-    # loose refuses every pair after it, and that is worth reading in the run's
-    # log rather than only in the file afterwards.
+    # A refused pair is judged, written and counted here, and left out of the
+    # record later for having no agreed verdict. It is warned about because the
+    # shard is the only place that sees them arriving one after another: a
+    # decoder that came loose refuses every pair after it, and that is worth
+    # reading in the run's log rather than only in the file afterwards.
     refused = sum(1 for row in judged if row.grammar_applied is False)
     if refused:
         LOG.warning(
