@@ -97,23 +97,23 @@ test('a resize moves the pixels and reuses the extents, it does not recompute th
 	// The widest preset, so the latency panel has runs to draw an extent from.
 	await setWindow(page, WIDEST);
 
-	const spare = page.locator('[data-context-series="spare"]');
-	const wideSpare = await spare.getAttribute('points');
+	const worst = page.locator('[data-context-series="largest"] polyline');
+	const wideWorst = await worst.getAttribute('points');
 	const wideContext = await contextPanel(page).getAttribute('data-context-domain');
 	const wideTail = await latencyPanel(page).getAttribute('data-tail-domain');
 	const wideRuns = await page.locator('[data-context-run]').count();
 	parseDomain(wideContext, 'run-context');
 	parseDomain(wideTail, 'latency');
-	expect(wideSpare, 'the run-context panel drew no spare-capacity line').not.toBeNull();
+	expect(wideWorst, 'the run-context panel drew no worst-case line').not.toBeNull();
 
 	// Narrow the viewport. The polyline is drawn in pixels off the width, so its
 	// points MUST move - that is the proof the resize was processed rather than
 	// swallowed, and it is the work the fix keeps doing.
 	await page.setViewportSize({ width: 560, height: 1000 });
 	await expect(
-		spare,
+		worst,
 		'the run-context polyline did not reflow, so the resize changed nothing to reason about'
-	).not.toHaveAttribute('points', wideSpare ?? '');
+	).not.toHaveAttribute('points', wideWorst ?? '');
 
 	// The pixels moved. The extents, the population and the caption domain are a
 	// function of the span alone, so they must be byte-identical to before.

@@ -812,13 +812,13 @@ half-quote, and a rule whose reason has stopped holding is a rule to change.
   named with the shipped site that proves it, because an exception nobody can
   point at is an exception nobody can check.
   - **A limit the panel exists to measure distance from** - 16 GiB of runner
-    memory, the context window - **joins the values the domain is built from**,
-    so the limit is a line on the plot and a breach still draws past it. It is
-    never the axis maximum, which would clip the breach at the line and hide the
-    one reading the panel exists for. Shipped twice: `targetbar.ts` runs its
-    track to the larger of the value and the target, and the context headroom
+    memory, the model's reading limit - **joins the values the domain is built
+    from**, so the limit is a line on the plot and a breach still draws past it.
+    It is never the axis maximum, which would clip the breach at the line and
+    hide the one reading the panel exists for. Shipped twice: `targetbar.ts`
+    runs its track to the larger of the value and the target, and the context
     panel on `/console/machine/` builds its axis from the drawn extent rather
-    than from the window it is measured against.
+    than from the limit it is measured against.
   - **A share or a cumulative percentage runs 0 to 100**, because a curve that
     stops short of its own top reads as a curve that has not finished. Shipped in
     `TimeHistogram.svelte`, whose right-hand percent axis is always the full

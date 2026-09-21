@@ -291,6 +291,10 @@ export interface ConsoleConfig {
 	/** The same count that puts the day in the headline sentence. Equal to the
 	 * mark, because a signal whose expected value is zero has no spread to split. */
 	model_disk_reads_named: number;
+	/** Which percentile of an article's context use a run draws beside its largest. */
+	context_high_percentile: number;
+	/** The word the model server uses for a reply that ran out of room. */
+	context_cut_off_reason: string;
 }
 
 /** One heading on a console route, and the panels under it, in drawn order.
@@ -517,7 +521,9 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	processor_lost_pct_marked: 1.0,
 	processor_lost_pct_named: 10.0,
 	model_disk_reads_marked: 1,
-	model_disk_reads_named: 1
+	model_disk_reads_named: 1,
+	context_high_percentile: 99.0,
+	context_cut_off_reason: 'length'
 };
 /** The running order a fresh clone draws, and the one the committed config
  * repeats. Four headings on Hardware, each naming a decision an operator takes
