@@ -88,6 +88,7 @@ Twenty rows. Read this before the tables.
 | 7 | Qualification asks each article once | C | - | PENDING | - | - | - |
 | 17 | The utilities and evaluations nothing calls go | C | 7 | PENDING | - | - | - |
 | 8 | Both test pipelines commit what they produce | C | - | PENDING | - | - | - |
+| 21 | One request builder, and the pipeline stops naming a server | A | 2,18 | PENDING | - | - | - |
 | 15 | The hosted span sink goes | D | - | PENDING | - | - | - |
 | 19 | One console route list, not nine | D | - | PENDING | - | - | - |
 | 1 | The generated contract layer goes | E | A,B,C,D | PENDING | - | - | - |
@@ -319,8 +320,10 @@ Four proposals were declined. Keeping the capability probe until the fork is pro
  | # | Decision | Authority |
  | --- | --- | --- |
  | 1 | It is deleted rather than kept unused. A measurement on 2026-09-12 found it changes the output on nine articles of nine, so it was never a free speed-up | Owner ruling 2026-09-21 |
- | 2 | If it is wanted again it comes back as keys in a model file and nothing else, which row #2 makes possible | Owner ruling 2026-09-21 |
- | 3 | The two model files lose the field rather than being deleted. They are entries for a model, not for a draft head | Fowler |
+ | 2 | **The fetch generalises rather than losing a capability.** The model file gains `companion_files`: a list, each entry naming a repository, an exact commit, a filename and a checksum. One loop downloads each and checks each. Adding a draft or multi-token head to any model is then one more entry in that list, never a code change. Absent or empty means weights only, which is every model today | Fowler and Carmack, agreed 2026-09-21 |
+ | 3 | **The installer publishes each landed path.** A speculative head is named to the server as a *path*, and an untyped options map cannot name a file the installer chose. Without this, speculative decoding cannot come back as configuration at all | Carmack |
+ | 4 | Every field that becomes part of a web address or a command argument is a single bare word, checked before it is used. These cross to a download and to a shell, not to the model server, so row #2's ruling does not reach them (Guardrail #11) | Fowler |
+ | 5 | The two model files lose the typed draft block. They are entries for a model, not for a draft head | Fowler |
 
 - **Rejected alternatives:**
 
@@ -453,10 +456,11 @@ Four proposals were declined. Keeping the capability probe until the fork is pro
  | --- | --- | --- |
  | 1 | A producer commits what it produces. No census of who reads it, and no consumer's absence changes what a producer writes | Owner ruling 2026-09-21 |
  | 2 | The qualification workflow keeps its verdict commit and its write permission for the same reason | Owner ruling 2026-09-21 |
- | 3 | The trial directory is named for the model, which answers what the tree means without a lookup | Owner question 2026-09-21, ruled here |
- | 4 | One file an article on the day tree, not one file a day. A file an article means a re-run replaces exactly what it re-summarised | Fowler |
- | 5 | The collection is written only when a trial root is set, so the nightly run never grows it - a condition read from configuration | Fowler, Guardrail #6 |
- | 6 | It carries a retention window on the line that declares it (Guardrail #12) | Fowler |
+ | 3 | **Each dispatch names its own destination, and its own model file.** Both are dispatch inputs on all three workflows - the qualification run, the pipeline test and the benchmark - defaulting to the model's own identifier. Today the qualification run hard-codes a directory named after a different workflow, and the benchmark names none at all | Owner ruling 2026-09-21 |
+ | 4 | **The whole telemetry set is committed, not only the summaries**: the item-health rows, the host fingerprint, the traces and the segments. They already follow the destination automatically - one redirect happens before any stage runs, and every stage reads it - so this is a dispatch input, not new code | Owner ruling 2026-09-21 |
+ | 5 | Production is never touched. The nightly run leaves the destination unset and writes where it writes today | Fowler |
+ | 6 | One file an article on the day tree, not one file a day. A file an article means a re-run replaces exactly what it re-summarised | Fowler |
+ | 7 | The summaries collection carries a retention window on the line that declares it (Guardrail #12) | Fowler |
 
 - **Rejected alternatives:**
 
@@ -605,6 +609,8 @@ Four proposals were declined. Keeping the capability probe until the fork is pro
  | 4 | The health check asks one endpoint. Asking three was belt and suspenders over a digest check that already pins the file | Owner ruling 2026-09-21 |
  | 5 | The weights digest check stays. It is the one step on this path that guards bytes rather than restating configuration | Carmack |
  | 6 | The candidate weights cache leaves the three dispatch workflows and stays in the nightly run and the council. A candidate is always a cache miss, so restoring it costs a fraction of a dispatch and buys nothing | Carmack |
+ | 7 | **The cache key is the build tag plus a digest of the file listing** - one line per file, its name and its checksum, sorted. Fixed length whatever the file count, so a model needing three files moves nothing about the key's shape. The repository and the commit leave the key: once it names content, the address is redundant and including it throws away a valid multi-gigabyte entry when an upload moves a revision without moving a byte | Carmack |
+ | 8 | **No prefix fallback, and no separate verify step.** A fallback hands a job an entry built for a different listing. Instead, per file: if it is there and its checksum matches, skip it; else download, check, rename. A half-filled directory then heals itself into one small download rather than a failed job, and the standalone verify pass is deleted because this one replaces it | Carmack |
 
 - **Rejected alternatives:**
 
@@ -819,3 +825,38 @@ Four proposals were declined. Keeping the capability probe until the fork is pro
  | --- | --- | --- | --- | --- |
  | 1 | Rewrite the script to take an explicit mode argument | A real improvement to its shape - the mode is currently implicit in which of three variables are set, with three illegal combinations guarded by hand - but it is a structural change with no behaviour behind it and belongs in its own commit | A refactor of a 308-line script in a plan about deletion | Fowler |
  | 2 | Leave all four | The nightly job is the one that runs five times a day, so a redundant commit step is paid five times daily | Nothing to take | Carmack |
+
+## Section 22 - Row #21 - One request builder, and the pipeline stops naming a server
+
+- **Scope:** Replace the two request builders with one that speaks the widely-supported shape, move every call onto that route, and delete the decode-identity stamp rather than migrating it.
+- **Files touched:**
+  - `backend/idhazh/llm/server.py` (both builders, the response parser, the stamp and its helper)
+  - `backend/idhazh/llm/__init__.py`
+  - `backend/idhazh/summarize.py`, `backend/idhazh/stages/common.py`, `two_calls.py`, `backend/idhazh/similarity/judge.py`, `backend/idhazh/stages/judge_shard.py`
+  - `backend/idhazh/fingerprint.py` (the stamp leaves the run record)
+  - `backend/idhazh/contracts/item_health.py` (the two llama-specific slot cells)
+  - `backend/idhazh/contracts/` wherever the stamp is a field
+  - `backend/tests/` for each
+  - `docs/architecture/summarize/prompt.md`, `docs/architecture/contracts/determinism.md`
+- **Acceptance gates:** local - `python -m pytest backend/tests -k 'summarize or classify or judge' -q`; CI - full suite, and one real pipeline-test dispatch before the row closes.
+- **Oracle:** the same article, put through the pipeline before and after, produces a summary satisfying the same schema, with the constrained decode still refusing an off-schema reply - driven from a recorded server response. **And the endpoint is a configuration value**: pointing it at a different compatible server needs no code change, proved by a test that builds a request for a second address.
+- **Decisions:**
+
+ | # | Decision | Authority |
+ | --- | --- | --- |
+ | 1 | One builder. Two shapes with a caller choosing between them is the drift this plan keeps finding elsewhere | Fowler |
+ | 2 | The widely-supported shape is the one that survives. The pipeline should be able to point at a different server tomorrow, and naming one runtime in the request shape is what prevents that | Owner ruling 2026-09-21 |
+ | 3 | **The decode-identity stamp is deleted - code, tests and documentation.** It was determinism scaffolding. This removes the only reason this row would have needed a migration: nothing downstream compares stamps once there are none | Owner ruling 2026-09-21 |
+ | 4 | If a settings fingerprint is ever wanted it is written fresh over the values that affect the output, sorted, never over the shape of the request. Ten lines, the day somebody needs it | Owner ruling 2026-09-21 |
+ | 5 | The code adapts to the new response shape rather than the row reporting a loss. The first-token alternatives are read from their new position; the judge's rules are sent as a schema instead of as literal grammar | Owner ruling 2026-09-21 |
+ | 6 | Two llama-specific cells on the item record go: the slot number, which is always zero because every model runs one sequence, and the tokens-already-held reading, which the cached-token cells beside it already carry | Owner ruling 2026-09-21 |
+ | 7 | The startup flag that enables prompt caching is unaffected. It is set when the server starts, not on each request, so only the per-request repetition of it goes | Carmack |
+ | 8 | **The two-call design is not a constraint on this row.** A prompt rewrite may make it one call or three; the reuse-between-calls question belongs to that decision, not to this one | Owner ruling 2026-09-21 |
+
+- **Rejected alternatives:**
+
+ | # | Option | Why rejected | What it would cost to take | Authority |
+ | --- | --- | --- | --- | --- |
+ | 1 | Keep the native route and wrap it behind an interface | Keeps a second shape alive behind a name, and the interface is then shaped by the runtime it hides | About 80 lines, and a swap that still needs a new back-end written | Owner |
+ | 2 | Migrate the stamp instead of deleting it | A migration for every change of shape is the tax this plan exists to remove, and the stamp answered a question nobody asks | A read-side migration and the stamp kept forever | Owner |
+ | 3 | Keep the two slot cells by reading them another way | One is always zero. The other duplicates cells on the same row | About 20 lines for a column of zeros and a duplicate | Carmack |
