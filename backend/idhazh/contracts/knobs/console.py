@@ -442,6 +442,7 @@ class ConsoleConfig(Model):
                     title="What the machine was doing",
                     panels=[
                         "two-clocks",
+                        "disk-reads",
                         "machine-cards",
                         "reading-against-writing",
                         "platform-mix",
