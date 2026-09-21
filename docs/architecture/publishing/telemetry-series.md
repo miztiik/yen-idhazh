@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 
 The console's interactive charts read a published projection of item health. They
 never read `state/item-health/` directly.
@@ -602,8 +602,9 @@ ledger had been committed for four days with no page reading a cell of it.
 | Job clock | the machine record's `job_seconds` against `run.shard_timeout_minutes` | the slowest shard. A run's wall clock is its slowest shard |
 | The processor | the machine record's `cpu_model` | text, per shard, and never averaged |
 | Busy and load | the item ledger's `cpu_busy_pct`, the machine record's `model_load_ms` | lowest, slowest |
-| Peak memory | the item ledger's `llama_rss_peak_bytes` against the runner's 16 GB | the LARGEST shard, never their sum - shards are separate jobs on separate hosts |
-| What one item cost the machine | the item ledger's `llama_rss_peak_bytes` and `python_rss_bytes` against `os_mem_total_bytes` | one mark an item in run order, the maximum named with the item that owns it. The two maxima added are an UPPER BOUND unless one item held both |
+| Peak memory | the item ledger's `llama_rss_peak_bytes`, folded per shard | a range mark on the shard board only. The memory board dropped it on 2026-09-21: it is `VmHWM`, so it covers the server's whole life rather than the item and falls when the kernel reclaims a page |
+| What one item held at its end | the item ledger's `llama_rss_bytes` and `python_rss_bytes` | two brackets labelled AT MOST, drawn against the larger of themselves and never against the machine's total. The two added are an UPPER BOUND unless one item held both |
+| How close an item took the machine to running out | `os_mem_available_min_bytes` | the MINIMUM over the run's items, named with the item that owns it. A per-shard maximum cannot show it |
 | What one item left the kernel | `os_mem_available_min_bytes` to `os_mem_available_bytes` | one range mark an item, floor to recovery - a floor that falls with an end that falls is a leak, a floor that falls with an end that recovers is hard work |
 | The queue behind an item | `load_1m` against the host's `cores`, with `cpu_busy_min` to `cpu_busy_max` | one mark an item. Busy and queued are different facts and neither implies the other, so both are drawn |
 | The shape of a run | the item ledger's `summarize_ms` | one ladder a run at the five configured percentiles, interpolated between the two nearest ranks, never pooled between runs |

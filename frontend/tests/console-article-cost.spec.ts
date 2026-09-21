@@ -4,11 +4,18 @@
  * machine records, never read back off the module's output - an assertion
  * against a module's own answer only proves the module agrees with itself.
  *
- * Two fixtures, because the canary cannot state every case. It records no
- * resident memory at all, so the step between one article and the next is
- * driven from bounded rows written in this file; and it carries exactly one
- * machine record with no processor count, which is the case the panel has to
- * print a dash for rather than assume the runner we usually get.
+ * Two fixtures, because the canary cannot state every case. A gap in the item
+ * numbering and a shard boundary are both things it does not hold, so the rule
+ * about what is and is not a step is driven from bounded rows written in this
+ * file; and it carries exactly one machine record with no processor count,
+ * which is the case the panel has to print a dash for rather than assume the
+ * runner we usually get.
+ *
+ * The added-memory figure is read on the canary at two windows. Over the widest
+ * it is a reading, because older days carry shards whose neighbours both
+ * recorded the model server's memory. Over the narrowest it is the absence,
+ * because the newest day carries no two neighbours that both did - and that is
+ * where the panel has to print a dash and the reason rather than a zero.
  *
  * Pure functions and the committed canary only, except where a test names a
  * page. No `$app` import and no SvelteKit alias: a spec that reaches one fails
@@ -40,6 +47,7 @@ const CONSOLE = (
 ).console;
 
 const WIDEST = Math.max(...CONSOLE.window_presets);
+const NARROWEST = Math.min(...CONSOLE.window_presets);
 
 function canaryHealth(): Record<string, string>[] {
 	return readDayShards(join(CANARY, 'item-health'), -1).rows;
@@ -101,6 +109,48 @@ function countsBy(column: string): Map<string, number> {
 		found.set(`${row.date ?? ''}|${row.run_id ?? ''}|${row.shard ?? ''}`, Number(value));
 	}
 	return found;
+}
+
+/** What the model server's memory did from one article of a shard to the next.
+ *
+ * The rule restated rather than borrowed: a step is taken only between
+ * neighbours in the item numbering, only inside one shard, and only where both
+ * neighbours recorded the reading. `shards` counts the shards that produced at
+ * least one.
+ */
+function memoryStepsFrom(health: readonly Record<string, string>[]): {
+	steps: number[];
+	shards: number;
+} {
+	const byShard = new Map<string, { index: number; rss: number }[]>();
+	for (const row of health) {
+		if ((row.item_index ?? '') === '' || (row.llama_rss_bytes ?? '') === '') continue;
+		const index = Number(row.item_index);
+		const rss = Number(row.llama_rss_bytes);
+		if (!Number.isFinite(index) || !Number.isFinite(rss)) continue;
+		const key = `${row.date ?? ''}|${row.run_id ?? ''}|${row.shard ?? ''}`;
+		byShard.set(key, [...(byShard.get(key) ?? []), { index, rss }]);
+	}
+	const steps: number[] = [];
+	let shards = 0;
+	for (const items of byShard.values()) {
+		const sorted = [...items].sort((left, right) => left.index - right.index);
+		const before = steps.length;
+		for (let at = 1; at < sorted.length; at += 1) {
+			if (sorted[at].index === sorted[at - 1].index + 1) {
+				steps.push(sorted[at].rss - sorted[at - 1].rss);
+			}
+		}
+		if (steps.length > before) shards += 1;
+	}
+	return { steps, shards };
+}
+
+/** The panel's own wording for a signed step, restated here. */
+function mib(bytes: number): string {
+	const value = bytes / 1024 / 1024;
+	const sign = value > 0 ? '+' : value < 0 ? '-' : '';
+	return `${sign}${grouped(Number(Math.abs(value).toFixed(1)))} MiB`;
 }
 
 /** One item row, with only the cells a figure needs. */
@@ -197,11 +247,12 @@ test.describe('the three costs, as arithmetic', () => {
 	});
 
 	test('added memory is a step between neighbours of ONE shard', () => {
-		// Three things this has to get right, and the canary records no resident
-		// memory at all, so they are stated on rows written here. A step is taken
-		// between neighbours; a gap in the numbering is not a step; and a shard
-		// boundary is not a step either, because a new shard starts a new model
-		// server and its first reading is a restart rather than an article.
+		// Three things this has to get right, and the canary holds neither a gap in
+		// the numbering nor two shards of one run that both step, so they are stated
+		// on rows written here. A step is taken between neighbours; a gap in the
+		// numbering is not a step; and a shard boundary is not a step either, because
+		// a new shard starts a new model server and its first reading is a restart
+		// rather than an article.
 		const health = [
 			itemRow({ date: '2026-08-20', run_id: 'r1', shard: 0, item_index: 0, llama_rss_bytes: 100 }),
 			itemRow({ date: '2026-08-20', run_id: 'r1', shard: 0, item_index: 1, llama_rss_bytes: 160 }),
@@ -371,20 +422,55 @@ test.describe('the panel, on the canary', () => {
 		await expect(processor).toContainText(`${said} articles at the middle figure`);
 	});
 
+	test('THE ORACLE: the added-memory figure is the fixture steps recomputed', async ({ page }) => {
+		// The panel's measured state. Over the widest window the canary holds
+		// shards whose neighbours both recorded the model server's memory, so the
+		// figure is a reading - recomputed here from those rows rather than read
+		// back off the module.
+		await page.goto('/console/machine/');
+		await expect(page.locator(`[data-window-preset="${WIDEST}"] input`)).toBeEnabled();
+		await widen(page, WIDEST);
+
+		const span = await shownSpan(page);
+		const health = canaryHealth().filter((row) => within(row, span.start, span.end));
+		const { steps, shards } = memoryStepsFrom(health);
+		expect(steps.length, 'the window the page drew holds no memory step').toBeGreaterThan(0);
+
+		const memory = page.locator(`${PANEL} [data-article-cost="memory"]`);
+		await expect(memory).toHaveAttribute('data-cost-state', 'measured');
+		await expect(memory).toHaveAttribute('data-cost-from', String(steps.length));
+		await expect(memory).toHaveAttribute('data-cost-shards', String(shards));
+		const read = async (name: string) =>
+			Number((await memory.getAttribute(`data-cost-${name}`)) ?? 'NaN');
+		expect(await read('mid')).toBeCloseTo(middle(steps), 6);
+		expect(await read('low')).toBeCloseTo(Math.min(...steps), 6);
+		expect(await read('high')).toBeCloseTo(Math.max(...steps), 6);
+		await expect(memory.locator('[data-article-cost-value="memory"]')).toHaveText(
+			mib(middle(steps))
+		);
+	});
+
 	test('a figure the fixture cannot fill prints a dash and the reason, not a zero', async ({
 		page
 	}) => {
-		// The canary records no resident memory, so the added-memory figure is the
-		// absence. A zero here would say every article added nothing, which is a
-		// claim about the machine rather than about the ledger.
+		// The same figure at the narrowest window the control offers. No shard of
+		// the canary's newest day recorded the model server's memory for two
+		// articles in a row, so one day holds no step to measure. A zero here would
+		// say every article added nothing, which is a claim about the machine
+		// rather than about the ledger.
 		await page.goto('/console/machine/');
-		await widen(page, WIDEST);
+		await expect(page.locator(`[data-window-preset="${NARROWEST}"] input`)).toBeEnabled();
+		await widen(page, NARROWEST);
+
+		const span = await shownSpan(page);
+		const health = canaryHealth().filter((row) => within(row, span.start, span.end));
+		expect(health.length, 'the narrowest window drew no article at all').toBeGreaterThan(0);
+		expect(
+			memoryStepsFrom(health).steps.length,
+			'this window now holds a memory step, so the absence arm asserts nothing'
+		).toBe(0);
 
 		const memory = page.locator(`${PANEL} [data-article-cost="memory"]`);
-		expect(
-			canaryHealth().filter((row) => (row.llama_rss_bytes ?? '') !== '').length,
-			'the canary started recording resident memory, so this arm asserts nothing'
-		).toBe(0);
 		await expect(memory).toHaveAttribute('data-cost-state', 'unrecorded');
 		await expect(memory).toHaveAttribute('data-cost-mid', '');
 		await expect(memory.locator('.value')).toHaveText('-');

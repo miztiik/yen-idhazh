@@ -574,13 +574,15 @@ its edge case: a setting that moved on a day nobody was measuring is exactly
 what makes a before-and-after unsafe, and a chart silent about it invites the
 comparison it cannot support.
 
-**On the Hardware memory bar the change is a sentence, not a hairline.** The
-window grain of that panel is one track from the lowest run of the span to the
-highest - one cell for the whole window - so a rule inside it would be noise for
-the same reason decision 6 keeps one off the day strips. It names the days that
-moved under the track instead, on the one grain whose figure is read across
-days. Susan, 2026-09-20, adapting her own decision 7 to a panel that has no date
-axis to put a line on.
+**On the Hardware memory board the change is a sentence, not a hairline.** That
+board draws one run, item by item, so it has no date axis to put a line on. What
+it does have is a figure a reader carries between days - how little the kernel
+had left - so the days that moved are named under that track, one line however
+many of them there are. Susan, 2026-09-20, adapting her own decision 7 to a panel
+with no date axis. The naming first went under the panel's window track, which
+ran from the lowest run of a span to the highest; that track drew the per-shard
+high-water mark and left the page on 2026-09-21, so the sentence moved down onto
+what the board leads with instead.
 
 Authority: Andre (AI/LLM) on which measures a change moves, Fowler
 (Architecture) on one server-side derivation, Jony (UI/UX) on the mark being
