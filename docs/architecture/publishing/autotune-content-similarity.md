@@ -376,6 +376,19 @@ discarded row from the old instrument is the more recent one, so filtering
 second would let it take the pair on recency and then be thrown away, losing the
 fresh reading standing behind it.
 
+**One caller has the two in the other order, and it is safe today for a reason
+worth writing down.** `set_merge_line` hands the counting step rows it has
+already de-duplicated, so on that path the stamp filter runs second. It cannot
+bite on a run: the counting verb moves the record to tonight's stamp before
+`set_merge_line` reads the day, so tonight's rows are both the admitted ones and
+the newest ones, and either order gives the same answer. What makes it worth a
+sentence is that the safety is a property of the order the two verbs run in,
+not of either one - change which verb moves the stamp, or read a day the record
+has not been moved to, and the path starts counting a row the stamp refuses.
+Correcting it moves what `pairs_in_band`, `pairs_judged`, `pairs_usable` and the
+two rates mean on rows already committed, so it is a schema change rather than a
+tidy-up (`CLAUDE.md` section 11).
+
 ## How the line moves: down fast, up slow
 
 The line is allowed to move a little each day, and it is allowed to move further down than up. **Lowering the line publishes less.** Two feeds giving near-identical coverage is the feed's fault, and folding them is the answer, so the move that folds more arrives quickly and the move that folds fewer arrives over a month.

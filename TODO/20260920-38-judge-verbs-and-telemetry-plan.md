@@ -192,7 +192,7 @@ After those three land, three groups open at once and the file lists must be re-
 | 21b | The content-similarity judge answers which nights it is behind on | 8, 11b, 12, 15b, 21a | T | DONE | - | 1029 | worker |
 | 22 | The guard that stops a shard committing is renamed and re-reasoned | 16, 21a | U | DONE | - | 1023 | worker |
 | 23 | The council runs green with no judge in the repository | 15a, 17, 21a, 24, 25 | U | DONE | - | 1023 | worker |
-| 20 | The plan pointer | 19, 21b, 23 | V | PENDING | - | - | - |
+| 20 | The plan pointer | 19, 21b, 23 | V | DONE | - | - | owner |
 
 **Two lanes, not two windows.** `Parallel N = 2` is the council lane and the judge lane. **No council row waits on a judge row anywhere in the graph** - which is a property of the table above rather than a claim about it. **They do share files**, and round seven counted nine: the council workflow, the router, the workflow test module, the ledger, two knob modules, `AppConfig`, the committed config and the council's own doc page. So the two lanes rebase against each other, and the order inside a lane is what the `Depends-on` column is for. The claim that survives is the one that matters: either lane's gates are green with the other lane's rows absent.
 
