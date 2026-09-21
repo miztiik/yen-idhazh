@@ -10,6 +10,7 @@ Nothing here opens a store or a published day.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Final
 
 import pytest
@@ -128,13 +129,19 @@ def test_the_prefix_this_judge_stages_covers_the_store_every_unit_writes() -> No
     assert under_the_prefix.startswith(tenant.TENANT.committed_paths[0] + "/")
 
 
-def test_this_judge_names_no_night_the_council_did_not_ask_about() -> None:
+def test_this_judge_names_no_night_the_council_did_not_ask_about(tmp_path: Path) -> None:
     """A date from outside the window is a job the venue never priced.
 
     It would reach a runner as silently as a date that was asked for, so the
-    planning job refuses one by name - which makes an answer of nothing the one
-    that costs a night nothing.
+    planning job refuses one by name, and a tenant that answered with one would
+    fail the night rather than be ignored.
+
+    On a store this test built. The committed one is appended to every night, so
+    reading it here would put the archive's own contents inside the assertion
+    (CLAUDE.md section 13).
     """
-    answered = tenant.TENANT.nights_outstanding(window=(A_NIGHT,))
+    answered = tenant.TENANT.nights_outstanding(
+        window=(A_NIGHT,), state_dir=tmp_path / "a-store-with-no-record-in-it"
+    )
 
     assert set(answered) <= {A_NIGHT}

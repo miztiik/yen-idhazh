@@ -3,9 +3,10 @@
 The plan is the council's, so every tenant here is written by the test that uses
 it and nothing in this file imports `idhazh.similarity` or any judge contract.
 
-The first arm is the committed config's own night: no tenant registered, so the
-union is empty and the plan names tonight and nothing else. Every later step
-still runs on it - one date is one date, whether a tenant answered or not.
+Every arm runs on a config the test wrote. The committed one registers a judge,
+and a judge answers out of a store the pipeline appends to every night, so a
+plan run against `config/` would be asserting what the archive holds rather than
+what the planner does (CLAUDE.md section 13).
 """
 
 from __future__ import annotations
@@ -70,16 +71,20 @@ def _planned(capsys: pytest.CaptureFixture[str], argv: list[str]) -> list[str]:
 
 
 def test_a_night_with_no_tenant_registered_plans_tonight_and_nothing_else(
-    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The committed config's own night, and the one the venue has to survive.
+    """The night the venue has to survive: nobody to ask, and a plan all the same.
 
     The council asks and does not look, so with nobody to ask the union is empty
     - and an empty union is a plan of one date rather than a plan of none. A
     night that planned nothing would leave the judging job with no matrix, the
     settle with nothing to loop, and no way to tell that apart from a failure.
     """
-    assert _planned(capsys, ["--config-root", str(CONFIG_DIR), "--tonight", TONIGHT]) == [TONIGHT]
+    config_root = _config_registering(tmp_path, slugs=())
+
+    planned = _planned(capsys, ["--config-root", str(config_root), "--tonight", TONIGHT])
+
+    assert planned == [TONIGHT]
 
 
 def test_the_plan_is_the_union_of_what_the_tenants_owe_newest_first(

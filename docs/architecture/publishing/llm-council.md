@@ -176,7 +176,9 @@ is another job a tenant a shard.
 
 **What counts as behind is the tenant's**, because only the tenant knows what it
 has read. **The window is the council's**, because only the council knows what a
-runner costs.
+runner costs. The content-similarity judge answers from its own record, and what
+it counts as behind is in
+[autotune-content-similarity.md](autotune-content-similarity.md#the-nights-this-judge-says-it-is-behind-on).
 
 **The floor is why a first run does not backfill a month.** The council's store
 holds one day file against 30 published days, so an unfloored window names every

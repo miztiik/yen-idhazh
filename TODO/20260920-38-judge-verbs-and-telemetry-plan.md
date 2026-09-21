@@ -189,7 +189,7 @@ After those three land, three groups open at once and the file lists must be re-
 | 18 | The store groups under the judge that fills it | 17 | Q | DONE | - | 1015 | worker |
 | 19 | Where the content-similarity judge's merge line stands against its holdout | 7, 18 | R | DONE | - | 1026 | worker |
 | 21a | The council asks every tenant what it is behind on | 15a, 17, 24 | S | DONE | - | 1019 | worker |
-| 21b | The content-similarity judge answers which nights it is behind on | 8, 11b, 12, 15b, 21a | T | PENDING | - | - | - |
+| 21b | The content-similarity judge answers which nights it is behind on | 8, 11b, 12, 15b, 21a | T | DONE | - | 1029 | worker |
 | 22 | The guard that stops a shard committing is renamed and re-reasoned | 16, 21a | U | DONE | - | 1023 | worker |
 | 23 | The council runs green with no judge in the repository | 15a, 17, 21a, 24, 25 | U | DONE | - | 1023 | worker |
 | 20 | The plan pointer | 19, 21b, 23 | V | PENDING | - | - | - |
