@@ -73,7 +73,6 @@ EXPECTED_WORKFLOWS: Final = {
         "Pages publication",
         frozenset({"workflow_run", "workflow_dispatch"}),
     ),
-    "probe.yml": ("Runtime probe", frozenset({"workflow_dispatch"})),
     "prune.yml": ("Corpus prune", frozenset({"schedule", "workflow_dispatch"})),
     "validate.yml": ("Model validation", frozenset({"workflow_dispatch"})),
 }
@@ -231,7 +230,6 @@ LLAMA_RUNTIME_WORKFLOWS: Final = frozenset(
         "idhazh-pipeline-tests.yaml",
         "llm-council.yml",
         "measure.yml",
-        "probe.yml",
         "validate.yml",
     }
 )
@@ -246,8 +244,7 @@ LLAMA_RUNTIME_WORKFLOWS: Final = frozenset(
 # stops asking that workflow for an `env:` copy and starts refusing one.
 LLAMA_RUNTIME_SCRIPT: Final = "fetch-model-runtime.sh"
 
-# The runtime half on its own, for the one job that installs the binary and
-# opens no weights. `fetch-model-runtime.sh` sources it.
+# The runtime half on its own. `fetch-model-runtime.sh` sources it.
 LLAMA_INSTALL_SCRIPT: Final = "install-llama-runtime.sh"
 
 LLAMA_SHARED_SCRIPTS: Final = (LLAMA_RUNTIME_SCRIPT, LLAMA_INSTALL_SCRIPT)
@@ -255,7 +252,7 @@ LLAMA_SHARED_SCRIPTS: Final = (LLAMA_RUNTIME_SCRIPT, LLAMA_INSTALL_SCRIPT)
 LLAMA_PIN_SCRIPT: Final = "llama-cpp-pin.sh"
 
 LLAMA_SCRIPT_CALLERS: Final = frozenset(
-    {"digest.yml", "idhazh-pipeline-tests.yaml", "llm-council.yml", "probe.yml", "validate.yml"}
+    {"digest.yml", "idhazh-pipeline-tests.yaml", "llm-council.yml", "validate.yml"}
 )
 
 LLAMA_INLINE_RUNTIME_WORKFLOWS: Final = LLAMA_RUNTIME_WORKFLOWS - LLAMA_SCRIPT_CALLERS
@@ -272,11 +269,8 @@ LLAMA_PIN_NAMES: Final = ("LLAMA_CPP_BUILD", "LLAMA_CPP_ASSET", "LLAMA_CPP_SHA25
 # it. A literal is the copy, and a literal is what drifts.
 LLAMA_PIN_VALUES: Final = (PINNED_LLAMA_BUILD, PINNED_LLAMA_ASSET, PINNED_LLAMA_SHA256)
 
-# The subset that starts a server and posts to it. `probe.yml` installs the
-# same binary and asks it what it accepts, which needs no port - and a port
-# declared where nothing reads it is a value that can go stale with nothing to
-# catch it, which is the failure the port test exists to stop.
-LLAMA_SERVER_WORKFLOWS: Final = LLAMA_RUNTIME_WORKFLOWS - {"probe.yml"}
+# The subset that starts a server and posts to it.
+LLAMA_SERVER_WORKFLOWS: Final = LLAMA_RUNTIME_WORKFLOWS
 
 LLAMA_DIGEST_CHECK: Final = 'echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256sum --check'
 
@@ -408,7 +402,7 @@ BROWSER_CACHE_PATH: Final = "~/.cache/ms-playwright"
 # reader, because a key written twice drifts and a drifted key never hits.
 BROWSER_VERSION_SOURCE: Final = ("ci.yml", "scope", "browsers", "playwright")
 
-MEASUREMENT_TARGETS: Final = frozenset({"bench", "image", "corpus", "batched", "budgets"})
+MEASUREMENT_TARGETS: Final = frozenset({"bench", "corpus", "batched", "budgets"})
 
 
 #: The bench is one target and two jobs: raw prefill and decode first, then a
