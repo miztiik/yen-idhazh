@@ -37,7 +37,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 4 |
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
-| [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 11 | 11 | 6 |
+| [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 11 | 11 | 5 |
 | [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 15 | 14 | 1 |
 
 ## In flight - 0
@@ -45,7 +45,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 35
+## Ready now - 34
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -84,12 +84,11 @@ section 3 is where it is answered.
 | #10 | 37 | C | Did another tenant take the processor | 5, 8, 9 |
 | #11 | 37 | C | Is the kernel taking the model's weights back | 5, 8, 9 |
 | #13 | 37 | C | Two panels leave the page | 9 |
-| #14 | 37 | C | The memory board drops the disputed mark | 2, 9 |
 | #19 | 37 | C | Which prompts get re-read, and how fast | 9 |
 | #20 | 37 | C | What is holding the runner's memory | 5, 9 |
 | #24 | 38 | N | The council runs verbs of its own over a tenant list | 2, 15a, 16 |
 
-## Waiting on another row - 90
+## Waiting on another row - 91
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -166,9 +165,10 @@ section 3 is where it is answered.
 | #12 | 36 | W3 / rejects-store | The rejects store + corpus fence (`state/rejects/`, 30-day prune) | 3 is PENDING; 7 is PENDING |
 | #13 | 36 | W4 / plan34-gaps | Retro: plan-34 latent gaps + the shared space-trap guard | 34 landed names no row; 6 is PENDING |
 | #12 | 37 | C | What one article costs the machine | - |
+| #14 | 37 | C | The memory board drops the disputed mark | - |
 | #21 | 37 | C | What the context window actually costs | - |
 | #22 | 37 | C | Dotted rules where a setting moved | 21 is UNKNOWN |
-| #17 | 37 | D | Every published column names its reader | 10 is PENDING; 11 is PENDING; 12 is UNKNOWN; 13 is PENDING; 14 is PENDING; 19 is PENDING; 20 is PENDING; 21 is UNKNOWN; 22 is UNKNOWN |
+| #17 | 37 | D | Every published column names its reader | 10 is PENDING; 11 is PENDING; 12 is UNKNOWN; 13 is PENDING; 14 is UNKNOWN; 19 is PENDING; 20 is PENDING; 21 is UNKNOWN; 22 is UNKNOWN |
 | #18 | 37 | E | Docs, the living-page corrections, and the orphan sweep | all names no row |
 | #12 | 38 | J | The four verbs name their work | 24 is PENDING |
 | #13 | 38 | J | `leg` and `fold` leave the vocabulary | 12 is PENDING |
