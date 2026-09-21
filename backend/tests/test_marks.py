@@ -70,6 +70,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_data_wrangler",
         "test_day_metrics_producer",
         "test_day_partition",
+        "test_deadline",
         "test_decode_split",
         "test_desk_bounds",
         "test_desk_field",

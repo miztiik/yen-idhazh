@@ -295,7 +295,13 @@ jobs:
       # union-merged day file would buy four pushes that can each lose a race
       # against a digest run, four rebases, and a leg that dies after pushing
       # half its rows. One fold is one push.
-      - uses: actions/upload-artifact@v7
+      #
+      # `always()`, because the exposure was never the collecting job dying - it
+      # is a leg dying. A leg that stops on its own clock, or is killed on the
+      # platform's, has still judged every pair it reached, and without this
+      # those verdicts go in the bin however much of the bound they cost.
+      - if: always()
+        uses: actions/upload-artifact@v7
         with:
           name: judge-verdicts-${{ matrix.shard }}
           path: backend/var/judge/${{ needs.draw.outputs.date }}/verdicts/${{ matrix.shard }}.csv
