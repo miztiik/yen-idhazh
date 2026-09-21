@@ -473,8 +473,9 @@ before; a configured boolean controls both the startup flag and request body.
 `load_mode: "mmap+mlock"` emits `-lm mmap+mlock`, the combined spelling the
 runtime recommends instead of the deprecated separate switches.
 
-The daily worker logs its locked-memory limits and attempts `ulimit -l unlimited`
-inside the script that starts the server. The server inherits that shell's
+The daily worker logs its locked-memory limits and raises them with
+`sudo prlimit --memlock=unlimited --pid $$` inside the script that starts the
+server. The command targets that script's own shell, and the server inherits its
 effective limit; a separate workflow step would not carry it over. Each limit
 command captures its error and only warns on failure. Other startup errors
 still stop the job. The log records the effective limit after the attempt,
