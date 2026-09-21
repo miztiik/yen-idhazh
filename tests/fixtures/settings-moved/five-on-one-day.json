@@ -1,0 +1,143 @@
+{
+	"why": "Five days of run records, arranged so every state the setting marker has to draw is in one bounded file. Named after what it carries, not after a run that produced it - nothing produced it, and nothing about the committed archive can make it change.",
+	"days": [
+		{
+			"why": "Two days before the record existed. A day with no recorded inputs is a day nothing may be claimed about, so neither of these draws a rule.",
+			"date": "2026-09-14",
+			"records": [{ "inputs": null }]
+		},
+		{
+			"date": "2026-09-15",
+			"records": [{ "inputs": null }]
+		},
+		{
+			"why": "The first recorded day. There is nothing before it to differ from, so it draws no rule either.",
+			"date": "2026-09-16",
+			"records": [
+				{
+					"inputs": {
+						"model_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+						"quantisation": "Q4_K_M",
+						"runtime_build": "b1234",
+						"chat_template_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+						"prompt_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+						"turn_markers_sha256": "4444444444444444444444444444444444444444444444444444444444444444",
+						"output_schema_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+						"truncation_cap_tokens": 1800,
+						"sampling": "temperature=0.0,top_p=1.0,seed=0",
+						"runtime_flags": "--flash-attn",
+						"n_ctx": 8192,
+						"n_batch": 512,
+						"n_ubatch": 512,
+						"n_threads": 4,
+						"runner_class": "ubuntu-latest",
+						"extractor_version": "trafilatura-1.12.2",
+						"sanitizer_version": "bleach-6.1.0"
+					}
+				}
+			]
+		},
+		{
+			"why": "Five settings at once: the prompt, the turn markers, the truncation cap, the sampling settings and the context size. One rule, and its readout names all five.",
+			"date": "2026-09-17",
+			"records": [
+				{
+					"inputs": {
+						"model_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+						"quantisation": "Q4_K_M",
+						"runtime_build": "b1234",
+						"chat_template_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+						"prompt_sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+						"turn_markers_sha256": "8888888888888888888888888888888888888888888888888888888888888888",
+						"output_schema_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+						"truncation_cap_tokens": 2400,
+						"sampling": "temperature=0.2,top_p=0.95,seed=7",
+						"runtime_flags": "--flash-attn",
+						"n_ctx": 16384,
+						"n_batch": 512,
+						"n_ubatch": 512,
+						"n_threads": 4,
+						"runner_class": "ubuntu-latest",
+						"extractor_version": "trafilatura-1.12.2",
+						"sanitizer_version": "bleach-6.1.0"
+					}
+				}
+			]
+		},
+		{
+			"why": "Two runs of one day, and the second re-ran a prompt the first day used. A day that only went back to an older value started nothing new, so the day draws no rule of its own.",
+			"date": "2026-09-18",
+			"records": [
+				{
+					"inputs": {
+						"model_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+						"quantisation": "Q4_K_M",
+						"runtime_build": "b1234",
+						"chat_template_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+						"prompt_sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+						"turn_markers_sha256": "8888888888888888888888888888888888888888888888888888888888888888",
+						"output_schema_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+						"truncation_cap_tokens": 2400,
+						"sampling": "temperature=0.2,top_p=0.95,seed=7",
+						"runtime_flags": "--flash-attn",
+						"n_ctx": 16384,
+						"n_batch": 512,
+						"n_ubatch": 512,
+						"n_threads": 4,
+						"runner_class": "ubuntu-latest",
+						"extractor_version": "trafilatura-1.12.2",
+						"sanitizer_version": "bleach-6.1.0"
+					}
+				},
+				{
+					"inputs": {
+						"model_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+						"quantisation": "Q4_K_M",
+						"runtime_build": "b1234",
+						"chat_template_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+						"prompt_sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+						"turn_markers_sha256": "8888888888888888888888888888888888888888888888888888888888888888",
+						"output_schema_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+						"truncation_cap_tokens": 2400,
+						"sampling": "temperature=0.2,top_p=0.95,seed=7",
+						"runtime_flags": "--flash-attn",
+						"n_ctx": 16384,
+						"n_batch": 512,
+						"n_ubatch": 512,
+						"n_threads": 4,
+						"runner_class": "ubuntu-latest",
+						"extractor_version": "trafilatura-1.12.2",
+						"sanitizer_version": "bleach-6.1.0"
+					}
+				}
+			]
+		},
+		{
+			"why": "One setting on its own, on a day no chart here has a reading for. This is the day the marker exists for: a change nobody measured, so a reading either side of it is a before-and-after across something invisible.",
+			"date": "2026-09-19",
+			"records": [
+				{
+					"inputs": {
+						"model_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+						"quantisation": "Q4_K_M",
+						"runtime_build": "b1234",
+						"chat_template_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+						"prompt_sha256": "9999999999999999999999999999999999999999999999999999999999999999",
+						"turn_markers_sha256": "8888888888888888888888888888888888888888888888888888888888888888",
+						"output_schema_sha256": "5555555555555555555555555555555555555555555555555555555555555555",
+						"truncation_cap_tokens": 2400,
+						"sampling": "temperature=0.2,top_p=0.95,seed=7",
+						"runtime_flags": "--flash-attn",
+						"n_ctx": 16384,
+						"n_batch": 512,
+						"n_ubatch": 512,
+						"n_threads": 4,
+						"runner_class": "ubuntu-latest",
+						"extractor_version": "trafilatura-1.12.2",
+						"sanitizer_version": "bleach-7.0.0"
+					}
+				}
+			]
+		}
+	]
+}

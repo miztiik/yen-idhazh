@@ -18,8 +18,8 @@ FINGERPRINT_SURVIVORS: Final[dict[str, str]] = {
         "month mirrors carry the key, and extra=forbid refuses it"
     ),
     "backend/idhazh/contracts/run_manifest.py": (
-        "the popper, spelled plural: all 23 committed run.json files carry "
-        "pipeline_fingerprints and a published day is never rewritten"
+        "the popper, spelled plural: every run.json committed before the key was "
+        "dropped carries pipeline_fingerprints, and a published day is never rewritten"
     ),
     "backend/idhazh/contracts/eval_row.py": (
         "the one field that survives the drop, because the console reads its "
@@ -35,6 +35,10 @@ FINGERPRINT_SURVIVORS: Final[dict[str, str]] = {
     "backend/idhazh/contracts/label_row.py": "a changelog entry, which is history",
     "backend/idhazh/contracts/qualification.py": "a changelog entry, which is history",
     "backend/idhazh/contracts/summary.py": "a changelog entry, which is history",
+    "frontend/src/lib/console/settings-moved.ts": (
+        "where RECORDED_INPUTS_FROM is declared, and a date that splits two stores "
+        "has to name the one it is splitting away from"
+    ),
     "frontend/src/lib/server/model-work.ts": (
         "the dated historical branch, which reads the months committed before "
         "2026-09-12 and retires on the condition written beside RECORDED_INPUTS_FROM"

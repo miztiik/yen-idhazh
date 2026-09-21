@@ -32,11 +32,13 @@
 		type MemoryGrain,
 		type RangeMark
 	} from '$lib/charts/machine';
+	import { namesMoved, type SettingsMoved } from '$lib/console/settings-moved';
 	import { grouped } from '$lib/charts/series';
 
 	let {
 		board,
 		span,
+		moved = [],
 		windowDays
 	}: {
 		board: MemoryBoardView;
@@ -45,6 +47,11 @@
 		 * second copy: two derivations of one figure are what the one-builder rule
 		 * exists to stop, and this panel makes none. */
 		span: { low: number | null; high: number | null; from: number; outOf: number };
+		/** Every day inside this span the run record says a setting moved on, and
+		 * what moved. A bar is one cell for the whole window, so a hairline inside
+		 * it would be noise - the change is named under the track instead, on the
+		 * one grain whose figure is read across days. */
+		moved?: readonly SettingsMoved[];
 		windowDays: number;
 	} = $props();
 
@@ -73,6 +80,21 @@
 		if (mark.max === null) return `${mark.median.toFixed(2)}% busy at its trough, and no peak recorded`;
 		return `${mark.median.toFixed(2)}% busy at its trough, ${mark.max.toFixed(2)}% at its peak`;
 	}
+
+	/** What moved inside this span, as one sentence.
+	 *
+	 * The low and the high of the window grain can be two different setups, and
+	 * a span that says so is a reading rather than a comparison a reader has to
+	 * take on trust. One line however many days moved, because a line a day would
+	 * be the smear the charts refuse for the same reason. */
+	const movedText = $derived(
+		namesMoved(
+			moved.map((one) => {
+				const what = namesMoved(one.settings);
+				return what === '' ? one.date : `${one.date} (${what})`;
+			})
+		)
+	);
 </script>
 
 <div
@@ -377,6 +399,12 @@
 					<p class="note absent" data-memory-board-empty="span">
 						No run in these {windowDays} days recorded a memory high-water mark.
 					</p>
+					{#if moved.length > 0}
+						<p class="note" data-memory-span-moved={moved.length}>
+							{moved.length === 1 ? 'A setting moved' : 'Settings moved'} on {movedText}, and nothing
+							in these {windowDays} days measured what it did to the memory.
+						</p>
+					{/if}
 				{:else}
 					<!-- A figure with a span is one track, never two sentences. This
 					     was four lines of prose in another panel until this one
@@ -408,6 +436,13 @@
 						The track runs to {gib(spanScale)}; the bar is the span and the upright is this
 						run's own mark on it.
 					</span>
+					{#if moved.length > 0}
+						<p class="note" data-memory-span-moved={moved.length}>
+							{moved.length === 1 ? 'A setting moved' : 'Settings moved'} on {movedText}, inside
+							this span. The lowest run and the highest are not the same setup, so the two ends
+							are not a before-and-after of one thing.
+						</p>
+					{/if}
 					<dl class="readout">
 						<div data-memory-figure="span">
 							<dt>Over these {windowDays} days</dt>

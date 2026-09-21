@@ -18,14 +18,20 @@
 		dayColumns,
 		frame,
 		linearAxis,
+		modelRuleRow,
 		modelRuleTitle,
 		modelRules,
 		noModelRuleNote,
 		observeWidth,
 		pointerReadout,
-		readoutMarks,
-		MODEL_RULE_ROW
+		readoutMarks
 	} from '$lib/charts/frame';
+	import {
+		namesMoved,
+		settingsByDate,
+		unreadRuleNote,
+		type SettingsMoved
+	} from '$lib/console/settings-moved';
 	import { boundaryDates, firstOfDay, inSpan, runTicks, MARK_PAD } from './run-axis';
 	import type { ChartConfig } from '$lib/server/config';
 
@@ -36,6 +42,7 @@
 		contextWindow,
 		cost,
 		modelChanges,
+		moved,
 		chart,
 		windowDays,
 		days
@@ -47,6 +54,9 @@
 		/** The span's own figures, worked out on the server from the same rows. */
 		cost: ContextSpan;
 		modelChanges: readonly string[];
+		/** What the run record says moved, by date. A date in `modelChanges` with no
+		 * entry here moved something the record cannot name. */
+		moved: readonly SettingsMoved[];
 		chart: ChartConfig;
 		windowDays: number;
 		days: number;
@@ -97,6 +107,8 @@
 		)
 	);
 	const contextRules = $derived(modelRules(modelChanges, contextDates, contextX));
+	/** The words for one date, or none where the record could not name them. */
+	const movedOn = $derived(settingsByDate(moved));
 	const contextStrip = $derived(
 		contextData.map((column, index) => ({
 			...column,
@@ -105,9 +117,24 @@
 			// the rule list a column. The set holds a boundary DAY's date and every
 			// run of that day carries it, so all its columns take the rule.
 			rows: contextBoundaries.has(contextRuns[index]?.date ?? '')
-				? [...column.rows, MODEL_RULE_ROW]
+				? [
+						...column.rows,
+						modelRuleRow(namesMoved(movedOn.get(contextRuns[index]?.date ?? '') ?? []))
+					]
 				: column.rows
 		}))
+	);
+	/** Days this span covers, that a setting moved on, and that no run here
+	 * measured. The rule and the absence are both drawn: a setting that moved on
+	 * a day nobody was measuring is what makes a before-and-after unsafe, and a
+	 * chart silent about it invites the comparison anyway. */
+	const contextUnread = $derived(
+		moved.filter(
+			(one) =>
+				one.date >= start &&
+				one.date <= end &&
+				!contextRuns.some((run) => run.date === one.date)
+		)
 	);
 	const contextMarks = $derived(readoutMarks(contextStrip));
 	const contextResting = $derived(contextStrip.at(-1) ?? null);
@@ -154,6 +181,9 @@
 				No run in these {days} days recorded both the limit it ran under and an article's own
 				tokens, so nothing here can say what the limit cost.
 			</p>
+			{#if contextUnread.length > 0}
+				<p class="reads" data-model-rule-unread="machine-context">{unreadRuleNote(contextUnread)}</p>
+			{/if}
 		{:else}
 			<div
 				class="plot"
@@ -233,7 +263,7 @@
 								stroke-dasharray="3 3"
 								data-model-rule-line={rule.date}
 							>
-								<title>{modelRuleTitle(rule.date)}</title>
+								<title>{modelRuleTitle(rule.date, namesMoved(movedOn.get(rule.date) ?? []))}</title>
 							</line>
 						{/each}
 
@@ -327,6 +357,10 @@
 				<p class="reads">
 					<span data-model-rule-empty="machine-context">{noModelRuleNote(days)}</span>
 				</p>
+			{/if}
+
+			{#if contextUnread.length > 0}
+				<p class="reads" data-model-rule-unread="machine-context">{unreadRuleNote(contextUnread)}</p>
 			{/if}
 
 			<!-- The finding, in the order a reader needs it: what went spare, how far

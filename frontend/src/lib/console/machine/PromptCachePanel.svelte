@@ -38,7 +38,7 @@
 	data-window-days={windowDays}
 	data-model-rule="no"
 	data-model-rule-name="machine-cache"
-	data-model-rule-none="a change moves this, and an engine-drawn axis carries no rule yet"
+	data-model-rule-none="the engine draws this one, and a marker it placed would sit on top of the columns rather than behind them"
 >
 	<Panel
 		heading="h3"
