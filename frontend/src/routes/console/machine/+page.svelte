@@ -41,6 +41,7 @@
 	import WindowControl from '$lib/components/WindowControl.svelte';
 	import ContextCostPanel from '$lib/console/machine/ContextCostPanel.svelte';
 	import CounterfactualCostPanel from '$lib/console/machine/CounterfactualCostPanel.svelte';
+	import DiskReadsPanel from '$lib/console/machine/DiskReadsPanel.svelte';
 	import MachineCardsPanel from '$lib/console/machine/MachineCardsPanel.svelte';
 	import MachineSplitPanel from '$lib/console/machine/MachineSplitPanel.svelte';
 	import MemoryBoardPanel from '$lib/console/machine/MemoryBoardPanel.svelte';
@@ -257,6 +258,8 @@
 				tolerancePct={data.clocksTolerancePct}
 				chart={data.chart}
 			/>
+		{:else if id === 'disk-reads'}
+			<DiskReadsPanel reads={view.diskReads} days={view.days} {windowDays} />
 		{:else if id === 'machine-cards'}
 			<MachineCardsPanel machines={data.machines} />
 		{:else if id === 'platform-mix'}
