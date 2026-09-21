@@ -2923,8 +2923,20 @@ def refused_endpoint() -> str:
 
 
 def summarize_against(endpoint: str) -> Summary:
+    """One article at an endpoint, with the start-up question already answered.
+
+    The markers come off the committed renderings rather than off this endpoint,
+    which is what lets these cases be about the completion call. A server that
+    is dead or answering errors settles nothing at start-up, so a stage that
+    derived here would report every one of them as an unread template and none
+    of them as the named item failure each of these tests is the oracle for.
+    """
     return _summarize_one(
-        article(), config.load(CONFIG_DIR), endpoint=endpoint, run_id="2026-08-25-1"
+        article(),
+        config.load(CONFIG_DIR),
+        markers=committed_markers(),
+        endpoint=endpoint,
+        run_id="2026-08-25-1",
     )
 
 

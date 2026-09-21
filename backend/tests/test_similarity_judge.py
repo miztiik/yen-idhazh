@@ -44,6 +44,7 @@ from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimila
 from idhazh.council.deadline import compute_shard_deadline
 from idhazh.llm.server import (
     TokenChoice,
+    TurnMarkers,
     completion_url,
     parse_completion,
     post,
@@ -214,6 +215,18 @@ def _settings_judging_behind_a_thinking_span() -> config.Settings:
         | {"judge": thinking.summarize.model_dump(mode="json")}
     )
     return dataclasses.replace(settings, models=models)
+
+
+def _thinking_markers() -> TurnMarkers:
+    """The markers the entry above judges under, off that entry's own renderings.
+
+    Paired with `_settings_judging_behind_a_thinking_span` and never with the
+    incumbent's. A server derives one set of markers off the weights it loaded,
+    so settings from one entry and markers from another describe no server that
+    could exist - and the closing marker a reasoning span stops at is exactly
+    what the incumbent does not have.
+    """
+    return committed_markers(THINKING_ENTRY_FILE)
 
 
 def _a_deadline_no_shard_will_reach() -> float:
@@ -830,7 +843,7 @@ def test_a_thinking_entry_reads_its_verdict_off_the_answer_span() -> None:
             day.items[1],
             client=_client(server),
             settings=settings,
-            markers=committed_markers(),
+            markers=_thinking_markers(),
         )
         decodes = server.decodes
 
@@ -876,7 +889,7 @@ def test_a_pairs_calls_are_counted_rather_than_derived_from_its_pairs() -> None:
             day.items[1],
             client=_client(thinking_server),
             settings=_settings_judging_behind_a_thinking_span(),
-            markers=committed_markers(),
+            markers=_thinking_markers(),
         )
 
     recorded = parse_completion(cold_reply.decode("utf-8"))
