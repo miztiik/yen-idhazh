@@ -1520,6 +1520,42 @@ def token_ids(endpoint: str, text: str, *, timeout: float) -> list[int]:
         ) from unreadable
 
 
+def token_pieces(endpoint: str, text: str, *, timeout: float) -> list[str]:
+    """How the vocabulary SPELLS a string, token by token, in order.
+
+    `with_pieces` is the same tokenisation `token_ids` asks for with the text of
+    each token beside its id, so the two cannot disagree about where a string
+    breaks. The spelling is what a caller needs when it has to match a token the
+    server reported in an alternatives window: that window carries text, and an
+    id is comparable only against a table this repository would have to keep.
+
+    `add_special` stays off for the reason it is off next door - a sequence token
+    the template writes belongs to the template, not to the string being asked
+    about.
+
+    A build that answers with bare ids is refused rather than guessed at. Reading
+    an id as a spelling would put a number where a word goes and every match
+    downstream would quietly miss.
+    """
+    body = _ask(
+        tokenize_url(endpoint),
+        {"content": text, "add_special": False, "with_pieces": True},
+        timeout=timeout,
+    )
+    tokens = body.get("tokens") if isinstance(body, Mapping) else None
+    if not isinstance(tokens, list) or not tokens:
+        raise ProbeRefusedError(
+            "the server tokenised nothing, so the vocabulary cannot be read as spellings"
+        )
+    pieces = [token.get("piece") for token in tokens if isinstance(token, Mapping)]
+    if len(pieces) != len(tokens) or not all(isinstance(piece, str) for piece in pieces):
+        raise ProbeRefusedError(
+            "the server answered with_pieces as bare ids, so this build cannot say how "
+            "it spells a token and no window can be matched against a verdict"
+        )
+    return [str(piece) for piece in pieces]
+
+
 def prove_the_entry(
     *,
     model: ModelEntry,

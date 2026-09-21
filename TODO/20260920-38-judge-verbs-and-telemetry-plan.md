@@ -107,7 +107,7 @@ That sentence is worth nothing unless it is checkable, so it is five conditions 
 | 15a | The council's package, the tenancy protocol and the shipping capability | - | A | DONE | - | 990 | worker |
 | 9 | The council's clocks and its fan-out width move to a council block | - | B | DONE | - | 993 | worker |
 | 1a | The council bounds its shard and ships whatever it wrote | 9, 15a | C | DONE | - | 994 | worker |
-| 2 | The council knows which run it is | 1a | D | DONE | p38d | - | worker |
+| 2 | The council knows which run it is | 1a | D | DONE | - | 1004 | worker |
 | 3 | The separation and the dictum, written where the next agent reads it | - | E | DONE | - | 996 | worker |
 | 4 | The judge-call stamp, declared once and naming no judge | - | F | DONE | - | 992 | worker |
 | 5 | The council's own shard-outcome record | 4 | F | DONE | - | 992 | worker |
@@ -119,7 +119,7 @@ That sentence is worth nothing unless it is checkable, so it is five conditions 
 | 11a | The model layer offers both spans and says what it decoded | - | I | DONE | - | 989 | worker |
 | 12 | The four verbs name their work | 9, 24 | J | PENDING | - | - | - |
 | 13 | `leg` and `fold` leave the vocabulary | 12 | J | PENDING | - | - | - |
-| 11b | The content-similarity judge reads its own margin | 11a | K | PENDING | - | - | - |
+| 11b | The content-similarity judge reads its own margin | 11a | K | DONE | - | 1007 | worker |
 | 14 | The judge fills the stamp | 8, 11b, 13 | K | PENDING | - | - | - |
 | 15b | The content-similarity judge fills its metrics and registers as a tenant | 6, 14, 15a | L | PENDING | - | - | - |
 | 16 | The model block becomes one composite action | - | M | DONE | - | 1000 | worker |
@@ -832,7 +832,7 @@ All three stores join the prune targets (CLAUDE.md 1b: a prune verb per store) a
 
 - **Side: judge.**
 - **Scope:** this judge opens the thinking channel behind a model role of its own, constrains its six legal strings at the answer span, buckets its first-token window by verdict prefix, and records which envelope ran.
-- **Files touched:** `backend/idhazh/similarity/judge.py`, `backend/idhazh/similarity/prompt.py`, `backend/idhazh/similarity/stamps.py`, `backend/idhazh/similarity/fold.py` (the change detector), `backend/idhazh/contracts/story_similarity_pair.py` (the envelope column), `config/idhazh.json`, `config/models/`, `backend/tests/test_similarity_judge.py`, `tests/fixtures/`, `docs/reference/benchmarks/what-the-thinking-envelope-changes.md` (new), `schemas/story-similarity-pair.schema.json` (generated)
+- **Files touched:** `backend/idhazh/similarity/judge.py`, `backend/idhazh/similarity/prompt.py`, `backend/idhazh/similarity/stamps.py`, `backend/idhazh/similarity/fold.py` (the change detector), `backend/idhazh/contracts/story_similarity_pair.py` (the envelope column), `config/idhazh.json`, `config/models/`, `backend/tests/test_similarity_judge.py`, `tests/fixtures/`, `docs/reference/benchmarks/what-the-margin-rule-changes.md` (new - the thinking arm was priced and not run, so the page is named for the measurement that was taken), `schemas/story-similarity-pair.schema.json` (generated)
 - **Acceptance gates:** local - the similarity test modules, contract export, drift gate, ruff, mypy, `doc_load.py --changed`. CI - full suite.
 - **Oracle:** four cases. A recorded reply from an entry declaring a thinking close has its verdict read from the **answer** span, with the thinking span held for the assertion and never parsed as a verdict. A window whose only verdict token is **space-prefixed** yields a **non-null** margin. A window containing the bare `" "` token - which is a prefix of all three verdicts - drops it as unattributable rather than counting it three times. A window resolving to one verdict yields null.
 - **Decisions:**

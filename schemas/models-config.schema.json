@@ -683,6 +683,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Add an optional judge entry, decoding on the served role's weights.",
+      "version": "2026-09-21",
+      "why": "The judge could only open a thinking channel by moving the summariser too."
+    },
+    {
       "change": "Add optional CPU, cache, checkpoint and template controls.",
       "version": "2026-09-20",
       "why": "Each model can declare the runtime settings it needs."
@@ -698,11 +703,6 @@
       "why": "A cap set from no reading of these weights truncates a thought mid-sentence."
     },
     {
-      "change": "models.<role>.draft.spec_type accepts a third value, draft-mtp.",
-      "version": "2026-09-15T12:30",
-      "why": "A model that predicts its own next tokens needs no second set of weights."
-    },
-    {
       "change": "Earlier changes are in this file's git history.",
       "version": "2026-09-14",
       "why": "A changelog says what moved lately; git is the archive."
@@ -710,11 +710,22 @@
   ],
   "description": "`config/models/<name>.json` - one whole model, in one file of its own.\n\nOne entry per role, and each entry carries the settings it runs on. There is\nno block shared between the entries. A role is a model family served by its\nown llama-server process, and one block over two roles is a measurement\nabout one of them quietly applied to the other.\n\nOne role is left. The small visual planner is retired: the two calls the\nwork stage now makes per item run on these weights, so the picture is\ndecided by the same model that wrote the summary.\n\nIt is a file rather than a block of `config/idhazh.json` because everything\nin it is a fact about one set of weights - the repository, the digest, the\nwindow they were measured in, the markers their server renders. Held in the\nshared file, a swap is an edit across every one of those lines and a revert\nis the same edit backwards, with the previous model's numbers gone. Held\nhere, the incumbent and the candidate are two committed files and the swap\nis `models_file` in `config/idhazh.json`.",
   "properties": {
+    "judge": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ModelEntry"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "summarize": {
       "$ref": "#/$defs/ModelEntry"
     },
     "version": {
-      "default": "2026-09-20",
+      "default": "2026-09-21",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -725,5 +736,5 @@
   ],
   "title": "ModelsConfig",
   "type": "object",
-  "version": "2026-09-20"
+  "version": "2026-09-21"
 }

@@ -1,11 +1,74 @@
 {
+  " NO": {
+    "tokens": [
+      {
+        "id": 235248,
+        "piece": " "
+      },
+      {
+        "id": 8996,
+        "piece": "NO"
+      }
+    ]
+  },
+  " UNCLEAR": {
+    "tokens": [
+      {
+        "id": 235248,
+        "piece": " "
+      },
+      {
+        "id": 26120,
+        "piece": "UNCLEAR"
+      }
+    ]
+  },
+  " YES": {
+    "tokens": [
+      {
+        "id": 235248,
+        "piece": " "
+      },
+      {
+        "id": 14004,
+        "piece": "YES"
+      }
+    ]
+  },
   "NO": {
-    "tokens": [8996]
+    "tokens": [
+      {
+        "id": 235248,
+        "piece": " "
+      },
+      {
+        "id": 8996,
+        "piece": "NO"
+      }
+    ]
   },
   "UNCLEAR": {
-    "tokens": [14004, 26120, 934]
+    "tokens": [
+      {
+        "id": 235248,
+        "piece": " "
+      },
+      {
+        "id": 26120,
+        "piece": "UNCLEAR"
+      }
+    ]
   },
   "YES": {
-    "tokens": [14004, 1570]
+    "tokens": [
+      {
+        "id": 235248,
+        "piece": " "
+      },
+      {
+        "id": 14004,
+        "piece": "YES"
+      }
+    ]
   }
 }
