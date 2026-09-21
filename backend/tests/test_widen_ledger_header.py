@@ -25,7 +25,7 @@ from idhazh.telemetry import prune
 from utilities import widen_ledger_header
 
 DATE = "2026-09-18"
-TARGET = "story-similarity-scored-pairs"
+TARGET = "content-similarity-judge-scored-pairs"
 
 #: The header this store carried before the judge-call stamp was appended.
 NARROW = FIXTURES_DIR / "state" / "scored-pairs-before-the-stamp.csv"
@@ -119,7 +119,7 @@ def test_a_dry_run_reports_what_a_live_run_writes_and_writes_nothing(tmp_path: P
     assert path.read_bytes() == untouched
     assert [(e.path, e.columns_before, e.columns_after, e.rows, e.changed) for e in dry] == [
         (
-            f"story-similarity/scored-pairs/{DATE.replace('-', '/')}.csv",
+            f"content-similarity-judge/scored-pairs/{DATE.replace('-', '/')}.csv",
             22,
             len(StorySimilarityPair.csv_columns()),
             2,
@@ -174,4 +174,9 @@ def test_a_store_with_no_file_yet_reports_nothing_and_raises_nothing(tmp_path: P
     """
     a_narrow_day(tmp_path)
 
-    assert widen_ledger_header.widen("story-similarity-fitted-thresholds", state_dir=tmp_path) == []
+    assert (
+        widen_ledger_header.widen(
+            "content-similarity-judge-fitted-thresholds", state_dir=tmp_path
+        )
+        == []
+    )

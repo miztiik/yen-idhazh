@@ -1,6 +1,6 @@
 /** Where the merge line sat each day, read at build time from `state/`.
  *
- * `state/story-similarity/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` is one row a
+ * `state/content-similarity-judge/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` is one row a
  * run: what the line was, what the evidence proposed, what the run applied, and
  * which clamp shaped it. Nothing on the published site reads it, and nothing
  * here is fetched by a browser - the route inlines what it needs and the window
@@ -96,7 +96,7 @@ export function fittedLines(
 	days: number = LEDGER_WINDOW_DAYS,
 	root: string = STATE_ROOT
 ): FittedLine[] {
-	const table = readDayShards(join(root, 'story-similarity', 'fitted-thresholds'), days);
+	const table = readDayShards(join(root, 'content-similarity-judge', 'fitted-thresholds'), days);
 	const newest = new Map<string, FittedLine>();
 	for (const row of table.rows) {
 		const date = text(row.date);
@@ -135,14 +135,14 @@ export function fittedLines(
 
 /** The whole score record, or null where no day has folded one.
  *
- * `state/story-similarity/score-distribution.json` is read whole and that is the
+ * `state/content-similarity-judge/score-distribution.json` is read whole and that is the
  * point of its shape: 120 slots is a fixed size whatever the archive grows to,
  * so this costs the same on the thousandth day as on the third (Guardrail #12).
  * A record that will not parse is nothing to draw rather than a console route
  * that fails to build.
  */
 export function scoreRecord(root: string = STATE_ROOT): ScoreRecord | null {
-	const path = join(root, 'story-similarity', 'score-distribution.json');
+	const path = join(root, 'content-similarity-judge', 'score-distribution.json');
 	if (!existsSync(path)) return null;
 	try {
 		const raw = JSON.parse(readFileSync(path, 'utf8'));

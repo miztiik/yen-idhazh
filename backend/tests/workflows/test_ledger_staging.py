@@ -96,8 +96,10 @@ STORES_NOTHING_FILLS_YET: Final[Mapping[str, str]] = MappingProxyType(
         "state/content-similarity-judge/metrics": (
             "the content-similarity judge, on its way out of each unit of work it ran"
         ),
-        "state/story-similarity/archive": "the fold, on the day a stamp under the record moves",
-        "state/story-similarity/holdout-pairs.csv": (
+        "state/content-similarity-judge/archive": (
+            "the fold, on the day a stamp under the record moves"
+        ),
+        "state/content-similarity-judge/holdout-pairs.csv": (
             "a person, and no run ever - the file is typed by hand"
         ),
     }

@@ -70,12 +70,13 @@ DAY_PATHS: Final[dict[str, Callable[[Path, str], Path]]] = {
         f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}-"
         f"{ledger.MERGE_LINE_HOLDOUT_SCORES_DIRNAME}"
     ): ledger.merge_line_holdout_scores_path,
-    f"{ledger.STORY_SIMILARITY_DIRNAME}-{ledger.SCORED_PAIRS_DIRNAME}": (
+    f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}-{ledger.SCORED_PAIRS_DIRNAME}": (
         ledger.scored_pairs_path
     ),
-    f"{ledger.STORY_SIMILARITY_DIRNAME}-{ledger.FITTED_THRESHOLDS_DIRNAME}": (
-        ledger.fitted_thresholds_path
-    ),
+    (
+        f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}-"
+        f"{ledger.FITTED_THRESHOLDS_DIRNAME}"
+    ): ledger.fitted_thresholds_path,
 }
 
 

@@ -1639,7 +1639,7 @@ def test_the_retirement_ledger_is_named_where_the_commit_step_stages_it() -> Non
     `set -euo pipefail`, so a retirement file that only appears on the first run
     that retires something would cost that job the sight and health ledgers
     staged beside it. The header ships with the contract instead, exactly as
-    `state/story-similarity/holdout-pairs.csv` does.
+    `state/content-similarity-judge/holdout-pairs.csv` does.
 
     Whether this checkout carries the file is a question about a working copy,
     not about code: no commit can make it false, and a short or sparse clone
@@ -1662,17 +1662,21 @@ def test_the_hand_marked_holdout_is_named_where_the_commit_step_stages_it() -> N
     (`CLAUDE.md` section 13); what stays here is the path the commit step is
     handed.
     """
-    assert ledger.similarity_holdout_relpath() == "state/story-similarity/holdout-pairs.csv"
+    assert (
+        ledger.similarity_holdout_relpath()
+        == "state/content-similarity-judge/holdout-pairs.csv"
+    )
     assert ledger.similarity_holdout_path(Path("state")) == Path(
-        "state/story-similarity/holdout-pairs.csv"
+        "state/content-similarity-judge/holdout-pairs.csv"
     )
 
 
 def test_the_judged_pairs_are_filed_under_the_day_they_were_drawn_from() -> None:
     """One nested segment more than every other day tree, and the relpath says so.
 
-    The whole feature hangs off `state/story-similarity/`, so the commit step
-    can stage one prefix. That makes this the first store whose day file sits two
+    Everything this judge produces hangs off `state/content-similarity-judge/`,
+    so the commit step can stage one prefix. That makes this the first store
+    whose day file sits two
     directories below `state/` rather than one, and a helper that quietly dropped
     the nest would write a tree nothing else in this file can find.
     """
@@ -1681,10 +1685,10 @@ def test_the_judged_pairs_are_filed_under_the_day_they_were_drawn_from() -> None
 
     assert (
         ledger.scored_pairs_relpath(date)
-        == "state/story-similarity/scored-pairs/2026/09/18.csv"
+        == "state/content-similarity-judge/scored-pairs/2026/09/18.csv"
     )
     assert ledger.scored_pairs_path(state, date) == Path(
-        "state/story-similarity/scored-pairs/2026/09/18.csv"
+        "state/content-similarity-judge/scored-pairs/2026/09/18.csv"
     )
 
 
@@ -1700,10 +1704,10 @@ def test_the_fitted_line_is_filed_under_the_day_it_was_fitted_for() -> None:
 
     assert (
         ledger.fitted_thresholds_relpath(date)
-        == "state/story-similarity/fitted-thresholds/2026/09/18.csv"
+        == "state/content-similarity-judge/fitted-thresholds/2026/09/18.csv"
     )
     assert ledger.fitted_thresholds_path(state, date) == Path(
-        "state/story-similarity/fitted-thresholds/2026/09/18.csv"
+        "state/content-similarity-judge/fitted-thresholds/2026/09/18.csv"
     )
 
 
@@ -1715,7 +1719,7 @@ def test_the_score_record_is_one_file_that_never_grows_with_the_archive() -> Non
     partition to place.
     """
     assert ledger.score_distribution_path(Path("state")) == Path(
-        "state/story-similarity/score-distribution.json"
+        "state/content-similarity-judge/score-distribution.json"
     )
 
 
@@ -2010,8 +2014,8 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     proves the shape - it files by month, so a second day adds nothing to either
     cover and a second month adds one file to the operator's.
 
-    `state/story-similarity/fitted-thresholds/` is registered before anything
-    writes it, which is why it is built here by hand rather than by an append
+    `state/content-similarity-judge/fitted-thresholds/` is registered before
+    anything writes it, which is why it is built here by hand rather than by an append
     call. Its sibling `scored-pairs/` has a writer and is filled by one.
     """
     ledger.append_seen(tmp_path, DATE, [seen_row()])
@@ -2044,11 +2048,13 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
             ledger.HOST_FINGERPRINT_KEY,
         ),
         (
-            f"story-similarity/fitted-thresholds/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
+            f"content-similarity-judge/fitted-thresholds/"
+            f"{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
             ledger.STORY_SIMILARITY_THRESHOLD_KEY,
         ),
         (
-            f"story-similarity/scored-pairs/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
+            f"content-similarity-judge/scored-pairs/"
+            f"{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
             ledger.STORY_SIMILARITY_PAIR_KEY,
         ),
         (

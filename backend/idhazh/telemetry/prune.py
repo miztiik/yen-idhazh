@@ -104,7 +104,8 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: `idhazh rebuild-score-index --month <YYYY-MM>` afterwards. The dry run is
 #: where that is read, which is why it is the default.
 #:
-#: **`story-similarity-scored-pairs` and `story-similarity-fitted-thresholds` are
+#: **`content-similarity-judge-scored-pairs` and
+#: `content-similarity-judge-fitted-thresholds` are
 #: not a pair.** The pairs are folded into `score-distribution.json` once and
 #: never read again, so deleting a day of them takes nothing away from the fit;
 #: deleting a fitted row takes a day out of the guard's median and out of what
@@ -113,11 +114,10 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: **`llm-council-shard-outcomes` is here before anything writes it.** The shape
 #: and the path land ahead of the step that appends to them (Guardrail #3), and a
 #: store an operator cannot name is a store a day cannot be taken out of. A range
-#: over a store with no file selects nothing and says so. The two
+#: over a store with no file selects nothing and says so. The four
 #: `content-similarity-judge` stores are here for the same reason, and they are
-#: the judge's rather than the council's: one records how that judge's own
-#: instrument behaved, and the other how the line it produces stands against a
-#: hand-marked holdout. What a reading is about decides where it is filed.
+#: the judge's rather than the council's: what a reading is about decides where
+#: it is filed, never what executed it.
 TARGETS: Final[Mapping[str, str]] = MappingProxyType(
     dict(
         sorted(
@@ -146,11 +146,15 @@ TARGETS: Final[Mapping[str, str]] = MappingProxyType(
                     f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}/"
                     f"{ledger.MERGE_LINE_HOLDOUT_SCORES_DIRNAME}"
                 ),
-                f"{ledger.STORY_SIMILARITY_DIRNAME}-{ledger.SCORED_PAIRS_DIRNAME}": (
-                    f"{ledger.STORY_SIMILARITY_DIRNAME}/{ledger.SCORED_PAIRS_DIRNAME}"
+                f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}-{ledger.SCORED_PAIRS_DIRNAME}": (
+                    f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}/{ledger.SCORED_PAIRS_DIRNAME}"
                 ),
-                f"{ledger.STORY_SIMILARITY_DIRNAME}-{ledger.FITTED_THRESHOLDS_DIRNAME}": (
-                    f"{ledger.STORY_SIMILARITY_DIRNAME}/{ledger.FITTED_THRESHOLDS_DIRNAME}"
+                (
+                    f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}-"
+                    f"{ledger.FITTED_THRESHOLDS_DIRNAME}"
+                ): (
+                    f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}/"
+                    f"{ledger.FITTED_THRESHOLDS_DIRNAME}"
                 ),
             }.items()
         )

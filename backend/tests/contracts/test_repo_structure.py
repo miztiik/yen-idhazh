@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import json
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -437,3 +438,65 @@ def test_every_script_a_workflow_runs_is_on_disk() -> None:
                 missing.append(f"{workflow.name} runs {script}, which is not on disk")
     assert seen, "no workflow names a script, so this test would pass on nothing"
     assert not missing, "\n".join(missing)
+
+
+#: The store path the same-story judge's output sat under until it moved beneath
+#: that judge's own slug, and the constant that used to spell it. Written as a
+#: pattern with the first letter in a character class so this file does not
+#: itself carry the string it refuses - the sweep below covers `backend/tests/`,
+#: and a literal would make the gate find its own definition. `RETIRED_WORD`
+#: above is written the same way for the same reason.
+#:
+#: A path segment only. `StorySimilarityPair`, `story-similarity-pair` and the
+#: modules that declare them are published keys and keep their spelling, so this
+#: pattern is anchored on `state/` and on the constant's full name rather than on
+#: the loose word.
+RETIRED_STORE_PATH = re.compile(r"state/[s]tory-similarity|STORY[_]SIMILARITY_DIRNAME")
+
+#: The six trees a person edits, swept through `git ls-files` rather than a
+#: directory walk: an untracked scratch file cannot turn this red, and a tracked
+#: one cannot escape it.
+RETIRED_STORE_SWEEP = ("backend", "frontend/src", ".github", "docs", "schemas", "config")
+
+
+def test_no_reader_resolves_a_path_under_the_retired_store_name() -> None:
+    """A store that moved leaves a reader behind, and only a run would find it.
+
+    Five path helpers, two frontend readers, two prune words and a dozen doc
+    sentences all named the old tree. A missed one resolves to a directory that
+    is not there: the backend reads an empty ledger and says nothing, and the
+    console draws a panel with no data. Both look like a quiet night.
+
+    **What it reads, and why it is bounded** (Guardrail #12): the tracked files
+    of the six trees above - roughly a thousand files of code, docs, schemas and
+    config that somebody wrote. It does not read `state/`, `corpus/` or
+    `frontend/public/`, which is where every collection a run appends to lives,
+    so this costs the same on the thousandth published day as on the third.
+
+    What it cannot settle: whether the moved tree still holds the right bytes.
+    That is a question about a working copy rather than about code
+    (`CLAUDE.md` section 13), and it was answered once by comparing each file's
+    blob across the move.
+    """
+    listed = subprocess.run(
+        ["git", "ls-files", "--", *RETIRED_STORE_SWEEP],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    assert len(listed) > 500, "the sweep found almost nothing, so it would pass on nothing"
+
+    offenders: list[str] = []
+    for relative in listed:
+        text = (REPO_ROOT / relative).read_bytes().decode("utf-8", "replace")
+        for number, line in enumerate(text.split("\n"), start=1):
+            if RETIRED_STORE_PATH.search(line):
+                offenders.append(f"{relative}:{number}: {line.strip()}")
+
+    assert not offenders, (
+        "a reader still resolves a path under the retired store name. The store "
+        "moved under the slug of the judge that fills it; point it at "
+        "ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME, or at "
+        "state/content-similarity-judge/ in prose:\n" + "\n".join(offenders)
+    )

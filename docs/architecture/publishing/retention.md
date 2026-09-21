@@ -282,8 +282,10 @@ primitive pointed at the repository is the one accident nobody can undo.
 
 | `--target` | Bounded on a schedule by |
 | --- | --- |
+| `content-similarity-judge-fitted-thresholds` | nothing today - one row a day at about 400 bytes across 33 columns is 146 KB a year at any `pair_budget` |
 | `content-similarity-judge-merge-line-holdout-scores` | nothing today - one row a day |
 | `content-similarity-judge-metrics` | nothing today - one row per shard per night, and a night is a handful of shards |
+| `content-similarity-judge-scored-pairs` | nothing today - at most `pair_budget` rows a day, 200 on the committed knobs |
 | `counterfactual-scores` | nothing today |
 | `feed-health` | `observability.feed_health_keep_months` |
 | `host-fingerprint` | `observability.host_fingerprint_keep_months` |
@@ -291,8 +293,6 @@ primitive pointed at the repository is the one accident nobody can undo.
 | `llm-council-shard-outcomes` | nothing today - one row per unit of work per night, and a night is a handful of units |
 | `score-index` | `observability.scores_full_grain_months` |
 | `scores` | `observability.scores_full_grain_months` |
-| `story-similarity-fitted-thresholds` | nothing today - one row a day at about 400 bytes across 33 columns is 146 KB a year at any `pair_budget` |
-| `story-similarity-scored-pairs` | nothing today - at most `pair_budget` rows a day, 200 on the committed knobs |
 | `visual-prunes` | nothing today - it is bounded by arithmetic, above |
 
 The rule that decides membership is one line: a store files
@@ -305,7 +305,8 @@ vocabulary closed: a slash in the word would make the argument look like a path,
 and a deletion primitive that resolved its argument against the file system is
 the one accident nobody can undo.
 
-**The two story-similarity stores are not a pair and either can go on its own.**
+**The judge's scored pairs and its fitted lines are not a pair, and either can
+go on its own.**
 The judged pairs are folded into `score-distribution.json` once and never read
 again, so deleting a day of them takes nothing away from the fit. Deleting a
 fitted row does take something away: it leaves a day out of the step-change
@@ -313,7 +314,8 @@ guard's median and out of what step 4 compares this week against.
 
 **`llm-council-shard-outcomes` is in the vocabulary before anything writes it.**
 The shape and the path land ahead of the step that appends to them (Guardrail
-#3), and the two story-similarity stores are the precedent: a store an operator
+#3), and the content-similarity judge's four stores are the precedent: a store
+an operator
 cannot name is a store a day cannot be taken out of, and a range over a store
 with no file selects nothing and says so. What it holds is the council's own
 pipeline record - which units of work started, which finished, which stopped on

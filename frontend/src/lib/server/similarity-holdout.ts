@@ -1,6 +1,6 @@
 /** The hand-marked holdout pairs, scored at build time from the published days.
  *
- * `state/story-similarity/holdout-pairs.csv` names two addresses and two dates
+ * `state/content-similarity-judge/holdout-pairs.csv` names two addresses and two dates
  * a row. The published day payload carries the vectors and the key points those
  * addresses were scored on, so the score is recomputed here, once, and the page
  * ships the answer. Nothing is scored in a browser.
@@ -116,7 +116,7 @@ export function holdoutReading(
 	stateRoot: string = STATE_ROOT,
 	digestRoot: string = DIGEST_ROOT
 ): HoldoutReading {
-	const table = readCsv(join(stateRoot, 'story-similarity', 'holdout-pairs.csv'));
+    const table = readCsv(join(stateRoot, 'content-similarity-judge', 'holdout-pairs.csv'));
 	if (table.rows.length === 0) {
 		return { marks: [], skipped: [], marked: 0, daysOpened: 0 };
 	}

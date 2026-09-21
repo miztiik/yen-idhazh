@@ -111,7 +111,7 @@ The one false merge at 0.93 is on 2026-08-30: Ontario's pushback against the lak
 
 **The rule is the first round hundredth above the highest-scoring pair a person marked as two stories.** That is how 0.94 was chosen, over the 11 committed days this table covers and the one marked-apart pair they held.
 
-**The margin is negative as of 2026-09-19, and the console now draws it.** `state/story-similarity/holdout-pairs.csv` holds 200 marked pairs, 4 of them marked as two different stories. Recomputed from the committed day payloads at the shipped weights - the whole score on the cosine - those four score **0.9407, 0.9374, 0.9352 and 0.9343**. The highest sits **0.0007 above** the 0.94 floor, so the line as committed would merge two stories somebody read as two. One pair of the four is on the wrong side; the other three clear it. The 0.0083 that was measured on 2026-09-01 was the margin over the evidence that existed then, and this replaces it.
+**The margin is negative as of 2026-09-19, and the console now draws it.** `state/content-similarity-judge/holdout-pairs.csv` holds 200 marked pairs, 4 of them marked as two different stories. Recomputed from the committed day payloads at the shipped weights - the whole score on the cosine - those four score **0.9407, 0.9374, 0.9352 and 0.9343**. The highest sits **0.0007 above** the 0.94 floor, so the line as committed would merge two stories somebody read as two. One pair of the four is on the wrong side; the other three clear it. The 0.0083 that was measured on 2026-09-01 was the margin over the evidence that existed then, and this replaces it.
 
 **The way to widen it is more labels, not a higher number**, and that has not changed: 0.95 would clear all four marks and lose ten groups a person read as one story each.
 
@@ -292,10 +292,10 @@ console is where the loop is watched once it starts
 
 | Store | The one question it answers |
 | --- | --- |
-| `state/story-similarity/scored-pairs/` | What did the judge say about this pair, in both orders, and under which models? |
-| `state/story-similarity/score-distribution.json` | Across everything judged so far, how many YES, NO and UNCLEAR readings sit in each slice of the band? |
-| `state/story-similarity/fitted-thresholds/` | On this day, what did the record propose, what shaped it, and what did the run apply? |
-| `state/story-similarity/holdout-pairs.csv` | Which pairs did a person mark, and which way? |
+| `state/content-similarity-judge/scored-pairs/` | What did the judge say about this pair, in both orders, and under which models? |
+| `state/content-similarity-judge/score-distribution.json` | Across everything judged so far, how many YES, NO and UNCLEAR readings sit in each slice of the band? |
+| `state/content-similarity-judge/fitted-thresholds/` | On this day, what did the record propose, what shaped it, and what did the run apply? |
+| `state/content-similarity-judge/holdout-pairs.csv` | Which pairs did a person mark, and which way? |
 
 The fields, the types and the bounds are in
 [../contracts/schemas.md](../contracts/schemas.md). How each store is partitioned,
@@ -482,7 +482,7 @@ news cluster can produce before it sets the line, and the benchmark cluster
 produced four. Two does not survive that; six does. Moved to 0.03 on 2026-09-19.
 
 **The margin the old cap guarded was withdrawn on 2026-09-19, and no line
-replaces it.** `state/story-similarity/holdout-pairs.csv` now holds 200 pairs
+replaces it.** `state/content-similarity-judge/holdout-pairs.csv` now holds 200 pairs
 labelled by `claude-opus-4.6` reading each pair's title and summary: 196 one
 story, 4 two stories. The four score 0.9407, 0.9374, 0.9352 and 0.9343,
 recomputed from the committed day vectors as 0.940676, 0.937400, 0.935201 and

@@ -37,7 +37,7 @@ question, and the four answers do not mix.
 | `.github/scripts/` | A shell step two or more workflow jobs run | a person | no |
 | `.github/agents/` | The seven persona advisors (`CLAUDE.md` section 14) | a person | no |
 | `.claude/skills/` | Claude Code skill wrappers that point at `docs/`, so one procedure is not written twice | a person | no |
-| `state/` | The append-only ledgers one run leaves for the next. Eight of them partition - `state/seen/`, `state/feed-health/`, `state/item-health/`, `state/published/`, `state/counterfactual-scores/`, `state/story-similarity/scored-pairs/` and `state/story-similarity/fitted-thresholds/` by day, `state/scores/` by month. `state/story-similarity/` is the one child that is a folder of ledgers rather than a ledger, so the whole adaptive merge line is one prefix for a commit step to stage. `state/segments/` is the one child that is not a ledger: rows in transit, one file per writer, deleted by the compaction that folds them into a head | a run, in CI | **never** |
+| `state/` | The append-only ledgers one run leaves for the next. Eight of them partition - `state/seen/`, `state/feed-health/`, `state/item-health/`, `state/published/`, `state/counterfactual-scores/`, `state/content-similarity-judge/scored-pairs/` and `state/content-similarity-judge/fitted-thresholds/` by day, `state/scores/` by month. `state/content-similarity-judge/` is a child that is a folder of ledgers rather than a ledger, so everything one judge produces is one prefix for a commit step to stage; `state/llm-council/` is the other. `state/segments/` is the one child that is not a ledger: rows in transit, one file per writer, deleted by the compaction that folds them into a head | a run, in CI | **never** |
 | `frontend/` | The published site, plus the digest payloads under `public/` | a person, and the pipeline under `public/` | yes |
 | `tests/` | Cross-cutting fixtures: captured pages, golden summaries, injection canaries | a person | no |
 | `notebooks/` | Committed notebooks a person runs off this machine, on hardware the runner does not have. Instructions only - never weights, never a token, and nothing in CI runs them (Guardrail #2) | a person | no |
@@ -54,7 +54,7 @@ These exist on a developer machine and in CI. None is ever committed.
 | `backend/bin/` | llama.cpp binaries, ~45 MB. Downloaded, not authored |
 | `backend/var/` | Run intermediates and caches. The committed record of a run is the digest plus the `state/` rows, never the workings |
 | `backend/var/evidence/` | Inside `backend/var/`, and named here because a person has to find it. One file per scored item, holding the article text and the summary a human labeller must read. Article bodies are not ours to republish (`CLAUDE.md` section 0a), so this one is uncommittable on principle rather than on size |
-| `backend/var/judge/` | Inside `backend/var/`, and named here for the same reason. One `draw.csv` a day: the borderline pairs the content-similarity judge's own selection step chose, which the council runs as `idhazh council-prepare`, with every verdict column empty. A judging unit rewrites the rows it owns, and `state/**/*.csv` merges by union - so committing a drawn row would stack it beside its judged self with nothing to say which is current. A row reaches `state/story-similarity/scored-pairs/` once, already judged, and is never edited afterwards |
+| `backend/var/judge/` | Inside `backend/var/`, and named here for the same reason. One `draw.csv` a day: the borderline pairs the content-similarity judge's own selection step chose, which the council runs as `idhazh council-prepare`, with every verdict column empty. A judging unit rewrites the rows it owns, and `state/**/*.csv` merges by union - so committing a drawn row would stack it beside its judged self with nothing to say which is current. A row reaches `state/content-similarity-judge/scored-pairs/` once, already judged, and is never edited afterwards |
 | `frontend/build/` | The built bundle. Pages rebuilds it from source on every deploy |
 | `frontend/static/digest/` | Staged from `frontend/public/digest/` at build time. A copy is not a source |
 
@@ -83,7 +83,7 @@ one exception to "written by a machine", and it is deliberate: the point of the
 file is that no machine wrote it (`CLAUDE.md` section 0a). See
 [../concepts/evaluation.md](../concepts/evaluation.md).
 
-`state/story-similarity/holdout-pairs.csv` is the second, and it is the same
+`state/content-similarity-judge/holdout-pairs.csv` is the second, and it is the same
 exception for the same reason: a labeller reads two articles and marks them one
 story or two, and that mark is the fixed floor the fitted merge line has to stay
 above. No run writes it - an operator harvests the marks into it by hand, and

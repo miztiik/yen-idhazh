@@ -178,7 +178,7 @@ After those three land, three groups open at once and the file lists must be re-
 | 24 | The council runs verbs of its own over a tenant list | 2, 15a, 16 | N | DONE | - | 1011 | worker |
 | 17 | The council runs the tenant and files its own outcome row | 5, 15a, 24 | O | DONE | - | 1013 | worker |
 | 25 | The config check moves to the tenant that owns the number | 9, 24 | P | DONE | - | 1012 | worker |
-| 18 | The store groups under the judge that fills it | 17 | Q | PENDING | - | - | - |
+| 18 | The store groups under the judge that fills it | 17 | Q | DONE | - | - | worker |
 | 19 | Where the content-similarity judge's merge line stands against its holdout | 7, 18 | R | PENDING | - | - | - |
 | 21a | The council asks every tenant what it is behind on | 15a, 17, 24 | S | PENDING | - | - | - |
 | 21b | The content-similarity judge answers which nights it is behind on | 8, 11b, 12, 21a | T | PENDING | - | - | - |
