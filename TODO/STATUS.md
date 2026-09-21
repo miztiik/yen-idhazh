@@ -38,14 +38,14 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 | [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 9 | 13 | 10 |
-| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 1 | 28 | 5 |
+| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 2 | 27 | 6 |
 
 ## In flight - 0
 
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 43
+## Ready now - 44
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -95,9 +95,10 @@ section 3 is where it is answered.
 | #3 | 38 | E | The separation and the dictum, written where the next agent reads it | - |
 | #4 | 38 | F | The judge-call stamp, declared once and naming no judge | - |
 | #8 | 38 | G | The pair row gains the stamp, and the store is rewritten | - |
+| #11b | 38 | K | The content-similarity judge reads its own margin | 11a |
 | #16 | 38 | M | The model block becomes one composite action | - |
 
-## Waiting on another row - 98
+## Waiting on another row - 96
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -183,10 +184,8 @@ section 3 is where it is answered.
 | #7 | 38 | G | The content-similarity judge's merge-line benchmark record | 5 is PENDING |
 | #1b | 38 | H | The judge stops safely and flushes as it goes | 1a is PENDING |
 | #10 | 38 | H | The judge's own bound reads a measured number | 9 is PENDING |
-| #11a | 38 | I | The model layer offers both spans and says what it decoded | - |
 | #12 | 38 | J | The four verbs name their work | 9 is PENDING; 24 is PENDING |
 | #13 | 38 | J | `leg` and `fold` leave the vocabulary | 12 is PENDING |
-| #11b | 38 | K | The content-similarity judge reads its own margin | 11a is UNKNOWN |
 | #14 | 38 | K | The judge fills the stamp | 8 is PENDING; 11b is PENDING; 13 is PENDING |
 | #15b | 38 | L | The content-similarity judge fills its metrics and registers as a tenant | 6 is PENDING; 14 is PENDING |
 | #24 | 38 | N | The council runs verbs of its own over a tenant list | 2 is PENDING; 16 is PENDING |
