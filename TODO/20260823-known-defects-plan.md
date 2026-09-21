@@ -42,6 +42,112 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 22 | The same story publishes several times in one day, and each copy says only one source carried it | 3 | CLOSED 2026-09-14 |
 | 23 | The canary day records no settings, so nothing renders the rules that say a setting moved | 2 | **OPEN - the pure module is tested; the page is not** |
 | 24 | `failed_field` costs a cell on every row and answers nobody | 5 | **OPEN - draw it or migrate it out** |
+| 25 | `host_model` is a column nothing fills, and two rulings disagree about whether it should | 5 | **OPEN - a person settles which ruling holds** |
+| 26 | The settlement-key check reads one constant twice, so it cannot see a key lose a cell | 2 | **OPEN - every keyed store is exposed** |
+| 27 | The decode stamp excludes the grammar but not the schema | 3 | **OPEN - changing it moves every summariser digest** |
+| 28 | The one-at-a-time guard tells the operator the wrong verb | 1 | **OPEN - about four lines across three call sites** |
+| 29 | A shard is called a `unit` in the council's workflow and its tests | 1 | **OPEN - one borrowed word replaced by another** |
+| 30 | A third spelling of the vector norm lives in the canary builder | 1 | **OPEN - the one it duplicates is now public** |
+| 31 | The council's selection artifact is named for one date and carries several | 1 | **OPEN - cosmetic today, wrong the day somebody reads the name** |
+
+## 31 - The council's selection artifact is named for one date and carries several (OPEN)
+
+`.github/workflows/llm-council.yml:243` names the upload
+`council-selection-${{ steps.decide.outputs.date }}`, and the collecting job
+downloads it on `council-selection-*`. Since the night plan landed, that one
+artifact carries **every** date the night covers, as directory levels inside it.
+
+Nothing collides, because a run makes exactly one of them. So this costs nothing
+until somebody reads the artifact list to find out what a night did, and the
+name tells them one date when the contents hold three.
+
+Found 2026-09-21 by the row that built the night plan, which left it rather than
+churn a test it did not otherwise touch.
+
+## 30 - A third spelling of the vector norm lives in the canary builder (OPEN)
+
+`backend/utilities/build_canary_day.py:1104` declares its own `_vector_norm`.
+`idhazh.assemble` has carried the same rule all along and its helper became
+public on 2026-09-21, so the duplicate now has a callable original sitting next
+to it.
+
+It is an operator tool rather than a pipeline stage, which is why it was left.
+The cost is the ordinary cost of two spellings of one rule: the autotune page
+already records one occasion where a second word reduction drifted from the
+first and moved a measured line.
+
+## 29 - A shard is called a `unit` in the council's workflow and its tests (OPEN)
+
+The scrub that deleted `leg` on 2026-09-21 replaced it with `unit` across
+`backend/tests/workflows/test_llm_council_workflow.py` and
+`.github/workflows/llm-council.yml` - six test names and about forty comments,
+`test_one_server_per_unit`, `Run this unit of the tenant's work`.
+
+**`unit` is a second name for `shard`, which is already the column, the knob and
+the count.** `CLAUDE.md` section 0b says a borrowed second name is deleted
+rather than replaced, so the scrub swapped one for another and is not done. The
+guard test was renamed at the time; nothing else was.
+
+A rename of test names and comments, no behaviour. What makes it worth writing
+down is that this is the **fifth** borrowed word this repository has had to
+remove, and the first one removed by substituting a sixth.
+
+## 28 - The one-at-a-time guard tells the operator the wrong verb (OPEN)
+
+`backend/idhazh/prune/one_at_a_time.refuse_by_name` spells the word "prune" into
+the message it refuses with. The helper is general - it is what stops any verb
+running over two members at once - so the first other verb to reuse it refuses
+an operator in the name of a verb they did not run.
+
+About four lines across three call sites, plus the assertions that read the
+wording. Level 1: a wrong word in an operator message, with nothing depending on
+it today because nothing else uses the helper yet.
+
+## 27 - The decode stamp excludes the grammar but not the schema (OPEN)
+
+`UNSTAMPED_REQUEST_KEYS` at `backend/idhazh/llm/server.py:127` leaves `grammar`
+out of the decode digest and leaves `json_schema` in. A caller on the grammar
+route therefore stamps a digest with no grammar in it, and a caller on the
+schema route stamps its whole schema with no column beside it saying so.
+
+**The schema route is the summariser's**, so correcting the exclusions changes
+every summariser digest on every row written after the change - which is the
+reason it was left rather than fixed in passing. It is a persisted-contract
+change with a reset behind it, the same shape as the one the judge's record
+took on 2026-09-21 and recorded in
+`docs/reference/benchmarks/what-the-margin-rule-changes.md`.
+
+## 26 - The settlement-key check reads one constant twice, so it cannot see a key lose a cell (OPEN)
+
+`backend/tests/workflows/test_ledger_staging.py` checks that a store's writer
+and the settlement registry agree on the key a row is settled by. Both sides
+read the **same constant**, so the check compares a value with itself and passes
+whatever that value is.
+
+What it cannot catch is the failure it exists for: a key that loses a cell. Drop
+a column from the key and both sides drop it together, the check stays green,
+and two rows that differ only in the dropped cell start settling as one.
+
+**Every keyed store is exposed to this**, not just the one it was found on. The
+fix is for one side to be derived from something other than the constant - the
+committed header, or the contract's own field list.
+
+## 25 - `host_model` is a column nothing fills, and two rulings disagree (OPEN)
+
+`backend/idhazh/contracts/council_shard_outcome.py` declares `host_model`. No
+writer fills it.
+
+It is open rather than obvious because **two rulings point opposite ways and
+both are written down**. The contract's own argument is that a venue recording
+what a unit cost should say what ran it. The council row that files the outcome
+rejected recording the machine per shard, on the grounds that the digest
+pipeline already characterises the same runner pool and the probe wants 1.9 GiB
+on a job whose two processes already hold up to 9.02 GiB in 16 GB.
+
+Both cannot be right. A person settles which, and then the column is either
+filled or migrated out the way defect 24 describes.
+
+Found 2026-09-21, while the council's own record was being built.
 
 ## 24 - `failed_field` costs a cell on every row and answers nobody (OPEN)
 

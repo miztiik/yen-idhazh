@@ -95,4 +95,4 @@ reading over its own replies, not a property of the server.
 
 - [`../../architecture/summarize/model-boundary.md`](../../architecture/summarize/model-boundary.md) - why the layer hands back the raw window and computes no margin.
 - [`what-llama-server-reports-about-itself.md`](what-llama-server-reports-about-itself.md) - the other reading taken off `/props` and the server's own log.
-- [`../../../TODO/20260920-38-judge-verbs-and-telemetry-plan.md`](../../../TODO/20260920-38-judge-verbs-and-telemetry-plan.md) - row #11a decision 9, which asked for this, and row #11b, whose margin rule rests on it.
+- [`../../architecture/publishing/autotune-content-similarity.md`](../../architecture/publishing/autotune-content-similarity.md) - the margin rule that rests on this reading, and what it does with an unattributable token.
