@@ -57,7 +57,7 @@
         },
         {
           "id": "what-the-model-spends",
-          "panels": ["prompt-cache", "read-against-written", "counterfactual-cost"],
+          "panels": ["article-cost", "prompt-cache", "read-against-written", "counterfactual-cost"],
           "title": "What the model spends"
         }
       ],
