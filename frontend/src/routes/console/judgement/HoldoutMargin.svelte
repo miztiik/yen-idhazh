@@ -38,10 +38,12 @@
 		reachNote,
 		reachZone,
 		scoreRange,
+		scoredNote,
 		skipNote,
 		weightsNote,
 		type HoldoutMark,
 		type HoldoutSkip,
+		type ScoredHoldout,
 		type ScoreWeights
 	} from '$lib/console/holdout';
 
@@ -54,6 +56,7 @@
 		maxDownStep,
 		fitted,
 		weights,
+		scored,
 		height,
 		width
 	}: {
@@ -78,6 +81,10 @@
 		/** False where no day has fitted a line yet. */
 		fitted: boolean;
 		weights: ScoreWeights;
+		/** The last committed reading of the line against these marks, or null
+		 * where nobody has taken one. A person types the verb that writes it, so
+		 * null is an ordinary state and the panel says so. */
+		scored: ScoredHoldout | null;
 		height: number;
 		width: number;
 	} = $props();
@@ -438,6 +445,9 @@
 			{/if}
 		{/each}
 		<p class="under" data-holdout-weights>{weightsNote(weights)}</p>
+		<p class="under" data-holdout-scored={scored === null ? 'none' : scored.date}>
+			{scoredNote(scored)}
+		</p>
 		{#if skips !== null}
 			<p class="under" data-holdout-skips={skipped.length}>{skips}</p>
 		{/if}

@@ -349,7 +349,7 @@ def merge_embeddings(
     return current.model_copy(update={"vectors": {**previous.vectors, **current.vectors}})
 
 
-def _norm(vector: array[int]) -> float:
+def vector_norm(vector: array[int]) -> float:
     return math.sqrt(sum(value * value for value in vector)) or 1.0
 
 
@@ -520,7 +520,7 @@ def read_taxonomy_vectors(root: Path, taxonomy: Taxonomy) -> TaxonomyVectors | N
         taxonomy_digest=digest.hex(),
         encoder_ref=reference,
         vectors=stored,
-        norms=tuple(_norm(vector) for vector in stored),
+        norms=tuple(vector_norm(vector) for vector in stored),
     )
 
 
@@ -552,7 +552,7 @@ def nearest_label_cosines(
         return []
     found: list[float] = []
     for item_id, encoded in sorted(embeddings.vectors.items()):
-        raw = _vector_bytes(encoded, embeddings.dimensions)
+        raw = vector_bytes(encoded, embeddings.dimensions)
         if raw is None:
             LOG.warning(
                 "item %s stores a vector that is not %s bytes wide, so it is left out "
@@ -562,7 +562,7 @@ def nearest_label_cosines(
             )
             continue
         vector = array("b", raw)
-        length = _norm(vector)
+        length = vector_norm(vector)
         found.append(
             max(
                 cosine_int8(vector, label, left_norm=length, right_norm=label_norm)
@@ -772,7 +772,7 @@ def key_point_overlap(left: frozenset[str], right: frozenset[str]) -> float:
     return shared / (len(left) + len(right) - shared)
 
 
-def _key_point_words(item: DigestItem) -> frozenset[str]:
+def key_point_words(item: DigestItem) -> frozenset[str]:
     """One item's key points as a set of reduced words, computed once per day."""
     return frozenset(_reduce(" ".join(item.key_points)).split())
 
@@ -1092,7 +1092,7 @@ def _day_scoring(
         for item_id, encoded in block_vectors.vectors.items():
             if day_of.get(item_id, "missing") != date or item_id in vectors:
                 continue
-            raw = _vector_bytes(encoded, block_vectors.dimensions)
+            raw = vector_bytes(encoded, block_vectors.dimensions)
             if raw is None:
                 LOG.warning(
                     "item %s stores a vector that is not %s bytes wide, so it is not "
@@ -1102,13 +1102,13 @@ def _day_scoring(
                 )
                 continue
             vectors[item_id] = array("b", raw)
-            norms[item_id] = _norm(vectors[item_id])
+            norms[item_id] = vector_norm(vectors[item_id])
 
     return _DayScoring(
         vectors=vectors,
         norms=norms,
         keys=keys,
-        points={item_id: _key_point_words(by_id[item_id]) for item_id in vectors},
+        points={item_id: key_point_words(by_id[item_id]) for item_id in vectors},
         knobs=same_story or SameStoryConfig(),
         by_id=by_id,
         day_of=day_of,
@@ -1782,7 +1782,7 @@ def days_in_month(digest_root: Path, month: str) -> list[DigestDay]:
     return [DigestDay.from_json(path.read_text(encoding="utf-8")) for path in paths]
 
 
-def _vector_bytes(encoded: str, dimensions: int) -> bytes | None:
+def vector_bytes(encoded: str, dimensions: int) -> bytes | None:
     """The stored vector, or nothing when it is not the width this index names.
 
     A short vector is the one failure that must never be written: the offsets
@@ -1861,7 +1861,7 @@ def build_search_index(month: str, days: Sequence[DigestDay]) -> tuple[SearchInd
             offset: int | None = None
             encoded = block.vectors.get(item.item_id) if named and block is not None else None
             if encoded is not None:
-                raw = _vector_bytes(encoded, dimensions)
+                raw = vector_bytes(encoded, dimensions)
                 if raw is None:
                     LOG.warning(
                         "item %s on %s stores a vector this index cannot lay out at %s "

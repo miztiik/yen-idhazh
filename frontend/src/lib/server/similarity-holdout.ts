@@ -5,13 +5,19 @@
  * addresses were scored on, so the score is recomputed here, once, and the page
  * ships the answer. Nothing is scored in a browser.
  *
+ * **The four cells come off a committed row and are never counted here.**
+ * `python -m idhazh score-merge-line-holdout` writes how the line stood against
+ * the marks, so a reading survives the page that drew it and two of them can be
+ * held against each other weeks apart. What this file still derives is the
+ * per-pair score, which the panel draws as dots and no row carries.
+ *
  * **What it reads, and what bounds it.** One hand-typed file, plus one day
- * payload for each distinct date that file names. The bound is the length of
- * the holdout file rather than the archive: a published day nothing marks is
- * never opened, and another year of archive adds no read at all. The days it
- * does open are outside the window preset the rest of this route works to,
- * which is why the read has an entry of its own in
- * `docs/concepts/growing-reads.md`.
+ * payload for each distinct date that file names, plus the committed readings a
+ * window of days reaches. The bound is the length of the holdout file rather
+ * than the archive: a published day nothing marks is never opened, and another
+ * year of archive adds no read at all. The days it does open are outside the
+ * window preset the rest of this route works to, which is why the read has an
+ * entry of its own in `docs/concepts/growing-reads.md`.
  *
  * Nothing here is published. It sits under `$lib/server/` so SvelteKit refuses
  * to bundle it for a browser, the same place and for the same reason as
@@ -32,7 +38,7 @@ import {
 	type HoldoutSkip,
 	type ScoreWeights
 } from '../console/holdout';
-import { DIGEST_ROOT, readCsv, STATE_ROOT } from './payload';
+import { DIGEST_ROOT, LEDGER_WINDOW_DAYS, readCsv, readDayShards, STATE_ROOT } from './payload';
 
 /** Every mark the day tree could answer for, and every one it could not. */
 export interface HoldoutReading {
@@ -42,6 +48,26 @@ export interface HoldoutReading {
 	marked: number;
 	/** How many distinct published days were opened to answer it. */
 	daysOpened: number;
+}
+
+/** One committed reading of the line against the marks - the four cells and their line.
+ *
+ * `state/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>.csv` is
+ * one row a scoring run, written by `python -m idhazh score-merge-line-holdout`.
+ * The page reads it rather than counting the same cells again: two answers to
+ * one question is what the committed row exists to stop.
+ */
+export interface MergeLineHoldoutScore {
+	date: string;
+	runId: string;
+	appliedLine: number;
+	labeller: string;
+	mergedAndOneStory: number;
+	mergedAndTwoStories: number;
+	apartAndOneStory: number;
+	apartAndTwoStories: number;
+	pairsUnresolved: number;
+	labelledTwoStoryPairs: number;
 }
 
 /** The identity a holdout row and a published item are joined on.
@@ -172,4 +198,47 @@ export function holdoutReading(
 		});
 	}
 	return { marks, skipped, marked: table.rows.length, daysOpened: dates.size };
+}
+
+/** The newest committed reading of the line against the marks, or null for none.
+ *
+ * **Null is an ordinary state and the panel says so rather than erroring.** A
+ * person types the verb that writes these rows; nothing in the daily pipeline
+ * calls it, so a tree where nobody has run it yet has no row at all - and a
+ * window that reaches back past the newest row has none either.
+ *
+ * Bounded by the same window every other read on this route takes: the day files
+ * a span of days reaches and no more (Guardrail #12).
+ */
+export function mergeLineHoldoutScore(
+	days: number = LEDGER_WINDOW_DAYS,
+	root: string = STATE_ROOT
+): MergeLineHoldoutScore | null {
+	const table = readDayShards(
+		join(root, 'content-similarity-judge', 'merge-line-holdout-scores'),
+		days
+	);
+	let newest: MergeLineHoldoutScore | null = null;
+	for (const row of table.rows) {
+		const date = (row.date ?? '').trim();
+		const runId = (row.run_id ?? '').trim();
+		const line = Number(row.applied_line);
+		if (date === '' || runId === '' || !Number.isFinite(line)) continue;
+		// Date first, then run: two runs of one date both scored the line, and the
+		// later one read the later tree.
+		if (newest !== null && `${newest.date}${newest.runId}` >= `${date}${runId}`) continue;
+		newest = {
+			date,
+			runId,
+			appliedLine: line,
+			labeller: (row.labeller ?? '').trim(),
+			mergedAndOneStory: Number(row.merged_and_one_story ?? 0),
+			mergedAndTwoStories: Number(row.merged_and_two_stories ?? 0),
+			apartAndOneStory: Number(row.apart_and_one_story ?? 0),
+			apartAndTwoStories: Number(row.apart_and_two_stories ?? 0),
+			pairsUnresolved: Number(row.pairs_unresolved ?? 0),
+			labelledTwoStoryPairs: Number(row.labelled_two_story_pairs ?? 0)
+		};
+	}
+	return newest;
 }

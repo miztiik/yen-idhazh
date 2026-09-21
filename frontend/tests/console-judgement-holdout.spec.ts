@@ -10,6 +10,12 @@
  * they would look tidy, a mark the day tree cannot answer for counted with its
  * reason, and a panel that keeps its box at every width.
  *
+ * **Nothing has ever scored this tree's line against its marks**, because a
+ * person types the verb that writes that row and the canary build has no
+ * committed one. So this file owns the absent case; the four cells themselves
+ * are checked in `backend/tests/test_merge_line_holdout.py`, where a reading can
+ * be produced.
+ *
  * **`build_canary_day.py` writes four hand marks.** The day's own
  * highest-scoring pair marked apart, its lowest marked apart, a third marked as
  * one story, and one naming a date the tree holds no day for. All three scored
@@ -292,6 +298,24 @@ test.describe('the pairs a person marked apart', () => {
 		const weights = (await page.locator(`${PANEL} [data-holdout-weights]`).textContent()) ?? '';
 		expect(weights).toContain('on the cosine');
 		expect(weights).toContain('on the key points');
+	});
+
+	test('a tree nobody has scored says so rather than printing four zeros', async ({ page }) => {
+		// THE BITE. A person types the verb that writes the committed row, so this
+		// tree has none - and four zeros would read as a line that merged nothing
+		// rather than as a reading nobody has taken. The panel keeps drawing the
+		// margin either way, which is what says the two are different questions.
+		await open(page);
+
+		const scored = page.locator(`${PANEL} [data-holdout-scored]`);
+		await expect(scored).toHaveAttribute('data-holdout-scored', 'none');
+		const said = (await scored.textContent()) ?? '';
+		expect(said).toContain('has not been scored');
+		expect(said).toContain('score-merge-line-holdout');
+		expect(said).not.toContain('0 of the');
+		// A reader is not shown markdown.
+		expect(said).not.toContain('`');
+		await expect(page.locator(`${PANEL} [data-holdout-figure]`)).toBeVisible();
 	});
 
 	test('the panel names no ledger column', async ({ page }) => {

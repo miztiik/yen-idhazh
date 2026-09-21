@@ -17,6 +17,7 @@ import {
 	marginDistance,
 	pairScore,
 	reduceWords,
+	scoredNote,
 	skipNote,
 	weightsNote,
 	type HoldoutMark,
@@ -178,5 +179,58 @@ test('a mark the day tree cannot answer for is counted with its reason', () => {
 		{ leftTitle: 'one', rightTitle: 'two', reason: 'the day it names is no longer published' }
 	]);
 	expect(said).toContain('1 marked pair could not be checked');
+	expect(said).toContain('no longer published');
+});
+
+test('a tree nobody has scored says so, and never prints four zeros', () => {
+	// THE BITE. A person types the verb that writes the committed row, so a tree
+	// where nobody has run it has none. Four zeros would read as a line that
+	// merged nothing rather than as a reading nobody took.
+	const said = scoredNote(null);
+
+	expect(said).toContain('has not been scored');
+	expect(said).toContain('score-merge-line-holdout');
+	expect(said).not.toContain('0 of the');
+});
+
+test('the committed row is printed with the population each count came from', () => {
+	// A rate read without its denominator is the whole reason the row carries
+	// counts and no percentage: 196 of these 200 marks are on one side.
+	const said = scoredNote({
+		date: '2026-09-21',
+		appliedLine: 0.94,
+		labeller: 'claude-opus-4.6',
+		mergedAndOneStory: 79,
+		mergedAndTwoStories: 1,
+		apartAndOneStory: 117,
+		apartAndTwoStories: 3,
+		pairsUnresolved: 0,
+		labelledTwoStoryPairs: 4
+	});
+
+	expect(said).toContain('2026-09-21');
+	expect(said).toContain('0.9400');
+	expect(said).toContain('claude-opus-4.6');
+	expect(said).toContain('joined 1 of the 4 pairs marked as two stories');
+	expect(said).toContain('left 117 pairs marked as one story apart');
+	expect(said).not.toContain('could not be scored');
+});
+
+test('pairs the tree could not score are named rather than left out', () => {
+	// Silence here would make a comparison look complete at whatever size
+	// retention had left it.
+	const said = scoredNote({
+		date: '2026-09-21',
+		appliedLine: 0.94,
+		labeller: 'claude-opus-4.6',
+		mergedAndOneStory: 40,
+		mergedAndTwoStories: 1,
+		apartAndOneStory: 60,
+		apartAndTwoStories: 1,
+		pairsUnresolved: 98,
+		labelledTwoStoryPairs: 4
+	});
+
+	expect(said).toContain('98 could not be scored');
 	expect(said).toContain('no longer published');
 });

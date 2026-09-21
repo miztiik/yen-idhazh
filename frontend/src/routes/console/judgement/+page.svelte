@@ -150,6 +150,7 @@
 		maxDownStep={data.similarity.max_down_bins * data.similarity.bin_width}
 		fitted={data.lines.length > 0}
 		weights={data.holdout.weights}
+		scored={data.holdout.scored}
 		height={data.console.chart_height}
 		width={data.console.chart_width}
 	/>

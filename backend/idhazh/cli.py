@@ -81,6 +81,7 @@ from idhazh.stages import (
     qualify_decide,
     rebuild_score_index,
     record,
+    score_merge_line_holdout,
     site_weight,
     validate,
     validate_days,
@@ -145,6 +146,7 @@ STAGES: Final[tuple[str, ...]] = (
     "backfill-vectors",
     "site-weight",
     "validate-days",
+    "score-merge-line-holdout",
     "council-prepare",
     "council-settle",
     "council-shard",
@@ -302,6 +304,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             "name once in its planning job and hands it to every verb that writes a "
             "row, so a night's rows cannot arrive under two addresses. A digest run "
             "computes its own from --execution instead."
+        ),
+    )
+    parser.add_argument(
+        "--labeller",
+        default=None,
+        help=(
+            "Who marked the holdout, for score-merge-line-holdout. The same name "
+            "sample_sheet.py was given when it harvested the marks, because the row "
+            "records what a reading is worth and a mark is worth what its labeller is."
         ),
     )
     parser.add_argument(
@@ -551,6 +562,35 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
         state_dir = common.STATE_ROOT if args.state_root is None else args.state_root
         return validate_days.stage_validate_days(args.digest_root, args.day, state_dir=state_dir)
+
+    if args.stage == "score-merge-line-holdout":
+        # Above the fetcher for the reason validate-days is: it reads the marked
+        # file and the published days that file names, and starting a fetcher to
+        # do it would read every host's robots.txt for nothing.
+        #
+        # A person types this verb. Nothing schedules it, because the marked file
+        # changes when somebody labels more pairs and not when a day publishes.
+        if args.labeller is None:
+            parser.error(
+                "score-merge-line-holdout needs --labeller: the row records who marked "
+                "the holdout, and a reading nobody can attribute is a reading nobody "
+                "can argue with later"
+            )
+        if args.run_id is None:
+            parser.error(
+                "score-merge-line-holdout needs --run-id: the row says which run took "
+                "the reading, and a digest run's id would claim a machine and a clock "
+                "that scored nothing"
+            )
+        scored = score_merge_line_holdout.stage_score_merge_line_holdout(
+            args.date or _today(),
+            run_id=args.run_id,
+            labeller=args.labeller,
+            settings=settings,
+            state_dir=None if args.state_root is None else args.state_root,
+            digest_root=args.digest_root,
+        )
+        return 0 if scored is not None else 1
 
     if args.stage == "council-prepare":
         # Above the fetcher because picking the work is the council resolving its
