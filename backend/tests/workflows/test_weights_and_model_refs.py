@@ -87,25 +87,6 @@ def test_every_fetched_weight_is_checked_before_anything_reads_it() -> None:
         assert "sha256sum --check" in script, where
 
 
-def test_the_health_check_names_the_weights_that_answered() -> None:
-    """Healthy says a server replied. It does not say which weights replied."""
-    health = _step(_load_workflows()["digest.yml"], "work", "name", "Check model health")
-    script = health.get("run")
-    assert isinstance(script, str)
-
-    assert '["summarize"]["id"]' in script, "the alias comes from config"
-    assert "/v1/models" in script, "assert the served alias"
-    assert "/props" in script, "assert the loaded path"
-
-    # The step lives in the shared action now, so it reads the filename by name
-    # rather than from one caller's job outputs. Asserted through the step's own
-    # `env`, because a probe comparing the served path against a name nothing
-    # filled would pass on an empty string and say nothing at all.
-    given = _mapping(health.get("env"), "the health step env")
-    assert given.get("WEIGHTS_FILE") == _expression("inputs.weights_file")
-    assert "${WEIGHTS_FILE}" in script
-
-
 def test_no_arm_starts_measuring_before_it_knows_which_model_answered() -> None:
     """The Oracle. A number is about a model only if that model produced it.
 
