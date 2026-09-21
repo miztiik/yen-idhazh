@@ -35,6 +35,40 @@ the fold runs anyway and keeps every row the surviving legs produced. What it
 will not do is fold a day into the record with a leg missing, because the record
 counts what was looked at.
 
+## The clock a unit stops on, and the upload that runs either way
+
+**The venue owns both clocks, because the venue owns the runner.** The job
+timeout, the checkout, the install and the weights restore are all the council's
+and no tenant can see any of them, so `council.shard_timeout_minutes` and
+`council.shard_wrap_up_minutes` sit in the council's own config block. The
+second is the reserve: how much of the bound a unit keeps back for writing its
+records and getting its artifact away.
+
+**What crosses to a tenant is one instant, not two knobs.**
+[../../../backend/idhazh/council/deadline.py](../../../backend/idhazh/council/deadline.py)
+subtracts the reserve from the bound, adds it to the instant the unit's own
+process began, and hands the result over. A tenant handed an instant needs no
+config block and no config reader to stop on time, which is how a judge with
+neither can still be stopped - and how the clock is gated against a four-line
+fake instead of a model.
+
+The zero is the process rather than the job, because only the process knows when
+it began: the job's clock started before a checkout, an install and a weights
+restore that this reading is not about.
+
+**Nothing in the council checks the instant it handed over.** Only the tenant
+knows what a unit of work is and where stopping leaves a readable result, so the
+tenant reports which outcome it reached and the council files that answer rather
+than inferring one from its own clock. A tenant that ignores the instant is not
+stopped early - it is killed on the platform's clock instead, which is the case
+the reserve exists to avoid.
+
+**And the upload runs whatever happened to the unit.** It carries `always()`,
+because the exposure was never the collecting job dying - it is a unit dying.
+Without it a unit that spent most of `council.shard_timeout_minutes` and judged
+every pair it reached ships none of them, and tomorrow's run pays for that work
+a second time.
+
 ## Design rationale: named for the room, not for this month's job
 
 Owner ruling, 2026-09-18. The legs shard a list today and never confer, so

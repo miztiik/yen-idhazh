@@ -21,6 +21,7 @@ from utilities import shard_bound
 from ._harness import (
     _job,
     _load_workflows,
+    _normalize_condition,
     _script,
     _step,
     _steps,
@@ -48,6 +49,10 @@ COMMIT_ORDER: Final = (
     "state/story-similarity/score-distribution.json",
 )
 
+#: What a leg's judged rows travel in. Spelled once, so the test below names the
+#: step by what it ships rather than by where it sits in the job.
+VERDICTS_ARTIFACT: Final = "judge-verdicts-"
+
 
 def _judges() -> dict[str, object]:
     return _load_workflows()[FILENAME]
@@ -55,6 +60,16 @@ def _judges() -> dict[str, object]:
 
 def _named(job: str) -> list[str]:
     return [str(step.get("name") or step.get("uses") or "") for step in _steps(_judges(), job)]
+
+
+def _uploads(job: str, prefix: str) -> list[dict[str, object]]:
+    """Every step in `job` uploading an artifact whose name starts with `prefix`."""
+    found = []
+    for step in _steps(_judges(), job):
+        settings = step.get("with")
+        if isinstance(settings, dict) and str(settings.get("name", "")).startswith(prefix):
+            found.append(step)
+    return found
 
 
 def test_the_leg_reads_its_timeout_from_the_one_file_that_says_so() -> None:
@@ -201,6 +216,25 @@ def test_a_dead_leg_does_not_cancel_its_siblings() -> None:
     assert str(strategy["fail-fast"]).lower() == "false"
     assert fold["if"] == "always()"
     assert fold["needs"] == ["draw", "judge"]
+
+
+def test_a_leg_that_stops_early_still_ships_what_it_judged() -> None:
+    """The exposure was never the collecting job dying - it is a leg dying.
+
+    A leg that stops on its own clock, or is killed on the platform's, has
+    already judged every pair it reached. Without `always()` the upload is
+    skipped on the way out and those verdicts are lost after up to 79 minutes of
+    model time, so the night pays for them twice.
+    """
+    uploads = _uploads("judge", VERDICTS_ARTIFACT)
+
+    assert len(uploads) == 1, f"one {VERDICTS_ARTIFACT}* upload a leg, not {len(uploads)}"
+    guard = uploads[0].get("if")
+    assert guard is not None, (
+        "the verdicts upload carries no condition, so a leg that stopped early skips it "
+        "and every pair it judged goes in the bin"
+    )
+    assert _normalize_condition(guard, "the verdicts upload") == "always()"
 
 
 def test_no_leg_commits() -> None:
