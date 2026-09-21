@@ -87,7 +87,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 11 | Is the kernel taking the model's weights back | 5, 8, 9 | C | PENDING | - | - | - |
 | 12 | What one article costs the machine | 9 | C | PENDING | - | - | - |
 | 13 | Two panels leave the page | 9 | C | PENDING | - | - | - |
-| 14 | The memory board drops the disputed mark | 2, 9 | C | DONE | p37r14b | - | worker |
+| 14 | The memory board drops the disputed mark | 2, 9 | C | DONE | p37r14b | #998 | worker |
 | 15 | The shard board gains the clocks nobody reads | 9 | C | DONE | p37r15 | #987 | worker |
 | 16 | Machine cards gain uptime, clock speed, cache size and copy speed | 6, 9 | C | DONE | p37r16 | #988 | worker |
 | 19 | Which prompts get re-read, and how fast | 9 | C | PENDING | - | - | - |
