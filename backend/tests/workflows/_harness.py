@@ -967,6 +967,7 @@ EXPRESSION_VALUES: Final = {
     "needs.plan.outputs.date": SUBSTITUTED_DATE,
     "needs.plan.outputs.day_dir": SUBSTITUTED_DAY_DIR,
     "needs.plan.outputs.shards": SUBSTITUTED_SHARDS,
+    "needs.draw.outputs.date": SUBSTITUTED_DATE,
     "steps.decide.outputs.date": SUBSTITUTED_DATE,
     "github.sha": SUBSTITUTED_SHA,
     "matrix.shard": SUBSTITUTED_SHARD,
