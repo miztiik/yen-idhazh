@@ -86,6 +86,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21T01:00",
+            change="observability.host_fingerprint_bandwidth_cache_multiple, additive, default 2.",
+            why="The probe and the console grade a row by it, so it cannot be two numbers.",
+        ),
+        ChangelogEntry(
             version="2026-09-21",
             change="council block added; the judge's own block is now optional.",
             why="The venue's runner numbers cannot sit inside a tenant that need not exist.",
@@ -94,11 +99,6 @@ class AppConfig(Contract):
             version="2026-09-20T01:00",
             change="observability.host_fingerprint_bandwidth_mib renamed to ..._floor_mib.",
             why="The probe now derives its buffer from the cache, so the value is a floor.",
-        ),
-        ChangelogEntry(
-            version="2026-09-20",
-            change="observability.runtime_counters_scrape, removed with the store it governed.",
-            why="The four cells a reader wants are on the host row, from the same scrape.",
         ),
         ChangelogEntry(
             version="2026-09-19T09:00",

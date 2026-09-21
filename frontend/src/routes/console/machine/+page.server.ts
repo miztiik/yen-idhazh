@@ -354,6 +354,9 @@ export async function load() {
 		watchedFlags: flagNames,
 		colourStops: console_.machine_colour_stops,
 		recording: observability.host_fingerprint,
+		// The margin the probe sized its own buffer with, so a row this build grades
+		// is graded by the rule that wrote it rather than by a second copy of it.
+		cacheMargin: observability.host_fingerprint_bandwidth_cache_multiple,
 		ramp,
 		keys,
 		// A snapshot like the panels around it, so the loss is this run's own day
