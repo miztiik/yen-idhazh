@@ -113,7 +113,7 @@ That sentence is worth nothing unless it is checkable, so it is five conditions 
 | 5 | The council's own shard-outcome record | 4 | F | DONE | - | 992 | worker |
 | 6 | The content-similarity judge's own metrics | 5 | G | DONE | - | 995 | worker |
 | 7 | The content-similarity judge's merge-line benchmark record | 5 | G | DONE | - | 995 | worker |
-| 8 | The pair row gains the stamp, and the store is rewritten | - | G | PENDING | - | - | - |
+| 8 | The pair row gains the stamp, and the store is rewritten | - | G | DONE | - | 999 | worker |
 | 1b | The judge stops safely and flushes as it goes | 1a | H | DONE | - | 997 | worker |
 | 10 | The judge's own bound reads a measured number | 9 | H | DONE | - | 997 | worker |
 | 11a | The model layer offers both spans and says what it decoded | - | I | DONE | - | 989 | worker |

@@ -80,4 +80,25 @@ export interface StorySimilarityPair {
 
 	/** Wall clock for both calls on this pair. A per-pair reading, so a day's spread is readable off the day file; the leg bound is sized off its own run instead. */
 	decode_seconds?: number | null;
+
+	/** Which instrument produced the verdict on this row. One member, because one judge writes this store and no other - so the column is narrowed here, where a closed set can be closed honestly. */
+	judge_id?: 'content-similarity-judge';
+
+	/** The sampler temperature both calls ran at, as the number it was set to. An operator reading a row needs the value, not a digest of it. */
+	judge_temperature?: number | null;
+
+	/** sha256 of the canonical JSON of every key the caller posted that is not excluded. Taken from the payload rather than from config, because a digest built off config cannot see a payload-builder defect. The prompt is excluded because it differs every row and would make this a pair id; the grammar and the model reference are excluded because each has a column here already. */
+	decode_digest?: string | null;
+
+	/** Whether BOTH calls of this pair opened inside the grammar. The grain here is a pair, so one call that came back outside it makes this false. Empty until a judge has read the pair: a pair nothing decoded is a different fact from a decode the grammar did not hold. */
+	grammar_applied?: boolean | null;
+
+	/** What the decoder said it could have written at the first generated position of the FILE-ORDER call, named so because a pair makes two calls and a singular column must say which. `first_token_margin` is the gap this window's top two leave, so the window is what lets that number be re-derived rather than trusted. */
+	first_token_probabilities?: string | null;
+
+	/** How many reasoning spans the file-order call decoded before its answer - 0 for a cold answer, 1 under a thinking envelope. A column of its own because `decode_digest` cannot see the envelope: the only posted key a thinking envelope moves is the prompt, and the prompt is excluded. Without this cell a margin taken after reasoning and one taken cold are one population. */
+	thinking_spans?: number | null;
+
+	/** The run that READ this pair, which `run_id` beside it does not say: that one names the digest run that published the day, so two judging runs over one date write the identical string there. It is in the settlement key, so a re-judged pair lands beside the row it replaces instead of being dropped as a repeat. Empty on every row written before this column existed. */
+	judged_by_run_id?: string | null;
 }
