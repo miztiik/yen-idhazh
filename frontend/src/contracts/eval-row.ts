@@ -72,7 +72,7 @@ export interface EvalRow {
 
 	summary_word_count: number;
 
-	/** Null on every row written after 2026-09-12. The stamp stopped being a gate and stopped keying the eval window, so no writer fills it. The field and its ledger column survive here alone, because the console reads this column for every day before model-work.ts RECORDED_INPUTS_FROM and it is the only source of the model-change boundaries drawn over those days. Remove it, and the column from state/scores/, once no shard the widest console window can reach holds a row dated before that constant. */
+	/** Null on every row written after 2026-09-12. The stamp stopped being a gate and stopped keying the eval window, so no writer fills it. The field and its ledger column survive here alone, because the console reads this column to draw the model-change boundaries on every day whose identity is a digest rather than a named input manifest, and it is the only source of them. Remove it, and the column from state/scores/, once no score row the widest console window can reach carries one. */
 	pipeline_fingerprint?: string | null;
 
 	output_digest: string;

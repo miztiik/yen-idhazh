@@ -23,8 +23,8 @@ FINGERPRINT_SURVIVORS: Final[dict[str, str]] = {
     ),
     "backend/idhazh/contracts/eval_row.py": (
         "the one field that survives the drop, because the console reads its "
-        "state/scores/ column for every day before RECORDED_INPUTS_FROM - the "
-        "condition that removes it is on the line that declares it"
+        "state/scores/ column for every day that recorded its identity that way - "
+        "the condition that removes it is on the line that declares it"
     ),
     "frontend/src/contracts/eval-row.ts": (
         "generated from the field above, so it goes when that field goes and "
@@ -35,13 +35,10 @@ FINGERPRINT_SURVIVORS: Final[dict[str, str]] = {
     "backend/idhazh/contracts/label_row.py": "a changelog entry, which is history",
     "backend/idhazh/contracts/qualification.py": "a changelog entry, which is history",
     "backend/idhazh/contracts/summary.py": "a changelog entry, which is history",
-    "frontend/src/lib/console/settings-moved.ts": (
-        "where RECORDED_INPUTS_FROM is declared, and a date that splits two stores "
-        "has to name the one it is splitting away from"
-    ),
     "frontend/src/lib/server/model-work.ts": (
-        "the dated historical branch, which reads the months committed before "
-        "2026-09-12 and retires on the condition written beside RECORDED_INPUTS_FROM"
+        "the arm that reads a day whose identity is a digest, and the precedence "
+        "that lets a manifest beside one win. It retires on the condition written "
+        "beside the field itself, which is about the rows and not about a date"
     ),
     "frontend/src/lib/console/eval-instruments.ts": (
         "the ledger column's own note, which says why no panel draws it"
