@@ -106,6 +106,42 @@ The number is that judge's reading, so the check is that judge's too. Until
 in the import closure of every module that reads config - the council's own
 included. Owner ruling, 2026-09-21.
 
+### What holds the seam open, and the three shapes that still cross
+
+The council runs one judge or many - in sequence, in parallel, or chained - and
+depends on none of them. That is a claim about the import graph, so it is
+checked rather than reviewed. Three arms, each failing on a different mistake.
+
+| The arm | Where | What it refuses |
+| --- | --- | --- |
+| directory | [../../../backend/tests/contracts/test_repo_structure.py](../../../backend/tests/contracts/test_repo_structure.py) | any statement in `backend/idhazh/council/` naming the judge's package, its four stage modules or any judge contract |
+| closure | [../../../backend/tests/council/test_council_runs_without_a_judge.py](../../../backend/tests/council/test_council_runs_without_a_judge.py) | a judge module reached at import time from any council module, by any route |
+| run | the same file | a night that cannot be driven end to end against tenants the test wrote |
+
+**The directory arm alone would have proved nothing.** Both couplings that
+really existed lived outside that directory: the command router imported four of
+the judge's stage modules, and the composed application config imported the
+judge's knob block. A check scoped to one directory reads green over both.
+
+**Three judge CONTRACTS still cross, and the list cannot grow.** Measured by a
+fresh walk on 2026-09-21: `story_similarity_pair` and
+`fitted_similarity_threshold` arrive through
+[../../../backend/idhazh/ledger.py](../../../backend/idhazh/ledger.py), the one
+registry of CSV rows and the module the tenancy protocol reads its row types
+from; `story_similarity_distribution` arrives through the placement knob block
+`app_config` composes, which the registry loads to ask a tenant whether it can
+finish the night. **No judge CODE is on that list and none may join it** - these
+are declarations a deleted judge would take with it, which is what makes the
+exception survivable. The owner agreed those three on 2026-09-21, and a second
+assertion fails the moment a fourth appears, so the exception limits itself
+rather than inviting the next one. Cutting either carrier means moving a shape
+every stage and the digest pipeline read, and that is a row of its own.
+
+**The empty case is the test.** With nobody registered the union is empty, the
+plan names tonight and every job is a no-op - and every one of those steps still
+runs and is still asserted. A venue that only works once somebody has moved in is
+not a venue.
+
 ## Tonight, and the older nights it repairs
 
 A night judges **tonight, plus the older nights its tenants say they are behind
@@ -405,6 +441,36 @@ them unreachable.
 
 The tenant's own slug is a directory level inside each upload, so two tenants'
 first unit land beside each other rather than on top of each other.
+
+### Design rationale: the upload, and what would make a commit the better answer
+
+**The pinned checkout is the whole reason, and it cannot be edited away.** A
+commit is the obvious alternative and it is not a preference the design turned
+down - it does not work. Every `actions/checkout` in this workflow names no
+ref, so each job reads the tree as it stood when the run was triggered. The
+collecting job decides whether every unit reported by counting what it
+downloaded, and it is reading a tree from 22:00; a row a unit pushed at 22:40
+is not in that tree, so the count would say a unit went missing while its rows
+sat on `main`. `test_no_shard_commits` is what holds this shut, and it reads the
+shell closure of the judging job rather than its `run:` bodies - the model block
+is a composite action now, and a commit call issued from there or from a script
+that action runs is a commit call all the same.
+
+**It is not about a merge conflict.** The council used to argue this as many
+writers racing into one union-merged day file. That premise died on 2026-09-19
+when `merge=union` left the judged-pairs store, and quoting it today invites a
+reader to retire the guard along with it. The conflict that segments exist to
+solve - more than one job committing into one ledger file - is priced in
+[its own rationale below](#design-rationale-the-councils-own-path-not-the-segment-store),
+and the council has one committing writer either way.
+
+**What would change the answer**, as a condition rather than a preference: a
+checkout here naming a ref, so a later job could see commits made during the
+same run. Nothing needs that today, and taking it costs the property the pinned
+checkout buys - every job of one night reads one tree, so two units cannot
+disagree about what the repository contained. The cheaper triggers are the
+artifact's own limits: an output too large to upload, or one that must outlive
+the three nights these uploads keep.
 
 ## The venue keeps its own record of every unit it ran
 

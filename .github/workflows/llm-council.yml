@@ -332,15 +332,11 @@ jobs:
             --shard ${{ matrix.shard }} \
             --shards ${{ matrix.shards }}
 
-      # The unit commits nothing. Many units each committing into one
-      # union-merged day file would buy many pushes that can each lose a race
-      # against a digest run, many rebases, and a unit that dies after pushing
-      # half its rows. One settle is one push.
-      #
-      # An artifact rather than a commit, and the reason is that a commit would
-      # not reach the reader: every checkout here names no ref, so each job is
-      # pinned to the commit the run was triggered at and a row pushed at 22:40
-      # is invisible to a job checked out at 22:00.
+      # The unit commits nothing, and an artifact is the only way its rows get
+      # across. Every checkout here names no ref, so each job is pinned to the
+      # commit the run was triggered at: a row pushed at 22:40 is invisible to
+      # the collecting job, which checked out at 22:00 and decides whether every
+      # unit reported by counting what it downloaded. One settle is one push.
       #
       # `always()`, because the exposure was never the collecting job dying - it
       # is a unit dying. A unit that stopped on its own clock, or was killed on

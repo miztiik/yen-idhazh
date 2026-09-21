@@ -53,6 +53,62 @@ def test_contracts_import_no_other_subpackage() -> None:
                     pytest.fail(f"{module.name} imports {name}")
 
 
+#: What a council module may not name: the judge's own package, the four stage
+#: modules that judge owns, and every persisted shape a judge declares. Spelled
+#: one by one rather than by a shared prefix, because a stage is named for the
+#: work it does rather than for whose loop it is in.
+JUDGE_SURFACE = (
+    "idhazh.similarity",
+    "idhazh.stages.count_verdicts",
+    "idhazh.stages.judge_item_pairs",
+    "idhazh.stages.pick_item_pairs",
+    "idhazh.stages.set_merge_line",
+    "idhazh.contracts.content_similarity_judge_metrics",
+    "idhazh.contracts.fitted_similarity_threshold",
+    "idhazh.contracts.judge_call",
+    "idhazh.contracts.merge_line_holdout_score",
+    "idhazh.contracts.similarity_holdout_pair",
+    "idhazh.contracts.story_similarity_distribution",
+    "idhazh.contracts.story_similarity_pair",
+)
+
+
+def test_a_council_module_names_no_judge() -> None:
+    """The council runs a judge and depends on none, and this is the narrow half.
+
+    Every import statement in the package, wherever it sits - a function body and
+    a `TYPE_CHECKING` block included, because the council's own code may not name
+    a judge even where the name would never be loaded.
+
+    The wide half is `backend/tests/council/test_council_runs_without_a_judge.py`,
+    which walks what these modules reach through somebody else's. A check scoped
+    to this directory only ever proves something about this directory, and both
+    couplings that used to exist lived outside it.
+    """
+    package = REPO_ROOT / "backend" / "idhazh" / "council"
+    modules = sorted(package.glob("*.py"))
+    offenders: list[str] = []
+
+    assert modules, "the council package has no modules, so this would pass on nothing"
+    for module in modules:
+        tree = ast.parse(read_text(module), filename=str(module))
+        for node in ast.walk(tree):
+            names: list[str] = []
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names = [f"{node.module}.{alias.name}" for alias in node.names] + [node.module]
+            for name in names:
+                if any(name == j or name.startswith(f"{j}.") for j in JUDGE_SURFACE):
+                    offenders.append(f"{module.name} imports {name}")
+
+    assert not offenders, (
+        "the council's own package names a judge. A judge is reached only through "
+        "the protocol in council/tenancy.py, registered from config:\n"
+        + "\n".join(offenders)
+    )
+
+
 @pytest.mark.parametrize(
     "path",
     sorted(SCHEMAS_DIR.glob("*.json")) + sorted(CONFIG_DIR.glob("*.json")) + fixture_paths(),
