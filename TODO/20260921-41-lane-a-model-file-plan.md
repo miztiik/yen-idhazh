@@ -19,7 +19,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner, one worktree per pull requ
 | Hands to plan 42 as well | Plan 39 row 3's workflow half is plan 42 row 4, and it adds no key to the model file. Plan 39 row 5 (`<role>.runtime`) sits in plan 40 row 1, so nothing in this plan waits on it. The two log-format assertions at `backend/tests/workflows/test_model_server_jobs.py:446` and `:487` belong to plan 42 row 6, not to row 1 here. |
 | ESCALATE triggers | (1) Row 7 moves the turn-marker boundary check from configuration load to server start. It must still run in every process that decodes, before the first article, and refuse identically. If it cannot, stop - that is Guardrail #11's control, and only its position moves. (2) Row 5 retypes `ModelRef.inference`, which all 34 committed `run.json` files embed; the run manifest's version stamp and changelog line ship in the same commit or the row stops. (3) Row 3 deletes `ModelRef.draft`, which 6 committed run records carry; the read-side line ships in the same commit or the row stops. (4) Rows 2 and 4 remove columns from committed ledgers; each uses that ledger's retired-cell mechanism, and where none exists the row builds one rather than rewriting committed data by hand. (5) `MODELS_FILE_PATTERN` must survive byte-identical. (6) Row 6 amends `CLAUDE.md`; it lands inside pull request A, never after. (7) Any row that would raise a runner budget figure (Guardrail #2). |
 | Chosen strategy | Two pull requests, split at the prompt path. A carries everything that cannot change a rendered prompt. B carries the markers, which is the only change here that can, so a moved prompt has exactly one candidate cause. Fowler rules the contracts, Carmack the runtime, Andre the decode surface. |
-| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 1.` |
+| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 1.` **Two preconditions before any dispatch, both from `docs/reference/agent-notes/shell-and-tools.md:121-129`, and this plan has already been stopped once by ignoring them.** First, prove delegation works with one real read-only nested invocation - the refusal is silent, not an error. Second, every brief says: commit before any long gate, and leave the full suite to CI. And read section 1c before selecting a row. |
 
 ### Hard scope - out
 
@@ -66,13 +66,45 @@ Seven rows, two pull requests. Read this before the tables.
 
 | # | Row title | PR | Depends-on | Parallel-group | Status | Worktree | PR link | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The server-log reader goes | A | - | A | PENDING | - | - | - |
-| 2 | The decode stamp and the dead fingerprint go | A | 1 | A | PENDING | - | - | - |
-| 3 | The draft head becomes a companion file | A | 2 | A | PENDING | - | - | - |
-| 4 | Both decode caps go | A | 3 | A | PENDING | - | - | - |
-| 5 | The model file carries llama-server's own flags | A | 4 | A | PENDING | - | - | - |
-| 6 | The engineering contract catches up | A | 5 | A | PENDING | - | - | - |
-| 7 | The markers are derived at server start | B | 6 | B | PENDING | - | - | - |
+| 1 | The server-log reader goes | A | - | A | IN-FLIGHT - committed, unshipped | `p41c` -> `p41a` | - | - |
+| 2 | The decode stamp and the dead fingerprint go | A | 1 | A | IN-FLIGHT - committed, unshipped | `p41a` | - | - |
+| 3 | The draft head becomes a companion file | A | 2 | A | **REDO** - the commit that exists deletes it | `p41c` | - | - |
+| 4 | Both decode caps go | A | 3 | A | IN-FLIGHT - committed, unshipped | `p41c` | - | - |
+| 5 | The model file carries llama-server's own flags | A | 4 | A | **REDO** - written against a superseded C1 | `p41a` | - | - |
+| 6 | The engineering contract catches up | A | 5 | A | IN-FLIGHT - uncommitted, 7 files | `p41a` | - | - |
+| 7 | The markers are derived at server start | B | 6 | B | IN-FLIGHT - uncommitted, 43 files | `p41b` | - | - |
+
+## Section 1c - Adopt before dispatch. This plan has already been run once
+
+**Do not dispatch a row until this section is resolved.** An interrupted run left work in three checkouts, none of it pushed, no pull request open, and until 2026-09-21 the table above said every row was `PENDING`. Re-dispatching a row throws its edits away (`docs/reference/agent-notes/shell-and-tools.md:127`).
+
+### What exists, measured 2026-09-21
+
+| Branch, in its worktree | Commits not on `main` | State |
+| --- | --- | --- |
+| `feat/the-draft-head-and-the-decode-caps-go` in `p41c` | `f0671283` rows 3, `ffcdf024` row 4 | clean |
+| `feat/the-model-file-stops-being-a-type` in `p41a` | the two above by merge, plus `d1ecf859` row 1, `57697961` row 2, `5a837759` row 5 | **7 uncommitted files** - row 6, half done |
+| `feat/the-markers-come-from-the-model` in `p41b` | the five above | **43 uncommitted files** including a deleted `contracts/knobs/turns.py` - row 7, half done |
+
+All three are **33 commits behind `origin/main`**, and a dry merge reports **16 files changed on both sides**. Together the commits are 158 files, +3,151 / -4,841.
+
+### Two of the five committed rows are now wrong, and this is the part that must not be lost
+
+| Commit | Why it cannot be rebased as it stands |
+| --- | --- |
+| `f0671283` **Retire the draft head from the model shape** | Row 3 was rewritten on 2026-09-21 to **relocate rather than delete**. `config/models/gemma-4-e4b-qat.json:5-15` declares a multi-token-prediction head the model's publisher ships, and `docs/reference/benchmarks/what-the-draft-head-is-worth.md` measures it. **Rebasing this commit silently destroys a live capability**, and nothing red would say so |
+| `5a837759` **Carry llama-server's own flags in the model file** | Row 5 was written against a C1 that had no `companion_files` block and no `flag` bridge. Both arrived on 2026-09-21 |
+
+Rows 1, 2 and 4 are untouched by that reversal and their commits stand.
+
+### Why it ended this way, so the next dispatch does not repeat it
+
+`docs/reference/agent-notes/shell-and-tools.md:121-129` already records both halves, and neither was read before dispatch:
+
+- **A worker cannot delegate until the harness allows it, and the refusal is silent rather than an error.** `chat.subagents.allowInvocationsFromSubagents` must be enabled, every delegating agent needs `agent` in its `tools` list, and one real read-only nested invocation must be verified before relying on it.
+- **A worker that starts a long gate returns one useless line and leaves its work uncommitted.** The nested turn ends while the suite still runs, so the report is empty and no pull request exists - which reads exactly like a worker that did nothing. The note records three workers on one plan ending this way. **Ask the worktree before concluding anything**: `git -C <worktree> status --porcelain`.
+
+**The fix belongs in the brief, not in the tool: a worker commits before any long gate, and leaves the full browser project to CI.** That line is now in the Execution row of section 0.
 
 ### The two pull requests
 
