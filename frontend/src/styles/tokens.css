@@ -86,6 +86,11 @@
 	--chart-grid: #1f2632;
 	--chart-axis: #5c6a7e;
 	--chart-marker: #cbd5e1;
+	/* The rule where the summarizing pipeline changed. Its own token because it
+	   marks an event rather than a value: --chart-marker is a target a series is
+	   read against, and the furniture tokens above are the things a reader is
+	   meant to look past. */
+	--chart-change: #f0a868;
 	--chart-readout-bg: rgba(230, 237, 245, 0.95);
 	--chart-readout-text: #0b0e14;
 
@@ -235,6 +240,7 @@
 	--chart-grid: #e6eaf3;
 	--chart-axis: #98a2b3;
 	--chart-marker: #344054;
+	--chart-change: #a35200;
 	--chart-readout-bg: rgba(16, 24, 40, 0.92);
 	--chart-readout-text: #f9fafb;
 

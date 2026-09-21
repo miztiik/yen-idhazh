@@ -2,12 +2,20 @@ import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import { modelRuleRow, modelRuleTitle, modelRules, MODEL_RULE_ROW } from '../src/lib/charts/frame';
+import {
+	modelRuleRow,
+	modelRuleTitle,
+	modelRules,
+	MODEL_RULE_LABEL,
+	MODEL_RULE_ROW
+} from '../src/lib/charts/frame';
 import {
 	namesMoved,
+	namesMovedShort,
 	settingsByDate,
 	settingsMoved,
 	unreadRuleNote,
+	NAMES_SHOWN,
 	SETTING_WORDS
 } from '../src/lib/console/settings-moved';
 
@@ -209,5 +217,43 @@ test.describe('the words, against the contract', () => {
 		expect(namesMoved(['the prompt'])).toBe('the prompt');
 		expect(namesMoved(['the prompt', 'the context size'])).toBe('the prompt and the context size');
 		expect(namesMoved(['a', 'b', 'c'])).toBe('a, b and c');
+	});
+
+	test('a strip row names three settings and then counts the rest', () => {
+		// Up to the cap it is the same sentence, so a short day reads identically
+		// in the row and in the hover.
+		expect(namesMovedShort(['a', 'b', 'c'])).toBe(namesMoved(['a', 'b', 'c']));
+		// Past it the count is kept rather than dropped. Three names and no number
+		// cannot tell a day that moved three settings from one that moved seven.
+		expect(namesMovedShort(['a', 'b', 'c', 'd'])).toBe('a, b, c and 1 more');
+		expect(namesMovedShort(['a', 'b', 'c', 'd', 'e', 'f', 'g'])).toBe('a, b, c and 4 more');
+	});
+
+	test('the hover keeps every name the row had to cut', () => {
+		const seven = [
+			'the prompt',
+			'the context size',
+			'the weights',
+			'the runtime build',
+			'the batch size',
+			'the thread count',
+			'the output schema'
+		];
+		const full = modelRuleTitle('2026-09-17', namesMoved(seven));
+		// The title opens the sentence, so the first name is capitalised there.
+		// What matters is the four the row had no line for.
+		for (const name of seven.slice(NAMES_SHOWN)) expect(full).toContain(name);
+		// The row keeps the first three and the count. The four it dropped are
+		// still one hover away, so nothing is lost - only moved off one line.
+		const row = modelRuleRow(namesMovedShort(seven)).value;
+		expect(row).toContain('and 4 more');
+		expect(row).not.toContain('the output schema');
+	});
+
+	test('the rule carries its own words on the plot', () => {
+		// A rule a reader has to hover to identify is a rule most readers never
+		// identify, so the label is plain English and names no subsystem.
+		expect(MODEL_RULE_LABEL).toBe('setup changed');
+		expect(MODEL_RULE_LABEL).not.toMatch(/pipeline|fingerprint|manifest|inputs/i);
 	});
 });

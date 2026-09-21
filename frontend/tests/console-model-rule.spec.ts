@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import { modelRules } from '../src/lib/charts/frame';
@@ -43,17 +44,11 @@ function canaryScores(): Record<string, string>[] {
 }
 
 /**
- * The boundary dates, derived here rather than imported.
+ * The boundary dates from the score ledger's stamp alone.
  *
- * The rule, stated in `docs/architecture/publishing/frontend.md`: a day is a
- * boundary when it ran an identity the previous recorded day did not run. This
- * is a second implementation of it on purpose - a check that calls the code it
- * is checking only proves the code is deterministic.
- *
- * It reads the score ledger's stamp, so it speaks only for days a run recorded
- * that way. That is the same half of the split the function under test reads
- * from a stamped row, and a day recorded as a named manifest is invisible to
- * both.
+ * A second implementation of the digest fallback, used to cross-check the
+ * against rows this test wrote. A check that calls the code it is checking only
+ * proves the code is deterministic.
  */
 function boundariesFrom(rows: Record<string, string>[]): string[] {
 	const seen = new Map<string, string[]>();
@@ -71,6 +66,70 @@ function boundariesFrom(rows: Record<string, string>[]): string[] {
 	return found;
 }
 
+/**
+ * The boundary dates on the canary, derived here rather than imported.
+ *
+ * The rule, stated in `docs/architecture/publishing/console-charts.md`: a day
+ * is a boundary when it ran an identity the previous recorded day did not run,
+ * and two days recorded different ways are never compared. This is a second
+ * implementation of it on purpose - a check that calls the code it is checking
+ * only proves the code is deterministic.
+ *
+ * Both records, because the canary carries both. The manifest wins on a
+ * day that holds each, which is the same precedence the page applies: a record
+ * that names a field beats one that can only say a field moved.
+ */
+function canaryBoundaries(): string[] {
+	const kind = new Map<string, 'stamp' | 'manifest'>();
+	const held = new Map<string, string[]>();
+	const keep = (date: string, mark: 'stamp' | 'manifest', value: string) => {
+		const had = kind.get(date);
+		if (had === 'manifest' && mark === 'stamp') return;
+		if (had !== mark) {
+			kind.set(date, mark);
+			held.set(date, [value]);
+			return;
+		}
+		held.set(date, [...(held.get(date) ?? []), value]);
+	};
+
+	for (const row of canaryScores()) {
+		if (!row.date || !row.pipeline_fingerprint) continue;
+		keep(row.date, 'stamp', row.pipeline_fingerprint);
+	}
+	for (const [date, inputs] of canaryManifests()) keep(date, 'manifest', inputs);
+
+	const dates = [...kind.keys()].sort();
+	const found: string[] = [];
+	for (let at = 1; at < dates.length; at += 1) {
+		if (kind.get(dates[at]) !== kind.get(dates[at - 1])) continue;
+		const before = held.get(dates[at - 1]) ?? [];
+		const now = held.get(dates[at]) ?? [];
+		if (now.some((one) => !before.includes(one))) found.push(dates[at]);
+	}
+	return found;
+}
+
+/** Each canary day's recorded input manifest, as one comparable string. */
+function canaryManifests(): [string, string][] {
+	const root = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'digest');
+	const out: [string, string][] = [];
+	for (const year of readdirSync(root)) {
+		for (const month of readdirSync(join(root, year))) {
+			for (const day of readdirSync(join(root, year, month))) {
+				const file = join(root, year, month, day, 'run.json');
+				if (!existsSync(file)) continue;
+				const manifest = JSON.parse(readFileSync(file, 'utf8'));
+				for (const run of manifest.runs ?? []) {
+					if (!run.inputs) continue;
+					out.push([`${year}-${month}-${day}`, JSON.stringify(run.inputs)]);
+				}
+			}
+		}
+	}
+	return out;
+}
+
 const ROUTES = ['/console/', '/console/model/', '/console/machine/', '/console/voices/'];
 
 interface Declared {
@@ -81,6 +140,8 @@ interface Declared {
 	from: string;
 	to: string;
 	lines: string[];
+	/** What the chart says about a change on a day it drew no column for. */
+	unread: string;
 	empty: number;
 }
 
@@ -107,6 +168,12 @@ async function declaredOn(page: Page, route: string): Promise<Declared[]> {
 					lines: [...node.querySelectorAll('[data-model-rule-line]')].map(
 						(line) => line.getAttribute('data-model-rule-line') ?? ''
 					),
+					unread:
+						name === ''
+							? ''
+							: [...document.querySelectorAll(`[data-model-rule-unread="${name}"]`)]
+									.map((one) => one.textContent ?? '')
+									.join(' '),
 					empty:
 						name === ''
 							? 0
@@ -288,8 +355,9 @@ test.describe('the rule, on the built console', () => {
 	test('a chart that draws the rule draws one per boundary inside its own span', async ({
 		page
 	}) => {
-		const boundaries = boundariesFrom(canaryScores());
+		const boundaries = canaryBoundaries();
 		let drawing = 0;
+		const drawn = new Set<string>();
 		for (const route of ROUTES) {
 			for (const chart of await declaredOn(page, route)) {
 				if (chart.rule !== 'yes') continue;
@@ -300,19 +368,39 @@ test.describe('the rule, on the built console', () => {
 				// Strictly inside: the oldest drawn day has nothing to its left, so a
 				// change on it separates nothing and is not drawn.
 				const inside = boundaries.filter((date) => date > chart.from && date <= chart.to);
-				expect(
-					chart.lines.sort(),
-					`${at}: rules drawn between ${chart.from} and ${chart.to}`
-				).toEqual(inside.sort());
+				// Never a rule the record does not carry, and never one outside the
+				// span the chart declared.
+				for (const line of chart.lines) {
+					expect(
+						inside,
+						`${at}: drew a rule on ${line}, which is not a boundary it covers`
+					).toContain(line);
+					drawn.add(line);
+				}
+				// A chart draws its own columns, not the window's days. Where a change
+				// falls on a day it measured nothing for, it names that day in words
+				// instead - which is the state a missing line cannot express.
+				for (const date of inside) {
+					if (chart.lines.includes(date)) continue;
+					expect(
+						chart.unread,
+						`${at}: ${date} is a boundary in its span, and it neither drew it nor said it could not`
+					).toContain(date);
+				}
 			}
 		}
 		expect(drawing, 'no chart on the console draws the rule at all').toBeGreaterThan(0);
+		// The positive case, which a digest could never provide: the canary
+		// records an input manifest and moves four settings on one mid-window day,
+		// so at least one chart has a real rule to draw rather than an empty state.
+		expect(boundaries.length, 'the canary carries no pipeline change to draw').toBeGreaterThan(0);
+		expect([...drawn], 'no chart drew the change the canary records').not.toEqual([]);
 	});
 
 	test('a chart that draws no rule in its span says so, rather than being blank', async ({
 		page
 	}) => {
-		const boundaries = boundariesFrom(canaryScores());
+		const boundaries = canaryBoundaries();
 		for (const route of ROUTES) {
 			for (const chart of await declaredOn(page, route)) {
 				if (chart.rule !== 'yes') continue;
@@ -367,7 +455,7 @@ test.describe('the rule, on the built console', () => {
 		// steps the days with an arrow key meets it without a pointer. Stepping
 		// every column and counting is what stops the line being a constant: a row
 		// printed on every column would say the pipeline changed every day.
-		const boundaries = boundariesFrom(canaryScores());
+		const boundaries = canaryBoundaries();
 		await page.goto('/console/');
 		const chart = page.locator('[data-model-rule-name="timings"]');
 		await expect(chart).toHaveCount(1);
