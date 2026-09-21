@@ -187,13 +187,13 @@ It is paid for by `RunRecord.inputs.prompt_sha256`, which digests both turns
 stamp, and `prose_changed_alone` still has something to compare. Ruled by
 Fowler, 2026-09-13.
 
-**The same split is why `turns.declared_for` is optional where
-`inference.declared_for` is not.** A person writing an entry always knows which
-weights the markers were recorded against, so config load refuses a mismatch.
-But a field that were required here would have to be present in every payload
-embedding the recorded shape - and no run written before 2026-09-14 carries an
-envelope at all. Optional is what lets today's build read yesterday's run; the
-refusal that matters lives on the declared shape, where somebody can act on it.
+**The same split is why the recorded shape carries no markers at all.** A run
+written before 2026-09-14 carries no envelope, so a field required there would
+stop today's build reading yesterday's run. Since 2026-09-21 there is nothing to
+require either way: six of the eight markers are read off the model's own
+template at server start and written nowhere, and the two that cannot be -
+`thinking_close` and `thinking_kwarg` - sit on the entry under the one
+`declared_for` pin, where somebody can act on the refusal.
 
 The envelope reached the entry on 2026-09-13. Before that it was one global
 file, `backend/idhazh/prompts/turn_markers.json`, with no model key - so a
@@ -529,15 +529,15 @@ rather than a second download, and refuses the run when the two disagree. That
 is the one case where the digest, the alias and the filename all agree and only
 the words get worse - a repackaged GGUF under a familiar name.
 
-**Both declared blocks name the weights they were set for, and load refuses a
-mismatch.** `inference.declared_for` and `turns.declared_for` each hold the
-entry's own `sha256`. The failure this stops is five strings edited in place -
-repo, file, revision, digest and id - with the blocks underneath them untouched,
+**The entry names the weights it was set for, and load refuses a mismatch.**
+`declared_for` holds the entry's own `sha256`. The failure this stops is five
+strings edited in place - repo, file, revision, digest and id - with the settings
+underneath them untouched,
 which used to raise nothing and then stand a server up on numbers derived for
 weights it never opened. It is not hypothetical: the summarizer moved from the
-8B to the 9B on 2026-08-27 and the settings block did not move with it. The two
-blocks fail differently on purpose - re-derive the numbers, or re-record the
-markers off the server that applies them.
+8B to the 9B on 2026-08-27 and the settings block did not move with it. The
+markers need no such pin since 2026-09-21, because the server derives them from
+the template the weights themselves carry.
 
 **This page describes the boundary rather than tracking work**, so it changes
 when the shape changes. [Swap the Summarizer
