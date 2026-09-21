@@ -62,6 +62,7 @@ from idhazh.contracts.feed_health import (
     RobotsOutcome,
     derive_endpoint_key,
 )
+from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.item_health import FailureCode as ItemFailureCode
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage, TimeSource
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
@@ -746,6 +747,55 @@ def _site_bytes(date: str) -> int:
     return SITE_BYTES_FIRST_DAY + max(0, elapsed) * SITE_BYTES_PER_DAY
 
 
+def _digest(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+#: The canary day the summarizing pipeline changed on.
+#:
+#: Mid-window on purpose. A change on the first day drawn is at the edge of the
+#: span rather than inside it, so `modelRules` draws nothing for it and the
+#: fixture would prove only that the code does not crash.
+PIPELINE_CHANGED_ON = (calendar_date.fromisoformat(DATE) - timedelta(days=9)).isoformat()
+
+
+def _inputs(date: str) -> PipelineInputs:
+    """The recorded input manifest for a canary run, before or after the change.
+
+    The stamp arm cannot produce this case at all: an opaque digest says a day
+    differs from the one before it and stops there, so a fixture built on it can
+    never exercise the sentence that names what moved. Four settings move at
+    once here, and four is deliberate - it is over the three the readout prints
+    by name, so the fixture also carries the "and one more" case rather than
+    only the short one.
+
+    Every run of one day carries the same manifest, the way a day that did not
+    change mid-morning does. The console compares the set a date holds against
+    the set the date before it held, so a manifest that varied per run inside
+    one day would draw a rule nothing in the fixture stands for.
+    """
+    after = date >= PIPELINE_CHANGED_ON
+    return PipelineInputs(
+        model_sha256=_digest("canary.gguf"),
+        quantisation="Q4_K_M",
+        runtime_build="canary-b0000",
+        chat_template_sha256=_digest("canary chat template " + ("2" if after else "1")),
+        prompt_sha256=_digest("canary prompt " + ("2" if after else "1")),
+        turn_markers_sha256=_digest("canary turn markers"),
+        output_schema_sha256=_digest("canary output schema"),
+        truncation_cap_tokens=4096,
+        sampling="temperature=0;top_k=1;top_p=1;seed=0",
+        runtime_flags="flash_attn=1;kv_type=f16" + (";rope_scaling=linear" if after else ""),
+        n_ctx=16384 if after else 8192,
+        n_batch=512,
+        n_ubatch=128,
+        n_threads=4,
+        runner_class="canary",
+        extractor_version="canary-1",
+        sanitizer_version="canary-1",
+    )
+
+
 def _record(
     date: str,
     n: int,
@@ -769,6 +819,7 @@ def _record(
         status=status,
         commit_sha=FIXTURE_SHA,
         runner="canary",
+        inputs=_inputs(date),
         models=[
             ModelUse(
                 role=ModelRole.SUMMARIZE,

@@ -447,6 +447,22 @@ written on the line that declares the field. What retiring it costs: the nine
 boundaries the digest arm finds come off the chart, and an operator who wants
 them reads the CSV.
 
+**The trigger is a question about rows, so a person asks the rows.**
+`backend/utilities/fingerprint_column_due.py` reads the score day-shards inside
+`console.max_window_days` and prints `due`, how many days still carry a stamp
+and the date the newest one leaves the window. It is an operator surface and
+never a collected test: a test over `state/scores/` would go red because a run
+appended to it, and no reviewer could see that coming (CLAUDE.md section 13).
+The read is bounded by the config window rather than by the archive, so it costs
+the same when the ledger is ten times the size (Guardrail #12).
+
+**That date is 2027-09-13, not the end of 2026.** Measured 2026-09-21: the
+newest stamped day is 2026-09-12 and the widest console window is 366 days, so
+the arm is load-bearing for another year. An earlier estimate of December 2026
+had assumed a 90-day window and was wrong by nine months. The number is not
+written down anywhere - the utility derives it from the rows each time it is
+asked, so it cannot rot.
+
 **This was a hardcoded date until 2026-09-21** - `RECORDED_INPUTS_FROM =
 '2026-09-12'`, with three gates hanging off it. It was a day early. The last
 stamped day is 2026-09-12 and the first day carrying a manifest is 2026-09-13,
@@ -458,6 +474,40 @@ digest arm and six out of the manifest arm. So the recovered day cost nothing
 and the two rules agree everywhere else. **No committed day carries both
 records**, so the precedence above is held by the tests rather than by the
 archive.
+
+## How the rule is drawn
+
+**The rule says what it marks without being pointed at.** It is dashed `3 3`,
+`1.5` wide, in `--chart-change` - its own token in both themes - and it carries
+the words `setup changed` at the top of the line. Every one of those is a
+correction made 2026-09-21. Before it, the rule was a 1-pixel hairline in
+`--color-text-tertiary`, the same ink as the y-tick labels, the day ticks, the
+day-axis text and the hover guide, and it said nothing at all until a reader
+happened to hover it. A finding nobody can see has not been reported, and this
+is the one marker on the console whose whole job is to tell a reader that a
+comparison across it is not like-for-like.
+
+The token is its own rather than borrowed from `--chart-marker` because the two
+mean different things: `--chart-marker` is a target a series is read against,
+and this is an event that happened. Borrowing it would put the context limit and
+a model swap in one ink.
+
+**The strip row names three settings and then counts.** Seventeen inputs can
+move on one day, and `namesMovedShort` in `frontend/src/lib/console/settings-moved.ts`
+cuts the list at three plus `and N more`, because a strip row is one line and a
+fourth name is what pushes it onto a second. The count is kept rather than
+dropped - three names and no number cannot tell a day that moved three settings
+from one that moved seven, and 2026-09-15 is a real day that moved seven. The
+hover keeps every name, so nothing is lost; it is moved off one line.
+
+**The canary carries a day the pipeline changed on.** `build_canary_day.py`
+writes a recorded input manifest onto every canary run and moves four settings
+at once on one mid-window day, so the browser suite has a positive case rather
+than only the empty state. Four is over the cap on purpose, so the fixture
+carries the counted form as well as the short one. Mid-window because a change
+on the first day drawn sits at the edge of the span and `modelRules` correctly
+draws nothing for it. The stamp arm could never have provided this case: an
+opaque digest says a day differs and stops there.
 
 **The record is now the branch that draws, and both branches are live.**
 Re-counted 2026-09-21 over the committed archive: **22 of 122 run entries carry
