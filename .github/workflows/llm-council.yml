@@ -299,7 +299,7 @@ jobs:
       # `always()`, because the exposure was never the collecting job dying - it
       # is a leg dying. A leg that stops on its own clock, or is killed on the
       # platform's, has still judged every pair it reached, and without this
-      # those verdicts go in the bin after up to 79 minutes of model time.
+      # those verdicts go in the bin however much of the bound they cost.
       - if: always()
         uses: actions/upload-artifact@v7
         with:

@@ -64,10 +64,10 @@ stopped early - it is killed on the platform's clock instead, which is the case
 the reserve exists to avoid.
 
 **And the upload runs whatever happened to the unit.** It carries `always()`,
-because the exposure was never the collecting job dying - it is a unit dying,
-which without this ships nothing after up to 79 minutes of model time. A unit
-stopped on either clock has judged every pair it reached, and those verdicts are
-the night's work.
+because the exposure was never the collecting job dying - it is a unit dying.
+Without it a unit that spent most of `council.shard_timeout_minutes` and judged
+every pair it reached ships none of them, and tomorrow's run pays for that work
+a second time.
 
 ## Design rationale: named for the room, not for this month's job
 
