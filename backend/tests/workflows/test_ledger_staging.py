@@ -90,9 +90,6 @@ STORE_MODULES: Final = (ledger, traces)
 # a commit step may be staging for nothing.
 STORES_NOTHING_FILLS_YET: Final[Mapping[str, str]] = MappingProxyType(
     {
-        "state/content-similarity-judge/merge-line-holdout-scores": (
-            "the step that scores the applied merge line against the hand-marked holdout"
-        ),
         "state/content-similarity-judge/metrics": (
             "the council's shipping capability, which this derivation cannot see: it "
             "renders a tenant's row rather than calling a ledger writer"
@@ -100,10 +97,35 @@ STORES_NOTHING_FILLS_YET: Final[Mapping[str, str]] = MappingProxyType(
         "state/content-similarity-judge/archive": (
             "the fold, on the day a stamp under the record moves"
         ),
+    }
+)
+
+# A store no run ever fills, and who does. These are the operator's files: a
+# person runs the verb, reads what it wrote, and commits it from their own
+# checkout. No job stages them because no job writes them, which is a different
+# answer from the list above rather than a softer one - waiting for a filler is
+# temporary, and this is the design.
+#
+# It is a list rather than a rule for the same reason: a store that stops having a
+# writing job fails this file instead of joining it unnoticed.
+STORES_NO_RUN_FILLS: Final[Mapping[str, str]] = MappingProxyType(
+    {
         "state/content-similarity-judge/holdout-pairs.csv": (
-            "a person, and no run ever - the file is typed by hand"
+            "a person, typing the marks, or the labelling loop in "
+            "backend/utilities/sample_sheet.py harvesting them back"
+        ),
+        "state/content-similarity-judge/merge-line-holdout-scores": (
+            "a person, running `python -m idhazh score-merge-line-holdout`. The marked "
+            "file changes when somebody labels more pairs rather than when a day "
+            "publishes, so nothing in the daily pipeline calls it and no job stages it"
         ),
     }
+)
+
+# Both lists excuse a store from needing a writer this derivation can follow, so
+# every assertion that subtracts one subtracts the other.
+STORES_NO_JOB_WRITES: Final = frozenset(STORES_NOTHING_FILLS_YET) | frozenset(
+    STORES_NO_RUN_FILLS
 )
 
 # A module a verb used to reach and now reaches only through a tenant the council
@@ -527,25 +549,26 @@ def test_every_store_is_filled_by_a_writer_this_test_can_follow() -> None:
         f"{sinks.__name__} declares no sink class that takes a path, so the sink half of "
         "the derivation matches nothing and a store written by one is checked by nobody."
     )
-    unknown = sorted(set(STORES_NOTHING_FILLS_YET) - set(stores.values()))
+    unknown = sorted(STORES_NO_JOB_WRITES - set(stores.values()))
     assert not unknown, (
         f"{', '.join(unknown)} is excused from needing a writer and no store module "
         "declares a path helper for it, so the excuse covers nothing. Delete the entry "
-        "from STORES_NOTHING_FILLS_YET."
+        "from STORES_NOTHING_FILLS_YET or STORES_NO_RUN_FILLS."
     )
-    landed = sorted(set(STORES_NOTHING_FILLS_YET) & written)
+    landed = sorted(STORES_NO_JOB_WRITES & written)
     assert not landed, (
         f"{', '.join(landed)} now has a public writer and is still excused from having "
-        "one. Delete the entry from STORES_NOTHING_FILLS_YET, so the store is held to "
-        "the staging and settlement checks below from its first row."
+        "one. Delete the entry from STORES_NOTHING_FILLS_YET or STORES_NO_RUN_FILLS, so "
+        "the store is held to the staging and settlement checks below from its first row."
     )
-    unwritten = sorted(set(stores.values()) - written - set(STORES_NOTHING_FILLS_YET))
+    unwritten = sorted(set(stores.values()) - written - STORES_NO_JOB_WRITES)
     assert not unwritten, (
         f"{', '.join(unwritten)} has a path helper and nothing public fills it. Either the "
         "writer is private - make it public, so the staging test can see it - or the "
         "helper is dead and a commit step is staging a directory nothing fills. A helper "
         "that is deliberately ahead of its writer (Guardrail #3) goes in "
-        "STORES_NOTHING_FILLS_YET, named with what will fill it."
+        "STORES_NOTHING_FILLS_YET, named with what will fill it; a store only a person "
+        "ever fills goes in STORES_NO_RUN_FILLS, named with who fills it."
     )
 
     called = {
@@ -690,10 +713,10 @@ def test_every_ledger_that_declares_a_key_is_registered_for_settlement() -> None
     than named: see `_rewritten_stores`.
 
     A store registered before its writer exists is the second exception, and that one
-    is named rather than derived: `STORES_NOTHING_FILLS_YET`. Registering the key with
-    the shape rather than with its first writer is what makes the settlement true from
-    the first row instead of from the second, which is the position
-    `state/feed-retirements.csv` was in on 2026-09-02.
+    is named rather than derived: `STORES_NOTHING_FILLS_YET` and `STORES_NO_RUN_FILLS`.
+    Registering the key with the shape rather than with its first writer is what makes
+    the settlement true from the first row instead of from the second, which is the
+    position `state/feed-retirements.csv` was in on 2026-09-02.
 
     `keyed_paths` is asked for one named date, so it returns that day's cover instead
     of globbing the tree, and this test reads no committed file.
@@ -718,9 +741,7 @@ def test_every_ledger_that_declares_a_key_is_registered_for_settlement() -> None
         "dropped. Add it to keyed_paths() in backend/idhazh/ledger.py."
     )
 
-    keyless = sorted(
-        set(registered) - set(declared) - _rewritten_stores() - set(STORES_NOTHING_FILLS_YET)
-    )
+    keyless = sorted(set(registered) - set(declared) - _rewritten_stores() - STORES_NO_JOB_WRITES)
     assert not keyless, (
         f"{', '.join(keyless)} is registered for settlement, its writer appends rows, and "
         "that writer names no key - so the settler has a key the writer does not use. Name "

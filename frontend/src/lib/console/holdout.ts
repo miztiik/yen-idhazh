@@ -327,6 +327,50 @@ export function weightsNote(weights: ScoreWeights): string {
 		: `${under}, the weights on the newest fitted day, ${weights.fittedOn}.`;
 }
 
+/** The four cells of a committed reading, and the line they were counted at. */
+export interface ScoredHoldout {
+	date: string;
+	appliedLine: number;
+	labeller: string;
+	mergedAndOneStory: number;
+	mergedAndTwoStories: number;
+	apartAndOneStory: number;
+	apartAndTwoStories: number;
+	pairsUnresolved: number;
+	labelledTwoStoryPairs: number;
+}
+
+/** What the last scoring run found, in one sentence, or that none has run.
+ *
+ * **The counts are read off a committed row and never counted here.** The panel
+ * above derives a per-pair score because no row carries one; these four numbers
+ * do have a row, and deriving them a second time would be two answers to one
+ * question.
+ *
+ * Null is an ordinary state. A person types the verb that writes the row, so a
+ * tree where nobody has run it says so rather than printing four zeros - which
+ * would read as a line that merged nothing.
+ */
+export function scoredNote(scored: ScoredHoldout | null): string {
+	if (scored === null) {
+		return (
+			'The line has not been scored against these marks. ' +
+			'`idhazh score-merge-line-holdout` is what writes that reading down.'
+		);
+	}
+	const wrong = scored.mergedAndTwoStories;
+	const missed = scored.apartAndOneStory;
+	const unresolved =
+		scored.pairsUnresolved === 0
+			? ''
+			: ` ${scored.pairsUnresolved} could not be scored: the day they name is no longer published.`;
+	return (
+		`Scored on ${scored.date} at a line of ${scored.appliedLine.toFixed(4)}, against marks by ` +
+		`${scored.labeller}. It joined ${wrong} of the ${scored.labelledTwoStoryPairs} pairs marked ` +
+		`as two stories, and left ${missed} pairs marked as one story apart.${unresolved}`
+	);
+}
+
 /** What one more day of legal fall would do, in one sentence.
  *
  * The figure on its own says how much room there is. It does not say how fast

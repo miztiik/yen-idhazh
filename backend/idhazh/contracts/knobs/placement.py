@@ -46,7 +46,25 @@ _WEIGHTS_TOLERANCE: Final = 1e-9
 #: config value and a frozen subtraction goes stale the moment either side moves.
 #: Today that gap is -0.0007: the line sits BELOW the highest two-story mark, so
 #: there is no headroom for a downward step to protect.
+#:
+#: **One declaration, and one instrument that retakes it** (Guardrail #10).
+#: `idhazh score-merge-line-holdout` scores every marked pair on its way to the
+#: four cells, so it already holds this reading and prints it beside this line
+#: whenever the two disagree. It prints rather than stores: a second copy on a
+#: committed row is the second source this constant is not allowed to have.
 HOLDOUT_TWO_STORY_MAX: Final = 0.9407
+
+#: How much of the marked set has to be scorable before the four cells are worth
+#: reading, as a share of the marked rows. Retention deletes published days the
+#: holdout still names, so a run can find no vectors for most of the pairs and
+#: still produce four cells that add up - and four small cells look like a good
+#: line rather than a vanished comparison.
+#:
+#: **A constant rather than a knob, on purpose.** It says what makes the reading
+#: mean anything, and a number that can be tuned down is a number somebody tunes
+#: down on the morning the reading goes red. It sits beside the two-story maximum
+#: because both are properties of the marked file rather than of the pipeline.
+HOLDOUT_RESOLVED_SHARE_MIN: Final = 0.5
 
 #: Wall clock for one judge call at 764 read tokens, in seconds. Derived from the
 #: repository's own reading of 9.85 tokens a second - median over 4,117 timed

@@ -312,7 +312,7 @@ def built_vectors(*sources: list[float]) -> assemble.TaxonomyVectors:
         taxonomy_digest=digest,
         encoder_ref=embed.ENCODER_REF,
         vectors=stored,
-        norms=tuple(assemble._norm(one) for one in stored),
+        norms=tuple(assemble.vector_norm(one) for one in stored),
     )
 
 
