@@ -762,7 +762,7 @@ PIPELINE_CHANGED_ON = (calendar_date.fromisoformat(DATE) - timedelta(days=9)).is
 def _inputs(date: str) -> PipelineInputs:
     """The recorded input manifest for a canary run, before or after the change.
 
-    The stamp arm cannot produce this case at all: an opaque digest says a day
+    A digest cannot produce this case at all: an opaque token says a day
     differs from the one before it and stops there, so a fixture built on it can
     never exercise the sentence that names what moved. Four settings move at
     once here, and four is deliberate - it is over the three the readout prints

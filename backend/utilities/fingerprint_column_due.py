@@ -36,7 +36,7 @@ def _stamped_rows(shard: Path) -> int:
 
     A shard written after the cutover still has the column; what it does not
     have is a value in it. An empty string is not a stamp, and counting the
-    column instead of its contents would report the arm as load-bearing forever.
+    column instead of its contents would report the fallback as load-bearing forever.
     """
     with shard.open(encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
@@ -78,7 +78,7 @@ def main(argv: list[str] | None = None) -> int:
 
     newest = max(stamped_days) if stamped_days else None
     # The window walks backwards from today, so a stamped day leaves the window
-    # `window` days after it was written. That is the earliest the arm can go.
+    # `window` days after it was written. That is the earliest the fallback can go.
     clear_on = (date.fromisoformat(newest) + timedelta(days=window)).isoformat() if newest else None
 
     print(f"due={'true' if not stamped_days else 'false'}")

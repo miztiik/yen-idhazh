@@ -21,6 +21,8 @@ import pytest
 
 from utilities.fingerprint_column_due import main
 
+pytestmark = pytest.mark.contract
+
 HEADER = "date,run_id,pipeline_fingerprint\n"
 
 
@@ -86,7 +88,7 @@ def test_the_column_goes_once_the_stamped_days_fall_out_of_the_window(
 
 def test_an_empty_column_is_not_a_stamp(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     # Every shard written after the cutover still has the column. Counting the
-    # column instead of its contents would report the arm load-bearing forever.
+    # column instead of its contents would report the fallback load-bearing forever.
     state = _ledger(tmp_path / "state", {"2026-09-14": "", "2026-09-15": "   "})
     config = _config(tmp_path / "config", 366)
 

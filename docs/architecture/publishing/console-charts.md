@@ -441,10 +441,10 @@ two shapes always compare unequal, so an overlap would invent a boundary.
 **Two days recorded different ways are never a boundary**, because the store
 changed there and the pipeline need not have. A day carrying both is a day
 something replayed, and the manifest wins - a record that can name a field beats
-one that can only say a field moved. The digest arm retires once no score row
+one that can only say a field moved. The digest fallback retires once no score row
 the widest console window can reach carries one, and the removal condition is
 written on the line that declares the field. What retiring it costs: the nine
-boundaries the digest arm finds come off the chart, and an operator who wants
+boundaries the digest fallback finds come off the chart, and an operator who wants
 them reads the CSV.
 
 **The trigger is a question about rows, so a person asks the rows.**
@@ -458,7 +458,7 @@ the same when the ledger is ten times the size (Guardrail #12).
 
 **That date is 2027-09-13, not the end of 2026.** Measured 2026-09-21: the
 newest stamped day is 2026-09-12 and the widest console window is 366 days, so
-the arm is load-bearing for another year. An earlier estimate of December 2026
+the fallback is load-bearing for another year. An earlier estimate of December 2026
 had assumed a 90-day window and was wrong by nine months. The number is not
 written down anywhere - the utility derives it from the rows each time it is
 asked, so it cannot rot.
@@ -470,7 +470,7 @@ so 2026-09-12 was invisible to the chart and the seam cost two comparisons
 rather than the one its own comment claimed. Measured 2026-09-21 on a developer
 machine over the committed archive: the record split compares **30 dates against
 the date rule's 29** and finds the **same 15 boundaries** - nine out of the
-digest arm and six out of the manifest arm. So the recovered day cost nothing
+digest fallback and six out of the manifests. So the recovered day cost nothing
 and the two rules agree everywhere else. **No committed day carries both
 records**, so the precedence above is held by the tests rather than by the
 archive.
@@ -506,7 +506,7 @@ at once on one mid-window day, so the browser suite has a positive case rather
 than only the empty state. Four is over the cap on purpose, so the fixture
 carries the counted form as well as the short one. Mid-window because a change
 on the first day drawn sits at the edge of the span and `modelRules` correctly
-draws nothing for it. The stamp arm could never have provided this case: an
+draws nothing for it. A digest could never have provided this case: an
 opaque digest says a day differs and stops there.
 
 **The record is now the branch that draws, and both branches are live.**
@@ -517,7 +517,7 @@ and 2026-09-15 moved seven settings at once: the article extractor, the context
 size, the prompt, the sampling settings, the sanitizer, the truncation cap and
 the turn markers. One of the eight days, 2026-09-20, recorded a manifest and
 moved nothing, which is the state that tells a reader the instrument was
-working. The digest arm still draws every day whose score rows carry a stamp,
+working. The digest fallback still draws every day whose score rows carry a stamp,
 and the commit that dropped `pipeline_fingerprint` from nine contracts left it
 on `EvalRow` - which is `state/scores/`, the file `payload.ts` reads at build
 time and hands to this module - rather than on the published projection of that

@@ -46,7 +46,7 @@ function canaryScores(): Record<string, string>[] {
 /**
  * The boundary dates from the score ledger's stamp alone.
  *
- * A second implementation of the stamp arm, used to cross-check the arithmetic
+ * A second implementation of the digest fallback, used to cross-check the
  * against rows this test wrote. A check that calls the code it is checking only
  * proves the code is deterministic.
  */
@@ -75,7 +75,7 @@ function boundariesFrom(rows: Record<string, string>[]): string[] {
  * implementation of it on purpose - a check that calls the code it is checking
  * only proves the code is deterministic.
  *
- * Both arms, because the canary carries both records. The manifest wins on a
+ * Both records, because the canary carries both. The manifest wins on a
  * day that holds each, which is the same precedence the page applies: a record
  * that names a field beats one that can only say a field moved.
  */
@@ -390,7 +390,7 @@ test.describe('the rule, on the built console', () => {
 			}
 		}
 		expect(drawing, 'no chart on the console draws the rule at all').toBeGreaterThan(0);
-		// The positive case, which the stamp arm could never provide: the canary
+		// The positive case, which a digest could never provide: the canary
 		// records an input manifest and moves four settings on one mid-window day,
 		// so at least one chart has a real rule to draw rather than an empty state.
 		expect(boundaries.length, 'the canary carries no pipeline change to draw').toBeGreaterThan(0);
