@@ -39,15 +39,20 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 | [20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md) | 21 | 0 | 7 | 4 |
 | [20260921-40-bonsai-probe-plan.md](20260921-40-bonsai-probe-plan.md) | 7 | 0 | 7 | 4 |
-| [20260921-41-lane-a-model-file-plan.md](20260921-41-lane-a-model-file-plan.md) | 7 | 0 | 7 | 1 |
+| [20260921-41-lane-a-model-file-plan.md](20260921-41-lane-a-model-file-plan.md) | 7 | 0 | 7 | 0 |
 | [20260921-42-lane-b-workflows-plan.md](20260921-42-lane-b-workflows-plan.md) | 11 | 0 | 11 | 2 |
 
-## In flight - 0
+## In flight - 5
 
-Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
-dispatches a row, so an empty table here and a busy worktree disagree.
+| Row | Plan | Group | Title | Worktree |
+| --- | --- | --- | --- | --- |
+| #1 | 41 | A | The server-log reader goes | `p41c` -> `p41a` |
+| #2 | 41 | A | The decode stamp and the dead fingerprint go | `p41a` |
+| #4 | 41 | A | Both decode caps go | `p41c` |
+| #6 | 41 | A | The engineering contract catches up | `p41a` |
+| #7 | 41 | B | The markers are derived at server start | `p41b` |
 
-## Ready now - 48
+## Ready now - 47
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -100,11 +105,10 @@ section 3 is where it is answered.
 | #2 | 40 | A | The test workflow takes named addresses | - |
 | #5 | 40 | A | The eight telemetry steps move across | - |
 | #6 | 40 | A | A trial state root, and what the run keeps | - |
-| #1 | 41 | A | The server-log reader goes | - |
 | #1 | 42 | M | The runner stops paying for a graphics card it does not have | - |
 | #3 | 42 | A | The capability probe goes | - |
 
-## Waiting on another row - 93
+## Waiting on another row - 89
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -186,12 +190,8 @@ section 3 is where it is answered.
 | #3 | 40 | B | One plan job, so a fan-out agrees what it is reading | 2 is PENDING |
 | #4 | 40 | C | The fan-out | 3 is PENDING |
 | #7 | 40 | D | One dispatch, and the readings written up | 1 is PENDING; 4 is PENDING; 5 is PENDING; 6 is PENDING |
-| #2 | 41 | A | The decode stamp and the dead fingerprint go | 1 is PENDING |
-| #3 | 41 | A | The draft head becomes a companion file | 2 is PENDING |
-| #4 | 41 | A | Both decode caps go | 3 is PENDING |
-| #5 | 41 | A | The model file carries llama-server's own flags | 4 is PENDING |
-| #6 | 41 | A | The engineering contract catches up | 5 is PENDING |
-| #7 | 41 | B | The markers are derived at server start | 6 is PENDING |
+| #3 | 41 | A | The draft head becomes a companion file | 2 is IN-FLIGHT |
+| #5 | 41 | A | The model file carries llama-server's own flags | 4 is IN-FLIGHT |
 | #2 | 42 | M | The plan job closes the clock it opens | 1 is PENDING |
 | #4 | 42 | A | The image benchmark goes | 3 is PENDING |
 | #5 | 42 | B | Five checks move into the thing they check | 2 is PENDING; 4 is PENDING |
