@@ -95,7 +95,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 21 | What the context window actually costs | 9 | C | DONE | p37r21 | #991 | worker |
 | 22 | Dotted rules where a setting moved | 9, 21 | C | DONE | p37r22 | #1006 | worker |
 | 17 | Every published column names its reader | 5, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22 | D | DONE | p37r17 | #1017 | worker |
-| 18 | Docs, the living-page corrections, and the orphan sweep | all | E | IN REVIEW | p37r18 | #1018 | worker |
+| 18 | Docs, the living-page corrections, and the orphan sweep | all | E | DONE | p37r18 | #1018 | worker |
 
 **Rows are listed in dispatch order, not numeric order.** A row number records when it was written; the `Depends-on` column records when it runs.
 
