@@ -1,16 +1,24 @@
 <script lang="ts">
-	/** How near the runner's ceiling a run got - item, shard, and over the window.
+	/** How close one article came to using up the machine's memory.
 	 *
-	 * **One measurement, three grains, one panel.** The run's high-water mark used
-	 * to be drawn twice: once as per-shard bars and once again as prose in the
-	 * panel about what the server did outside the model call. The item's own
-	 * high-water mark was drawn nowhere, and on the committed ledger one item took
-	 * the model server to 83.1 percent of the runner's 16 GiB. A per-shard maximum
-	 * is the verdict reading and hides the item that owns it, so the two questions
-	 * are one panel with a grain switch rather than two panels and a paragraph.
+	 * **The lead is the within-item floor of what the kernel had left.** A
+	 * per-shard maximum cannot answer this: one item can take the machine to its
+	 * floor while the shard it sits in reads as a normal shard. `MemAvailable` is
+	 * also the only figure here that answers the question the panel is for -
+	 * whether a bigger model fits - because a resident-set mark says what a
+	 * process held and not what was still free.
 	 *
-	 * **This is a break panel.** It takes the extreme and the individual that owns
-	 * it, and it covers every item of one run.
+	 * **The model server's own high-water mark is not drawn here.** It is
+	 * `VmHWM`, which covers the server's whole life rather than this item, and it
+	 * reads lower than an earlier item's whenever the kernel reclaims a page. The
+	 * column stays in the ledger; the panel says why it is off the page rather
+	 * than drawing it under a caveat, because a caveat under a mark does not stop
+	 * the mark being read.
+	 *
+	 * **The end-of-item process readings are brackets, never tracks.** They run
+	 * to the larger of themselves and they overlap on purpose. A resident-set
+	 * figure drawn against the machine's total reads as a budget, and a reader
+	 * cannot add two brackets that visibly overlap.
 	 *
 	 * **Machine load is the second series and not a second panel.** A one-minute
 	 * load of 5.49 on four cores is a QUEUE, and processor busy runs near 100 on
@@ -22,49 +30,46 @@
 	 * the model call owns the peak - reading the prompt or writing the answer.
 	 * That split needs an instrument nobody has built, and a memory panel silent
 	 * about it invites the reader to assume it was separated.
+	 *
+	 * **What moved is a sentence, not a hairline.** This board is one run, so it
+	 * has no date axis to draw a rule on. What it does have is a figure a reader
+	 * carries between days - how little the kernel had left - so the days a
+	 * setting moved on inside the page's reach are named under that track. One
+	 * line however many days moved, because a line a day is the smear the charts
+	 * refuse for the same reason.
 	 */
-	import ShapeSwitch from './ShapeSwitch.svelte';
-	import TargetBar from './TargetBar.svelte';
 	import {
 		gib,
 		RUNNER_MEMORY_BYTES,
 		type MemoryBoardView,
-		type MemoryGrain,
 		type RangeMark
 	} from '$lib/charts/machine';
+	import { namesMoved, type SettingsMoved } from '$lib/console/settings-moved';
 	import { grouped } from '$lib/charts/series';
 
 	let {
 		board,
-		span,
+		moved = [],
 		windowDays
 	}: {
 		board: MemoryBoardView;
-		/** The window's own low-to-high peak memory, already derived once per
-		 * preset by the loader. The grain switch offers it rather than deriving a
-		 * second copy: two derivations of one figure are what the one-builder rule
-		 * exists to stop, and this panel makes none. */
-		span: { low: number | null; high: number | null; from: number; outOf: number };
+		/** Every day inside the page's span the run record says a setting moved on,
+		 * and what moved. The board draws one run, so this is not a caveat about two
+		 * ends of one track - it is the caveat about the reading a person remembers
+		 * from last week. */
+		moved?: readonly SettingsMoved[];
+		/** How far back the page looked, which is what bounds the days above. */
 		windowDays: number;
 	} = $props();
 
-	let grain = $state<MemoryGrain>('item');
+	const tightestItem = $derived(board.items.find((item) => item.tightest) ?? null);
 
-	const GRAINS: { value: MemoryGrain; text: string }[] = [
-		{ value: 'item', text: 'Item' },
-		{ value: 'shard', text: 'Shard' },
-		{ value: 'span', text: 'Window' }
-	];
-
-	const worstItem = $derived(board.items.find((item) => item.worst) ?? null);
-
-	/** The window grain's own domain. The panel's byte domain, widened where a
-	 * run in the window reached further than anything this run drew - the limit
-	 * joins the values rather than capping them, so a breach draws past the
-	 * line. */
-	const spanScale = $derived(Math.max(board.scaleBytes, span.high ?? 0));
-	const along = (value: number | null) =>
-		spanScale <= 0 || value === null ? 0 : Math.min(value / spanScale, 1) * 100;
+	/** A bracket's length against the larger of the two brackets, never against
+	 * the machine's total. */
+	const bracket = (value: number | null) =>
+		board.bracketScaleBytes <= 0 || value === null
+			? '0%'
+			: `${Math.min(value / board.bracketScaleBytes, 1) * 100}%`;
 
 	/** A range mark as a sentence, for the reader with no pointer. */
 	function busyText(mark: RangeMark): string {
@@ -73,23 +78,38 @@
 		if (mark.max === null) return `${mark.median.toFixed(2)}% busy at its trough, and no peak recorded`;
 		return `${mark.median.toFixed(2)}% busy at its trough, ${mark.max.toFixed(2)}% at its peak`;
 	}
+
+	/** The days that moved, each with what moved on it, as one sentence. */
+	const movedText = $derived(
+		namesMoved(
+			moved.map((one) => {
+				const what = namesMoved(one.settings);
+				return what === '' ? one.date : `${one.date} (${what})`;
+			})
+		)
+	);
 </script>
 
 <div
 	class="memory-board"
 	data-memory-board={board.empty ? 'empty' : board.runId}
-	data-memory-grain={grain}
 	data-memory-ceiling={board.ceilingBytes}
 	data-memory-total-measured={board.measuredTotalBytes ?? ''}
 	data-memory-totals-seen={board.totalsSeen.join(' ')}
 	data-memory-total-agrees={board.totalAgrees === null ? '' : String(board.totalAgrees)}
-	data-memory-item-high-water={board.itemHighWater ?? ''}
-	data-memory-worst-item={board.worstItemId ?? ''}
+	data-memory-floor-low={board.floorLowBytes ?? ''}
+	data-memory-floor-item={board.floorItemId ?? ''}
+	data-memory-server-end-high-water={board.serverEndHighWater ?? ''}
 	data-memory-worker-high-water={board.workerHighWater ?? ''}
 	data-memory-both-high-water={board.bothHighWater ?? ''}
+	data-memory-bracket-scale={board.bracketScaleBytes}
 	data-memory-co-peak={String(board.coPeak)}
 	data-memory-items={board.from}
 	data-memory-items-planned={board.outOf ?? ''}
+	data-memory-kernel-from={board.headroomFrom}
+	data-memory-kernel-skipped={board.kernelSkipped}
+	data-memory-kernel-begins={board.kernelBeginsOn ?? ''}
+	data-memory-read-from={board.readFrom ?? ''}
 	data-memory-load-high={board.loadHigh ?? ''}
 	data-memory-cores={board.cores ?? ''}
 	data-memory-busy-low={board.busySpan.median ?? ''}
@@ -99,22 +119,10 @@
 >
 	{#if board.empty}
 		<p class="note" data-memory-board-empty="all">
-			No run in this span recorded what it did to the machine's memory. That is a measurement
+			No item of this run recorded what it did to the machine's memory. That is a measurement
 			that did not survive, not a run that used none.
 		</p>
 	{:else}
-		<!-- Top right of its own panel, and radio inputs: three named states a
-		     reader can see all of beat one state and a verb. The same control the
-		     shape switches use, because a second switch shape would be a pile. -->
-		<div class="grains">
-			<ShapeSwitch
-				bind:shape={grain}
-				name="memory-grain"
-				label="Which grain to draw"
-				options={GRAINS}
-			/>
-		</div>
-
 		<p class="note">
 			Run <strong>{board.runId}</strong> on {board.date}.
 			{#if board.outOf === null}
@@ -135,7 +143,7 @@
 		     inside a container MemTotal reports the host. -->
 		<p class="note" data-memory-denominator>
 			{#if board.measuredTotalBytes === null}
-				No item recorded what the machine has, so every figure here is drawn against the
+				No item recorded what the machine has, so the kernel figures here are drawn against the
 				runner's own {gib(board.ceilingBytes)} rather than against a memory total this run
 				measured.
 			{:else if board.totalAgrees === false}
@@ -157,298 +165,258 @@
 			{/if}
 		</p>
 
-		{#if grain === 'item'}
-			<div class="grain" data-memory-pane="item">
-				{#if board.itemsEmpty}
-					<p class="note absent" data-memory-board-empty="item">
-						No item of this run recorded what it held or what it left the kernel. The cells
-						landed later than this run, so it reports nothing here - which is a missing
-						reading and not an item that used no memory.
-					</p>
-				{:else}
-					<!-- Three tracks, one x. The two byte tracks share one domain so
-					     their lengths compare; load is not bytes, so it takes its own
-					     row on the same x rather than a second axis on the same plot. -->
-					<p class="track-name" id="held-name">
-						What the model server held, item by item in run order
-					</p>
-					<div class="strip" role="img" aria-labelledby="held-name">
-						{#each board.items as item (item.itemId)}
-							<span
-								class="mark"
-								class:worst={item.worst}
-								data-memory-item={item.itemId}
-								data-memory-item-shard={item.shard}
-								data-memory-item-peak={item.peakBytes ?? ''}
-								data-memory-item-worker={item.workerBytes ?? ''}
-								data-memory-item-floor={item.headroom.floorBytes ?? ''}
-								data-memory-item-end={item.headroom.endBytes ?? ''}
-								data-memory-item-recovered={item.headroom.recoveredBytes ?? ''}
-								data-memory-item-load={item.load ?? ''}
-								data-memory-item-worst={String(item.worst)}
-								title="{item.itemId}: {item.peakBytes === null
-									? 'no memory reading'
-									: `${gib(item.peakBytes)} held by the model server`}{item.headroom.empty
-									? ''
-									: `, ${gib(item.headroom.floorBytes)} left at its worst and ${gib(
-											item.headroom.endBytes
-										)} when it ended`}."
-							>
-								{#if item.peakBytes === null}
-									<span class="bar absent-bar"></span>
-								{:else}
-									<span class="bar held" style="block-size: {item.peakWidth}"></span>
-								{/if}
-							</span>
-						{/each}
-					</div>
-
-					<p class="track-name" id="left-name">What the kernel had left: worst, then at the end</p>
-					{#if board.headroomFrom === 0}
-						<p class="note absent" data-memory-track-empty="headroom">
-							No item of this run recorded what the kernel had left. A resident-set mark says
-							what a process held; it does not say what was still free, and this run measured
-							only the first.
-						</p>
+		<!-- THE LEAD. The first figure on the panel and the reason it exists: how
+		     little the kernel had left at one item's worst moment. -->
+		<dl class="readout lead">
+			<div data-memory-figure="floor-low">
+				<dt>The least the kernel had left</dt>
+				<dd>
+					{#if board.floorLowBytes === null}
+						<span class="absent">
+							No item of this run recorded what the kernel had left, so how close it came
+							cannot be said here.
+						</span>
 					{:else}
-						<div class="strip" role="img" aria-labelledby="left-name">
-							{#each board.items as item (item.itemId)}
-								<span class="mark" class:worst={item.worst}>
-									{#if item.headroom.empty}
-										<span class="bar absent-bar"></span>
-									{:else}
-										<span class="bar floor" style="block-size: {item.headroom.floorWidth}"></span>
-										{#if item.headroom.endBytes !== null}
-											<span class="notch" style="inset-block-end: {item.headroom.endWidth}"></span>
-										{/if}
-									{/if}
-								</span>
-							{/each}
-						</div>
+						{gib(board.floorLowBytes)}
 						<span class="unit">
-							The bar is the least the kernel had while the model worked; the notch is what the
-							item left when it ended. A bar that falls with a notch that stays down is a leak;
-							one that falls with a notch above it was working hard.
+							still free - {board.floorLowPct}% of {gib(board.ceilingBytes)} - at the worst
+							moment of
+							<strong>{board.floorItemId ?? 'an item this run did not name'}</strong>{tightestItem ===
+							null
+								? ''
+								: `, shard ${tightestItem.shard}`}. A per-shard maximum cannot show this: one
+							item can take the machine to its floor while the shard it sits in reads as a
+							normal shard.
 						</span>
 					{/if}
-
-					<p class="track-name" id="load-name">
-						The queue when each item ended{board.cores === null
-							? ''
-							: `, against ${board.cores} ${board.cores === 1 ? 'core' : 'cores'}`}
-					</p>
-					{#if board.loadFrom === 0}
-						<p class="note absent" data-memory-track-empty="load">
-							No item of this run recorded the machine's load, so whether anything was waiting
-							for a processor cannot be said here.
-						</p>
-					{:else}
-						<div class="strip" role="img" aria-labelledby="load-name">
-							{#each board.items as item (item.itemId)}
-								<span class="mark" class:worst={item.worst}>
-									{#if item.load === null}
-										<span class="bar absent-bar"></span>
-									{:else}
-										<span class="bar load" style="block-size: {item.loadWidth}"></span>
-									{/if}
-								</span>
-							{/each}
-						</div>
-					{/if}
-
-					<!-- The figures as text. A hover is never the only carrier of any
-					     of this: the dominant reading device has no pointer. -->
-					<dl class="readout">
-						<div data-memory-figure="item-peak">
-							<dt>The worst item held</dt>
-							<dd>
-								{gib(board.itemHighWater)}
-								<span class="unit">
-									{board.itemHighWaterPct}% of {gib(board.ceilingBytes)}, on
-									<strong>{board.worstItemId ?? 'an item this run did not name'}</strong>{worstItem ===
-									null
-										? ''
-										: `, shard ${worstItem.shard}`}. A per-shard maximum cannot show it, because
-									the shard's own figure IS this item and reads as the shard's normal.
-								</span>
-							</dd>
-						</div>
-						<div data-memory-figure="both">
-							<dt>Both processes together</dt>
-							<dd>
-								{#if board.bothHighWater === null}
-									<span class="absent">The worker process recorded nothing on this run.</span>
-								{:else}
-									{gib(board.bothHighWater)}
-									<span class="unit">
-										{board.bothHighWaterPct}% of {gib(board.ceilingBytes)}.
-										{#if board.coPeak}
-											Both maxima fall on the same item, so this is a reading.
-										{:else}
-											<strong>An upper bound and not an observed peak</strong> - the two maxima
-											fall on different items, so no moment of this run held both.
-										{/if}
-									</span>
-								{/if}
-							</dd>
-						</div>
-						<div data-memory-figure="load">
-							<dt>The longest queue</dt>
-							<dd>
-								{#if board.loadHigh === null}
-									<span class="absent">No item of this run recorded the machine's load.</span>
-								{:else}
-									{board.loadHigh.toFixed(2)}
-									<span class="unit">
-										{board.cores === null
-											? "one-minute load, and this run did not record the host's core count - so whether that is a queue cannot be said"
-											: `one-minute load on ${board.cores} ${
-													board.cores === 1 ? 'core' : 'cores'
-												}${
-													board.loadHigh > board.cores
-														? ' - past the cores, so work was waiting for a processor'
-														: ' - inside the cores, so nothing was waiting'
-												}`}. {busyText(board.busySpan)}.
-									</span>
-								{/if}
-							</dd>
-						</div>
-					</dl>
-
-					<!-- The one thing this panel cannot answer, said on the panel. -->
-					<p class="note" data-memory-cannot-separate>
-						No figure here can say which half of the model call owns the peak - reading the
-						prompt or writing the answer. Nothing samples memory inside the call, so the two
-						phases are one reading, and this panel does not separate them.
-					</p>
-				{/if}
+				</dd>
 			</div>
-		{:else if grain === 'shard'}
-			<div class="grain" data-memory-pane="shard">
-				{#if board.shard.empty}
-					<p class="note absent" data-memory-board-empty="shard">
-						No shard of this run recorded a memory high-water mark, which is a missing
-						reading and not a run that used no memory.
-					</p>
-				{:else}
-					<div class="bars" data-peak-memory={board.shard.runId}>
-						<div data-memory="run" data-memory-high-water={board.shard.highWater ?? ''}>
-							<TargetBar
-								marks={board.shard.marks}
-								label="The run's high-water mark"
-								valueText={gib(board.shard.highWater)}
-								targetText="of the runner's {gib(RUNNER_MEMORY_BYTES)} - {board.shard
-									.pctOfRunner}%, the largest of the {board.shard.from} shards below and never
-								their total"
-								emptyNote="This run recorded no memory high-water mark."
-							/>
-						</div>
-						{#each board.shard.shards as one (one.shard)}
-							<div data-memory-shard={one.shard} data-memory-bytes={one.bytes}>
-								<TargetBar
-									marks={one.marks}
-									label="Shard {one.shard}"
-									valueText={gib(one.bytes)}
-									targetText="of the runner's {gib(RUNNER_MEMORY_BYTES)} - {Math.round(
-										(one.bytes / RUNNER_MEMORY_BYTES) * 100
-									)}%"
-									emptyNote="This shard recorded no memory high-water mark."
-								/>
-							</div>
-						{/each}
-					</div>
-					<p class="note" data-memory-basis data-memory-planned={board.shard.outOf ?? ''}>
-						The run's figure is the LARGEST of these and never their total: shards are
-						separate jobs on separate hosts, so adding them would report a machine that never
-						existed.
-						{#if board.shard.outOf === null}
-							Over {board.shard.from}
-							{board.shard.from === 1 ? 'shard' : 'shards'}; this run's manifest recorded no
-							shard count, so how many the plan asked for is unknown.
-						{:else}
-							Over {board.shard.from} of the run's {board.shard.outOf} shards.
-						{/if}
-					</p>
+		</dl>
+
+		<p class="track-name" id="left-name">What the kernel had left: worst, then at the end</p>
+		{#if board.headroomFrom === 0}
+			<p class="note absent" data-memory-track-empty="headroom">
+				No item of this run recorded what the kernel had left, so nothing is drawn here.
+				{#if board.kernelBeginsOn !== null}
+					The reading begins on {board.kernelBeginsOn} in the ledger this page read, which
+					starts on {board.readFrom}.
+				{:else if board.readFrom !== null}
+					No item in the ledger this page read, back to {board.readFrom}, carries it.
 				{/if}
-			</div>
+				A resident-set mark says what a process held; it does not say what was still free.
+			</p>
 		{:else}
-			<div class="grain" data-memory-pane="span">
-				{#if span.high === null}
-					<p class="note absent" data-memory-board-empty="span">
-						No run in these {windowDays} days recorded a memory high-water mark.
-					</p>
-				{:else}
-					<!-- A figure with a span is one track, never two sentences. This
-					     was four lines of prose in another panel until this one
-					     absorbed it. -->
-					<p class="track-name" id="span-name">
-						The high-water mark across these {windowDays} days, lowest run to highest
-					</p>
-					<div
-						class="span-track"
-						role="img"
-						aria-labelledby="span-name"
-						data-memory-span-low={span.low ?? ''}
-						data-memory-span-high={span.high ?? ''}
-						data-memory-span-from={span.from}
-						data-memory-span-out-of={span.outOf}
-						data-memory-span-scale={spanScale}
+			<div class="strip" role="img" aria-labelledby="left-name">
+				{#each board.items as item (item.itemId)}
+					<span
+						class="mark"
+						class:tightest={item.tightest}
+						data-memory-item={item.itemId}
+						data-memory-item-shard={item.shard}
+						data-memory-item-server-end={item.serverEndBytes ?? ''}
+						data-memory-item-worker={item.workerBytes ?? ''}
+						data-memory-item-floor={item.headroom.floorBytes ?? ''}
+						data-memory-item-end={item.headroom.endBytes ?? ''}
+						data-memory-item-recovered={item.headroom.recoveredBytes ?? ''}
+						data-memory-item-load={item.load ?? ''}
+						data-memory-item-tightest={String(item.tightest)}
+						title="{item.itemId}: {item.headroom.empty
+							? 'no kernel reading'
+							: `${gib(item.headroom.floorBytes)} left at its worst and ${gib(
+									item.headroom.endBytes
+								)} when it ended`}."
 					>
-						<span
-							class="span-fill"
-							style="inset-inline-start: {along(span.low)}%; inline-size: {along(span.high) -
-								along(span.low)}%"
-						></span>
-						{#if board.shard.highWater !== null}
-							<span class="span-now" style="inset-inline-start: {along(board.shard.highWater)}%"
-							></span>
+						{#if item.headroom.empty}
+							<span class="bar absent-bar"></span>
+						{:else}
+							<span class="bar floor" style="block-size: {item.headroom.floorWidth}"></span>
+							{#if item.headroom.endBytes !== null}
+								<span class="notch" style="inset-block-end: {item.headroom.endWidth}"></span>
+							{/if}
 						{/if}
-					</div>
-					<span class="unit">
-						The track runs to {gib(spanScale)}; the bar is the span and the upright is this
-						run's own mark on it.
 					</span>
-					<dl class="readout">
-						<div data-memory-figure="span">
-							<dt>Over these {windowDays} days</dt>
-							<dd>
-								{gib(span.low)} to {gib(span.high)}
-								<span class="unit">
-									on {span.from} of {span.outOf} runs. Each of those is itself the largest of a
-									run's shards, so this is a span of maxima and never a total.
-								</span>
-							</dd>
-						</div>
-						<div data-memory-figure="span-newest">
-							<dt>This run, on that span</dt>
-							<dd>
-								{#if board.shard.highWater === null}
-									<span class="absent">This run recorded no high-water mark.</span>
-								{:else}
-									{gib(board.shard.highWater)}
-									<span class="unit">
-										{board.shard.pctOfRunner}% of {gib(board.ceilingBytes)}, marked on the track
-										above.
-									</span>
-								{/if}
-							</dd>
-						</div>
-					</dl>
-				{/if}
+				{/each}
 			</div>
+			<span class="unit">
+				The bar is the least the kernel had while the model worked; the notch is what the item
+				left when it ended. A bar that falls with a notch that stays down is a leak; one that
+				falls with a notch above it was working hard.
+			</span>
+			{#if board.kernelSkipped > 0}
+				<!-- Decision 4: an item older than the kernel columns is a printed
+				     count, never a line at zero and never a fall back to a mark the
+				     page has just said it does not trust. -->
+				<p class="note absent" data-memory-kernel-gap>
+					{grouped(board.kernelSkipped)} of the {grouped(board.from)}
+					{board.from === 1 ? 'item' : 'items'} drawn carry no kernel reading and are hatched
+					rather than drawn at zero.
+					{#if board.kernelBeginsOn !== null}
+						The reading begins on {board.kernelBeginsOn} in the ledger this page read, which
+						starts on {board.readFrom}.
+					{/if}
+				</p>
+			{/if}
 		{/if}
+
+		<!-- Row #22 decision 2, on a panel with no date axis: one line however many
+		     days moved, under the one figure a reader carries between days. It sits
+		     outside the branch above because a setting that moved on a day nobody
+		     measured is the state this naming is most useful in. -->
+		{#if moved.length > 0}
+			<p class="note" data-memory-moved={moved.length}>
+				{moved.length === 1 ? 'A setting moved' : 'Settings moved'} on {movedText}, inside the
+				{windowDays} days this page read. This board is one run, so nothing here is drawn across
+				that change - but a reading remembered from before
+				{moved.length === 1 ? 'it' : 'the last of them'} was taken under a different setup.
+			</p>
+		{/if}
+
+		<!-- Decision 3: brackets and never a track. Both run to the larger of
+		     themselves, they overlap on purpose, and they are labelled at most -
+		     a resident-set figure drawn against the machine's total reads as a
+		     budget, which is the figure this project retracted on 2026-09-09. -->
+		<p class="track-name" id="held-name">
+			What the two processes held when each item ended, at most
+		</p>
+		{#if board.bracketScaleBytes <= 0}
+			<p class="note absent" data-memory-track-empty="held">
+				No item of this run recorded what either process held when it ended.
+			</p>
+		{:else}
+			<div class="brackets" role="img" aria-labelledby="held-name">
+				<span class="bracket server" style="inline-size: {bracket(board.serverEndHighWater)}">
+					<span class="cap"></span>
+				</span>
+				<span class="bracket worker" style="inline-size: {bracket(board.workerHighWater)}">
+					<span class="cap"></span>
+				</span>
+			</div>
+			<span class="unit">
+				Each bracket runs to <strong>at most</strong> that many bytes over the run's items, and
+				the two are drawn against the larger of themselves rather than against the machine. They
+				overlap because they may not be added into a share of it: the weights are read from a
+				file, so they sit inside the model server's bracket and inside the page cache at once.
+			</span>
+			<dl class="readout">
+				<div data-memory-figure="server-end">
+					<dt>The model server held, at most</dt>
+					<dd>
+						{#if board.serverEndHighWater === null}
+							<span class="absent">The model server recorded nothing on this run.</span>
+						{:else}
+							{gib(board.serverEndHighWater)}
+							<span class="unit">at the end of an item, over the items drawn.</span>
+						{/if}
+					</dd>
+				</div>
+				<div data-memory-figure="worker-end">
+					<dt>The worker process held, at most</dt>
+					<dd>
+						{#if board.workerHighWater === null}
+							<span class="absent">The worker process recorded nothing on this run.</span>
+						{:else}
+							{gib(board.workerHighWater)}
+							<span class="unit">at the end of an item, over the items drawn.</span>
+						{/if}
+					</dd>
+				</div>
+				<div data-memory-figure="both">
+					<dt>Both brackets added</dt>
+					<dd>
+						{#if board.bothHighWater === null}
+							<span class="absent">Only one of the two processes recorded anything.</span>
+						{:else}
+							{gib(board.bothHighWater)}
+							<span class="unit">
+								{#if board.coPeak}
+									Both maxima fall on the same item, so this is a reading.
+								{:else}
+									<strong>An upper bound and not an observed figure</strong> - the two maxima
+									fall on different items, so no moment of this run held both.
+								{/if}
+							</span>
+						{/if}
+					</dd>
+				</div>
+			</dl>
+		{/if}
+
+		<p class="track-name" id="load-name">
+			The queue when each item ended{board.cores === null
+				? ''
+				: `, against ${board.cores} ${board.cores === 1 ? 'core' : 'cores'}`}
+		</p>
+		{#if board.loadFrom === 0}
+			<p class="note absent" data-memory-track-empty="load">
+				No item of this run recorded the machine's load, so whether anything was waiting for a
+				processor cannot be said here.
+			</p>
+		{:else}
+			<div class="strip" role="img" aria-labelledby="load-name">
+				{#each board.items as item (item.itemId)}
+					<span class="mark" class:tightest={item.tightest}>
+						{#if item.load === null}
+							<span class="bar absent-bar"></span>
+						{:else}
+							<span class="bar load" style="block-size: {item.loadWidth}"></span>
+						{/if}
+					</span>
+				{/each}
+			</div>
+			<dl class="readout">
+				<div data-memory-figure="load">
+					<dt>The longest queue</dt>
+					<dd>
+						{#if board.loadHigh === null}
+							<span class="absent">No item of this run recorded the machine's load.</span>
+						{:else}
+							{board.loadHigh.toFixed(2)}
+							<span class="unit">
+								{board.cores === null
+									? "one-minute load, and this run did not record the host's core count - so whether that is a queue cannot be said"
+									: `one-minute load on ${board.cores} ${
+											board.cores === 1 ? 'core' : 'cores'
+										}${
+											board.loadHigh > board.cores
+												? ' - past the cores, so work was waiting for a processor'
+												: ' - inside the cores, so nothing was waiting'
+										}`}. {busyText(board.busySpan)}.
+							</span>
+						{/if}
+					</dd>
+				</div>
+			</dl>
+		{/if}
+
+		<!-- Decision 1: the mark comes off the page and stays in the ledger, and
+		     the surface that would have drawn it is where that is said. -->
+		<p class="note" data-memory-not-drawn>
+			<strong>The model server's own high-water mark is not drawn here.</strong> The kernel prints
+			the larger of what the process holds now and a stored mark it refreshes only when the
+			process gives memory back, so the figure covers the server's whole life rather than this
+			item and reads lower than an earlier item's whenever a page is reclaimed. The column is
+			still written to the ledger; nothing on this panel is built on it.
+		</p>
+
+		<!-- The one thing this panel cannot answer, said on the panel. -->
+		<p class="note" data-memory-cannot-separate>
+			No figure here can say which half of the model call owns the peak - reading the prompt or
+			writing the answer. Nothing samples memory inside the call, so the two phases are one
+			reading, and this panel does not separate them.
+		</p>
 
 		<!-- Every drawn value as text, for a reader who cannot see the marks and
 		     for the oracle, which recomputes each one from the ledger. -->
 		<ul class="sr-only" data-memory-values>
 			{#each board.items as item (item.itemId)}
 				<li>
-					{item.itemId}, shard {item.shard}: model server {gib(item.peakBytes)}, worker
-					{gib(item.workerBytes)}, kernel headroom {item.headroom.empty
+					{item.itemId}, shard {item.shard}: kernel headroom {item.headroom.empty
 						? 'not recorded'
 						: `${gib(item.headroom.floorBytes)} at its worst and ${gib(
 								item.headroom.endBytes
-							)} when it ended`}, load {item.load === null ? '-' : item.load.toFixed(2)},
+							)} when it ended`}, model server {gib(item.serverEndBytes)} and worker {gib(
+						item.workerBytes
+					)} at the end, load {item.load === null ? '-' : item.load.toFixed(2)},
 					{busyText(item.busy)}.
 				</li>
 			{/each}
@@ -464,11 +432,6 @@
 		position: relative;
 	}
 
-	.grains {
-		display: flex;
-		justify-content: flex-end;
-	}
-
 	.note {
 		margin: 0;
 		font-size: var(--text-sm);
@@ -478,12 +441,6 @@
 
 	.absent {
 		color: var(--color-text-tertiary);
-	}
-
-	.grain {
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2);
 	}
 
 	.track-name {
@@ -516,10 +473,6 @@
 		border-radius: 1px 1px 0 0;
 	}
 
-	.held {
-		background: var(--chart-1);
-	}
-
 	.floor {
 		background: var(--chart-3);
 	}
@@ -548,40 +501,47 @@
 		background: var(--color-text);
 	}
 
-	.mark.worst .bar {
+	.mark.tightest .bar {
 		outline: 1px solid var(--color-text);
 		outline-offset: 0;
 	}
 
-	/* The run's own mark first, then a bar a shard, every bar on the same
-	   ceiling so their lengths compare. One column below the breakpoint: a
-	   memory bar squeezed into half a phone cannot be compared with its
-	   neighbour. */
-	.bars {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
-		gap: var(--space-4) var(--space-5);
-	}
-
-	.span-track {
+	/* Two brackets from one origin, overlapping on purpose. A slice that abuts
+	   its neighbour invites a reader to add the two, and these two may not be
+	   added - one page can be resident in both processes at once. */
+	.brackets {
 		position: relative;
-		block-size: 1.5rem;
-		border-radius: var(--radius-sm);
-		background: var(--color-surface-sunken);
+		display: flex;
+		flex-direction: column;
+		gap: 0;
+		block-size: 2.25rem;
+		justify-content: center;
 	}
 
-	.span-fill {
-		position: absolute;
-		inset-block: 0.375rem;
-		background: var(--chart-3);
-		border-radius: var(--radius-sm);
+	.bracket {
+		position: relative;
+		block-size: 0.75rem;
+		border-block-start: 2px solid currentColor;
+		border-block-end: 2px solid currentColor;
+		min-inline-size: 2px;
 	}
 
-	.span-now {
+	.bracket .cap {
 		position: absolute;
-		inset-block: 0;
+		inset-block: -2px;
+		inset-inline-end: 0;
 		inline-size: 2px;
-		background: var(--color-text);
+		background: currentColor;
+	}
+
+	.bracket.server {
+		color: var(--chart-1);
+	}
+
+	/* Pulled up over the first so the two visibly cross rather than stack. */
+	.bracket.worker {
+		color: var(--chart-2);
+		margin-block-start: -0.375rem;
 	}
 
 	.readout {
@@ -589,6 +549,16 @@
 		grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
 		gap: var(--space-3);
 		margin: var(--space-2) 0 0;
+	}
+
+	/* The lead is one figure across the panel's whole width, not one cell of a
+	   grid a reader has to pick it out of. */
+	.readout.lead {
+		grid-template-columns: 1fr;
+	}
+
+	.readout.lead dd {
+		font-size: var(--text-2xl);
 	}
 
 	.readout dt {

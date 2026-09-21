@@ -1,6 +1,6 @@
 # Console Charts
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 What a chart on the operator console has to conform to: the one coordinate
 frame every chart draws through, the pointer readout every chart with a shared
 column carries, how a missing number is marked rather than drawn as a zero, and
@@ -444,18 +444,22 @@ declares it. What retiring it costs: the nine boundaries the committed months
 hold become unreachable from the console, and an operator who wants them reads
 the CSV.
 
-**Today the historical branch is the only branch that draws anything, and that
-is why the column outlived the field.** Measured 2026-09-13 over all 23
-committed `run.json` files: **0 of them carry a recorded input manifest**, so the
-branch on and after the cutover contributes no identity on any day the archive
-holds. The pipeline has not published since `inputs` started being written. The
-commit that dropped `pipeline_fingerprint` from nine contracts therefore left it
-on `EvalRow` - which is `state/scores/`, the file `payload.ts` reads at build
-time and hands to this module - rather than on the published projection of that
+**The record is now the branch that draws, and both branches are live.**
+Measured 2026-09-21 over the committed archive: **20 of 120 run entries carry a
+recorded input manifest, across 7 of the 30 committed days** - 13 to 18 and 20
+September. Over those seven days the prompt took **6 distinct values**, and
+2026-09-15 moved seven settings at once: the article extractor, the context
+size, the prompt, the sampling settings, the sanitizer, the truncation cap and
+the turn markers. One of the seven days, 2026-09-20, recorded a manifest and
+moved nothing, which is the state that tells a reader the instrument was
+working. The historical branch still draws every day before the cutover, and the
+commit that dropped `pipeline_fingerprint` from nine contracts left it on
+`EvalRow` - which is `state/scores/`, the file `payload.ts` reads at build time
+and hands to this module - rather than on the published projection of that
 ledger, which nothing under `frontend/src/` opened and which was deleted on
-2026-09-16. Dropping it would have made this panel report that
-nothing moved across nine days on which something did, which is a wrong answer
-where the whole design asks for a missing one.
+2026-09-16. Dropping it would make this panel report that nothing moved across
+the days before the record existed, which is a wrong answer where the design
+asks for a missing one.
 
 **A day is a boundary when it ran an identity the previous recorded day did not
 run.** A day that only stopped using one of yesterday's started nothing, so it
@@ -498,7 +502,7 @@ an answer. Where a drawing chart's span holds no boundary it says so in type
 | Sources we may ask | Voices | no | Permission, a rest and a retirement are all decided before a summary is written. |
 | Charts drawn for articles | Pipelines | no | Chart drawing is a different model call, judged on its own retirement rule. |
 | Time to write one summary | Summaries | no | A change moves every bar on it. The axis is seconds, so the window is pooled into one distribution and a day has no position to draw at. |
-| How much text the model has to read again each time | Hardware | no | A change moves it - the prompt is in the stamp - and its engine-drawn axis carries no rule yet. |
+| How much text the model has to read again each time | Hardware | no | A change moves it - the prompt is in the stamp - and the engine draws this one, so a marker it placed would sit on top of the columns rather than behind them. |
 | How close the longest text came to the model's limit | Hardware | no | One bar a run, so there is no day edge to draw between. |
 | How much of a run is reading and how much is writing | Hardware | no | One group a run, so there is no day edge to draw between. |
 
@@ -517,15 +521,73 @@ arrow key meets the change without a pointer. Two charts, one string, from
 `$lib/charts/frame` - two charts describing one event differently is how the two
 descriptions drift.
 
-The wording never says "the model changed", because the stamp moves for a
-reworded prompt or a rebuilt runtime as readily as for new weights, and four of
-the five stamps in the ledger cannot be expanded into their cause at all
-(measured 2026-08-27). It says *a new model, prompt or setting started here*,
-which is the set the stamp actually covers.
+The wording never says "the model changed" where nothing can name what did,
+because the stamp moves for a reworded prompt or a rebuilt runtime as readily as
+for new weights, and four of the five stamps in the ledger cannot be expanded
+into their cause at all (measured 2026-08-27). There it says *a new model,
+prompt or setting started here*, which is the set the stamp actually covers.
+
+### Naming what moved
+
+Where the day's identity came from the run record rather than from a digest, the
+rule says which settings moved - *the prompt, the turn markers, the truncation
+cap, the sampling settings and the context size changed on this day* - in the
+pointer title and in one line of the readout strip.
+
+**Naming them is the whole return on the record.** A digest affords equality and
+nothing else, so a rule drawn from one can only ever say that something moved;
+an owner reading a step in a trend still has to open a CSV to find out whether
+to trust the two halves either side of it. The record has enumerated the inputs
+by name since 2026-09-12, so the same comparison that places the line can say
+what it is.
+
+**One rule a date, never one a setting, and one readout line naming all of
+them.** Measured 2026-09-21, 2026-09-15 moved seven settings at once. Seven
+hairlines on one date is a smear on exactly the date that most needs reading,
+and seven lines in the strip is the same smear written out. Ruled by Susan
+(Craft and Delight), 2026-09-20, who priced it at five - the count is a reading
+of a growing archive and the rule is what survives it.
+
+**No new column.** The record already hangs off `RunRecord.inputs` and
+`loadManifests` already passes it through, so the marker reads what is there. A
+copy of the prompt digest on the item row was refused by Fowler on 2026-09-20 as
+a second copy of a fact, which is a thing that can disagree with itself.
+
+**The words are not the field names.** `n_ctx` is what the runtime calls it and
+"the context size" is what it is, and a term from a subsystem is not a term for
+a user (`CLAUDE.md` section 0b). `SETTING_WORDS` in
+`$lib/console/settings-moved` holds one phrase per recorded input, in the order
+the contract declares them, and `frontend/tests/settings-moved.spec.ts` reads
+`schemas/run-manifest.schema.json` and fails on a field with no words or words
+with no field - so a field added to `PipelineInputs` next month fails a test
+rather than going unnamed on the page for a year.
+
+**A day with no record draws nothing.** Measured 2026-09-21, 100 of the 120
+committed run entries carry no manifest. Drawing "nothing moved" for a day
+nothing was recorded on is the same claim as a zero theft figure, refused
+elsewhere on this route for the same reason.
+
+**A date with a rule and no reading gets both.** A chart with no column for that
+day cannot draw a line on it, so it names the day and what moved in words,
+beside its own absent state. That is the marker's most useful state rather than
+its edge case: a setting that moved on a day nobody was measuring is exactly
+what makes a before-and-after unsafe, and a chart silent about it invites the
+comparison it cannot support.
+
+**On the Hardware memory board the change is a sentence, not a hairline.** That
+board draws one run, item by item, so it has no date axis to put a line on. What
+it does have is a figure a reader carries between days - how little the kernel
+had left - so the days that moved are named under that track, one line however
+many of them there are. Susan, 2026-09-20, adapting her own decision 7 to a panel
+with no date axis. The naming first went under the panel's window track, which
+ran from the lowest run of a span to the highest; that track drew the per-shard
+high-water mark and left the page on 2026-09-21, so the sentence moved down onto
+what the board leads with instead.
 
 Authority: Andre (AI/LLM) on which measures a change moves, Fowler
 (Architecture) on one server-side derivation, Jony (UI/UX) on the mark being
-neutral ink; console chart-craft plan Row #3, 2026-08-31.
+neutral ink; console chart-craft plan Row #3, 2026-08-31, and honest machine
+telemetry plan Row #22, 2026-09-21.
 
 ## See also
 

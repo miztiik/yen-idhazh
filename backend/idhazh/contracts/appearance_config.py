@@ -504,6 +504,11 @@ class AppearanceConfig(Contract):
             why="What the machine's memory holds is a question the ceiling panel does not answer.",
         ),
         ChangelogEntry(
+            version="2026-09-21T12:00",
+            change="console.panel_groups.machine gains the article-cost panel.",
+            why="What one article costs has to be priceable before the run that pays it.",
+        ),
+        ChangelogEntry(
             version="2026-09-21",
             change="console.context_high_percentile and console.context_cut_off_reason, additive.",
             why="The context panel draws two ends a run and names what a cut-off looks like.",
@@ -512,11 +517,6 @@ class AppearanceConfig(Contract):
             version="2026-09-20T15:00",
             change="console.panel_groups.machine drops two Hardware panels.",
             why="A container of unrelated figures has no question to be titled with.",
-        ),
-        ChangelogEntry(
-            version="2026-09-20T14:00",
-            change="console.panel_groups.machine is four decision groups, not three time grains.",
-            why="A heading naming a grain answers no question an operator arrives with.",
         ),
         ChangelogEntry(
             version="2026-08-29",

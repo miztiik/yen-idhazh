@@ -45,6 +45,7 @@
 	import MachineSplitPanel from '$lib/console/machine/MachineSplitPanel.svelte';
 	import MemoryBoardPanel from '$lib/console/machine/MemoryBoardPanel.svelte';
 	import MemoryHeldPanel from '$lib/console/machine/MemoryHeldPanel.svelte';
+	import ArticleCostPanel from '$lib/console/machine/ArticleCostPanel.svelte';
 	import PlatformMixPanel from '$lib/console/machine/PlatformMixPanel.svelte';
 	import PromptCachePanel from '$lib/console/machine/PromptCachePanel.svelte';
 	import ReadAgainstWrittenPanel from '$lib/console/machine/ReadAgainstWrittenPanel.svelte';
@@ -207,7 +208,13 @@
 		{#if id === 'shard-board'}
 			<ShardBoardPanel board={data.board} timeoutMinutes={data.shardTimeoutMinutes} />
 		{:else if id === 'memory-board'}
-			<MemoryBoardPanel board={data.memory} span={view.peakRssSpan} windowDays={view.days} />
+			<MemoryBoardPanel
+				board={data.memory}
+				moved={data.settingsMoved}
+				start={view.start}
+				end={view.end}
+				windowDays={view.days}
+			/>
 		{:else if id === 'memory-held'}
 			<MemoryHeldPanel
 				record={data.memoryHeld}
@@ -216,8 +223,13 @@
 				days={view.days}
 			/>
 		{:else if id === 'reading-against-writing'}
-			<MachineSplitPanel split={data.split} />
-		{:else if id === 'prompt-cache'}
+			<MachineSplitPanel split={data.split} />	{:else if id === 'article-cost'}
+		<ArticleCostPanel
+			cost={view.articleCost}
+			days={view.days}
+			{windowDays}
+			chart={data.chart}
+		/>		{:else if id === 'prompt-cache'}
 			<PromptCachePanel
 				cacheDays={view.cacheDays}
 				days={view.days}
@@ -233,6 +245,7 @@
 				contextWindow={data.contextWindow}
 				cost={view.context}
 				modelChanges={data.modelChanges}
+				moved={data.settingsMoved}
 				chart={data.chart}
 				{windowDays}
 				days={view.days}
@@ -261,6 +274,7 @@
 				start={view.start}
 				end={view.end}
 				modelChanges={data.modelChanges}
+				moved={data.settingsMoved}
 				chart={data.chart}
 				{windowDays}
 				days={view.days}

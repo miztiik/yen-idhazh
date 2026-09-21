@@ -63,6 +63,9 @@ def empty_record(
             "judge_model": judge.judge_model,
             "prompt_digest": judge.prompt_digest,
             "grammar_digest": judge.grammar_digest,
+            "judge_temperature": judge.judge_temperature,
+            "decode_digest": judge.decode_digest,
+            "judge_thinks": judge.thinks,
             "folded_dates": (),
             "slots": tuple(
                 ScoreSlot(bin_low=knobs.band_low + index * knobs.bin_width)
@@ -92,20 +95,37 @@ def slot_index(score: float, *, record: StorySimilarityDistribution) -> int | No
     return min(index, len(record.slots) - 1)
 
 
+def _read_at(row: StorySimilarityPair) -> tuple[str, str]:
+    """How recently a row was judged, as a value two rows can be compared on.
+
+    `judged_by_run_id` first, because that is the run that READ the pair.
+    `run_id` names the digest run that published the day, so two judging runs
+    over one date write the identical string there and it can settle nothing on
+    its own.
+
+    An empty stamp sorts lowest, so a stamped re-judge beats the unstamped row
+    it replaces. `run_id` stays in the pair rather than being dropped: without
+    it two unstamped rows from different runs would compare equal and the first
+    one seen would win, which is neither file order nor what this did before the
+    column existed.
+    """
+    return (row.judged_by_run_id or "", row.run_id)
+
+
 def one_row_a_pair(rows: Sequence[StorySimilarityPair]) -> list[StorySimilarityPair]:
-    """At most one row per `pair_key`, the newest `run_id` winning.
+    """At most one row per `pair_key`, the most recently judged one winning.
 
     The day file can hold one pair twice: once from the run that judged it and
     once from a later run that judged it again against a rebuilt day. Both rows
-    stay in the file, because `run_id` says they are two facts. The record counts
-    the pair once, and it counts the newest run, because that run read the day as
-    it stands. Counting both would double one pair's weight in its slot with
-    nothing downstream able to see it.
+    stay in the file, because the two run stamps say they are two facts. The
+    record counts the pair once, and it counts the latest reading, because that
+    run read the day as it stands. Counting both would double one pair's weight
+    in its slot with nothing downstream able to see it.
     """
     newest: dict[str, StorySimilarityPair] = {}
     for row in rows:
         held = newest.get(row.pair_key)
-        if held is None or row.run_id > held.run_id:
+        if held is None or _read_at(row) > _read_at(held):
             newest[row.pair_key] = row
     return [newest[key] for key in sorted(newest)]
 
@@ -180,9 +200,14 @@ def inputs_changed(
     """The old value and the new value of the first field that moved, or `None`.
 
     Returns the pair rather than a bare flag, because the operator reading a held
-    line needs to know WHICH input moved: the encoder, a weight, the model, or a
-    reworded ask. Compared in a fixed order so two runs over one changed record
-    name the same field.
+    line needs to know WHICH input moved: the encoder, a weight, the model, a
+    reworded ask, a sampler, or a reasoning span in front of the verdict.
+    Compared in a fixed order so two runs over one changed record name the same
+    field.
+
+    **Every value the record stamps is compared here.** A stamp column the
+    detector cannot see is a stamp that lies: the record would archive under a
+    new name with nothing able to say which input moved it.
     """
     for was, now in (
         (record.scorer_model, scorer.scorer_model),
@@ -191,6 +216,9 @@ def inputs_changed(
         (record.judge_model, judge.judge_model),
         (record.prompt_digest, judge.prompt_digest),
         (record.grammar_digest, judge.grammar_digest),
+        (record.judge_temperature, judge.judge_temperature),
+        (record.decode_digest, judge.decode_digest),
+        (record.judge_thinks, judge.thinks),
         (record.band_low, knobs.band_low),
         (record.band_high, knobs.band_high),
         (record.bin_width, knobs.bin_width),

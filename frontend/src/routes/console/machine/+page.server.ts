@@ -22,6 +22,7 @@ import {
 	type ContextRun,
 	type ContextSpan
 } from '$lib/console/machine/context-cost';
+import { articleCost, type ArticleCost } from '$lib/console/machine/article-cost';
 import { costChart, costOverDays, DEFAULT_COST_SHAPE } from '$lib/charts/cost';
 import { memoryHeld } from '$lib/console/machine/memory-held';
 import { splitByMachine } from '$lib/charts/machine-split';
@@ -41,6 +42,7 @@ import {
 } from '$lib/server/config';
 import { itemHealthRows, evalRows, loadDay, loadManifests, shardDays } from '$lib/server/payload';
 import { pipelineChanges } from '$lib/server/model-work';
+import { settingsMoved } from '$lib/console/settings-moved';
 import {
 	CLOCKS_AGREE_WITHIN_PCT,
 	loadMachineCounters,
@@ -50,27 +52,6 @@ import {
 } from '$lib/server/machine-counters';
 
 export const prerender = true;
-
-/** The span of a figure across the runs that reported it, and how many did.
- *
- * A range and not a mean: the whole finding this route exists to publish is
- * that two shards of one run differ by more than 4x, and a mean of a lottery
- * reports neither end of it. `from` of zero means nothing measured it, which is
- * a different fact from a measurement of zero.
- */
-function spanOf(
-	values: readonly (number | null)[]
-): { low: number | null; high: number | null; from: number; outOf: number } {
-	const known = values.filter((value): value is number => value !== null);
-	return {
-		low: known.length === 0 ? null : Math.min(...known),
-		high: known.length === 0 ? null : Math.max(...known),
-		from: known.length,
-		outOf: values.length
-	};
-}
-
-export type FigureSpan = ReturnType<typeof spanOf>;
 
 /** Everything one span of days answers, worked out once for each span the
  * control offers.
@@ -92,7 +73,6 @@ export interface MachineWindow {
 	 * the counters above and can be in a different state on the same day. */
 	machineRecord: RecordingNotes;
 	cacheDays: CacheDay[];
-	peakRssSpan: FigureSpan;
 	/** What kinds of machine the platform gave us over this span, and how often. */
 	fleet: FleetView;
 	tokens: RunWork[];
@@ -106,6 +86,10 @@ export interface MachineWindow {
 	 * same terms as `work`: the run marks are in `series.context`, out of the
 	 * same call, so the sentence and the chart cannot be two answers. */
 	context: ContextSpan;
+	/** What one article cost the machine over this span - processor time, added
+	 * memory and model time, each as a range. Three figures and a few counts, so
+	 * a preset carries it rather than the rows behind it. */
+	articleCost: ArticleCost;
 }
 
 /** Everything a run-by-run chart draws, carried once rather than once a span.
@@ -137,6 +121,7 @@ const DRAWN_PANELS = [
 	'memory-board',
 	'memory-held',
 	'reading-against-writing',
+	'article-cost',
 	'prompt-cache',
 	'context-headroom',
 	'two-clocks',
@@ -161,9 +146,9 @@ const DRAWN_PANELS = [
  * slow day across Pipelines and Hardware sees both on one span.
  *
  * **A panel about one run does not follow the window.** The shard board, the
- * reading/writing split, the peak-memory bars and the clock check are
- * snapshots: a window is a span, and a span cannot narrow a single run. Each
- * names the run or the day it is about instead.
+ * reading/writing split, the memory board and the clock check are snapshots: a
+ * window is a span, and a span cannot narrow a single run. Each names the run
+ * or the day it is about instead.
  */
 export async function load() {
 	const console_ = consoleConfig();
@@ -246,6 +231,10 @@ export async function load() {
 		// The rows stay behind: they are carried once, bounded to the widest preset,
 		// in `series.context`. Only the scalars differ per span.
 		const context = contextCost(healthRows, contextOptions).span;
+		// The machine record is the second instrument here: the item ledger says
+		// what share of the processors an article kept busy, and only the record
+		// says how many processors that share was taken across.
+		const perArticle = articleCost(healthRows, inSpan(fingerprints));
 
 		return {
 			days,
@@ -282,9 +271,7 @@ export async function load() {
 				figures: 'machine record'
 			}),
 			cacheDays: cacheByDay(runs),
-			// The newest run's own reading is a snapshot and sits on the memory
-			// board; this says whether that reading was unusual over the span.
-			peakRssSpan: spanOf(runs.map((run) => run.peakRssBytes.value)),
+			articleCost: perArticle,
 			// Counted once a preset here rather than in a browser, which holds no
 			// ledger to count. At most eight kinds a span, so five presets is forty
 			// small objects.
@@ -329,6 +316,10 @@ export async function load() {
 	// redraws cannot be built from two different sets.
 	const widest = Math.max(...spans);
 	const bound = windows.get(widest) as MachineWindow;
+	// One read of the run manifests for the whole route. The boundary dates and
+	// the names of what moved on them are two questions about one record, and two
+	// reads of it could answer them off two different day lists.
+	const manifests = loadManifests(undefined, widest);
 	const latency = percentileHistory(health, console_.min_attempts_for_rate);
 	const series: RunSeries = {
 		// Oldest first: a chart reads left to right, and `contextCost` sorts by run
@@ -348,10 +339,9 @@ export async function load() {
 	// single run into something smaller.
 	const newest: MachineRun | null = counters.runs[0] ?? null;
 	const board = shardBoard(newest, limits.jobTimeoutSeconds, console_.chart_width);
-	// Item grain and shard grain from one call, because a panel that offers two
-	// grains built from two derivations can show two answers to one question. The
-	// window grain is the span the loop above already derived for every preset,
-	// which this panel reads rather than deriving a second time.
+	// One run, item by item. The board had a shard grain and a window grain until
+	// 2026-09-21; both drew the per-shard high-water mark the page no longer
+	// trusts, so both went and the panel is one builder call.
 	const memory = memoryBoard(newest, health);
 	// One bar a day, over every day the widest preset reaches, so the panel can
 	// take the open span off the control without this deriving a second time.
@@ -437,7 +427,13 @@ export async function load() {
 		// off two different day lists, and the two would eventually disagree. The
 		// rows stop at the widest preset, which is as far back as either chart draws
 		// (`CLAUDE.md` Guardrail #12), and the manifests are bounded the same way.
-		modelChanges: pipelineChanges(evalRows(days).rows, loadManifests(undefined, widest)),
+		modelChanges: pipelineChanges(evalRows(days).rows, manifests),
+		// WHICH settings moved on each of those days, off the same manifests, so a
+		// rule and its readout cannot be built from two different reads. A date the
+		// line above holds and this one does not is a day whose identity came from
+		// the score ledger's digest, which can say that something moved and never
+		// which - the readout falls back to the sentence that names no field.
+		settingsMoved: settingsMoved(manifests),
 		board,
 		memory,
 		memoryHeld: held,

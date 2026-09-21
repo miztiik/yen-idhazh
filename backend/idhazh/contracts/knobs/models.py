@@ -304,6 +304,11 @@ class ModelsConfig(Contract):
     __schema_stem__: ClassVar[str] = "models-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21",
+            change="Add an optional judge entry, decoding on the served role's weights.",
+            why="The judge could only open a thinking channel by moving the summariser too.",
+        ),
+        ChangelogEntry(
             version="2026-09-20",
             change="Add optional CPU, cache, checkpoint and template controls.",
             why="Each model can declare the runtime settings it needs.",
@@ -319,11 +324,6 @@ class ModelsConfig(Contract):
             why="A cap set from no reading of these weights truncates a thought mid-sentence.",
         ),
         ChangelogEntry(
-            version="2026-09-15T12:30",
-            change="models.<role>.draft.spec_type accepts a third value, draft-mtp.",
-            why="A model that predicts its own next tokens needs no second set of weights.",
-        ),
-        ChangelogEntry(
             version="2026-09-14",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",
@@ -331,6 +331,17 @@ class ModelsConfig(Contract):
     )
 
     summarize: ModelEntry
+    #: How the content-similarity judge decodes, when it is not the summariser's
+    #: own entry. Null in every committed file and null is the default, so a
+    #: fresh clone judges exactly as it judges today. It exists because the one
+    #: thing the judge wants - a reasoning span in front of its verdict - lives
+    #: in an entry that also moves the summariser's answer budget, its cache
+    #: types and its batch size, and moving those for a judge's benefit is an
+    #: uninstrumented change to the words a reader gets. It is filled when a
+    #: replay says a reasoned verdict is a better verdict; until then it stays
+    #: null and the channel stays shut
+    #: (`docs/reference/benchmarks/what-the-margin-rule-changes.md`).
+    judge: ModelEntry | None = None
 
     @classmethod
     def roles(cls) -> tuple[str, ...]:
@@ -340,6 +351,12 @@ class ModelsConfig(Contract):
         its own, so the field list stopped being the role list on the day this
         shape became a file - and a caller that read it as one would offer
         `version` as a model an operator could name.
+
+        **A role here is a model a server is stood up for**, which is why the
+        optional judge entry is not one: it re-decodes on the weights the served
+        role already holds, so it is fetched by nobody and started by nobody.
+        `entries` below is what a caller wants when the question is every entry
+        that was declared.
         """
         return tuple(
             sorted(
@@ -349,10 +366,48 @@ class ModelsConfig(Contract):
             )
         )
 
+    def entries(self) -> tuple[tuple[str, ModelEntry], ...]:
+        """Every entry this document actually declares, named, in name order.
+
+        `roles` is the list of models a server is stood up for; this is the list
+        of entries somebody wrote down. An optional entry left out is absent here
+        rather than present and null, so a caller loops over what exists instead
+        of testing each one.
+        """
+        declared = ((name, getattr(self, name)) for name in sorted(type(self).model_fields))
+        return tuple(
+            (name, entry) for name, entry in declared if isinstance(entry, ModelEntry)
+        )
+
     @model_validator(mode="before")
     @classmethod
     def _a_removed_key_is_refused_by_name(cls, data: Any) -> Any:
         return refuse_a_removed_knob("models", data, SUPERSEDED_MODELS_NAMES)
+
+    @model_validator(mode="after")
+    def _a_second_entry_decodes_on_the_weights_the_server_holds(self) -> Self:
+        """An entry nobody stands a server up for has to name the running weights.
+
+        One llama-server, one file. An entry naming a second set of weights would
+        either double what the runner's cache carries - the largest fixed cost in
+        the pipeline (Guardrail #2) - or, worse, decode against whatever the
+        running server happens to hold while the row records the id it asked for.
+        Nothing raises in that case and every verdict is attributed to a model
+        that never saw the pair.
+
+        What a second entry is free to move is the decode: its temperature, its
+        budgets, its turn markers and whether it opens a reasoning channel.
+        """
+        for role, entry in self.entries():
+            if role in type(self).roles() or entry.sha256 == self.summarize.sha256:
+                continue
+            raise ValueError(
+                f"models.{role} names weights {entry.sha256 or 'nothing at all'} and "
+                f"models.summarize names {self.summarize.sha256 or 'nothing at all'}. "
+                f"No server is started for models.{role}, so it decodes on the weights "
+                "the summariser's server holds - name those, or make it a role of its own"
+            )
+        return self
 
     @model_validator(mode="after")
     def _every_block_names_the_weights_it_is_declared_for(self) -> Self:
@@ -372,8 +427,7 @@ class ModelsConfig(Contract):
         The stamp already refuses to run on one: `idhazh.fingerprint.build_inputs`
         stops when the weights have no recorded digest.
         """
-        for role in type(self).roles():
-            entry: ModelEntry = getattr(self, role)
+        for role, entry in self.entries():
             for block, declared, repair in (
                 ("inference", entry.inference.declared_for, _REDERIVE_THE_NUMBERS),
                 ("turns", entry.turns.declared_for, _RERECORD_THE_MARKERS),

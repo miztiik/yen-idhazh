@@ -531,6 +531,42 @@ commit nothing: one job downloads every leg's verdicts and makes one push, so
 there is no merge driver to trust, no union stacking to census afterwards, and no
 leg that can die having pushed half its rows.
 
+**The confidence column is a gap between verdicts, and it was a gap between
+tokens until 2026-09-21.** The judge asks the decoder what else it could have
+written at the position the verdict opens at, and the old rule subtracted the top
+two entries of that list. A list holds tokens, and a token is the opening of a
+legal reply rather than a legal reply - so `NO` and ` NO` are one verdict said
+twice, and subtracting them reported a near-zero gap on a reply the model was
+certain about. The rule now sums each returned token into the verdict its text
+opens, drops a token that opens more than one as naming none of them, and divides
+by the legal mass. The window widened with it, from the three verdict words to
+the twenty-five non-empty prefixes the grammar admits, **because the two are one
+change**: at three tokens the list is usually one verdict spelled twice and the
+new rule has nothing to compare - measured, and the reading is in
+[../../reference/benchmarks/what-the-margin-rule-changes.md](../../reference/benchmarks/what-the-margin-rule-changes.md).
+
+**It is a change rather than a repair, and the record pays for it once.** The 82
+rows written before 2026-09-21 carry the old quantity in the same column, and
+the only thing that tells a reader which is which is the empty `decode_digest`
+cell on the older rows. The record's own stamp widened at the same time - it now
+carries the sampler temperature, the decode digest and whether a reasoning span
+ran - so every count in it archives and starts again once, by construction rather
+than because a judge changed. That is the price of the two populations the record
+used to merge in silence: a run judging behind a reasoning span and a run judging
+cold produce different numbers in one column, and before the widening nothing
+could separate them afterwards.
+
+**The judge may take a model entry of its own, and no committed file gives it
+one.** The one thing this judge wants from a second entry is a reasoning span in
+front of the verdict, and the committed entry that offers one also moves the
+summariser's answer budget, its cache types and its batch size - which is an
+uninstrumented change to the words a reader gets. So `models.judge` is optional,
+it is null everywhere, and a second entry is refused unless it names the weights
+`models.summarize` already holds: no server is started for it, so it decodes on
+whatever the running one has open. What it may move is the decode. It is filled
+the day a replay says a reasoned verdict is a better verdict, and that replay is
+priced and unrun.
+
 ## Rejected alternatives
 
 **A precision target of 98 percent or better.** About four pairs a day clear the

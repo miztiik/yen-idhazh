@@ -993,11 +993,17 @@ SUBSTITUTED_SHARDS: Final = "8"
 #: see which candidate a machine was drawn for.
 SUBSTITUTED_CANDIDATE: Final = "candidate"
 
+#: The name a council night files its rows under. The day the council RUNS and
+#: then the platform's run id, so the prefix is deliberately a day later than
+#: `SUBSTITUTED_DATE` - a judging run opens after the day it judges.
+SUBSTITUTED_COUNCIL_RUN: Final = "2026-08-26-35534060762"
+
 EXPRESSION_VALUES: Final = {
     "needs.plan.outputs.date": SUBSTITUTED_DATE,
     "needs.plan.outputs.day_dir": SUBSTITUTED_DAY_DIR,
     "needs.plan.outputs.shards": SUBSTITUTED_SHARDS,
     "needs.draw.outputs.date": SUBSTITUTED_DATE,
+    "needs.draw.outputs.run_id": SUBSTITUTED_COUNCIL_RUN,
     "steps.decide.outputs.date": SUBSTITUTED_DATE,
     "github.sha": SUBSTITUTED_SHA,
     "matrix.shard": SUBSTITUTED_SHARD,
