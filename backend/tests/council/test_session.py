@@ -151,14 +151,21 @@ def _judge_modules_reached(module: str, prefixes: tuple[str, ...]) -> list[str]:
 
 
 @pytest.mark.parametrize("verb", COUNCIL_VERBS)
-def test_a_council_verb_runs_a_night_that_hosts_nobody(verb: str) -> None:
-    """The zero-tenant arm, against the config the repository commits.
+def test_a_council_verb_runs_a_night_that_hosts_nobody(verb: str, tmp_path: Path) -> None:
+    """The zero-tenant arm, against a config that registers nobody.
 
     A venue with no tenants judges nothing, and that is correct. What it must
     not do is fail: every step of the night still runs, which is what makes the
     council buildable and testable with no judge in the repository.
+
+    The config is written here rather than read out of `config/`, which has
+    registered a judge since 2026-09-21. Reading the committed one would ask
+    what that judge does instead of what an empty room does - and would run a
+    real night's work over the checkout's own stores on the way.
     """
-    assert cli.main([verb, "--date", A_DATE, "--run-id", A_RUN]) == 0
+    empty = _config_registering(tmp_path)
+
+    assert cli.main([verb, "--date", A_DATE, "--run-id", A_RUN, "--config", str(empty)]) == 0
 
 
 @pytest.mark.parametrize("verb", [*COUNCIL_VERBS, "council-shard"])
@@ -378,10 +385,21 @@ def test_a_night_that_hosts_nobody_leaves_no_day_file_behind(tmp_path: Path) -> 
     nothing at all. The store's directory is kept by its own `.gitkeep`.
     """
     state_root = tmp_path / "state"
+    empty = _config_registering(tmp_path)
 
     assert (
         cli.main(
-            ["council-settle", "--date", A_DATE, "--run-id", A_RUN, "--state-root", str(state_root)]
+            [
+                "council-settle",
+                "--date",
+                A_DATE,
+                "--run-id",
+                A_RUN,
+                "--config",
+                str(empty),
+                "--state-root",
+                str(state_root),
+            ]
         )
         == 0
     )
