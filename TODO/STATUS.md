@@ -38,14 +38,14 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 | [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 11 | 11 | 8 |
-| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 8 | 21 | 7 |
+| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 11 | 18 | 4 |
 
 ## In flight - 0
 
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 43
+## Ready now - 40
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -90,10 +90,7 @@ section 3 is where it is answered.
 | #20 | 37 | C | What is holding the runner's memory | 5, 9 |
 | #21 | 37 | C | What the context window actually costs | 9 |
 | #2 | 38 | D | The council knows which run it is | 1a |
-| #3 | 38 | E | The separation and the dictum, written where the next agent reads it | - |
 | #8 | 38 | G | The pair row gains the stamp, and the store is rewritten | - |
-| #1b | 38 | H | The judge stops safely and flushes as it goes | 1a |
-| #10 | 38 | H | The judge's own bound reads a measured number | 9 |
 | #11b | 38 | K | The content-similarity judge reads its own margin | 11a |
 | #16 | 38 | M | The model block becomes one composite action | - |
 

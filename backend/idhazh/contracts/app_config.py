@@ -41,7 +41,7 @@ from idhazh.contracts.knobs.models import SUPERSEDED_MODELS_NAMES, ModelsConfig,
 from idhazh.contracts.knobs.observability import LoggingConfig, ObservabilityConfig
 from idhazh.contracts.knobs.page_weight import PageWeightConfig
 from idhazh.contracts.knobs.placement import (
-    SECONDS_A_CALL,
+    SECONDS_A_JUDGED_PAIR,
     AssembleConfig,
     LensWeightsConfig,
     PlacementConfig,
@@ -86,9 +86,14 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-09-21T02:00",
+            version="2026-09-21T05:00",
             change="console.context_high_percentile and console.context_cut_off_reason, additive.",
             why="The context panel draws two ends a run and names what a cut-off looks like.",
+        ),
+        ChangelogEntry(
+            version="2026-09-21T04:30",
+            change="assemble.same_story.adaptive_dedup_threshold.flush_every_pairs, default 1.",
+            why="A shard that stops early kept nothing, and pairs are the only unit it has.",
         ),
         ChangelogEntry(
             version="2026-09-21T01:00",
@@ -99,11 +104,6 @@ class AppConfig(Contract):
             version="2026-09-21",
             change="council block added; the judge's own block is now optional.",
             why="The venue's runner numbers cannot sit inside a tenant that need not exist.",
-        ),
-        ChangelogEntry(
-            version="2026-09-20T01:00",
-            change="observability.host_fingerprint_bandwidth_mib renamed to ..._floor_mib.",
-            why="The probe now derives its buffer from the cache, so the value is a floor.",
         ),
         ChangelogEntry(
             version="2026-08-21",
@@ -231,23 +231,25 @@ class AppConfig(Contract):
         """A budget a shard cannot finish is a job GitHub kills with nothing uploaded.
 
         Per tenant, and only while that tenant is configured. The bound and the
-        width are the council's; the pair budget and the per-call cost are the
+        width are the council's; the pair budget and the per-pair cost are the
         content-similarity judge's, so a config with no judge in it has nothing
-        to check. The refusal prints the arithmetic rather than a bare
-        comparison: a person raising the budget has three knobs to choose
-        between, and the message has to say which.
+        to check. The cost is the worst pair measured rather than the average
+        one: a budget sized on the average fails on the night the work is hard.
+        The refusal prints the arithmetic rather than a bare comparison: a person
+        raising the budget has three knobs to choose between, and the message has
+        to say which.
         """
         knobs = self.assemble.same_story.adaptive_dedup_threshold
         if knobs is None:
             return self
         a_shard = math.ceil(knobs.pair_budget / self.council.shards)
-        seconds = a_shard * 2 * SECONDS_A_CALL
+        seconds = a_shard * SECONDS_A_JUDGED_PAIR
         bound = self.council.shard_timeout_minutes * 60
         if seconds > bound:
             raise ValueError(
                 f"pair_budget {knobs.pair_budget} over {self.council.shards} shards is "
-                f"{a_shard} pairs a shard, which is {a_shard * 2} calls at "
-                f"{SECONDS_A_CALL} s, which is {seconds:.0f} s against "
+                f"{a_shard} pairs a shard, which at {SECONDS_A_JUDGED_PAIR} s a pair is "
+                f"{seconds:.0f} s against "
                 f"council.shard_timeout_minutes of {self.council.shard_timeout_minutes} "
                 f"({bound} s). Lower pair_budget, raise council.shards, or raise the "
                 "timeout - which may not go past GitHub's 6 h job ceiling"

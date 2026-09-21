@@ -12,6 +12,7 @@
         "discard_share": 0.02,
         "enabled": true,
         "fall_weight": 0.6,
+        "flush_every_pairs": 5,
         "judge_temperature": 0.7,
         "max_down_bins": 12,
         "max_up_bins": 4,

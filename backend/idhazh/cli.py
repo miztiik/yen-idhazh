@@ -38,6 +38,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+import time
 from collections.abc import Sequence
 from datetime import date as date_type
 from pathlib import Path
@@ -53,6 +54,7 @@ from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.qualification import (
     CandidateIdentity,
 )
+from idhazh.council.deadline import compute_shard_deadline
 from idhazh.embed import Embedder
 from idhazh.evals import sampling
 from idhazh.evals.hhem import (
@@ -578,6 +580,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             settings=settings,
             digest_root=common.PUBLIC_ROOT,
             run_dir=common.JUDGE_ROOT / judged_on,
+            # Read here rather than at the top of this file: the checkout, the
+            # install and the weights restore ran before this process and are not
+            # what the judging clock is about.
+            deadline=compute_shard_deadline(settings.app.council, started=time.monotonic()),
             base_url=args.base_url,
         )
         return 0
