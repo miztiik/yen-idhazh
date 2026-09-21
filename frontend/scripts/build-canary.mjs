@@ -122,11 +122,11 @@ function writeItemHealthCanary() {
 	// zero, and a day timed in part.
 	//
 	// The machine cells that no committed run has written yet are named and left
-	// empty - the stolen share, the fault count and the pinning flag. A plausible
-	// figure nobody measured is worse here than a dash: this file is what the
-	// console's arithmetic is checked against. The six `os_` ones and the two
-	// anonymous-memory readings are filled on four of the days, from the
-	// committed readings and from a model that says it is one (`READINGS`).
+	// empty - the stolen share. A plausible figure nobody measured is worse here
+	// than a dash: this file is what the console's arithmetic is checked against.
+	// The six `os_` ones and the two anonymous-memory readings are filled on four
+	// of the days, from the committed readings and from a model that says it is
+	// one (`READINGS`).
 	//
 	// The newest day is not one of those four. It carries the kernel's own
 	// account - what the machine has, what was left at the item's worst moment
@@ -134,6 +134,12 @@ function writeItemHealthCanary() {
 	// shape the committed archive has: the three columns landed late, so most
 	// days carry none of them. The memory board leads with that account, so a
 	// fixture without it could only ever reach the board's empty state.
+	//
+	// The fault count, the pinning setting and the disk copies are filled on three
+	// named days as well, and `memory` below says exactly which and why. They are
+	// fixture, like the stage clock: the states the disk-read panel exists to tell
+	// apart have never been produced by a committed run, and a panel drawing a
+	// state nothing can reach is a panel nobody can tell from a broken one.
 	const COLUMNS = [
 		'version', 'date', 'run_id', 'item_id', 'url_key', 'canonical_url', 'vertical',
 		'source_id', 'stage', 'outcome', 'code', 'http_status', 'source_chars', 'source_words',
@@ -359,6 +365,64 @@ function writeItemHealthCanary() {
 		};
 	};
 
+	/** Whether the machine took the model's memory back, on three named days.
+	 *
+	 * **Fixture, and a set of states no committed run has produced.** No row of
+	 * the committed item ledger carries `llama_major_faults` or
+	 * `weights_pinned` at all, and the rows carrying `os_mem_cached_bytes` sit
+	 * on two days - measured 2026-09-21 over 13,946 rows across 28 days, and it
+	 * is the property rather than the count that matters, because the ledger
+	 * grows every run. So every state the disk-read panel exists to tell apart
+	 * is unreachable from the archive, and three of them have to sit on a
+	 * fixture or no test can see them.
+	 *
+	 * One day a state, because a day is one tile:
+	 *
+	 * - The newest day waited on the disk AND its disk copies collapsed by about
+	 *   a third over the day. That is the machine reclaiming, and it is the one
+	 *   the panel exists to catch.
+	 * - The day before waited on the disk while its disk copies never moved.
+	 *   Same tile on the upper strip, a different one underneath, and the two
+	 *   have different fixes - which is the whole reason the second strip is
+	 *   drawn beside the first rather than instead of it.
+	 * - The day forty days back counted and found nothing, and it is the one day
+	 *   here whose memory was held down. A quiet strip on a run that pinned its
+	 *   weights is the expected reading; a quiet strip on a run that did not is
+	 *   luck, and the panel must be able to say which it is looking at.
+	 *
+	 * Every other day leaves all three cells empty, which is what every run
+	 * before the columns wrote and which must never draw as a quiet day.
+	 *
+	 * The count climbs with the seat so that the day's own arithmetic is
+	 * checkable from this file. The FIRST article of a shard carries a far larger
+	 * one - `starting` - because a server that has just started really does read
+	 * its whole weight file in, and that is the read the panel leaves out. Left
+	 * at zero it would make the exclusion untestable: a fold that quietly counted
+	 * the first article would get the same total as one that did not.
+	 *
+	 * Both pinning settings are real: `config/models/qwen3.5-9b-q4km.json` sets
+	 * `inference.load_mode` and the other four leave it null, so neither value
+	 * here is a setting the repository cannot produce.
+	 */
+	const MEMORY_DAYS = new Map([
+		[
+			date,
+			{ waits: 4100, starting: 148000, copies: 10_400_000_000, step: 1_900_000_000, pinned: 'False' }
+		],
+		[earlier, { waits: 1700, starting: 148000, copies: 10_200_000_000, step: 0, pinned: 'False' }],
+		[longAgo, { waits: 0, starting: 148000, copies: 11_000_000_000, step: 0, pinned: 'True' }]
+	]);
+
+	const memory = (rowDate, seat) => {
+		const day = MEMORY_DAYS.get(rowDate);
+		if (!day) return {};
+		return {
+			llama_major_faults: seat === 0 ? day.starting : day.waits * seat,
+			os_mem_cached_bytes: day.copies - day.step * seat,
+			weights_pinned: day.pinned
+		};
+	};
+
 	/** The item's own clock, the per-call rates, and what it ran on.
 	 *
 	 * **Fixture, and derived from the milliseconds already on the row.** The run
@@ -482,7 +546,12 @@ function writeItemHealthCanary() {
 						os_mem_available_min_bytes: kernelRecorded ? floor : '',
 						os_mem_available_bytes: kernelRecorded ? floor + (scatter % 300) * 1000000 : ''
 					}),
-			n_ctx_configured: 65536
+			n_ctx_configured: 65536,
+			// Last, so the three disk-read cells beat `READINGS` on the one day both
+			// name. `READINGS` sets the copies flat across that day, and this day is
+			// here to say the copies did not move - the same fact, written by the
+			// side whose panel reads it.
+			...memory(rowDate, seat.item_index)
 		};
 	};
 

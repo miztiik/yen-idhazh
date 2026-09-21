@@ -942,6 +942,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "console.panel_groups.machine gains the disk-reads panel.",
+      "version": "2026-09-21T18:00",
+      "why": "Memory taken back off the model is paid for on every later article."
+    },
+    {
       "change": "console.panel_groups.machine gains memory-held, additive.",
       "version": "2026-09-21T14:00",
       "why": "What the machine's memory holds is a question the ceiling panel does not answer."
@@ -955,11 +960,6 @@
       "change": "console.context_high_percentile and console.context_cut_off_reason, additive.",
       "version": "2026-09-21",
       "why": "The context panel draws two ends a run and names what a cut-off looks like."
-    },
-    {
-      "change": "console.panel_groups.machine drops two Hardware panels.",
-      "version": "2026-09-20T15:00",
-      "why": "A container of unrelated figures has no question to be titled with."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -997,7 +997,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-09-21T14:00",
+      "default": "2026-09-21T18:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1005,5 +1005,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-09-21T14:00"
+  "version": "2026-09-21T18:00"
 }

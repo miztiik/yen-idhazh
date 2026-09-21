@@ -499,6 +499,11 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21T18:00",
+            change="console.panel_groups.machine gains the disk-reads panel.",
+            why="Memory taken back off the model is paid for on every later article.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T14:00",
             change="console.panel_groups.machine gains memory-held, additive.",
             why="What the machine's memory holds is a question the ceiling panel does not answer.",
@@ -512,11 +517,6 @@ class AppearanceConfig(Contract):
             version="2026-09-21",
             change="console.context_high_percentile and console.context_cut_off_reason, additive.",
             why="The context panel draws two ends a run and names what a cut-off looks like.",
-        ),
-        ChangelogEntry(
-            version="2026-09-20T15:00",
-            change="console.panel_groups.machine drops two Hardware panels.",
-            why="A container of unrelated figures has no question to be titled with.",
         ),
         ChangelogEntry(
             version="2026-08-29",
