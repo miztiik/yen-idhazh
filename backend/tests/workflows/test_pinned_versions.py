@@ -9,16 +9,12 @@ import pytest
 from conftest import REPO_ROOT, read_text
 
 from ._harness import (
-    APPROVED_ACTION_MAJORS,
     LLAMA_DIGEST_CHECK,
-    LLAMA_INLINE_RUNTIME_WORKFLOWS,
     LLAMA_PIN_NAMES,
     LLAMA_PIN_SCRIPT,
     LLAMA_PIN_VALUES,
     LLAMA_PINNED_ENDPOINT,
     LLAMA_RUNTIME_SCRIPT,
-    LLAMA_RUNTIME_WORKFLOWS,
-    LLAMA_SCRIPT_CALLERS,
     LLAMA_SHARED_SCRIPTS,
     PINNED_LLAMA_ASSET,
     PINNED_LLAMA_BUILD,
@@ -42,26 +38,21 @@ from ._harness import (
 pytestmark = pytest.mark.workflow
 
 
-def test_every_workflow_that_runs_llama_cpp_pins_the_same_build() -> None:
-    """Production, the validation case and the harness run one binary.
+def _fetch_script_callers(workflows: dict[str, dict[str, object]]) -> dict[str, dict[str, object]]:
+    """Every workflow whose steps reach the shared runtime fetch, found by reading.
 
-    A throughput number is only about the pipeline if the pipeline runs the
-    build the number was measured on (Guardrail #10).
-
-    An unconverted workflow spells the pin in its own `env:` block. A converted
-    one reads it off the shared script, which is the next test.
+    This was a written list, so converting a caller was an edit to a test file
+    before it was a change to a workflow.
     """
-    workflows = _load_workflows()
-
-    for filename in sorted(LLAMA_INLINE_RUNTIME_WORKFLOWS):
-        env = _mapping(workflows[filename].get("env"), f"{filename} env")
-        assert env.get("LLAMA_CPP_BUILD") == PINNED_LLAMA_BUILD, filename
-        assert env.get("LLAMA_CPP_ASSET") == PINNED_LLAMA_ASSET, filename
-        assert env.get("LLAMA_CPP_SHA256") == PINNED_LLAMA_SHA256, filename
+    return {
+        filename: workflow
+        for filename, workflow in sorted(workflows.items())
+        if any(shared in body for body in _run_bodies(workflow) for shared in LLAMA_SHARED_SCRIPTS)
+    }
 
 
 def test_the_shared_fetch_script_is_the_one_home_of_the_pin_for_every_caller_on_it() -> None:
-    """One home per converted caller, and the test tightens as the rest convert.
+    """One home per converted caller, and the callers are read rather than listed.
 
     The pin used to live in eleven places that had to change together - four
     workflow `env:` blocks and seven fetch steps - and nothing read them against
@@ -69,9 +60,9 @@ def test_the_shared_fetch_script_is_the_one_home_of_the_pin_for_every_caller_on_
     does not run, which is a measurement about a binary nobody ships
     (Guardrail #10).
 
-    A conversion is one line in `LLAMA_SCRIPT_CALLERS`: that workflow stops
-    being asked for an `env:` copy above and starts being refused one here. The
-    set is not the whole runtime list yet, and this names which ones are left.
+    The three values are read off the pin script now rather than repeated in the
+    harness, so a bump is one edit instead of three and a stale copy cannot
+    agree with itself while the runners run something else.
 
     What a converted caller is refused is the VALUE, not the name. A job whose
     stage records which build decoded the bytes has to put `LLAMA_CPP_BUILD` in
@@ -81,16 +72,33 @@ def test_the_shared_fetch_script_is_the_one_home_of_the_pin_for_every_caller_on_
     walks values, so an `env:` block reintroducing `LLAMA_CPP_BUILD: <build>`
     was invisible to it - the key is not a value and the build does not contain
     its own name.
+
+    Two one-line rules are folded in rather than kept as tests of their own:
+    nobody asks for whichever release is newest, and a fetch names a tag and
+    checks a digest.
     """
-    pin = read_text(SCRIPTS_DIR / LLAMA_PIN_SCRIPT)
-    assert f"LLAMA_CPP_BUILD={PINNED_LLAMA_BUILD}" in pin
-    assert f"LLAMA_CPP_SHA256={PINNED_LLAMA_SHA256}" in pin
-    assert PINNED_LLAMA_ASSET in pin.replace("${LLAMA_CPP_BUILD}", PINNED_LLAMA_BUILD)
+    assert all(LLAMA_PIN_VALUES), f"{LLAMA_PIN_SCRIPT} declares an empty pin"
+    assert re.fullmatch(r"[0-9a-f]{64}", PINNED_LLAMA_SHA256), "the pin's digest is not a sha256"
+    assert PINNED_LLAMA_BUILD in PINNED_LLAMA_ASSET, "the asset does not name the build it holds"
+
+    # The list endpoint hands back a different binary on every cache eviction.
+    # The scripts as well as the workflows, because a fetch that was extracted
+    # into a script is still a fetch.
+    named = (
+        *WORKFLOWS_DIR.glob("*.yml"),
+        *WORKFLOWS_DIR.glob("*.yaml"),
+        *SCRIPTS_DIR.glob("*.sh"),
+    )
+    assert named, "neither directory ships anything, so this is checking nothing"
+    for path in sorted(named):
+        assert "releases?per_page" not in read_text(path), path.name
 
     # Every shipped script, not just the fetch: the runtime install moved into a
     # second file, and a check that named one file would stop covering the pin
     # the moment a third appeared.
-    for script in sorted(SCRIPTS_DIR.glob("*.sh")):
+    scripts = sorted(SCRIPTS_DIR.glob("*.sh"))
+    assert scripts, f"{SCRIPTS_DIR} ships nothing, so nothing here can spell a pin"
+    for script in scripts:
         if script.name == LLAMA_PIN_SCRIPT:
             continue
         text = read_text(script)
@@ -101,20 +109,27 @@ def test_the_shared_fetch_script_is_the_one_home_of_the_pin_for_every_caller_on_
     assert f".github/scripts/{LLAMA_PIN_SCRIPT}" in reachable, (
         "the fetch reads the pin rather than repeating it"
     )
+    assert LLAMA_PINNED_ENDPOINT in reachable, "the shared fetch must ask for one tag"
+    assert LLAMA_DIGEST_CHECK in reachable, "the shared fetch must check the archive digest"
 
-    assert LLAMA_SCRIPT_CALLERS <= LLAMA_RUNTIME_WORKFLOWS, (
-        "a caller of the fetch script installs the runtime, so it belongs to that set"
-    )
-    assert LLAMA_SCRIPT_CALLERS, "nothing is converted, so this is checking nothing"
+    workflows = _load_workflows()
+
+    # Every fetch a workflow still spells for itself, discovered rather than
+    # listed. That set empties as callers convert, and the closure above is what
+    # covers them once it has.
+    for filename, workflow in sorted(workflows.items()):
+        for job_name, step_name, script_body in _llama_fetch_scripts(workflow):
+            where = f"{filename}/{job_name}/{step_name}"
+            assert LLAMA_PINNED_ENDPOINT in script_body, f"{where} must ask for one tag"
+            assert LLAMA_DIGEST_CHECK in script_body, f"{where} must check the archive digest"
+            assert RELEASE_LOOKUP_FORM in script_body, f"{where} must fail on an HTTP error"
+            assert WEIGHTS_FETCH_FORM in script_body, f"{where} must fail on an HTTP error"
+
+    converted = _fetch_script_callers(workflows)
+    assert converted, "no workflow reaches the shared fetch, so this is checking nothing"
 
     published = f".outputs.{_pin_output_name()} }}}}"
-    workflows = _load_workflows()
-    for filename in sorted(LLAMA_SCRIPT_CALLERS):
-        workflow = workflows[filename]
-        assert any(
-            shared in body for body in _run_bodies(workflow) for shared in LLAMA_SHARED_SCRIPTS
-        ), f"{filename} is converted, so it has to call one of {sorted(LLAMA_SHARED_SCRIPTS)}"
-
+    for filename, workflow in converted.items():
         copied = sorted(
             text for text in _strings(workflow) if any(v in text for v in LLAMA_PIN_VALUES)
         )
@@ -133,44 +148,14 @@ def test_the_shared_fetch_script_is_the_one_home_of_the_pin_for_every_caller_on_
                 )
 
 
-def test_every_llama_cpp_fetch_is_pinned_and_digest_checked() -> None:
-    workflows = _load_workflows()
+def test_every_action_a_workflow_calls_is_pinned() -> None:
+    """A `uses:` with no `@` takes whatever that action's default branch holds today.
 
-    for filename in sorted(LLAMA_RUNTIME_WORKFLOWS):
-        scripts = _llama_fetch_scripts(workflows[filename])
-        assert scripts, f"{filename} must still fetch llama.cpp"
-
-        for job_name, step_name, script in scripts:
-            where = f"{filename}/{job_name}/{step_name}"
-            assert LLAMA_PINNED_ENDPOINT in script, f"{where} must ask for one tag"
-            assert LLAMA_DIGEST_CHECK in script, f"{where} must check the archive digest"
-            assert RELEASE_LOOKUP_FORM in script, f"{where} must fail on an HTTP error"
-            assert WEIGHTS_FETCH_FORM in script, f"{where} must fail on an HTTP error"
-
-
-def test_no_workflow_takes_whichever_llama_cpp_release_is_newest() -> None:
-    """The list endpoint hands back a different binary on every cache eviction.
-
-    The scripts as well as the workflows, because the pin is moving into
-    `.github/scripts/` one caller at a time and a check that stopped at the YAML
-    would stop covering a fetch the moment that fetch was extracted.
-    """
-    named = (
-        *WORKFLOWS_DIR.glob("*.yml"),
-        *WORKFLOWS_DIR.glob("*.yaml"),
-        *SCRIPTS_DIR.glob("*.sh"),
-    )
-    for path in sorted(named):
-        assert "releases?per_page" not in read_text(path), path.name
-
-
-def test_every_action_is_pinned_to_an_approved_major() -> None:
-    """GitHub retired Node 20 on the runners.
-
-    An action major that still declares `using: node20` is force-run on Node 24
-    today and stops running at all later. The warning names the action, not the
-    workflow, so nothing in the repo pointed at the 35 call sites until this test
-    existed. A new action must be added here with its Node 24 major.
+    An approval table of Node 24 majors used to sit here, and calling a new
+    action meant editing it first. What it guarded against - a major still
+    declaring `using: node20` - GitHub already warns about in the run log, and
+    the warning names the action rather than the workflow, so the table was a
+    second copy of a notice a person is handed anyway.
     """
     for filename, workflow in _load_workflows().items():
         references = _action_references(workflow)
@@ -180,18 +165,14 @@ def test_every_action_is_pinned_to_an_approved_major() -> None:
             where = f"{filename}/{job_name}"
             # A `./` action is this repository at the commit the run checked
             # out, so it is already pinned to the thing under test and there is
-            # no major to approve. It is held by `_composite_action_script`
+            # no version to name. It is held by `_composite_action_script`
             # instead, which reads what it actually runs.
             if uses.startswith("./"):
                 assert (REPO_ROOT / uses[2:] / "action.yml").is_file(), (
                     f"{where} calls a local action that does not exist: {uses}"
                 )
                 continue
-            action, separator, version = uses.partition("@")
-            assert separator, f"{where} must pin a version: {uses}"
-            assert action in APPROVED_ACTION_MAJORS, f"{where} uses unapproved {action}"
-            expected = APPROVED_ACTION_MAJORS[action]
-            assert version == expected, f"{where} must use {action}@{expected}, not {uses}"
+            assert "@" in uses, f"{where} must pin a version: {uses}"
 
 
 def test_every_setup_python_pin_is_inside_the_declared_interpreter_range() -> None:

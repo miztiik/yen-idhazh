@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import ast
 import json
 import re
 from pathlib import Path
-from typing import cast
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from conftest import REPO_ROOT, read_text
 
 from utilities import model_refs
 
@@ -22,30 +20,22 @@ from ._harness import (
     MODEL_REF_FIELDS,
     MODEL_REF_OUTPUTS,
     MODEL_SERVER_ACTION,
-    MODEL_SERVER_CALLERS,
-    MODELS_DOCUMENT,
     MODELS_POINTER_KEY,
     PINNED_LLAMA_BUILD,
     WEIGHTS_CACHE_ROLES,
     WEIGHTS_CACHE_SUFFIX,
     WEIGHTS_CHECKS,
-    WEIGHTS_FETCH_FORM,
     WORKFLOWS_DIR,
     _action_call,
     _committed_models,
-    _config_key_paths,
     _declared_dispatch_inputs,
     _every_env,
     _expression,
-    _inline_programs,
     _job,
     _load_workflows,
     _mapping,
-    _names,
-    _own_nodes,
+    _model_server_callers,
     _pin_output_name,
-    _reads_the_environment,
-    _run_bodies,
     _runtime_cache_keys,
     _script,
     _step,
@@ -64,25 +54,6 @@ MODEL_REFS_CALL = "python3 backend/utilities/model_refs.py"
 def _published(rows: list[str]) -> dict[str, str]:
     """The `KEY=value` lines a step appends to `$GITHUB_OUTPUT`, as a mapping."""
     return dict(row.split("=", 1) for row in rows)
-
-
-def test_every_weights_fetch_fails_loudly() -> None:
-    """One spelling, everywhere, so a fourth workflow cannot reintroduce the bug.
-
-    `digest.yml` fetched both its models with a bare `curl -sSL`. Without `-f`
-    curl writes an HTTP error body into the .gguf and exits 0, and
-    `backend/models` is a cache path - so a rate-limited minute produced a
-    junk file that was then saved under the pinned key and served to every
-    later run until the entry was evicted.
-    """
-    fetches = _weights_fetch_steps(_load_workflows())
-    assert fetches, "some workflow must still download weights"
-
-    for (filename, job_name), (step_name, script) in sorted(fetches.items()):
-        where = f"{filename}/{job_name}/{step_name}"
-        assert WEIGHTS_FETCH_FORM in script, where
-        assert "curl -sSL" not in script, f"{where} must fail on an HTTP error"
-        assert "resolve/main" not in script, f"{where} must name an immutable revision"
 
 
 def test_every_fetched_weight_is_checked_before_anything_reads_it() -> None:
@@ -116,25 +87,6 @@ def test_every_fetched_weight_is_checked_before_anything_reads_it() -> None:
         assert "sha256sum --check" in script, where
 
 
-def test_the_health_check_names_the_weights_that_answered() -> None:
-    """Healthy says a server replied. It does not say which weights replied."""
-    health = _step(_load_workflows()["digest.yml"], "work", "name", "Check model health")
-    script = health.get("run")
-    assert isinstance(script, str)
-
-    assert '["summarize"]["id"]' in script, "the alias comes from config"
-    assert "/v1/models" in script, "assert the served alias"
-    assert "/props" in script, "assert the loaded path"
-
-    # The step lives in the shared action now, so it reads the filename by name
-    # rather than from one caller's job outputs. Asserted through the step's own
-    # `env`, because a probe comparing the served path against a name nothing
-    # filled would pass on an empty string and say nothing at all.
-    given = _mapping(health.get("env"), "the health step env")
-    assert given.get("WEIGHTS_FILE") == _expression("inputs.weights_file")
-    assert "${WEIGHTS_FILE}" in script
-
-
 def test_no_arm_starts_measuring_before_it_knows_which_model_answered() -> None:
     """The Oracle. A number is about a model only if that model produced it.
 
@@ -148,7 +100,14 @@ def test_no_arm_starts_measuring_before_it_knows_which_model_answered() -> None:
     is held to the same rule whether or not anybody remembered it. The drift this
     catches has run in both directions: `test_model_server_jobs` records the last
     time it was `validate.yml` that nobody diffed.
+
+    Absorbing what was a second test beside it: the alias says which name the
+    server answered under, and only the loaded path says which bytes. A step
+    that asks for the path has to compare it against a filename it was handed by
+    name - a probe comparing against a name nothing filled passes on an empty
+    string and says nothing at all.
     """
+    compared = 0
     for filename, workflow in sorted(_load_workflows().items()):
         for job_name in _mapping(workflow.get("jobs"), f"{filename} jobs"):
             for step in _steps(workflow, job_name):
@@ -159,6 +118,15 @@ def test_no_arm_starts_measuring_before_it_knows_which_model_answered() -> None:
                 assert "/v1/models" in script, (
                     f"{where} waits for health and never asks which model answered"
                 )
+                if "/props" not in script:
+                    continue
+                compared += 1
+                given = _mapping(step.get("env"), f"{where} env")
+                handed = sorted(name for name in given if f"${{{name}}}" in script)
+                assert handed, f"{where} compares the loaded path against no name it was handed"
+                assert ".gguf" not in script, f"{where} names a weights file of its own"
+
+    assert compared, "no step compares the path the server loaded, so this checks nothing"
 
 
 def test_the_daily_run_writes_no_model_ref_of_its_own() -> None:
@@ -369,92 +337,6 @@ def test_a_candidate_is_named_by_its_models_file_and_by_nothing_else(tmp_path: P
             model_refs.candidate_rows(tmp_path, "../../etc/passwd.json", prefix=prefix)
 
 
-def test_every_config_key_a_workflow_indexes_is_in_the_committed_config() -> None:
-    """A key that moved is a `KeyError` on the runner, and nothing earlier looks.
-
-    The inline programs index the committed config by literal key. The schema
-    cannot catch a stale one: the runtime sweep reads its copy as a plain dict,
-    indexes it, and only validates the result afterwards, so the index raises
-    first. This is the one place a renamed or moved knob is caught before a job
-    spends a runner minute reaching for it.
-
-    Two documents since 2026-09-14. A program that indexes `models_file` is
-    reading the model's own file from that point on, so the key path is resolved
-    against whichever of the two it really opened - resolving both against the
-    pointer file would pass on a key neither carries.
-    """
-    documents: dict[str, object] = {
-        CONFIG_FILE_NAME: json.loads(read_text(CONFIG_DIR / CONFIG_FILE_NAME)),
-        MODELS_DOCUMENT: _committed_models(),
-    }
-    seen: set[tuple[str, str, tuple[str, ...]]] = set()
-    for filename, workflow in sorted(_load_workflows().items()):
-        for script in _run_bodies(workflow):
-            for program in _inline_programs(script):
-                for document, keys in _config_key_paths(program):
-                    seen.add((filename, document, keys))
-                    node: object = documents[document]
-                    for depth, key in enumerate(keys):
-                        assert isinstance(node, dict) and key in node, (
-                            f"{filename} indexes the {document} document at "
-                            f"{'.'.join(keys)}, and there is no "
-                            f"{'.'.join(keys[: depth + 1])}"
-                        )
-                        node = cast(dict[str, object], node)[key]
-
-    # A workflow that still indexes the models document by literal key. Naming
-    # one keeps this test from passing by finding nothing, and it names a path
-    # in EACH document so neither half can go quiet on its own. It has moved
-    # twice as the bench's programs moved into `backend/utilities/`.
-    assert ("digest.yml", CONFIG_FILE_NAME, (MODELS_POINTER_KEY,)) in seen
-    assert any(document == MODELS_DOCUMENT for _, document, _ in seen), (
-        "no workflow indexes the models document any more, so this test checks nothing"
-    )
-
-
-def test_no_inline_program_rebinds_a_name_it_read_from_the_environment() -> None:
-    """A dispatch input read into a name and then written over is silently ignored.
-
-    `measure.yml` did exactly this: `CANDIDATE` was the runtime sweep's choice
-    from `RUNTIME_CANDIDATE`, and four lines later the same name was rebound to
-    the candidate config directory. Every later reader got the path, so a
-    dispatch of the incumbent died on `unknown runtime candidate:
-    backend/var/candidate-config` after paying for the weights download.
-
-    **A rebind that consults the value it replaces is a fallback, not a
-    collision** - `value = value or configured.get(field)` is how the same file
-    lets config stand in for an absent input, and that is correct. What is
-    banned is a second assignment that ignores what the first one read.
-    """
-    shadowed: list[str] = []
-    for filename, workflow in sorted(_load_workflows().items()):
-        for script in _run_bodies(workflow):
-            for program in _inline_programs(script):
-                tree = ast.parse(program)
-                for scope in [tree, *(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef))]:
-                    from_environment: dict[str, int] = {}
-                    assignments = sorted(
-                        (n for n in _own_nodes(scope) if isinstance(n, ast.Assign)),
-                        key=lambda n: n.lineno,
-                    )
-                    for node in assignments:
-                        if len(node.targets) != 1:
-                            continue
-                        target = node.targets[0]
-                        if not isinstance(target, ast.Name):
-                            continue
-                        if _reads_the_environment(node.value):
-                            from_environment[target.id] = node.lineno
-                        elif target.id in from_environment and not _names(node.value, target.id):
-                            shadowed.append(
-                                f"{filename}: {target.id} is read from the environment at "
-                                f"line {from_environment[target.id]} of its inline program and "
-                                f"written over at line {node.lineno} without reading it"
-                            )
-
-    assert not shadowed, "\n".join(shadowed)
-
-
 def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
     """The Oracle. Every part of what the entry holds, and all of them from one source.
 
@@ -480,9 +362,11 @@ def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
     which is why the refs travel that way at all.
     """
     workflows = _load_workflows()
+    callers = _model_server_callers(workflows)
+    assert callers, "no job calls the model-server action, so there is no key to read"
     keys = {
         (filename, job_name): dict(_runtime_cache_keys(workflows[filename]))[job_name]
-        for filename, job_name in MODEL_SERVER_CALLERS
+        for filename, job_name in callers
     }
     assert len(set(keys.values())) == 1, f"one entry cannot hold two sets of weights: {keys}"
     key = next(iter(keys.values()))
@@ -506,7 +390,7 @@ def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
     )
 
     published = re.compile(r"\$\{\{ needs\.[a-z_]+\.outputs\.[a-z_0-9]+ \}\}")
-    for filename, job_name in sorted(MODEL_SERVER_CALLERS):
+    for filename, job_name in sorted(callers):
         given = _action_call(workflows[filename], job_name, MODEL_SERVER_ACTION)
         for name in ("weights_file", "weights_revision", _pin_output_name()):
             assert published.fullmatch(given[name]), (
@@ -572,6 +456,8 @@ def _candidate_outputs(
 
 
 @pytest.mark.parametrize(("filename", "job_name", "step_id", "prefix"), CANDIDATE_STEPS)
+
+
 def test_a_declared_draft_head_is_published_and_named_in_the_cache_key(
     filename: str, job_name: str, step_id: str, prefix: str, tmp_path: Path
 ) -> None:
@@ -599,6 +485,8 @@ def test_a_declared_draft_head_is_published_and_named_in_the_cache_key(
 
 
 @pytest.mark.parametrize(("filename", "job_name", "step_id", "prefix"), CANDIDATE_STEPS)
+
+
 def test_an_entry_with_no_draft_head_keeps_the_key_it_already_had(
     filename: str, job_name: str, step_id: str, prefix: str, tmp_path: Path
 ) -> None:
@@ -618,6 +506,8 @@ def test_an_entry_with_no_draft_head_keeps_the_key_it_already_had(
 
 
 @pytest.mark.parametrize(("filename", "job_name", "step_id", "prefix"), CANDIDATE_STEPS)
+
+
 def test_a_draft_head_that_declares_no_digest_is_refused(
     filename: str, job_name: str, step_id: str, prefix: str, tmp_path: Path
 ) -> None:

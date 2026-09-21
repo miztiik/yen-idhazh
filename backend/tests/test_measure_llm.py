@@ -1,4 +1,5 @@
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,7 @@ from utilities.measure_llm import (
     compare_readings,
     display_path,
     download,
+    parse_args,
     parse_model_refs,
     parse_positive_csv,
     raw_readings,
@@ -172,6 +174,25 @@ def test_the_bench_refuses_bytes_the_dispatch_did_not_declare() -> None:
     refusal = check_declared_digest(ref, RemoteFile(bytes=17, sha256="c" * 64), "b" * 64)
     assert refusal is not None
     assert "c" * 64 in refusal and "b" * 64 in refusal
+
+
+def test_a_bench_call_that_names_no_digest_is_refused_at_the_flag(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Required at the parser, so every caller is covered rather than one YAML file.
+
+    A workflow test over the one step that spells the flag stops covering it the
+    day a second caller appears. The parser refuses before anything downloads.
+    """
+    monkeypatch.setattr(
+        sys, "argv", ["measure_llm.py", "bench", "--models", "owner/repo@" + "a" * 40 + ":m.gguf"]
+    )
+
+    with pytest.raises(SystemExit) as refused:
+        parse_args()
+
+    assert refused.value.code == 2
+    assert "--expect-sha256" in capsys.readouterr().err
 
 
 def _bench_rows(*, threads: int = 4) -> list[dict[str, object]]:

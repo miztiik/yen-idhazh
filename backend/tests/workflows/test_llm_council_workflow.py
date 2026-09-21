@@ -23,7 +23,6 @@ from utilities import council_matrix, shard_bound
 
 from ._harness import (
     MODEL_SERVER_ACTION,
-    MODEL_SERVER_CALLERS,
     MODEL_SERVER_STEPS,
     SUBSTITUTED_DATE,
     _action_call,
@@ -32,6 +31,7 @@ from ._harness import (
     _job,
     _load_workflows,
     _local_action_inputs,
+    _model_server_callers,
     _normalize_condition,
     _script,
     _stage_invocations,
@@ -201,7 +201,7 @@ def test_the_unit_reaches_the_model_through_the_one_shared_action() -> None:
     entry that competes for eviction, and would throw away the only throughput
     reading this feature has - which was taken on these weights.
     """
-    assert (FILENAME, "judge") in MODEL_SERVER_CALLERS
+    assert (FILENAME, "judge") in _model_server_callers(_load_workflows())
     given = _action_call(_judges(), "judge", MODEL_SERVER_ACTION)
     assert set(given) == set(_local_action_inputs(MODEL_SERVER_ACTION))
 

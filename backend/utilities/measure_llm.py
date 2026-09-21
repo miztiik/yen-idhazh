@@ -870,11 +870,12 @@ def parse_args() -> argparse.Namespace:
     bench.add_argument("--repeats", type=int, default=3)
     # Without this the harness downloads whatever the repository holds today and
     # says nothing. The digest is what makes the rest of the page about a
-    # specific set of bytes (Guardrail #10).
+    # specific set of bytes (Guardrail #10). Required rather than defaulted, so
+    # a caller that forgets it is refused before it spends a runner hour.
     bench.add_argument(
         "--expect-sha256",
-        default="",
-        help="Refuse any bytes but these. Required with a single model reference.",
+        required=True,
+        help="Refuse any bytes but these. Empty is allowed only for a multi-model sweep.",
     )
     bench.add_argument("--candidate-id", default="", help="The config id these weights serve as")
     bench.add_argument("--quantisation", default="", help="The quantisation these bytes carry")
