@@ -28,7 +28,7 @@
       "n_threads_batch": 4,
       "n_ubatch": 512,
       "poll": null,
-      "priority": 2,
+      "priority": 1,
       "reasoning_preserve": true,
       "request_timeout_minutes": 22.1,
       "seed": 0,
