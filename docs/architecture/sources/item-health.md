@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -182,18 +182,6 @@ row for the key. Where the two rows disagree the one that names a job wins, for
 the reason the next section gives - `assemble` runs once for the whole day and
 cannot say which machine an item was for.
 
-**That filter reads a frozen file, and until 2026-09-18 that was only half the
-guarantee.** `actions/checkout` pins a job to the commit its run was triggered
-at, so a second attempt at the same work could not see the rows the first attempt
-pushed afterwards and appended them again; a union merge driver then kept the lines from
-both sides rather than collapsing them. The other half ran after that merge, on
-the merged file, and kept the first row for each key. Measured 2026-08-31,
-`2026-08-29-3` held 44 repeated keys here because only the first half existed.
-
-Both halves are gone with the shape that needed them. A worker writes its census
-into its own segment, `idhazh compact` folds the segments by key, and no two
-writers open this file - so there is no merge to settle after.
-
 **A worker records only settled items.** It writes an article payload for every
 item it reaches and a summary payload for every item that got as far as the
 model, so an accepted article with no summary beside it means the shard stopped
@@ -246,8 +234,8 @@ the same temp-file-then-rename every per-item payload uses. The payload is
 `ItemHealthRow` and nothing else, so there is no second shape to version.
 
 **It exists because the row used to die with the shard.** The recorder validates
-all 119 cells an item at a time, and until 2026-09-15 the only place they went
-was a log line - a CI artifact with its own expiry. The durable row was rebuilt
+every cell of the row an item at a time, and until 2026-09-15 the only place they
+went was a log line - a CI artifact with its own expiry. The durable row was rebuilt
 afterwards from the article and the summary payloads, which between them cannot
 carry most of those cells, so a cell the shard measured correctly still reached
 this ledger empty.
@@ -368,9 +356,11 @@ is that rule: a row naming a job beats a row that does not.
 
 ### What the machine had, against what a process held
 
-Seven memory cells on this row are about a PROCESS - the model server's
-resident set now and over its whole life, the worker's, and the part of each
-that is not file-backed. **None of them can
+Five memory cells on this row are about a PROCESS, and the column names say
+which: `llama_rss_bytes` and `llama_rss_peak_bytes` are the model server's
+resident set now and over its whole life, `python_rss_bytes` is the worker's,
+and `llama_rss_anon_bytes` and `python_rss_anon_bytes` are the part of each that
+is not file-backed. **None of them can
 say what was left.** llama.cpp maps the weights with no `-lm`, so their resident
 pages are file-backed and evictable and count in every RSS figure, and a page
 two processes share is counted twice. Adding the marks up and subtracting from
@@ -898,6 +888,20 @@ Authority: Fowler.
 The row stores `canonical_url`. About 80 bytes buys back the URL that otherwise
 expires with a run artifact. Authority: Fowler.
 
+**How many phases a model call decodes in is a config value, so no column on
+this row is shaped by it.** `_ask_the_model` in
+[`backend/idhazh/stages/common.py`](../../../backend/idhazh/stages/common.py)
+decodes a logical call as two spans when the active model's turn envelope
+declares a closing marker and as one span otherwise, and
+`TurnsConfig.thinks` reads that marker as the whole of the question. The rule
+for deriving the count, in place of a number: take the logical calls the stage
+made for the item, double it if the active model file under `config/models/`
+sets `turns.thinking_close`, and double it again because each span reads its
+prompt before it writes its answer. Clearing one marker halves it with no code
+changed. **Write the rule, never the count.** Every fixed count written about
+this pipeline has been wrong in turn, and a number here rots on a config edit
+that no test and no reviewer can see. Authority: Owner, 2026-09-20.
+
 A worker commits the rows for its own items, and Assemble writes the rest.
 Assemble was the only writer until 2026-08-27, to keep a diagnostic append out of
 a rebase race with the publish commit. What that reasoning missed is where the
@@ -933,7 +937,7 @@ by the row identity above. Authority: Fowler, over Carmack's original ruling.
 | Let a worker record every item it was planned, not only the settled ones | An item the shard was interrupted on would be filed as a failure, and an append-only ledger cannot take that back. |
 | Add a visual-planning or render outcome column | Neither is a terminal item stage: a render failure degrades an item, never fails it. The run manifest and the day payload already carry what the planner did. |
 | Record a render failure as a `visual` row here | It would say the item stopped where it did not - the item publishes, shorter - and it would take one off the `publish` count that `day_metrics` and the console read. The failure is loud from 2026-09-14 as the `item.visual.failed` event, whose `src` is the stage that broke rather than the stage the item ended at. |
-| Split the model-server peak into a prefill half and a decode half | There is no single boundary to cut on. An item's model time is four segments in alternation, because the stage sends two calls: `prefill_ms` equals `label_prefill_ms + summary_prefill_ms` on 370 of 370 rows carrying two calls (2026-09-17), and `model_calls` reads 1 or 2 across the whole committed ledger and never more. The split is reachable in-process, since the stage knows which call is running while it runs. What is refused is the persisted form: `label_started_at` and `summary_started_at` columns would write today's two-call shape into a contract, and a third call would then break every reader. The instrument that answers it is a sample taken inside a call, which costs a sampler change and no new column. |
+| Split the model-server peak into a prefill half and a decode half | There is no single boundary to cut on: an item's model time is a read then a write, repeated once per span the active model decodes in, and how many spans that is comes from config rather than from the pipeline (the design rationale above gives the rule). `prefill_ms` equals `label_prefill_ms + summary_prefill_ms` on 370 of 370 rows carrying two calls (2026-09-17), so the flat cells are already the sum over whatever ran. The split is reachable in-process, since the stage knows which span is running while it runs. **What is refused is the persisted form, and what refusing costs is named rather than implied.** The reader loses the ability to say which half of the model call holds the peak, so a context cut and an output-length cut cannot be told apart on evidence. What it would cost to take: `label_started_at` and `summary_started_at` are task-named timestamp columns, and they would freeze into a contract a call shape one config value controls - clear the thinking marker in a model file and every reader of those columns is wrong with nothing failing. The instrument that answers it without that price is a sample taken inside a call, which costs a sampler change and no new column. |
 
 ## See also
 

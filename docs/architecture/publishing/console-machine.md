@@ -9,23 +9,29 @@ two questions every panel names, the five routes and the strip, the standing ban
 and the one window that governs every page. How any figure here is allowed to
 read is [../../concepts/console-design.md](../../concepts/console-design.md), and
 the machinery every chart shares is [console-charts.md](console-charts.md).
-Twelve panels under **four headings**. Ten read `state/item-health/` and
-`state/host-fingerprint/`, which are the two instruments this route puts beside
-each other; three - the two machine panels and the split - read the machine
-record for the processor and the flags as well. All three are read at
-build time under `$lib/server/` and nothing on the route is fetched: the three
-`state/`
-ledgers add no telemetry column and no reader sees a cell of any of them.
+The headings, their order and which panels sit under each are
+`console.panel_groups.machine` in
+[`config/appearance.json`](../../../config/appearance.json), so the table below
+describes that file rather than repeating a count that a config edit moves.
+Every panel reads `state/item-health/`, `state/host-fingerprint/` or both -
+the two instruments this route puts beside each other - and the machine panels
+and the split take the processor and the flags off the machine record as well.
+Both ledgers are read at build time under `$lib/server/` and nothing on the
+route is fetched: neither adds a telemetry column and no reader sees a cell of
+either.
 
 | Group | Panel | Grain | The sentence it is for |
 | --- | --- | --- | --- |
 | What the machine was doing | Whether the speed numbers can be trusted | one bar a shard | Whether the day's rates can be trusted at all. |
+| What the machine was doing | How much of the processor went to somebody else | one tile a day, and one a shard of the newest run | Whether the work was slow because another tenant on the same box took a share of the processor. |
+| What the machine was doing | Whether the machine took the model's memory back | one tile a day | Whether the model waited on the disk for weight pages the kernel had reclaimed. |
 | What the machine was doing | Which machines this run was given | one card a machine | What machine this is, what it can do against the others this run drew, what clock and uptime it had when we got it, and whether its record survived the day. |
 | What the machine was doing | Whether some machines do the same work slower | one group a machine | What a written token costs against a read one, on the machine that paid it. |
 | What the machine was doing | What kinds of machine we keep being given | one group a day, one bar a machine kind | What kinds of machine we keep being handed, and whether that is changing. |
 | Where the time went | Which parts of the last run took longest | one row a shard | Was the day slow because of the work or because of the machine. |
 | Where the time went | Whether the slowest articles are getting slower | one plot a percentile, one mark a run | Whether the slow end of a run is moving, and how wide the gap is today. |
 | How close we are to the limits | How close an article came to using up the machine's memory | one mark an item of the newest run | How little the kernel had left at one article's worst moment, whether it gave the memory back, and how long the queue was. |
+| How close we are to the limits | What is holding the machine's memory | one bar for the tightest moment of each day | What the memory is going to, and which of those parts a reader may add together. |
 | How close we are to the limits | How close the longest text came to the model's limit | one mark a run | Whether raising the truncation cap is even possible. |
 | What the model spends | What one article costs the machine | three figures over the span, each a range across the articles that recorded it | What a change to the prompt, the model or how many articles a day runs will cost before the run that pays for it. |
 | What the model spends | How much text the model has to read again each time | one column a day | Whether a bigger cache would save wall clock. |
@@ -47,7 +53,7 @@ a panel it does not draw, or leaves one out, so a typo fails the build rather
 than dropping a panel off the page in silence. A titled group steps its panels'
 titles to an `h3` under its own `h2`, which is what makes the grouping a
 document outline and not a row of dividers. Authority: Susan, rulings A and B of
-Row #9 of `TODO/20260920-37-honest-machine-telemetry-plan.md`.
+Row #9 of the honest-machine-telemetry plan, 2026-09-20.
 
 **The grain moved off the heading and onto the panel.** A group used to carry
 it: everything under `The open window` followed the span control and everything
