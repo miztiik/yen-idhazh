@@ -330,6 +330,52 @@ an artifact, the collecting job appends it to the store above, and the trip
 belongs to the venue - so a unit the platform killed has still handed over every
 reading it took.
 
+### The nights this judge says it is behind on
+
+The council asks each tenant which nights inside its window are outstanding
+([llm-council.md](llm-council.md#tonight-and-the-older-nights-it-repairs)) and
+this judge answers from the record, which is one file of a fixed size. No day
+file is opened and no directory is listed, so the answer costs the same on the
+thousandth night as on the first (`CLAUDE.md` Guardrail #12).
+
+**A night is outstanding when the record has never read it.** The record keeps
+two date lists for that. `counted_dates` is the days whose verdicts are in the
+counts, and it is what makes a re-run free. `judged_dates` is every day the
+record has ever read, and it is what an instrument move leaves behind.
+
+| The list | What it holds | What a reset does to it |
+| --- | --- | --- |
+| `counted_dates` | the days behind the counts in this record | emptied, with the counts |
+| `judged_dates` | every day this judge has ever counted | kept |
+
+**The reset is why there are two lists rather than one.** Move the model, the
+prompt, a weight or the sampler and the counts are archived, because they answer
+a different question afterwards. Which nights were read is not a count, so it
+comes across. Without that, retuning the scorer on a Monday would have the
+council dispatch every night of its window that week - and every one of those
+jobs would append its rows and then be refused, because the record still counts
+a date once.
+
+**What it does name is the night that lost a unit.** Three units of four
+reporting is the failure this repair path exists for: every row those three
+judged was appended, and the date stayed out of both lists because a partial day
+cannot be counted and cannot be topped up later. That date comes back here, and
+the next council night judges it again from the top.
+
+**A judge with no record yet names nothing.** A tenant raises the council's
+floor for itself by naming no night from before it arrived, and a judge with no
+record has not arrived on any of them. An operator who wants one of those nights
+judged names the date, which replaces the plan outright.
+
+**The counting step admits only rows the record's own stamp matches**, and that
+filter runs before the one-row-a-pair de-duplication. The day file is
+append-only, so a day judged twice under two instruments holds both readings;
+adding them together would make the record's own stamp a lie with nothing able
+to separate them afterwards. Filtering first is what lets the right row win - a
+discarded row from the old instrument is the more recent one, so filtering
+second would let it take the pair on recency and then be thrown away, losing the
+fresh reading standing behind it.
+
 ## How the line moves: down fast, up slow
 
 The line is allowed to move a little each day, and it is allowed to move further down than up. **Lowering the line publishes less.** Two feeds giving near-identical coverage is the feed's fault, and folding them is the answer, so the move that folds more arrives quickly and the move that folds fewer arrives over a month.
