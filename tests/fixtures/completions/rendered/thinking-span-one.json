@@ -1,0 +1,15 @@
+{
+  "content": "Both headlines name one filing by one company. The dates differ by a day, which is the second wire picking the story up late rather than a second event.",
+  "stop_type": "word",
+  "timings": {
+    "cache_n": 402,
+    "predicted_ms": 3140.7,
+    "predicted_n": 34,
+    "prompt_ms": 4118.2,
+    "prompt_n": 362
+  },
+  "tokens_cached": 798,
+  "tokens_evaluated": 764,
+  "tokens_predicted": 34,
+  "truncated": false
+}

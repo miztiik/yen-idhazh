@@ -559,6 +559,41 @@ allowed to spell one. Every knob is a named field with a type and a default.
 branch on a value is configuration. A branch on an identity is a fork, and the
 second one arrives within a release of the first.
 
+**Span one drops a named set, and the set is what span two owns rather than
+what a schema is.** Deriving the thinking span by removing `json_schema` alone
+was correct while one route existed. On the route whose answer is a word, span
+one inherited the grammar - so it was allowed to write three verdict words and
+nothing else, which is a reasoning block it could not open - and inherited
+`n_probs`, asking the server for a list of alternatives at every position of a
+span nobody reads a distribution off. The rule is now the set, each member
+carrying its own reason, and a recorded reply cannot see either fault: a span
+constrained to three words comes back as a perfectly well-formed verdict.
+
+**The thinking temperature is the caller's, and null carries the answer's
+over.** Every committed entry pins 0.2, so the summariser is unaffected and no
+output moves. A caller that pins 0.0 for a one-word answer is the case this
+exists for: greedy decoding on a span whose length is uncapped by default runs
+until it repeats itself, and the repetition ends at the window rather than at
+the marker it is looping instead of writing.
+
+**The layer hands back the raw window and computes no margin.** It has no idea
+what a verdict opening is, and it must not - one caller's answer is the emitted
+token and another's is the distribution, so a single shared margin would be two
+instruments in one column. Which decoded position the answer opens at is handed
+in for the same reason: where a caller's answer starts is a fact about that
+caller's spans, not about this layer.
+
+**The decode stamp is defined by what it leaves out.** Three keys are excluded
+and everything else posted is in it, so a caller that starts sending a new
+sampler field is stamped under a new digest without anybody remembering to
+maintain a list. The prompt is out because `prompt_sha256` already carries it
+and a stamp that never repeats cannot say two items were decoded alike; the
+grammar is out because respelling one literal would move it without the sampler
+being asked for anything different; the model name is out because the bytes are
+stamped as `model_sha256`. The stamp is taken over the body that went out
+rather than over the config block somebody wrote down, because the two disagree
+exactly when a builder drops a key.
+
 ## What is wrong with the boundary today
 
 Both shims exist and both work, and the schema constrains the decode on both
