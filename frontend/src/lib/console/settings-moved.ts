@@ -15,11 +15,36 @@
  * that draws a rule, so a day that moved five settings is one entry naming five
  * of them rather than five entries a reader has to count.
  *
- * Relative imports only, so the browser suite can load this in plain Node and
- * re-derive the answer without standing up Vite.
+ * Relative imports only, and nothing from `$lib/server`: a panel draws this, so
+ * the module has to be loadable in a browser bundle and in plain Node. That is
+ * why the cutover date and the run-day shape live here rather than beside the
+ * boundary derivation that also reads them.
  */
 
-import { RECORDED_INPUTS_FROM, type RecordedRunDay } from '../server/model-work';
+/** The slice of a published day's runs both derivations need.
+ *
+ * Structural rather than imported, so `RunSummary` from the payload loader
+ * satisfies it and this module goes on importing nothing at all.
+ */
+export interface RecordedRunDay {
+	date: string;
+	records: readonly { inputs: unknown }[];
+}
+
+/** The first day a run recorded its inputs by name instead of as a digest.
+ *
+ * Before it, a day's identity is the score ledger's `pipeline_fingerprint`,
+ * which can say that something moved and never which. On and after it, it is
+ * the run's own input manifest, which can. A hard split, never "prefer whichever
+ * is present": the two shapes always compare unequal, so an overlap would invent
+ * a boundary that nothing caused.
+ *
+ * Remove the historical branch in `$lib/server/model-work` once the oldest day
+ * the widest console window can show is on or after this date. Until then the
+ * boundaries the committed ledger holds are still reachable, and a chart with no
+ * rules over a window that contains them would read as "nothing moved".
+ */
+export const RECORDED_INPUTS_FROM = '2026-09-12';
 
 /** Every input the run record enumerates, and the words a reader gets for it.
  *
