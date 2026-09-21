@@ -25,7 +25,7 @@ function record(
 		bandLow: 0.93,
 		bandHigh: 0.93 + counts.length * 0.001,
 		binWidth: 0.001,
-		daysFolded: 1,
+		daysCounted: 1,
 		slots: counts.map((held, index) => ({
 			binLow: 0.93 + index * 0.001,
 			same: held.same ?? 0,

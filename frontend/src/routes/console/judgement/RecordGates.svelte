@@ -1,6 +1,6 @@
 <script lang="ts">
 	/** What the record still needs before a line may be fitted at all, and which
-	 * days it actually folded.
+	 * days it actually counted.
 	 *
 	 * Three target bars, one per gate, and a square a day underneath.
 	 *
@@ -18,7 +18,7 @@
 	import Panel from '$lib/components/Panel.svelte';
 	import TargetBar from '$lib/components/TargetBar.svelte';
 	import { grouped } from '$lib/charts/series';
-	import { foldDays, gateNeeds, silentTail, type JudgeDay } from '$lib/console/merge-line';
+	import { countedDays, gateNeeds, silentTail, type JudgeDay } from '$lib/console/merge-line';
 
 	let {
 		days,
@@ -44,7 +44,7 @@
 	const newest = $derived(drawn.length === 0 ? null : drawn[drawn.length - 1]);
 	const needs = $derived(gateNeeds(newest, gates));
 	const met = $derived(needs.every((need) => need.value >= need.target));
-	const squares = $derived(foldDays(spanned, drawn, met));
+	const squares = $derived(countedDays(spanned, drawn, met));
 	const silent = $derived(silentTail(squares));
 	const fitted = $derived(squares.filter((square) => square.state === 'fitted').length);
 
@@ -87,13 +87,13 @@
 			{/each}
 		</div>
 
-		<div class="strip" data-fold-strip data-fold-squares={squares.length}>
+		<div class="strip" data-counted-strip data-counted-squares={squares.length}>
 			{#each squares as square (square.date)}
 				<span
 					class="square"
 					style={`background: ${fill(square.state)}`}
-					data-fold-day={square.date}
-					data-fold-state={square.state}
+					data-counted-day={square.date}
+					data-counted-state={square.state}
 					title={square.title}
 				><span class="sr-only">{square.title}</span></span>
 			{/each}
@@ -113,7 +113,7 @@
 				>
 			{:else if silent > 0}
 				<span data-gates-state="stale"
-					>Nothing has been folded for {silent}
+					>Nothing has been counted for {silent}
 					{silent === 1 ? 'day' : 'days'}.</span
 				>
 			{:else}
@@ -123,7 +123,7 @@
 				>
 			{/if}
 			{#if fitted > 0}
-				<span data-fold-fitted={fitted}
+				<span data-counted-fitted={fitted}
 					>A line was fitted on {fitted} of these {windowDays} days.</span
 				>
 			{/if}

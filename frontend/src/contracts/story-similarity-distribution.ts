@@ -30,7 +30,7 @@ export interface StorySimilarityDistribution {
 	/** How wide each slot is. This is the resolution of the fitted line: the fit can only ever answer to the nearest slot edge. */
 	bin_width: number;
 
-	/** Which encoder produced the scores these counts were filed under. Null until the first fold. */
+	/** Which encoder produced the scores these counts were filed under. Null until the first day is counted. */
 	scorer_model?: 'all-minilm-l6-v2-quantized' | null;
 
 	/** What the cosine was worth for every count in this record. A different weight puts the same pair in a different slot, so a change archives the record rather than reinterpreting it. */
@@ -39,7 +39,7 @@ export interface StorySimilarityDistribution {
 	/** What the key-point term was worth. Same reason as the cosine weight. */
 	key_point_weight?: number | null;
 
-	/** Which model produced these verdicts. Null until the first fold. */
+	/** Which model produced these verdicts. Null until the first day is counted. */
 	judge_model?: 'qwen3-5-9b-q4-k-m' | 'qwen3-5-9b-q4-k-m-thinking' | 'ornith-1-5-9b-q5-k-m' | 'gemma-4-e4b-it-qat-ud-q4-k-xl' | null;
 
 	/** sha256 of the system turn the verdicts were produced under. */
@@ -57,8 +57,8 @@ export interface StorySimilarityDistribution {
 	/** Whether a reasoning span ran in front of every verdict counted here. A column of its own because `decode_digest` cannot see it: the only posted key a thinking envelope moves is the prompt, and the prompt is excluded. Without it a record counted cold and a record counted after reasoning are one population. */
 	judge_thinks?: boolean | null;
 
-	/** Every date already counted, sorted. A second fold of one date is refused rather than doubling its counts, which makes a re-run free instead of damaging. */
-	folded_dates?: string[];
+	/** Every date already counted, sorted. A date already here is refused a second time rather than doubling its counts, which makes a re-run free instead of damaging. */
+	counted_dates?: string[];
 
 	/** The band, slot by slot, lowest first. Fixed size: the record never grows as the archive does, which is why the fit reads it and never the day tree (Guardrail #12). */
 	slots: ScoreSlot[];

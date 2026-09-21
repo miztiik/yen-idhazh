@@ -45,12 +45,17 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "`folded_dates` is now `counted_dates`. The old key still reads.",
+      "version": "2026-09-21T12:00",
+      "why": "Borrowed vocabulary for the count this field already holds."
+    },
+    {
       "change": "Added judge_temperature, decode_digest and judge_thinks, and stamped them.",
       "version": "2026-09-21",
       "why": "Two samplers and two decode envelopes were counted as one population."
     },
     {
-      "change": "Initial shape: a fixed row of slots, three counts each, and the dates folded.",
+      "change": "Initial shape: a fixed row of slots, three counts each, and the dates counted.",
       "version": "2026-09-18",
       "why": "A fit that sorted every pair ever judged would cost more every day."
     }
@@ -93,6 +98,16 @@
       "description": "What the cosine was worth for every count in this record. A different weight puts the same pair in a different slot, so a change archives the record rather than reinterpreting it.",
       "title": "Cosine Weight"
     },
+    "counted_dates": {
+      "default": [],
+      "description": "Every date already counted, sorted. A date already here is refused a second time rather than doubling its counts, which makes a re-run free instead of damaging.",
+      "items": {
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+        "type": "string"
+      },
+      "title": "Counted Dates",
+      "type": "array"
+    },
     "decode_digest": {
       "anyOf": [
         {
@@ -106,16 +121,6 @@
       "default": null,
       "description": "sha256 of what the judging call asked the decoder to do, minus the prompt, the grammar and the model name - each of which is stamped here in a column of its own. It catches a sampler field that moved with no other column moving, which is a change to what a verdict means that the six named values cannot see.",
       "title": "Decode Digest"
-    },
-    "folded_dates": {
-      "default": [],
-      "description": "Every date already counted, sorted. A second fold of one date is refused rather than doubling its counts, which makes a re-run free instead of damaging.",
-      "items": {
-        "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
-        "type": "string"
-      },
-      "title": "Folded Dates",
-      "type": "array"
     },
     "grammar_digest": {
       "anyOf": [
@@ -147,7 +152,7 @@
         }
       ],
       "default": null,
-      "description": "Which model produced these verdicts. Null until the first fold.",
+      "description": "Which model produced these verdicts. Null until the first day is counted.",
       "title": "Judge Model"
     },
     "judge_temperature": {
@@ -217,7 +222,7 @@
         }
       ],
       "default": null,
-      "description": "Which encoder produced the scores these counts were filed under. Null until the first fold.",
+      "description": "Which encoder produced the scores these counts were filed under. Null until the first day is counted.",
       "title": "Scorer Model"
     },
     "slots": {
@@ -229,7 +234,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-21",
+      "default": "2026-09-21T12:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -243,5 +248,5 @@
   ],
   "title": "StorySimilarityDistribution",
   "type": "object",
-  "version": "2026-09-21"
+  "version": "2026-09-21T12:00"
 }

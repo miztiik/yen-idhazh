@@ -1,11 +1,11 @@
-"""The day's draw: which borderline pairs get judged, in what order, on which leg.
+"""The day's draw: which borderline pairs get judged, in what order, on which shard.
 
 Nothing under test here calls a model or opens a socket, because the step does
 neither - it says which pairs are worth a model's time and writes them out with
 every verdict column empty.
 
 Unit tier for the four rules - across mastheads, the band's edges, what the
-budget may cut, and how the legs are dealt - and integration tier for the stage
+budget may cut, and how the shards are dealt - and integration tier for the stage
 writing a file the contract can read back. Real quantised vectors through the
 encoder's own wire format and the committed run-manifest fixture throughout. No
 mocks, no network.
@@ -44,7 +44,7 @@ from idhazh.contracts.knobs.placement import SameStoryConfig
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, to_base64
-from idhazh.similarity.draw import (
+from idhazh.similarity.selection import (
     Draw,
     assign_shards,
     draw_order,
@@ -291,22 +291,22 @@ def test_a_pair_key_is_the_full_digest_of_both_addresses_sorted() -> None:
         column.validate_python(key[:16])
 
 
-# --- the legs ----------------------------------------------------------------
+# --- the shards ----------------------------------------------------------------
 
 
 @pytest.mark.parametrize("count", [200, 199])
 def test_the_shards_are_even_to_within_one(count: int) -> None:
-    """Index modulo the leg count, so a draw the budget cut short still spreads.
+    """Index modulo the shard count, so a draw the budget cut short still spreads.
 
-    A contiguous block would fill the first leg and starve the last on any day
-    the cap bit, and the leg that finished first would be the one with nothing
+    A contiguous block would fill the first shard and starve the last on any day
+    the cap bit, and the shard that finished first would be the one with nothing
     to do.
     """
     pairs = [scored(f"left-{n:03d}", f"right-{n:03d}", score=0.90) for n in range(count)]
 
     counts = Counter(shard for shard, _ in assign_shards(pairs, shards=4))
 
-    assert sorted(counts) == [0, 1, 2, 3], "every leg gets work"
+    assert sorted(counts) == [0, 1, 2, 3], "every shard gets work"
     assert max(counts.values()) - min(counts.values()) <= 1
 
 
@@ -411,7 +411,7 @@ def test_the_draw_round_trips_through_the_contract(
 def test_the_draw_samples_the_config_band_and_never_the_line_a_fit_applied(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The population the record is folded from is the config band, whatever the line.
+    """The population the record counts from is the config band, whatever the line.
 
     Verified in the stage as it stands: `in_band` is handed `tuning.band_low` and
     `tuning.band_high` off the config file, and no fitted value reaches it. This
@@ -456,8 +456,8 @@ def test_the_draw_samples_the_config_band_and_never_the_line_a_fit_applied(
 def test_a_day_that_is_not_on_disk_writes_an_empty_draw(tmp_path: Path) -> None:
     """A missing day is nothing to judge rather than a run to fail.
 
-    The header still goes down, so the leg that opens the file reads an empty
-    draw instead of dying on a file that is not there - which on a four-leg
+    The header still goes down, so the shard that opens the file reads an empty
+    draw instead of dying on a file that is not there - which on a four-shard
     matrix is four failed jobs for one day nobody published.
     """
     out_dir = tmp_path / "judge"

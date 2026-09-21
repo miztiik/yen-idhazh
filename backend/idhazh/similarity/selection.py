@@ -1,4 +1,4 @@
-"""Which of a day's borderline pairs today's budget judges, in what order, and on which leg.
+"""Which of a day's borderline pairs today's budget judges, in what order, and on which shard.
 
 Nothing here opens a file, reads a config or knows what a day is. It takes
 pairs that are already scored and answers the one question a budget forces: the
@@ -24,7 +24,7 @@ from idhazh.similarity.stamps import ScorerStamp
 class Draw:
     """What one day's budget bought, and what it was bought out of."""
 
-    #: The pairs this day judges, in the order the legs are cut from.
+    #: The pairs this day judges, in the order the shards are cut from.
     taken: list[ScoredPair]
     #: How many pairs the band held before the budget cut it. A day that hit
     #: the cap reads as partial rather than as a quiet truncation.
@@ -106,10 +106,10 @@ def select(
 def assign_shards(
     taken: Sequence[ScoredPair], *, shards: int
 ) -> list[tuple[int, ScoredPair]]:
-    """Deal the draw round the legs, one pair at a time.
+    """Deal the draw round the shards, one pair at a time.
 
-    Index modulo the leg count rather than a contiguous block, so a draw the
-    budget cut short still spreads across every leg instead of filling the
+    Index modulo the shard count rather than a contiguous block, so a draw the
+    budget cut short still spreads across every shard instead of filling the
     first and starving the last.
     """
     return [(index % shards, pair) for index, pair in enumerate(taken)]

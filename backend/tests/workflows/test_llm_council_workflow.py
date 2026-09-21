@@ -284,7 +284,7 @@ def test_a_matrix_with_no_cells_never_reaches_the_strategy_evaluator(
     assert _normalize_condition(judge["if"], "the judging job") == (
         "needs.draw.outputs.matrix != '[]'"
     )
-    assert _normalize_condition(_job(_judges(), "fold")["if"], "the collecting job") == "always()"
+    assert _normalize_condition(_job(_judges(), "collect")["if"], "the collecting job") == "always()"
 
 
 def test_the_parallelism_is_the_cell_count_and_never_the_shard_width() -> None:
@@ -338,13 +338,13 @@ def test_one_server_per_unit() -> None:
 def test_a_dead_unit_does_not_cancel_its_siblings() -> None:
     """A unit that runs out of clock costs its own work for that day and nothing else."""
     strategy = _job(_judges(), "judge").get("strategy")
-    fold = _job(_judges(), "fold")
+    collect = _job(_judges(), "collect")
 
     assert isinstance(strategy, dict)
     # The harness reads the file as text, so a YAML boolean arrives as the word
     # somebody wrote. Comparing to the word is what this file can actually see.
     assert str(strategy["fail-fast"]).lower() == "false"
-    assert fold["needs"] == ["draw", "judge"]
+    assert collect["needs"] == ["draw", "judge"]
 
 
 def test_a_unit_that_stops_early_still_ships_what_it_did() -> None:
@@ -417,11 +417,11 @@ def test_the_night_makes_one_commit_call_over_the_paths_its_tenants_named() -> N
     remembers to edit this file.
     """
     calls = [
-        _script(step, "a fold step")
-        for step in _steps(_judges(), "fold")
-        if "run" in step and COMMIT_SCRIPT in _script(step, "a fold step")
+        _script(step, "a collect step")
+        for step in _steps(_judges(), "collect")
+        if "run" in step and COMMIT_SCRIPT in _script(step, "a collect step")
     ]
-    step = _step(_judges(), "fold", "name", COMMIT_STEP)
+    step = _step(_judges(), "collect", "name", COMMIT_STEP)
     environment = step.get("env")
 
     assert len(calls) == 1, "one collecting job, one push"
@@ -457,7 +457,7 @@ def test_the_collecting_job_settles_every_date_inside_one_job() -> None:
     one, so the second push would race the first. One job, a loop over the dates
     the planning job named, one push.
     """
-    settle = _step(_judges(), "fold", "name", "Settle each date")
+    settle = _step(_judges(), "collect", "name", "Settle each date")
     environment = settle.get("env")
     script = _script(settle, "the settle step")
 
@@ -538,7 +538,7 @@ def test_every_verb_that_writes_a_row_is_handed_the_same_name() -> None:
             "judge",
             f"needs.draw.outputs.{RUN_ID_OUTPUT}",
         ),
-        "Settle each date": ("fold", f"needs.draw.outputs.{RUN_ID_OUTPUT}"),
+        "Settle each date": ("collect", f"needs.draw.outputs.{RUN_ID_OUTPUT}"),
     }
     for step_name, (job_name, expression) in sorted(carried.items()):
         environment = _step(_judges(), job_name, "name", step_name).get("env")

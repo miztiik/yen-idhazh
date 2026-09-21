@@ -64,7 +64,18 @@ class HeldReason(StrEnum):
     INPUTS_CHANGED = "inputs_changed"
     JUDGE_UNSTABLE = "judge_unstable"
     JUDGE_UNCERTAIN = "judge_uncertain"
-    LEGS_MISSING = "legs_missing"
+    SHARDS_MISSING = "shards_missing"
+
+    @classmethod
+    def _missing_(cls, value: object) -> HeldReason | None:
+        """`legs_missing` was renamed to `shards_missing` on 2026-09-21.
+
+        The ledger is append-only, so a row a run wrote under the old spelling
+        has to keep reading. Nothing but the name moved.
+        """
+        if value == "legs_missing":
+            return cls.SHARDS_MISSING
+        return None
 
 
 class FittedSimilarityThreshold(Contract):
@@ -72,6 +83,11 @@ class FittedSimilarityThreshold(Contract):
 
     __schema_stem__: ClassVar[str] = "fitted-similarity-threshold"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-21",
+            change="held_reason `legs_missing` is now `shards_missing`. The old value still reads.",
+            why="`leg` was a second name for the shard the rest of this feature already names.",
+        ),
         ChangelogEntry(
             version="2026-09-19",
             change="smoothing_weight splits into fall_weight and rise_weight; max_up_step added.",
@@ -233,7 +249,7 @@ class FittedSimilarityThreshold(Contract):
     pairs_in_band: int = Field(
         ge=0,
         description=(
-            "How many distinct pairs the day file holds - what the draw dealt the legs, "
+            "How many distinct pairs the day file holds - what the draw dealt the shards, "
             "after pair_budget cut the band down. Equal to the budget on a day that hit "
             "the cap, which is how a truncated day reads as partial rather than as a quiet "
             "one. The count before the budget is not persisted anywhere, so no writer "
@@ -241,12 +257,12 @@ class FittedSimilarityThreshold(Contract):
         ),
     )
     pairs_judged: int = Field(
-        ge=0, description="How many pairs a judging leg actually read."
+        ge=0, description="How many pairs a judging shard actually read."
     )
     pairs_usable: int = Field(
         ge=0,
         description=(
-            "How many of those got two agreeing readings. Only these were folded."
+            "How many of those got two agreeing readings. Only these were counted."
         ),
     )
     disagreement_rate: float = Field(
@@ -280,7 +296,7 @@ class FittedSimilarityThreshold(Contract):
         ),
     )
     days_on_record: int = Field(
-        ge=0, description="How many dates the record has folded."
+        ge=0, description="How many dates the record has counted."
     )
     merge_count: int = Field(
         ge=0,
@@ -306,7 +322,7 @@ class FittedSimilarityThreshold(Contract):
         default=None,
         description=(
             "Which model produced the verdicts this fit read. Empty on a held day whose "
-            "record has never been folded."
+            "record has never counted a date."
         ),
     )
     prompt_digest: Sha256 | None = Field(

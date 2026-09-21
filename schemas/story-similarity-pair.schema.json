@@ -16,6 +16,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Descriptions say shard where they said leg. No field moved.",
+      "version": "2026-09-21T13:00",
+      "why": "`leg` was a second name for the shard this row already carries a column for."
+    },
+    {
       "change": "first_token_margin is a renormalised per-verdict gap over a 25-wide window.",
       "version": "2026-09-21T12:00",
       "why": "A raw top-two gap over three tokens subtracted one verdict from itself."
@@ -85,7 +90,7 @@
         }
       ],
       "default": null,
-      "description": "Wall clock for both calls on this pair. A per-pair reading, so a day's spread is readable off the day file; the leg bound is sized off its own run instead.",
+      "description": "Wall clock for both calls on this pair. A per-pair reading, so a day's spread is readable off the day file; the shard bound is sized off its own run instead.",
       "title": "Decode Seconds"
     },
     "first_token_margin": {
@@ -263,7 +268,7 @@
       "type": "string"
     },
     "shard": {
-      "description": "Which judging leg owns this row. index mod shards, never a contiguous block, so a truncated draw still spreads evenly across the legs.",
+      "description": "Which judging shard owns this row. index mod shards, never a contiguous block, so a truncated draw still spreads evenly across them.",
       "minimum": 0,
       "title": "Shard",
       "type": "integer"
@@ -284,7 +289,7 @@
     },
     "usable": {
       "default": false,
-      "description": "Whether the two readings agree. Only an agreed pair is folded into the record; a disagreement is a reading about the judge rather than about the pair.",
+      "description": "Whether the two readings agree. Only an agreed pair is counted into the record; a disagreement is a reading about the judge rather than about the pair.",
       "title": "Usable",
       "type": "boolean"
     },
@@ -298,7 +303,7 @@
         }
       ],
       "default": null,
-      "description": "What the judge said with the items in file order. Empty until a judging leg has read the pair."
+      "description": "What the judge said with the items in file order. Empty until a judging shard has read the pair."
     },
     "verdict_swapped": {
       "anyOf": [
@@ -313,7 +318,7 @@
       "description": "What the judge said with the same two items in the other order. Two readings of one pair, which is what makes disagreement measurable."
     },
     "version": {
-      "default": "2026-09-21T12:00",
+      "default": "2026-09-21T13:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -336,5 +341,5 @@
   ],
   "title": "StorySimilarityPair",
   "type": "object",
-  "version": "2026-09-21T12:00"
+  "version": "2026-09-21T13:00"
 }

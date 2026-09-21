@@ -18,7 +18,7 @@ from conftest import CONTRACT_FIXTURES_DIR, read_text
 from idhazh.contracts.knobs.placement import SimilarityThresholdConfig
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
-from idhazh.similarity import fold
+from idhazh.similarity import counting
 from idhazh.similarity.stamps import JudgeStamp, ScorerStamp
 
 DATE: Final = "2026-09-18"
@@ -40,7 +40,7 @@ def a_judge() -> JudgeStamp:
 
 
 def a_record() -> StorySimilarityDistribution:
-    return fold.empty_record(KNOBS, scorer=a_scorer(), judge=a_judge())
+    return counting.empty_record(KNOBS, scorer=a_scorer(), judge=a_judge())
 
 
 def a_row(
@@ -83,24 +83,24 @@ def test_a_score_lands_in_the_slot_whose_lower_edge_it_clears() -> None:
     """A pair scoring a slot's lower edge is in that slot, not the one below."""
     record = a_record()
 
-    assert fold.slot_index(0.50, record=record) == 0
-    assert fold.slot_index(0.5099, record=record) == 0
-    assert fold.slot_index(0.51, record=record) == 1
+    assert counting.slot_index(0.50, record=record) == 0
+    assert counting.slot_index(0.5099, record=record) == 0
+    assert counting.slot_index(0.51, record=record) == 1
 
 
 def test_a_score_at_the_top_of_the_band_lands_in_the_last_slot() -> None:
     """`band_high` has no next slot to fall into, so it closes the last one."""
     record = a_record()
 
-    assert fold.slot_index(0.62, record=record) == len(record.slots) - 1
+    assert counting.slot_index(0.62, record=record) == len(record.slots) - 1
 
 
 def test_a_score_outside_the_band_lands_nowhere() -> None:
     """Below the band nothing was ever judged, so the record can say nothing."""
     record = a_record()
 
-    assert fold.slot_index(0.499, record=record) is None
-    assert fold.slot_index(0.621, record=record) is None
+    assert counting.slot_index(0.499, record=record) is None
+    assert counting.slot_index(0.621, record=record) is None
 
 
 def test_an_exact_slot_edge_on_the_shipped_band_is_that_slot() -> None:
@@ -112,12 +112,12 @@ def test_an_exact_slot_edge_on_the_shipped_band_is_that_slot() -> None:
     merge line off a slot edge, so filing one slot low is a whole bin of error on
     the one number this feature exists to set.
     """
-    record = fold.empty_record(
+    record = counting.empty_record(
         SimilarityThresholdConfig(), scorer=a_scorer(), judge=a_judge()
     )
 
     for score in (0.900, 0.930, 0.950, 0.970, 0.990):
-        index = fold.slot_index(score, record=record)
+        index = counting.slot_index(score, record=record)
         assert index is not None
         assert record.slots[index].bin_low == pytest.approx(score), (
             f"{score} is a slot's own lower edge and belongs in that slot"
@@ -128,30 +128,30 @@ def test_an_unusable_row_is_counted_nowhere() -> None:
     """A verdict nobody can vouch for still moves the line if it is counted."""
     record = a_record()
 
-    folded = fold.fold_day(record, [a_row(score=0.55, usable=False)], date=DATE)
+    counted = counting.count_day(record, [a_row(score=0.55, usable=False)], date=DATE)
 
-    assert sum(slot.different_count for slot in folded.slots) == 0
-    assert folded.folded_dates == (DATE,), "the day is still counted as read"
+    assert sum(slot.different_count for slot in counted.slots) == 0
+    assert counted.counted_dates == (DATE,), "the day is still counted as read"
 
 
 def test_an_unclear_verdict_is_counted_only_as_unclear() -> None:
     """Counted and never fitted on, so a rising share of them is visible."""
     record = a_record()
 
-    folded = fold.fold_day(
+    counted = counting.count_day(
         record, [a_row(score=0.55, verdict=SameStoryVerdict.UNCLEAR)], date=DATE
     )
 
-    slot = folded.slots[fold.slot_index(0.55, record=record) or 0]
+    slot = counted.slots[counting.slot_index(0.55, record=record) or 0]
     assert (slot.same_count, slot.different_count, slot.unclear_count) == (0, 0, 1)
 
 
 def test_folding_a_date_the_record_already_holds_raises() -> None:
-    """A re-run of the fold is free rather than a day counted twice."""
-    record = fold.fold_day(a_record(), [a_row(score=0.55)], date=DATE)
+    """A re-run of the count is free rather than a day counted twice."""
+    record = counting.count_day(a_record(), [a_row(score=0.55)], date=DATE)
 
     with pytest.raises(ValueError, match=DATE):
-        fold.fold_day(record, [a_row(score=0.55)], date=DATE)
+        counting.count_day(record, [a_row(score=0.55)], date=DATE)
 
 
 def test_a_changed_scorer_stamp_archives_and_starts_empty() -> None:
@@ -161,10 +161,10 @@ def test_a_changed_scorer_stamp_archives_and_starts_empty() -> None:
         scorer_model="all-minilm-l6-v2-quantized", cosine_weight=0.8, key_point_weight=0.2
     )
 
-    assert fold.inputs_changed(record, knobs=KNOBS, scorer=a_scorer(), judge=a_judge()) is None
-    assert fold.inputs_changed(record, knobs=KNOBS, scorer=moved, judge=a_judge()) == ("1.0", "0.8")
-    assert fold.archive_stem(record) != fold.archive_stem(
-        fold.empty_record(KNOBS, scorer=moved, judge=a_judge())
+    assert counting.inputs_changed(record, knobs=KNOBS, scorer=a_scorer(), judge=a_judge()) is None
+    assert counting.inputs_changed(record, knobs=KNOBS, scorer=moved, judge=a_judge()) == ("1.0", "0.8")
+    assert counting.archive_stem(record) != counting.archive_stem(
+        counting.empty_record(KNOBS, scorer=moved, judge=a_judge())
     )
 
 
@@ -182,9 +182,9 @@ def test_every_value_the_record_stamps_is_a_value_the_detector_sees(field: str) 
         "thinks": dataclasses.replace(a_judge(), thinks=True),
     }[field]
 
-    assert fold.inputs_changed(record, knobs=KNOBS, scorer=a_scorer(), judge=after) is not None
-    assert fold.archive_stem(record) != fold.archive_stem(
-        fold.empty_record(KNOBS, scorer=a_scorer(), judge=after)
+    assert counting.inputs_changed(record, knobs=KNOBS, scorer=a_scorer(), judge=after) is not None
+    assert counting.archive_stem(record) != counting.archive_stem(
+        counting.empty_record(KNOBS, scorer=a_scorer(), judge=after)
     )
 
 
@@ -192,7 +192,7 @@ def test_a_record_written_before_the_decode_columns_resets_once() -> None:
     """The read-side migration, and what it costs.
 
     A record written under the older shape carries the three decode values null,
-    loads here, and stamps to a value it never stamped to - so the first fold
+    loads here, and stamps to a value it never stamped to - so the first day
     after the widening archives it and counts on from zero. That is the reset,
     it is by construction rather than by an input moving, and it happens once.
     """
@@ -202,11 +202,11 @@ def test_a_record_written_before_the_decode_columns_resets_once() -> None:
     )
 
     assert older.record_stamp() != record.record_stamp()
-    assert fold.inputs_changed(older, knobs=KNOBS, scorer=a_scorer(), judge=a_judge()) == (
+    assert counting.inputs_changed(older, knobs=KNOBS, scorer=a_scorer(), judge=a_judge()) == (
         "None",
         "0.0",
     )
-    assert fold.inputs_changed(record, knobs=KNOBS, scorer=a_scorer(), judge=a_judge()) is None
+    assert counting.inputs_changed(record, knobs=KNOBS, scorer=a_scorer(), judge=a_judge()) is None
 
 
 def test_one_pair_judged_twice_is_counted_once_at_the_newer_run() -> None:
@@ -217,11 +217,11 @@ def test_one_pair_judged_twice_is_counted_once_at_the_newer_run() -> None:
         a_row(score=0.55, verdict=SameStoryVerdict.NO, run_id=f"{DATE}-2"),
     ]
 
-    kept = fold.one_row_a_pair(rows)
+    kept = counting.one_row_a_pair(rows)
 
     assert [row.run_id for row in kept] == [f"{DATE}-2"]
-    folded = fold.fold_day(record, rows, date=DATE)
-    slot = folded.slots[fold.slot_index(0.55, record=record) or 0]
+    counted = counting.count_day(record, rows, date=DATE)
+    slot = counted.slots[counting.slot_index(0.55, record=record) or 0]
     assert (slot.same_count, slot.different_count) == (0, 1)
 
 
@@ -245,7 +245,7 @@ def test_a_stamped_re_judge_beats_the_unstamped_rows_it_replaces() -> None:
         a_row(score=0.55, verdict=SameStoryVerdict.UNCLEAR, run_id=f"{DATE}-1"),
     ]
 
-    kept = fold.one_row_a_pair(rows)
+    kept = counting.one_row_a_pair(rows)
 
     assert [row.verdict for row in kept] == [SameStoryVerdict.NO]
-    assert [row.run_id for row in fold.one_row_a_pair(rows[::2])] == [f"{DATE}-2"]
+    assert [row.run_id for row in counting.one_row_a_pair(rows[::2])] == [f"{DATE}-2"]

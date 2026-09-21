@@ -235,7 +235,7 @@ export interface JudgeDay {
 	disagreementRate: number;
 	/** What share of the agreed readings were UNCLEAR. */
 	unclearRate: number;
-	/** How many pairs a judging leg actually read. The denominator both rates
+	/** How many pairs a judging shard actually read. The denominator both rates
 	 * are a share of, so a panel can print it in the same sentence. */
 	pairsJudged: number;
 	negativesOnRecord: number;
@@ -289,7 +289,7 @@ export function gateNeeds(
 			targetText: `${gates.minimumNegatives} needed before a line may be fitted`
 		},
 		{
-			label: 'Days the record has folded',
+			label: 'Days the record has counted',
 			value: newest?.daysOnRecord ?? 0,
 			target: gates.minimumDays,
 			targetText: `${gates.minimumDays} needed, so one fortnight of one kind of news cannot set the line`
@@ -325,7 +325,7 @@ export interface FoldSquare {
  * warning fill arrives only once the gates are met and a hold stops being
  * expected.
  */
-export function foldDays(
+export function countedDays(
 	dates: readonly string[],
 	rows: readonly JudgeDay[],
 	gatesMet: boolean
@@ -361,8 +361,8 @@ export function heldInWords(reason: string): string {
 			return 'The two readings disagreed too often to trust';
 		case 'judge_uncertain':
 			return 'Too many readings could not tell';
-		case 'legs_missing':
-			return 'One of the judging legs did not report';
+		case 'shards_missing':
+			return 'One of the judging shards did not report';
 		default:
 			return 'The run held the line';
 	}

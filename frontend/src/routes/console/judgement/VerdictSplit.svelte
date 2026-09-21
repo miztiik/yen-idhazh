@@ -40,7 +40,7 @@
 		width,
 		figures
 	}: {
-		/** Null where no day has folded a record yet. */
+		/** Null where no day has been counted into a record yet. */
 		record: ScoreRecord | null;
 		/** The line the newest day was built with. */
 		applied: number;
@@ -119,7 +119,7 @@
 	title="What the judge said about the line"
 	note="Every judged pair, split by whether its score cleared the line the day was built with and by what the judge said about it."
 >
-	<div data-verdict-split data-verdict-line={reads(applied)} data-verdict-days={record?.daysFolded ?? 0}>
+	<div data-verdict-split data-verdict-line={reads(applied)} data-verdict-days={record?.daysCounted ?? 0}>
 		<div class="grid">
 			{#each cells as cell (cell.key)}
 				<div class="cell" data-verdict-cell={cell.key}>

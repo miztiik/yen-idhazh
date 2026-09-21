@@ -16,7 +16,7 @@ export const CLAMP_KIND = ['none', 'step', 'guard', 'ceiling', 'floor'] as const
 export type ClampKind = (typeof CLAMP_KIND)[number];
 
 /** Why no fit ran today. `NONE` means one did. */
-export const HELD_REASON = ['none', 'sheet_too_small', 'inputs_changed', 'judge_unstable', 'judge_uncertain', 'legs_missing'] as const;
+export const HELD_REASON = ['none', 'sheet_too_small', 'inputs_changed', 'judge_unstable', 'judge_uncertain', 'shards_missing'] as const;
 
 export type HeldReason = (typeof HELD_REASON)[number];
 
@@ -81,13 +81,13 @@ export interface FittedSimilarityThreshold {
 	/** The median daily shift over the last fourteen written rows. Empty until fourteen exist, which is how a reader sees the guard is still filling. A median rather than a sigma, because the daily shift shrinks as 1/days and is not normally distributed. */
 	typical_shift?: number | null;
 
-	/** How many distinct pairs the day file holds - what the draw dealt the legs, after pair_budget cut the band down. Equal to the budget on a day that hit the cap, which is how a truncated day reads as partial rather than as a quiet one. The count before the budget is not persisted anywhere, so no writer could put it here. */
+	/** How many distinct pairs the day file holds - what the draw dealt the shards, after pair_budget cut the band down. Equal to the budget on a day that hit the cap, which is how a truncated day reads as partial rather than as a quiet one. The count before the budget is not persisted anywhere, so no writer could put it here. */
 	pairs_in_band: number;
 
-	/** How many pairs a judging leg actually read. */
+	/** How many pairs a judging shard actually read. */
 	pairs_judged: number;
 
-	/** How many of those got two agreeing readings. Only these were folded. */
+	/** How many of those got two agreeing readings. Only these were counted. */
 	pairs_usable: number;
 
 	/** What share of the judged pairs the two readings disagreed about. One of the three gates, and the one that reads the judge rather than the record. */
@@ -102,7 +102,7 @@ export interface FittedSimilarityThreshold {
 	/** Judged pairs at or above the applied line. These are the entire precision measurement, so they are never sampled away. */
 	above_line_on_record: number;
 
-	/** How many dates the record has folded. */
+	/** How many dates the record has counted. */
 	days_on_record: number;
 
 	/** How many groups the day published. The one number in this feature that involves no model. */
@@ -117,7 +117,7 @@ export interface FittedSimilarityThreshold {
 	/** What the key-point term was worth. Same reason as the cosine weight. */
 	key_point_weight: number;
 
-	/** Which model produced the verdicts this fit read. Empty on a held day whose record has never been folded. */
+	/** Which model produced the verdicts this fit read. Empty on a held day whose record has never counted a date. */
 	judge_model?: 'qwen3-5-9b-q4-k-m' | 'qwen3-5-9b-q4-k-m-thinking' | 'ornith-1-5-9b-q5-k-m' | 'gemma-4-e4b-it-qat-ud-q4-k-xl' | null;
 
 	/** sha256 of the system turn those verdicts were produced under. */

@@ -3,12 +3,15 @@
   "band_low": 0.88,
   "bin_width": 0.001,
   "cosine_weight": 1.0,
-  "folded_dates": [
+  "counted_dates": [
     "2026-09-18",
     "2026-09-19"
   ],
+  "decode_digest": null,
   "grammar_digest": "c1d1b9dc902a79bd8eb0bdb775417a4329cbda9fe53aeabebfd87052854115c4",
   "judge_model": "qwen3-5-9b-q4-k-m",
+  "judge_temperature": null,
+  "judge_thinks": null,
   "key_point_weight": 0.0,
   "prompt_digest": "4f993862de58effa6954ee6ddb8bfaad98e1ee89428fa7885754703b095d51f5",
   "scorer_model": "all-minilm-l6-v2-quantized",

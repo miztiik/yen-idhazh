@@ -500,3 +500,98 @@ def test_no_reader_resolves_a_path_under_the_retired_store_name() -> None:
         "ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME, or at "
         "state/content-similarity-judge/ in prose:\n" + "\n".join(offenders)
     )
+
+
+#: The identifiers the judging council spelled with a borrowed word. Each letter
+#: class keeps this file from matching its own definition.
+BORROWED_JUDGE_WORD = re.compile(
+    r"[l]egs?_(missing|expected|present)"
+    r"|LEGS[_]MISSING"
+    r"|[f]olded_dates|days[F]olded|data-[f]old-|[f]oldDays"
+    r"|similarity[./][f]old\b|test_similarity_[f]old|[f]old_day|[F]oldReport"
+    r"|judging [l]egs?\b"
+)
+
+#: The judging council's own files. The word is banned outright inside these,
+#: which the loose pattern above cannot do repository-wide: `leg` still names
+#: the first clause of a two-part rule and one arm of a measurement gate, and
+#: `fold` still names the telemetry compaction verb and the same-story merge.
+JUDGE_SUBSYSTEM = (
+    "backend/idhazh/similarity",
+    "backend/idhazh/stages/count_verdicts.py",
+    "backend/idhazh/stages/judge_item_pairs.py",
+    "backend/idhazh/stages/pick_item_pairs.py",
+    "backend/idhazh/stages/set_merge_line.py",
+    "backend/idhazh/contracts/story_similarity_distribution.py",
+    "backend/idhazh/contracts/knobs/council.py",
+    "backend/tests/test_similarity_counting.py",
+    "backend/tests/test_similarity_judge.py",
+    "backend/tests/test_similarity_selection.py",
+    "frontend/src/lib/server/similarity-ledger.ts",
+)
+
+#: A retired spelling wrapped in quotes or backticks is being NAMED, not used as
+#: a name - a read-side migration has to spell the key it accepts, its test has
+#: to hand that key in, and a changelog entry that cannot print it tells the
+#: reader of an older payload nothing. Stripped before the match, so a field
+#: declaration, an attribute read or a bare identifier is still caught.
+RETIRED_SPELLING_NAMED = re.compile(
+    r"[\"'`]([l]egs_missing|[f]olded_dates|days[F]olded|similarity[.][f]old)[\"'`]"
+)
+
+
+def test_the_judging_council_spells_its_shard_and_its_count_plainly() -> None:
+    """Two borrowed words leave the vocabulary and do not come back.
+
+    `leg` was relay racing's word for one shard of the judging work, and `shard`
+    is already the column, the knob and the count. `fold` was functional
+    programming's word for the job that collects those shards' output, commits it
+    and counts it into the record; that job is `collect` and the action is
+    counting. A reader who has to know which field a word was borrowed from is
+    reading a second name for something that already has one (CLAUDE.md section
+    0b).
+
+    **What it reads, and why it is bounded** (Guardrail #12): the tracked files
+    of the six trees below, which is code, docs, schemas and config somebody
+    wrote. It never opens `state/`, `corpus/` or `frontend/public/`, where every
+    collection a run appends to lives, so it costs the same on the thousandth
+    published day as on the third.
+
+    **What it is deliberately blind to.** `leg` still names the first clause of a
+    two-part rule in `visual_validator.py`, one arm of a measurement gate in
+    `measure.yml`, a branch of a displayed value in `derived_values.py`, and the
+    encoder's failover origin on the frontend - none of them a judging shard.
+    `fold` still names the telemetry compaction verb, which is the digest
+    pipeline's word, and the same-story merge a reader sees on a card. So the
+    loose word is refused only inside the judging council's own files, and
+    everywhere else only the identifiers are. And a retired spelling inside
+    quotes or backticks is being named rather than used, which is what a
+    migration, its test and a changelog entry all have to do; a field
+    declaration, an attribute read or a bare identifier is still caught.
+    """
+    listed = subprocess.run(
+        ["git", "ls-files", "--", *RETIRED_STORE_SWEEP],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.split()
+    assert len(listed) > 500, "the sweep found almost nothing, so it would pass on nothing"
+
+    loose = re.compile(r"\b[l]egs?\b|\b[f]old(s|ed|ing)?\b")
+    offenders: list[str] = []
+    for relative in listed:
+        inside = relative.startswith(JUDGE_SUBSYSTEM)
+        text = (REPO_ROOT / relative).read_bytes().decode("utf-8", "replace")
+        for number, line in enumerate(text.split("\n"), start=1):
+            used = RETIRED_SPELLING_NAMED.sub("", line)
+            if BORROWED_JUDGE_WORD.search(used) or (inside and loose.search(used)):
+                offenders.append(f"{relative}:{number}: {line.strip()}")
+
+    assert not offenders, (
+        "a borrowed word is back in the judging council's vocabulary. One shard of "
+        "the judging work is a `shard`, which is already the column and the knob. "
+        "The job that collects the shards' output is `collect`, and prose names "
+        "the action: a day with a missing shard is not counted into the "
+        "record:\n" + "\n".join(offenders)
+    )

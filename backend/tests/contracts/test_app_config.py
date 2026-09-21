@@ -1336,7 +1336,7 @@ def test_the_two_contract_modules_share_one_grid_tolerance() -> None:
     """Two literals for one rule drift the first time somebody loosens one.
 
     The config and the record have to agree exactly, or a band the knob block
-    accepts is a band the record refuses - hours later, in CI, on the first fold.
+    accepts is a band the record refuses - hours later, in CI, on the first day counted.
     """
     assert placement.GRID_TOLERANCE is story_similarity_distribution.GRID_TOLERANCE
 
@@ -1345,7 +1345,7 @@ def test_the_committed_defaults_build_a_record_the_contract_accepts() -> None:
     """The knob block and the record are two shapes, and neither may read the other's file.
 
     So the agreement is held here: the three band knobs, turned into a record the
-    way the fold will turn them, produce something the record's own validators
+    way the counting will turn them, produce something the record's own validators
     accept. A test rather than a field rule, because a field rule would need one
     of the two shapes to import the other's on-disk value.
     """
@@ -1365,7 +1365,7 @@ def test_the_committed_defaults_build_a_record_the_contract_accepts() -> None:
 
     assert slots == 120
     assert len(record.slots) == 120
-    assert record.folded_dates == ()
+    assert record.counted_dates == ()
 
 
 def test_the_feature_ships_off_and_a_fresh_clone_publishes_what_it_always_did() -> None:

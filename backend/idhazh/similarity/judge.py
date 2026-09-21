@@ -7,7 +7,7 @@ means the two readings agree, and a disagreement is never retried: a third
 reading with no rule for breaking the tie is a coin toss wearing a number.
 
 **There is no prose path here, on purpose.** The grammar is the control, and a
-reply that did not come out of it fails the leg. A parser that could read `I
+reply that did not come out of it fails the shard. A parser that could read `I
 think these are the same story` back into a YES would restore the whole class of
 failure the grammar was put there to remove, and it would restore it on exactly
 the days something had already gone wrong with the decoder.
@@ -42,7 +42,7 @@ Client = Callable[[dict[str, Any]], Completion]
 
 
 class GrammarNotAppliedError(RuntimeError):
-    """The reply did not come out of the grammar, so the leg stops here.
+    """The reply did not come out of the grammar, so the shard stops here.
 
     Loud rather than degraded. A constrained decode that quietly stopped being
     constrained writes rows that look exactly like good ones, and every count
@@ -98,7 +98,7 @@ def verdict_of(text: str) -> SameStoryVerdict:
         raise GrammarNotAppliedError(
             f"the judge answered {text!r}, and the grammar admits only "
             f"{', '.join(verdict.value for verdict in SameStoryVerdict)}. The decode was "
-            "not constrained, so nothing this leg wrote can be read as a verdict"
+            "not constrained, so nothing this shard wrote can be read as a verdict"
         ) from None
 
 
@@ -154,7 +154,7 @@ def entry_of(settings: config.Settings) -> ModelEntry:
     to hold - the cache restore is the largest fixed cost in the pipeline
     (Guardrail #2).
 
-    Read here by the decode, by the stamp and by the leg, so a run cannot judge
+    Read here by the decode, by the stamp and by the shard, so a run cannot judge
     under one entry and record another.
     """
     return settings.models.judge or settings.models.summarize

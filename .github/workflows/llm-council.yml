@@ -221,7 +221,7 @@ jobs:
     strategy:
       # A unit that runs out of clock costs its own work for that day and
       # nothing else. The settle still runs, still appends every row the other
-      # units produced, and refuses to fold a partial day into a record.
+      # units produced, and a partial day is not counted into a record.
       fail-fast: false
       max-parallel: ${{ fromJSON(needs.draw.outputs.max_parallel) }}
       matrix:
@@ -314,7 +314,7 @@ jobs:
           if-no-files-found: warn
           retention-days: 1
 
-  fold:
+  collect:
     needs: [draw, judge]
     # A unit that died still leaves the others' work worth keeping, and a date
     # still owes whatever its tenants settle.

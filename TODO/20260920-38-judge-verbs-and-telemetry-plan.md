@@ -173,7 +173,7 @@ After those three land, three groups open at once and the file lists must be re-
 | 10 | The judge's own bound reads a measured number | 9 | H | DONE | - | 997 | worker |
 | 11a | The model layer offers both spans and says what it decoded | - | I | DONE | - | 989 | worker |
 | 12 | The four verbs name their work | 9, 24 | J | DONE | - | 1014 | worker |
-| 13 | `leg` and `fold` leave the vocabulary | 12 | J | PENDING | - | - | - |
+| 13 | `leg` and `fold` leave the vocabulary | 12 | J | DONE | - | - | worker |
 | 11b | The content-similarity judge reads its own margin | 11a | K | DONE | - | 1007 | worker |
 | 14 | The judge fills the stamp | 8, 11b, 13 | K | PENDING | - | - | - |
 | 15b | The content-similarity judge fills its metrics and registers as a tenant | 6, 14, 15a | L | PENDING | - | - | - |

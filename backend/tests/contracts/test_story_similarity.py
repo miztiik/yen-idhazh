@@ -233,10 +233,10 @@ def test_a_headline_matched_pair_scores_one_and_is_accepted() -> None:
 
 
 def test_a_verdict_with_no_judge_named_is_refused() -> None:
-    """A label nobody can re-read is a label the record must not fold.
+    """A label nobody can re-read is a label the record must not count.
 
-    The three judge columns are one fact, and `usable` is the flag the fold
-    reads - so a row that sets it before the two readings agree would fold a
+    The three judge columns are one fact, and `usable` is the flag the record
+    reads - so a row that sets it before the two readings agree would count a
     disagreement as evidence.
     """
     with pytest.raises(ValidationError, match="names the judge"):
@@ -338,7 +338,7 @@ def test_a_pair_row_refuses_a_first_token_window_that_would_split_the_row() -> N
 
 
 def test_a_record_whose_slot_count_disagrees_with_its_band_is_refused() -> None:
-    """A short record is a band with a hole in it that every later fold widens.
+    """A short record is a band with a hole in it that every later day widens.
 
     The fit walks the slots from the top, so a missing slot is a count read at
     the wrong score rather than a count that is absent.
@@ -364,21 +364,62 @@ def test_a_record_whose_slots_are_off_the_grid_is_refused() -> None:
         StorySimilarityDistribution.model_validate(drifted)
 
 
-def test_a_date_already_folded_is_refused() -> None:
+def test_a_date_already_counted_is_refused() -> None:
     """A day counted twice cannot be uncounted, so it is refused rather than absorbed.
 
-    This is what makes a re-run free: the second fold is a no-op instead of a
+    This is what makes a re-run free: the second pass is a no-op instead of a
     doubling nothing downstream can detect.
     """
     with pytest.raises(ValidationError, match="already holds"):
         StorySimilarityDistribution.model_validate(
-            a_record(folded_dates=["2026-09-17", "2026-09-17"])
+            a_record(counted_dates=["2026-09-17", "2026-09-17"])
         )
 
     with pytest.raises(ValidationError, match="sorted"):
         StorySimilarityDistribution.model_validate(
-            a_record(folded_dates=["2026-09-18", "2026-09-17"])
+            a_record(counted_dates=["2026-09-18", "2026-09-17"])
         )
+
+
+def test_a_record_written_under_the_old_date_key_still_loads_with_its_dates() -> None:
+    """The read-side migration the rename owes, proved on a payload rather than asserted.
+
+    `folded_dates` became `counted_dates` on 2026-09-21. The model forbids
+    unknown keys, so without the migration the committed record would be refused
+    outright and the day list behind the fitted line would be gone. The next run
+    rewrites the record under the new key, so this covers the one run in between.
+    """
+    payload = a_record()
+    payload["folded_dates"] = ["2026-09-17", "2026-09-18"]
+
+    record = StorySimilarityDistribution.model_validate(payload)
+
+    assert record.counted_dates == ("2026-09-17", "2026-09-18")
+    assert "counted_dates" in record.to_json(), "the record is rewritten under the new key"
+    assert "folded_dates" not in record.to_json()
+
+
+def test_a_fitted_row_written_under_the_old_held_reason_still_reads() -> None:
+    """The ledger is append-only, so a row a run already wrote has to keep reading.
+
+    `legs_missing` became `shards_missing` on 2026-09-21. Nothing but the name
+    moved, and the enum is what a reader of the column resolves through.
+    """
+    assert HeldReason("legs_missing") is HeldReason.SHARDS_MISSING
+
+    row = FittedSimilarityThreshold.model_validate(
+        a_fit(
+            held_reason="legs_missing",
+            proposed=None,
+            after_damping=None,
+            applied=0.94,
+            clamp_kind=ClampKind.NONE,
+            clamp_movement=0.0,
+        )
+    )
+
+    assert row.held_reason is HeldReason.SHARDS_MISSING
+    assert row.csv_row()["held_reason"] == "shards_missing"
 
 
 def test_a_held_row_says_nothing_was_clamped() -> None:
@@ -423,7 +464,7 @@ def test_a_held_row_carries_no_proposal() -> None:
 
     with pytest.raises(ValidationError, match="no proposal"):
         FittedSimilarityThreshold.model_validate(
-            a_fit(held_reason=HeldReason.LEGS_MISSING, applied=0.94, proposed=0.93)
+            a_fit(held_reason=HeldReason.SHARDS_MISSING, applied=0.94, proposed=0.93)
         )
 
     with pytest.raises(ValidationError, match="both the proposal"):
