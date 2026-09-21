@@ -723,7 +723,7 @@ def require_matching_header(path: Path, columns: tuple[str, ...]) -> None:
 
 
 def _csv_line(columns: tuple[str, ...], payload: dict[str, str]) -> str:
-    """One row, written the way `_append` writes one.
+    """One row, written the way `extend_ledger_file` writes one.
 
     A re-filed row and an appended row have to be the same bytes, or the file a
     migration leaves behind is a file the next append disagrees with.
@@ -853,7 +853,7 @@ def migrate_header(
 
     **It reads line 1 and stops there when the header is already the
     contract's**, whatever the file's size. That is the ordinary case on every
-    append, and it is complete rather than optimistic: `_append` writes rows into
+    append, and it is complete rather than optimistic: `extend_ledger_file` writes rows into
     a file that exists and a header only into one that does not, so an append
     cannot put a second header in a file. A union merge resolve could, and every
     head under `state/` carried that driver until 2026-09-19; the files it already
@@ -970,8 +970,14 @@ def settle_header(
     return moved, refused
 
 
-def _append(path: Path, columns: tuple[str, ...], rows: Sequence[CsvRecord]) -> int:
+def extend_ledger_file(path: Path, columns: tuple[str, ...], rows: Sequence[CsvRecord]) -> int:
     """Write every row it is handed. This path does not deduplicate, on purpose.
+
+    **Public because a caller outside this module now writes a file this module
+    does not name.** The council ships a tenant's rows to a store the tenant
+    names, so there is no `<store>_relpath` helper here to hang an `append_*`
+    writer off - and rewriting the append beside that caller would give one
+    ledger two shapes.
 
     `evals.writer.append` does, against its `OBSERVATION_KEY`, and the reason the
     two differ is what a row means. There a row is a measurement, so re-measuring
@@ -1055,7 +1061,7 @@ def _stream_rows(path: Path) -> Iterator[dict[str, str]]:
 
 def append_seen(state_dir: Path, date: str, rows: Iterable[SeenRow]) -> int:
     """Append first sights. Returns how many landed, so a caller can log the count."""
-    return _append(seen_path(state_dir, date), SeenRow.csv_columns(), list(rows))
+    return extend_ledger_file(seen_path(state_dir, date), SeenRow.csv_columns(), list(rows))
 
 
 def append_published(state_dir: Path, date: str, rows: Iterable[PublishedRow]) -> int:
@@ -1066,7 +1072,9 @@ def append_published(state_dir: Path, date: str, rows: Iterable[PublishedRow]) -
     rewrite the freeze rule permits and the same choice `append_seen` gives its
     caller. See `docs/concepts/partitions.md`.
     """
-    return _append(published_path(state_dir, date), PublishedRow.csv_columns(), list(rows))
+    return extend_ledger_file(
+        published_path(state_dir, date), PublishedRow.csv_columns(), list(rows)
+    )
 
 
 def load_seen(state_dir: Path, *, today: str, within_days: int) -> dict[str, str]:
@@ -1201,7 +1209,7 @@ def append_health(state_dir: Path, date: str, rows: Iterable[FeedHealthRow]) -> 
     that only replaced an earlier account of the same event is not a gain.
     """
     path = health_path(state_dir, date)
-    landed = _append(path, FeedHealthRow.csv_columns(), list(rows))
+    landed = extend_ledger_file(path, FeedHealthRow.csv_columns(), list(rows))
     return landed - drop_repeated_rows(path, FEED_HEALTH_KEY)
 
 def _as_item_health_row(raw: dict[str, str]) -> dict[str, str]:
@@ -1270,7 +1278,7 @@ def append_retirements(state_dir: Path, rows: Iterable[FeedRetirementRow]) -> in
     that only repeated one already on record is not a gain.
     """
     path = feed_retirements_path(state_dir)
-    landed = _append(path, FeedRetirementRow.csv_columns(), list(rows))
+    landed = extend_ledger_file(path, FeedRetirementRow.csv_columns(), list(rows))
     return landed - drop_repeated_rows(path, FEED_RETIREMENT_KEY)
 
 
@@ -1322,7 +1330,7 @@ def append_visual_prunes(state_dir: Path, date: str, rows: Iterable[VisualPruneR
     Returns how many rows the file gained, so a caller can log the count.
     """
     path = visual_prunes_path(state_dir, date)
-    landed = _append(path, VisualPruneRow.csv_columns(), list(rows))
+    landed = extend_ledger_file(path, VisualPruneRow.csv_columns(), list(rows))
     return landed - drop_repeated_rows(path, VISUAL_PRUNE_KEY)
 
 
@@ -1337,7 +1345,8 @@ def append_counterfactual_scores(
     attempts scored the same candidates against the same committed weights. The
     first row wins and there is nothing to choose between them.
 
-    **The day file is created even when the run has no rows for it.** `_append`
+    **The day file is created even when the run has no rows for it.**
+    `extend_ledger_file`
     writes nothing for an empty list, which is right everywhere else and wrong
     here: the plan job's commit step names this directory, `git add` runs under
     `set -euo pipefail`, and a path missing from the working tree aborts the
@@ -1352,7 +1361,7 @@ def append_counterfactual_scores(
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
-    landed = _append(path, columns, list(rows))
+    landed = extend_ledger_file(path, columns, list(rows))
     return landed - drop_repeated_rows(path, COUNTERFACTUAL_SCORE_KEY)
 
 
@@ -1381,7 +1390,7 @@ def append_story_similarity_pairs(
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
-    landed = _append(path, columns, list(rows))
+    landed = extend_ledger_file(path, columns, list(rows))
     return landed - drop_repeated_rows(path, STORY_SIMILARITY_PAIR_KEY)
 
 
@@ -1429,7 +1438,7 @@ def append_fitted_thresholds(
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
-    landed = _append(path, columns, list(rows))
+    landed = extend_ledger_file(path, columns, list(rows))
     return landed - drop_repeated_rows(path, STORY_SIMILARITY_THRESHOLD_KEY)
 
 
@@ -2027,7 +2036,7 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
 def drop_repeated_rows(path: Path, key: tuple[str, ...]) -> int:
     """Rewrite the file without any row repeating a key an earlier row holds.
 
-    This is the half of the guarantee `_append`'s filter cannot give. That filter
+    This is the half of the guarantee `extend_ledger_file`'s filter cannot give. That filter
     reads the committed file the job checked out, and `actions/checkout` pins a
     job to the commit its run was triggered at - so a second execution of the
     same work cannot see rows the first one pushed after that commit. Its append

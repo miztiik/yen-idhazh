@@ -1,6 +1,6 @@
 # The LLM-COUNCIL, and why judging has its own clock
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 
 The room a model verdict is taken in. `LLM-COUNCIL` is a workflow of its own -
 [../../../.github/workflows/llm-council.yml](../../../.github/workflows/llm-council.yml) -
@@ -47,6 +47,74 @@ room rather than for the one job being done in it this month.
 
 `CLAUDE.md` section 1a permits this: a model verdict may run in a production
 workflow and may determine publication.
+
+## The venue and its tenants are separate things
+
+**The council runs one judge or many - in sequence, in parallel, or chained -
+and depends on none of them.** A judge's development does not wait on the
+council, and the council's does not wait on a judge. Owner ruling, 2026-09-21.
+
+`backend/idhazh/council/` is where that sentence is kept true. Nothing under it
+imports a judge or names one: a judge is reached through the protocol in
+[../../../backend/idhazh/council/tenancy.py](../../../backend/idhazh/council/tenancy.py)
+and hands its rows to
+[../../../backend/idhazh/council/metrics_sink.py](../../../backend/idhazh/council/metrics_sink.py).
+The council records which tenant ran; it never declares which tenants may exist.
+
+Three layers, and which one a reading belongs to is decided by what the reading
+is ABOUT, never by what executed it.
+
+| Layer | Owns | Stored |
+| --- | --- | --- |
+| Council pipeline observability | Did the pipeline work - which units started, which finished, which stopped on their own clock, what each cost | `state/llm-council/` |
+| The tenancy protocol | The shape a judge presents: its slug, how many ways its work splits, the store paths it commits, the nights it is behind on, and three units of work. Declared by the council, implemented by each judge, and it names no judge | code, not data |
+| The shipping capability | The plumbing only. Takes a validated row a judge hands it and gets it committed. Declares nothing about what is in it | code, not data |
+| Judge metrics | Entirely the judge's - its units, its funnel, its own contract | under that judge's own slug |
+
+A judge that runs no model files a row with no model columns, and the council's
+record is unchanged.
+
+## A unit uploads what it measured, and the collecting job commits it
+
+Each unit writes one file on its own runner, the workflow uploads that
+directory, and the collecting job downloads every one of them and appends each
+row to the store the tenant named.
+
+**An artifact rather than a commit, and the reason is that a commit would not
+reach the reader.** Every checkout in this workflow names no ref, so each job is
+pinned to the commit the run was triggered at. A unit that commits its rows at
+22:40 puts them where a collecting job checked out at 22:00 cannot see them, and
+the counting step decides whether every unit reported by counting the files it
+downloaded. Moving the rows into the tree does not make them safer; it makes
+them unreachable.
+
+The tenant's own slug is a directory level inside each upload, so two tenants'
+first unit land beside each other rather than on top of each other.
+
+## Design rationale: the council's own path, not the segment store
+
+The digest pipeline files rows through `state/segments/` and a compaction verb
+folds them into a head. The council does not, for two reasons.
+
+**Segments solve a conflict this workflow does not have.** They exist for the
+case where more than one job commits into one ledger file - the digest pipeline
+has four to eight committing units on one day file. The council has one
+committing writer, and its day file is already settled on every write by a key
+carrying the run id, which is the property segments exist to provide.
+
+**And the compaction verb takes no filter.** It folds every waiting segment,
+whatever ledger it belongs to, and then deletes the files it read. The digest
+run's own segments are often still waiting when the council starts - 21 files
+across five ledgers, measured on `origin/main` on 2026-09-20 - so a council run
+that compacted and then committed only its own folders would delete the digest
+pipeline's transit copies while leaving the files they were folded into
+uncommitted.
+
+**What would change the answer**, stated as a condition rather than a
+preference: a unit whose output is too large for an artifact, or which must
+survive the artifact's 24-hour retention. Neither is true today. Adopting
+segments then also needs the collecting job to see commits made during its own
+run, which it has no way to do.
 
 ## What is heard here
 

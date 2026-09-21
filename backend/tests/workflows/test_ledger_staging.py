@@ -57,12 +57,14 @@ from ._harness import (
 
 pytestmark = pytest.mark.workflow
 
-# The daily run, and only the daily run. `measure.yml` writes under the trial state
-# root, throws away most of what it writes, and holds its own staged list
-# closed-world in test_bench_targets.py - so a ledger it does not stage is a
-# decision rather than a loss. The labels in scope are whichever ones the harness
-# says live in this file, so a sixth commit step joins without an edit here.
-DAILY_WORKFLOW: Final = "digest.yml"
+# Every workflow that commits, except the trial one. `measure.yml` writes under
+# the trial state root, throws away most of what it writes, and holds its own
+# staged list closed-world in test_bench_targets.py - so a ledger it does not
+# stage is a decision rather than a loss. Every other commit label the harness
+# declares is in scope, so a sixth commit step joins without an edit here, and a
+# second workflow that writes a store is held to the same parity as the daily
+# run.
+TRIAL_WORKFLOW: Final = "measure.yml"
 
 # A second date, in another year, so the longest prefix two paths from one helper
 # share is the directory a commit step would stage rather than that directory plus
@@ -428,13 +430,17 @@ def _job_verbs(workflow: dict[str, object], job_name: str) -> set[str]:
     return found
 
 
-def _job_commit_calls() -> dict[str, dict[str, list[str]]]:
-    """Job -> commit label -> the paths that label stages, read from the workflow."""
-    calls: dict[str, dict[str, list[str]]] = {}
+def _job_commit_calls() -> dict[tuple[str, str], dict[str, list[str]]]:
+    """(Workflow, job) -> commit label -> the paths that label stages.
+
+    Keyed by the pair rather than by the job name, because two workflows may each
+    carry a job of one name and their runners share nothing.
+    """
+    calls: dict[tuple[str, str], dict[str, list[str]]] = {}
     for label, workflow in COMMIT_WORKFLOWS.items():
-        if workflow != DAILY_WORKFLOW:
+        if workflow == TRIAL_WORKFLOW:
             continue
-        calls.setdefault(COMMIT_JOBS[label], {})[label] = _commit_call(label)[0]
+        calls.setdefault((workflow, COMMIT_JOBS[label]), {})[label] = _commit_call(label)[0]
     return calls
 
 
@@ -556,35 +562,35 @@ def test_every_store_is_staged_by_the_job_whose_stage_writes_it() -> None:
     A job is credited only for its own commit steps. The assemble job stages `state`
     whole and that is worth nothing to a work shard - the shard runs on its own
     runner with its own checkout, and the file it wrote is not in the tree assemble
-    committed.
+    committed. That is also why every committing workflow is asked, not only the
+    daily one: a second workflow's runner is no closer to the daily run's tree.
     """
-    workflow = _load_workflows()[DAILY_WORKFLOW]
+    workflows = _load_workflows()
     verb_stores = _verb_stores()
     commit_calls = _job_commit_calls()
 
     missing: list[str] = []
-    credited: dict[str, set[str]] = {}
-    for job_name, labels in sorted(commit_calls.items()):
+    credited: set[tuple[str, str]] = set()
+    for (workflow_name, job_name), labels in sorted(commit_calls.items()):
         staged = {path for paths in labels.values() for path in paths}
-        for verb in sorted(_job_verbs(workflow, job_name)):
+        for verb in sorted(_job_verbs(workflows[workflow_name], job_name)):
             for store, because in sorted(verb_stores.get(verb, {}).items()):
-                credited.setdefault(job_name, set()).add(store)
+                credited.add((workflow_name, job_name))
                 if any(_covers(path, store) for path in staged):
                     continue
                 steps = ", ".join(f'"{COMMIT_STEPS[label]}"' for label in sorted(labels))
                 missing.append(
                     f"{store} is written by the {job_name} job ({because}) and no commit "
                     f"step in that job stages it. Add {store} to the paths of the {steps} "
-                    f"step in .github/workflows/{DAILY_WORKFLOW}. Another job staging a "
+                    f"step in .github/workflows/{workflow_name}. Another job staging a "
                     "parent of it is not enough: that job runs on its own runner and "
                     "cannot see a file this one wrote."
                 )
 
     assert not missing, "\n".join(missing)
-    assert set(credited) == set(commit_calls), (
-        f"the {sorted(set(commit_calls) - set(credited))} job commits in "
-        f".github/workflows/{DAILY_WORKFLOW} and this test charged it with no store at "
-        "all, so nothing above was checked for it."
+    assert credited == set(commit_calls), (
+        f"the {sorted(set(commit_calls) - credited)} job commits and this test charged "
+        "it with no store at all, so nothing above was checked for it."
     )
 
 
