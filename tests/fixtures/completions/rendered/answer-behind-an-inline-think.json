@@ -1,0 +1,83 @@
+{
+  "completion_probabilities": [
+    {
+      "bytes": [60, 47, 116, 104, 105, 110, 107, 62],
+      "id": 151668,
+      "logprob": -0.31,
+      "token": "</think>",
+      "top_logprobs": [
+        {
+          "bytes": [60, 47, 116, 104, 105, 110, 107, 62],
+          "id": 151668,
+          "logprob": -0.31,
+          "token": "</think>"
+        },
+        {
+          "bytes": [32, 83, 111],
+          "id": 2055,
+          "logprob": -1.4,
+          "token": " So"
+        }
+      ]
+    },
+    {
+      "bytes": [10, 10],
+      "id": 271,
+      "logprob": -0.04,
+      "token": "\n\n",
+      "top_logprobs": [
+        {
+          "bytes": [10, 10],
+          "id": 271,
+          "logprob": -0.04,
+          "token": "\n\n"
+        },
+        {
+          "bytes": [10],
+          "id": 198,
+          "logprob": -3.2,
+          "token": "\n"
+        }
+      ]
+    },
+    {
+      "bytes": [78, 79],
+      "id": 8996,
+      "logprob": -0.88,
+      "token": "NO",
+      "top_logprobs": [
+        {
+          "bytes": [78, 79],
+          "id": 8996,
+          "logprob": -0.88,
+          "token": "NO"
+        },
+        {
+          "bytes": [89, 69, 83],
+          "id": 14004,
+          "logprob": -0.94,
+          "token": "YES"
+        },
+        {
+          "bytes": [85, 78],
+          "id": 1861,
+          "logprob": -2.6,
+          "token": "UN"
+        }
+      ]
+    }
+  ],
+  "content": "</think>\n\nNO",
+  "stop_type": "eos",
+  "timings": {
+    "cache_n": 0,
+    "predicted_ms": 301.9,
+    "predicted_n": 3,
+    "prompt_ms": 4210.4,
+    "prompt_n": 771
+  },
+  "tokens_cached": 774,
+  "tokens_evaluated": 771,
+  "tokens_predicted": 3,
+  "truncated": false
+}

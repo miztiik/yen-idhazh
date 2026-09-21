@@ -29,6 +29,7 @@ from conftest import (
     CONTRACT_FIXTURES_DIR,
     FIXTURES_DIR,
     REPO_ROOT,
+    RecordedEndpoint,
     llama_server_flags,
     read_text,
 )
@@ -65,19 +66,23 @@ from idhazh.llm.server import (
     PROBE_SYSTEM,
     PROBE_USER,
     UNCAPPED_N_PREDICT,
+    UNSTAMPED_REQUEST_KEYS,
     Completion,
     FlashAttention,
     ProbeRefusedError,
     answer_span,
     completion_payload,
     continued_completion_payload,
+    decode_digest,
     decoding_still_constrains,
     flash_attention_state,
     gguf_architecture,
+    grammar_completion_payload,
     is_context_exceeded,
     one_document_schema,
     one_reply,
     parse_completion,
+    post,
     render_prompt,
     request_payload,
     server_argv,
@@ -1837,6 +1842,179 @@ class TestTwoSpansOnOneCall:
         assert merged.prefill_ms == 410
         assert merged.prompt_tokens == 2_000, "span two's own prompt accounting"
         assert merged.cached_tokens == 1_900
+
+
+class TestAConstrainedCallerGetsBothSpans:
+    """The same two spans, on the route whose answer is a word rather than a document.
+
+    Every test here asserts on the REQUEST the builder produced. A reply-driven
+    test cannot see a request-side defect: span one inheriting the grammar comes
+    back as a perfectly well-formed verdict, because the grammar allows nothing
+    else - which is how a span that could not think at all would have passed a
+    recorded-reply suite.
+    """
+
+    def turns(self) -> TurnsConfig:
+        return built_turns(thinking_close="\n</think>\n\n")
+
+    def grammar_body(self, **overrides: Any) -> dict[str, Any]:
+        declared: dict[str, Any] = {
+            "model_id": "m",
+            "system": "S",
+            "user": "U",
+            "grammar": 'root ::= "YES" | "NO" | "UNCLEAR"',
+            "inference": InferenceConfig(),
+            "turns": self.turns(),
+            "max_answer_tokens": 4,
+            "first_token_alternatives": 3,
+        }
+        return grammar_completion_payload(**(declared | overrides))
+
+    def schema_body(self) -> dict[str, Any]:
+        return completion_payload(
+            model_id="m",
+            system="S",
+            user="U",
+            output_schema=output_schema(),
+            inference=InferenceConfig(),
+            turns=self.turns(),
+            max_answer_tokens=InferenceConfig().max_answer_tokens,
+        )
+
+    def test_span_one_carries_neither_the_grammar_nor_the_alternatives_request(self) -> None:
+        """The row's oracle, and the arm a recorded reply cannot reach.
+
+        A grammar of three literals leaves the model able to write those three
+        words and nothing else, so span one could not open a reasoning block at
+        all; `n_probs` carried across asks the server for a list of alternatives
+        at every position of a span nobody reads a distribution off.
+        """
+        answer = self.grammar_body()
+        span = thinking_span(answer, turns=self.turns(), max_think_tokens=None)
+
+        assert "grammar" in answer, "the fixture is only meaningful if the answer carries one"
+        assert "grammar" not in span, "constrained to three words, span one cannot think"
+        assert "n_probs" not in span, "alternatives at every position of a span nobody reads"
+        assert span["prompt"] == answer["prompt"], "both spans open on the same prompt"
+        assert span["stop"] == ["\n</think>\n\n"]
+
+    def test_span_one_takes_its_own_temperature_rather_than_the_answers(self) -> None:
+        """A one-word answer is decoded greedily, and span one must not be.
+
+        Greedy decoding on a span whose length is uncapped by default runs until
+        it repeats itself, and the repetition ends at the window rather than at
+        the marker it is looping instead of writing.
+        """
+        answer = self.grammar_body(inference=InferenceConfig(temperature=0.0))
+
+        stated = thinking_span(answer, turns=self.turns(), max_think_tokens=None, temperature=0.7)
+        carried = thinking_span(answer, turns=self.turns(), max_think_tokens=None)
+
+        assert answer["temperature"] == 0.0
+        assert stated["temperature"] == 0.7, "the caller's number, not the answer's"
+        assert carried["temperature"] == 0.0, "null carries the answer's own over, unchanged"
+
+    def test_the_grammar_is_applied_at_the_answer_position_and_not_at_position_zero(self) -> None:
+        """Constraining the first decoded token forces an answer where reasoning starts."""
+        answer = self.grammar_body()
+        span = thinking_span(answer, turns=self.turns(), max_think_tokens=None)
+        second = answer_span(answer, thought="both wires name one filing", turns=self.turns())
+
+        assert "grammar" not in span
+        assert second["grammar"] == answer["grammar"], "the control is back on, one span later"
+        assert second["prompt"].endswith("both wires name one filing\n</think>\n\n")
+
+    def test_every_posted_key_is_either_stamped_or_named_as_unstamped(self) -> None:
+        """The digest is defined by what it leaves out, so nothing falls between.
+
+        A fixed count would be one route's key set and would go red the day a
+        builder sends one more field. This moves each posted value in turn and
+        asks whether the stamp noticed, which is the property itself rather than
+        a number standing in for it.
+        """
+        for route, posted in (("grammar", self.grammar_body()), ("schema", self.schema_body())):
+            baseline = decode_digest(posted)
+            for name in posted:
+                moved = dict(posted)
+                moved[name] = "something else entirely"
+                noticed = decode_digest(moved) != baseline
+
+                assert noticed is (name not in UNSTAMPED_REQUEST_KEYS), f"{route}.{name}"
+
+    def test_the_stamp_is_the_same_for_two_items_decoded_the_same_way(self) -> None:
+        """A stamp that never repeats cannot say two items were decoded alike."""
+        one = self.grammar_body(user="the first pair of headlines")
+        two = self.grammar_body(user="a completely different pair")
+
+        assert one["prompt"] != two["prompt"]
+        assert decode_digest(one) == decode_digest(two)
+        assert decode_digest(self.grammar_body(inference=InferenceConfig(seed=7))) != decode_digest(
+            one
+        ), "a sampler knob that moved has to move the stamp"
+
+    def test_the_probability_mode_is_in_the_body_rather_than_left_to_the_build(self) -> None:
+        """Which distribution comes back is a decision, and nothing pins the build.
+
+        The two modes answer different questions, and only the pre-sampling one
+        can say the grammar chose a word the model did not. What the server
+        returns under this key is measured, not assumed -
+        `docs/reference/benchmarks/which-probabilities-the-server-returns.md`.
+        """
+        assert self.grammar_body()["post_sampling_probs"] is False
+        assert self.grammar_body(post_sampling_probs=True)["post_sampling_probs"] is True
+
+    def test_the_window_is_the_servers_list_at_the_position_the_caller_named(self) -> None:
+        """The reply arm, on a recorded reply whose answer does not open the decode.
+
+        The fixture is read inside the test rather than at module scope, so a
+        reply that stops carrying a window fails this one test with a message
+        naming what it wanted (`CLAUDE.md` section 13).
+        """
+        recorded = read_text(COMPLETIONS / "rendered" / "answer-behind-an-inline-think.json")
+
+        opening = parse_completion(recorded)
+        answer = parse_completion(recorded, answer_at=2)
+        past_the_end = parse_completion(recorded, answer_at=9)
+
+        assert [choice.token for choice in opening.first_token_choices] == ["</think>", " So"]
+        assert [choice.token for choice in answer.first_token_choices] == ["NO", "YES", "UN"]
+        assert answer.first_token_choices[0].logprob == -0.88, "as the server wrote it"
+        assert past_the_end.first_token_choices == (), "a position the reply does not carry"
+
+    def test_the_pair_of_recorded_replies_reads_back_as_one_constrained_answer(self) -> None:
+        """Both arms meeting: two recorded spans over one real socket.
+
+        `RecordedEndpoint` is a server, not a mock (Guardrail #7). It replays the
+        two committed bodies in order and hands back what it was posted, so the
+        request assertions below are about bytes that went over a socket.
+        """
+        first = read_text(COMPLETIONS / "rendered" / "thinking-span-one.json")
+        second = read_text(COMPLETIONS / "rendered" / "thinking-span-two.json")
+        answer = self.grammar_body()
+
+        with RecordedEndpoint(200, first.encode("utf-8"), second.encode("utf-8")) as served:
+            thought = post(
+                thinking_span(answer, turns=self.turns(), max_think_tokens=256, temperature=0.7),
+                endpoint=served.endpoint,
+                timeout=5.0,
+            )
+            verdict = post(
+                answer_span(answer, thought=thought.content, turns=self.turns()),
+                endpoint=served.endpoint,
+                timeout=5.0,
+            )
+
+        merged = one_reply(thought=thought, answer=verdict)
+        span_one, span_two = served.sent
+
+        assert "grammar" not in span_one, "over the wire, not just in the builder"
+        assert span_two["grammar"] == answer["grammar"]
+        assert thought.first_token_choices == (), "span one asked for no alternatives"
+        assert [choice.token for choice in verdict.first_token_choices] == ["YES", "NO", "UN"]
+        assert merged.content == "YES", "the answer's word"
+        assert merged.completion_tokens == 35, "the pair's cost: 34 thought and 1 answered"
+        assert merged.decode_sha256 == decode_digest(span_two), "span two's own stamp"
+        assert merged.decode_sha256 != decode_digest(span_one)
 
 
 class TestTheThinkingReachesNothing:
