@@ -26,6 +26,8 @@
         {
           "model_ref": {
             "byte_count": null,
+            "companion_files": [],
+            "draft": null,
             "file": "Qwen3-8B-Q4_K_M.gguf",
             "hf_base_repo": null,
             "id": "qwen3-8b-q4-k-m",
@@ -72,6 +74,8 @@
         {
           "model_ref": {
             "byte_count": null,
+            "companion_files": [],
+            "draft": null,
             "file": "Qwen3-4B-Q4_K_M.gguf",
             "hf_base_repo": null,
             "id": "qwen3-4b-q4-k-m",
@@ -182,6 +186,8 @@
         {
           "model_ref": {
             "byte_count": null,
+            "companion_files": [],
+            "draft": null,
             "file": "Qwen3-8B-Q4_K_M.gguf",
             "hf_base_repo": null,
             "id": "qwen3-8b-q4-k-m",

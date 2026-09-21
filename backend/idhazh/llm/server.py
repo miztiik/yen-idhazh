@@ -494,7 +494,9 @@ def server_argv(
             argv.append(str(value))
     for companion in model.companion_files:
         if companion.flag is not None:
-            argv += [companion.flag, str(companion_path(weights, companion))]
+            # POSIX separators: the runner is Linux, and this argument is
+            # captured into a committed golden (`CLAUDE.md` section 2).
+            argv += [companion.flag, companion_path(weights, companion).as_posix()]
     return argv
 
 
