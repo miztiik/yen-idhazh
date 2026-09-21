@@ -519,11 +519,6 @@ class AppearanceConfig(Contract):
             why="A container of unrelated figures has no question to be titled with.",
         ),
         ChangelogEntry(
-            version="2026-09-20T14:00",
-            change="console.panel_groups.machine is four decision groups, not three time grains.",
-            why="A heading naming a grain answers no question an operator arrives with.",
-        ),
-        ChangelogEntry(
             version="2026-08-29",
             change="Earlier changes are in this file's git history.",
             why="A changelog says what moved lately; git is the archive.",

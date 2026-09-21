@@ -962,11 +962,6 @@
       "why": "A container of unrelated figures has no question to be titled with."
     },
     {
-      "change": "console.panel_groups.machine is four decision groups, not three time grains.",
-      "version": "2026-09-20T14:00",
-      "why": "A heading naming a grain answers no question an operator arrives with."
-    },
-    {
       "change": "Earlier changes are in this file's git history.",
       "version": "2026-08-29",
       "why": "A changelog says what moved lately; git is the archive."

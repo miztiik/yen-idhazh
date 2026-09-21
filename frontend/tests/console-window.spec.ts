@@ -315,11 +315,11 @@ test('THE ORACLE: the Machine route obeys the same control over its own surfaces
 		'the machine route publishes no windowed surfaces, so the oracle asserts nothing'
 	).toEqual([
 		'machine-article-cost',
-		'machine-cache',
 		'machine-context',
 		'machine-cost',
 		'machine-fleet',
 		'machine-latency',
+		'machine-prompt-reuse',
 		'machine-runs',
 		'machine-tokens'
 	]);
