@@ -470,7 +470,7 @@ class ConsoleConfig(Model):
                     title="What the model spends",
                     panels=[
                         "article-cost",
-                        "prompt-cache",
+                        "prompt-reuse",
                         "read-against-written",
                         "counterfactual-cost",
                     ],

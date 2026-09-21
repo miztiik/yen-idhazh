@@ -499,6 +499,11 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21T23:00",
+            change="console.panel_groups.machine names prompt-reuse where it named prompt-cache.",
+            why="The panel now reads one span a request rather than one column a day.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T18:00",
             change="console.panel_groups.machine gains the disk-reads panel.",
             why="Memory taken back off the model is paid for on every later article.",
@@ -512,11 +517,6 @@ class AppearanceConfig(Contract):
             version="2026-09-21T12:00",
             change="console.panel_groups.machine gains the article-cost panel.",
             why="What one article costs has to be priceable before the run that pays it.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21",
-            change="console.context_high_percentile and console.context_cut_off_reason, additive.",
-            why="The context panel draws two ends a run and names what a cut-off looks like.",
         ),
         ChangelogEntry(
             version="2026-08-29",
