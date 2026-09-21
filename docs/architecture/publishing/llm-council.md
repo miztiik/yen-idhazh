@@ -57,10 +57,19 @@ memory and now pulls two, and both of those arrive through the digest
 pipeline's own use of the applied merge line rather than through anything the
 council runs.
 
-## The tenant list, and why it is empty
+## The tenant list, and the judge in it
 
 `council.tenants` is an ordered list of slugs in `config/idhazh.json`. It is the
-one place a judge is registered, and it ships **empty**.
+one place a judge is registered, and since 2026-09-21 it names one: the
+content-similarity judge, which declares itself in
+[../../../backend/idhazh/similarity/tenant.py](../../../backend/idhazh/similarity/tenant.py)
+and routes the three units of work to its own four stages. An empty list is
+still a legal night - the venue runs every step it always runs and judges
+nothing.
+
+**That one line decides whether a night judges anything at all.** Everything
+else can be built, every gate can pass, and a config naming no slug still runs a
+night that plans tonight, fans out to no cell and commits nothing.
 
 A slug resolves to the module that declares it: the council reads the directory
 listing of its own package, finds each subpackage that has a `tenant` module in

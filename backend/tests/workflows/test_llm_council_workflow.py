@@ -320,21 +320,21 @@ def test_every_fanout_output_the_workflow_reads_is_one_the_emitter_prints(
     )
 
 
-def test_a_matrix_with_no_cells_never_reaches_the_strategy_evaluator(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_a_matrix_with_no_cells_never_reaches_the_strategy_evaluator() -> None:
     """An empty matrix is a job Actions refuses to build, so the guard has to exist.
 
-    With no tenant registered the emitter prints an empty list, which is the
-    night the venue is designed to run. Without the guard that legal night would
-    red on a strategy evaluation nobody could read, and the failure would look
-    like a broken workflow rather than a room with no case in it.
+    A night with nobody registered fans out to no cells, which is a legal night
+    the venue is designed to run. Without the guard it would red on a strategy
+    evaluation nobody could read, and the failure would look like a broken
+    workflow rather than a room with no case in it.
+
+    What the emitter prints on such a night is asked in
+    `backend/tests/council/test_council_matrix.py`, against a config written
+    there: the committed one registers a judge, so it cannot answer that
+    question here.
     """
     judge = _job(_judges(), "judge")
 
-    assert _emitted(capsys)["matrix"] == "[]", (
-        "no tenant is registered, so the committed config fans out to no cells"
-    )
     assert _normalize_condition(judge["if"], "the judging job") == (
         "needs.draw.outputs.matrix != '[]'"
     )
@@ -369,10 +369,14 @@ def test_a_cell_carries_its_tenant_its_date_and_its_own_width(
     """
     shard = _script(_step(_judges(), "judge", "name", "Run this unit of the tenant's work"), "")
     emitted = _emitted(capsys)
+    cells = json.loads(emitted["matrix"])
 
     for value in ("tenant", "date", "shard", "shards"):
         assert f"matrix.{value}" in shard, f"the unit is never told which {value} it is"
-    assert json.loads(emitted["matrix"]) == [], "the committed config hosts nobody"
+    assert cells, "the committed config registers a tenant, so tonight fans out to cells"
+    assert all(set(cell) == {"tenant", "date", "shard", "shards"} for cell in cells), (
+        "a cell the unit reads four values off has to carry all four and nothing else"
+    )
     assert json.loads(emitted["dates"]) == [SUBSTITUTED_DATE]
 
 

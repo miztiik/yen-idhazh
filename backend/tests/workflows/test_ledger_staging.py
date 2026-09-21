@@ -94,7 +94,8 @@ STORES_NOTHING_FILLS_YET: Final[Mapping[str, str]] = MappingProxyType(
             "the step that scores the applied merge line against the hand-marked holdout"
         ),
         "state/content-similarity-judge/metrics": (
-            "the content-similarity judge, on its way out of each unit of work it ran"
+            "the council's shipping capability, which this derivation cannot see: it "
+            "renders a tenant's row rather than calling a ledger writer"
         ),
         "state/content-similarity-judge/archive": (
             "the fold, on the day a stamp under the record moves"
@@ -106,20 +107,22 @@ STORES_NOTHING_FILLS_YET: Final[Mapping[str, str]] = MappingProxyType(
 )
 
 # A module a verb used to reach and now reaches only through a tenant the council
-# hosts. `council.tenants` is empty, so nothing runs these and nothing they write
-# can be lost on a runner - which is the whole of what this file exists to catch.
+# hosts. The resolver imports a tenant by name at call time, so a module behind one
+# is in no verb's import closure however many slugs the config registers - and the
+# job that runs the verb stages what the tenant named rather than what this file
+# could have charged it with.
 #
 # It is a list rather than a rule, so a module that goes unreachable for any OTHER
-# reason fails this file instead of joining it unnoticed. An entry goes the day the
-# slug that reaches it is registered, and a name here that a verb DOES reach fails
+# reason fails this file instead of joining it unnoticed. An entry goes the day a
+# verb reaches the module directly, and a name here that a verb DOES reach fails
 # too.
 MODULES_ONLY_A_TENANT_REACHES: Final[Mapping[str, str]] = MappingProxyType(
     {
         "idhazh.stages.set_merge_line": (
-            "the content-similarity judge, once its slug is registered as a tenant"
+            "the content-similarity judge's tenant module, resolved from config"
         ),
         "idhazh.stages.count_verdicts": (
-            "the content-similarity judge, once its slug is registered as a tenant"
+            "the content-similarity judge's tenant module, resolved from config"
         ),
     }
 )

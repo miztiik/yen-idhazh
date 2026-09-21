@@ -70,15 +70,21 @@ def _emitted(
 
 
 def test_a_night_with_no_tenant_fans_out_to_nothing(
-    capsys: pytest.CaptureFixture[str],
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    """The committed config's own night, and the one the venue has to survive.
+    """The night the venue has to survive: a room with nobody registered in it.
 
     An empty matrix, no path to stage, and a parallelism Actions can still read -
     the judging job's guard is what stops the empty list reaching the strategy
     evaluator, and it cannot be asked of a job that was never built.
+
+    Against a config written here rather than the committed one, which has
+    registered a judge since 2026-09-21. Reading that would ask what the judge
+    fans out to instead of what an empty room does.
     """
-    emitted = _emitted(capsys, config_root=CONFIG_DIR, dates=(A_DATE,))
+    emitted = _emitted(
+        capsys, config_root=_config_registering(tmp_path, slugs=()), dates=(A_DATE,)
+    )
 
     assert json.loads(emitted["matrix"]) == []
     assert json.loads(emitted["dates"]) == [A_DATE]

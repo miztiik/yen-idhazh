@@ -129,7 +129,9 @@
     "shard_timeout_minutes": 200,
     "shard_wrap_up_minutes": 12,
     "shards": 4,
-    "tenants": []
+    "tenants": [
+      "content-similarity-judge"
+    ]
   },
   "drift": {
     "extractiveness_rise": 0.15,

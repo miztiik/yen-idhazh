@@ -296,10 +296,39 @@ console is where the loop is watched once it starts
 | `state/content-similarity-judge/score-distribution.json` | Across everything judged so far, how many YES, NO and UNCLEAR readings sit in each slice of the band? |
 | `state/content-similarity-judge/fitted-thresholds/` | On this day, what did the record propose, what shaped it, and what did the run apply? |
 | `state/content-similarity-judge/holdout-pairs.csv` | Which pairs did a person mark, and which way? |
+| `state/content-similarity-judge/metrics/` | Over one unit of one night, how did this judge's own instrument behave - what was it dealt, what did it read, and what did that cost? |
 
 The fields, the types and the bounds are in
 [../contracts/schemas.md](../contracts/schemas.md). How each store is partitioned,
 and why, is in [../../concepts/partitions.md](../../concepts/partitions.md).
+
+### This judge is a tenant, and the venue knows nothing about it
+
+The council hosts judges and depends on none of them
+([llm-council.md](llm-council.md#the-venue-and-its-tenants-are-separate-things)).
+This judge registers by putting its slug in `council.tenants` and declaring
+itself in
+[../../../backend/idhazh/similarity/tenant.py](../../../backend/idhazh/similarity/tenant.py),
+which binds the venue's three units of work to the four stages above: pick the
+work, judge one unit of it, then count and fit. That module imports the venue;
+nothing in the venue imports it.
+
+**The funnel closes, and the contract is what holds it closed.** Every pair a
+unit was dealt ends exactly one of four ways - read, refused by the grammar,
+unreachable because the day either item ran on has aged out, or never reached
+because the unit stopped on its own clock. The four added together are what the
+unit was dealt, and a row where they do not is refused before it is written. The
+abandoned term is why: without it the identity would go red on exactly the unit
+the deadline exists to let report at all.
+
+**A rate over no rows is empty rather than zero.** A unit that read nothing
+measured nothing; a zero would say it measured everything and found nothing
+wrong.
+
+**A unit ships its row as it finishes and commits nothing.** The row goes out as
+an artifact, the collecting job appends it to the store above, and the trip
+belongs to the venue - so a unit the platform killed has still handed over every
+reading it took.
 
 ## How the line moves: down fast, up slow
 

@@ -1,5 +1,8 @@
 """What does the record hold after a day is counted into it, and what is refused?
 
+The arithmetic, and the collecting job that applies it: what it appends beside
+the record is part of what a counted day leaves behind.
+
 Every record and every row here is built in the test that uses it. Nothing walks
 the committed day tree: the arithmetic is about one record and a handful of rows,
 and a fixture that grows with the archive would make these slower every week
@@ -10,18 +13,28 @@ from __future__ import annotations
 
 import dataclasses
 import json
+from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
+from idhazh import assemble, config, ledger
+from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJudgeMetrics
 from idhazh.contracts.knobs.placement import SimilarityThresholdConfig
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
+from idhazh.council import metrics_sink
 from idhazh.similarity import counting
 from idhazh.similarity.stamps import JudgeStamp, ScorerStamp
+from idhazh.similarity.tenant import JUDGE_ID
+from idhazh.stages import count_verdicts
+from idhazh.stages.judge_item_pairs import VERDICTS_DIRNAME
 
 DATE: Final = "2026-09-18"
+
+#: The name the council night these tests settle files its rows under.
+A_COUNCIL_RUN: Final = f"{DATE}-9"
 
 #: A twelve-slot band, wide enough to tell an edge from a middle and small enough
 #: that a failing assertion names a slot a reader can count to.
@@ -249,3 +262,128 @@ def test_a_stamped_re_judge_beats_the_unstamped_rows_it_replaces() -> None:
 
     assert [row.verdict for row in kept] == [SameStoryVerdict.NO]
     assert [row.run_id for row in counting.one_row_a_pair(rows[::2])] == [f"{DATE}-2"]
+
+
+def a_metrics_row(*, shard: int, dealt: int = 2) -> ContentSimilarityJudgeMetrics:
+    """One unit's instrument reading, with a funnel that closes."""
+    return ContentSimilarityJudgeMetrics.model_validate(
+        {
+            "date": DATE,
+            "run_id": A_COUNCIL_RUN,
+            "shard": shard,
+            "pairs_dealt": dealt,
+            "pairs_read": dealt,
+            "pairs_agreed": dealt,
+            "pairs_unreadable": 0,
+            "pairs_refused": 0,
+            "pairs_abandoned": 0,
+            "disagreement_rate": 0.0,
+            "unclear_rate": 0.0,
+            "first_token_margin_median": 0.5,
+            "decode_seconds_total": 3.5 + shard,
+            "decode_seconds_max": 2.0,
+        }
+    )
+
+
+def a_night(root: Path, *, units: int) -> tuple[Path, Path, list[ContentSimilarityJudgeMetrics]]:
+    """A night's units as they leave a runner: a verdict file and a shipped row each.
+
+    The verdict files carry a header and no rows, because what these ask is what
+    the collecting job does with what the units shipped rather than how a verdict
+    is counted.
+    """
+    shipped = root / "shipped"
+    judge_root = root / "judge"
+    written = [a_metrics_row(shard=unit) for unit in range(units)]
+    for unit, row in enumerate(written):
+        metrics_sink.ship_judge_metrics(row, judge_id=JUDGE_ID, shard=unit, out_dir=shipped)
+        assemble.write_atomic(
+            judge_root / DATE / VERDICTS_DIRNAME / f"{unit}.csv",
+            ",".join(StorySimilarityPair.csv_columns()) + "\n",
+        )
+    return shipped, judge_root, written
+
+
+def test_the_row_the_collecting_job_lands_is_the_row_the_unit_shipped(tmp_path: Path) -> None:
+    """Cell for cell, and the whole file is compared rather than a column of it.
+
+    Both ends render through the contract's own columns, so a column one side
+    knows about and the other does not shows up here as a line that is no longer
+    the line the unit wrote - which is the one failure a spot check of two cells
+    would walk straight past.
+    """
+    settings = config.load(CONFIG_DIR)
+    state = tmp_path / "state"
+    shipped, judge_root, written = a_night(tmp_path, units=settings.app.council.shards)
+
+    report = count_verdicts.stage_count_verdicts(
+        DATE,
+        run_id=A_COUNCIL_RUN,
+        judge_id=JUDGE_ID,
+        shipped_root=shipped,
+        settings=settings,
+        state_dir=state,
+        judge_root=judge_root,
+    )
+
+    landed = read_text(ledger.content_similarity_judge_metrics_path(state, DATE)).splitlines()
+    out_of_the_units = [
+        read_text(shipped / JUDGE_ID / f"{unit}.csv").splitlines()
+        for unit in range(len(written))
+    ]
+
+    assert report.metrics_appended == len(written)
+    assert report.counted is True, "every unit reported, so the day is counted"
+    assert landed[0] == ",".join(ContentSimilarityJudgeMetrics.csv_columns())
+    assert landed[1:] == [unit[1] for unit in out_of_the_units]
+    assert all(unit[0] == landed[0] for unit in out_of_the_units), (
+        "the units and the store name their columns differently, so a row moved "
+        "between them would be read one cell out of place"
+    )
+
+
+def test_the_readings_land_on_a_night_the_record_refused_to_count(tmp_path: Path) -> None:
+    """A unit that ran and a day that cannot be counted are two different facts.
+
+    Holding the readings back until the record accepts the day would delete the
+    evidence of the first to record the second - and the night a unit dies is
+    exactly the night an operator opens this store to find out why.
+    """
+    settings = config.load(CONFIG_DIR)
+    state = tmp_path / "state"
+    shipped, judge_root, written = a_night(tmp_path, units=1)
+
+    report = count_verdicts.stage_count_verdicts(
+        DATE,
+        run_id=A_COUNCIL_RUN,
+        judge_id=JUDGE_ID,
+        shipped_root=shipped,
+        settings=settings,
+        state_dir=state,
+        judge_root=judge_root,
+    )
+
+    assert settings.app.council.shards > len(written), "a night short of a unit"
+    assert (report.counted, report.held_reason) == (False, "shards_missing")
+    assert report.metrics_appended == 1
+    assert ledger.content_similarity_judge_metrics_path(state, DATE).exists()
+
+
+def test_a_night_whose_units_shipped_nothing_appends_nothing(tmp_path: Path) -> None:
+    """An empty upload is a night with no tenant, never a run to fail."""
+    settings = config.load(CONFIG_DIR)
+    state = tmp_path / "state"
+
+    report = count_verdicts.stage_count_verdicts(
+        DATE,
+        run_id=A_COUNCIL_RUN,
+        judge_id=JUDGE_ID,
+        shipped_root=tmp_path / "nothing-was-uploaded",
+        settings=settings,
+        state_dir=state,
+        judge_root=tmp_path / "judge",
+    )
+
+    assert report.metrics_appended == 0
+    assert not ledger.content_similarity_judge_metrics_path(state, DATE).exists()

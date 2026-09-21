@@ -18,10 +18,10 @@ state ledger is derived from the published tree:
 | `state/day-metrics/<YYYY>/<MM>/<DD>.json` | `telemetry.publish.day_metrics.write` |
 | `state/visual-prunes/<YYYY>/<MM>/<DD>.csv` | `ledger.append_visual_prunes` |
 | `state/counterfactual-scores/<YYYY>/<MM>/<DD>.csv` | `ledger.append_counterfactual_scores` |
-| `state/content-similarity-judge/scored-pairs/<YYYY>/<MM>/<DD>.csv` | none yet - the shape and the path land ahead of the step that appends to them (Guardrail #3) |
-| `state/content-similarity-judge/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` | none yet, for the same reason |
-| `state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv` | none yet, for the same reason |
-| `state/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>.csv` | none yet, for the same reason |
+| `state/content-similarity-judge/scored-pairs/<YYYY>/<MM>/<DD>.csv` | `ledger.append_story_similarity_pairs`, from the collecting job |
+| `state/content-similarity-judge/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` | `ledger.append_fitted_thresholds`, from the collecting job |
+| `state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv` | `ledger.append_council_shard_outcomes`, from the collecting job |
+| `state/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>.csv` | `council.metrics_sink.collect_judge_metrics`, from the collecting job |
 | `state/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>.csv` | none yet, for the same reason |
 
 Every rule on this page reads the same with "day" in place of "month": a writer
