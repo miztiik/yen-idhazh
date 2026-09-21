@@ -82,6 +82,13 @@ room rather than for the one job being done in it this month.
 `CLAUDE.md` section 1a permits this: a model verdict may run in a production
 workflow and may determine publication.
 
+**The test every name here has to pass.** A word earns a name only when its
+ordinary English meaning is what the thing does. Where a reader has to know
+which other field a word was borrowed from, it is a second name for something
+that already has one, and the fix is to delete it rather than to find a better
+borrowing. `council` passes on the plain meaning: a council is a room where a
+case is heard.
+
 ## The venue and its tenants are separate things
 
 **The council runs one judge or many - in sequence, in parallel, or chained -
@@ -95,8 +102,29 @@ and hands its rows to
 [../../../backend/idhazh/council/metrics_sink.py](../../../backend/idhazh/council/metrics_sink.py).
 The council records which tenant ran; it never declares which tenants may exist.
 
-Three layers, and which one a reading belongs to is decided by what the reading
-is ABOUT, never by what executed it.
+**That sentence is worth nothing unless a reviewer can fail a change on it**, so
+it is five conditions and each one names what fails.
+
+| # | The condition | What fails a change |
+| --- | --- | --- |
+| 1 | Nothing under `backend/idhazh/council/` imports a judge | a new import of a judge's module or a judge's contract, anywhere in that directory. The precedent is `CLAUDE.md` section 4, where the contracts package imports no sibling of its own |
+| 2 | No judge module is reachable from a council verb, however many imports away | a council verb that imports a judge at module scope, or imports something that does. A check scoped to the directory cannot see this: the command router used to import four judge stages at module scope, so deleting the judge broke every council verb while the directory itself stayed clean |
+| 3 | Every council contract declares, builds and round-trips with no judge in the repository | a council contract that names a judge's type, or whose field description names a judge's unit of work. A description is published in the generated schema, so a judge's word in one is a judge's word in the venue's own public contract |
+| 4 | Every council test passes with no judge's test module present | a council test that imports a judge's fixture, and a council change that cannot be merged until a judge change is. Council tests live in `backend/tests/council/` |
+| 5 | A judge is reached only through the protocol the council declares, and only from config | the council opening a judge's store, reading a judge's stamp, or naming a judge's type. Registration points a judge at the council and never the other way: the config names slugs, and the resolver imports a judge only when it has been asked for one |
+
+**What the rule costs, stated rather than implied.** The council's own row
+records the tenant's slug as plain text with no membership check, so a typo
+files a row under a name nobody owns and a group-by hands it back. That is a
+reporting nuisance, and it is the price of the rule: a central list of who may
+exist would change the venue's published contract every time a tenant moved in,
+and a repository with no judge in it could not import the council's own record
+at all. The slug reaches the council from the tenant's own module constant, so a
+typo is a source edit a reviewer sees.
+
+Four layers - three of them the council's and one the tenant's - and which one a
+reading belongs to is decided by what the reading is ABOUT, never by what
+executed it.
 
 | Layer | Owns | Stored |
 | --- | --- | --- |
@@ -107,6 +135,19 @@ is ABOUT, never by what executed it.
 
 A judge that runs no model files a row with no model columns, and the council's
 record is unchanged.
+
+**Why the separation is not a matter of taste.** A first draft put a judge's
+funnel and its first-token margin on the council's own row. That margin means
+"the grammar chose and the model did not" for a judge whose emitted token is the
+answer, and "a legitimate middle score" for a judge whose spread of scores is the
+answer. One column, two instruments, and any total taken over it adds them
+together. So a shared judge-metrics contract is refused rather than deferred:
+the column would not be wrong on the day it was added, it would go wrong on the
+day a second judge filled it.
+
+Which store each reading lands in, and the one reading that is filed under a
+judge although the council is what runs it, is
+[../../concepts/telemetry.md](../../concepts/telemetry.md#where-a-judging-night-files-what-it-measured).
 
 ## A unit uploads what it measured, and the collecting job commits it
 
@@ -169,5 +210,6 @@ today. Where one of them gains a fitted line, this is the room it is fitted in.
 - [autotune-desk-assignment.md](autotune-desk-assignment.md) - what decides an article's desk and lens, hand-set today.
 - [autotune-entity-linking.md](autotune-entity-linking.md) - what decides that a mention is an entity, hand-set today.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the two loops, and where this one sits against the digest.
+- [../../concepts/telemetry.md](../../concepts/telemetry.md#where-a-judging-night-files-what-it-measured) - which committed store each of a judging night's readings goes in.
 - [../../reference/github-actions.md](../../reference/github-actions.md) - every workflow, its trigger and its schedule.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Guardrail #2 (the 6 h job ceiling) and section 1a (what a model verdict may decide).

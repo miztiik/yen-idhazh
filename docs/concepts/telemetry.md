@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 
 The structured-event vocabulary: the envelope every event carries, the event names that are emitted, the two shapes those names take, the span tree a developer can switch on, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, which is a project non-goal ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 0a).
 
@@ -465,6 +465,38 @@ Thirteen stores under `state/` is not thirteen designs. It is six grains, and th
 
 **A published payload with no reader is deleted rather than kept for later.** `scores/` and `feed-health/` were 6,455,733 bytes that no console route fetched, and on 2026-09-16 they went with their two projections. A mirror nobody reads drifts from the ledger it mirrors and nobody notices, which is the same failure as a column nobody writes. The ledgers under `state/scores/` and `state/feed-health/` stay - they are the record, and the console reads them at build time.
 
+### Where a judging night files what it measured
+
+A judging night has two parties: the council, which is the workflow that runs the
+night ([../architecture/publishing/llm-council.md](../architecture/publishing/llm-council.md)),
+and the judge it hosts. They file separately. **What the reading is ABOUT decides
+which store it lands in, never what executed it.**
+
+| Path | What the reading is about | Keyed on |
+| --- | --- | --- |
+| `state/llm-council/shard-outcomes/` | did the pipeline work - which units of work started, which finished, which stopped on their own clock, and what the work they hosted cost in total | date, run, judge, shard |
+| `state/content-similarity-judge/metrics/` | how one judge's own instrument behaved - what the selection dealt it, how much of that it read, what it refused, what it cost | date, run, shard |
+| `state/content-similarity-judge/merge-line-holdout-scores/` | how the line that judge produced stands against a holdout marked outside this pipeline | date, run |
+
+**The third one is the case that catches people.** The council is what runs the
+scoring, so the reading looks like the council's. It measures a judge's output,
+so it is the judge's, and it sits under that judge's slug beside that judge's
+other store. A judge owns as many stores as it has questions, and running under
+the council makes none of them the council's.
+
+**The council's own row carries no column that needs a name for the unit of
+work.** It reads the same whether the judge it hosted made four hundred model
+calls or none, which is what lets a second judge rename every column it files
+without touching the council's published contract. The reverse holds too: a
+judge's funnel, its own rates and its own verdicts never appear on the council's
+row. Why the two are held apart, and the five conditions a change is failed on,
+are on the council's own page linked above.
+
+These three paths are spelled in
+[../../backend/idhazh/ledger.py](../../backend/idhazh/ledger.py) and hold no rows
+yet, because each writer lands with the work that fills it. An empty tree here
+is the state of the build and not a lost reading.
+
 ### What folds, what does not, and the test that decides
 
 Read this table before proposing a merge. A store folds only when it fails **every** one of three tests: it must key on something that is always an item, keep the same window as the census, and hold no fact the census could not have recorded at write time.
@@ -566,5 +598,6 @@ Treating the Actions run log as the log store, rather than shipping logs anywher
 - [config.md](config.md) - the log level, which is the only knob logging has.
 - [evaluation.md](evaluation.md) - the ledger that IS the record, as distinct from the log.
 - [../architecture/sources/item-health.md](../architecture/sources/item-health.md) - the item-level census ledger.
+- [../architecture/publishing/llm-council.md](../architecture/publishing/llm-council.md) - the judging workflow, and why its own readings and a judge's are two records.
 - [principles.md](principles.md) - principle 9, logging is local by construction.
 - [../../CLAUDE.md](../../CLAUDE.md) - section 1b (logging) and the no-telemetry-SDK non-goal (section 0a).
