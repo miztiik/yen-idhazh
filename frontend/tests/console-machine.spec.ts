@@ -16,7 +16,6 @@ import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
-	cacheByDay,
 	clockAgreement,
 	costOf,
 	itemRead,
@@ -602,35 +601,6 @@ test.describe('work or the host, decided on the row', () => {
 	test('the weights load lands as a cell on the shard that paid it', () => {
 		expect(host.rows[0].modelLoadMs).toBe(2400);
 		expect(boardOf(TWO_SHARDS).rows.map((row) => row.modelLoadMs)).toEqual([4000, 3000]);
-	});
-});
-
-test.describe('the prompt cache', () => {
-	test('a day is the sum of its runs, in absolute tokens, with its own share', () => {
-		const second = TWO_SHARDS.map((reading) => ({
-			...reading,
-			runId: '2026-09-04-2',
-			serverPromptTokens: 1000,
-			cachedTokens: 1000
-		}));
-		const { runs } = runsOf(
-			[...TWO_SHARDS, ...second],
-			[
-				['2026-09-04-1', 2],
-				['2026-09-04-2', 2]
-			]
-		);
-		const [day] = cacheByDay(runs);
-		// Run one read 8,000 + 2,000 and cached 2,000 + 2,000; run two read 1,000
-		// twice and cached 1,000 twice.
-		expect(day.read).toBe(10_000 + 2000);
-		expect(day.cached).toBe(4000 + 2000);
-		expect(day.runs).toBe(2);
-		expect(day.cachedPct).toBe(Math.round((6000 / 18_000) * 100));
-	});
-
-	test('a run that reported neither count is left out rather than counted as nothing', () => {
-		expect(cacheByDay(runsOf([{ shard: 0 }], [['2026-09-04-1', 1]]).runs)).toEqual([]);
 	});
 });
 

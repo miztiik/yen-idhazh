@@ -349,49 +349,67 @@ test('a hand-written multi-series chart prints every series at one column', asyn
 test('an engine-drawn chart prints both its series at one column', async ({ page }) => {
 	await page.goto('/console/machine/', { waitUntil: 'domcontentloaded' });
 
-	const strip = page.locator('[data-readout="cache"]');
-	await expect(strip, 'the stacked cache chart carries a strip').toHaveCount(1);
+	// The two-clocks chart is the one this rule exists for: two readings of one
+	// quantity on a shared axis, which is exactly the comparison a reader would
+	// otherwise make by eye, one hover at a time.
+	const strip = page.locator('[data-readout="clocks"]');
+	await expect(strip, 'the two-instrument chart carries a strip').toHaveCount(1);
 
 	const rows = await strip
 		.locator('[data-readout-row]')
 		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-readout-row') ?? ''));
-	expect(rows).toEqual(['Read', 'Served from cache']);
+	// Both instruments, and the gap between them, at the column the reader is on.
+	expect(rows).toEqual(['Item ledger', 'Model server', 'Apart']);
 });
 
 test('an arrow key moves an engine chart readout and draws a guide', async ({ page }) => {
 	await page.goto('/console/machine/', { waitUntil: 'domcontentloaded' });
 
-	const frame = page.locator('[data-chart-readout="cache"]');
+	// One column a run, and a run id is unique, so the column Home lands on can
+	// never print what the resting column prints.
+	const frame = page.locator('[data-chart-readout="read-against-written"]');
 	await expect(frame).toHaveCount(1);
-	const head = page.locator('[data-readout="cache"] [data-readout-day]');
+	const head = page.locator('[data-readout="read-against-written"] [data-readout-day]');
 	const resting = await head.textContent();
 
 	// The keyboard is the point. A tooltip that only a pointer can raise leaves
 	// a value with nowhere to appear on a phone or under a screen reader.
 	await frame.focus();
 	await page.keyboard.press('Home');
-	await expect(page.locator('[data-chart-guide="cache"]')).toHaveCount(1);
+	await expect(page.locator('[data-chart-guide="read-against-written"]')).toHaveCount(1);
 	expect(await head.textContent()).not.toBe(resting);
 
 	// Escape returns it to rest, and the guide goes with it.
 	await page.keyboard.press('Escape');
-	await expect(page.locator('[data-chart-guide="cache"]')).toHaveCount(0);
+	await expect(page.locator('[data-chart-guide="read-against-written"]')).toHaveCount(0);
 	expect(await head.textContent()).toBe(resting);
 });
 
 test('the shape switch is one control per panel and reaches the chart', async ({ page }) => {
 	await page.goto('/console/machine/', { waitUntil: 'domcontentloaded' });
 
-	const control = page.locator('[data-shape-switch="cache"]');
+	// The counterfactual panel carries the one switch on this route that names
+	// shapes; the other two name units and grains.
+	const control = page.locator('[data-shape-switch="cost-shape"]');
 	await expect(control, 'one control, not one per series').toHaveCount(1);
-	await expect(control).toHaveAttribute('data-shape', 'bars');
+	await expect(control).toHaveAttribute('data-shape', 'daily');
+	const chart = page.locator('[data-chart-readout="counterfactual-cost"]');
 
 	// The label, not the input: the segment box sits over it, which is exactly the
 	// trap `console-window.spec.ts` already records for the window presets.
-	await control.locator('[data-shape-option="lines"]').click();
-	await expect(control).toHaveAttribute('data-shape', 'lines');
-	await control.locator('[data-shape-option="bars"]').click();
-	await expect(control).toHaveAttribute('data-shape', 'bars');
+	await control.locator('[data-shape-option="running"]').click();
+	await expect(control).toHaveAttribute('data-shape', 'running');
+	// And it reaches the chart rather than only its own fieldset. The accessible
+	// name is where a reader who cannot see the marks is told which shape it is,
+	// so a switch that moved the radio and left the drawing named as before is a
+	// defect this file owns.
+	await expect(chart, 'the chart is still named as the shape the switch left').toHaveAttribute(
+		'aria-label',
+		/added up day by day/
+	);
+	await control.locator('[data-shape-option="daily"]').click();
+	await expect(control).toHaveAttribute('data-shape', 'daily');
+	await expect(chart).toHaveAttribute('aria-label', /one column a day/);
 });
 
 test('a route in a state says which state, in the owner words', async ({ page }) => {

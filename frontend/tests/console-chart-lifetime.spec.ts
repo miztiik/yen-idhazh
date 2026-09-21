@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
  * outside it. A chart took its option once at hydration and never looked at it
  * again, so a control that changed the option changed the markup and the page's
  * own description of the chart while the drawn chart went on showing the old
- * one - the prompt-cache switch on this route is exactly that, and the comment
+ * one - the counterfactual switch on this route is exactly that, and the comment
  * above the chart said so out loud and worked around it with a remount. Every
  * mounted chart drew, including charts nine screens down and charts CSS had
  * hidden. And an instance could outlive the component that made it, because the
@@ -303,18 +303,18 @@ test('THE ORACLE: a control that changes a chart changes the drawn chart', async
 	await page.setViewportSize(DESKTOP);
 	await page.goto(ROUTE);
 
-	const control = page.locator('[data-shape-switch="cache"]');
+	const control = page.locator('[data-shape-switch="cost-shape"]');
 	await control.scrollIntoViewIfNeeded();
-	const index = await hostFor(page, 'cache');
-	expect(index, 'the prompt-cache panel draws no engine chart').toBeGreaterThanOrEqual(0);
+	const index = await hostFor(page, 'cost-shape');
+	expect(index, 'the counterfactual panel draws no engine chart').toBeGreaterThanOrEqual(0);
 	await comeTo(page, index);
 
-	await expect(control).toHaveAttribute('data-shape', 'bars');
+	await expect(control).toHaveAttribute('data-shape', 'daily');
 	const bars = await settledMarks(page, index);
 	expect(bars.length, 'the chart drew nothing to compare').toBeGreaterThan(4);
 
-	await control.locator('[data-shape-option="lines"]').click();
-	await expect(control, 'the switch did not move').toHaveAttribute('data-shape', 'lines');
+	await control.locator('[data-shape-option="running"]').click();
+	await expect(control, 'the switch did not move').toHaveAttribute('data-shape', 'running');
 	const lines = await settledMarks(page, index);
 
 	expect(
