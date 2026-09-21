@@ -530,9 +530,10 @@ Four proposals were declined. Keeping the capability probe until the fork is pro
  | 1 | Keep it, since the extra is opt-in and unused | An unused second implementation is the thing that rots, and it is a sink pointed at a third party sitting in a repository whose contract says there is no sink | About 120 lines across four files, a knob, an extra, and a contradiction a reader has to resolve | Fowler |
  | 2 | Keep the sink interface and delete only the hosted implementation | An interface with one implementation is the implementation | About 40 lines kept for a shape with nothing behind it | Fowler |
 
-## Section 17 - Row #16 - The thinking budget and the two-span call go
+## Section 17 - Row #16 - The thinking budget goes; the two-span call stays
 
-- **Scope:** Delete the reasoning-token budget, which llama-server has no parameter for and this project implements itself, and with it the machinery that splits one logical call into two requests.
+- **Scope:** Delete the reasoning-token budget, which llama-server has no parameter for and this project invented. **Keep the two-request split**, which carries a second job the first draft of this row missed.
+- **Corrected 2026-09-21 after the second advisory round.** The first draft deleted the split as well, on the stated ground that it existed only to apply the budget. The code says otherwise: a schema or grammar binds the decode from the very first token, and the first request deliberately strips the schema, the grammar and the token-probability request so the model is free to reason. Collapsing to one request applies the shape from token zero, so **a reasoning model cannot reason at all** - and it still returns a well-shaped summary, so nothing goes red. That is the exact silent failure this plan exists to avoid creating.
 - **Files touched:**
   - `backend/idhazh/llm/server.py` (`thinking_span`, `answer_span`, the budget arithmetic in the request bodies)
   - `backend/idhazh/stages/common.py` (the two-span caller)
@@ -553,9 +554,9 @@ Four proposals were declined. Keeping the capability probe until the fork is pro
  | # | Decision | Authority |
  | --- | --- | --- |
  | 1 | A budget this project invented for a runtime that has no such parameter is this project's scaffolding, and it goes | Owner ruling 2026-09-21 |
- | 2 | The two-span split goes with it, because the split exists only to apply the budget. One request a call replaces two | Carmack |
- | 3 | The risk is named rather than guarded: a reasoning model now runs until it stops or reaches the one remaining cap. Plan 40's dispatch measures what that costs, which is the experiment the owner asked for rather than a knob set in advance | Owner ruling 2026-09-21 |
- | 4 | The span-count cells on the two judge records go. A count of spans in a world with one span is a column of ones | Fowler |
+ | 2 | **The split stays.** The first request exists to leave the decode unconstrained while the model thinks; the second puts the shape back for the answer. Deleting it would silently stop every reasoning model reasoning. Removing the budget alone is one line: the first request keeps an uncapped prediction count and its stop marker | Fowler and Andre, second round |
+ | 3 | The risk that remains is named rather than guarded: a reasoning model now thinks until it stops on its own. Plan 40's dispatch measures what that costs, which is the experiment the owner asked for | Owner ruling 2026-09-21 |
+ | 4 | The span-count cells on the two judge records stay, because there are still two spans | Fowler |
 
 - **Rejected alternatives:**
 
@@ -584,9 +585,11 @@ Four proposals were declined. Keeping the capability probe until the fork is pro
  | 1 | A one-shot measurement utility retires once its answer is written down. Re-taking the measurement costs writing the script again, which is the correct price for something run once | Fowler |
  | 2 | The human-label queue goes. It has zero committed rows and was run once; it returns as a short script the day somebody labels something | Andre |
  | 3 | The retrieval evaluation goes. Its only reader is its own test, it walks the growing committed archive - which CLAUDE.md section 13 forbids by name - and its bar is a date a person bumps to keep it green | Andre |
- | 4 | Five demoted score fields go. **The two counterweights stay**: without them a faithfulness floor drives the system toward bland copying, and they see what the faithfulness score cannot | Andre |
+ | 4 | Five demoted score fields go **from the qualification report only**. See decision 7 | Andre |
  | 5 | The plan-queue tooling goes. It is tooling to read a file a person wrote, and an agent reads the file | Fowler |
  | 6 | What is lost is named, not waved away: nothing then measures whether archive search finds the right story. The replacement is a fixture of query and answer pairs, written the day search changes | Andre |
+ | 7 | **The measuring functions are out of scope, and this is the row's hardest boundary.** Three of the measures the qualification report prints are not diagnostics anywhere else: they set the confidence line published beside an item every day, and they are the admission filter on the fine-tuning corpus. Measured over the committed days: taking the functions rather than the report fields would move 2,193 of 11,654 scored items across a confidence band, promote 2,100 of them to the highest band with nothing measured to justify it, and delete the disclosure sentence from 1,988 published items. **This row deletes report fields. It does not touch `backend/idhazh/evals/metrics.py`, `evals/score.py` or `corpus.py`** | Editor, second round |
+ | 8 | The census in the oracle covers `frontend/` as well as `backend/`, `.github/` and `docs/`. One of these measures is read by a published console page | Fowler |
 
 - **Rejected alternatives:**
 
@@ -596,9 +599,11 @@ Four proposals were declined. Keeping the capability probe until the fork is pro
  | 2 | Delete the two counterweight score fields as well | A faithfulness floor with no counterweight rewards copying the source, which is the failure the counterweights exist to see | About 40 lines, and a quality signal that moves the wrong way | Andre |
  | 3 | Delete the commit-and-push script, also large | It has eight call sites and a test that drives the real script through race and rebase cases against real repositories. That is this project's own code being wrong, which is what the plan's rule keeps a check for | A retry loop in five workflows, none of them executable in a test | Fowler |
 
-## Section 19 - Row #18 - The server renders the prompt, not us
+## Section 19 - Row #18 - The model's own template renders the prompt, not our copy of it
 
-- **Scope:** Stop re-implementing each model's chat template in configuration. Send the conversation as messages to the chat endpoint and let llama-server apply the model's own template, which retires the turn envelope and the one remaining startup check with it.
+- **Scope:** Stop transcribing each model's chat template into configuration by hand. Ask the server to render the conversation through the model's own template, then send that rendered prompt the way we send one today.
+- **Corrected 2026-09-21 after the second advisory round.** The first draft moved every call to the message-based endpoint. Three separate breaks were found and it would have been a trust-boundary breach: the check that refuses a marker family the sanitizer cannot strip reads our declared markers at configuration load, in every process, with no server running - and its proposed replacement cannot be built, because the server publishes its template as source code in which a marker is assembled by concatenation rather than listed. Only two markers are directly recoverable, and no template parser is a dependency here. The message endpoint also loses the literal grammar the judge posts, the first-token alternatives it reads, and moves the decode identity stamped on every committed row. A measurement on 2026-09-12 also found the template drops a marker when a turn is replayed as history, which re-reads about a hundred tokens an item - the exact regression the current design was changed to remove.
+- **The shape that gets what the owner wants**: the server already exposes a route that applies the model's own template to a message list and returns the rendered prompt. Post there once, take the rendering, send it on the route production already uses. The hand transcription dies; the grammar, the first-token alternatives, the prompt splice, the decode stamp and the marker check all survive untouched.
 - **Files touched:**
   - `backend/idhazh/contracts/knobs/turns.py` (deleted)
   - `backend/idhazh/llm/server.py` (`render_prompt`, `continued_prompt`, `turn_markers`, `turn_markers_digest`, `the_render_agrees`, the completion payload builders)
@@ -616,10 +621,11 @@ Four proposals were declined. Keeping the capability probe until the fork is pro
  | # | Decision | Authority |
  | --- | --- | --- |
  | 1 | The template is the model's, not ours. A configuration field that restates somebody else's file is the same mistake as a schema that restates a Pydantic model | Owner ruling 2026-09-21 |
- | 2 | The one surviving startup check retires here, and only here. It exists to prove our copy matches the original; with no copy there is nothing to prove | Andre |
- | 3 | **The trust boundary moves, it does not weaken.** The sanitizer still refuses any marker family it cannot strip; it now reads the markers out of the template the server reports rather than out of our file. Guardrail #11 is unchanged in force | Andre, Guardrail #11 |
- | 4 | This row runs after the two-span call is gone, because raw-prompt control existed for two reasons and that is one of them | Carmack |
- | 5 | If the prefix cache stops serving the second call, the row stops and reports. Prompt caching is a measurable share of prefill, and losing it silently is the one outcome that would make this a bad trade | Carmack |
+ | 2 | **The transport does not change.** Production keeps the route it uses, so the grammar the judge posts, the first-token alternatives it reads, the two slot cells on the item ledger and the decode identity on every committed row are all unaffected | Fowler and Andre, second round |
+ | 3 | **The trust boundary does not move.** The marker check keeps reading a plain dictionary at configuration load, in every process, with no server needed. The dictionary is now machine-recorded rather than typed, which is the whole point | Andre, Guardrail #11 |
+ | 4 | The render-agreement check retires, because the fields were recorded from the template rather than transcribed. That is the check's own reason for existing | Andre |
+ | 5 | This row no longer depends on the two-span call, which row #16 now keeps | Fowler |
+ | 6 | Recording is a one-off per model, not a step in every run. A new model's entry is filled by asking the server once; the run reads the file | Carmack |
 
 - **Rejected alternatives:**
 
