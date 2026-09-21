@@ -942,6 +942,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "console.panel_groups.machine names prompt-reuse where it named prompt-cache.",
+      "version": "2026-09-21T23:00",
+      "why": "The panel now reads one span a request rather than one column a day."
+    },
+    {
       "change": "console.panel_groups.machine gains the processor-lost panel.",
       "version": "2026-09-21T19:00",
       "why": "A busy figure cannot be read without the share the host gave elsewhere."
@@ -955,11 +960,6 @@
       "change": "console.panel_groups.machine gains memory-held, additive.",
       "version": "2026-09-21T14:00",
       "why": "What the machine's memory holds is a question the ceiling panel does not answer."
-    },
-    {
-      "change": "console.panel_groups.machine gains the article-cost panel.",
-      "version": "2026-09-21T12:00",
-      "why": "What one article costs has to be priceable before the run that pays it."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -997,7 +997,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-09-21T19:00",
+      "default": "2026-09-21T23:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1005,5 +1005,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-09-21T19:00"
+  "version": "2026-09-21T23:00"
 }

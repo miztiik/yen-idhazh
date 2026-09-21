@@ -49,7 +49,7 @@
 	import ArticleCostPanel from '$lib/console/machine/ArticleCostPanel.svelte';
 	import PlatformMixPanel from '$lib/console/machine/PlatformMixPanel.svelte';
 	import ProcessorLostPanel from '$lib/console/machine/ProcessorLostPanel.svelte';
-	import PromptCachePanel from '$lib/console/machine/PromptCachePanel.svelte';
+	import PromptReusePanel from '$lib/console/machine/PromptReusePanel.svelte';
 	import ReadAgainstWrittenPanel from '$lib/console/machine/ReadAgainstWrittenPanel.svelte';
 	import ShardBoardPanel from '$lib/console/machine/ShardBoardPanel.svelte';
 	import TailTrendPanel from '$lib/console/machine/TailTrendPanel.svelte';
@@ -225,18 +225,19 @@
 				days={view.days}
 			/>
 		{:else if id === 'reading-against-writing'}
-			<MachineSplitPanel split={data.split} />	{:else if id === 'article-cost'}
-		<ArticleCostPanel
-			cost={view.articleCost}
-			days={view.days}
-			{windowDays}
-			chart={data.chart}
-		/>		{:else if id === 'prompt-cache'}
-			<PromptCachePanel
-				cacheDays={view.cacheDays}
+			<MachineSplitPanel split={data.split} />
+		{:else if id === 'article-cost'}
+			<ArticleCostPanel
+				cost={view.articleCost}
 				days={view.days}
 				{windowDays}
-				svg={data.cacheSvg}
+				chart={data.chart}
+			/>
+		{:else if id === 'prompt-reuse'}
+			<PromptReusePanel
+				reuse={view.reuse}
+				days={view.days}
+				{windowDays}
 				chart={data.chart}
 			/>
 		{:else if id === 'context-headroom'}

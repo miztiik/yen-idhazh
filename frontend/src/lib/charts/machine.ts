@@ -2,12 +2,11 @@
  *
  * `$lib/server/machine-counters.ts` reads `state/host-fingerprint/` and
  * `state/item-health/` and hands back one figure per shard and per run. This
- * module turns those figures into the eight things an operator can act on:
+ * module turns those figures into the seven things an operator can act on:
  * which shard was slow and why, whether the seconds went on reading or on
- * writing, whether the prompt cache is earning its keep, how much of the
- * context window a run actually used, how near the runner's 16 GB a run got,
- * whether the two clocks agree, whether the tail is growing, and what a run's
- * tokens would have cost somewhere else.
+ * writing, how much of the context window a run actually used, how near the
+ * runner's 16 GB a run got, whether the two clocks agree, whether the tail is
+ * growing, and what a run's tokens would have cost somewhere else.
  *
  * Every function here is pure and every one takes its ceiling as an argument,
  * so a test drives it from a fixture ledger and Guardrail #6 keeps the knobs in
@@ -42,9 +41,10 @@ export const RUNNER_MEMORY_BYTES = 16 * 1024 * 1024 * 1024;
  * `stacked` and the run-by-run bars both took a fixed 48px, which is a gutter
  * sized for a four-digit count. Measured 2026-09-01 at 1440, 768 and 390 on the
  * built console, that clipped `200,000` by 1.35px and `1,200,000` by 10.44px on
- * the prompt-cache chart - six labels cut on every width. The engine picks its
- * own top tick, so the widest label it can draw is the largest value grouped
- * plus at most one more character; that character is the slack added here.
+ * a stacked chart whose day totals reached seven digits - six labels cut on
+ * every width. The engine picks its own top tick, so the widest label it can
+ * draw is the largest value grouped plus at most one more character; that
+ * character is the slack added here.
  */
 export function valueGutter(highest: number, fontSize = 11): number {
 	const widest = labelWidth(grouped(Math.round(highest)), fontSize) + fontSize * LABEL_ADVANCE_EM;
@@ -457,88 +457,10 @@ export function shardBoard(
 // The prompt cache
 // ---------------------------------------------------------------------------
 
-export interface CacheDay {
-	date: string;
-	/** Prompt tokens the server actually read. */
-	read: number;
-	/** Prompt tokens it reused instead of reading. */
-	cached: number;
-	/** Cached over every prompt token the day needed, whole percent. Null where
-	 * the day needed none. */
-	cachedPct: number | null;
-	/** Runs the day's figures were summed over. The denominator. */
-	runs: number;
-}
-
-/** Absolute tokens per day, never a share.
- *
- * The decision this answers is "would a bigger cache save wall clock", and a
- * share over a shrinking prompt is not that: a day that read half as much and
- * cached the same fraction draws an identical bar. The share is printed beside
- * the bar because it is worth knowing, and it is never the geometry.
- */
-export function cacheByDay(runs: readonly MachineRun[]): CacheDay[] {
-	const byDate = new Map<string, { read: number; cached: number; runs: number }>();
-	for (const run of runs) {
-		if (run.promptTokens.value === null || run.cachedTokens.value === null) continue;
-		const bucket = byDate.get(run.date) ?? { read: 0, cached: 0, runs: 0 };
-		bucket.read += run.promptTokens.value;
-		bucket.cached += run.cachedTokens.value;
-		bucket.runs += 1;
-		byDate.set(run.date, bucket);
-	}
-	return [...byDate.entries()]
-		.map(([date, bucket]) => ({
-			date,
-			read: bucket.read,
-			cached: bucket.cached,
-			cachedPct:
-				bucket.read + bucket.cached > 0
-					? Math.round((bucket.cached / (bucket.read + bucket.cached)) * 100)
-					: null,
-			runs: bucket.runs
-		}))
-		.sort((a, b) => a.date.localeCompare(b.date));
-}
-
-/** The cache as a stacked column a day. No threshold marker and no health tint:
- * nobody has agreed a floor, and a tint would invent one and publish it.
- *
- * The same array draws as two lines, which is the other half of the question:
- * stacked says how many prompt tokens the day needed, lines say whether the
- * read half fell while the cached half rose. Nothing is re-shaped between them.
- */
-export function cacheChart(days: readonly CacheDay[], shape: StackShape = 'bars') {
-	const plot = stacked(
-		// The same date grammar the hand-written axes print. `2026-08-25` is how
-		// the ledger spells a day, and a ledger spelling is not a label.
-		days.map((day) => dayMonth(day.date)),
-		[
-			{ label: 'Read', token: '--chart-1', values: days.map((day) => day.read) },
-			{ label: 'Served from cache', token: '--chart-3', values: days.map((day) => day.cached) }
-		],
-		shape
-	);
-	// A day here reaches seven digits, which is two more than the shared inset
-	// was drawn for. The gutter is returned as well as applied, so the readout
-	// strip's column centres are computed from the same number the engine laid
-	// the plot out with rather than from a copy that can drift.
-	const grid = { left: valueGutter(Math.max(0, ...plot.totals)), right: 12 };
-	if (!plot.empty) plot.option.grid = { ...plot.option.grid, ...grid };
-	return { ...plot, grid };
-}
-
-/** Both halves of one day's prompt tokens, for the strip under the chart. */
-export function cacheColumns(days: readonly CacheDay[]): DayReadout[] {
-	return days.map((day) => ({
-		x: 0,
-		date: day.date,
-		rows: [
-			{ label: 'Read', value: grouped(day.read), colour: 'var(--chart-1)' },
-			{ label: 'Served from cache', value: grouped(day.cached), colour: 'var(--chart-3)' }
-		]
-	}));
-}
+// Prompt reuse is drawn one span a request and lives in
+// `$lib/console/machine/prompt-reuse.ts`. It was one stacked column a day until
+// 2026-09-21, and a day figure is the mean of a request that read its whole
+// prompt again and one that reused nearly all of its own, which is neither.
 
 // ---------------------------------------------------------------------------
 // Memory and load, at the item grain

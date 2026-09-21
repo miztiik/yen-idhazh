@@ -499,6 +499,11 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21T23:00",
+            change="console.panel_groups.machine names prompt-reuse where it named prompt-cache.",
+            why="The panel now reads one span a request rather than one column a day.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T19:00",
             change="console.panel_groups.machine gains the processor-lost panel.",
             why="A busy figure cannot be read without the share the host gave elsewhere.",
@@ -512,11 +517,6 @@ class AppearanceConfig(Contract):
             version="2026-09-21T14:00",
             change="console.panel_groups.machine gains memory-held, additive.",
             why="What the machine's memory holds is a question the ceiling panel does not answer.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T12:00",
-            change="console.panel_groups.machine gains the article-cost panel.",
-            why="What one article costs has to be priceable before the run that pays it.",
         ),
         ChangelogEntry(
             version="2026-08-29",
