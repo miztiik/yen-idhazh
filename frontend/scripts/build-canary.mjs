@@ -122,10 +122,15 @@ function writeItemHealthCanary() {
 	// zero, and a day timed in part.
 	//
 	// The machine cells that no committed run has written yet are named and left
-	// empty - the six `os_` ones, the stolen share, the fault count, the two
-	// anonymous-memory readings and the pinning flag. A plausible figure nobody
-	// measured is worse here than a dash: this file is what the console's
-	// arithmetic is checked against.
+	// empty - the six `os_` ones, the stolen share and the two anonymous-memory
+	// readings. A plausible figure nobody measured is worse here than a dash:
+	// this file is what the console's arithmetic is checked against.
+	//
+	// Three of them are now filled, on named days only, and `memory` below says
+	// exactly which and why. They are fixture, like the stage clock: the states
+	// the disk-read panel exists to tell apart have never been produced by a
+	// committed run, and a panel drawing a state nothing can reach is a panel
+	// nobody can tell from a broken one.
 	const COLUMNS = [
 		'version', 'date', 'run_id', 'item_id', 'url_key', 'canonical_url', 'vertical',
 		'source_id', 'stage', 'outcome', 'code', 'http_status', 'source_chars', 'source_words',
@@ -246,6 +251,58 @@ function writeItemHealthCanary() {
 		};
 	};
 
+	/** Whether the machine took the model's memory back, on three named days.
+	 *
+	 * **Fixture, and a set of states no committed run has produced.** Measured
+	 * 2026-09-21 over the whole committed item ledger - 13,877 rows across 28
+	 * days - not one row carries `llama_major_faults` or `weights_pinned`, and
+	 * 378 rows over two days carry `os_mem_cached_bytes`. So every state the
+	 * disk-read panel exists to tell apart is unreachable from the archive, and
+	 * three of them have to sit on a fixture or no test can see them.
+	 *
+	 * One day a state, because a day is one tile:
+	 *
+	 * - The newest day waited on the disk AND its disk copies collapsed by about
+	 *   a third over the day. That is the machine reclaiming, and it is the one
+	 *   the panel exists to catch.
+	 * - The day before waited on the disk while its disk copies never moved.
+	 *   Same tile on the upper strip, a different one underneath, and the two
+	 *   have different fixes - which is the whole reason the second strip is
+	 *   drawn beside the first rather than instead of it.
+	 * - The day forty days back counted and found nothing, and it is the one day
+	 *   here whose memory was held down. A quiet strip on a run that pinned its
+	 *   weights is the expected reading; a quiet strip on a run that did not is
+	 *   luck, and the panel must be able to say which it is looking at.
+	 *
+	 * Every other day leaves all three cells empty, which is what every run
+	 * before the columns wrote and which must never draw as a quiet day.
+	 *
+	 * The count climbs with the seat so that the day's own arithmetic is
+	 * checkable from this file, and so the first article of a shard - which the
+	 * panel leaves out, because a server that has just started is reading its
+	 * own memory in - is a row that really does carry a count rather than an
+	 * absence that would pass either way.
+	 *
+	 * Both pinning settings are real: `config/models/qwen3.5-9b-q4km.json` sets
+	 * `inference.load_mode` and the other four leave it null, so neither value
+	 * here is a setting the repository cannot produce.
+	 */
+	const MEMORY_DAYS = new Map([
+		[date, { waits: 4100, copies: 10_400_000_000, step: 1_900_000_000, pinned: 'False' }],
+		[earlier, { waits: 1700, copies: 10_200_000_000, step: 0, pinned: 'False' }],
+		[longAgo, { waits: 0, copies: 11_000_000_000, step: 0, pinned: 'True' }]
+	]);
+
+	const memory = (rowDate, seat) => {
+		const day = MEMORY_DAYS.get(rowDate);
+		if (!day) return {};
+		return {
+			llama_major_faults: day.waits * seat,
+			os_mem_cached_bytes: day.copies - day.step * seat,
+			weights_pinned: day.pinned
+		};
+	};
+
 	/** The item's own clock, the per-call rates, and what it ran on.
 	 *
 	 * **Fixture, and derived from the milliseconds already on the row.** The run
@@ -336,7 +393,8 @@ function writeItemHealthCanary() {
 			load_1m: Math.round((2 + (spread % 600) / 100) * 100) / 100,
 			llama_rss_peak_bytes: 12000000000 + (spread % 1000) * 1000000,
 			python_rss_bytes: 1700000000 + (spread % 1000) * 100000,
-			n_ctx_configured: 65536
+			n_ctx_configured: 65536,
+			...memory(rowDate, seat.item_index)
 		};
 	};
 
