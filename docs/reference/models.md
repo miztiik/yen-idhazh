@@ -70,10 +70,15 @@ git grep -n -E '"(id|file|sha256)"' -- config/models/
 The first names the active file; the second prints the configuration id, the
 weight file and the SHA-256 the runtime checks the downloaded bytes against.
 
-**One model can have more than one file, and one model does.**
+**One model can have more than one file, and two models do.**
 `qwen3.5-9b-q4km-thinking.json` is the incumbent's file with
 `turns.thinking_close` declared, so the same weights reason before they answer.
-The pair carries one `sha256`, so the second command above prints the same
+`gemma-4-e4b-qat-no-draft.json` is the candidate's file with its
+`companion_files` list empty, so the same weights run without the
+multi-token-prediction head its publisher ships - which is the control that
+measures what the head is worth
+([benchmarks/what-the-draft-head-is-worth.md](benchmarks/what-the-draft-head-is-worth.md)).
+Each pair carries one `sha256`, so the second command above prints the same
 digest twice - that is a pair working, not a duplicate. Which one is in force is
 the `models_file` line, and nothing else has to change to move between them
 ([../architecture/summarize/model-boundary.md](../architecture/summarize/model-boundary.md)).
