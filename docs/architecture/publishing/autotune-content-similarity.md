@@ -1,6 +1,6 @@
 # Autotuning the similarity line that groups one story
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 
 A day runs the same story from more than one of our feeds. This page owns the
 line that decides when two items are one story, how that line fits itself once a
@@ -544,6 +544,18 @@ the twenty-five non-empty prefixes the grammar admits, **because the two are one
 change**: at three tokens the list is usually one verdict spelled twice and the
 new rule has nothing to compare - measured, and the reading is in
 [../../reference/benchmarks/what-the-margin-rule-changes.md](../../reference/benchmarks/what-the-margin-rule-changes.md).
+
+**A reply the grammar could not have written is recorded on the row rather than
+thrown - 2026-09-21.** It used to end the shard, and every pair behind it then
+went missing. Absence on this store already means the draw never took the pair,
+so the two states an operator most needs to tell apart - a decoder that came
+loose, and a day nothing judged - wrote the same thing to disk. The pair is now
+read in both orders, written with `grammar_applied` false and no verdict at all,
+and the shard reads the next pair. Nothing counts it: both verdict cells are
+empty, `usable` is false, and the night's count skips it exactly as it skips two
+readings that disagreed. The reason - prose where a verdict was due, or a first
+token that did not open the word that arrived - reaches the run's log, because
+the row records that the decode came loose and not which check caught it.
 
 **It is a change rather than a repair, and the record pays for it once.** The 82
 rows written before 2026-09-21 carry the old quantity in the same column, and

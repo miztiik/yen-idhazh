@@ -7,24 +7,34 @@ means the two readings agree, and a disagreement is never retried: a third
 reading with no rule for breaking the tie is a coin toss wearing a number.
 
 **There is no prose path here, on purpose.** The grammar is the control, and a
-reply that did not come out of it fails the shard. A parser that could read `I
-think these are the same story` back into a YES would restore the whole class of
-failure the grammar was put there to remove, and it would restore it on exactly
-the days something had already gone wrong with the decoder.
+reply that did not come out of it never becomes a verdict. A parser that could
+read `I think these are the same story` back into a YES would restore the whole
+class of failure the grammar was put there to remove, and it would restore it on
+exactly the days something had already gone wrong with the decoder.
+
+**A reply the grammar cannot have written is written down rather than thrown.**
+The reading keeps its clock, its tokens and its window, and carries a null
+verdict with the grammar flag false. A shard that died on the first such reply
+left every pair after it absent, and absence on this store already means "never
+drawn" - so the one thing an operator most needs to tell apart, a decoder that
+came loose from a day nothing judged, was the one thing the record could not say.
 """
 
 from __future__ import annotations
 
+import json
+import logging
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from math import exp
-from typing import Any
+from typing import Any, Final
 
 from idhazh import config
+from idhazh.contracts.base import fit_field
 from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.knobs.models import ModelEntry
-from idhazh.contracts.story_similarity_pair import SameStoryVerdict
+from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
 from idhazh.llm.server import (
     Completion,
     TokenChoice,
@@ -35,6 +45,8 @@ from idhazh.llm.server import (
 )
 from idhazh.similarity import prompt
 
+LOG: Final = logging.getLogger("idhazh")
+
 #: The one seam between a verdict and a socket. A judge hands over a request body
 #: and is handed back a reply; it holds no address, so no part of a model's
 #: output can become one (Guardrail #11).
@@ -42,23 +54,38 @@ Client = Callable[[dict[str, Any]], Completion]
 
 
 class GrammarNotAppliedError(RuntimeError):
-    """The reply did not come out of the grammar, so the shard stops here.
+    """The reply did not come out of the grammar, so it is not a verdict.
 
-    Loud rather than degraded. A constrained decode that quietly stopped being
-    constrained writes rows that look exactly like good ones, and every count
-    downstream is then a mixture of two measurements with nothing on the row to
-    separate them.
+    Raised by the two checks that read a reply and caught by `read_once`, which
+    records the refusal on the reading. Loud on the row rather than loud in the
+    process: a constrained decode that quietly stopped being constrained writes
+    rows that look exactly like good ones, and every count downstream is then a
+    mixture of two measurements with nothing on the row to separate them.
     """
 
 
 @dataclass(frozen=True, slots=True)
 class Reading:
-    """One call, one order, one verdict."""
+    """One call, one order, one verdict - or the record of why there is none."""
 
-    verdict: SameStoryVerdict
+    #: Null where the reply did not come out of the grammar. A reading that read
+    #: nothing still cost a call and still has a window worth keeping, so the
+    #: failure is a value here rather than a missing row.
+    verdict: SameStoryVerdict | None
     first_token_margin: float | None
     decode_seconds: float
     prompt_tokens: int
+    #: What the model wrote back, as the server counted it. Summed over a
+    #: thinking envelope's two calls by `one_reply`, so a reasoning span is paid
+    #: for here rather than disappearing between the spans.
+    completion_tokens: int
+    #: Whether THIS call opened inside the grammar. Both checks have to pass: the
+    #: word that arrived has to be one the grammar admits, and the likeliest
+    #: first token has to be an opening of that word.
+    grammar_applied: bool = True
+    #: The decoder's own alternatives at the answer's opening, already fitted to
+    #: the column that holds them. Empty where the server reported none.
+    first_token_window: str = ""
     #: How many reasoning spans ran in front of the answer - 0 cold, 1 under a
     #: thinking envelope. `decode_digest` cannot see the difference, because the
     #: only posted key an envelope moves is the prompt and the prompt is not
@@ -73,13 +100,37 @@ class Reading:
 
 @dataclass(frozen=True, slots=True)
 class Judged:
-    """Both readings of one pair, and whether they agree."""
+    """Both readings of one pair, whether they agree, and what they cost.
 
-    verdict: SameStoryVerdict
-    verdict_swapped: SameStoryVerdict
+    The cost figures are the pair's own. Nothing here is a budget, a bound or a
+    knob: a venue that sets a timeout sets it as policy, and a judge reporting
+    what it spent is not the same statement as a judge being told what it may.
+    """
+
+    verdict: SameStoryVerdict | None
+    verdict_swapped: SameStoryVerdict | None
     usable: bool
     first_token_margin: float | None
+    #: Wall clock for every call this pair made, which is two cold and four under
+    #: a thinking envelope.
     decode_seconds: float
+    #: The longest single CALL, not the longest reading. A reading under a
+    #: thinking envelope is two calls, and the figure a venue sizing a timeout
+    #: needs is the longest one thing it waited on.
+    decode_seconds_max: float
+    prompt_tokens: int
+    completion_tokens: int
+    #: How many calls this pair actually made, counted at the seam. Never twice
+    #: the pairs: that arithmetic reports a thinking judge at half what it spent.
+    calls: int
+    #: Whether BOTH readings opened inside the grammar. One that did not makes
+    #: this false, because the grain of the row it lands on is a pair.
+    grammar_applied: bool
+    #: The file-order reading's window, because a pair makes two calls and the
+    #: column that holds this one has to say which.
+    first_token_window: str
+    #: The file-order reading's reasoning-span count, for the same reason.
+    thinking_spans: int
 
 
 def verdict_of(text: str) -> SameStoryVerdict:
@@ -143,6 +194,40 @@ def margin_of(choices: Sequence[TokenChoice]) -> float | None:
     if len(ranked) < 2:
         return None
     return max(0.0, min(1.0, (ranked[0] - ranked[1]) / legal))
+
+
+def first_token_window(choices: Sequence[TokenChoice]) -> str:
+    """The decoder's own alternatives at the answer's opening, as one cell.
+
+    Each entry is the token's text and its log probability, in the order the
+    server returned them, so `margin_of` can be re-run over a row written months
+    ago: that rule buckets a token by the text it opens and weighs it by the
+    exponential of its log probability, and a window carrying either half alone
+    could not be replayed through it.
+
+    **The log probability is stored as the server reported it.** Exponentiating
+    here would throw away the precision the margin is computed at: a token at
+    -9.5 is 0.000075, which rounds to nothing at any width this column can hold,
+    while the log probability rounds to itself.
+
+    Empty where the server reported no alternatives, which is the same silence
+    `first_token_margin` answers null for.
+
+    The token text is model-written, so it is fitted to the column's own
+    character class and length and lands as a quoted CSV value - never a key,
+    never a name, never a path (Guardrail #11). A window long enough to be cut by
+    that fit stops being readable as JSON and stays readable as evidence, which
+    is the better of the two losses.
+    """
+    if not choices:
+        return ""
+    window = [[choice.token, round(choice.logprob, 6)] for choice in choices]
+    return fit_field(
+        json.dumps(window, ensure_ascii=True, separators=(",", ":")),
+        model=StorySimilarityPair,
+        field="first_token_probabilities",
+        absent="[]",
+    )
 
 
 def entry_of(settings: config.Settings) -> ModelEntry:
@@ -217,6 +302,12 @@ def read_once(
     declared the answer is decoded in span two with the grammar back on and the
     reasoning behind it in the prompt, so the verdict is read off the answer and
     never off the thinking.
+
+    **A reply the grammar cannot have written comes back as a null verdict**,
+    with `grammar_applied` false and everything else the call really cost. The
+    reason is logged here because this is the only place that still holds it: the
+    row records THAT the decode came loose, and an operator asking WHICH of the
+    two checks caught it reads the run's own log.
     """
     entry = entry_of(settings)
     answer = decode_body(
@@ -245,16 +336,57 @@ def read_once(
         reply = client(answer)
         thinking, spans = "", 0
     elapsed = time.perf_counter() - started
-    verdict = verdict_of(reply.content)
-    _the_first_token_opened_the_word_that_came_back(reply.first_token_choices, verdict)
+    verdict: SameStoryVerdict | None
+    try:
+        verdict = verdict_of(reply.content)
+        _the_first_token_opened_the_word_that_came_back(reply.first_token_choices, verdict)
+        held = True
+    except GrammarNotAppliedError as refused:
+        LOG.warning("judge reading recorded outside the grammar: %s", refused)
+        verdict, held = None, False
     return Reading(
         verdict=verdict,
         first_token_margin=margin_of(reply.first_token_choices),
         decode_seconds=elapsed,
         prompt_tokens=reply.prompt_tokens,
+        completion_tokens=reply.completion_tokens,
+        grammar_applied=held,
+        first_token_window=first_token_window(reply.first_token_choices),
         thinking_spans=spans,
         thinking=thinking,
     )
+
+
+@dataclass(slots=True)
+class _Meter:
+    """What one pair's calls cost, counted and timed where the calls are made."""
+
+    calls: int = 0
+    longest: float = 0.0
+
+
+def _metered(client: Client, meter: _Meter) -> Client:
+    """The same client, with every call through it counted and timed.
+
+    Counted here rather than derived from the pair count, because a reading is
+    one call cold and two under a thinking envelope: twice the pairs reports a
+    thinking judge at half what it spent. The count is taken before the call
+    returns, so a call that raised is still a call the run paid for.
+
+    Timed here rather than around the reading for the same reason. The longest
+    single call is what a venue sizing its own timeout needs; the longest reading
+    would hide a reasoning span and an answer behind one number.
+    """
+
+    def call(body: dict[str, Any]) -> Completion:
+        meter.calls += 1
+        started = time.perf_counter()
+        try:
+            return client(body)
+        finally:
+            meter.longest = max(meter.longest, time.perf_counter() - started)
+
+    return call
 
 
 def judge_pair(
@@ -266,18 +398,37 @@ def judge_pair(
 ) -> Judged:
     """Both orders, one comparison, no tie-break.
 
-    File order first, so `first_token_margin` on the row is always taken from the
-    same call. A margin read off whichever call happened to answer second would
-    be two different measurements sharing one column.
+    File order first, so the margin, the window and the reasoning-span count on
+    the row are always taken from the same call. A margin read off whichever call
+    happened to answer second would be two different measurements sharing one
+    column.
+
+    **Both readings always run.** A first reading the grammar did not hold is
+    still a reading, and skipping the second over it would leave `decode_seconds`
+    - written on the row as both calls - silently holding one.
+
+    **A null verdict agrees with nothing, including another null.** Two readings
+    that both came back outside the grammar say the decoder came loose twice, and
+    reading that as agreement would mark the pair usable and count a verdict
+    nobody gave.
     """
-    forward = read_once(left, right, client=client, settings=settings)
-    swapped = read_once(right, left, client=client, settings=settings)
+    meter = _Meter()
+    metered = _metered(client, meter)
+    forward = read_once(left, right, client=metered, settings=settings)
+    swapped = read_once(right, left, client=metered, settings=settings)
     return Judged(
         verdict=forward.verdict,
         verdict_swapped=swapped.verdict,
-        usable=forward.verdict == swapped.verdict,
+        usable=forward.verdict is not None and forward.verdict == swapped.verdict,
         first_token_margin=forward.first_token_margin,
         decode_seconds=forward.decode_seconds + swapped.decode_seconds,
+        decode_seconds_max=meter.longest,
+        prompt_tokens=forward.prompt_tokens + swapped.prompt_tokens,
+        completion_tokens=forward.completion_tokens + swapped.completion_tokens,
+        calls=meter.calls,
+        grammar_applied=forward.grammar_applied and swapped.grammar_applied,
+        first_token_window=forward.first_token_window,
+        thinking_spans=forward.thinking_spans,
     )
 
 
