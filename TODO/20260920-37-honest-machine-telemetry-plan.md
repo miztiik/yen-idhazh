@@ -92,7 +92,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 16 | Machine cards gain uptime, clock speed, cache size and copy speed | 6, 9 | C | PENDING | - | - | - |
 | 19 | Which prompts get re-read, and how fast | 9 | C | PENDING | - | - | - |
 | 20 | What is holding the runner's memory | 5, 9 | C | PENDING | - | - | - |
-| 21 | What the context window actually costs | 9 | C | IN REVIEW | p37r21 | - | worker |
+| 21 | What the context window actually costs | 9 | C | IN REVIEW | p37r21 | #991 | worker |
 | 22 | Dotted rules where a setting moved | 9, 21 | C | PENDING | - | - | - |
 | 17 | Every published column names its reader | 5, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22 | D | PENDING | - | - | - |
 | 18 | Docs, the living-page corrections, and the orphan sweep | all | E | PENDING | - | - | - |
