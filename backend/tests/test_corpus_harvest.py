@@ -16,6 +16,7 @@ from conftest import (
     CONTRACT_FIXTURES_DIR,
     REFILL_BODY,
     REFILL_PUBLISHED,
+    committed_markers,
     read_text,
     refetched,
     refill_recorded,
@@ -100,7 +101,7 @@ def test_the_first_two_turns_are_the_bytes_the_run_really_sends(
         article,
         model_id=models.summarize.id,
         inference=models.summarize.inference,
-        turns=models.summarize.turns,
+        markers=committed_markers(),
         prompt_config=app.summarize,
     )
     harvested = corpus.harvest_rows(

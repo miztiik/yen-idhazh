@@ -8,7 +8,6 @@ from conftest import CONTRACT_FIXTURES_DIR, read_text
 from idhazh import config
 from idhazh.contracts.article import Article
 from idhazh.contracts.knobs.run import RunConfig
-from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.qualification import (
     GateStatus,
     ItemObservation,
@@ -19,21 +18,6 @@ from idhazh.evals import qualification_summary
 from idhazh.evals.qualify import schema_validity
 from idhazh.llm.server import Completion
 from idhazh.stages import qualify
-
-
-def built_turns() -> TurnsConfig:
-    """A turn envelope built for this question, never the committed one.
-
-    Nothing here asserts on it - it only sizes `fits_context_predicted` - so the
-    committed entry would tie these tests to whichever model is configured today
-    (CLAUDE.md section 13).
-    """
-    return TurnsConfig(
-        turn_opening="<|im_start|>$role\n",
-        turn_closing="<|im_end|>\n",
-        reply_opening="<|im_start|>assistant\n",
-        reply_opening_thinking="<|im_start|>assistant\n<think>\n",
-    )
 
 
 def an_article() -> Article:
@@ -74,7 +58,6 @@ def folded(*replies: Completion | None) -> ItemObservation:
         replies,
         repeat=1,
         inference=built.INFERENCE,
-        turns=built_turns(),
         seconds=1.0,
     )
 

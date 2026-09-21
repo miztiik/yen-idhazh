@@ -36,7 +36,6 @@ from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
-from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.qualification import (
     CanaryObservation,
     CorpusItem,
@@ -382,8 +381,6 @@ def publishable_length(
 def context_fit(
     observations: Sequence[ItemObservation],
     inference: InferenceConfig,
-    *,
-    turns: TurnsConfig | None = None,
 ) -> GateOutcome:
     """The complete chat-templated request fits the window, and the cheap
     predictor never says yes when it should have said no.
@@ -397,10 +394,6 @@ def context_fit(
     whatever the window has left after the prompt - which is exactly what this
     measures. A request with no headroom at all is still refused; what this gate
     no longer promises is that the headroom is enough.
-
-    `turns` is carried for the signature's sake: the harness hands it the entry
-    it ran, and an envelope that thinks spends its reasoning inside this same
-    sequence rather than beside it.
     """
     overflow = [o for o in observations if o.prompt_tokens >= inference.n_ctx]
     under_reserved = [
@@ -567,12 +560,12 @@ def gates(
     run: RunConfig,
     budget_: Budget,
     required_canaries: int,
-    turns: TurnsConfig | None = None,
+    thinking: bool = False,
 ) -> tuple[Corpus, list[GateOutcome]]:
     """Every gate, in the order the row registers them.
 
-    `turns` reaches exactly one gate, and only to name what a leak would mean:
-    reasoning the entry never asked for, or reasoning it asked for and the
+    `thinking` reaches exactly one gate, and only to name what a leak would
+    mean: reasoning the entry never asked for, or reasoning it asked for and the
     discard failed to remove.
 
     **Every gate is asked of every run.** There is no conditional gate and no
@@ -582,11 +575,11 @@ def gates(
     corpus = merge(shards)
     pinned = all(shard.scorer.pinned for shard in shards) and bool(shards)
     return corpus, [
-        reasoning_leakage(corpus.observations, thinking=turns is not None and turns.thinks),
+        reasoning_leakage(corpus.observations, thinking=thinking),
         schema_validity(corpus.observations),
         injection_canaries(corpus.canaries, required=required_canaries),
         publishable_length(corpus.observations, summarize),
-        context_fit(corpus.observations, inference, turns=turns),
+        context_fit(corpus.observations, inference),
         identity(shards),
         budget(budget_),
         scored_denominator(corpus, evaluation=evaluation, run=run),

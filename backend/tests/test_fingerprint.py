@@ -26,6 +26,7 @@ import inspect
 import re
 from collections.abc import Iterable
 from pathlib import Path
+from string import Template
 from typing import Final
 
 import pytest
@@ -37,7 +38,6 @@ from idhazh.contracts.base import Contract
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.models import ModelEntry, ModelRef, ModelsConfig
-from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.corpus import read_rows, scored_from_items
 from idhazh.fingerprint import (
     MACHINE_INPUTS,
@@ -57,7 +57,7 @@ from idhazh.fingerprint import (
     sampling_spelling,
 )
 from idhazh.ledger import load_retirements
-from idhazh.llm.server import turn_markers_digest
+from idhazh.llm.server import SystemPlacement, TurnMarkers, turn_markers_digest
 
 pytestmark = pytest.mark.contract
 
@@ -83,7 +83,28 @@ CONFIGURED_MODEL: Final = ModelRef(
 )
 
 
-def stamp_with(model_sha256: str | None, *, turns: TurnsConfig | None = None) -> PipelineInputs:
+def a_built_envelope(**overrides: object) -> TurnMarkers:
+    """A turn envelope built for this question, never the committed one.
+
+    These tests are about what the stamp can and cannot see, so the committed
+    entry would tie them to whichever model is configured today (`CLAUDE.md`
+    section 13).
+    """
+    declared: dict[str, object] = {
+        "turn_opening": Template("<|im_start|>${role}\n"),
+        "turn_closing": "<|im_end|>\n",
+        "reply_opening": "<|im_start|>assistant\n",
+        "reply_opening_thinking": "<|im_start|>assistant\n<think>\n",
+        "system_role": SystemPlacement.OWN_TURN,
+        "system_joiner": "",
+        "thinking_close": None,
+    }
+    return TurnMarkers(**(declared | overrides))  # type: ignore[arg-type]
+
+
+def stamp_with(
+    model_sha256: str | None, *, markers: TurnMarkers | None = None
+) -> PipelineInputs:
     """`build_inputs` with everything but the observed weights digest held still."""
     return build_inputs(
         model=CONFIGURED_MODEL,
@@ -97,7 +118,7 @@ def stamp_with(model_sha256: str | None, *, turns: TurnsConfig | None = None) ->
         runner_class="ubuntu-latest-4vcpu",
         extractor_version="trafilatura-2.0.0",
         sanitizer_version="idhazh-sanitizer-1",
-        turns=turns,
+        markers=markers,
     )
 
 
@@ -167,19 +188,12 @@ def unclassified_knobs(knobs: Iterable[str]) -> frozenset[str]:
 def model_shaped_fields() -> frozenset[str]:
     """The whole universe the closed set has to answer for.
 
-    All three shapes, not just the inference block. It was that block alone
-    until 2026-09-13, which was closed over the wrong set the moment `turns`
-    moved onto the entry - a prompt-shaping field in no stamp and in no closed
-    set, with nothing saying so. The envelope's own fields joined on 2026-09-14
-    for the same reason: naming `turns` answers for the block and for nothing
-    inside it, so `system_role`, `system_joiner` and `thinking_kwarg` could have
-    landed unclassified.
+    Both shapes, not just the inference block. It was that block alone until
+    2026-09-13, which was closed over the wrong set the moment a model-shaped
+    fact lived on the entry - a field in no stamp and in no closed set, with
+    nothing saying so.
     """
-    return (
-        frozenset(InferenceConfig.model_fields)
-        | frozenset(ModelEntry.model_fields)
-        | frozenset(TurnsConfig.model_fields)
-    )
+    return frozenset(InferenceConfig.model_fields) | frozenset(ModelEntry.model_fields)
 
 
 def test_every_inference_knob_is_digested_or_written_down_as_undigested() -> None:
@@ -210,30 +224,24 @@ def test_the_undigested_set_names_only_real_knobs() -> None:
 
 
 def test_the_turn_envelope_reaches_the_stamp_by_both_routes_it_claims() -> None:
-    """`turns` is digested, and both routes are checked rather than asserted.
+    """The envelope is digested, and both routes are checked rather than asserted.
 
-    `MODEL_FIELD_SPELLING` claims the envelope arrives as `turn_markers_sha256`.
-    The claim is worth nothing unless a moved marker moves that digest, so the
-    marker is moved and the two digests compared - and the rendered prompt is
-    compared beside it, because a marker that renders into a prompt moves both.
-    Driven from a built entry, so it says nothing about what the committed
-    config happens to hold.
+    `MODEL_FIELD_SPELLING` claims the closing marker arrives as
+    `turn_markers_sha256`. The claim is worth nothing unless a moved marker
+    moves that digest, so the marker is moved and the two digests compared - and
+    the rendered prompt is compared beside it, because a marker that renders
+    into a prompt moves both.
     """
-    assert MODEL_FIELD_SPELLING["turns"] == "turn_markers_sha256"
-    turns = TurnsConfig(
-        turn_opening="<|im_start|>$role\n",
-        turn_closing="<|im_end|>\n",
-        reply_opening="<|im_start|>assistant\n",
-        reply_opening_thinking="<|im_start|>assistant\n<think>\n",
-    )
-    moved = turns.model_copy(update={"turn_closing": "<|end_of_turn|>\n"})
+    assert MODEL_FIELD_SPELLING["thinking_close"] == "turn_markers_sha256"
+    markers = a_built_envelope()
+    moved = a_built_envelope(turn_closing="<|end_of_turn|>\n")
 
-    assert calls.prompt_inputs(turns=turns) != calls.prompt_inputs(turns=moved)
-    assert turn_markers_digest(turns) != turn_markers_digest(moved)
+    assert calls.prompt_inputs(markers=markers) != calls.prompt_inputs(markers=moved)
+    assert turn_markers_digest(markers) != turn_markers_digest(moved)
 
 
 def test_the_envelope_digest_sees_what_a_rendered_prompt_cannot() -> None:
-    """Decision 8's whole reason, as the two facts that would otherwise vanish.
+    """The whole reason the envelope is digested on its own.
 
     A declared closing marker and the reply opening it selects both move an
     output. The rendered prompt moves with the opening and is blind to the
@@ -241,18 +249,15 @@ def test_the_envelope_digest_sees_what_a_rendered_prompt_cannot() -> None:
     reasoning block would decode differently with nothing in the stamp saying
     so.
     """
-    quiet = TurnsConfig(
-        turn_opening="<|im_start|>$role\n",
-        turn_closing="<|im_end|>\n",
-        reply_opening="<|im_start|>assistant\n",
-        reply_opening_thinking="<|im_start|>assistant\n<think>\n",
-    )
-    thinks = quiet.model_copy(update={"thinking_close": "</think>"})
-    closes_otherwise = quiet.model_copy(update={"thinking_close": "<|end_think|>"})
+    quiet = a_built_envelope()
+    thinks = a_built_envelope(thinking_close="</think>")
+    closes_otherwise = a_built_envelope(thinking_close="<|end_think|>")
 
     assert turn_markers_digest(quiet) != turn_markers_digest(thinks)
     assert turn_markers_digest(thinks) != turn_markers_digest(closes_otherwise)
-    assert calls.prompt_inputs(turns=thinks) == calls.prompt_inputs(turns=closes_otherwise), (
+    assert calls.prompt_inputs(markers=thinks) == calls.prompt_inputs(
+        markers=closes_otherwise
+    ), (
         "the rendered prompt is blind to which string closes the block, which is "
         "why the envelope is digested on its own"
     )
@@ -261,23 +266,21 @@ def test_the_envelope_digest_sees_what_a_rendered_prompt_cannot() -> None:
 def test_a_stamp_built_without_an_envelope_leaves_the_key_absent() -> None:
     """The read-side rule for the optional digest, proved by not handing one over.
 
-    A run record written before 2026-09-14 has no envelope in it, and the
-    recorded `ModelRef` a manifest embeds carries none either. An absent key
-    means that and only that; substituting a digest would say the envelope was
-    recorded and unchanged, which is the one reading it must never carry.
+    A run record written before 2026-09-14 has no envelope in it, and a caller
+    holding only a recorded `ModelRef` never stood a server up to derive one. An
+    absent key means that and only that; substituting a digest would say the
+    envelope was recorded and unchanged, which is the one reading it must never
+    carry.
     """
     assert stamp_with("b" * 64).turn_markers_sha256 is None
 
 
 def test_a_stamp_that_was_handed_an_envelope_carries_its_digest() -> None:
-    turns = TurnsConfig(
-        turn_opening="<|im_start|>$role\n",
-        turn_closing="<|im_end|>\n",
-        reply_opening="<|im_start|>assistant\n",
-        reply_opening_thinking="<|im_start|>assistant\n<think>\n",
-    )
+    markers = a_built_envelope()
 
-    assert stamp_with("b" * 64, turns=turns).turn_markers_sha256 == turn_markers_digest(turns)
+    assert stamp_with("b" * 64, markers=markers).turn_markers_sha256 == turn_markers_digest(
+        markers
+    )
 
 
 def test_every_undigested_knob_carries_a_reason() -> None:

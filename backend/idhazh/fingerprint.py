@@ -35,8 +35,7 @@ from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.fingerprint import PipelineInputs
 from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.models import ModelEntry, ModelRef
-from idhazh.contracts.knobs.turns import TurnsConfig
-from idhazh.llm.server import turn_markers_digest
+from idhazh.llm.server import TurnMarkers, turn_markers_digest
 
 #: Sixty-four zeroes. It satisfies `Sha256`, so a manifest built on it validates,
 #: publishes, and still says nothing about which weights ran (Guardrail #10).
@@ -191,20 +190,18 @@ class Undigested(NamedTuple):
     reason: str
 
 
-#: Every `InferenceConfig`, `ModelEntry` and `TurnsConfig` field the manifest
-#: does not carry, and why each one is out.
+#: Every `InferenceConfig` and `ModelEntry` field the manifest does not carry,
+#: and why each one is out.
 #:
 #: Every field left here is one that cannot move an output. The five inference
 #: knobs that could - `cache_type_k`, `cache_type_v`, `flash_attention`,
 #: `n_parallel` and `n_threads_batch` - were listed here as known blind spots
 #: until 2026-08-26 and are now folded into `runtime_flags`.
 #:
-#: **The universe is all three shapes, not just `InferenceConfig`.** It was the
+#: **The universe is both shapes, not just `InferenceConfig`.** It was the
 #: inference block alone until 2026-09-13, which was closed over the wrong set
-#: the moment a model-shaped fact lived outside that block: `turns` moved onto
-#: the entry and would have sat in no stamp and in no closed set, with no test
-#: saying so. The envelope's own fields joined on 2026-09-14 for the same
-#: reason - naming `turns` answers for the block and for nothing inside it.
+#: the moment a model-shaped fact lived outside that block: a fact on the entry
+#: would have sat in no stamp and in no closed set, with no test saying so.
 #:
 #: The set is closed: a field that is neither here nor recorded fails the
 #: contract test in `backend/tests/test_fingerprint.py`.
@@ -286,15 +283,15 @@ NOT_DIGESTED: Final[Mapping[str, Undigested]] = MappingProxyType(
             "The name of the template variable chat_template_kwargs carries. The run's "
             "two calls render their own prompt bytes and send no template keywords at "
             "all, so no published word is decoded under it; it reaches only the "
-            "start-up probe and the chat route. What it would turn on is already "
+            "start-up derivation and the chat route. What it would turn on is already "
             "recorded - sampling carries thinking on or off, and the rendered prompt "
             "ends on whichever reply opening that chose.",
         ),
     }
 )
 
-#: Where a `ModelEntry` or `TurnsConfig` field arrives in the manifest when it is
-#: not carried under its own name. The whole envelope is digested as
+#: Where a `ModelEntry` field arrives in the manifest when it is not carried
+#: under its own name. The whole turn envelope is digested as
 #: `turn_markers_sha256` since 2026-09-14, which is the field that exists to
 #: carry it: `run_manifest.ModelUse` embeds the recorded `ModelRef`, which
 #: carries no markers at all.
@@ -306,24 +303,10 @@ NOT_DIGESTED: Final[Mapping[str, Undigested]] = MappingProxyType(
 #: both move an output without moving a rendered prompt. A rendered prompt still
 #: moves when a marker moves, so the envelope reaches the stamp twice - the
 #: claim written here is the one a test can check against a moved marker.
-#:
-#: `system_role` and `system_joiner` are in here for the same reason the markers
-#: are, and the reason is worth stating because the design once read the other
-#: way: a placement change moves the same bytes to a different address, so it
-#: was argued that the stamp could not see it. Since the prompt bytes became
-#: ours the stamp renders through the envelope, so it does - which is what makes
-#: a topology change as loud as a reworded instruction.
 MODEL_FIELD_SPELLING: Final[Mapping[str, str]] = MappingProxyType(
     {
         "inference": "sampling",
         "sha256": "model_sha256",
-        "turns": "turn_markers_sha256",
-        "turn_opening": "turn_markers_sha256",
-        "turn_closing": "turn_markers_sha256",
-        "reply_opening": "turn_markers_sha256",
-        "reply_opening_thinking": "turn_markers_sha256",
-        "system_role": "turn_markers_sha256",
-        "system_joiner": "turn_markers_sha256",
         "thinking_close": "turn_markers_sha256",
     }
 )
@@ -346,12 +329,6 @@ def digested_inference_fields() -> frozenset[str]:
 def digested_model_fields() -> frozenset[str]:
     """The declared model-shaped fields the manifest carries, read back from the manifest.
 
-    Both shapes, because the envelope is a nested block: `ModelEntry` holds
-    `turns` and `TurnsConfig` holds the strings that render a turn. Asking only
-    the outer shape would answer for `turns` as a whole and for none of the
-    fields inside it, so a seventh envelope field could land in no stamp and in
-    no closed set with nothing saying so.
-
     `quantisation` reaches the manifest under its own name. The rest arrive
     under a manifest field of a different name, and `MODEL_FIELD_SPELLING` is
     where that is written down - each entry is checked against `PipelineInputs`,
@@ -359,7 +336,7 @@ def digested_model_fields() -> frozenset[str]:
     it.
     """
     carried = frozenset(PipelineInputs.model_fields)
-    declared = frozenset(ModelEntry.model_fields) | frozenset(TurnsConfig.model_fields)
+    declared = frozenset(ModelEntry.model_fields)
     return frozenset(
         name
         for name in declared
@@ -380,7 +357,7 @@ def build_inputs(
     runner_class: str,
     extractor_version: str,
     sanitizer_version: str,
-    turns: TurnsConfig | None = None,
+    markers: TurnMarkers | None = None,
 ) -> PipelineInputs:
     """Assemble the manifest from the weights that were loaded, not the ones configured.
 
@@ -392,9 +369,9 @@ def build_inputs(
     `PLACEHOLDER_DIGEST`, which turned "nobody measured the weights" into a
     manifest that looked measured.
 
-    `turns` is optional because `ModelRef` does not carry one - a run record
-    embeds the recorded shape, and a caller holding only that shape has no
-    envelope to digest. An absent envelope leaves the key absent rather than
+    `markers` is optional because a caller may have none: they are read off the
+    server at start-up, and a caller holding only a recorded `ModelRef` never
+    stood a server up. An absent envelope leaves the key absent rather than
     substituting a digest, which is the read-side rule
     `PipelineInputs.turn_markers_sha256` states.
     """
@@ -409,7 +386,7 @@ def build_inputs(
         runtime_build=runtime_build,
         chat_template_sha256=text_digest(chat_template),
         prompt_sha256=text_digest(prompt),
-        turn_markers_sha256=turn_markers_digest(turns) if turns is not None else None,
+        turn_markers_sha256=turn_markers_digest(markers) if markers is not None else None,
         output_schema_sha256=text_digest(output_schema),
         truncation_cap_tokens=truncation_cap_tokens,
         sampling=sampling_spelling(inference),

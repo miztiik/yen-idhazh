@@ -25,19 +25,19 @@ from __future__ import annotations
 
 import json
 import os
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
-from functools import lru_cache
+from enum import StrEnum
 from pathlib import Path
 from string import Template
-from typing import IO, Any, Final
+from typing import Any, Final
 from urllib import request
 from urllib.parse import urlsplit, urlunsplit
 
 from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.models import ModelEntry, ModelRef
-from idhazh.contracts.knobs.turns import SystemPlacement, TurnsConfig
+from idhazh.sanitize import why_a_forged_turn_would_survive
 
 # One port per job. A workflow declares it once as `LLAMA_PORT`, and both halves
 # read it here: the argv the server binds with, and the address the stage posts
@@ -73,7 +73,6 @@ DEFAULT_COMPLETION_ENDPOINT: Final = f"http://127.0.0.1:{DEFAULT_PORT}{_COMPLETI
 _PROPS_PATH: Final = "/props"
 _APPLY_TEMPLATE_PATH: Final = "/apply-template"
 _TOKENIZE_PATH: Final = "/tokenize"
-_MODELS_PATH: Final = "/v1/models"
 
 #: llama-server's own stop vocabulary on the rendered-completion route, in the
 #: words the chat route would have used for the same ending. `limit` is the one
@@ -135,23 +134,38 @@ def is_context_exceeded(body: str) -> bool:
     return bool(error.get("type") == CONTEXT_EXCEEDED_TYPE)
 
 
-#: The strings that open and close a turn belong to the weights, so they are
-#: read off the entry that names those weights - `models.<role>.turns` in
-#: `config/idhazh.json`. They lived in `backend/idhazh/prompts/turn_markers.json`
-#: until 2026-09-13, one global file with no model key, which meant a model
-#: whose turns differ was a source edit and a swap that forgot them raised
-#: nothing (`docs/architecture/summarize/model-boundary.md`).
+#: The name a turn opening substitutes the role under. `string.Template` renders
+#: it, so both `$role` and `${role}` spell it.
+TURN_ROLE: Final = "role"
+
+
+class SystemPlacement(StrEnum):
+    """Where this model's template takes the system text. Two, and no third.
+
+    A turn topology, so it is an enum rather than a free-form string: what
+    "folded into the first user turn" MEANS is a code path
+    (`docs/architecture/summarize/model-boundary.md`).
+    """
+
+    #: A system turn of its own, ahead of the first user turn. Every chat
+    #: template that has a system role.
+    OWN_TURN = "own_turn"
+    #: No system role exists, so the same bytes open the first user turn instead,
+    #: behind the joiner the template writes. The same words at a different
+    #: address, never different words.
+    FOLD_INTO_FIRST_USER = "fold_into_first_user"
 
 
 @dataclass(frozen=True, slots=True)
 class TurnMarkers:
     """The strings that open and close a turn, and the two ways a reply opens.
 
-    **The reply opening is not derived from the turn opening**, because a chat
-    template ends a generation prompt with more than a role header. The weights
-    this project runs today close an empty reasoning block there when reasoning
-    is off, and open one when it is on; both are recorded rather than invented,
-    from the server that applies them.
+    Six of these are read off the model's own rendering at server start, so this
+    project's render IS the template's render rather than a copy of it that can
+    drift. The two that cannot be read off a rendering come from the entry: a
+    generation prompt never contains the marker the model writes to close its
+    reasoning, and a template cannot hand back the name of a variable nobody
+    sent it (`docs/architecture/summarize/model-boundary.md`).
     """
 
     turn_opening: Template
@@ -159,14 +173,18 @@ class TurnMarkers:
     reply_opening: str
     reply_opening_thinking: str
     system_role: SystemPlacement
-    #: Empty under `own_turn`, where nothing reads it. The contract refuses a
-    #: fold that declares no joiner, so the empty string is unreachable on the
-    #: case that does read it.
+    #: Empty under `own_turn`, where nothing reads it. The fold is the only case
+    #: that reads it, and there the derivation takes it from the template's own
+    #: rendering, so it is never empty on the case that reads it.
     system_joiner: str
     #: What closes this model's reasoning block, and the whole declaration that
     #: reasoning is wanted. `None` is one schema-constrained span and no
     #: reasoning; a string is two spans on one slot.
     thinking_close: str | None
+    #: The template variable that turns this model's reasoning on and off, sent
+    #: as the one key of `chat_template_kwargs`. `None` is a template that reads
+    #: no keywords, and then a request carries none.
+    thinking_kwarg: str | None = None
 
     def turn(self, role: str, content: str) -> str:
         """One whole turn. `substitute` rather than `safe_substitute`: a renamed
@@ -224,49 +242,7 @@ class TurnMarkers:
         raise ValueError("this prompt does not end on a reply opening, so nothing may follow it")
 
 
-@lru_cache(maxsize=8)
-def _markers(
-    turn_opening: str,
-    turn_closing: str,
-    reply_opening: str,
-    reply_opening_thinking: str,
-    system_role: SystemPlacement,
-    system_joiner: str,
-    thinking_close: str | None,
-) -> TurnMarkers:
-    return TurnMarkers(
-        turn_opening=Template(turn_opening),
-        turn_closing=turn_closing,
-        reply_opening=reply_opening,
-        reply_opening_thinking=reply_opening_thinking,
-        system_role=system_role,
-        system_joiner=system_joiner,
-        thinking_close=thinking_close,
-    )
-
-
-def turn_markers(turns: TurnsConfig) -> TurnMarkers:
-    """The markers one entry declares, cached under that entry's own strings.
-
-    Keyed rather than single-slot. One process holding two entries - a bench
-    comparing an incumbent against a candidate - would otherwise render the
-    second model's prompts with the first model's markers, and the grammar would
-    accept every reply.
-    """
-    return _markers(
-        turns.turn_opening,
-        turns.turn_closing,
-        turns.reply_opening,
-        turns.reply_opening_thinking,
-        turns.system_role,
-        # Null only under `own_turn`, where the fold never runs and nothing reads
-        # it. The contract refuses a fold whose joiner is absent or empty.
-        turns.system_joiner or "",
-        turns.thinking_close,
-    )
-
-
-def turn_markers_digest(turns: TurnsConfig) -> str:
+def turn_markers_digest(markers: TurnMarkers) -> str:
     """One digest over the whole envelope, for the stamp and for the bench.
 
     `prompt_sha256` moves when a marker moves and stops short of two envelope
@@ -275,11 +251,9 @@ def turn_markers_digest(turns: TurnsConfig) -> str:
     the envelope is digested whole, in one place, and both readers take it from
     here - a second rendering is a second answer.
 
-    `thinking_kwarg` is out, and `declared_for` with it. The first is a name in
-    somebody else's template that no published word is decoded under; the second
-    is the weights, which `model_sha256` already carries.
+    `thinking_kwarg` is out. It is a name in somebody else's template that no
+    published word is decoded under.
     """
-    markers = turn_markers(turns)
     return derive_text_digest(
         "\n".join(
             (
@@ -295,13 +269,12 @@ def turn_markers_digest(turns: TurnsConfig) -> str:
     )
 
 
-def render_prompt(*, system: str, user: str, turns: TurnsConfig) -> str:
-    """The prompt bytes a rendered completion is sent, from the turns it is made of."""
-    markers = turn_markers(turns)
+def render_prompt(*, system: str, user: str, markers: TurnMarkers) -> str:
+    """The prompt bytes a rendered completion is sent, from the markers it is made of."""
     return markers.conversation(system=system, user=user) + markers.opening()
 
 
-def continued_prompt(prompt: str, *, reply: str, user: str, turns: TurnsConfig) -> str:
+def continued_prompt(prompt: str, *, reply: str, user: str, markers: TurnMarkers) -> str:
     """The next prompt in a sequence: this one, what came back, and one new turn.
 
     The opening is a literal concatenation, so the property a prefix cache needs
@@ -316,7 +289,6 @@ def continued_prompt(prompt: str, *, reply: str, user: str, turns: TurnsConfig) 
     Guardrail #11 exists to keep model-written text out of. What that costs is
     the answer's own tokens re-prefilled, which is prefill rather than decode.
     """
-    markers = turn_markers(turns)
     opening = markers.opening_of(prompt)
     return prompt + reply + markers.turn_closing + markers.turn("user", user) + opening
 
@@ -489,7 +461,7 @@ def request_payload(
     user: str,
     output_schema: dict[str, Any],
     inference: InferenceConfig,
-    turns: TurnsConfig,
+    markers: TurnMarkers,
     schema_name: str = "summary",
 ) -> dict[str, Any]:
     """The request body, with the output shape enforced by the decoder.
@@ -497,11 +469,11 @@ def request_payload(
     `response_format` is the control that survives an injection: text inside the
     user turn can change the words, and cannot change the shape.
 
-    `turns` is handed in and has no default here. Both the keyword that turns
+    `markers` is handed in and has no default here. Both the keyword that turns
     reasoning on and the marker that declares it wanted are variables in
-    somebody else's chat template, so they belong to the entry that names the
-    weights - a default in this signature would be a project constant sent to
-    every model, which is what this argument replaced.
+    somebody else's chat template, so they belong to the weights - a default in
+    this signature would be a project constant sent to every model, which is
+    what this argument replaced.
 
     **This route decodes one span and the runtime owns the split.** The prompt
     is rendered by the model's own template, so a caller cannot stop the decode
@@ -535,8 +507,8 @@ def request_payload(
     # A null keyword is a template that reads none, so the key is absent rather
     # than carrying a name no template answers to; the entry refuses that pair
     # with a closing marker declared.
-    if turns.thinking_kwarg is not None:
-        payload["chat_template_kwargs"] = {turns.thinking_kwarg: turns.thinks}
+    if markers.thinking_kwarg is not None:
+        payload["chat_template_kwargs"] = {markers.thinking_kwarg: markers.thinks}
     return payload
 
 
@@ -547,7 +519,7 @@ def completion_payload(
     user: str,
     output_schema: dict[str, Any],
     inference: InferenceConfig,
-    turns: TurnsConfig,
+    markers: TurnMarkers,
     max_answer_tokens: int,
 ) -> dict[str, Any]:
     """The request body for a prompt we rendered ourselves.
@@ -582,7 +554,7 @@ def completion_payload(
     """
     return {
         "model": model_id,
-        "prompt": render_prompt(system=system, user=user, turns=turns),
+        "prompt": render_prompt(system=system, user=user, markers=markers),
         "temperature": inference.temperature,
         "top_p": inference.top_p,
         "seed": inference.seed,
@@ -600,7 +572,7 @@ def grammar_completion_payload(
     user: str,
     grammar: str,
     inference: InferenceConfig,
-    turns: TurnsConfig,
+    markers: TurnMarkers,
     max_answer_tokens: int,
     first_token_alternatives: int,
     post_sampling_probs: bool = False,
@@ -635,7 +607,7 @@ def grammar_completion_payload(
     """
     return {
         "model": model_id,
-        "prompt": render_prompt(system=system, user=user, turns=turns),
+        "prompt": render_prompt(system=system, user=user, markers=markers),
         "temperature": inference.temperature,
         "top_p": inference.top_p,
         "seed": inference.seed,
@@ -651,7 +623,7 @@ def grammar_completion_payload(
 def thinking_span(
     answer: Mapping[str, Any],
     *,
-    turns: TurnsConfig,
+    markers: TurnMarkers,
     temperature: float | None = None,
 ) -> dict[str, Any]:
     """Span one: this call's own prompt, decoded unconstrained and stopped at the marker.
@@ -693,10 +665,10 @@ def thinking_span(
     window - which is exactly what this accepts, and why an uncapped span rests
     its whole weight on the marker being the bytes this model actually writes.
     """
-    close = turns.thinking_close
+    close = markers.thinking_close
     if close is None:
         raise ValueError(
-            "these turns declare no thinking_close, so there is no span to think in - "
+            "these markers declare no thinking_close, so there is no span to think in - "
             "a caller reached for one on an envelope that does not think"
         )
     span = {name: value for name, value in answer.items() if name not in _ANSWER_ONLY_KEYS}
@@ -708,7 +680,7 @@ def thinking_span(
 
 
 def answer_span(
-    answer: Mapping[str, Any], *, thought: str, turns: TurnsConfig
+    answer: Mapping[str, Any], *, thought: str, markers: TurnMarkers
 ) -> dict[str, Any]:
     """Span two: the same body, with the thinking behind it and the shape back on.
 
@@ -734,10 +706,10 @@ def answer_span(
     that stopped at the marker does not carry it - and a span that ran to its
     budget never wrote one at all. Writing it closes both.
     """
-    close = turns.thinking_close
+    close = markers.thinking_close
     if close is None:
         raise ValueError(
-            "these turns declare no thinking_close, so nothing may be spliced into this "
+            "these markers declare no thinking_close, so nothing may be spliced into this "
             "prompt - a caller reached for a second span on an envelope that does not think"
         )
     return {**answer, "prompt": str(answer["prompt"]) + thought + close}
@@ -773,7 +745,7 @@ def continued_completion_payload(
     reply: str,
     user: str,
     output_schema: dict[str, Any],
-    turns: TurnsConfig,
+    markers: TurnMarkers,
     max_answer_tokens: int,
 ) -> dict[str, Any]:
     """A second request whose prompt IS the first one's, plus what it returned.
@@ -805,7 +777,7 @@ def continued_completion_payload(
     """
     return {
         **first,
-        "prompt": continued_prompt(str(first["prompt"]), reply=reply, user=user, turns=turns),
+        "prompt": continued_prompt(str(first["prompt"]), reply=reply, user=user, markers=markers),
         "n_predict": max_answer_tokens,
         "json_schema": output_schema,
     }
@@ -987,11 +959,6 @@ def tokenize_url(endpoint: str = DEFAULT_ENDPOINT) -> str:
     return _sibling(endpoint, _TOKENIZE_PATH)
 
 
-def models_url(endpoint: str = DEFAULT_ENDPOINT) -> str:
-    """Where the server describes the model it loaded, including its trained window."""
-    return _sibling(endpoint, _MODELS_PATH)
-
-
 def props(endpoint: str = DEFAULT_ENDPOINT, *, timeout: float) -> dict[str, Any]:
     """What the running server says about itself, including its chat template.
 
@@ -1013,33 +980,37 @@ def props(endpoint: str = DEFAULT_ENDPOINT, *, timeout: float) -> dict[str, Any]
     return payload if isinstance(payload, dict) else {}
 
 
-# --- The five things the server proves before the first item ----------------
+# --- What the server settles before the first item --------------------------
 #
-# The entry CLAIMS how a turn opens and closes, which architecture the weights
-# are, and how big a window they were trained for. Until this block existed
-# nothing checked any of it against the running server: a wrong marker renders a
-# prompt with no turn structure that the grammar still accepts, so the only
-# symptom was worse summaries and nothing went red.
+# The turn markers are read off the model's own rendering here, so this
+# project's render IS the template's render rather than a hand-transcribed copy
+# of it. Two things are still asked rather than assumed: whether the sanitizer
+# can strip the markers that came back (Guardrail #11), and whether the decoder
+# is still held to the schema it is given.
 #
-# **None of the five has a skip flag, and an unread proof refuses.** The proof is
-# what paid for declaring the envelope in config at all; a skip returns the tree
-# to worse-summaries-and-no-error with extra ceremony. A refusal costs one step
-# where the failure it prevents costs a day of summaries filed under a model
-# nobody reconciled.
+# **Neither has a skip flag, and an unread proof refuses.** A run that skips
+# them is back to worse-summaries-and-no-error with extra ceremony. A refusal
+# costs one step where the failure it prevents costs a day of summaries nobody
+# reconciled.
 #
-# Cost, on a stock ubuntu-latest (Guardrail #2): one template render, two
-# tokenisations, two completions of at most PROBE_OUTPUT_TOKENS tokens each, one
-# model list, and a few kilobytes read off the front of the weights file. It runs
-# once per server rather than once per run, because a shard starts its own.
+# Cost, on a stock ubuntu-latest (Guardrail #2): three template renders and one
+# completion of at most PROBE_OUTPUT_TOKENS tokens. It runs once per server
+# rather than once per run, because a shard starts its own.
 
 
-#: The two turns the probe renders. Short and about nothing: what is being
-#: reconciled is the SHAPE of the render, so the content only has to be stable.
+#: The turns the derivation renders. Short and about nothing: what is being read
+#: back is the SHAPE of the render, so the content only has to be stable, unique
+#: and free of any marker.
 PROBE_SYSTEM: Final = "You are a probe."
 PROBE_USER: Final = "Answer with the one word this shape allows."
-#: The turn the second probe call adds, so its prompt is the first one plus what
-#: came back plus one more turn - the exact shape a real item's two calls take.
+#: The turn a second call adds, so its prompt is the first one plus what came
+#: back plus one more turn - the exact shape a real item's two calls take. The
+#: derivation reuses it as the second user turn of its history render.
 PROBE_FOLLOW_UP: Final = "Answer once more."
+#: What already-written reply the history render carries. It sits between two
+#: user turns so the bytes that close a turn and open the next one can be read
+#: off one rendering.
+PROBE_REPLY: Final = "The earlier reply."
 #: The only value the constrained-decoding case's schema admits.
 PROBE_ANSWER: Final = "probe"
 #: The decode budget for one probe call. Not a tunable: the grammar admits
@@ -1047,97 +1018,30 @@ PROBE_ANSWER: Final = "probe"
 #: and raising it would only lengthen a refusal (Guardrail #6).
 PROBE_OUTPUT_TOKENS: Final = 32
 
-#: A GGUF opens with these four bytes, then its key-value block.
-_GGUF_MAGIC: Final = b"GGUF"
-_GGUF_ARCHITECTURE_KEY: Final = "general.architecture"
-_GGUF_STRING: Final = 8
-_GGUF_ARRAY: Final = 9
-#: Every other value type, and how many bytes it occupies. uint8, int8, uint16,
-#: int16, uint32, int32, float32, bool, uint64, int64, float64 in that order.
-_GGUF_FIXED_WIDTHS: Final = {0: 1, 1: 1, 2: 2, 3: 2, 4: 4, 5: 4, 6: 4, 7: 1, 10: 8, 11: 8, 12: 8}
-#: How far into the header the architecture may sit before we give up. A GGUF
-#: writes general.* first and a model carries a few hundred keys, so this is a
-#: ceiling on a malformed file rather than a limit anybody meets.
-_GGUF_KEY_CEILING: Final = 4096
+#: The roles the derivation asks the template to write, and the two a forged
+#: turn would be spelled with. "system" and "user" share no first character and
+#: no last one, so what the two renderings have in common is exactly the bytes
+#: around the role rather than part of the role itself.
+_TURN_ROLES: Final = ("system", "user")
+
+#: What every derived marker is asked about before a prompt is built from it.
+#: The keys are the marker names a refusal has to name; a forged turn is spelled
+#: with the bytes an attacker would have to write into an article, and a turn
+#: opening carries a role, so it is checked once per role.
+_BOUNDARY_ADVICE: Final = (
+    "An article carrying that marker would reach this model with the turn "
+    "boundary intact. Teach the family to backend/idhazh/sanitize.py and move "
+    "SANITIZER_VERSION with it, or name a model whose markers it already strips"
+)
 
 
 class ProbeRefusedError(RuntimeError):
-    """One of the five start-up proofs did not hold, so no item runs.
+    """Something the server had to settle did not hold, so no item runs.
 
-    The message names both sides - what the entry declared and what the server
-    or the weights reported - because a refusal that names only one of them
-    sends the reader to the wrong file.
+    The message names both sides - what came back and what could not be made of
+    it - because a refusal that names only one of them sends the reader to the
+    wrong file.
     """
-
-
-def _head(ids: Sequence[int]) -> str:
-    shown = list(ids[:8])
-    return f"{shown}..." if len(ids) > len(shown) else str(shown)
-
-
-def _first_difference(ours: Sequence[int], theirs: Sequence[int]) -> int:
-    for index, (mine, yours) in enumerate(zip(ours, theirs, strict=False)):
-        if mine != yours:
-            return index
-    return min(len(ours), len(theirs))
-
-
-def the_render_agrees(*, ours: Sequence[int], theirs: Sequence[int]) -> None:
-    """Case 1. Our rendered prompt is the prompt the model's own template renders.
-
-    **Token ids, not bytes.** A chat template's output may open with the model's
-    own sequence token, and the runtime inserts that token again when it reads a
-    prompt string - so a byte comparison would push the entry to declare a
-    marker the runtime then doubles. Comparing ids lets the server's list carry
-    one leading token ours does not, and nothing else: a second difference, or a
-    difference anywhere but the head, is the envelope disagreeing.
-
-    The committed fixture's token ids are invented, so the test proves the
-    comparison rule and the config-derived prompt only; tokenizer agreement is
-    proved solely by this probe running against a server with weights.
-    """
-    lead = len(theirs) - len(ours)
-    if 0 <= lead <= 1 and list(theirs)[lead:] == list(ours):
-        return
-    raise ProbeRefusedError(
-        "the turn envelope does not render what this server's own chat template "
-        f"renders: the entry renders {len(ours)} tokens {_head(ours)} and the server "
-        f"renders {len(theirs)} tokens {_head(theirs)}, first difference at index "
-        f"{_first_difference(ours, theirs)}. Re-record models.summarize.turns off this "
-        "server rather than editing them by hand"
-    )
-
-
-def the_prefix_cache_is_live(*, first: Completion, second: Completion) -> None:
-    """Case 2. The second call read the first call's prompt out of the slot.
-
-    The second probe's prompt IS the first one plus the reply plus one turn, so
-    every token the first call prefilled is a prefix of it. Reusing none of them
-    is the prefix being re-read: a llama.cpp build that flipped the prompt-cache
-    default, a seam that re-splits, a leading-token mismatch, or a slot lost to
-    parallelism. Each doubles prefill on every item, and none of them writes a
-    line anywhere. All four land on the same reading, which is why zero is the
-    line: a slot that is not holding the prefix reuses nothing, not a little
-    less than everything.
-
-    **The reuse count is bounded by a checkpoint position, not by the previous
-    prompt's length**, so asking for all of it refuses a healthy server. The
-    slot restores from a context checkpoint written mid-prompt and resumes from
-    there; where that checkpoint sits is the runtime's business and it moves
-    with the build. Measured 2026-09-14 on GitHub `ubuntu-latest`, llama.cpp
-    `b10598`, Qwen3.5-9B-Q4_K_M, run 34820209002: the first probe prefilled 31
-    tokens, the slot checkpointed at position 26, and the second probe reused 27
-    of its 60 and evaluated 33. Prefill was cut, not doubled - and the version
-    of this case that wanted 31 refused all four shards on the first real run it
-    ever saw, so the day planned 80 items and published none.
-    """
-    if first.prompt_tokens > 0 and second.cached_tokens > 0:
-        return
-    raise ProbeRefusedError(
-        "the prompt cache is not holding the prefix: the first probe prefilled "
-        f"{first.prompt_tokens} tokens and the second probe reused "
-        f"{second.cached_tokens} of them. Every item would pay full prefill twice"
-    )
 
 
 def one_document_schema(
@@ -1186,136 +1090,12 @@ def decoding_still_constrains(*, reply: str, only: Mapping[str, Any]) -> None:
     )
 
 
-def the_weights_are_the_declared_ones(*, declared: str, reported: str) -> None:
-    """Case 4. The file the server opened is the architecture the entry names.
-
-    Beside the filename assertion `digest.yml` already makes, which says which
-    file. This says what that file is. A repackaged GGUF under a familiar name
-    is the one case where the alias, the path and the digest all agree with a
-    config somebody edited, and only the words get worse.
-    """
-    if declared == reported:
-        return
-    raise ProbeRefusedError(
-        f"the weights declare architecture {reported!r} and models.summarize declares "
-        f"{declared!r}. One of the two is wrong, and a run started on the pair files "
-        "every summary under a model that never produced it"
-    )
-
-
-def the_window_is_inside_the_trained_window(*, n_ctx: int, trained: int) -> None:
-    """Case 5. The configured window is one the model was actually trained for.
-
-    `--no-context-shift` refuses a prompt past `n_ctx`. It never refuses one
-    past the length the weights were trained at, so a candidate with a short
-    native window under a larger `n_ctx` degrades quietly rather than raising. A
-    conservative default is not an assertion, so this is one.
-    """
-    if trained <= 0:
-        raise ProbeRefusedError(
-            "the server reports no trained context length for the model it loaded, so "
-            f"the configured window of {n_ctx} cannot be checked against it. An "
-            "unread proof is not a proof"
-        )
-    if n_ctx > trained:
-        raise ProbeRefusedError(
-            f"models.summarize.inference.n_ctx is {n_ctx} and the weights were trained "
-            f"for {trained}. The server will not refuse a prompt in between, so every "
-            "item past the trained length would degrade with nothing red"
-        )
-
-
-def trained_context(model_list: Mapping[str, Any]) -> int:
-    """`n_ctx_train` off the model list the server publishes. Zero when unreadable."""
-    entries = model_list.get("data")
-    if not isinstance(entries, list) or not entries:
-        return 0
-    first = entries[0]
-    meta = first.get("meta") if isinstance(first, dict) else None
-    if not isinstance(meta, dict):
-        return 0
-    try:
-        return int(meta.get("n_ctx_train") or 0)
-    except (TypeError, ValueError):
-        return 0
-
-
-def _gguf_unsigned(stream: IO[bytes], width: int) -> int:
-    raw = stream.read(width)
-    if len(raw) != width:
-        raise ValueError("the weights file ends inside its own header")
-    return int.from_bytes(raw, "little", signed=False)
-
-
-def _gguf_string_value(stream: IO[bytes]) -> str:
-    length = _gguf_unsigned(stream, 8)
-    raw = stream.read(length)
-    if len(raw) != length:
-        raise ValueError("the weights file ends inside a header string")
-    return raw.decode("utf-8", errors="replace")
-
-
-def _gguf_skip_value(stream: IO[bytes], kind: int) -> None:
-    if kind == _GGUF_STRING:
-        _gguf_string_value(stream)
-        return
-    if kind == _GGUF_ARRAY:
-        inner = _gguf_unsigned(stream, 4)
-        for _ in range(_gguf_unsigned(stream, 8)):
-            _gguf_skip_value(stream, inner)
-        return
-    width = _GGUF_FIXED_WIDTHS.get(kind)
-    if width is None:
-        raise ValueError(f"the weights file header uses value type {kind}, which is not GGUF")
-    stream.seek(width, 1)
-
-
-def gguf_architecture(weights: Path) -> str:
-    """The architecture name written inside the weights file.
-
-    The header only: a GGUF opens with its key-value block, so this reads a few
-    kilobytes off the front of a five-gigabyte file and stops at the key it came
-    for. The cost does not follow the model's size (Guardrail #12).
-
-    **It is read here because the server does not publish it.** `/props` names
-    the path, the alias, the file type, the build and the window; `/v1/models`
-    adds the vocabulary, the embedding width, the parameter count and the
-    trained window. Neither carries an architecture on the pinned build, so the
-    fact is read where it is written, from the file the server was pointed at.
-    """
-    try:
-        with weights.open("rb") as stream:
-            if stream.read(4) != _GGUF_MAGIC:
-                raise ValueError("the weights file does not open with a GGUF header")
-            _gguf_unsigned(stream, 4)
-            _gguf_unsigned(stream, 8)
-            pairs = min(_gguf_unsigned(stream, 8), _GGUF_KEY_CEILING)
-            for _ in range(pairs):
-                key = _gguf_string_value(stream)
-                kind = _gguf_unsigned(stream, 4)
-                if key != _GGUF_ARCHITECTURE_KEY:
-                    _gguf_skip_value(stream, kind)
-                    continue
-                if kind != _GGUF_STRING:
-                    raise ValueError("the architecture key in this file is not a string")
-                return _gguf_string_value(stream)
-    except (OSError, ValueError) as unreadable:
-        raise ProbeRefusedError(
-            f"the weights at {weights.as_posix()} do not say which architecture they "
-            f"are: {unreadable}. An unread proof is not a proof"
-        ) from unreadable
-    raise ProbeRefusedError(
-        f"the weights at {weights.as_posix()} declare no {_GGUF_ARCHITECTURE_KEY}, so "
-        "nothing can be compared against models.summarize.arch"
-    )
-
-
 def _ask(url: str, payload: Mapping[str, Any] | None, *, timeout: float) -> Any:
-    """One probe request. A server that will not answer refuses the run.
+    """One start-up request. A server that will not answer refuses the run.
 
     Unlike `props`, which records an absence and lets the stage carry on. What
-    is being asked here is whether the entry is true, and an unanswered question
-    is not a yes.
+    is being asked here is what every prompt will be built out of, and an
+    unanswered question is not a yes.
     """
     outbound = (
         request.Request(url, method="GET")
@@ -1332,79 +1112,364 @@ def _ask(url: str, payload: Mapping[str, Any] | None, *, timeout: float) -> Any:
             return json.loads(response.read().decode("utf-8"))
     except (OSError, ValueError) as unreachable:
         raise ProbeRefusedError(
-            f"the server did not answer {url}, so what the entry claims cannot be "
-            f"checked: {unreachable}. None of the five start-up proofs has a skip flag"
+            f"the server did not answer {url}, so the turn markers cannot be read off "
+            f"its own rendering: {unreachable}. Neither start-up proof has a skip flag"
         ) from unreachable
 
 
-def _rendered_by_the_server(endpoint: str, *, turns: TurnsConfig, timeout: float) -> str:
-    """The server's own render of the probe conversation, asked for the same way.
+def _rendered_by_the_server(
+    endpoint: str,
+    conversation: list[dict[str, str]],
+    *,
+    keyword: str | None,
+    thinking: bool,
+    timeout: float,
+) -> str:
+    """One rendering the model's own template made, asked for as a real call asks.
 
-    Both the keyword and whether reasoning is asked for come from the entry
-    rather than from a literal here. Case 1 compares our render against this one,
-    so either of them spelled in source would make the probe agree with itself
-    while both sides asked the template a question it does not answer.
+    The keyword comes from the entry rather than from a literal here. It is a
+    name in somebody else's Jinja source, so spelling it in this file would send
+    one model's variable to every model.
     """
     body = _ask(
         apply_template_url(endpoint),
         {
-            "messages": [
-                {"role": "system", "content": PROBE_SYSTEM},
-                {"role": "user", "content": PROBE_USER},
-            ],
-            **(
-                {"chat_template_kwargs": {turns.thinking_kwarg: turns.thinks}}
-                if turns.thinking_kwarg is not None
-                else {}
-            ),
+            "messages": conversation,
+            **({"chat_template_kwargs": {keyword: thinking}} if keyword is not None else {}),
         },
         timeout=timeout,
     )
     prompt = body.get("prompt") if isinstance(body, Mapping) else None
     if not isinstance(prompt, str) or not prompt:
         raise ProbeRefusedError(
-            "the server rendered no prompt for the probe conversation, so the turn "
-            "envelope has nothing to be reconciled against"
+            "the server rendered no prompt for the turns it was handed, so no marker "
+            "can be read off this model's own template"
         )
     return prompt
 
 
-def token_ids(endpoint: str, text: str, *, timeout: float) -> list[int]:
-    """What the server would really read. `add_special` off on both strings.
+def _where(rendered: str, sentinel: str, *, inside: str) -> int:
+    """Where one turn's text sits in a rendering, refusing anything but one copy.
 
-    Both sides are tokenised the same way, so a sequence token the template
-    wrote into its own output arrives as one id on that side and is absent from
-    ours - which is the single leading difference case 1 allows. Leaving
-    `add_special` on would put one on both and hide a real disagreement.
+    Two copies would make every byte offset behind the second one ambiguous, and
+    the markers are exactly the bytes between the offsets.
     """
-    body = _ask(
-        tokenize_url(endpoint), {"content": text, "add_special": False}, timeout=timeout
+    found = rendered.count(sentinel)
+    if found == 1:
+        return rendered.index(sentinel)
+    raise ProbeRefusedError(
+        f"this model's template wrote {sentinel!r} {found} times into its rendering of "
+        f"{inside}, and a marker can only be read off a turn that appears once. The "
+        "template rewrites or repeats what it is given, so nothing here can say where "
+        "one turn ends"
     )
-    tokens = body.get("tokens") if isinstance(body, Mapping) else None
-    if not isinstance(tokens, list) or not tokens:
+
+
+def _shared_front(first: str, second: str) -> str:
+    end = 0
+    while end < min(len(first), len(second)) and first[end] == second[end]:
+        end += 1
+    return first[:end]
+
+
+def _shared_back(first: str, second: str) -> str:
+    start = 0
+    while start < min(len(first), len(second)) and first[-1 - start] == second[-1 - start]:
+        start += 1
+    return first[len(first) - start :]
+
+
+def _role_placeholder(*, openings: Mapping[str, str], model_id: str) -> Template:
+    """The turn opening with the role lifted back out of it.
+
+    Two openings of the same template differ in the role word and nowhere else,
+    so what they share at the front and at the back IS the marker and what is
+    left in the middle is the role. `${role}` in braces rather than `$role`,
+    because a template whose opening continues with a letter would otherwise
+    read the placeholder and that letter as one name.
+
+    A template that renames a role - `System` for `system` - cannot be rebuilt
+    this way, and refuses here rather than rendering every turn under a role
+    header the model never writes.
+    """
+    first, second = (openings[role] for role in _TURN_ROLES)
+    front = _shared_front(first, second)
+    back = _shared_back(first[len(front) :], second[len(front) :])
+    rebuilt = {role: front + role + back for role in _TURN_ROLES}
+    if rebuilt != dict(openings):
         raise ProbeRefusedError(
-            "the server tokenised nothing, so the render cannot be compared as tokens"
+            f"the turn opening this model's template writes for {model_id!r} cannot be "
+            f"read as one marker with the role inside it: it opens a turn {first!r} for "
+            f"{_TURN_ROLES[0]} and {second!r} for {_TURN_ROLES[1]}, which differ "
+            "somewhere other than the role word. This project renders a turn by "
+            "substituting the role into one opening, so a template that spells a role "
+            "its own way has to be read by a rule this one does not have"
         )
-    try:
-        return [int(token) for token in tokens]
-    except (TypeError, ValueError) as unreadable:
+    return Template(front + "${" + TURN_ROLE + "}" + back)
+
+
+def _folded_role_placeholder(user_opening: str, *, model_id: str) -> Template:
+    """The turn opening of a template with no system role.
+
+    Only the user turn exists to read, so the role is found by name inside it.
+    One occurrence or nothing: two would make the substitution ambiguous, and
+    none means the opening carries no role header at all - a prompt that renders
+    cleanly and says nothing about who is speaking.
+    """
+    folded_role = _TURN_ROLES[1]
+    if user_opening.count(folded_role) != 1:
         raise ProbeRefusedError(
-            f"the server returned token pieces rather than ids: {unreadable}"
-        ) from unreadable
+            f"this model's template has no system role, and the turn opening it writes "
+            f"for {model_id!r} is {user_opening!r}, which does not name {folded_role!r} "
+            "exactly once. A turn with no role header renders cleanly and says nothing "
+            "about who is speaking"
+        )
+    front, _, back = user_opening.partition(folded_role)
+    return Template(front + "${" + TURN_ROLE + "}" + back)
+
+
+def _the_boundary_can_hold(markers: TurnMarkers, *, model_id: str) -> None:
+    """Every marker a forged turn could be spelled with, asked of the sanitizer.
+
+    The control-token pattern in `idhazh.sanitize` is what keeps a forged turn
+    out of an article (Guardrail #11), and it knows the families it was written
+    for. A server may load weights from a family it does not - and then the
+    first article carrying that family's markers is what finds out, which is
+    finding out too late. So the question is asked once, over the markers this
+    server really renders with, before any article reaches a prompt.
+
+    `system_joiner` is not one of them. It separates two blocks inside one turn
+    rather than opening or closing a turn, and every template that folds joins
+    with ordinary whitespace - a rule demanding the pattern recognise it would
+    refuse a joiner of two newlines.
+
+    `safe_substitute`, where `TurnMarkers.turn` is strict. A marker naming some
+    other placeholder is a real failure with a message of its own: it raises at
+    the first render. Repeating it here as a `KeyError` would only bury the one
+    this function exists to report.
+    """
+    forgeable: dict[str, str] = {
+        f"turn_opening.{role}": markers.turn_opening.safe_substitute({TURN_ROLE: role})
+        for role in _TURN_ROLES
+    }
+    forgeable["turn_closing"] = markers.turn_closing
+    forgeable["reply_opening"] = markers.reply_opening
+    forgeable["reply_opening_thinking"] = markers.reply_opening_thinking
+    refuse_markers_the_boundary_cannot_hold(model_id, forgeable)
+
+
+def refuse_markers_the_boundary_cannot_hold(model_id: str, markers: Mapping[str, str]) -> None:
+    """A marker the sanitizer cannot strip refuses the run, naming the marker.
+
+    A plain mapping of marker name to rendered marker, so what is asked does not
+    depend on where the markers came from. It moved here from configuration load
+    on 2026-09-21, when the markers stopped being typed by a person and started
+    being read off the model's own template; what it refuses did not change.
+    """
+    for field, marker in markers.items():
+        surviving = why_a_forged_turn_would_survive(marker)
+        if surviving is None:
+            continue
+        raise ProbeRefusedError(
+            f"the turn markers this server derived for model {model_id!r} are refused: "
+            f"{field} renders {marker!r}, and {surviving}. {_BOUNDARY_ADVICE}"
+        )
+
+
+def turn_markers_from_renderings(
+    *,
+    model_id: str,
+    plain: str,
+    thinking: str,
+    history: str,
+    thinking_close: str | None,
+    thinking_kwarg: str | None,
+) -> TurnMarkers:
+    """The markers a model's own template writes, read back off three of its renderings.
+
+    Every marker is the bytes BETWEEN two turns whose text this project chose,
+    so nothing here is guessed: the offsets are known and the segments between
+    them are the markers. `history` carries a reply between two user turns,
+    which is the one rendering where the bytes that close a turn sit next to the
+    bytes that open the next one - that pair is what splits a closing marker
+    from an opening one without knowing either in advance.
+
+    **A rendering that opens with a preamble refuses.** Some templates write a
+    sequence token once at the front of a whole conversation, and this project
+    renders turn by turn with nothing in front, so a preamble would be repeated
+    at every turn. It is caught here rather than in a prompt: the closing marker
+    is read off a seam in the middle of a conversation, and a preamble makes
+    that seam disagree with the front of the rendering.
+
+    **What this cannot settle is a template family none of the committed models
+    uses.** A template that renames a role, repeats a turn's text, or writes a
+    preamble is refused at server start, before the first article - which is
+    where a family this rule cannot read is found.
+    """
+    user_opening_at = _where(history, PROBE_USER, inside="a conversation with a reply in it")
+    reply_at = _where(history, PROBE_REPLY, inside="a conversation with a reply in it")
+    follow_up_at = _where(history, PROBE_FOLLOW_UP, inside="a conversation with a reply in it")
+    if not user_opening_at < reply_at < follow_up_at:
+        raise ProbeRefusedError(
+            "this model's template reordered the turns it was handed, so the bytes "
+            "between them are not the markers that separate them"
+        )
+
+    user_opening = history[:user_opening_at]
+    seam = history[reply_at + len(PROBE_REPLY) : follow_up_at]
+    if not user_opening or not seam.endswith(user_opening) or seam == user_opening:
+        raise ProbeRefusedError(
+            f"this model's template closes a turn and opens the next one with {seam!r}, "
+            f"and opens its first turn with {user_opening!r}. The second is not the end "
+            "of the first, so the template writes something once at the front of a "
+            "conversation that this project would have to repeat at every turn"
+        )
+    turn_closing = seam[: len(seam) - len(user_opening)]
+
+    history_tail = history[follow_up_at + len(PROBE_FOLLOW_UP) :]
+    if not history_tail.startswith(turn_closing) or history_tail == turn_closing:
+        raise ProbeRefusedError(
+            f"this model's template ends a generation prompt with {history_tail!r}, "
+            f"which does not begin by closing the last turn with {turn_closing!r}. "
+            "Nothing here can say where the reply is meant to start"
+        )
+    reply_opening = history_tail[len(turn_closing) :]
+
+    system_at = _where(plain, PROBE_SYSTEM, inside="a system turn and a user turn")
+    user_at = _where(plain, PROBE_USER, inside="a system turn and a user turn")
+    if system_at > user_at:
+        raise ProbeRefusedError(
+            "this model's template put the system text behind the user text, so the "
+            "instructions no longer open the conversation"
+        )
+    head = plain[:system_at]
+    between = plain[system_at + len(PROBE_SYSTEM) : user_at]
+    if plain[user_at + len(PROBE_USER) :] != turn_closing + reply_opening:
+        raise ProbeRefusedError(
+            "this model's template ends a two-turn conversation differently from a "
+            "longer one, so the bytes a reply opens on are not one marker"
+        )
+
+    if between == turn_closing + user_opening:
+        placement, joiner = SystemPlacement.OWN_TURN, ""
+        turn_opening = _role_placeholder(
+            openings={"system": head, "user": user_opening}, model_id=model_id
+        )
+    elif head == user_opening and between:
+        # No system role in this template, so the system text opens the first
+        # user turn behind whatever the template joins the two blocks with.
+        placement, joiner = SystemPlacement.FOLD_INTO_FIRST_USER, between
+        turn_opening = _folded_role_placeholder(user_opening, model_id=model_id)
+    else:
+        raise ProbeRefusedError(
+            f"this model's template neither gives the system text a turn of its own nor "
+            f"folds it into the first user turn: it opens with {head!r} and puts "
+            f"{between!r} between the system text and the user text. A third placement "
+            "needs a rule this project does not have"
+        )
+
+    thinking_tail = thinking[_where(thinking, PROBE_USER, inside="the same two turns") :]
+    thinking_tail = thinking_tail[len(PROBE_USER) :]
+    if not thinking_tail.startswith(turn_closing) or thinking_tail == turn_closing:
+        raise ProbeRefusedError(
+            "asking this model's template for reasoning changed where a turn ends, so "
+            f"the two openings are not one envelope: it ended with {thinking_tail!r}"
+        )
+
+    markers = TurnMarkers(
+        turn_opening=turn_opening,
+        turn_closing=turn_closing,
+        reply_opening=reply_opening,
+        reply_opening_thinking=thinking_tail[len(turn_closing) :],
+        system_role=placement,
+        system_joiner=joiner,
+        thinking_close=thinking_close,
+        thinking_kwarg=thinking_kwarg,
+    )
+    _the_boundary_can_hold(markers, model_id=model_id)
+    return markers
+
+
+#: One derivation per server and per entry, because a bench holding two entries
+#: on two servers would otherwise render the second model's prompts with the
+#: first model's markers, and the grammar would accept every reply.
+_DERIVED: Final[dict[tuple[str, str, str | None, str | None], TurnMarkers]] = {}
+
+
+def derive_turn_markers(
+    endpoint: str = DEFAULT_ENDPOINT,
+    *,
+    entry: ModelEntry,
+    timeout: float,
+) -> TurnMarkers:
+    """Read this model's turn markers off its own template. Three renders, no decode.
+
+    The markers are held in memory for as long as the process lives and written
+    nowhere. A file of them would be a second copy of somebody else's template
+    that a model swap can leave behind, which is what they were until now.
+
+    Two facts a rendering cannot return come from the entry beside the weights:
+    the marker this model writes to CLOSE a reasoning block, which a generation
+    prompt never contains, and the name of the template variable that turns
+    reasoning on, which is an input to the render rather than an output of it.
+    """
+    held = _DERIVED.get(
+        key := (endpoint, entry.id, entry.thinking_close, entry.thinking_kwarg)
+    )
+    if held is not None:
+        return held
+    two_turns = [
+        {"role": "system", "content": PROBE_SYSTEM},
+        {"role": "user", "content": PROBE_USER},
+    ]
+    plain = _rendered_by_the_server(
+        endpoint, two_turns, keyword=entry.thinking_kwarg, thinking=False, timeout=timeout
+    )
+    derived = turn_markers_from_renderings(
+        model_id=entry.id,
+        plain=plain,
+        # A template that reads no keyword renders one way whatever it is asked,
+        # so the second call would repeat the first. The entry refuses a null
+        # keyword beside a closing marker, so nothing here needs both openings.
+        thinking=(
+            _rendered_by_the_server(
+                endpoint,
+                two_turns,
+                keyword=entry.thinking_kwarg,
+                thinking=True,
+                timeout=timeout,
+            )
+            if entry.thinking_kwarg is not None
+            else plain
+        ),
+        history=_rendered_by_the_server(
+            endpoint,
+            [
+                {"role": "user", "content": PROBE_USER},
+                {"role": "assistant", "content": PROBE_REPLY},
+                {"role": "user", "content": PROBE_FOLLOW_UP},
+            ],
+            keyword=entry.thinking_kwarg,
+            thinking=False,
+            timeout=timeout,
+        ),
+        thinking_close=entry.thinking_close,
+        thinking_kwarg=entry.thinking_kwarg,
+    )
+    _DERIVED[key] = derived
+    return derived
 
 
 def token_pieces(endpoint: str, text: str, *, timeout: float) -> list[str]:
     """How the vocabulary SPELLS a string, token by token, in order.
 
-    `with_pieces` is the same tokenisation `token_ids` asks for with the text of
-    each token beside its id, so the two cannot disagree about where a string
-    breaks. The spelling is what a caller needs when it has to match a token the
-    server reported in an alternatives window: that window carries text, and an
-    id is comparable only against a table this repository would have to keep.
+    `with_pieces` asks the tokenizer for the text of each token beside its id,
+    so a caller reading a window the server reported can match a token by the
+    spelling it came back as. That window carries text, and an id is comparable
+    only against a table this repository would have to keep.
 
-    `add_special` stays off for the reason it is off next door - a sequence token
-    the template writes belongs to the template, not to the string being asked
-    about.
+    `add_special` stays off: a sequence token the template writes belongs to the
+    template, not to the string being asked about.
 
     A build that answers with bare ids is refused rather than guessed at. Reading
     an id as a spelling would put a number where a word goes and every match
@@ -1432,63 +1497,39 @@ def token_pieces(endpoint: str, text: str, *, timeout: float) -> list[str]:
 def prove_the_entry(
     *,
     model: ModelEntry,
-    weights: Path,
     output_schema: Mapping[str, Any],
     endpoint: str = DEFAULT_ENDPOINT,
     timeout: float,
 ) -> None:
-    """Turn the entry's claims into facts, or refuse the run.
+    """Read this model's markers off its own template, then prove the decoder is bound.
 
-    Five cases, in cost order: the two that cost a render and a tokenisation
-    first, then the two completions, then the file read and the model list. The
-    first refusal stops the rest, because a server whose render disagrees has
-    nothing useful to say about its own cache.
+    The markers cost three renders and no decode, and the boundary check rides
+    inside the derivation. Then one short decode under a schema exactly one
+    document satisfies: the derivation cannot say whether our own generated
+    schema has grown a construct the grammar converter drops, and a looser
+    decoder still accepts every good reply, so nothing else in the pipeline
+    would see it.
 
     `output_schema` is handed in rather than imported. The schema this run sends
     is built in `idhazh.classify.calls`, which imports this module, so taking it
     as an argument is what keeps the model layer at the bottom of the graph
-    (`CLAUDE.md` section 4) - and it means the probe is held to whatever shape
-    the caller really uses rather than to a copy of it.
+    (`CLAUDE.md` section 4) - and it means this is held to whatever shape the
+    caller really uses rather than to a copy of it.
     """
-    inference = model.inference
-    ours = render_prompt(system=PROBE_SYSTEM, user=PROBE_USER, turns=model.turns)
-    theirs = _rendered_by_the_server(endpoint, turns=model.turns, timeout=timeout)
-    the_render_agrees(
-        ours=token_ids(endpoint, ours, timeout=timeout),
-        theirs=token_ids(endpoint, theirs, timeout=timeout),
-    )
-
+    markers = derive_turn_markers(endpoint, entry=model, timeout=timeout)
     schema, only = one_document_schema(output_schema)
-    address = completion_url(endpoint)
-    first_payload = completion_payload(
-        model_id=model.id,
-        system=PROBE_SYSTEM,
-        user=PROBE_USER,
-        output_schema=schema,
-        inference=inference,
-        turns=model.turns,
-        max_answer_tokens=PROBE_OUTPUT_TOKENS,
-    )
-    first = post(first_payload, endpoint=address, timeout=timeout)
-    decoding_still_constrains(reply=first.content, only=only)
-    second = post(
-        continued_completion_payload(
-            first_payload,
-            reply=first.content,
-            user=PROBE_FOLLOW_UP,
+    reply = post(
+        completion_payload(
+            model_id=model.id,
+            system=PROBE_SYSTEM,
+            user=PROBE_USER,
             output_schema=schema,
-            turns=model.turns,
+            inference=model.inference,
+            markers=markers,
             max_answer_tokens=PROBE_OUTPUT_TOKENS,
         ),
-        endpoint=address,
+        endpoint=completion_url(endpoint),
         timeout=timeout,
     )
-    the_prefix_cache_is_live(first=first, second=second)
+    decoding_still_constrains(reply=reply.content, only=only)
 
-    the_weights_are_the_declared_ones(
-        declared=model.arch, reported=gguf_architecture(weights)
-    )
-    the_window_is_inside_the_trained_window(
-        n_ctx=inference.n_ctx,
-        trained=trained_context(_ask(models_url(endpoint), None, timeout=timeout)),
-    )

@@ -16,16 +16,22 @@ from typing import Any
 
 from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.llm.server import (
+    TurnMarkers,
     completion_payload,
     continued_completion_payload,
     grammar_completion_payload,
     request_payload,
     thinking_span,
+    turn_markers_from_renderings,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MODELS_DIR = REPO_ROOT / "config" / "models"
 GOLDEN_DIR = REPO_ROOT / "tests" / "fixtures" / "request-bodies"
+#: The renderings each model's own template made, recorded once. A golden body
+#: carries a prompt and a prompt is built from markers the server derives, so
+#: this is where an offline capture gets them.
+RENDERINGS = REPO_ROOT / "tests" / "fixtures" / "llm" / "derived-turn-markers.json"
 
 #: Fixed inputs, so the only thing that moves between two captures is the entry
 #: and the builder. Short enough to read in a diff.
@@ -43,17 +49,30 @@ CONTINUED_BUDGET = 1024
 ALTERNATIVES = 3
 
 
-def bodies(config: ModelsConfig) -> dict[str, Any]:
+def markers_for(model_file: str) -> TurnMarkers:
+    """The markers one model's own template writes, off its recorded renderings."""
+    recorded = json.loads(RENDERINGS.read_text(encoding="utf-8"))["entries"][model_file]
+    return turn_markers_from_renderings(
+        model_id=str(recorded["model_id"]),
+        plain=str(recorded["plain"]),
+        thinking=str(recorded["thinking"]),
+        history=str(recorded["history"]),
+        thinking_close=recorded["thinking_close"],
+        thinking_kwarg=recorded["thinking_kwarg"],
+    )
+
+
+def bodies(config: ModelsConfig, *, markers: TurnMarkers) -> dict[str, Any]:
     """Every route's body for one entry, keyed by the route that posts it."""
     entry = config.summarize
-    inference, turns = entry.inference, entry.turns
+    inference = entry.inference
     completion = completion_payload(
         model_id=entry.id,
         system=SYSTEM,
         user=USER,
         output_schema=SCHEMA,
         inference=inference,
-        turns=turns,
+        markers=markers,
         max_answer_tokens=BUDGET,
     )
     captured: dict[str, Any] = {
@@ -63,7 +82,7 @@ def bodies(config: ModelsConfig) -> dict[str, Any]:
             user=USER,
             output_schema=SCHEMA,
             inference=inference,
-            turns=turns,
+            markers=markers,
         ),
         "completion": completion,
         "grammar": grammar_completion_payload(
@@ -72,7 +91,7 @@ def bodies(config: ModelsConfig) -> dict[str, Any]:
             user=USER,
             grammar=GRAMMAR,
             inference=inference,
-            turns=turns,
+            markers=markers,
             max_answer_tokens=BUDGET,
             first_token_alternatives=ALTERNATIVES,
         ),
@@ -81,12 +100,12 @@ def bodies(config: ModelsConfig) -> dict[str, Any]:
             reply='{"title": "a bridge"}',
             user="Now the picture.",
             output_schema=SCHEMA,
-            turns=turns,
+            markers=markers,
             max_answer_tokens=CONTINUED_BUDGET,
         ),
     }
-    if turns.thinks:
-        captured["thinking_span"] = thinking_span(completion, turns=turns)
+    if markers.thinks:
+        captured["thinking_span"] = thinking_span(completion, markers=markers)
     return captured
 
 
@@ -96,7 +115,13 @@ def main() -> None:
         config = ModelsConfig.model_validate_json(path.read_text(encoding="utf-8"))
         written = GOLDEN_DIR / path.name
         written.write_text(
-            json.dumps(bodies(config), indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+            json.dumps(
+                bodies(config, markers=markers_for(path.name)),
+                indent=2,
+                sort_keys=True,
+                ensure_ascii=False,
+            )
+            + "\n",
             encoding="utf-8",
             newline="\n",
         )

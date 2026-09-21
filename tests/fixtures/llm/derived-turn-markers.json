@@ -1,0 +1,61 @@
+{
+  "a_template_whose_markers_are_words": {
+    "history": "Turn from user:\nAnswer with the one word this shape allows.End of turn.\nTurn from assistant:\nThe earlier reply.End of turn.\nTurn from user:\nAnswer once more.End of turn.\nTurn from assistant:\n",
+    "model_id": "a-model-whose-markers-are-words",
+    "plain": "Turn from system:\nYou are a probe.End of turn.\nTurn from user:\nAnswer with the one word this shape allows.End of turn.\nTurn from assistant:\n",
+    "thinking": "Turn from system:\nYou are a probe.End of turn.\nTurn from user:\nAnswer with the one word this shape allows.End of turn.\nTurn from assistant:\n",
+    "thinking_close": null,
+    "thinking_kwarg": "enable_thinking"
+  },
+  "a_template_with_no_system_role": {
+    "history": "<start_of_turn>user\nAnswer with the one word this shape allows.<end_of_turn>\n<start_of_turn>model\nThe earlier reply.<end_of_turn>\n<start_of_turn>user\nAnswer once more.<end_of_turn>\n<start_of_turn>model\n",
+    "model_id": "a-template-with-no-system-role",
+    "plain": "<start_of_turn>user\nYou are a probe.\n\nAnswer with the one word this shape allows.<end_of_turn>\n<start_of_turn>model\n",
+    "prompt_today": "<start_of_turn>user\nYou are a probe.\n\nAnswer with the one word this shape allows.<end_of_turn>\n<start_of_turn>model\n",
+    "thinking": "<start_of_turn>user\nYou are a probe.\n\nAnswer with the one word this shape allows.<end_of_turn>\n<start_of_turn>model\n<think>\n",
+    "thinking_close": null,
+    "thinking_kwarg": "enable_thinking"
+  },
+  "endpoint": "POST /apply-template, three times: two turns, two turns asking for reasoning, and a conversation with a reply already in it",
+  "entries": {
+    "gemma-4-e4b-qat.json": {
+      "history": "<|turn>user\nAnswer with the one word this shape allows.<turn|>\n<|turn>model\nThe earlier reply.<turn|>\n<|turn>user\nAnswer once more.<turn|>\n<|turn>model\n",
+      "model_id": "gemma-4-e4b-it-qat-ud-q4-k-xl",
+      "plain": "<|turn>system\nYou are a probe.<turn|>\n<|turn>user\nAnswer with the one word this shape allows.<turn|>\n<|turn>model\n",
+      "prompt_today": "<|turn>system\nYou are a probe.<turn|>\n<|turn>user\nAnswer with the one word this shape allows.<turn|>\n<|turn>model\n<|channel>thought\n",
+      "thinking": "<|turn>system\nYou are a probe.<turn|>\n<|turn>user\nAnswer with the one word this shape allows.<turn|>\n<|turn>model\n<|channel>thought\n",
+      "thinking_close": "<channel|>",
+      "thinking_kwarg": "enable_thinking"
+    },
+    "ornith-1.5-9b-q5km.json": {
+      "history": "<|im_start|>user\nAnswer with the one word this shape allows.<|im_end|>\n<|im_start|>assistant\nThe earlier reply.<|im_end|>\n<|im_start|>user\nAnswer once more.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+      "model_id": "ornith-1-5-9b-q5-k-m",
+      "plain": "<|im_start|>system\nYou are a probe.<|im_end|>\n<|im_start|>user\nAnswer with the one word this shape allows.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+      "prompt_today": "<|im_start|>system\nYou are a probe.<|im_end|>\n<|im_start|>user\nAnswer with the one word this shape allows.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+      "thinking": "<|im_start|>system\nYou are a probe.<|im_end|>\n<|im_start|>user\nAnswer with the one word this shape allows.<|im_end|>\n<|im_start|>assistant\n<think>\n",
+      "thinking_close": null,
+      "thinking_kwarg": "enable_thinking"
+    },
+    "qwen3.5-9b-q4km-thinking.json": {
+      "history": "<|im_start|>user\nAnswer with the one word this shape allows.<|im_end|>\n<|im_start|>assistant\nThe earlier reply.<|im_end|>\n<|im_start|>user\nAnswer once more.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+      "model_id": "qwen3-5-9b-q4-k-m-thinking",
+      "plain": "<|im_start|>system\nYou are a probe.<|im_end|>\n<|im_start|>user\nAnswer with the one word this shape allows.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+      "prompt_today": "<|im_start|>system\nYou are a probe.<|im_end|>\n<|im_start|>user\nAnswer with the one word this shape allows.<|im_end|>\n<|im_start|>assistant\n<think>\n",
+      "thinking": "<|im_start|>system\nYou are a probe.<|im_end|>\n<|im_start|>user\nAnswer with the one word this shape allows.<|im_end|>\n<|im_start|>assistant\n<think>\n",
+      "thinking_close": "\n</think>\n\n",
+      "thinking_kwarg": "enable_thinking"
+    },
+    "qwen3.5-9b-q4km.json": {
+      "history": "<|im_start|>user\nAnswer with the one word this shape allows.<|im_end|>\n<|im_start|>assistant\nThe earlier reply.<|im_end|>\n<|im_start|>user\nAnswer once more.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+      "model_id": "qwen3-5-9b-q4-k-m",
+      "plain": "<|im_start|>system\nYou are a probe.<|im_end|>\n<|im_start|>user\nAnswer with the one word this shape allows.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+      "prompt_today": "<|im_start|>system\nYou are a probe.<|im_end|>\n<|im_start|>user\nAnswer with the one word this shape allows.<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n",
+      "thinking": "<|im_start|>system\nYou are a probe.<|im_end|>\n<|im_start|>user\nAnswer with the one word this shape allows.<|im_end|>\n<|im_start|>assistant\n<think>\n",
+      "thinking_close": null,
+      "thinking_kwarg": "enable_thinking"
+    }
+  },
+  "how_to_record": "Start the server as digest.yml does, then post each of these three bodies to http://127.0.0.1:8080/apply-template with Content-Type: application/json, and keep the prompt field of each reply. 1: {\"messages\":[{\"role\":\"system\",\"content\":\"You are a probe.\"},{\"role\":\"user\",\"content\":\"Answer with the one word this shape allows.\"}],\"chat_template_kwargs\":{\"enable_thinking\":false}}. 2: the same body with enable_thinking true. 3: {\"messages\":[{\"role\":\"user\",\"content\":\"Answer with the one word this shape allows.\"},{\"role\":\"assistant\",\"content\":\"The earlier reply.\"},{\"role\":\"user\",\"content\":\"Answer once more.\"}],\"chat_template_kwargs\":{\"enable_thinking\":false}}.",
+  "recorded": false,
+  "why_not_recorded": "Not captured from a live server. The machine this was written on has no weights and no llama-server, so nothing here claims to be a capture (CLAUDE.md Guardrail #7). The response shape is llama.cpp's own and is documented: /apply-template answers with a JSON object carrying a prompt field. Every prompt under entries is what the turn markers committed in that model file rendered on 2026-09-21, before the markers were deleted, so it is derived from committed configuration rather than invented - and prompt_today is the prompt those markers produced, which is what the derivation has to reproduce byte for byte. The last two entries are built rather than derived, because no committed model file uses either shape: one is a template with no system role, spelled as Gemma's published template spells it, and one is a template whose markers are ordinary words that nothing can strip."
+}

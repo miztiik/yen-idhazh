@@ -61,7 +61,7 @@ def stage_qualify_decide(
             ),
         ),
         required_canaries=len(sorted(common.CANARY_DIR.glob("*.json"))),
-        turns=settings.models.summarize.turns,
+        thinking=settings.models.summarize.thinks,
     )
     shortfalls = qualify.corpus_shortfalls(
         frozen.items, summarize=settings.app.summarize, evaluation=evaluation

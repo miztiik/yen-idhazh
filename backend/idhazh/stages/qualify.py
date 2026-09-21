@@ -22,7 +22,6 @@ from idhazh.contracts.base import canonical_json
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.run import RunConfig
-from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.qualification import (
     CandidateIdentity,
     CorpusItem,
@@ -53,6 +52,7 @@ from idhazh.fingerprint import (
 from idhazh.llm.server import (
     DEFAULT_ENDPOINT,
     Completion,
+    derive_turn_markers,
     props,
 )
 from idhazh.sanitize import SANITIZER_VERSION
@@ -246,7 +246,6 @@ def _observe(
     *,
     repeat: int,
     inference: InferenceConfig,
-    turns: TurnsConfig,
     seconds: float,
 ) -> ItemObservation:
     """One item at one repeat, folded from every reply the path produced.
@@ -277,7 +276,7 @@ def _observe(
         completion_tokens=sum(reply.completion_tokens for reply in answered),
         prefill_ms=sum(reply.prefill_ms for reply in answered) or None,
         decode_ms=sum(reply.decode_ms for reply in answered) or None,
-        fits_context_predicted=summarize.fits_context(article, inference, turns=turns),
+        fits_context_predicted=summarize.fits_context(article, inference),
         summarize_seconds=seconds,
     )
 
@@ -439,7 +438,9 @@ def stage_qualify(
         runner_class=runner_class(),
         extractor_version=extract.EXTRACTOR_VERSION,
         sanitizer_version=SANITIZER_VERSION,
-        turns=model.turns,
+        markers=derive_turn_markers(
+            model_endpoint, entry=model, timeout=inference.request_timeout_minutes * 60
+        ),
     )
 
     plan = _load_plan(date)
@@ -515,7 +516,6 @@ def stage_qualify(
                     answer.replies,
                     repeat=repeat,
                     inference=inference,
-                    turns=model.turns,
                     seconds=answer.seconds,
                 )
             )

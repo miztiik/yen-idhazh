@@ -39,7 +39,6 @@ from idhazh.contracts.feed_health import (
 )
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemStage
 from idhazh.contracts.knobs.extract import ExtractConfig
-from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.qualification import (
     CanaryObservation,
 )
@@ -54,7 +53,9 @@ from idhazh.fingerprint import (
 )
 from idhazh.llm.server import (
     Completion,
+    TurnMarkers,
     answer_span,
+    derive_turn_markers,
     is_context_exceeded,
     one_reply,
     post,
@@ -318,7 +319,7 @@ def _two_spans(
     payload: dict[str, Any],
     *,
     article: Article,
-    turns: TurnsConfig,
+    markers: TurnMarkers,
     endpoint: str,
     timeout: float,
 ) -> Completion:
@@ -343,7 +344,7 @@ def _two_spans(
     failure with a code rather than a silent truncation.
     """
     thought = post(
-        thinking_span(payload, turns=turns),
+        thinking_span(payload, markers=markers),
         endpoint=endpoint,
         timeout=timeout,
     )
@@ -354,7 +355,7 @@ def _two_spans(
             thought.completion_tokens,
         )
     answer = post(
-        answer_span(payload, thought=thought.content, turns=turns),
+        answer_span(payload, thought=thought.content, markers=markers),
         endpoint=endpoint,
         timeout=timeout,
     )
@@ -382,7 +383,7 @@ def _ask_the_model(
     prompt_digest: str,
     run_id: str | None,
     trace: telemetry.Tracer,
-    turns: TurnsConfig | None = None,
+    markers: TurnMarkers | None = None,
 ) -> tuple[Completion | None, FailureCode]:
     """One request, its reply, and the code that says why there is none.
 
@@ -391,7 +392,7 @@ def _ask_the_model(
     not. The generation span is opened here so a run that makes two calls an
     item draws two spans rather than one covering both.
 
-    `turns` decides whether that request is one decode or two. An envelope that
+    `markers` decide whether that request is one decode or two. An envelope that
     declares a closing marker gets a thinking span in front of the answer, and
     what comes back is the pair's cost carrying the answer's words. It is
     optional because a caller that has already rendered a chat body has no
@@ -408,11 +409,11 @@ def _ask_the_model(
                 _two_spans(
                     payload,
                     article=article,
-                    turns=turns,
+                    markers=markers,
                     endpoint=endpoint,
                     timeout=timeout,
                 )
-                if turns is not None and turns.thinks
+                if markers is not None and markers.thinks
                 else post(payload, endpoint=endpoint, timeout=timeout)
             )
         except HTTPError as error:
@@ -520,13 +521,15 @@ def _one_call(
     stop at a marker and continue under a grammar.
     """
     inference = settings.models.summarize.inference
-    turns = settings.models.summarize.turns
+    markers = derive_turn_markers(
+        endpoint, entry=settings.models.summarize, timeout=inference.request_timeout_minutes * 60
+    )
     model_id = settings.models.summarize.id
     payload = summarize.build_request(
         article,
         model_id=model_id,
         inference=inference,
-        turns=turns,
+        markers=markers,
         prompt_config=settings.app.summarize,
     )
     started = time.monotonic()
@@ -558,7 +561,7 @@ def _one_call(
         prompt_config=settings.app.summarize,
         evaluation=settings.app.evaluation,
         no_reply=no_reply,
-        thinking=turns.thinks,
+        thinking=markers.thinks,
     )
     return summary, completion, seconds
 

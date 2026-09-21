@@ -50,7 +50,13 @@ from idhazh.evals.metrics import (
     unsupported_numbers,
     verbatim_run,
 )
-from idhazh.llm.server import DEFAULT_ENDPOINT, post, props, request_payload
+from idhazh.llm.server import (
+    DEFAULT_ENDPOINT,
+    derive_turn_markers,
+    post,
+    props,
+    request_payload,
+)
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 RUBRIC_PATH: Final = Path(__file__).parent / "prompt_loop_rubric.md"
@@ -355,8 +361,12 @@ class LiveSummarizer:
 
     def summarize(self, prompt: str, items: Sequence[FrozenItem]) -> list[ItemSummary]:
         ask = self._settings.app.summarize
-        inference = self._settings.models.summarize.inference
-        model_id = self._settings.models.summarize.id
+        entry = self._settings.models.summarize
+        inference = entry.inference
+        model_id = entry.id
+        markers = derive_turn_markers(
+            self._endpoint, entry=entry, timeout=inference.request_timeout_minutes * 60
+        )
         produced: list[ItemSummary] = []
         for item in items:
             article = self._articles[item.key]
@@ -364,7 +374,7 @@ class LiveSummarizer:
                 article,
                 model_id=model_id,
                 inference=inference,
-                turns=self._settings.models.summarize.turns,
+                markers=markers,
                 prompt_config=ask,
             )
             payload["messages"][0]["content"] = render_system(
@@ -378,7 +388,7 @@ class LiveSummarizer:
                 prompt_config=ask,
                 source_words=article.band_source_words,
                 brief=article.brief,
-                thinking=self._settings.models.summarize.turns.thinks,
+                thinking=entry.thinks,
             )
             produced.append(
                 ItemSummary(
@@ -449,14 +459,17 @@ class ModelJudge:
         return bool(reply.get("prefers_candidate", False))
 
     def _call(self, user: str, schema: dict[str, object], schema_name: str) -> dict[str, object]:
-        inference = self._settings.models.summarize.inference
+        entry = self._settings.models.summarize
+        inference = entry.inference
         payload = request_payload(
-            model_id=self._settings.models.summarize.id,
+            model_id=entry.id,
             system=_JUDGE_SYSTEM,
             user=user,
             output_schema=schema,
             inference=inference,
-            turns=self._settings.models.summarize.turns,
+            markers=derive_turn_markers(
+                self._endpoint, entry=entry, timeout=inference.request_timeout_minutes * 60
+            ),
             schema_name=schema_name,
         )
         completion = post(

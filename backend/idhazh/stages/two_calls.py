@@ -48,6 +48,7 @@ from idhazh.llm.server import (
     DEFAULT_ENDPOINT,
     Completion,
     completion_url,
+    derive_turn_markers,
 )
 from idhazh.render import asset_relpath, render_planned_visual
 from idhazh.stages import common
@@ -483,6 +484,7 @@ def two_calls_one_item(
     # ignores it, losing the only control that survives an injection.
     rendered_endpoint = completion_url(endpoint)
     timeout = inference.request_timeout_minutes * 60
+    markers = derive_turn_markers(endpoint, entry=model, timeout=timeout)
     generated_at = assemble.utc_now()
     stamp = {
         "model_id": model_id,
@@ -544,7 +546,7 @@ def two_calls_one_item(
                     table,
                     model_id=model_id,
                     inference=inference,
-                    turns=model.turns,
+                    markers=markers,
                     prompt_config=settings.app.summarize,
                 )
                 so_far.first = first
@@ -566,7 +568,7 @@ def two_calls_one_item(
                 prompt_digest=first_digest,
                 run_id=run_id,
                 trace=trace,
-                turns=model.turns,
+                markers=markers,
             )
             label_ms = int((time.monotonic() - asked_at) * 1000)
             if one is None:
@@ -643,7 +645,7 @@ def two_calls_one_item(
                 second = calls.build_summarize_and_plan_request(
                     first,
                     one.content,
-                    turns=model.turns,
+                    markers=markers,
                     prompt_config=settings.app.summarize,
                     source_words=article.band_source_words,
                     brief=article.brief,
@@ -662,7 +664,7 @@ def two_calls_one_item(
                 prompt_digest=text_digest(second_rendered),
                 run_id=run_id,
                 trace=trace,
-                turns=model.turns,
+                markers=markers,
             )
             summary_ms = int((time.monotonic() - asked_at) * 1000)
             if two is None:
@@ -721,7 +723,7 @@ def two_calls_one_item(
                         prompt_config=settings.app.summarize,
                         evaluation=settings.app.evaluation,
                         no_reply=no_reply,
-                        thinking=model.turns.thinks,
+                        thinking=model.thinks,
                     ),
                     one,
                     two,

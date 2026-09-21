@@ -19,17 +19,16 @@ from idhazh.contracts.base import (
 )
 from idhazh.contracts.knobs.inference import SUPERSEDED_INFERENCE_NAMES, InferenceConfig
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
-from idhazh.contracts.knobs.turns import TurnsConfig
 
 
 class ModelRef(Model):
     """Which weights, from where. Per-item payloads carry only the `id`.
 
     **This is the shape a run recorded**, and `run_manifest.ModelUse` embeds it.
-    `ModelEntry` below is the shape a person declares in `config/`. The turn
-    envelope belongs to the second and not to this one: no `model_ref` a run has
-    ever written carries markers, and a field required here would stop today's
-    build reading yesterday's run (`CLAUDE.md` section 11).
+    `ModelEntry` below is the shape a person declares in `config/`. What a
+    reasoning span is closed with belongs to the second and not to this one: no
+    `model_ref` a run has ever written carries it, and a field required here
+    would stop today's build reading yesterday's run (`CLAUDE.md` section 11).
     """
 
     id: Slug
@@ -87,7 +86,7 @@ class ModelRef(Model):
 
     @model_validator(mode="before")
     @classmethod
-    def _a_run_written_while_a_draft_head_was_declared_still_reads(cls, data: Any) -> Any:
+    def _a_run_written_under_a_retired_entry_key_still_reads(cls, data: Any) -> Any:
         """The read-side migration a run record is owed (`CLAUDE.md` section 11).
 
         Six committed `run.json` files name a draft head, and `extra="forbid"`
@@ -102,27 +101,29 @@ class ModelRef(Model):
         return without_retired_keys(data, *RETIRED_ENTRY_NAMES)
 
 
-#: The entry key a `run.json` written before 2026-09-21 carries and nothing
+#: The entry keys a `run.json` written before 2026-09-21 carries and nothing
 #: carries now. A draft head is not a decoding knob priced on cost alone: two
 #: paired dispatches on 2026-09-12 changed the summary on nine articles of nine
 #: with the head on, so it was never the output-identical speed-up its publisher
-#: claims. Nothing replaces it.
-RETIRED_ENTRY_NAMES: Final[Mapping[str, str]] = MappingProxyType({"draft": ""})
+#: claims. The turn block was a hand-transcribed copy of the model's own chat
+#: template, and the server now reads those markers off the template itself.
+#: Nothing replaces either.
+RETIRED_ENTRY_NAMES: Final[Mapping[str, str]] = MappingProxyType({"draft": "", "turns": ""})
 
 
 class ModelEntry(ModelRef):
     """Which weights, and everything a run needs to talk to them.
 
     **This is the shape a person declares**, and `ModelsConfig` is made of it.
-    It is `ModelRef` plus the turn envelope, which is required here and absent
-    from the recorded shape - so a config entry that forgets its markers fails
-    at load, and a `run.json` written before the markers were declared still
-    reads. A swap that moved the markers is still visible in a run record:
-    `RunRecord.inputs.prompt_sha256` digests both turns rendered through them.
+    It is `ModelRef` plus the two facts about this model's reasoning that the
+    model's own chat template cannot hand back - so a config entry that gets one
+    wrong fails here, and a `run.json` written before either existed still
+    reads.
 
-    Do not move `turns` down onto `ModelRef` as a tidy-up. That is the change
-    this split exists to prevent. `arch` is here for the same reason and not
-    for a different one.
+    The markers that open and close a turn are not here. They are read off the
+    template itself at server start (`idhazh.llm.server.derive_turn_markers`),
+    because a field restating somebody else's file is a copy a model swap can
+    leave behind.
     """
 
     arch: str = Field(
@@ -130,23 +131,69 @@ class ModelEntry(ModelRef):
         description=(
             "The architecture name inside the GGUF - its `general.architecture` key, "
             "which reads `qwen35` for the weights this entry names. Required and with "
-            "no default, for the reason `turns` is: an entry that inherits the "
-            "incumbent's architecture claims something nobody checked. "
-            "`idhazh.llm.server.prove_the_entry` reads the key back out of the file "
-            "the server was pointed at and refuses the run before the first item when "
-            "the two disagree, which is what makes this a fact rather than a claim. It "
-            "catches a repackaged GGUF under a familiar name - the one case where the "
-            "digest, the alias and the filename all agree and only the words get worse."
+            "no default: an entry that inherits the incumbent's architecture claims "
+            "something nobody checked. It is what a person reads when they want to know "
+            "which family a committed entry belongs to, and it names the family in a "
+            "refusal when a rule cannot read this model's template."
         ),
     )
-    turns: TurnsConfig = Field(
+    thinking_close: str | None = Field(
+        default=None,
+        min_length=1,
         description=(
-            "The turn envelope these weights are rendered with. Required and with no "
-            "default: an entry that forgets its markers must fail rather than inherit "
-            "the incumbent's, because inheriting them renders a prompt the grammar "
-            "still accepts and nothing else can see is wrong."
+            "What this model writes to close its reasoning block, and the whole of the "
+            "declaration that reasoning is wanted. Not null means a call is decoded as "
+            "two spans - one unconstrained span that stops here, then the "
+            "schema-constrained answer on the same slot. Null means one "
+            "schema-constrained span and no reasoning, which is where the incumbent "
+            "sits. It is declared rather than derived because a generation prompt never "
+            "contains it: it is what the model writes, not what the template writes. A "
+            "wrong one means the span never stops and the item lands model_timed_out, "
+            "loudly and one item at a time."
         ),
     )
+    thinking_kwarg: str | None = Field(
+        default="enable_thinking",
+        min_length=1,
+        description=(
+            "The template variable that turns this model's reasoning on and off, sent "
+            "as the one key of chat_template_kwargs. It is declared rather than derived "
+            "because a rendering cannot return the name of a variable nobody sent it. "
+            "Null means this template reads no keywords at all, and then the request "
+            "carries no chat_template_kwargs and thinking_close must be null too; this "
+            "entry refuses the pair."
+        ),
+    )
+
+    @property
+    def thinks(self) -> bool:
+        """Whether a call on these weights is decoded as two spans.
+
+        One question with one answer, read off the marker that makes the second
+        span possible. There is no flag beside it: a flag and a marker are two
+        places to disagree, and the disagreement renders a prompt the grammar
+        still accepts.
+        """
+        return self.thinking_close is not None
+
+    @model_validator(mode="after")
+    def _a_template_that_reads_no_keyword_cannot_be_asked_to_think(self) -> Self:
+        """Reasoning is asked for through a template keyword, so a null name refuses it.
+
+        Both halves are facts about somebody else's template, so this entry owns
+        the pair. A null keyword with a closing marker declared is a claim
+        nothing can satisfy: the request carries no `chat_template_kwargs` at
+        all, the template renders its own default, and the only symptom is
+        whatever that default happens to be.
+        """
+        if self.thinking_kwarg is None and self.thinking_close is not None:
+            raise ValueError(
+                f"thinking_kwarg is null, so a request sends no chat_template_kwargs at "
+                f"all, and thinking_close is {self.thinking_close!r}, which asks this "
+                "template to turn reasoning on through a keyword nothing sends. Name "
+                "the keyword this model's template reads, or set thinking_close null"
+            )
+        return self
 
     @model_validator(mode="before")
     @classmethod
@@ -190,21 +237,12 @@ MODELS_FILE_PATTERN: Final = r"^models/[a-z0-9]+(?:[.-][a-z0-9]+)*\.json$"
 ModelsFile = Annotated[str, StringConstraints(pattern=MODELS_FILE_PATTERN)]
 
 
-#: What an operator does next when one of an entry's two declared blocks names
-#: weights the entry does not. The check is the same for both; only the repair
-#: differs, so each block carries its own clause rather than a second copy of
-#: the rule.
+#: What an operator does next when an entry's declared block names weights the
+#: entry does not.
 _REDERIVE_THE_NUMBERS: Final = (
     "Every setting in that block was measured against one model on one runner, "
     "so re-derive them for these weights"
 )
-
-
-_RERECORD_THE_MARKERS: Final = (
-    "Every marker in that block was recorded off the server that renders these "
-    "turns, so re-record them for these weights"
-)
-
 
 class ModelsConfig(Contract):
     """`config/models/<name>.json` - one whole model, in one file of its own.
@@ -220,15 +258,20 @@ class ModelsConfig(Contract):
 
     It is a file rather than a block of `config/idhazh.json` because everything
     in it is a fact about one set of weights - the repository, the digest, the
-    window they were measured in, the markers their server renders. Held in the
-    shared file, a swap is an edit across every one of those lines and a revert
-    is the same edit backwards, with the previous model's numbers gone. Held
-    here, the incumbent and the candidate are two committed files and the swap
-    is `models_file` in `config/idhazh.json`.
+    window they were measured in. Held in the shared file, a swap is an edit
+    across every one of those lines and a revert is the same edit backwards,
+    with the previous model's numbers gone. Held here, the incumbent and the
+    candidate are two committed files and the swap is `models_file` in
+    `config/idhazh.json`.
     """
 
     __schema_stem__: ClassVar[str] = "models-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-21T04:00",
+            change="The turn block goes; two keys move onto the entry and a run still reads.",
+            why="The markers are the model's own template, so the server reads them off it.",
+        ),
         ChangelogEntry(
             version="2026-09-21T03:00",
             change="Both inference decode caps go; a run that pinned one still reads.",
@@ -243,11 +286,6 @@ class ModelsConfig(Contract):
             version="2026-09-21",
             change="Add an optional judge entry, decoding on the served role's weights.",
             why="The judge could only open a thinking channel by moving the summariser too.",
-        ),
-        ChangelogEntry(
-            version="2026-09-20",
-            change="Add optional CPU, cache, checkpoint and template controls.",
-            why="Each model can declare the runtime settings it needs.",
         ),
         ChangelogEntry(
             version="2026-09-14",
@@ -322,7 +360,7 @@ class ModelsConfig(Contract):
         that never saw the pair.
 
         What a second entry is free to move is the decode: its temperature, its
-        budgets, its turn markers and whether it opens a reasoning channel.
+        budgets, and whether it opens a reasoning channel.
         """
         for role, entry in self.entries():
             if role in type(self).roles() or entry.sha256 == self.summarize.sha256:
@@ -340,31 +378,23 @@ class ModelsConfig(Contract):
         """A settings block belongs to one entry's bytes, and says which.
 
         The swap this refuses is five strings edited in place: repo, file,
-        revision, digest and id, with the blocks underneath them untouched. That
+        revision, digest and id, with the block underneath them untouched. That
         raises nothing on its own, and the run then stands a server up on numbers
         derived for weights it never opened.
-
-        **Two blocks, one rule, one loop.** `inference` and `turns` are both
-        measurements about one model, so the check is the same for both and only
-        the repair differs - re-derive the numbers, or re-record the markers off
-        the server that applies them.
 
         Both digests absent is legal and means an entry nobody has measured yet.
         The stamp already refuses to run on one: `idhazh.fingerprint.build_inputs`
         stops when the weights have no recorded digest.
         """
         for role, entry in self.entries():
-            for block, declared, repair in (
-                ("inference", entry.inference.declared_for, _REDERIVE_THE_NUMBERS),
-                ("turns", entry.turns.declared_for, _RERECORD_THE_MARKERS),
-            ):
-                if declared == entry.sha256:
-                    continue
-                raise ValueError(
-                    f"models.{role}.{block} is declared for "
-                    f"{declared or 'no weights at all'}, and models.{role} names "
-                    f"{entry.sha256 or 'no weights at all'}. {repair} and set "
-                    f"models.{role}.{block}.declared_for to the digest the entry "
-                    "carries - or put the entry back"
-                )
+            declared = entry.inference.declared_for
+            if declared == entry.sha256:
+                continue
+            raise ValueError(
+                f"models.{role}.inference is declared for "
+                f"{declared or 'no weights at all'}, and models.{role} names "
+                f"{entry.sha256 or 'no weights at all'}. {_REDERIVE_THE_NUMBERS} and set "
+                f"models.{role}.inference.declared_for to the digest the entry "
+                "carries - or put the entry back"
+            )
         return self

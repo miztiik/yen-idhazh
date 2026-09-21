@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, FIXTURES_DIR, committed_markers, read_text
 from pytest import MonkeyPatch
 
 from idhazh import config, summarize
@@ -272,9 +272,7 @@ class TestTheWorkStageDispatchesBothCalls:
 
         stamped = recorded_inputs(items).prompt_sha256
         assert stamped == text_digest(
-            calls.prompt_inputs(
-                settings.app.summarize, turns=settings.models.summarize.turns
-            )
+            calls.prompt_inputs(settings.app.summarize, markers=committed_markers())
         )
         assert stamped != text_digest(summarize.prompt_inputs(settings.app.summarize))
 

@@ -7,10 +7,12 @@ changed a request body would have shipped looking like a rename.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import re
 from math import ceil
 from os.path import commonprefix
+from string import Template
 from typing import Any
 
 import pytest
@@ -22,6 +24,7 @@ from conftest import (
     SUMMARIZE_AND_PLAN_REPLIES,
     RecordedEndpoint,
     a_table,
+    committed_markers,
     label_payload,
     read_text,
 )
@@ -74,14 +77,20 @@ from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.models import ModelEntry
 from idhazh.contracts.knobs.summarize import SummarizeConfig
-from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.knobs.visuals import VisualsConfig
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.visual import CODE_STAMPED_FIELDS, VisualPlan, widest_json_characters
 from idhazh.contracts.visual_decision import NoneReason, VisualKind
 from idhazh.elements import SpanDriftError, element_table
 from idhazh.extract import approx_tokens
-from idhazh.llm.server import Completion, continued_prompt, post, render_prompt, turn_markers
+from idhazh.llm.server import (
+    Completion,
+    SystemPlacement,
+    TurnMarkers,
+    continued_prompt,
+    post,
+    render_prompt,
+)
 from idhazh.visual_planner import plan_lost_to_the_budget, plan_lost_to_the_window
 
 RECORDED_PAYLOADS = FIXTURES_DIR / "planner" / "recorded-call-payloads.json"
@@ -115,6 +124,25 @@ RECAPTURE = (
 )
 
 
+def markers_from(recorded: dict[str, Any]) -> TurnMarkers:
+    """The markers a set of recorded bodies was rendered with.
+
+    Read off the fixture rather than off a running server, so the byte oracle
+    below says what this code renders rather than what a model's template
+    happens to write today.
+    """
+    return TurnMarkers(
+        turn_opening=Template(recorded["turn_opening"]),
+        turn_closing=recorded["turn_closing"],
+        reply_opening=recorded["reply_opening"],
+        reply_opening_thinking=recorded["reply_opening_thinking"],
+        system_role=SystemPlacement(recorded.get("system_role", "own_turn")),
+        system_joiner=recorded.get("system_joiner") or "",
+        thinking_close=recorded["thinking_close"],
+        thinking_kwarg=recorded.get("thinking_kwarg"),
+    )
+
+
 def rebuilt_payloads(inputs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     """Both request bodies, from the inputs the fixture recorded beside them.
 
@@ -128,18 +156,18 @@ def rebuilt_payloads(inputs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, 
         article, config=ElementsConfig(max_per_article=inputs["elements_max_per_article"])
     )
     reply = json.loads(read_text(REPO_ROOT / inputs["label_reply"]))
-    turns = TurnsConfig.model_validate(inputs["turns"])
+    markers = markers_from(inputs["turns"])
     label_call = build_label_request(
         article,
         table,
         model_id=inputs["model_id"],
         inference=InferenceConfig.model_validate(inputs["inference"]),
-        turns=turns,
+        markers=markers,
     )
     summarize_and_plan_call = build_summarize_and_plan_request(
         label_call,
         reply["choices"][0]["message"]["content"],
-        turns=turns,
+        markers=markers,
         source_words=article.band_source_words,
     )
     return label_call, summarize_and_plan_call
@@ -263,20 +291,19 @@ class TestThePromptBytes:
         it on.
 
         **The recording and the entry name the same weights.** The fixture says
-        which bytes the server had loaded and `turns.declared_for` says which
-        bytes the markers were recorded for, so a swap that moved one and not
-        the other fails here rather than rendering quietly.
+        which bytes the server had loaded, so a swap that moved the weights and
+        not the recording fails here rather than rendering quietly.
         """
         recorded = json.loads(read_text(CHAT_TEMPLATE_RENDERING))
         system, user = recorded["system"], recorded["user"]
-        entry = configured()
-        thinking = entry.turns.model_copy(update={"thinking_close": "</think>"})
+        markers = committed_markers()
+        thinking = dataclasses.replace(markers, thinking_close="</think>")
 
-        assert entry.turns.declared_for == recorded["weights_sha256"]
-        assert render_prompt(system=system, user=user, turns=entry.turns) == (
+        assert configured().sha256 == recorded["weights_sha256"]
+        assert render_prompt(system=system, user=user, markers=markers) == (
             recorded["generation_prompt"]
         )
-        assert render_prompt(system=system, user=user, turns=thinking) == (
+        assert render_prompt(system=system, user=user, markers=thinking) == (
             recorded["generation_prompt_thinking"]
         )
 
@@ -290,13 +317,15 @@ class TestThePromptBytes:
         first one extended.
         """
         recorded = json.loads(read_text(CHAT_TEMPLATE_RENDERING))
-        turns = configured().turns
+        markers = committed_markers()
         opening = recorded["generation_prompt"] + recorded["reply"]
         ours = continued_prompt(
-            render_prompt(system=recorded["system"], user=recorded["user"], turns=turns),
+            render_prompt(
+                system=recorded["system"], user=recorded["user"], markers=markers
+            ),
             reply=recorded["reply"],
             user=recorded["question"],
-            turns=turns,
+            markers=markers,
         )
 
         assert not recorded["continued_prompt"].startswith(opening)
@@ -309,55 +338,39 @@ class TestThePromptBytes:
                 "a prompt that stops mid-sentence",
                 reply="{}",
                 user="and then?",
-                turns=configured().turns,
+                markers=committed_markers(),
             )
 
-    def test_every_marker_is_read_from_the_entry_and_none_is_written_here(self) -> None:
-        """The substitution test: move the config and the bytes move with it."""
-        turns = configured().turns
-        markers = turn_markers(turns)
-        moved = turn_markers(turns.model_copy(update={"turn_closing": "<<END>>"}))
+    def test_every_marker_is_read_off_the_template_and_none_is_written_here(self) -> None:
+        """The substitution test: move the markers and the bytes move with them."""
+        markers = committed_markers()
+        moved = dataclasses.replace(markers, turn_closing="<<END>>")
 
         assert markers.turn("user", "hello").endswith(markers.turn_closing)
         assert moved.turn("user", "hello").endswith("<<END>>")
 
-    def test_two_entries_in_one_process_render_their_own_turns(self) -> None:
-        """The lookup is keyed by the entry, so a bench holding two gets two.
-
-        It was a single-slot cache with no argument until 2026-09-13, which
-        answered the first entry's markers to the second one - and the grammar
-        would have accepted every reply.
-        """
-        incumbent = configured().turns
-        candidate = incumbent.model_copy(
-            update={"turn_opening": "[$role]\n", "turn_closing": "[end]\n"}
-        )
-
-        assert turn_markers(incumbent).turn("user", "hi") != turn_markers(candidate).turn(
-            "user", "hi"
-        )
-        assert turn_markers(candidate).turn("user", "hi") == "[user]\nhi[end]\n"
-
     def test_a_shorter_reply_opening_cannot_shadow_a_longer_one(self) -> None:
-        """Built rather than drawn from config, because the incumbent is safe by luck.
+        """Built rather than derived, because the incumbent is safe by luck.
 
         `opening_of` matches on a suffix. Here the plain opening IS a suffix of
         the thinking one, so a first-match-wins reader would splice a thinking
         continuation with the plain opening and break the prefix the two calls
         exist to keep. Longest-first makes that unreachable.
         """
-        turns = TurnsConfig(
-            turn_opening="<turn $role>",
-            turn_closing="</turn>",
-            reply_opening="<turn assistant>",
-            reply_opening_thinking="<thinking><turn assistant>",
+        markers = markers_from(
+            {
+                "turn_opening": "<turn $role>",
+                "turn_closing": "</turn>",
+                "reply_opening": "<turn assistant>",
+                "reply_opening_thinking": "<thinking><turn assistant>",
+                "thinking_close": None,
+            }
         )
-        markers = turn_markers(turns)
 
-        assert markers.opening_of("..." + turns.reply_opening_thinking) == (
-            turns.reply_opening_thinking
+        assert markers.opening_of("..." + markers.reply_opening_thinking) == (
+            markers.reply_opening_thinking
         )
-        assert markers.opening_of("..." + turns.reply_opening) == turns.reply_opening
+        assert markers.opening_of("..." + markers.reply_opening) == markers.reply_opening
 
 
 # --- The label call: the model reads the article and points at it --------------------
@@ -673,9 +686,9 @@ class TestTheLabelCallPrompting:
             a_table(dense),
             model_id="m",
             inference=entry.inference,
-            turns=entry.turns,
+            markers=committed_markers(),
         )
-        markers = turn_markers(entry.turns)
+        markers = committed_markers()
         assert payload["json_schema"] == label_schema()
         assert payload["prompt"].startswith(markers.turn("system", label_system_prompt()))
         assert "4,200 megawatt hours" in payload["prompt"]
@@ -1339,7 +1352,7 @@ def test_a_recorded_label_reply_labels_the_table_over_a_loopback_socket(
         table,
         model_id="m",
         inference=entry.inference,
-        turns=entry.turns,
+        markers=committed_markers(),
     )
     body = (LABEL_REPLIES / "labelled.json").read_bytes()
 
@@ -1386,7 +1399,7 @@ def summarize_and_plan_payload(article: Article, reply: str = "{}") -> dict[str,
     return build_summarize_and_plan_request(
         label_payload(article),
         reply,
-        turns=configured().turns,
+        markers=committed_markers(),
         source_words=article.band_source_words,
     )
 
@@ -1486,7 +1499,7 @@ class TestTheInstructionsSitInFrontOfTheArticle:
         """
         ask = config.load(CONFIG_DIR).app.summarize
         entry = configured()
-        markers = turn_markers(entry.turns)
+        markers = committed_markers()
         opening = markers.turn("system", label_system_prompt(ask))
 
         for article in (dense, article_ok):
@@ -1495,7 +1508,7 @@ class TestTheInstructionsSitInFrontOfTheArticle:
                 a_table(article),
                 model_id="m",
                 inference=entry.inference,
-                turns=entry.turns,
+                markers=committed_markers(),
                 prompt_config=ask,
             )
             assert payload["prompt"].startswith(opening)
@@ -1566,7 +1579,7 @@ class TestTheInstructionsSitInFrontOfTheArticle:
 
 class TestTheSummarizeAndPlanShape:
     def test_the_label_reply_is_replayed_as_the_assistant_turn(self, dense: Article) -> None:
-        markers = turn_markers(configured().turns)
+        markers = committed_markers()
         first = label_payload(dense)
         prompt = summarize_and_plan_payload(dense, '{"labels": []}')["prompt"]
 
@@ -1675,7 +1688,7 @@ class TestTheDerivedBudget:
             second[key] for key in ("temperature", "top_p", "seed", "stream", "cache_prompt")
         ] == [first[key] for key in ("temperature", "top_p", "seed", "stream", "cache_prompt")]
         assert second["prompt"].endswith(
-            turn_markers(configured().turns).opening_of(first["prompt"])
+            committed_markers().opening_of(first["prompt"])
         ), "the reply opening is read off the label call's prompt, so the two cannot disagree"
 
 
@@ -1967,9 +1980,9 @@ def test_the_visual_gate_moves_nothing_in_front_of_the_cached_prefix() -> None:
         "message"
     ]["content"]
 
-    asked = build_summarize_and_plan_request(first, reply, turns=configured().turns, plan=True)
+    asked = build_summarize_and_plan_request(first, reply, markers=committed_markers(), plan=True)
     suppressed = build_summarize_and_plan_request(
-        first, reply, turns=configured().turns, plan=False
+        first, reply, markers=committed_markers(), plan=False
     )
     opening = str(first["prompt"])
 

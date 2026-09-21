@@ -76,12 +76,12 @@ from idhazh.contracts.element import (
 from idhazh.contracts.knobs.extract import ElementsConfig
 from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
-from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.visual import CODE_STAMPED_FIELDS, VisualPlan, widest_json_characters
 from idhazh.elements import NUMBER, SpanDriftError, read_quantity, sentence_starts, settle
 from idhazh.extract import approx_tokens
 from idhazh.llm.server import (
     Completion,
+    TurnMarkers,
     completion_payload,
     continued_completion_payload,
     continued_prompt,
@@ -548,7 +548,7 @@ def build_label_request(
     *,
     model_id: str,
     inference: InferenceConfig,
-    turns: TurnsConfig,
+    markers: TurnMarkers,
     prompt_config: SummarizeConfig | None = None,
 ) -> dict[str, Any]:
     """The label call's request body, with the reply shape enforced by the decoder.
@@ -563,8 +563,8 @@ def build_label_request(
     now. Every number it spends is a config-level one, the same on every item,
     so the turn is still the same bytes on every item.
 
-    `turns` comes from the entry that names the weights this body will be sent
-    to, so a model whose turns differ is a config edit rather than a source one.
+    `markers` are read off the template of the weights this body will be sent
+    to, so a model whose turns differ costs no edit at all.
     """
     return completion_payload(
         model_id=model_id,
@@ -572,7 +572,7 @@ def build_label_request(
         user=label_user_turn(article, table),
         output_schema=label_schema(),
         inference=inference,
-        turns=turns,
+        markers=markers,
         max_answer_tokens=label_budget_tokens(),
     )
 
@@ -1357,7 +1357,7 @@ def build_summarize_and_plan_request(
     first: Mapping[str, Any],
     reply: str,
     *,
-    turns: TurnsConfig,
+    markers: TurnMarkers,
     prompt_config: SummarizeConfig | None = None,
     source_words: int | None = None,
     brief: bool = False,
@@ -1398,7 +1398,7 @@ def build_summarize_and_plan_request(
         output_schema=summarize_and_plan_schema(
             prompt_config, source_words=source_words, brief=brief, plan=plan
         ),
-        turns=turns,
+        markers=markers,
         max_answer_tokens=summarize_and_plan_budget_tokens(prompt_config, plan=plan),
     )
 
@@ -1406,7 +1406,7 @@ def build_summarize_and_plan_request(
 def prompt_inputs(
     prompt_config: SummarizeConfig | None = None,
     *,
-    turns: TurnsConfig,
+    markers: TurnMarkers,
 ) -> str:
     """What the fingerprint hashes to stand for these two prompts.
 
@@ -1417,13 +1417,14 @@ def prompt_inputs(
     question the stamp exists to answer.
 
     **The rendering is what makes the turn envelope a digested input.** Since
-    the prompt bytes became ours, `models.<role>.turns` decides where every turn
-    opens and closes, and nothing else in the stamp reaches it: the chat
-    template hashed off `/props` no longer renders these prompts. Editing a
-    marker would move every reply while the fingerprint ledger said `unchanged`,
-    which is the state `Observation.DETERMINISM_VIOLATION` exists to make
-    visible. Rendering both turns through the same helpers the live requests use
-    covers the envelope, all four prompt files and the turn order together.
+    the prompt bytes became ours, the markers the server derives decide where
+    every turn opens and closes, and nothing else in the stamp reaches them: the
+    chat template hashed off `/props` no longer renders these prompts. A model
+    whose template differs would move every reply while the fingerprint ledger
+    said `unchanged`, which is the state `Observation.DETERMINISM_VIOLATION`
+    exists to make visible. Rendering both turns through the same helpers the
+    live requests use covers the envelope, all four prompt files and the turn
+    order together.
 
     It stops short of two envelope facts all the same, and
     `PipelineInputs.turn_markers_sha256` is where those land: the thinking
@@ -1434,9 +1435,9 @@ def prompt_inputs(
     leaves the result the same on every item.
     """
     ask = prompt_config or SummarizeConfig()
-    first = render_prompt(system=label_system_prompt(ask), user="", turns=turns)
+    first = render_prompt(system=label_system_prompt(ask), user="", markers=markers)
     rendered = continued_prompt(
-        first, reply="", user=summarize_and_plan_user_turn(ask), turns=turns
+        first, reply="", user=summarize_and_plan_user_turn(ask), markers=markers
     )
     return rendered + canonical_json(ask.model_dump(mode="json"))
 
