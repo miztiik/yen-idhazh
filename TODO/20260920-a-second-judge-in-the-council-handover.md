@@ -47,7 +47,7 @@ it reads like corroboration, which is the trap.
 | The judge's model | Inherited from the `summarize` role | No judge role exists to point elsewhere |
 | Per-pair output | `verdict`, `verdict_swapped`, `usable`, `first_token_margin`, `judge_model`, `prompt_digest`, `grammar_digest` | Written per pair |
 | Run gates | `disagreement_max` `0.15`, `unclear_max` `0.35` | A run past either is not usable |
-| Budget knobs | `pair_budget` `200`, `shards` `4`, `judge_shard_timeout_minutes` `200` | In `config/idhazh.json` under `assemble.same_story.adaptive_dedup_threshold` |
+| Budget knobs | `pair_budget` `200` | In `config/idhazh.json` under `assemble.same_story.adaptive_dedup_threshold`. `shards` `4` and `shard_timeout_minutes` `200` moved to the top-level `council` block on 2026-09-21; the old addresses are refused by name |
 | Model registry | `config/models/` | Five entries: two Gemma-4-E4B-QAT variants, `ornith-1.5-9b-q5km`, two Qwen3.5-9B-Q4KM variants |
 | The benchmark | `state/story-similarity/holdout-pairs.csv` | 200 labelled pairs. Written only by `backend/utilities/sample_sheet.py`, an operator tool. No pipeline path appends to it |
 | The runbook | [`docs/how-to/label-the-similarity-holdout.md`](../docs/how-to/label-the-similarity-holdout.md) | How a sheet is drawn, labelled and harvested |
