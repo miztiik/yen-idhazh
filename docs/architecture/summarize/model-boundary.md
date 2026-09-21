@@ -1,6 +1,6 @@
 # The model boundary
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-21
 
 How the summarizer stays generic while the model behind it changes. This page
 owns the shape of the boundary - what crosses it, which side each fact lives
@@ -464,9 +464,9 @@ the list on its `--spec-type` line. The fixture is named for the build, so
 moving the pin without re-recording fails on a missing file rather than passing
 against a binary nobody runs.
 
-**The recording comes from `.github/workflows/probe.yml`**, which installs the
-pinned asset, runs `--help` and keeps the output. It exists because the
-alternative way to learn what a build accepts is the hour the Gemma run spent.
+**The recording is `llama-server --help` from the pinned asset, taken on
+2026-09-15.** It exists because the alternative way to learn what a build
+accepts is the hour the Gemma run spent.
 
 **Turning the head off is a pointer change, not an edit.** The same Gemma
 weights sit in two files - `config/models/gemma-4-e4b-qat.json` with the head,

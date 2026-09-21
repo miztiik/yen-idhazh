@@ -170,9 +170,9 @@ vocabulary lives in the contract rather than in the schema.
 hardware performance monitoring unit, so there is no counter to read. The gap is
 in the machine, not in this record's column set.
 
-Read on `ubuntu-latest` on 2026-09-20 by
-[`.github/workflows/probe.yml`](../../.github/workflows/probe.yml), on three
-draws of image `ubuntu-24.04` 20260907.300.1, kernel `6.17.0-1022-azure`. An AMD
+Read on `ubuntu-latest` on 2026-09-20 by a dispatched job that ran the six
+`/proc` and `/sys` reads below, on three draws of image `ubuntu-24.04`
+20260907.300.1, kernel `6.17.0-1022-azure`. An AMD
 EPYC 9V74 80-Core and an AMD EPYC 7763 64-Core answered all six reads
 identically; an Intel Xeon Platinum 8573C answered the first two the same way.
 

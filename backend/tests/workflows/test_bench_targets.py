@@ -334,7 +334,7 @@ def test_a_bypassed_speed_case_skips_that_job_and_nothing_else() -> None:
 
     # The other three targets cannot be reached by this at all, and that is a
     # fact about the graph rather than an assurance.
-    for name in ("image", "corpus", BUDGETS_JOB, "batched"):
+    for name in ("corpus", BUDGETS_JOB, "batched"):
         assert BENCH_RAW_JOB not in _needs(workflow, name), name
 
 

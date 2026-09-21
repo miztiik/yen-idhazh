@@ -120,15 +120,6 @@ dev = [
     # Beneficiary: the commit-and-push loop both daily jobs run.
     "shellcheck-py>=0.10",
 ]
-# Only for backend/utilities/bench_image.py, which times CPU diffusion models on
-# a runner. Multi-hundred-megabyte wheels, so they are never in the default set.
-bench-image = [
-    "diffusers>=0.31",
-    "torch>=2.5",
-]
-# Only for backend/utilities/measure_corpus.py, which measures how long real
-# articles actually are. Reaches the network, so it never runs inside a test.
-measure = []
 # The faithfulness scorer. A 250M cross-encoder, but transformers plus torch is
 # hundreds of megabytes, so it stays out of the default install and out of the
 # test path - the model-free counterweights are what run everywhere.
@@ -215,7 +206,7 @@ enable_error_code = ["redundant-expr", "truthy-bool", "ignore-without-code"]
 # Measurement-only dependencies, absent from a default install and shipping no
 # type stubs of their own.
 [[tool.mypy.overrides]]
-module = ["diffusers.*", "feedparser.*", "onnxruntime.*", "torch.*", "trafilatura.*", "transformers.*"]
+module = ["feedparser.*", "onnxruntime.*", "torch.*", "trafilatura.*", "transformers.*"]
 ignore_missing_imports = true
 
 # `langfuse` is an optional extra, so CI type-checks without it installed and

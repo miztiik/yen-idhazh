@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
 
@@ -23,7 +23,6 @@ so the others still cannot.
 | `drift.yml` | `Drift review` | Sunday at 08:00 (`0 8 * * 0`) | yes |
 | `validate.yml` | `Model validation` | none | yes |
 | `measure.yml` | `Measurements` | none | yes |
-| `probe.yml` | `Runtime probe` | none | yes |
 | `prune.yml` | `Corpus prune` | `37 23 * * *`; squashes on the first wake `finetune.prune_every_days` allows | yes |
 | `backfill.yml` | `Vector backfill` | none | yes |
 | `idhazh-pipeline-tests.yaml` | `Pipeline tests` | none | yes |
@@ -710,8 +709,8 @@ calling workflow, so it is not.
 #### The runtime pin is a block, and converting to it goes one caller at a time
 
 Fetching the inference runtime and the weights and proving the digests was
-hundreds of lines across two dozen steps in five workflows - `digest.yml`,
-`idhazh-pipeline-tests.yaml`, `measure.yml`, `probe.yml` and `validate.yml`.
+hundreds of lines across two dozen steps in four workflows - `digest.yml`,
+`idhazh-pipeline-tests.yaml`, `measure.yml` and `validate.yml`.
 
 The pin itself - `LLAMA_CPP_BUILD`, its asset name and its SHA-256 - was spelled
 in more than a dozen places that had to change together. It is now in
@@ -728,8 +727,8 @@ copy of them in a workflow that has been converted; where the pinned values live
 and how a caller reads them is [ci-model-runtime.md](ci-model-runtime.md).
 
 **The conversion is a strangler, one workflow per commit, and the workflow that
-publishes goes last.** `probe.yml` first because it opens no weights and a
-mistake there costs a dispatch nobody depends on; `validate.yml` next because a
+publishes goes last.** A job that opened no weights went first, because a
+mistake there cost a dispatch nobody depended on; `validate.yml` next because a
 mistake costs a qualification that can be re-run; `digest.yml` last because it
 publishes to readers and a bad fetch there is a bad day on the site.
 
@@ -740,7 +739,7 @@ disliked.
 | --- | --- |
 | One commit converting all five | A revert takes four working conversions out with the fifth, and the daily run is in that set - so the blast radius of a mistake is a published day |
 | Leave the pin copied, add a test that compares the copies | The test goes green on five agreeing copies and says nothing about the sixth place somebody adds next |
-| One script with an optional `WEIGHTS_FILE` | Every caller's weights refusals become optional to satisfy one caller that opens no weights. Converting `probe.yml` first forced the question "what does a job that opens no weights need" to be answered before any weights-carrying caller moved, and the answer was a second script, `install-llama-runtime.sh`, which `fetch-model-runtime.sh` sources |
+| One script with an optional `WEIGHTS_FILE` | Every caller's weights refusals become optional to satisfy one caller that opens no weights. Converting the weightless job first forced the question "what does a job that opens no weights need" to be answered before any weights-carrying caller moved, and the answer was a second script, `install-llama-runtime.sh`, which `fetch-model-runtime.sh` sources |
 
 #### The model block is a block, and counting its inputs says the wrong thing
 
