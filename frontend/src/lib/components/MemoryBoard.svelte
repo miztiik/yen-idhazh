@@ -30,6 +30,13 @@
 	 * the model call owns the peak - reading the prompt or writing the answer.
 	 * That split needs an instrument nobody has built, and a memory panel silent
 	 * about it invites the reader to assume it was separated.
+	 *
+	 * **What moved is a sentence, not a hairline.** This board is one run, so it
+	 * has no date axis to draw a rule on. What it does have is a figure a reader
+	 * carries between days - how little the kernel had left - so the days a
+	 * setting moved on inside the page's reach are named under that track. One
+	 * line however many days moved, because a line a day is the smear the charts
+	 * refuse for the same reason.
 	 */
 	import {
 		gib,
@@ -37,9 +44,23 @@
 		type MemoryBoardView,
 		type RangeMark
 	} from '$lib/charts/machine';
+	import { namesMoved, type SettingsMoved } from '$lib/console/settings-moved';
 	import { grouped } from '$lib/charts/series';
 
-	let { board }: { board: MemoryBoardView } = $props();
+	let {
+		board,
+		moved = [],
+		windowDays
+	}: {
+		board: MemoryBoardView;
+		/** Every day inside the page's span the run record says a setting moved on,
+		 * and what moved. The board draws one run, so this is not a caveat about two
+		 * ends of one track - it is the caveat about the reading a person remembers
+		 * from last week. */
+		moved?: readonly SettingsMoved[];
+		/** How far back the page looked, which is what bounds the days above. */
+		windowDays: number;
+	} = $props();
 
 	const tightestItem = $derived(board.items.find((item) => item.tightest) ?? null);
 
@@ -57,6 +78,16 @@
 		if (mark.max === null) return `${mark.median.toFixed(2)}% busy at its trough, and no peak recorded`;
 		return `${mark.median.toFixed(2)}% busy at its trough, ${mark.max.toFixed(2)}% at its peak`;
 	}
+
+	/** The days that moved, each with what moved on it, as one sentence. */
+	const movedText = $derived(
+		namesMoved(
+			moved.map((one) => {
+				const what = namesMoved(one.settings);
+				return what === '' ? one.date : `${one.date} (${what})`;
+			})
+		)
+	);
 </script>
 
 <div
@@ -225,6 +256,19 @@
 					{/if}
 				</p>
 			{/if}
+		{/if}
+
+		<!-- Row #22 decision 2, on a panel with no date axis: one line however many
+		     days moved, under the one figure a reader carries between days. It sits
+		     outside the branch above because a setting that moved on a day nobody
+		     measured is the state this naming is most useful in. -->
+		{#if moved.length > 0}
+			<p class="note" data-memory-moved={moved.length}>
+				{moved.length === 1 ? 'A setting moved' : 'Settings moved'} on {movedText}, inside the
+				{windowDays} days this page read. This board is one run, so nothing here is drawn across
+				that change - but a reading remembered from before
+				{moved.length === 1 ? 'it' : 'the last of them'} was taken under a different setup.
+			</p>
 		{/if}
 
 		<!-- Decision 3: brackets and never a track. Both run to the larger of

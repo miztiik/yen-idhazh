@@ -56,10 +56,16 @@ from idhazh.similarity.stamps import ScorerStamp, scorer_inputs
 from idhazh.stages import common
 from idhazh.stages.judge_draw import DRAW_FILENAME, stage_judge_draw
 
-#: The date the committed run-manifest fixture is addressed by. Used rather than
-#: re-spelled, so the run id a drawn row carries is one a real manifest holds.
+#: The date the committed run-manifest fixture is addressed by. The manifest is
+#: what makes the day a real published one; the run a drawn row names is the
+#: council's own and no longer comes off it.
 MANIFEST_FIXTURE: Final = CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json"
 DATE: Final = "2026-08-21"
+
+#: What the council calls itself on the night it judges `DATE`. The day after the
+#: judged date, because the prefix is the day the council RUNS, and a platform
+#: run id after it.
+COUNCIL_RUN: Final = "2026-08-22-35534060762"
 
 #: A line and a band chosen for the tests below rather than read off config: a
 #: unit test about what a budget may cut is not a test about today's floor, and
@@ -375,7 +381,11 @@ def test_the_draw_round_trips_through_the_contract(
     out_dir = tmp_path / "judge"
 
     drawn = stage_judge_draw(
-        DATE, settings=config.load(CONFIG_DIR), digest_root=digest_root, out_dir=out_dir
+        DATE,
+        run_id=COUNCIL_RUN,
+        settings=config.load(CONFIG_DIR),
+        digest_root=digest_root,
+        out_dir=out_dir,
     )
 
     written = (out_dir / DATE / DRAW_FILENAME).read_text(encoding="utf-8")
@@ -384,8 +394,9 @@ def test_the_draw_round_trips_through_the_contract(
     ]
     assert rows, "the day holds pairs inside the band, so the draw is not empty"
     assert len(rows) == len(drawn.taken) <= drawn.pairs_in_band
-    assert all(row.date == DATE and row.run_id == "2026-08-21-2" for row in rows), (
-        "a row names the run whose day it read"
+    assert all(row.date == DATE and row.run_id == COUNCIL_RUN for row in rows), (
+        "a row names the run that scored it, which is the council night and not "
+        "the digest run that published the day it read"
     )
     assert all(row.left_url_key < row.right_url_key for row in rows)
     assert not any(
@@ -425,7 +436,11 @@ def test_the_draw_samples_the_config_band_and_never_the_line_a_fit_applied(
         )
         driven = replace(settings, app=settings.app.model_copy(update={"assemble": assemble_block}))
         return stage_judge_draw(
-            DATE, settings=driven, digest_root=digest_root, out_dir=tmp_path / out
+            DATE,
+            run_id=COUNCIL_RUN,
+            settings=driven,
+            digest_root=digest_root,
+            out_dir=tmp_path / out,
         )
 
     at_the_bottom = drawn_with(tuning.band_low, "bottom")
@@ -449,6 +464,7 @@ def test_a_day_that_is_not_on_disk_writes_an_empty_draw(tmp_path: Path) -> None:
 
     drawn = stage_judge_draw(
         DATE,
+        run_id=COUNCIL_RUN,
         settings=config.load(CONFIG_DIR),
         digest_root=tmp_path / "nothing-here",
         out_dir=out_dir,

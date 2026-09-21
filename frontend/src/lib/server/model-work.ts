@@ -324,30 +324,16 @@ export function modelWork(
 	);
 }
 
-/** The slice of a published day's runs the model-change boundary needs.
+/** The slice of a published day's runs the model-change boundary needs, and the
+ * day the store behind it changed.
  *
- * Structural rather than imported, so `RunSummary` from the payload loader
- * satisfies it and this module goes on importing nothing at runtime - which is
- * what lets the browser suite load it in plain Node with no alias to resolve.
+ * Both are declared in `$lib/console/settings-moved`, which a panel imports and
+ * which therefore cannot import this file back. Re-exported here because every
+ * caller of `pipelineChanges` already reaches for them through this module.
  */
-export interface RecordedRunDay {
-	date: string;
-	records: readonly { inputs: unknown }[];
-}
+import { RECORDED_INPUTS_FROM, type RecordedRunDay } from '../console/settings-moved';
 
-/** The first day a run recorded its inputs by name instead of as a digest.
- *
- * Before it, the boundary is read off the score ledger's `pipeline_fingerprint`.
- * On and after it, off each run's recorded input manifest. A hard split, never
- * "prefer whichever is present": the two shapes always compare unequal, so an
- * overlap would invent a boundary that nothing caused.
- *
- * Remove the historical branch once the oldest day the widest console window can
- * show is on or after this date. Until then the nine boundaries the committed
- * ledger holds are still reachable, and a chart with no rules over a window that
- * contains them would read as "nothing moved".
- */
-export const RECORDED_INPUTS_FROM = '2026-09-12';
+export { RECORDED_INPUTS_FROM, type RecordedRunDay };
 
 /** Every day the pipeline that wrote the summaries was not the one before it.
  *

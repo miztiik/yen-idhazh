@@ -8,6 +8,7 @@ and a fixture that grows with the archive would make these slower every week
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from typing import Final
 
@@ -34,7 +35,8 @@ def a_scorer() -> ScorerStamp:
 
 def a_judge() -> JudgeStamp:
     return JudgeStamp(judge_model="qwen3-5-9b-q4-k-m", prompt_digest="a" * 64,
-                      grammar_digest="b" * 64)
+                      grammar_digest="b" * 64, judge_temperature=0.0,
+                      decode_digest="c" * 64, thinks=False)
 
 
 def a_record() -> StorySimilarityDistribution:
@@ -48,6 +50,7 @@ def a_row(
     usable: bool = True,
     pair_key: str | None = None,
     run_id: str = f"{DATE}-1",
+    judged_by_run_id: str | None = None,
 ) -> StorySimilarityPair:
     """One judged pair, re-cast from the committed contract fixture.
 
@@ -65,6 +68,7 @@ def a_row(
             "version": StorySimilarityPair.schema_version(),
             "date": DATE,
             "run_id": run_id,
+            "judged_by_run_id": judged_by_run_id,
             "composite_score": score,
             "cosine": score,
             "verdict": verdict.value,
@@ -164,6 +168,47 @@ def test_a_changed_scorer_stamp_archives_and_starts_empty() -> None:
     )
 
 
+@pytest.mark.parametrize("field", ["judge_temperature", "decode_digest", "thinks"])
+def test_every_value_the_record_stamps_is_a_value_the_detector_sees(field: str) -> None:
+    """A stamp column the detector cannot see is a stamp that lies.
+
+    The record would archive under a name nobody can explain: the counts move to
+    a new file and the operator reading the held line is told nothing moved.
+    """
+    record = a_record()
+    after = {
+        "judge_temperature": dataclasses.replace(a_judge(), judge_temperature=0.2),
+        "decode_digest": dataclasses.replace(a_judge(), decode_digest="d" * 64),
+        "thinks": dataclasses.replace(a_judge(), thinks=True),
+    }[field]
+
+    assert fold.inputs_changed(record, knobs=KNOBS, scorer=a_scorer(), judge=after) is not None
+    assert fold.archive_stem(record) != fold.archive_stem(
+        fold.empty_record(KNOBS, scorer=a_scorer(), judge=after)
+    )
+
+
+def test_a_record_written_before_the_decode_columns_resets_once() -> None:
+    """The read-side migration, and what it costs.
+
+    A record written under the older shape carries the three decode values null,
+    loads here, and stamps to a value it never stamped to - so the first fold
+    after the widening archives it and counts on from zero. That is the reset,
+    it is by construction rather than by an input moving, and it happens once.
+    """
+    record = a_record()
+    older = record.model_copy(
+        update={"judge_temperature": None, "decode_digest": None, "judge_thinks": None}
+    )
+
+    assert older.record_stamp() != record.record_stamp()
+    assert fold.inputs_changed(older, knobs=KNOBS, scorer=a_scorer(), judge=a_judge()) == (
+        "None",
+        "0.0",
+    )
+    assert fold.inputs_changed(record, knobs=KNOBS, scorer=a_scorer(), judge=a_judge()) is None
+
+
 def test_one_pair_judged_twice_is_counted_once_at_the_newer_run() -> None:
     """The newer run read the day as it stands; counting both doubles one pair."""
     record = a_record()
@@ -178,3 +223,29 @@ def test_one_pair_judged_twice_is_counted_once_at_the_newer_run() -> None:
     folded = fold.fold_day(record, rows, date=DATE)
     slot = folded.slots[fold.slot_index(0.55, record=record) or 0]
     assert (slot.same_count, slot.different_count) == (0, 1)
+
+
+def test_a_stamped_re_judge_beats_the_unstamped_rows_it_replaces() -> None:
+    """Three rows, because two of them are what the old ordering decided between.
+
+    `judged_by_run_id` is empty on every row written before the column existed,
+    and an empty stamp sorts lowest - so a re-judge wins whichever digest run it
+    is filed under. The two unstamped rows are still ordered by `run_id`, which
+    is what this did before the column existed: drop that half of the pair and
+    they would compare equal and the first one seen would win.
+    """
+    rows = [
+        a_row(score=0.55, verdict=SameStoryVerdict.YES, run_id=f"{DATE}-2"),
+        a_row(
+            score=0.55,
+            verdict=SameStoryVerdict.NO,
+            run_id=f"{DATE}-1",
+            judged_by_run_id=f"{DATE}-7",
+        ),
+        a_row(score=0.55, verdict=SameStoryVerdict.UNCLEAR, run_id=f"{DATE}-1"),
+    ]
+
+    kept = fold.one_row_a_pair(rows)
+
+    assert [row.verdict for row in kept] == [SameStoryVerdict.NO]
+    assert [row.run_id for row in fold.one_row_a_pair(rows[::2])] == [f"{DATE}-2"]

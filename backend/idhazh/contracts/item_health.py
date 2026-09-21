@@ -29,6 +29,7 @@ from idhazh.contracts.base import (
     Url,
     UrlKey,
     fits_its_column,
+    without_retired_keys,
 )
 from idhazh.contracts.call_cost import COST_FIELDS, CallKind
 from idhazh.contracts.sources import SourceForm
@@ -97,6 +98,13 @@ RETIRED_CELLS: Final[Mapping[str, str]] = MappingProxyType(
 #: heading that is neither a current column nor one the reader carries, rather
 #: than dropping cells silently - so a column deleted above without an entry here
 #: raises on the first append to every committed day file.
+#:
+#: **Both sides of the row read this one set.** The committed day file reaches it
+#: through `ledger.ITEM_HEALTH_CARRIED`; the per-item payload a work shard seals
+#: reaches it through `_without_the_columns_this_row_stopped_naming` below. A
+#: removal declared once is therefore honoured everywhere the row is read, which
+#: is what stops a column leaving the contract while a run is in flight and
+#: taking that run's day with it.
 DROPPED_CELLS: Final[frozenset[str]] = frozenset({"runner_name", "cgroup_peak_bytes"})
 
 
@@ -1046,6 +1054,27 @@ class ItemHealthRow(Contract):
     def counts_against_source(self) -> bool:
         """Does this failure count against the source in later source-health reads?"""
         return self.code is not None and self.code not in SOURCE_NEUTRAL_FAILURE_CODES
+
+    @model_validator(mode="before")
+    @classmethod
+    def _without_the_columns_this_row_stopped_naming(cls, data: Any) -> Any:
+        """The read-side migration `CLAUDE.md` section 11 owes a removed column.
+
+        A work shard seals one of these payloads the moment it finishes an item,
+        and a later job of the same run reads it back hours afterwards. A column
+        that leaves the row in between is a key `extra="forbid"` refuses, so the
+        run that wrote the payload loses its whole day - the failure is the
+        pipeline's, the payload is exactly what its author meant to write, and
+        nothing about it can be repaired.
+
+        The keys come from `DROPPED_CELLS` rather than from a list of their own.
+        A dropped column has no replacement by definition, so dropping the cell
+        costs the reader nothing it could have used; a column that MOVED is in
+        `RETIRED_CELLS` instead, is not named here, and still raises, because a
+        reader that silently dropped it would publish a row missing a value that
+        exists.
+        """
+        return without_retired_keys(data, *DROPPED_CELLS)
 
     @model_validator(mode="after")
     def _state_is_complete(self) -> Self:

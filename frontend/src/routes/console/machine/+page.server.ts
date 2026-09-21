@@ -41,6 +41,7 @@ import {
 } from '$lib/server/config';
 import { itemHealthRows, evalRows, loadDay, loadManifests, shardDays } from '$lib/server/payload';
 import { pipelineChanges } from '$lib/server/model-work';
+import { settingsMoved } from '$lib/console/settings-moved';
 import {
 	CLOCKS_AGREE_WITHIN_PCT,
 	loadMachineCounters,
@@ -313,6 +314,10 @@ export async function load() {
 	// redraws cannot be built from two different sets.
 	const widest = Math.max(...spans);
 	const bound = windows.get(widest) as MachineWindow;
+	// One read of the run manifests for the whole route. The boundary dates and
+	// the names of what moved on them are two questions about one record, and two
+	// reads of it could answer them off two different day lists.
+	const manifests = loadManifests(undefined, widest);
 	const latency = percentileHistory(health, console_.min_attempts_for_rate);
 	const series: RunSeries = {
 		// Oldest first: a chart reads left to right, and `contextCost` sorts by run
@@ -416,7 +421,13 @@ export async function load() {
 		// off two different day lists, and the two would eventually disagree. The
 		// rows stop at the widest preset, which is as far back as either chart draws
 		// (`CLAUDE.md` Guardrail #12), and the manifests are bounded the same way.
-		modelChanges: pipelineChanges(evalRows(days).rows, loadManifests(undefined, widest)),
+		modelChanges: pipelineChanges(evalRows(days).rows, manifests),
+		// WHICH settings moved on each of those days, off the same manifests, so a
+		// rule and its readout cannot be built from two different reads. A date the
+		// line above holds and this one does not is a day whose identity came from
+		// the score ledger's digest, which can say that something moved and never
+		// which - the readout falls back to the sentence that names no field.
+		settingsMoved: settingsMoved(manifests),
 		board,
 		memory,
 		newestRunId: newest?.runId ?? null,

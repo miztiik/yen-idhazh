@@ -256,7 +256,14 @@ STORY_SIMILARITY_THRESHOLD_KEY: Final = ("date", "run_id")
 #: keep whichever landed first, which is the opposite of what a re-run means -
 #: the fold picks the newest run itself, over the whole day, rather than letting
 #: a line-by-line rewrite decide.
-STORY_SIMILARITY_PAIR_KEY: Final = ("date", "run_id", "pair_key")
+#:
+#: `judged_by_run_id` is in it because `run_id` names the DIGEST run that
+#: published the day, so two judging runs over one date write the identical
+#: string there. Without this cell the settlement would keep the row already in
+#: the checked-out file and discard every fresh verdict, while the record
+#: counted the fresh ones - two descriptions of one day with nothing able to
+#: tell them apart.
+STORY_SIMILARITY_PAIR_KEY: Final = ("date", "run_id", "pair_key", "judged_by_run_id")
 
 #: What makes two retirement rows the same record. The address and nothing else:
 #: a retirement is permanent for one endpoint key, so a second row for it says
