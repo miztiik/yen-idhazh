@@ -54,6 +54,7 @@
 	const rate = (value: number) => `${value.toFixed(2)} a second`;
 </script>
 
+<div data-windowed="machine-prompt-reuse" data-window-days={windowDays}>
 <Panel
 	heading="h3"
 	id="prompt-reuse"
@@ -61,8 +62,6 @@
 	note="A request that reads its whole prompt again pays full price for text the server already holds, and the fix is that request rather than the machine - one span a request, over the items of the last {windowDays} days."
 >
 	<div
-		data-windowed="machine-prompt-reuse"
-		data-window-days={windowDays}
 		data-prompt-reuse-requests={measured.length}
 		data-prompt-reuse-items={reuse.items}
 		data-prompt-reuse-floor={reuse.floor?.pct ?? ''}
@@ -181,6 +180,7 @@
 		{/if}
 	</div>
 </Panel>
+</div>
 
 <style>
 	.lead {
