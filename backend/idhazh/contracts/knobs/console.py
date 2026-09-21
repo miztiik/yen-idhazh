@@ -460,6 +460,7 @@ class ConsoleConfig(Model):
                     title="How close we are to the limits",
                     panels=[
                         "memory-board",
+                        "memory-held",
                         "context-headroom",
                     ],
                 ),
@@ -468,7 +469,7 @@ class ConsoleConfig(Model):
                     title="What the model spends",
                     panels=[
                         "article-cost",
-                        "prompt-cache",
+                        "prompt-reuse",
                         "read-against-written",
                         "counterfactual-cost",
                     ],

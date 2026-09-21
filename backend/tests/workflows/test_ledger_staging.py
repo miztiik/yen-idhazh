@@ -30,6 +30,7 @@ Guardrail #12).
 from __future__ import annotations
 
 import ast
+import importlib
 import inspect
 import re
 from collections.abc import Callable, Mapping
@@ -101,6 +102,25 @@ STORES_NOTHING_FILLS_YET: Final[Mapping[str, str]] = MappingProxyType(
         "state/story-similarity/archive": "the fold, on the day a stamp under the record moves",
         "state/story-similarity/holdout-pairs.csv": (
             "a person, and no run ever - the file is typed by hand"
+        ),
+    }
+)
+
+# A module a verb used to reach and now reaches only through a tenant the council
+# hosts. `council.tenants` is empty, so nothing runs these and nothing they write
+# can be lost on a runner - which is the whole of what this file exists to catch.
+#
+# It is a list rather than a rule, so a module that goes unreachable for any OTHER
+# reason fails this file instead of joining it unnoticed. An entry goes the day the
+# slug that reaches it is registered, and a name here that a verb DOES reach fails
+# too.
+MODULES_ONLY_A_TENANT_REACHES: Final[Mapping[str, str]] = MappingProxyType(
+    {
+        "idhazh.stages.judge_fit": (
+            "the content-similarity judge, once its slug is registered as a tenant"
+        ),
+        "idhazh.stages.judge_fold": (
+            "the content-similarity judge, once its slug is registered as a tenant"
         ),
     }
 )
@@ -525,6 +545,11 @@ def test_every_store_is_filled_by_a_writer_this_test_can_follow() -> None:
         for module in reachable
         for writer in _writers_called_by(module)
     }
+    called |= {
+        writer
+        for name in MODULES_ONLY_A_TENANT_REACHES
+        for writer in _writers_called_by(importlib.import_module(name))
+    }
     uncalled = sorted(set(_writer_stores()) - called)
     assert not uncalled, (
         f"{', '.join(uncalled)} is exported as a writer and no module a `python -m idhazh "
@@ -540,6 +565,11 @@ def test_every_module_that_writes_a_store_is_reached_by_a_cli_verb() -> None:
     This is the hole the staging assertion would otherwise fall through. A stage that
     writes rows from a module the CLI never enters is charged to no job, so the
     parity check stays green while the rows go nowhere.
+
+    A module a tenant reaches is excused by name, because a tenant is resolved from
+    config rather than dispatched from the router - and with no tenant registered
+    nothing runs it at all. The excuse clears itself: a module named there that a
+    verb does reach fails below.
     """
     reached = {
         module.__name__
@@ -552,7 +582,21 @@ def test_every_module_that_writes_a_store_is_reached_by_a_cli_verb() -> None:
         if WRITER_CALL.search(source) or SINK_CALL.search(source)
     }
 
-    stranded = sorted(writing - reached - {ledger.__name__})
+    unknown = sorted(set(MODULES_ONLY_A_TENANT_REACHES) - writing)
+    assert not unknown, (
+        f"{', '.join(unknown)} is excused from needing a verb and writes no store, so "
+        "the excuse covers nothing. Delete the entry from MODULES_ONLY_A_TENANT_REACHES."
+    )
+    landed = sorted(set(MODULES_ONLY_A_TENANT_REACHES) & reached)
+    assert not landed, (
+        f"{', '.join(landed)} is reached by a verb now and is still excused from being. "
+        "Delete the entry from MODULES_ONLY_A_TENANT_REACHES, so the job that runs the "
+        "verb is held to staging what it writes."
+    )
+
+    stranded = sorted(
+        writing - reached - {ledger.__name__} - set(MODULES_ONLY_A_TENANT_REACHES)
+    )
     assert not stranded, (
         f"{', '.join(stranded)} writes a store and no `python -m idhazh <verb>` reaches "
         "it, so no job can be held to staging what it writes. Dispatch it from a verb in "
