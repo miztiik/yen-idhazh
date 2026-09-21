@@ -386,6 +386,35 @@ class ConsoleConfig(Model):
             "config file instead of editing a chart."
         ),
     )
+    context_high_percentile: float = Field(
+        default=99.0,
+        gt=0.0,
+        lt=100.0,
+        description=(
+            "Which percentile of an item's context use a run draws beside its "
+            "largest. A run gets two marks because one cannot carry both the "
+            "ordinary article and the worst one, and the decision to shrink the "
+            "window turns on the worst. Ninety-nine rather than the largest twice: "
+            "measured 2026-09-21 over the 1,312 committed item rows that record both "
+            "a window and a per-call token split, the 99th item used 9,900 tokens "
+            "and the largest used 13,569, so the pair says how far the worst sits "
+            "past the crowd. Lowering it draws a more typical article and hides how "
+            "long the tail is; raising it collapses the two marks onto each other."
+        ),
+    )
+    context_cut_off_reason: str = Field(
+        default="length",
+        min_length=1,
+        description=(
+            "The word the model server uses when a reply stopped because it ran out "
+            "of window rather than because the model finished. The vocabulary is "
+            "llama-server's, not this project's, which is why it is a knob: a "
+            "runtime that spells it differently is a config edit rather than a code "
+            "change. Measured 2026-09-21, the committed rows record one reason across "
+            "2,624 calls and it is `stop`, so nothing has ever been cut off - a panel "
+            "that could not name the other word could not say that."
+        ),
+    )
     panel_groups: dict[str, list[ConsolePanelGroup]] = Field(
         default_factory=lambda: {
             "pipelines": [
@@ -438,6 +467,7 @@ class ConsoleConfig(Model):
                     id="what-the-model-spends",
                     title="What the model spends",
                     panels=[
+                        "article-cost",
                         "prompt-cache",
                         "read-against-written",
                         "counterfactual-cost",

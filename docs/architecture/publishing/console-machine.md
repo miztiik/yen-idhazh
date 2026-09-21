@@ -1,6 +1,6 @@
 # What the Hardware route draws
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 `/console/machine/` answers a question no other route can ask: what machine did
 the run actually get, and does the day's rate mean anything because of it.
 
@@ -9,7 +9,7 @@ two questions every panel names, the five routes and the strip, the standing ban
 and the one window that governs every page. How any figure here is allowed to
 read is [../../concepts/console-design.md](../../concepts/console-design.md), and
 the machinery every chart shares is [console-charts.md](console-charts.md).
-Eleven panels under **four headings**. Nine read `state/item-health/` and
+Twelve panels under **four headings**. Ten read `state/item-health/` and
 `state/host-fingerprint/`, which are the two instruments this route puts beside
 each other; three - the two machine panels and the split - read the machine
 record for the processor and the flags as well. All three are read at
@@ -27,6 +27,7 @@ ledgers add no telemetry column and no reader sees a cell of any of them.
 | Where the time went | Whether the slowest articles are getting slower | one plot a percentile, one mark a run | Whether the slow end of a run is moving, and how wide the gap is today. |
 | How close we are to the limits | How close an article came to using up the machine's memory | one mark an item, with a shard grain and a window grain | Which item took the machine nearest its limit, whether it gave the memory back, and how long the queue was. |
 | How close we are to the limits | How close the longest text came to the model's limit | one mark a run | Whether raising the truncation cap is even possible. |
+| What the model spends | What one article costs the machine | three figures over the span, each a range across the articles that recorded it | What a change to the prompt, the model or how many articles a day runs will cost before the run that pays for it. |
 | What the model spends | How much text the model has to read again each time | one column a day | Whether a bigger cache would save wall clock. |
 | What the model spends | How much of a run is reading and how much is writing | one group a run, in either unit | Which half of the model call the run actually spent itself on. |
 | What the model spends | What this would have cost somewhere else | four figures over the whole span, and one column a day or one running line | Whether the runner time was a good trade, and whether the trade is getting worse. |
@@ -157,31 +158,54 @@ first paint always matches the prerendered document, and every cost figure on
 the page is derived from one shared value rather than from four copies that
 could drift.
 
-## Context headroom is one chart with a limit rule
+## What the context panel says the reading limit costs
 
 **Thirteen near-identical bars, each with two lines of prose, is a table
 pretending to be a chart.** The panel used to draw one target bar a run, so a
-question about a trend - is headroom moving toward the ceiling - had to be
-answered by reading thirteen numbers in a row. Since 2026-09-01 it is one chart:
-runs across the x-axis oldest first, the longest sequence on the y, the context
-window as a rule, and spare capacity as a second series. Authority: Susan,
-2026-08-31.
+question about a trend had to be answered by reading thirteen numbers in a row.
+Since 2026-09-01 it is one chart: runs across the x-axis oldest first, tokens on
+the y, and the reading limit as a rule. Authority: Susan, 2026-08-31.
 
-**The window is a rule, not a bar.** A limit is a line a series approaches. A bar
+**The limit is a rule, not a bar.** A limit is a line a series approaches. A bar
 beside a bar invites a reader to compare two lengths and forget which of them is
 the ceiling, and the browser oracle checks the geometry rather than the
-attribute: every mark must sit at or below the rule, because no run can exceed
-the window it was given. Authority: Jony.
+attribute: every mark must sit at or below the rule, because no call can exceed
+the limit it was given. Authority: Jony.
 
-**Spare capacity is dotted, because it is derived.** It is the window minus the
-measurement and not a second reading of anything, so the stroke says so.
-**What the panel answers is whether the truncation cap can go up**, and the
-answer is the worst run's share of its window: a run holding 88 percent of the
-window it was given is a no, and a run holding a third of it is a yes. The
-caveat is that it reads the path that is retiring. What it measures is the
-single call, which sizes at 25,156 tokens of the configured 65,536 at the
-committed cap; the pair the window is really held open for sizes at 54,887
-([`../summarize/prompt.md`](../summarize/prompt.md)).
+**The panel says what the current setting SPENDS, not only whether it could
+grow.** Until 2026-09-21 it drew the longest sequence and a dotted line for the
+room left over, which answered whether the truncation cap could rise - a
+question nobody was asking - and stayed silent on the size of the slack. It now
+draws two marks a run, because one mark cannot carry both the ordinary article
+and the worst one and the decision to cut the limit turns on the worst. Under
+the chart, one sentence names the share of the limit that has never been used
+and how many times the limit is the article it usually reads. Authority: Susan,
+plan 37 row 21. **What the reader loses: the dotted spare line**, which was the
+solid line reflected in the rule and carried no second reading.
+
+**The grain is one model call, and that correction roughly halves the figure.**
+The limit bounds one call. The pipeline carries an earlier call forward into the
+later prompt - measured 2026-09-21, the later prompt contains the earlier
+exchange on all 1,976 committed rows that record both - so the calls added
+together are a length the server never held. The panel takes the largest filled
+call slot per article instead. Measured 2026-09-21 over the 1,312 committed item
+rows that record both a limit and a call's own tokens, so both figures come off
+one row set: the old arithmetic read 26,706 tokens at its worst and the honest
+peak is 13,569, which is 41 percent of a 65,536-token limit against 21 percent.
+The overstatement is 1.97x at the worst row and 1.92x at the middle one.
+**Nothing here counts calls** - a slot is measured when the ledger filled it -
+because the count is a config value (plan 37, the standing rule).
+
+**Nothing has ever been cut off.** Every finish reason in the archive says the
+model stopped on its own: 2,624 of 2,624 calls, measured 2026-09-21. The word
+for the other outcome is `console.context_cut_off_reason`, a knob rather than a
+literal, because the vocabulary belongs to llama-server. The canary carries one
+cut-off reply so the state a shrinking budget reaches is drawn rather than
+argued about.
+
+**The row states the finding and does not act on it.** The limit is
+`models.summarize.inference.n_ctx` and cutting it is the owner's call. The
+panel's job is to make the slack impossible to miss.
 
 **The panel is about the worst run in the span, not the newest**, which is why
 it stays windowed and why every run in the span keeps a mark. Drawing only the
@@ -195,9 +219,78 @@ model-change rule falls on the FIRST run of a changed day, so one change draws
 one rule; without that, a day with three runs would say the pipeline changed
 three times.
 
-**Every run's own three numbers stay on the page**, in a screen-reader list
-under the chart. The chart is the shape of the question; the list is the table it
-was made from, and nothing on this route is only in a picture.
+**Every run's own numbers stay on the page**, in a screen-reader list under the
+chart. The chart is the shape of the question; the list is the table it was made
+from, and nothing on this route is only in a picture.
+
+## What one article costs, and why it is not the run total shared out
+
+**A run total divided by the item count cannot disagree with the run total, so
+it checks nothing.** It is the same number wearing a different unit: every
+article of a run gets the mean by construction, a run whose slowest article cost
+ten times its quickest reports neither figure, and a change that moved only the
+slow end moves the printed number by a tenth of what it actually did. Every
+figure on this panel is measured per article and printed as a range - lowest,
+middle, highest - which is the only shape that can price a change before the run
+that pays for it. Rejected alternative: Fowler, Row #12.
+
+**Three costs, three instruments, and they are not interchangeable.**
+
+- **Processor time** is `cpu_busy_pct` times the processors the machine record
+  names, times the item's own clock. The kernel counts every logical processor
+  on one `/proc/stat` line, so the share is a share of all of them and the
+  multiplier is `threads`, never `cores`. On a machine running two threads a
+  core - which is what every committed record describes - using `cores` halves
+  every figure. `frontend/tests/console-article-cost.spec.ts` runs the same
+  arithmetic both ways and refuses the answer that used the wrong one.
+- **Model time** is `prefill_ms + decode_ms`, which the summarize stage sums
+  over whatever calls the article made before the row is written. It is a total
+  over the work the article needed, so nothing on this panel is keyed to how
+  many calls an article makes.
+- **Added memory** is the rise in `llama_rss_bytes` between neighbouring items
+  of one shard. A step, not a level: the level says what the server is holding,
+  and the question here is what one more article adds to it.
+
+**The memory step is taken between neighbours of ONE shard, and never across
+two.** A fresh shard starts a fresh model server, so the difference between the
+last item of one shard and the first of the next is a restart rather than an
+article. A gap in `item_index` is skipped for the same reason: whatever happened
+to the item the ledger missed is not the next item's doing. Authority: Susan,
+Row #12 decision 2.
+
+**The track holds zero, because the step goes below it.** Measured 2026-09-21
+over the 1,162 steps the committed ledger holds, 402 of them are falls - the
+server gives memory back as often as two times in five. A track running from the
+lowest reading to the highest would put the biggest fall at the left edge,
+exactly where the smallest rise would sit, so the sign would be invisible. The
+shared `spanTrack` runs `0..max` and cannot draw a negative low, which is why
+this panel carries its own track rather than borrowing that one.
+
+**A processor-second is unreadable without the hour it has to fit inside**, so
+the panel prints what one runner-hour supplies next to the figure - the
+processor count times 3,600 - and quotes it on the smallest machine the span ran
+on, because that is the one a cost has to fit inside. It then says how many
+articles that hour buys at the middle figure. A share of an hour was printed
+first and was cut: it rounds to `0.0%` as soon as an article is cheap, which
+reads as free, and it answers a question nobody asked. Measured 2026-09-21 over
+the 954 committed articles that resolve to a machine record, the middle article
+takes 1,861 processor-seconds against the 14,400 a runner-hour supplies on four
+logical processors - 7.7 articles an hour of the whole machine. Authority:
+Susan, Row #12 decision 4, under `CLAUDE.md` Guardrail #10.
+
+**Where no machine record names a processor count, the figure is a dash and the
+panel says why.** The item ledger records a share; only the machine record says
+what the share is a share of. Filling that in from the runner we usually get
+would publish an assumption as a measurement. Of the 1,325 committed articles
+that recorded both a busy share and a clock on 2026-09-21, 371 belong to runs
+the machine record never reached, so the panel prints both counts rather than
+quietly dropping the difference. Authority: Susan, Row #12 decision 5.
+
+**What the panel cannot answer, it names.** The memory step belongs to the
+model's work, and nothing in the ledger says which half of it - the prompt the
+server read or the reply it wrote. The measurement that would settle it is a
+resident-memory reading taken at each call boundary instead of one reading when
+the article ended. Authority: Susan, Row #12 decision 3.
 
 ## Two panels left the page, and what the reader lost is named
 

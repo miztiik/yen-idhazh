@@ -113,16 +113,16 @@ That sentence is worth nothing unless it is checkable, so it is five conditions 
 | 5 | The council's own shard-outcome record | 4 | F | DONE | - | 992 | worker |
 | 6 | The content-similarity judge's own metrics | 5 | G | DONE | - | 995 | worker |
 | 7 | The content-similarity judge's merge-line benchmark record | 5 | G | DONE | - | 995 | worker |
-| 8 | The pair row gains the stamp, and the store is rewritten | - | G | IN PROGRESS | p38g2 | worker | - |
-| 1b | The judge stops safely and flushes as it goes | 1a | H | DONE | p38h | - | worker |
-| 10 | The judge's own bound reads a measured number | 9 | H | DONE | p38h | - | worker |
+| 8 | The pair row gains the stamp, and the store is rewritten | - | G | DONE | - | 999 | worker |
+| 1b | The judge stops safely and flushes as it goes | 1a | H | DONE | - | 997 | worker |
+| 10 | The judge's own bound reads a measured number | 9 | H | DONE | - | 997 | worker |
 | 11a | The model layer offers both spans and says what it decoded | - | I | DONE | - | 989 | worker |
 | 12 | The four verbs name their work | 9, 24 | J | PENDING | - | - | - |
 | 13 | `leg` and `fold` leave the vocabulary | 12 | J | PENDING | - | - | - |
 | 11b | The content-similarity judge reads its own margin | 11a | K | PENDING | - | - | - |
 | 14 | The judge fills the stamp | 8, 11b, 13 | K | PENDING | - | - | - |
 | 15b | The content-similarity judge fills its metrics and registers as a tenant | 6, 14, 15a | L | PENDING | - | - | - |
-| 16 | The model block becomes one composite action | - | M | PENDING | - | - | - |
+| 16 | The model block becomes one composite action | - | M | DONE | - | 1000 | worker |
 | 24 | The council runs verbs of its own over a tenant list | 2, 15a, 16 | N | PENDING | - | - | - |
 | 17 | The council runs the tenant and files its own outcome row | 5, 15a, 24 | O | PENDING | - | - | - |
 | 25 | The config check moves to the tenant that owns the number | 9, 24 | P | PENDING | - | - | - |

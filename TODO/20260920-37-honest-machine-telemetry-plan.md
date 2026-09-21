@@ -85,14 +85,14 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 5 | `ItemHealthRow` gains three columns and loses one | 4 | C | DONE | p37r5 | #982 | worker |
 | 10 | Did another tenant take the processor | 5, 8, 9 | C | PENDING | - | - | - |
 | 11 | Is the kernel taking the model's weights back | 5, 8, 9 | C | PENDING | - | - | - |
-| 12 | What one article costs the machine | 9 | C | PENDING | - | - | - |
+| 12 | What one article costs the machine | 9 | C | IN REVIEW | p37r12 | #1001 | - |
 | 13 | Two panels leave the page | 9 | C | PENDING | - | - | - |
 | 14 | The memory board drops the disputed mark | 2, 9 | C | PENDING | - | - | - |
 | 15 | The shard board gains the clocks nobody reads | 9 | C | DONE | p37r15 | #987 | worker |
 | 16 | Machine cards gain uptime, clock speed, cache size and copy speed | 6, 9 | C | DONE | p37r16 | #988 | worker |
 | 19 | Which prompts get re-read, and how fast | 9 | C | PENDING | - | - | - |
 | 20 | What is holding the runner's memory | 5, 9 | C | PENDING | - | - | - |
-| 21 | What the context window actually costs | 9 | C | PENDING | - | - | - |
+| 21 | What the context window actually costs | 9 | C | IN REVIEW | p37r21 | #991 | worker |
 | 22 | Dotted rules where a setting moved | 9, 21 | C | PENDING | - | - | - |
 | 17 | Every published column names its reader | 5, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22 | D | PENDING | - | - | - |
 | 18 | Docs, the living-page corrections, and the orphan sweep | all | E | PENDING | - | - | - |
@@ -519,15 +519,17 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | The panel prints what the window costs and not only whether it could grow | Susan - measured over 1,161 committed item rows against a 65,536-token window, the largest prompt ever sent used **42.5 percent** of it, the 99th percentile used **18.4 percent** and the median used **2.8 percent**. Nothing has ever been cut off: both calls report a natural stop on 1,161 of 1,161 rows |
+| 1 | The panel prints what the window costs and not only whether it could grow | Susan - re-measured 2026-09-21 over the 1,312 committed item rows that record both the window they ran under and a call's own tokens, all at 65,536: the largest single call ever sent used **20.7 percent** of it and the middle article used **7.3 percent**, so the window is **13.7 times** the article it usually reads and **79 percent of it has never been used, not once**. Nothing has ever been cut off: every finish reason in the archive is a natural stop, 2,624 of 2,624 |
 | 2 | Run marks gain a second end | Susan - one mark cannot show both the typical prompt and the worst one, and the decision to shrink a window turns on the worst |
 | 3 | The row states the finding rather than acting on it | The window is a config knob and shrinking it is the owner's call. The panel's job is to make the slack impossible to miss |
+| 4 | The grain is one model call, which roughly halves the figure decision 1 was first written with | Worker, 2026-09-21, correcting the brief. The window bounds one call and the later call replays the earlier one - measured, the later prompt contains the earlier exchange on all 1,976 rows that record both - so the calls added together are a length the server never held. Over one row set the old arithmetic reads 26,706 tokens at its worst and the honest peak is 13,569, 1.97x. The draft's 42.5 / 18.4 / 2.8 percent were taken on the added figure and are replaced above. **No arithmetic counts calls** (table 0b, trigger 0b7): a slot is measured when the ledger filled it |
 
 - **Rejected alternatives:**
 
 | # | Option | Why rejected | What it would cost to take | Authority |
 | --- | --- | --- | --- | --- |
-| 1 | Leave the panel as a headroom reading | It answers whether the window could grow, which nobody is asking, and stays silent on the window being 57 times the median prompt | The single largest piece of slack visible anywhere in this plan | Susan |
+| 1 | Leave the panel as a headroom reading | It answers whether the window could grow, which nobody is asking, and stays silent on the window being 13.7 times the median article | The single largest piece of slack visible anywhere in this plan | Susan |
+| 2 | Keep the dotted spare line beside the two new ends | It is the largest line reflected in the window rule, so it carries no reading the rule does not already carry, and a third line on a two-reading chart is a line a reader has to rule out | A reader who prefers reading slack as a height rather than as a gap | Worker, 2026-09-21 |
 
 ## Row #22 - Dotted rules where a setting moved
 

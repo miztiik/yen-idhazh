@@ -4,7 +4,6 @@ import {
 	cacheChart,
 	clockAgreement,
 	clocksChart,
-	contextHeadroom,
 	memoryBoard,
 	percentileHistory,
 	readAgainstWritten,
@@ -12,12 +11,18 @@ import {
 	workChart,
 	DEFAULT_WORK_UNIT,
 	type CacheDay,
-	type ContextBar,
 	type CostRate,
 	type LatencyRun,
 	type ReadWriteSummary,
 	type RunWork
 } from '$lib/charts/machine';
+import {
+	contextCost,
+	type ContextOptions,
+	type ContextRun,
+	type ContextSpan
+} from '$lib/console/machine/context-cost';
+import { articleCost, type ArticleCost } from '$lib/console/machine/article-cost';
 import { costChart, costOverDays, DEFAULT_COST_SHAPE } from '$lib/charts/cost';
 import { splitByMachine } from '$lib/charts/machine-split';
 import { machineCards, type MachineCards } from '$lib/charts/machine-cards';
@@ -97,6 +102,14 @@ export interface MachineWindow {
 	 * and carrying them twice would put the same numbers in the document twice. */
 	work: ReadWriteSummary;
 	tokenTotals: { input: number; output: number; items: number };
+	/** What the model's reading limit cost over this span. Scalars only, on the
+	 * same terms as `work`: the run marks are in `series.context`, out of the
+	 * same call, so the sentence and the chart cannot be two answers. */
+	context: ContextSpan;
+	/** What one article cost the machine over this span - processor time, added
+	 * memory and model time, each as a range. Three figures and a few counts, so
+	 * a preset carries it rather than the rows behind it. */
+	articleCost: ArticleCost;
 }
 
 /** Everything a run-by-run chart draws, carried once rather than once a span.
@@ -112,7 +125,7 @@ export interface MachineWindow {
  * the document at any span. Without that bound the page grows for ever.
  */
 export interface RunSeries {
-	context: ContextBar[];
+	context: ContextRun[];
 	latency: LatencyRun[];
 }
 
@@ -127,6 +140,7 @@ const DRAWN_PANELS = [
 	'shard-board',
 	'memory-board',
 	'reading-against-writing',
+	'article-cost',
 	'prompt-cache',
 	'context-headroom',
 	'two-clocks',
@@ -175,6 +189,12 @@ export async function load() {
 	// contract rather than a list typed here.
 	const fingerprints = hostFingerprints(days);
 	const flagNames = watchedFlags();
+	// Both context figures come from one call per row set, so the sentence under
+	// the chart and the marks on it cannot disagree about method.
+	const contextOptions: ContextOptions = {
+		percentile: console_.context_high_percentile,
+		cutOffReason: console_.context_cut_off_reason
+	};
 
 	// **The third state this route has to be able to say.** A day the machine
 	// record opened a file for and kept no row of, that published articles
@@ -227,6 +247,13 @@ export async function load() {
 		// and its durations are summed over exactly those rows, so the two grains
 		// can never cover different runs.
 		const { runs: tokens, ...work } = readAgainstWritten(healthRows);
+		// The rows stay behind: they are carried once, bounded to the widest preset,
+		// in `series.context`. Only the scalars differ per span.
+		const context = contextCost(healthRows, contextOptions).span;
+		// The machine record is the second instrument here: the item ledger says
+		// what share of the processors an article kept busy, and only the record
+		// says how many processors that share was taken across.
+		const perArticle = articleCost(healthRows, inSpan(fingerprints));
 
 		return {
 			days,
@@ -263,6 +290,7 @@ export async function load() {
 				figures: 'machine record'
 			}),
 			cacheDays: cacheByDay(runs),
+			articleCost: perArticle,
 			// The newest run's own reading is a snapshot and sits on the memory
 			// board; this says whether that reading was unusual over the span.
 			peakRssSpan: spanOf(runs.map((run) => run.peakRssBytes.value)),
@@ -290,7 +318,8 @@ export async function load() {
 					items: carry.items + run.items
 				}),
 				{ input: 0, output: 0, items: 0 }
-			)
+			),
+			context
 		};
 	}
 
@@ -311,13 +340,12 @@ export async function load() {
 	const bound = windows.get(widest) as MachineWindow;
 	const latency = percentileHistory(health, console_.min_attempts_for_rate);
 	const series: RunSeries = {
-		context: contextHeadroom(
-			counters.runs.filter((run) => run.date >= bound.start && run.date <= bound.end),
-			limits.contextWindow
-		)
-			// Oldest first: a chart reads left to right, and the reader hands runs
-			// over newest first.
-			.reverse(),
+		// Oldest first: a chart reads left to right, and `contextCost` sorts by run
+		// id, which is `<date>-<n>`.
+		context: contextCost(
+			health.filter((row) => (row.date ?? '') >= bound.start && (row.date ?? '') <= bound.end),
+			contextOptions
+		).runs,
 		latency: latency.runs.filter((run) => run.date >= bound.start && run.date <= bound.end)
 	};
 	const inWindow = <T extends { date: string }>(rows: readonly T[], span: MachineWindow): T[] =>

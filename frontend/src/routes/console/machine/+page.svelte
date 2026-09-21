@@ -39,11 +39,12 @@
 	import { base } from '$app/paths';
 	import PanelGroup from '$lib/components/PanelGroup.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
-	import ContextHeadroomPanel from '$lib/console/machine/ContextHeadroomPanel.svelte';
+	import ContextCostPanel from '$lib/console/machine/ContextCostPanel.svelte';
 	import CounterfactualCostPanel from '$lib/console/machine/CounterfactualCostPanel.svelte';
 	import MachineCardsPanel from '$lib/console/machine/MachineCardsPanel.svelte';
 	import MachineSplitPanel from '$lib/console/machine/MachineSplitPanel.svelte';
 	import MemoryBoardPanel from '$lib/console/machine/MemoryBoardPanel.svelte';
+	import ArticleCostPanel from '$lib/console/machine/ArticleCostPanel.svelte';
 	import PlatformMixPanel from '$lib/console/machine/PlatformMixPanel.svelte';
 	import PromptCachePanel from '$lib/console/machine/PromptCachePanel.svelte';
 	import ReadAgainstWrittenPanel from '$lib/console/machine/ReadAgainstWrittenPanel.svelte';
@@ -208,8 +209,13 @@
 		{:else if id === 'memory-board'}
 			<MemoryBoardPanel board={data.memory} span={view.peakRssSpan} windowDays={view.days} />
 		{:else if id === 'reading-against-writing'}
-			<MachineSplitPanel split={data.split} />
-		{:else if id === 'prompt-cache'}
+			<MachineSplitPanel split={data.split} />	{:else if id === 'article-cost'}
+		<ArticleCostPanel
+			cost={view.articleCost}
+			days={view.days}
+			{windowDays}
+			chart={data.chart}
+		/>		{:else if id === 'prompt-cache'}
 			<PromptCachePanel
 				cacheDays={view.cacheDays}
 				days={view.days}
@@ -218,16 +224,16 @@
 				chart={data.chart}
 			/>
 		{:else if id === 'context-headroom'}
-			<ContextHeadroomPanel
+			<ContextCostPanel
 				rows={data.series.context}
 				start={view.start}
 				end={view.end}
 				contextWindow={data.contextWindow}
+				cost={view.context}
 				modelChanges={data.modelChanges}
 				chart={data.chart}
 				{windowDays}
 				days={view.days}
-				runsRead={view.runsRead}
 			/>
 		{:else if id === 'two-clocks'}
 			<TwoClocksPanel
