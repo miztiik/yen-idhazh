@@ -109,3 +109,51 @@ test('THE ORACLE: the shard board carries the same reading, in the same third st
 		'Not recorded'
 	);
 });
+
+test('THE ORACLE: the loud tile reverses, and the three states are three fills', async ({
+	page
+}) => {
+	// The canary records no stolen share, so no tile is drawn loud or quiet on
+	// this fixture and the pure module test carries those two cases. What it
+	// cannot carry is the stylesheet: "outlined against filled" is a CSS rule,
+	// and a flattened ramp would leave every case passing while the panel drew
+	// three identical tiles. So the three classes are driven onto a real tile in
+	// the live document and the painted result is read back.
+	const tile = page.locator('[data-processor-lost-tile]').first();
+	await expect(tile, 'the day row drew no tiles, so this oracle asserts nothing').toHaveCount(1);
+
+	const painted = await tile.evaluate((node) => {
+		const states = ['unrecorded', 'quiet', 'marked'];
+		const held = states.filter((state) => node.classList.contains(state));
+		// Only the state token moves. Svelte scopes a component's own rules with a
+		// generated class on the element, so replacing the whole class list would
+		// detach every rule under test and leave three identical readings.
+		const read = (state: string) => {
+			node.classList.remove(...states);
+			node.classList.add(state);
+			const style = getComputedStyle(node);
+			return {
+				state,
+				background: style.backgroundColor,
+				border: `${style.borderTopStyle} ${style.borderTopColor}`
+			};
+		};
+		const seen = states.map(read);
+		node.classList.remove(...states);
+		node.classList.add(...held);
+		return seen;
+	});
+
+	const fills = painted.map((one) => `${one.background}|${one.border}`);
+	expect(new Set(fills).size, `two states paint the same tile: ${fills.join(' / ')}`).toBe(3);
+
+	const clear = (colour: string) => colour === 'transparent' || /,\s*0\)$/.test(colour);
+	expect(
+		painted.filter((one) => !clear(one.background)).map((one) => one.state),
+		'the loud tile is the one that reverses, and it is the only one that fills'
+	).toEqual(['marked']);
+	expect(
+		painted.find((one) => one.state === 'unrecorded')?.border.startsWith('dashed'),
+		'a day that recorded nothing is drawn with the same edge as one that did'
+	).toBe(true);
+});
