@@ -36,7 +36,7 @@ from urllib import request
 from urllib.parse import urlsplit, urlunsplit
 
 from idhazh.contracts.base import derive_text_digest
-from idhazh.contracts.knobs.models import ModelEntry, ModelRef
+from idhazh.contracts.knobs.models import CompanionFile, ModelEntry, ModelRef
 from idhazh.contracts.knobs.turns import SystemPlacement, TurnsConfig
 
 # One port per job. A workflow declares it once as `LLAMA_PORT`, and both halves
@@ -116,6 +116,7 @@ _ANSWER_ONLY_KEYS: Final[frozenset[str]] = frozenset(
         "n_probs",
     }
 )
+
 
 def is_context_exceeded(body: str) -> bool:
     """Did the runtime refuse this request because the prompt did not fit?
@@ -437,6 +438,16 @@ def caches_the_prompt(server: Mapping[str, Any]) -> bool:
     return "--no-cache-prompt" not in server
 
 
+def companion_path(weights: Path, companion: CompanionFile) -> Path:
+    """Where a companion file lands: beside the weights, under its own name.
+
+    The one place that answers this. `backend/utilities/model_refs.py` imports
+    it rather than spelling the join a second time, because a config file cannot
+    write a runner path and two copies of the rule drift apart in silence.
+    """
+    return weights.parent / companion.file
+
+
 def server_argv(
     *,
     binary: Path,
@@ -463,6 +474,9 @@ def server_argv(
     it the server silently drops the middle of an oversized prompt and answers
     about a document it no longer holds, which scores as a hallucination and
     names the wrong cause.
+
+    A companion file that declares a flag is emitted last, with the path it
+    landed at - the one argument a config file cannot spell for itself.
     """
     argv = [
         str(binary),
@@ -478,6 +492,9 @@ def server_argv(
         argv.append(flag)
         if value is not None:
             argv.append(str(value))
+    for companion in model.companion_files:
+        if companion.flag is not None:
+            argv += [companion.flag, str(companion_path(weights, companion))]
     return argv
 
 
@@ -708,9 +725,7 @@ def thinking_span(
     return span
 
 
-def answer_span(
-    answer: Mapping[str, Any], *, thought: str, turns: TurnsConfig
-) -> dict[str, Any]:
+def answer_span(answer: Mapping[str, Any], *, thought: str, turns: TurnsConfig) -> dict[str, Any]:
     """Span two: the same body, with the thinking behind it and the shape back on.
 
     The prompt is span one's prompt extended by what span one wrote, so the KV
@@ -1378,9 +1393,7 @@ def token_ids(endpoint: str, text: str, *, timeout: float) -> list[int]:
     ours - which is the single leading difference case 1 allows. Leaving
     `add_special` on would put one on both and hide a real disagreement.
     """
-    body = _ask(
-        tokenize_url(endpoint), {"content": text, "add_special": False}, timeout=timeout
-    )
+    body = _ask(tokenize_url(endpoint), {"content": text, "add_special": False}, timeout=timeout)
     tokens = body.get("tokens") if isinstance(body, Mapping) else None
     if not isinstance(tokens, list) or not tokens:
         raise ProbeRefusedError(
@@ -1486,9 +1499,7 @@ def prove_the_entry(
     )
     the_prefix_cache_is_live(first=first, second=second)
 
-    the_weights_are_the_declared_ones(
-        declared=model.arch, reported=gguf_architecture(weights)
-    )
+    the_weights_are_the_declared_ones(declared=model.arch, reported=gguf_architecture(weights))
     the_window_is_inside_the_trained_window(
         n_ctx=window(model.server),
         trained=trained_context(_ask(models_url(endpoint), None, timeout=timeout)),

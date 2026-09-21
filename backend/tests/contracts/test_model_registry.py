@@ -91,9 +91,7 @@ def test_folding_the_system_text_without_a_joiner_is_refused() -> None:
     with pytest.raises(ValidationError) as raised:
         ModelsConfig.model_validate(entry_with(system_role="fold_into_first_user"))
 
-    assert "system_joiner is required under system_role='fold_into_first_user'" in str(
-        raised.value
-    )
+    assert "system_joiner is required under system_role='fold_into_first_user'" in str(raised.value)
 
 
 def test_a_joiner_declared_beside_a_system_turn_is_refused() -> None:
@@ -417,19 +415,20 @@ def test_a_run_manifest_that_named_a_draft_head_still_reads() -> None:
     """The read side: six committed `run.json` files carry `draft` on `model_ref`.
 
     `frontend/src/lib/server/payload.ts` opens every one of them at each build,
-    and `Model` forbids a key it no longer declares - so without the migration
-    the field left in a commit that today's build could not read yesterday's run
-    with (`CLAUDE.md` section 11). Proved by putting the key back rather than by
-    reading a committed day, so it cannot age out of retention.
+    and `Model` forbids a key it no longer declares - so a retype rather than a
+    deletion is what lets today's build read yesterday's run (`CLAUDE.md`
+    section 11). Proved by putting the key back rather than by reading a
+    committed day, so it cannot age out of retention.
     """
     current = json.loads(read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json"))
+    recorded = {"file": "mtp-gemma-4-E4B-it.gguf", "spec_type": "draft-mtp", "n_max": 2}
     for run in current["runs"]:
         for used in run["models"]:
-            used["model_ref"]["draft"] = None
+            used["model_ref"]["draft"] = recorded
 
     parsed = RunManifest.model_validate(current)
 
-    assert not hasattr(parsed.runs[0].models[0].model_ref, "draft")
+    assert parsed.runs[0].models[0].model_ref.draft == recorded
 
 
 def test_a_run_manifest_written_before_the_settings_moved_still_reads() -> None:

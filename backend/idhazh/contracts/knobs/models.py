@@ -15,10 +15,73 @@ from idhazh.contracts.base import (
     Model,
     Sha256,
     Slug,
-    without_retired_keys,
 )
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 from idhazh.contracts.knobs.turns import TurnsConfig
+
+
+class CompanionFile(Model):
+    """One more file these weights need, and the flag that hands it to the server.
+
+    A model is not always one file. Google ships a multi-token-prediction head
+    beside the gemma weights; another family ships a projector, an adapter or a
+    vocoder. Each is the same fact - bytes from a hub repository, verified, then
+    named on the command line - so each is an entry here rather than a typed
+    block of its own with its own five fields and its own argv branch.
+
+    `flag` is what makes this a declaration rather than a download list. The
+    builder emits `<flag> <landed path>` and knows nothing about what the file
+    is for, so a projector or an adapter is a config-only change. A companion
+    with no flag is a file that must simply be present.
+    """
+
+    repo: str = Field(min_length=1, description="Hugging Face repository the file is pulled from.")
+    revision: CommitSha = Field(
+        description=(
+            "The hub commit the file is fetched at. Never a branch: a branch gets "
+            "whatever was uploaded last, under a digest that still reads the old bytes."
+        )
+    )
+    file: str = Field(
+        min_length=1,
+        description=(
+            "The file name inside the repository, and one path segment. It becomes a "
+            "path under the models directory and a shell argument beside it."
+        ),
+    )
+    sha256: Sha256 = Field(
+        description=(
+            "Required, with no exception. A blank digest makes `sha256sum --check` "
+            "report 'no properly formatted checksum lines found', which names neither "
+            "the entry nor the field."
+        )
+    )
+    byte_count: int | None = Field(
+        default=None,
+        ge=1,
+        description="How many bytes the hub reports. Absent where nobody has fetched it yet.",
+    )
+    flag: str | None = Field(
+        default=None,
+        pattern=r"^--[a-z0-9-]+$",
+        description=(
+            "The llama-server flag that takes this file's landed path. Absent means "
+            "the file must be present and is named by nothing on the command line."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _the_file_name_stays_inside_the_models_directory(self) -> CompanionFile:
+        """The name is joined to a directory, so the grammar is the only guard.
+
+        Guardrail #11: this value reaches a filesystem path and a shell argument.
+        """
+        name = self.file
+        if name.split() != [name]:
+            raise ValueError(f"companion file name is empty or not one word: {name!r}")
+        if "/" in name or "\\" in name or name.startswith("."):
+            raise ValueError(f"companion file name is not one path segment: {name!r}")
+        return self
 
 
 class ModelRef(Model):
@@ -100,30 +163,23 @@ class ModelRef(Model):
             "because the builder reads only the block above."
         ),
     )
-
-    @model_validator(mode="before")
-    @classmethod
-    def _a_run_written_while_a_draft_head_was_declared_still_reads(cls, data: Any) -> Any:
-        """The read-side migration a run record is owed (`CLAUDE.md` section 11).
-
-        Six committed `run.json` files name a draft head, and `extra="forbid"`
-        would refuse every one of them the day the field went. Dropped rather
-        than renamed: nothing replaces it, so there is no number to carry.
-
-        It is silent here and loud on `ModelEntry`, which is the same split
-        `InferenceConfig` draws - there a payload an earlier run wrote, here a
-        block a person typed, and accepting the second in silence teaches a knob
-        that nothing reads.
-        """
-        return without_retired_keys(data, *RETIRED_ENTRY_NAMES)
-
-
-#: The entry key a `run.json` written before 2026-09-21 carries and nothing
-#: carries now. A draft head is not a decoding knob priced on cost alone: two
-#: paired dispatches on 2026-09-12 changed the summary on nine articles of nine
-#: with the head on, so it was never the output-identical speed-up its publisher
-#: claims. Nothing replaces it.
-RETIRED_ENTRY_NAMES: Final[Mapping[str, str]] = MappingProxyType({"draft": ""})
+    companion_files: tuple[CompanionFile, ...] = Field(
+        default=(),
+        description=(
+            "Every extra file these weights need beside the GGUF the entry names. The "
+            "weights themselves stay in the fields above, because moving them here "
+            "would move `declared_for`, the health check and `--model` for no gain."
+        ),
+    )
+    draft: Mapping[str, Any] | None = Field(
+        default=None,
+        description=(
+            "What a run recorded when the draft head was a typed block of its own. A "
+            "plain mapping and nothing writes it: six committed run records carry it, "
+            "the reader forbids an extra key, and the head is now a companion file "
+            "with its decode settings in the server block."
+        ),
+    )
 
 
 class ModelEntry(ModelRef):
@@ -187,11 +243,16 @@ class ModelEntry(ModelRef):
         today's build reading yesterday's run.
 
         An empty settings mapping is what this shape serialises to, because it
-        inherits the recorded one from `ModelRef`. Refusing that would make a
-        config file fail to reload the bytes it just wrote.
+        inherits the recorded blocks from `ModelRef`. Refusing those would make
+        a config file fail to reload the bytes it just wrote, so a superseded
+        name is refused only when it carries a value.
         """
         if isinstance(data, dict):
-            typed = {key: value for key, value in data.items() if key != "inference" or value}
+            typed = {
+                key: value
+                for key, value in data.items()
+                if key not in SUPERSEDED_ENTRY_NAMES or value
+            }
             refuse_a_removed_knob("models.<role>", typed, SUPERSEDED_ENTRY_NAMES)
         return data
 
@@ -210,7 +271,7 @@ class ModelEntry(ModelRef):
 SUPERSEDED_ENTRY_NAMES: Final[Mapping[str, str]] = MappingProxyType(
     {
         "inference": "models.<role>.server and models.<role>.request",
-        "draft": "",
+        "draft": "models.<role>.companion_files and models.<role>.server",
     }
 )
 
@@ -251,6 +312,11 @@ class ModelsConfig(Contract):
     __schema_stem__: ClassVar[str] = "models-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21T05:00",
+            change="The draft head becomes a companion file; its decode settings join `server`.",
+            why="A file that cannot name what a publisher ships cannot describe that model.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T04:00",
             change="The settings split into llama-server's own flags and the request values.",
             why="Nineteen keys existed only to be translated into a flag.",
@@ -259,11 +325,6 @@ class ModelsConfig(Contract):
             version="2026-09-21T03:00",
             change="Both inference decode caps go; a run that pinned one still reads.",
             why="Each sent a number where the runtime's own default is already unbounded.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T02:00",
-            change="The draft head goes from the entry; a run that named one still reads.",
-            why="It changed the summary on nine articles of nine, so it never was a free speed-up.",
         ),
         ChangelogEntry(
             version="2026-09-21",
@@ -307,9 +368,7 @@ class ModelsConfig(Contract):
         """
         return tuple(
             sorted(
-                name
-                for name, field in cls.model_fields.items()
-                if field.annotation is ModelEntry
+                name for name, field in cls.model_fields.items() if field.annotation is ModelEntry
             )
         )
 
@@ -322,9 +381,7 @@ class ModelsConfig(Contract):
         of testing each one.
         """
         declared = ((name, getattr(self, name)) for name in sorted(type(self).model_fields))
-        return tuple(
-            (name, entry) for name, entry in declared if isinstance(entry, ModelEntry)
-        )
+        return tuple((name, entry) for name, entry in declared if isinstance(entry, ModelEntry))
 
     @model_validator(mode="before")
     @classmethod

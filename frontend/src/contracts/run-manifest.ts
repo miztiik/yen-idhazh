@@ -2,6 +2,40 @@
 // Never hand-edited: the drift gate regenerates it and fails on any diff
 // (CLAUDE.md section 1a). Edit the Pydantic model instead.
 
+/**
+ * One more file these weights need, and the flag that hands it to the server.
+ *
+ * A model is not always one file. Google ships a multi-token-prediction head
+ * beside the gemma weights; another family ships a projector, an adapter or a
+ * vocoder. Each is the same fact - bytes from a hub repository, verified, then
+ * named on the command line - so each is an entry here rather than a typed
+ * block of its own with its own five fields and its own argv branch.
+ *
+ * `flag` is what makes this a declaration rather than a download list. The
+ * builder emits `<flag> <landed path>` and knows nothing about what the file
+ * is for, so a projector or an adapter is a config-only change. A companion
+ * with no flag is a file that must simply be present.
+ */
+export interface CompanionFile {
+	/** Hugging Face repository the file is pulled from. */
+	repo: string;
+
+	/** The hub commit the file is fetched at. Never a branch: a branch gets whatever was uploaded last, under a digest that still reads the old bytes. */
+	revision: string;
+
+	/** The file name inside the repository, and one path segment. It becomes a path under the models directory and a shell argument beside it. */
+	file: string;
+
+	/** Required, with no exception. A blank digest makes `sha256sum --check` report 'no properly formatted checksum lines found', which names neither the entry nor the field. */
+	sha256: string;
+
+	/** How many bytes the hub reports. Absent where nobody has fetched it yet. */
+	byte_count?: number | null;
+
+	/** The llama-server flag that takes this file's landed path. Absent means the file must be present and is named by nothing on the command line. */
+	flag?: string | null;
+}
+
 /** Which config bytes a run read. A silently edited knob changes every output. */
 export interface ConfigDigest {
 	path: string;
@@ -48,6 +82,12 @@ export interface ModelRef {
 
 	/** What goes in a request body rather than on the command line, under this project's own names. A sampling value cannot reach the command line because the builder reads only the block above. */
 	request?: Record<string, unknown>;
+
+	/** Every extra file these weights need beside the GGUF the entry names. The weights themselves stay in the fields above, because moving them here would move `declared_for`, the health check and `--model` for no gain. */
+	companion_files?: CompanionFile[];
+
+	/** What a run recorded when the draft head was a typed block of its own. A plain mapping and nothing writes it: six committed run records carry it, the reader forbids an extra key, and the head is now a companion file with its decode settings in the server block. */
+	draft?: Record<string, unknown> | null;
 }
 
 export const MODEL_ROLE = ['summarize', 'route'] as const;

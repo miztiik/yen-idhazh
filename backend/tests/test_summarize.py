@@ -434,7 +434,13 @@ def test_an_entry_a_person_writes_is_refused_for_naming_a_draft_head() -> None:
     """A config file is refused by name; a run record is migrated in silence.
 
     Accepting the block and dropping it would teach an operator a knob that
-    nothing reads, which is the state the refusal exists to make loud.
+    nothing reads, which is the state the refusal exists to make loud. The
+    refusal names where the head went, because it moved rather than died: its
+    bytes to `companion_files`, its decode settings to the server block.
+
+    A null round-trips. `ModelEntry` inherits the recorded field, so this is the
+    shape it serialises to, and refusing that would make a config file fail to
+    reload the bytes it just wrote.
     """
     from pydantic import ValidationError
 
@@ -442,8 +448,8 @@ def test_an_entry_a_person_writes_is_refused_for_naming_a_draft_head() -> None:
 
     # A `mode="before"` refusal runs ahead of field validation, so the block is
     # all this has to carry to reach it.
-    with pytest.raises(ValidationError, match=r"models\.<role>\.draft is gone"):
-        ModelEntry.model_validate({"draft": None})
+    with pytest.raises(ValidationError, match=r"models\.<role>\.draft is now"):
+        ModelEntry.model_validate({"draft": {"file": "mtp-gemma-4-E4B-it.gguf"}})
 
 
 def test_server_argv_names_the_port_it_was_given() -> None:

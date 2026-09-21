@@ -214,9 +214,7 @@ class RunRecord(Model):
             "tree, not the published site and not what the Pages cap is measured against."
         ),
     )
-    site_files: int = Field(
-        ge=0, description="Files under frontend/public/digest/ after this run."
-    )
+    site_files: int = Field(ge=0, description="Files under frontend/public/digest/ after this run.")
 
     evaluation_enabled: bool | None = Field(
         default=None,
@@ -323,8 +321,8 @@ class RunManifest(Contract):
         ),
         ChangelogEntry(
             version="2026-09-21",
-            change="The embedded ModelRef loses `draft`; six records that carry it still read.",
-            why="The draft head is gone, and nothing replaces the field it was declared in.",
+            change="The embedded ModelRef gains companion files; `draft` becomes a plain mapping.",
+            why="Six records name a draft head, and the head is now one companion among several.",
         ),
         ChangelogEntry(
             version="2026-09-20",

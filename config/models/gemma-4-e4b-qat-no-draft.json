@@ -2,16 +2,6 @@
   "summarize": {
     "arch": "gemma4",
     "byte_count": 4215695776,
-    "companion_files": [
-      {
-        "byte_count": 59678016,
-        "file": "mtp-gemma-4-E4B-it.gguf",
-        "flag": "--spec-draft-model",
-        "repo": "unsloth/gemma-4-E4B-it-qat-GGUF",
-        "revision": "8c5a9e4fd5482e2be20fe0bf013b4c262a8f4265",
-        "sha256": "423074e537504b4f9ec5eafed5c639fac82c96631626efccacdd3c4039b20605"
-      }
-    ],
     "declared_for": "df0fd4ee07072c607c29a0a1cb4f98918426cca12f45a2776bdd6ee6d09a4de3",
     "file": "gemma-4-E4B-it-qat-UD-Q4_K_XL.gguf",
     "hf_base_repo": "google/gemma-4-E4B-it-qat-q4_0-unquantized",
@@ -29,10 +19,6 @@
       "--batch-size": 512,
       "--ctx-size": 65536,
       "--metrics": null,
-      "--spec-draft-n-max": 2,
-      "--spec-draft-n-min": 0,
-      "--spec-draft-p-min": 0.0,
-      "--spec-type": "draft-mtp",
       "--threads": 4,
       "--ubatch-size": 512,
       "-fa": "on",

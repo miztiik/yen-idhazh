@@ -1,5 +1,71 @@
 {
   "$defs": {
+    "CompanionFile": {
+      "additionalProperties": false,
+      "description": "One more file these weights need, and the flag that hands it to the server.\n\nA model is not always one file. Google ships a multi-token-prediction head\nbeside the gemma weights; another family ships a projector, an adapter or a\nvocoder. Each is the same fact - bytes from a hub repository, verified, then\nnamed on the command line - so each is an entry here rather than a typed\nblock of its own with its own five fields and its own argv branch.\n\n`flag` is what makes this a declaration rather than a download list. The\nbuilder emits `<flag> <landed path>` and knows nothing about what the file\nis for, so a projector or an adapter is a config-only change. A companion\nwith no flag is a file that must simply be present.",
+      "properties": {
+        "byte_count": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How many bytes the hub reports. Absent where nobody has fetched it yet.",
+          "title": "Byte Count"
+        },
+        "file": {
+          "description": "The file name inside the repository, and one path segment. It becomes a path under the models directory and a shell argument beside it.",
+          "minLength": 1,
+          "title": "File",
+          "type": "string"
+        },
+        "flag": {
+          "anyOf": [
+            {
+              "pattern": "^--[a-z0-9-]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The llama-server flag that takes this file's landed path. Absent means the file must be present and is named by nothing on the command line.",
+          "title": "Flag"
+        },
+        "repo": {
+          "description": "Hugging Face repository the file is pulled from.",
+          "minLength": 1,
+          "title": "Repo",
+          "type": "string"
+        },
+        "revision": {
+          "description": "The hub commit the file is fetched at. Never a branch: a branch gets whatever was uploaded last, under a digest that still reads the old bytes.",
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Revision",
+          "type": "string"
+        },
+        "sha256": {
+          "description": "Required, with no exception. A blank digest makes `sha256sum --check` report 'no properly formatted checksum lines found', which names neither the entry nor the field.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "repo",
+        "revision",
+        "file",
+        "sha256"
+      ],
+      "title": "CompanionFile",
+      "type": "object"
+    },
     "ConfigDigest": {
       "additionalProperties": false,
       "description": "Which config bytes a run read. A silently edited knob changes every output.",
@@ -40,6 +106,29 @@
           "default": null,
           "description": "How many bytes those weights are, as the hub reports them. Optional: an entry nobody has fetched yet declares none, and the run then records the size it opened on both sides rather than comparing a number to itself. It sits beside sha256 because it is the same kind of fact and has the same source, and because a qualification that had to be told it on the command line was a fact about these weights living somewhere other than the file that names them.",
           "title": "Byte Count"
+        },
+        "companion_files": {
+          "default": [],
+          "description": "Every extra file these weights need beside the GGUF the entry names. The weights themselves stay in the fields above, because moving them here would move `declared_for`, the health check and `--model` for no gain.",
+          "items": {
+            "$ref": "#/$defs/CompanionFile"
+          },
+          "title": "Companion Files",
+          "type": "array"
+        },
+        "draft": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What a run recorded when the draft head was a typed block of its own. A plain mapping and nothing writes it: six committed run records carry it, the reader forbids an extra key, and the head is now a companion file with its decode settings in the server block.",
+          "title": "Draft"
         },
         "file": {
           "minLength": 1,
@@ -657,9 +746,9 @@
       "why": "Neither number bounded anything the window and the timeout did not."
     },
     {
-      "change": "The embedded ModelRef loses `draft`; six records that carry it still read.",
+      "change": "The embedded ModelRef gains companion files; `draft` becomes a plain mapping.",
       "version": "2026-09-21",
-      "why": "The draft head is gone, and nothing replaces the field it was declared in."
+      "why": "Six records name a draft head, and the head is now one companion among several."
     },
     {
       "change": "Embedded inference gains CPU, cache, checkpoint and template controls.",
