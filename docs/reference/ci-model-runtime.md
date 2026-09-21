@@ -1,6 +1,6 @@
 # The model on a runner
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-21
 
 How a job gets the inference runtime and the weights, and how it proves it got
 the ones it asked for. Every value here is exact: a pin, a cache key, a digest,
@@ -9,10 +9,9 @@ a flag. The workflows that use them are in
 
 ## The inference runtime is pinned, and the cache key says which build
 
-`digest.yml`, `validate.yml`, `measure.yml`, `idhazh-pipeline-tests.yaml` and
-`probe.yml` run one llama.cpp build. Each checks the archive against its digest
-before it unpacks anything. `probe.yml` installs the build and stops there;
-the other four go on to download weights.
+`digest.yml`, `validate.yml`, `measure.yml` and `idhazh-pipeline-tests.yaml`
+run one llama.cpp build. Each checks the archive against its digest before it
+unpacks anything, and each goes on to download weights.
 
 | Variable | Value |
 | --- | --- |
@@ -32,15 +31,15 @@ the fetch, so the pin has to be readable without downloading anything.
 
 Two shared scripts read it, and the split is about what a job actually needs.
 `.github/scripts/install-llama-runtime.sh` sources the pin, installs the build
-and checks the archive; that is the whole of what a job wants when it opens no
-weights. `.github/scripts/fetch-model-runtime.sh` sources that one and then
-downloads the weights the calling step names through `env`. One script that
-always downloaded a model would turn the one-minute probe below into the
-slowest question here, and a `WEIGHTS_FILE` allowed to be empty would make the
-refusals every other caller depends on optional.
+and checks the archive; that is the runtime half on its own, and it is cached
+under its own key. `.github/scripts/fetch-model-runtime.sh` sources that one and
+then downloads the weights the calling step names through `env`. One script that
+always downloaded a model would tie the two cache keys together, and a
+`WEIGHTS_FILE` allowed to be empty would make the refusals every caller depends
+on optional.
 
-**`digest.yml`, `idhazh-pipeline-tests.yaml`, `probe.yml` and `validate.yml` are
-on those scripts.** `measure.yml` is the one still declaring the three variables
+**`digest.yml`, `idhazh-pipeline-tests.yaml` and `validate.yml` are on those
+scripts.** `measure.yml` is the one still declaring the three variables
 in its own `env:` block and fetching the build itself.
 
 So the three values are written in **two places today: the pin file and one
@@ -97,28 +96,20 @@ eviction takes the oldest last-access first. Either way the next run refetches
 the weights and reinstalls the runtime, on the publishing path. Both rules are
 in [ci-environment.md](ci-environment.md#platform-limits-that-shape-the-workflows).
 
-### `probe.yml` asks the build what it accepts
+### What the build accepts is recorded, not re-asked
 
 The pin says which binary runs. It does not say what that binary understands,
 and a models entry naming a speculation kind the build cannot drive fails late
 and quietly: the server starts, loads the draft head, drafts nothing, and the
-job spends its hour before anybody reads the flag back. `probe.yml` installs the
-same asset the three runtime arms install, runs `llama-server --help`, prints
-the speculation lines to the job summary, and keeps the whole help text as a
-30-day artifact - so the next question about this build is answered by
-downloading that artifact rather than by a second run.
+job spends its hour before anybody reads the flag back.
 
-It is a `workflow_dispatch` with no scheduled trigger and it loads no weights,
-so it costs about a minute of runner time. It takes no input for a build,
-either: it installs the build `llama-cpp-pin.sh` names, through the same shared
-install step the runtime arms reach, so its answer cannot describe a binary
-production does not run. Probing a candidate build is a branch that moves the
-pin, dispatched with `--ref` - the same commit somebody would have to make to
-adopt it.
-
-The question that made it was whether the pinned build accepts the kind a Gemma
-multi-token head needs, and that is the shape of every question it answers:
-read the runtime's own answer rather than a release note's.
+So the answer is committed rather than dispatched.
+`tests/fixtures/runtime/b10598-llama-server-help.txt` is what the pinned build
+printed for `--help` on 2026-09-15. The fixture is named for the build, so a pin
+that moves without a re-recording fails on a missing file rather than passing
+against a binary nobody runs. Re-recording it is one command against the
+installed build - `llama-server --help`, redirected into a file named for the
+new pin.
 
 ## Every download fails loudly, and every weight is checked
 

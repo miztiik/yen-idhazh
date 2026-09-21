@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # Install the pinned llama.cpp build onto this runner, and nothing else.
 #
-# Held apart from `fetch-model-runtime.sh` because `probe.yml` asks the binary
-# what it accepts and opens no weights at all. One script that always downloaded
-# a multi-gigabyte GGUF would turn a one-minute probe into the slowest question
-# in the repository, and a `WEIGHTS_FILE` allowed to be empty would make the
-# refusals every other caller depends on optional.
+# Held apart from `fetch-model-runtime.sh` so that installing the build and
+# downloading a multi-gigabyte GGUF stay two steps with two cache keys. Folding
+# them together would need a `WEIGHTS_FILE` allowed to be empty, which would
+# make the refusals every caller depends on optional.
 #
 # It takes no arguments and reads one thing from the environment, so no value is
 # pasted into this program before it is a value (Guardrail #11):
