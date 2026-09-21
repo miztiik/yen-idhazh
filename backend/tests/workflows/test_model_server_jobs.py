@@ -143,7 +143,7 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
 def test_the_model_block_is_one_action_with_a_contract_its_callers_can_read() -> None:
     """The Oracle for the extraction. One copy of the five steps, and a stated contract.
 
-    `digest.yml`'s work shard and `llm-council.yml`'s judging leg ran the same
+    `digest.yml`'s work shard and `llm-council.yml`'s judging shard ran the same
     cache, fetch, digest check, start and health probe as two copies, and the
     copies had already drifted: the daily run put the weights revision into its
     cache key and the other file got the same edit by hand afterwards. An action

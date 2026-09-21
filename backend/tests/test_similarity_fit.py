@@ -21,7 +21,7 @@ from typing import Final
 import pytest
 from conftest import read_text
 from test_same_story import at, block, item, unit
-from test_similarity_draw import MANIFEST_FIXTURE
+from test_similarity_selection import MANIFEST_FIXTURE
 
 from idhazh import assemble, cli, config, ledger
 from idhazh.contracts.digest_day import DigestDay, DigestRunRef, DigestVerticalRef
@@ -34,7 +34,7 @@ from idhazh.contracts.knobs.placement import SimilarityThresholdConfig
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.council.run_identity import council_run_id
-from idhazh.similarity import fit, fold
+from idhazh.similarity import counting, fit
 from idhazh.similarity.stamps import JudgeStamp, ScorerStamp
 from idhazh.stages import common
 from idhazh.stages.common import _load_day
@@ -91,7 +91,7 @@ def a_record(
     The scores are the keys, so a failing assertion reads in the units the line
     is reported in rather than in slot numbers a reader has to convert.
     """
-    record = fold.empty_record(knobs, scorer=a_scorer(), judge=a_judge())
+    record = counting.empty_record(knobs, scorer=a_scorer(), judge=a_judge())
     slots = list(record.slots)
     for column, counts in (
         ("same_count", positives or {}),
@@ -99,13 +99,13 @@ def a_record(
         ("unclear_count", unclear or {}),
     ):
         for score, count in counts.items():
-            index = fold.slot_index(score, record=record)
+            index = counting.slot_index(score, record=record)
             if index is None:
                 raise ValueError(f"{score} is outside the band this record covers")
             slots[index] = slots[index].model_copy(
                 update={column: getattr(slots[index], column) + count}
             )
-    return record.model_copy(update={"slots": tuple(slots), "folded_dates": dates})
+    return record.model_copy(update={"slots": tuple(slots), "counted_dates": dates})
 
 
 def a_written_row(
@@ -394,14 +394,14 @@ def test_the_applied_line_can_never_leave_the_band() -> None:
 
 
 @pytest.mark.parametrize(
-    ("reason", "negatives", "above_line", "days", "disagreement", "unclear", "fold_held"),
+    ("reason", "negatives", "above_line", "days", "disagreement", "unclear", "collect_held"),
     [
         (HeldReason.SHEET_TOO_SMALL, 10, 100, 100, 0.0, 0.0, None),
         (HeldReason.SHEET_TOO_SMALL, 400, 1, 100, 0.0, 0.0, None),
         (HeldReason.SHEET_TOO_SMALL, 400, 100, 2, 0.0, 0.0, None),
         (HeldReason.JUDGE_UNSTABLE, 400, 100, 100, 0.9, 0.0, None),
         (HeldReason.JUDGE_UNCERTAIN, 400, 100, 100, 0.0, 0.9, None),
-        (HeldReason.LEGS_MISSING, 400, 100, 100, 0.0, 0.0, HeldReason.LEGS_MISSING),
+        (HeldReason.SHARDS_MISSING, 400, 100, 100, 0.0, 0.0, HeldReason.SHARDS_MISSING),
         (HeldReason.INPUTS_CHANGED, 400, 100, 100, 0.0, 0.0, HeldReason.INPUTS_CHANGED),
     ],
 )
@@ -412,7 +412,7 @@ def test_each_gate_writes_its_own_reason_and_moves_nothing(
     days: int,
     disagreement: float,
     unclear: float,
-    fold_held: HeldReason | None,
+    collect_held: HeldReason | None,
 ) -> None:
     """One record per gate, each asked for the word it is supposed to say.
 
@@ -429,7 +429,7 @@ def test_each_gate_writes_its_own_reason_and_moves_nothing(
             days=days,
             disagreement_rate=disagreement,
             unclear_rate=unclear,
-            fold_held=fold_held,
+            collect_held=collect_held,
         )
         is reason
     )
@@ -497,7 +497,7 @@ def test_a_record_with_no_negatives_gives_no_daily_shift() -> None:
     is a measurement nobody took.
     """
     record = a_record(positives={0.950: 40}, dates=(DATE,))
-    counts = {index: fold.SlotCounts(same=1) for index in (70,)}
+    counts = {index: counting.SlotCounts(same=1) for index in (70,)}
 
     assert fit.daily_shift(record, counts, discard_share=KNOBS.discard_share) is None
 
@@ -511,7 +511,7 @@ def test_todays_own_evidence_is_what_the_daily_shift_measures() -> None:
     Today moved the answer three hundredths on its own.
     """
     record = a_record(negatives={0.960: 5, 0.930: 100})
-    today = {fold.slot_index(0.960, record=record) or 0: fold.SlotCounts(different=5)}
+    today = {counting.slot_index(0.960, record=record) or 0: counting.SlotCounts(different=5)}
 
     shift = fit.daily_shift(record, today, discard_share=KNOBS.discard_share)
 
@@ -521,7 +521,7 @@ def test_todays_own_evidence_is_what_the_daily_shift_measures() -> None:
 def test_subtracting_a_day_the_record_never_counted_is_refused() -> None:
     """A negative count lowers the walk's total and moves the line with nothing saying so."""
     record = a_record(negatives={0.930: 2})
-    too_many = {fold.slot_index(0.930, record=record) or 0: fold.SlotCounts(different=5)}
+    too_many = {counting.slot_index(0.930, record=record) or 0: counting.SlotCounts(different=5)}
 
     with pytest.raises(ValueError, match="does not hold the day being subtracted"):
         fit.without(record, too_many)
@@ -604,9 +604,9 @@ def test_a_row_is_written_on_a_day_nothing_moved(
     """A line that moves itself has to leave a record on the days it stayed put.
 
     An empty state tree is the most held day there is: no record, no verdicts, no
-    fold. The row still lands, it carries the committed floor on both sides, and
-    it says which gate refused - which is what a reader needs to tell this from a
-    day the job never ran.
+    day counted. The row still lands, it carries the committed floor on both sides,
+    and it says which gate refused - which is what a reader needs to tell this from
+    a day the job never ran.
     """
     digest_root = tmp_path / "digest"
     a_published_day(digest_root)
@@ -620,14 +620,14 @@ def test_a_row_is_written_on_a_day_nothing_moved(
 
     assert row is not None
     assert row.run_id == COUNCIL_RUN, "the run that fitted the line is the council night"
-    assert row.held_reason is HeldReason.LEGS_MISSING, "the record never counted this date"
+    assert row.held_reason is HeldReason.SHARDS_MISSING, "the record never counted this date"
     assert row.applied == pytest.approx(settings.app.assemble.same_story.floor_min)
     assert row.applied == pytest.approx(row.previous), "a held day moves the line nowhere"
     assert row.proposed is None and row.after_damping is None
 
     written = ledger.load_fitted_thresholds(state, today=DATE, within_days=1)
     assert [one.date for one in written] == [DATE], "the row survives the CSV round trip"
-    assert written[0].held_reason is HeldReason.LEGS_MISSING
+    assert written[0].held_reason is HeldReason.SHARDS_MISSING
 
 
 def test_a_day_that_never_published_is_not_a_run_to_fail(
@@ -709,7 +709,7 @@ def test_a_story_naming_itself_is_not_a_group(tmp_path: Path) -> None:
 
 
 def test_a_fortnight_of_built_days_converges() -> None:
-    """Fourteen identical days folded in sequence, and the answer stops moving.
+    """Fourteen identical days counted in sequence, and the answer stops moving.
 
     The evidence is the same shape every day on purpose: this asks whether the
     five steps settle on a stationary input, which is the only case where a
@@ -720,19 +720,19 @@ def test_a_fortnight_of_built_days_converges() -> None:
     stays: the next day's proposal is inside the dead zone and is not a move.
     Every one of the last three moves is below `settled_delta`.
     """
-    record = fold.empty_record(KNOBS, scorer=a_scorer(), judge=a_judge())
+    record = counting.empty_record(KNOBS, scorer=a_scorer(), judge=a_judge())
     a_day = {0.900: 20, 0.910: 20, 0.920: 20, 0.930: 20, 0.940: 20}
     previous = 0.94
     applied: list[float] = []
 
     for date in _days_back(14):
         counts = {
-            fold.slot_index(score, record=record) or 0: fold.SlotCounts(different=count)
+            counting.slot_index(score, record=record) or 0: counting.SlotCounts(different=count)
             for score, count in a_day.items()
         }
         record = record.model_copy(
             update={
-                "folded_dates": tuple(sorted((*record.folded_dates, date))),
+                "counted_dates": tuple(sorted((*record.counted_dates, date))),
                 "slots": tuple(
                     slot.model_copy(
                         update={"different_count": slot.different_count + counts[index].different}
@@ -747,7 +747,7 @@ def test_a_fortnight_of_built_days_converges() -> None:
             record,
             knobs=KNOBS,
             above_line=fit.judged_at_or_above(record, previous),
-            days=len(record.folded_dates),
+            days=len(record.counted_dates),
             disagreement_rate=0.0,
             unclear_rate=0.0,
         )

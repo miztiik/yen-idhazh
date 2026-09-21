@@ -490,8 +490,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--base-url",
         default=DEFAULT_ENDPOINT,
         help=(
-            "The llama-server one judging leg talks to. Every route it needs is derived "
-            "from this one address, so a leg cannot ask one server for a tokenisation "
+            "The llama-server one judging shard talks to. Every route it needs is derived "
+            "from this one address, so a shard cannot ask one server for a tokenisation "
             "and another for a verdict."
         ),
     )

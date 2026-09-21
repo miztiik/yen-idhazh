@@ -35,7 +35,7 @@ from idhazh.contracts.fitted_similarity_threshold import (
 )
 from idhazh.contracts.knobs.placement import SimilarityThresholdConfig
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
-from idhazh.similarity.fold import SlotCounts
+from idhazh.similarity.counting import SlotCounts
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,7 +194,7 @@ def clamp(
     The band walls bind after the caps. The record holds slots only between
     `band_low` and `band_high`, so a line outside them is a line the next walk
     cannot propose again. A line resting on a wall is reported as its own kind
-    rather than as silence: at `band_high` the line folds nothing at all, which
+    rather than as silence: at `band_high` the line merges nothing at all, which
     from the outside looks like the feature is switched off instead of pinned.
 
     `movement` is a distance, so it is at or above zero whichever wall moved the
@@ -278,19 +278,19 @@ def gates(
     days: int,
     disagreement_rate: float,
     unclear_rate: float,
-    fold_held: HeldReason | None = None,
+    collect_held: HeldReason | None = None,
 ) -> HeldReason | None:
     """The first gate that fails, or `None` when the fit may run.
 
     The order is fixed, so two runs over one held day name the same reason and an
-    operator comparing two rows is comparing one answer. `fold_held` comes first
+    operator comparing two rows is comparing one answer. `collect_held` comes first
     because a record today was never counted into cannot be read for anything
     else. The sheet comes next: on a young record every other gate is being asked
     of a sample too small to answer it, and "the sheet is too small" is the useful
     sentence. The judge's own health comes last.
     """
-    if fold_held is not None:
-        return fold_held
+    if collect_held is not None:
+        return collect_held
     if (
         negatives_on(record) < knobs.minimum_negatives
         or above_line < knobs.minimum_above_line

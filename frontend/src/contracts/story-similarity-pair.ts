@@ -24,7 +24,7 @@ export interface StorySimilarityPair {
 	/** The run that scored the pair. Two runs of one day judge the same pair twice, and both rows stay: each read its own day. */
 	run_id: string;
 
-	/** Which judging leg owns this row. index mod shards, never a contiguous block, so a truncated draw still spreads evenly across the legs. */
+	/** Which judging shard owns this row. index mod shards, never a contiguous block, so a truncated draw still spreads evenly across them. */
 	shard: number;
 
 	/** The pair's identity: sha256 of the two url keys joined in sorted order. Recomputed on read, never trusted from the row. */
@@ -57,13 +57,13 @@ export interface StorySimilarityPair {
 	/** What the key-point term was worth. Same reason as the cosine weight. */
 	key_point_weight: number;
 
-	/** What the judge said with the items in file order. Empty until a judging leg has read the pair. */
+	/** What the judge said with the items in file order. Empty until a judging shard has read the pair. */
 	verdict?: SameStoryVerdict | null;
 
 	/** What the judge said with the same two items in the other order. Two readings of one pair, which is what makes disagreement measurable. */
 	verdict_swapped?: SameStoryVerdict | null;
 
-	/** Whether the two readings agree. Only an agreed pair is folded into the record; a disagreement is a reading about the judge rather than about the pair. */
+	/** Whether the two readings agree. Only an agreed pair is counted into the record; a disagreement is a reading about the judge rather than about the pair. */
 	usable?: boolean;
 
 	/** The gap between the two likeliest VERDICTS at the first generated position of the file-order call, over the mass the grammar admits there. Each returned token is summed into the verdict its text opens, a token opening more than one is dropped as naming none, and what is left is renormalised. A margin near zero means the grammar chose and the model did not; empty means fewer than two verdicts took any mass, which a one-word window and a window of illegal tokens both are. Rows stamped before 2026-09-21T12:00 carry a raw gap between the top two TOKENS of a three-wide window instead, which subtracted one verdict from itself whenever a vocabulary spelled it two ways. */
@@ -78,7 +78,7 @@ export interface StorySimilarityPair {
 	/** sha256 of the grammar handed to the decoder. A grammar edit changes what the three words can be, so it is part of what the verdict means. */
 	grammar_digest?: string | null;
 
-	/** Wall clock for both calls on this pair. A per-pair reading, so a day's spread is readable off the day file; the leg bound is sized off its own run instead. */
+	/** Wall clock for both calls on this pair. A per-pair reading, so a day's spread is readable off the day file; the shard bound is sized off its own run instead. */
 	decode_seconds?: number | null;
 
 	/** Which instrument produced the verdict on this row. One member, because one judge writes this store and no other - so the column is narrowed here, where a closed set can be closed honestly. */

@@ -113,7 +113,7 @@ def test_a_tenant_narrows_the_venues_width_and_cannot_widen_it(
     A tenant that runs no model answers 1 and takes one job: four jobs for work
     that runs no model would pay four weights restores for nothing. A tenant
     that asked for more than the venue allows gets the venue's number, because
-    the ceiling is what a matrix leg costs rather than what a tenant prefers.
+    the ceiling is what a matrix shard costs rather than what a tenant prefers.
     """
     a_venue(
         venue,

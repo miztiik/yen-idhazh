@@ -309,7 +309,7 @@ export interface ConsolePanelGroup {
  *
  * A top-level block rather than a knob under a tenant, because every number
  * here prices a runner: a checkout, an install, a weights restore and a matrix
- * leg. No tenant can see any of them.
+ * shard. No tenant can see any of them.
  *
  * Until 2026-09-21 the bound sat in `run`, which is the digest pipeline's, and
  * the width sat inside the content-similarity judge's own block - so a
@@ -326,7 +326,7 @@ export interface CouncilConfig {
 	/** How much of shard_timeout_minutes a judging shard keeps back for itself, so it stops on its own clock instead of being killed on the platform's. A shard killed at the bound uploads nothing, so every verdict it had already produced dies with the units it had not started. The reserve covers what happens after the last unit: writing the records and the artifact upload. Its own knob rather than a copy of run.shard_wrap_up_minutes, because a work shard is a different stage with a different preamble. Raise it if an upload is ever cut off, and never lower it to fit one more unit. */
 	shard_wrap_up_minutes?: number;
 
-	/** How many shards split one night. The workflow reads it to size its own matrix, so it is the venue's number rather than a tenant's. 4, because one llama-server on the configured weights already peaks at 12.57 to 13.16 GiB and reaches 14.31 GiB with the shard's python - 96.0 percent of the 16 GB runner, measured 2026-09-08 over four shards of run 2026-08-29-3. A second server on one runner does not fit at all. The ceiling of 8 is what a GitHub matrix leg costs rather than a measured limit. A tenant may narrow it downward, so this is the ceiling and the default rather than an instruction. */
+	/** How many shards split one night. The workflow reads it to size its own matrix, so it is the venue's number rather than a tenant's. 4, because one llama-server on the configured weights already peaks at 12.57 to 13.16 GiB and reaches 14.31 GiB with the shard's python - 96.0 percent of the 16 GB runner, measured 2026-09-08 over four shards of run 2026-08-29-3. A second server on one runner does not fit at all. The ceiling of 8 is what a GitHub matrix job costs rather than a measured limit. A tenant may narrow it downward, so this is the ceiling and the default rather than an instruction. */
 	shards?: number;
 
 	/** Which tenants the council hosts, in the order it runs them. The one place a tenant is registered: the council resolves each slug to the module that declares it, and a slug nothing declares is refused by name. Empty is a legal night - every step still runs and the venue judges nothing - because a list in source would make adding a judge a code change and would put a roster of who may exist back inside the venue. */

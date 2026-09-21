@@ -20,13 +20,13 @@ from idhazh import assemble, config
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.story_similarity_pair import StorySimilarityPair
-from idhazh.similarity import draw
+from idhazh.similarity import selection
 from idhazh.similarity.stamps import ScorerStamp, scorer_inputs
 from idhazh.stages import common
 from idhazh.stages.assemble import _earlier_days
 from idhazh.stages.common import LOG, _load_day
 
-#: What the legs read. One name per day, because a day has one draw.
+#: What the shards read. One name per day, because a day has one draw.
 DRAW_FILENAME = "draw.csv"
 
 
@@ -62,7 +62,7 @@ def _drawn_row(
         date=date,
         run_id=run_id,
         shard=shard,
-        pair_key=draw.pair_key(left, right),
+        pair_key=selection.pair_key(left, right),
         left_url_key=left,
         right_url_key=right,
         composite_score=pair.score,
@@ -78,7 +78,7 @@ def _drawn_row(
 def _as_csv(rows: list[StorySimilarityPair]) -> str:
     """The draw as the file holds it: the contract's own columns, header first.
 
-    A header goes down even on a day that drew nothing, so a leg that opens the
+    A header goes down even on a day that drew nothing, so a shard that opens the
     file finds an empty draw rather than a missing one.
     """
     buffer = io.StringIO()
@@ -97,8 +97,8 @@ def stage_pick_item_pairs(
     settings: config.Settings,
     digest_root: Path = common.PUBLIC_ROOT,
     out_dir: Path = common.JUDGE_ROOT,
-) -> draw.Draw:
-    """Score one day's cross-source pairs, keep the borderline ones, deal the legs.
+) -> selection.Draw:
+    """Score one day's cross-source pairs, keep the borderline ones, deal the shards.
 
     **This is the day's second scoring pass and it is not free.** The same
     arithmetic inside `assemble` measures a median 22.9 s on the largest day
@@ -142,7 +142,7 @@ def stage_pick_item_pairs(
             draw_relpath(date),
         )
         assemble.write_atomic(path, _as_csv([]))
-        return draw.Draw(taken=[], pairs_in_band=0)
+        return selection.Draw(taken=[], pairs_in_band=0)
 
     earlier = _earlier_days(date, window_hours=window_hours)
     by_id: dict[str, DigestItem] = {item.item_id: item for item in day.items}
@@ -151,7 +151,7 @@ def stage_pick_item_pairs(
         # precedence the grouping pass applies to the same two blocks.
         by_id.update({one.item_id: one for one in block.items if one.item_id not in by_id})
 
-    banded = draw.in_band(
+    banded = selection.in_band(
         assemble.cross_source_pairs(
             day.items,
             day.embeddings,
@@ -165,12 +165,12 @@ def stage_pick_item_pairs(
     )
     # The line the day was actually grouped at, so a pair the day never merged is
     # never counted as one. A fitted line replaces this floor once a run writes one.
-    drawn = draw.select(
+    drawn = selection.select(
         banded, line=same_story.floor_min, budget=tuning.pair_budget, date=date, stamp=stamp
     )
     rows = [
         _drawn_row(pair, shard=shard, date=date, run_id=run_id, by_id=by_id, stamp=stamp)
-        for shard, pair in draw.assign_shards(drawn.taken, shards=shards)
+        for shard, pair in selection.assign_shards(drawn.taken, shards=shards)
     ]
     assemble.write_atomic(path, _as_csv(rows))
     LOG.info(

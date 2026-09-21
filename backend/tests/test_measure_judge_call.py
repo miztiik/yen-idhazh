@@ -57,7 +57,7 @@ def a_reading(
 def test_the_cold_call_is_reported_rather_than_dropped() -> None:
     """Call 1 is named on the summary and is in none of the figures.
 
-    It is the only call that faults the weights in off disk, and a leg pays it
+    It is the only call that faults the weights in off disk, and a shard pays it
     once against ninety-nine warm calls. Dropped, it becomes invisible; averaged
     in, it moves the number a bound is sized off.
     """

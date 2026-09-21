@@ -12,7 +12,7 @@ class CouncilConfig(Model):
 
     A top-level block rather than a knob under a tenant, because every number
     here prices a runner: a checkout, an install, a weights restore and a matrix
-    leg. No tenant can see any of them.
+    shard. No tenant can see any of them.
 
     Until 2026-09-21 the bound sat in `run`, which is the digest pipeline's, and
     the width sat inside the content-similarity judge's own block - so a
@@ -74,7 +74,7 @@ class CouncilConfig(Model):
             "and reaches 14.31 GiB with the shard's python - 96.0 percent of the 16 GB "
             "runner, measured 2026-09-08 over four shards of run 2026-08-29-3. A second "
             "server on one runner does not fit at all. The ceiling of 8 is what a GitHub "
-            "matrix leg costs rather than a measured limit. A tenant may narrow it "
+            "matrix job costs rather than a measured limit. A tenant may narrow it "
             "downward, so this is the ceiling and the default rather than an instruction."
         ),
     )

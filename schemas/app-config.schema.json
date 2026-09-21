@@ -679,7 +679,7 @@
     },
     "CouncilConfig": {
       "additionalProperties": false,
-      "description": "The clocks, the fan-out width and the tenant list one judging night runs under.\n\nA top-level block rather than a knob under a tenant, because every number\nhere prices a runner: a checkout, an install, a weights restore and a matrix\nleg. No tenant can see any of them.\n\nUntil 2026-09-21 the bound sat in `run`, which is the digest pipeline's, and\nthe width sat inside the content-similarity judge's own block - so a\nrepository with no judge configured had no width to size its matrix by and\nno clock to stop a shard on.",
+      "description": "The clocks, the fan-out width and the tenant list one judging night runs under.\n\nA top-level block rather than a knob under a tenant, because every number\nhere prices a runner: a checkout, an install, a weights restore and a matrix\nshard. No tenant can see any of them.\n\nUntil 2026-09-21 the bound sat in `run`, which is the digest pipeline's, and\nthe width sat inside the content-similarity judge's own block - so a\nrepository with no judge configured had no width to size its matrix by and\nno clock to stop a shard on.",
       "properties": {
         "shard_preamble_minutes": {
           "default": 13,
@@ -705,7 +705,7 @@
         },
         "shards": {
           "default": 4,
-          "description": "How many shards split one night. The workflow reads it to size its own matrix, so it is the venue's number rather than a tenant's. 4, because one llama-server on the configured weights already peaks at 12.57 to 13.16 GiB and reaches 14.31 GiB with the shard's python - 96.0 percent of the 16 GB runner, measured 2026-09-08 over four shards of run 2026-08-29-3. A second server on one runner does not fit at all. The ceiling of 8 is what a GitHub matrix leg costs rather than a measured limit. A tenant may narrow it downward, so this is the ceiling and the default rather than an instruction.",
+          "description": "How many shards split one night. The workflow reads it to size its own matrix, so it is the venue's number rather than a tenant's. 4, because one llama-server on the configured weights already peaks at 12.57 to 13.16 GiB and reaches 14.31 GiB with the shard's python - 96.0 percent of the 16 GB runner, measured 2026-09-08 over four shards of run 2026-08-29-3. A second server on one runner does not fit at all. The ceiling of 8 is what a GitHub matrix job costs rather than a measured limit. A tenant may narrow it downward, so this is the ceiling and the default rather than an instruction.",
           "maximum": 8,
           "minimum": 1,
           "title": "Shards",
@@ -2574,6 +2574,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "council descriptions say shard where they said leg. No knob moved.",
+      "version": "2026-09-21T13:00",
+      "why": "`leg` was a second name for the shard the council already sizes by."
+    },
+    {
       "change": "The judging-budget fit check left this contract for the tenant that owns it.",
       "version": "2026-09-21T12:40",
       "why": "Reading config pulled one judge's measured pair cost into every reader."
@@ -2587,11 +2592,6 @@
       "change": "console.context_high_percentile and console.context_cut_off_reason, additive.",
       "version": "2026-09-21T05:00",
       "why": "The context panel draws two ends a run and names what a cut-off looks like."
-    },
-    {
-      "change": "assemble.same_story.adaptive_dedup_threshold.flush_every_pairs, default 1.",
-      "version": "2026-09-21T04:30",
-      "why": "A shard that stops early kept nothing, and pairs are the only unit it has."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2675,7 +2675,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-21T12:40",
+      "default": "2026-09-21T13:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2686,5 +2686,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-21T12:40"
+  "version": "2026-09-21T13:00"
 }

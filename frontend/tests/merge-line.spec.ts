@@ -16,7 +16,7 @@ import {
 	clampEnvelope,
 	clampNote,
 	corridorOf,
-	foldDays,
+	countedDays,
 	gateNeeds,
 	heldInWords,
 	heldNote,
@@ -288,8 +288,8 @@ test.describe('the judge, and what the record still needs', () => {
 		// Ten amber squares on the panel's first fortnight would burn the colour
 		// before it ever meant anything.
 		const dates = ['2026-09-16', '2026-09-17', '2026-09-18'];
-		const filling = foldDays(dates, [judgeDay('2026-09-17')], false);
-		const settled = foldDays(dates, [judgeDay('2026-09-17')], true);
+		const filling = countedDays(dates, [judgeDay('2026-09-17')], false);
+		const settled = countedDays(dates, [judgeDay('2026-09-17')], true);
 
 		expect(filling.map((square) => square.state)).toEqual(['silent', 'filling', 'silent']);
 		expect(settled.map((square) => square.state)).toEqual(['silent', 'held', 'silent']);
@@ -298,7 +298,7 @@ test.describe('the judge, and what the record still needs', () => {
 	});
 
 	test('a fitted day is fitted whether or not the gates are met', () => {
-		const square = foldDays(['2026-09-17'], [judgeDay('2026-09-17', { heldReason: 'none' })], false);
+		const square = countedDays(['2026-09-17'], [judgeDay('2026-09-17', { heldReason: 'none' })], false);
 
 		expect(square[0].state).toBe('fitted');
 		expect(square[0].title).toContain('a line was fitted');
@@ -307,7 +307,7 @@ test.describe('the judge, and what the record still needs', () => {
 	test('the strip counts only the silent days at its newest end', () => {
 		// Staleness is about the tail. A gap in the middle is a day that went
 		// missing; a gap at the end is a record that has stopped filling.
-		const squares = foldDays(
+		const squares = countedDays(
 			['2026-09-15', '2026-09-16', '2026-09-17', '2026-09-18'],
 			[judgeDay('2026-09-15'), judgeDay('2026-09-16')],
 			false
@@ -323,7 +323,7 @@ test.describe('the judge, and what the record still needs', () => {
 			'inputs_changed',
 			'judge_unstable',
 			'judge_uncertain',
-			'legs_missing'
+			'shards_missing'
 		]) {
 			expect(heldInWords(reason), `${reason} reached a page as itself`).not.toContain('_');
 		}

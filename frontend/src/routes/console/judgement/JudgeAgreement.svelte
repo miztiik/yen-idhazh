@@ -66,7 +66,7 @@
 	const drawn = $derived(
 		days.filter((day) => day.date >= viewport.start && day.date <= viewport.end)
 	);
-	/** Only the days a leg actually read something. A day with nothing judged has
+	/** Only the days a shard actually read something. A day with nothing judged has
 	 * no rate, and a zero on the line would say the judge agreed with itself
 	 * perfectly on a day it was never asked. */
 	const read = $derived(drawn.filter((day) => day.pairsJudged > 0));

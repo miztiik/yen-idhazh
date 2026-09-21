@@ -129,7 +129,7 @@ would fail on an error nobody could read. The collecting job keeps `always()`.
 ## Units judge, and only the collecting job writes
 
 Units run in parallel, one `llama-server` each, and **none of them commits
-anything**. A `fold` job downloads every unit's output and makes one commit call,
+anything**. A `collect` job downloads every unit's output and makes one commit call,
 over every path the night's tenants named. Two processes never share a path.
 
 `fail-fast` is off. **A unit that dies costs its own work and nothing else** -
@@ -215,7 +215,7 @@ a second time.
 
 ## Design rationale: named for the room, not for this month's job
 
-Owner ruling, 2026-09-18. The legs shard a list today and never confer, so
+Owner ruling, 2026-09-18. The shards split a list today and never confer, so
 `judges` is the more literal word for what is on disk right now.
 
 **What is coming is not one question.** This loop argues a case, and a case needs
