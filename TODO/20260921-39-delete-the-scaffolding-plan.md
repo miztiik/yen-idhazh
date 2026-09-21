@@ -41,32 +41,170 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Gates whose verdict changes when the replay count falls to one | none of ten | scores compute under `if repeat == 1` at `backend/idhazh/stages/qualify.py:529`; canaries run on shard 0 only |
 | Cost of a two-address dispatch that fails | 40 to 50 minutes | owner estimate 2026-09-21 |
 
+## Section 0b - What this plan does, in one list
+
+Twenty rows. Read this before the tables.
+
+1. Delete the generated contract layer whole - every JSON schema, every generated TypeScript file, both generators, the drift tests and the continuous-integration job. Inline by hand the three types the site imports.
+2. Make the model file plain JSON. No typed field, no enumerated choice, no schema and no test for anything that crosses from it to the model server.
+3. Delete speculative decoding everywhere it reaches.
+4. Delete the capability probe workflow, the recorded option listing and the test that read it.
+5. Let a model file name the llama build it needs, so the installer stops naming one repository.
+6. Cut the startup probe from five checks to one, and then to none once row 18 makes the last one unnecessary.
+7. Take the replay dimension out of qualification. No gate's verdict reads it.
+8. Commit what each test pipeline produces, including a summary file per article under the model's own name.
+9. Delete the benchmark workflow's target and option enumerations.
+10. Delete the closed-world censuses that make a new workflow a test edit first.
+11. Delete the reader that parses the model server's log.
+12. Amend the four contract clauses this plan contradicts, in the change that contradicts them.
+13. Collapse seven hand-copied server-start blocks into one action that takes a model file path.
+14. Delete the image benchmark and the two heavy dependencies it alone needs.
+15. Delete the hosted trace sink and its dependency.
+16. Delete the reasoning budget this project invented. Keep the two-request split, which does a second job.
+17. Delete the utilities, evaluations and plan tooling nothing calls.
+18. Record each model's turn markers from its own template instead of transcribing them by hand.
+19. Replace nine hand-written console route lists in the site's tests with one exported constant.
+20. Collapse four copies of the commit-and-push call inside one workflow file.
+
 ## Section 1 - Status Reckoner
 
-Ordered by execution, not by row number. The row numbers are identities and do not move; the order below is what an owner runs, and it changed after the advisory review on 2026-09-21 (section 1a).
+**Rows are grouped into lanes. A lane is a set of rows that share files, so they run in order inside the lane and produce ONE pull request for the lane, not one per row.** Lanes are disjoint by file, so four run at once. This is what keeps pull-request churn down: the churn came from rows touching the same file in separate branches.
 
-| # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
+| # | Row title | Lane | Depends-on | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 13 | The entry path is one action taking a model file | - | A | PENDING | - | - | - |
-| 2 | The model file is plain JSON | - | A | PENDING | - | - | - |
-| 5 | The installer stops naming a repository | 2 | B | PENDING | - | - | - |
-| 6 | The startup probe keeps one check | 2 | B | PENDING | - | - | - |
-| 16 | The thinking budget and the two-span call go | 2 | B | PENDING | - | - | - |
-| 3 | The draft head goes | - | A | PENDING | - | - | - |
-| 4 | The capability probe goes | - | A | PENDING | - | - | - |
-| 14 | The image benchmark goes, and two heavy wheels with it | - | A | PENDING | - | - | - |
-| 15 | The hosted span sink goes | - | A | PENDING | - | - | - |
-| 10 | The workflow censuses go | 3,4 | C | PENDING | - | - | - |
-| 9 | The benchmark workflow's closed-world tests go | 3,4 | C | PENDING | - | - | - |
-| 11 | The server-log reader goes | - | A | PENDING | - | - | - |
-| 17 | The utilities and evaluations nothing calls go | - | A | PENDING | - | - | - |
-| 18 | The server renders the prompt, not us | 16 | C | PENDING | - | - | - |
-| 7 | Qualification asks each article once | - | A | PENDING | - | - | - |
-| 8 | Both test pipelines commit what they produce | - | A | PENDING | - | - | - |
-| 1 | The generated contract layer goes | 2,3,6,16 | D | PENDING | - | - | - |
-| 12 | The engineering contract and the pages catch up | 1 | E | PENDING | - | - | - |
+| 13 | The entry path is one action taking a model file | B | - | PENDING | - | - | - |
+| 2 | The model file is plain JSON | A | - | PENDING | - | - | - |
+| 5 | The installer stops naming a repository | A | 2 | PENDING | - | - | - |
+| 16 | The thinking budget goes; the two-span call stays | A | 2 | PENDING | - | - | - |
+| 18 | The model's own template renders the prompt | A | 2 | PENDING | - | - | - |
+| 6 | The startup probe keeps one check, then none | A | 18 | PENDING | - | - | - |
+| 11 | The server-log reader goes | A | - | PENDING | - | - | - |
+| 3 | The draft head goes | B | - | PENDING | - | - | - |
+| 4 | The capability probe goes | B | - | PENDING | - | - | - |
+| 9 | The benchmark workflow's closed-world tests go | B | 3,4 | PENDING | - | - | - |
+| 10 | The workflow censuses go | B | 3,4 | PENDING | - | - | - |
+| 14 | The image benchmark goes, and two heavy wheels with it | B | - | PENDING | - | - | - |
+| 20 | One commit call in the workflow that has four | B | - | PENDING | - | - | - |
+| 7 | Qualification asks each article once | C | - | PENDING | - | - | - |
+| 17 | The utilities and evaluations nothing calls go | C | 7 | PENDING | - | - | - |
+| 8 | Both test pipelines commit what they produce | C | - | PENDING | - | - | - |
+| 15 | The hosted span sink goes | D | - | PENDING | - | - | - |
+| 19 | One console route list, not nine | D | - | PENDING | - | - | - |
+| 1 | The generated contract layer goes | E | A,B,C,D | PENDING | - | - | - |
+| 12 | The engineering contract and the pages catch up | E | 1 | PENDING | - | - | - |
 
-**Row #12 is not last in practice.** Its first clause amendment ships inside row #2's pull request, because row #2 contradicts the contract the moment it lands and CLAUDE.md section 0 requires the conflicting rule to move in the same change. The rest of the documentation follows row #1.
+### The lanes, and why each is one pull request
+
+| Lane | Rows | The file they share | Parallel with |
+| --- | --- | --- | --- |
+| **A - the model file** | 2, 5, 16, 18, 6, 11 | `backend/idhazh/llm/server.py`, `backend/idhazh/contracts/knobs/`, `config/models/` | B, C, D |
+| **B - the workflows** | 13, 3, 4, 9, 10, 14, 20 | `.github/`, `backend/tests/workflows/_harness.py` | A, C, D |
+| **C - the ledgers and evaluations** | 7, 17, 8 | `backend/idhazh/evals/qualify.py`, `backend/idhazh/contracts/qualification.py`, `backend/idhazh/ledger.py` | A, B, D |
+| **D - the site and the sink** | 15, 19 | `frontend/tests/`, `backend/idhazh/telemetry/` | A, B, C |
+| **E - last, alone** | 1, 12 | every contract module and the engineering contract | nothing |
+
+**Lane E runs alone and last.** Row #1 touches a generated twin of every contract the other four lanes edit, so running it beside them is a conflict on every file that moved. Row #12's first clause amendment is the one exception and ships inside lane A's pull request, because row #2 contradicts the contract the moment it lands.
+
+**Parallel N = 4.** Four lanes, one worker each, one pull request each. A worker carries its lane's rows in order in one worktree. A lane returns when its pull request is green.
+
+## Section 1b - The contracts, declared before any code
+
+CLAUDE.md section 0d: intent, then contract, then code. Every persisted or interface shape this plan moves is declared here. **A worker does not invent one of these; it reads this section.** Where a shape is deleted rather than changed, the read-side behaviour for payloads already written is declared too.
+
+### C1 - The model file (rows 2, 5, 16, 18)
+
+`config/models/<name>.json`. No Pydantic model, no generated schema, no test of its contents. Read as a mapping.
+
+| Key | Shape | Who reads it | Note |
+| --- | --- | --- | --- |
+| `summarize` | mapping | everything below | one required role |
+| `judge` | mapping, optional | the similarity judge | same shape as `summarize` |
+| `<role>.id` | string | the argv builder's alias, the decision record | |
+| `<role>.repo`, `.revision`, `.file` | string | the weights fetch | |
+| `<role>.sha256`, `.byte_count` | string, integer | the weights check | **kept** - guards bytes we fetched |
+| `<role>.arch` | string | census its readers in row 6 before keeping | |
+| `<role>.runtime` | mapping, optional | the installer | **new in row 5**: `repo`, `build`, `asset`, `sha256`. Absent means the repository-wide pin |
+| `<role>.inference` | mapping | the argv builder, the request body, our own loop | **untyped**. Every key is passed through unless named below |
+| `<role>.turns` | mapping | the prompt render, the marker check | **machine-recorded in row 18**, not typed by hand |
+
+**Keys under `inference` this project's own code reads**, and which must therefore be present - a worker uses direct indexing so a missing one raises at load naming the key, never `.get` with a default:
+
+| Key | Read by |
+| --- | --- |
+| `n_ctx` | the window arithmetic in `classify/dag.py` and the context gate in `evals/qualify.py` |
+| `max_answer_tokens` | the answer request's token cap |
+| `temperature`, `top_p`, `seed` | the request body and the qualification report |
+| `request_timeout_minutes` | our own HTTP client |
+
+**Deleted from this file**: `declared_for` on both blocks, `max_think_tokens`, `draft`, and every enumerated choice. **Read-side migration**: a file that still carries a deleted key is ignored, not refused, for one release.
+
+### C2 - The turn markers, recorded not typed (row 18)
+
+Eight keys under `<role>.turns`: `turn_opening`, `turn_closing`, `reply_opening`, `reply_opening_thinking`, `thinking_close`, `system_role`, `system_joiner`, `thinking_kwarg`.
+
+They keep their current meanings and their current place in the file. **What changes is who writes them.** A one-off utility posts a known message list to the server's template-applying route, reads back the model's own rendering, derives the eight values from it, and writes them into the model file. A person runs it once per model and never types a marker.
+
+**The marker check is unchanged in force and in position**: `refuse_markers_the_boundary_cannot_hold` still runs at configuration load, in every process, over a plain mapping, with no server. Guardrail #11 does not move.
+
+### C3 - The qualification record (rows 7, 17)
+
+| Change | Shape | Read-side migration |
+| --- | --- | --- |
+| `repeats` removed from the shard and the report | integer | a committed payload carrying it still loads; the value is ignored |
+| `repeat` removed from an observation | integer | same |
+| Five demoted scores removed from the report's diagnostics | named strings | same. **The measuring functions are untouched** - see row 17 decision 7 |
+
+**Not touched by any row**: `backend/idhazh/evals/metrics.py`, `backend/idhazh/evals/score.py`, `backend/idhazh/corpus.py`. Those set the published confidence line and filter the fine-tuning corpus.
+
+### C4 - The summaries collection (row 8)
+
+**New committed collection.** `state/<model id>/summaries/<YYYY>/<MM>/<DD>/<item id>.json`.
+
+| Property | Value |
+| --- | --- |
+| Payload | the summary shape the pipeline already produces. No new shape is invented |
+| One file per | article |
+| Written by | the record stage, and only when a trial state root is set |
+| Directory name | the model's own identifier, so the tree says which model wrote it |
+| Retention | a window declared on the line that creates the collection (Guardrail #12) |
+| Production | never writes it - the nightly run leaves the trial root unset |
+
+### C5 - The entry action (row 13)
+
+`.github/actions/model-server/action.yml`.
+
+| Input | Before | After |
+| --- | --- | --- |
+| `github_token` | required | required |
+| `port` | required | required |
+| `models_file` | absent | **new** - path to the model file, defaulting to the committed pointer |
+| `weights_repo`, `weights_revision`, `weights_file`, `llama_cpp_build` | required | **removed** - read from the model file |
+| `draft_repo`, `draft_revision`, `draft_file` | optional | **removed** with row 3 |
+
+Steps go from five to four: cache, fetch-and-verify, start, one health check. The three shell scripts become one.
+
+### C6 - What leaves the repository entirely (rows 1, 3, 4, 11, 14, 15, 17)
+
+`schemas/`, `frontend/src/contracts/`, the two generators, the drift tests and the drift job. The draft-head configuration and its argv flags. The capability probe workflow, the recorded option listing and its test. The server-log optimisation reader. The image benchmark and its two dependencies. The hosted trace sink and its dependency. The utilities, evaluations and plan tooling with no caller.
+
+**Three types are inlined by hand before the generated layer goes**, next to the code that imports them: one panel-group type in the site's configuration reader, and two in its machine-fingerprint reader.
+
+### C7 - The engineering contract (row 12)
+
+| Clause | After |
+| --- | --- |
+| Guardrail #3 | The producer declares and validates its own payloads in its own language. A configuration file this project authors needs no declared shape. Generation into a second language happens where a second language reads the bytes - today, nowhere |
+| Section 1a, second bullet | Deleted. Nothing generates and nothing drifts |
+| Section 9, the drift-gate line | Deleted from the Definition of Done, along with the schema version-stamp line |
+| Section 10, hand-editing a generated artifact | Deleted - there are none |
+| Section 11 | Scoped to persisted payloads a later run reads. A configuration file this project authors is out |
+| `AGENTS.md` | The three phrases saying contracts are generated from the models, named and removed |
+
+**Guardrail #11 and Guardrail #12 are untouched.**
+
+### C8 - The pre-flight position, stated once
+
+Rows 6 and 18 together leave **no check running before the first article is fetched**. That is the intended end state and it is written here so it is never a surprise: after this plan, a wrong model file is found by the run failing, by the ledger's own cells, or by a person reading the summaries. The cells that report it are `summary_finish_reason`, `OUTPUT_TRUNCATED`, `CONTEXT_EXCEEDED` and `source_words_before_cap`, all committed per item. The failure none of them sees is a window declared larger than the weights were trained for; the run stamp records the trained length beside the configured one as an observation, never a refusal. The rest of the documentation follows row #1.
 
 ## Section 1a - What the advisory review changed, 2026-09-21
 
@@ -634,3 +772,50 @@ Four proposals were declined. Keeping the capability probe until the fork is pro
  | 1 | Keep rendering ourselves | Every new model needs its markers transcribed by hand, they can be silently wrong, and a startup check exists solely to catch that | Eight configuration fields, the rendering machinery and the check, kept forever | Owner |
  | 2 | Do this before the Bonsai run | The new model's markers would have to be transcribed first, which is exactly the work this row deletes. Doing it first is better, and it is why this row is not last | Andre |
  | 3 | Keep the raw-prompt path for the judge only | Two prompt paths is the drift this project keeps finding in other places | About 80 lines kept, and one model family rendering differently from the rest | Fowler |
+
+## Section 20 - Row #19 - One console route list, not nine
+
+- **Scope:** Replace nine hand-written lists of the site's console routes, spread across nine test files, with one exported constant they all read.
+- **Files touched:**
+  - `frontend/tests/console-axis.spec.ts`, `console-chrome.spec.ts`, `console-model-rule.spec.ts`, `console-nav.spec.ts`, `console-polarity.spec.ts`, `console-readout.spec.ts`, `console-title.spec.ts`, `console-voices.spec.ts`, `console-window-claims.spec.ts`
+  - one new exported constant beside them, or the existing route source if one can be read at test time
+- **Acceptance gates:** local - `npm --prefix frontend run test:browser -- --project console`; CI - full suite.
+- **Oracle:** every console route the site serves is visited by every spec that claims to cover all of them. **This check fails on the base tree today**, which is the defect: the site serves five console routes, three of those specs list three and two list four, so one route is visited by none of the five.
+- **Decisions:**
+
+ | # | Decision | Authority |
+ | --- | --- | --- |
+ | 1 | Adding a console route is one edit, not nine. This is the same closed-world census rows #9 and #10 delete on the backend, one language along | Fowler |
+ | 2 | The list is derived from what the site actually serves where that is readable at test time, and is a single exported constant otherwise | Fowler |
+ | 3 | The row fixes the coverage hole it finds rather than preserving it. A spec that claimed to cover every route and missed one was not covering anything | Susan |
+
+- **Rejected alternatives:**
+
+ | # | Option | Why rejected | What it would cost to take | Authority |
+ | --- | --- | --- | --- | --- |
+ | 1 | Correct the nine lists and leave them nine | Fixes today's hole and keeps tomorrow's. The tenth route repeats it | Nine edits now and nine again per route | Fowler |
+ | 2 | Split the two very large console specs at the same time | A different question - one file answering many - and it belongs to its own row | A large refactor bundled into a small fix | Fowler |
+
+## Section 21 - Row #20 - One commit call in the workflow that has four
+
+- **Scope:** Collapse the four separate commit-and-push invocations inside the nightly workflow into one call that stages what that job produced.
+- **Files touched:**
+  - `.github/workflows/digest.yml`
+  - `backend/tests/workflows/test_staged_paths.py`, `test_daily_commit_steps.py`
+- **Acceptance gates:** local - `python -m pytest backend/tests/workflows -q`; CI - full suite, and the nightly run's next dispatch watched to completion before the row closes.
+- **Oracle:** the set of paths committed by a nightly run is identical before and after, asserted against the staged-path list rather than against a run. What it cannot settle: whether a single call is as resilient to a push race as four were - the script's own race handling is unchanged, and it is the script that handles the race, not the number of calls.
+- **The finding:** the shared commit script has eight call sites across five workflows, and **four of the eight are in one file**. That is the same copy pattern row #13 removes from the server-start block, one directory along.
+- **Decisions:**
+
+ | # | Decision | Authority |
+ | --- | --- | --- |
+ | 1 | The script itself stays whole. It has real call sites and a test that drives it through race and rebase cases against real repositories, which is this project's own code being wrong | Fowler and Carmack, agreed |
+ | 2 | Four calls in one file is the defect, not the script. Each stages a different set of paths at a different point in the job; where two can be one, they are | Carmack |
+ | 3 | A call that must stay separate because its paths do not exist yet at the earlier point stays separate, and the row says which and why | Carmack |
+
+- **Rejected alternatives:**
+
+ | # | Option | Why rejected | What it would cost to take | Authority |
+ | --- | --- | --- | --- | --- |
+ | 1 | Rewrite the script to take an explicit mode argument | A real improvement to its shape - the mode is currently implicit in which of three variables are set, with three illegal combinations guarded by hand - but it is a structural change with no behaviour behind it and belongs in its own commit | A refactor of a 308-line script in a plan about deletion | Fowler |
+ | 2 | Leave all four | The nightly job is the one that runs five times a day, so a redundant commit step is paid five times daily | Nothing to take | Carmack |
