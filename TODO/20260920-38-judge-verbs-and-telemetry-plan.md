@@ -4,7 +4,7 @@
 
 **Level**: 5 (a persisted contract with committed rows, a committed state tree that moves, a new meaning for a `run_id` cell, and a change to the judge's model entry)
 
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 2 rows in flight - the council lane and the judge lane - refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 2 rows in flight - the council lane and the judge lane - refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. **Authorized and in flight since 2026-09-21; 19 rows have landed. Read Section 0e before doing anything else.**
 
 ## Section 0 - Operating contract
 
@@ -64,6 +64,58 @@ That sentence is worth nothing unless it is checkable, so it is five conditions 
 | The summary-quality judge's own stages | Plan 36 owns them | Plan 36 reaching its scoring row |
 | New console panels | The judgement console already renders the holdout against the applied line | An operator asking for something the committed rows cannot answer |
 | Renaming `backend/var/judge/` | The scratch directory keeps a word naming one loop's selection | The parallel work already moving production artefacts out of the code tree |
+
+## Section 0e - Handover, 2026-09-21
+
+**Read this section, Section 1's Reckoner, and nothing else in this file until you have a row to run.** The plan is 196 KB. Four workers have run out of context reading it whole. Index it with `git grep -n '^### Row #' -- TODO/20260920-38-judge-verbs-and-telemetry-plan.md`, then read only the line range of the row you hold.
+
+### Where it stands
+
+**19 of 29 rows are on `main`** (PRs 989, 990, 992, 993, 994, 995, 996, 997, 999, 1000, 1004, 1007, 1011, 1012, 1013, 1014). Ten are left: 13, 14, 15b, 18, 19, 20, 21a, 21b, 22, 23. No pull request is open and no worktree is held.
+
+The council can now be built, tested and run with no judge in the repository: it has its own package, its own knobs, its own run identity, its own verbs over a config-declared tenant list, and its own shard-outcome record. What is left is the judge side's own stores and stamps, the night plan, and the closing checks.
+
+### The owner rulings this run took - quote these, do not re-open them
+
+| Ruling | What it settles |
+| --- | --- |
+| **No council number is ever derived from a judge's throughput** (2026-09-21) | `council.shard_timeout_minutes` stays 200. It is venue policy against the platform ceiling and the nightly schedule. Deriving it from a measured per-pair cost is the coupling row #9 removed, one layer down. A tenant that cannot fit the window is refused by its own fit check, which is row #25's, not the council's. |
+| **The two clocks are separate** (2026-09-21) | The job clock starts at provisioning; the judging process starts about 13 minutes later. `council.shard_preamble_minutes` (13, measured) exists, and the work window is `shard_timeout_minutes - shard_preamble_minutes - shard_wrap_up_minutes` = 175 minutes. |
+| **`run_id` carries two meanings, split by the `version` stamp** (trigger 1, signed off) | The publishing run on a pair row written before 2026-09-21; the judging run on a council row. Written into `docs/architecture/publishing/llm-council.md`. |
+| **Row #8's rewrite ran** (trigger 2, signed off) | `state/story-similarity/scored-pairs/` is 29 columns over 82 rows. Every original cell is unchanged; `judge_id` is filled, the other six new cells are empty. |
+| **Row #11b's stamp reset is taken** (trigger 4, signed off) | The replay was taken first and is recorded in `docs/reference/benchmarks/what-the-margin-rule-changes.md`. A night before the reset and a night after carry different quantities in `first_token_margin`; the empty `decode_digest` on the 82 older rows is the discriminator. |
+| **Rows #13, #18 and #21a are signed off** (triggers 5, 6, 8; 2026-09-21) | #18 moves `state/story-similarity/` to `state/content-similarity-judge/` - 7 tracked files, 152.7 KB, 24 files naming the old path. #13 renames the published `folded_dates` with its read-side migration in the same commit. #21a adds `actions: read` to the workflow permissions and raises artifact retention from 1 day to 3 - the default credential is passed explicitly and no stored token is introduced. |
+| **A force-push on a pushed feature branch was accepted once** (PR #997) | Recorded in that squash commit's body. It is not a precedent: `docs/how-to/ship-a-pr.md` still forbids it, and the rule is to merge `origin/main` in. |
+
+### What to run next
+
+**Rows #18, #13 and #21a all conflict pairwise, so they are strictly sequential.** #18 and #21a share `.github/workflows/llm-council.yml`; #18 and #13 share `state/story-similarity/`; #13 and #21a share `backend/idhazh/contracts/knobs/council.py`.
+
+**Run #18 first.** It moves the tree every later judge-side row reads, so landing it early costs the other rows nothing and landing it late costs each of them a rewrite. Then #13, then #21a.
+
+After those three land, three groups open at once and the file lists must be re-checked before dispatch: #19 (needs 18), #14 (needs 13), and 22 / 23 / 21b (all need 21a). Row #20, the plan pointer, is last and needs 19, 21b and 23.
+
+### Defects found and not fixed
+
+| Where | What |
+| --- | --- |
+| `docs/concepts/pipeline-loop.md`, `docs/architecture/publishing/llm-council.md` | Corrected already: both said 77.6 seconds a call. Row #10 measured 110.98 seconds a judged pair. |
+| Row #17's report | `host_model` is a column nothing fills. Row #5's contract argues for it; row #17's rejected alternative 3 refuses recording the machine per shard. Both cannot be right; a person settles which. |
+| Row #17's report | `test_ledger_staging`'s settlement-key parity check compares the writer's key to the registry's key, and both read the same constant - so it cannot catch a key losing a cell. Every keyed store is exposed to this. |
+| Row #11b's report | `decode_digest` excludes `grammar` but not `json_schema`, so a schema-route caller stamps its whole schema with no column beside it. The schema route is the summariser's, so changing the exclusions moves every summariser digest. |
+| Row #25's report | `backend/idhazh/prune/one_at_a_time.refuse_by_name` hardcodes the word "prune" in its refusal, so any other verb reusing it tells the operator the wrong verb. About four lines across three call sites plus the wording assertions. |
+| Row #24's report | `idhazh.ledger` pulls three of the content-similarity judge's contracts into `idhazh.council.tenancy`'s closure. Not a judge's code, but a judge's published shape inside the venue's closure. Row #18 moves those stores and is the natural owner. |
+
+### How to run a row
+
+`docs/how-to/execute-a-plan.md` is the procedure. What earned its keep this run, beyond it:
+
+- **Cut a worktree off `origin/main` for every row.** Never edit the shared checkout - other agents hold it.
+- **Brief the worker with the line ranges to read, never the file.** Give it what already landed that its row builds on, the environment traps, and the gates. A worker that reads the plan whole dies.
+- **Make the worker commit, push and open the pull request BEFORE the long gates.** Two workers in earlier plans lost hours of correct work by ending a turn mid-suite.
+- **Ask every worker to prove its Oracle could fail** - what it broke, and what the failure printed. Roughly one oracle in three does not bite until it is proved.
+- **Merge one pull request at a time and re-check mergeability between them.** `gh pr view <n> --json mergeable` returns UNKNOWN for a few seconds after any merge; query twice.
+- **The Reckoner's columns are `Row | Title | Depends-on | Group | Status | Worktree | PR | Subagent`.** A worker sets its own row to DONE and leaves `PR` as `-`; the owner fills the number after the merge and clears the worktree cell. Never commit `TODO/STATUS.md`.
 
 ## Section 1 - Status Reckoner
 
