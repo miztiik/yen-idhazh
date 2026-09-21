@@ -38,14 +38,14 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 | [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 11 | 11 | 6 |
-| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 12 | 17 | 3 |
+| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 13 | 16 | 2 |
 
 ## In flight - 0
 
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 37
+## Ready now - 36
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -88,7 +88,6 @@ section 3 is where it is answered.
 | #19 | 37 | C | Which prompts get re-read, and how fast | 9 |
 | #20 | 37 | C | What is holding the runner's memory | 5, 9 |
 | #2 | 38 | D | The council knows which run it is | 1a |
-| #8 | 38 | G | The pair row gains the stamp, and the store is rewritten | - |
 | #11b | 38 | K | The content-similarity judge reads its own margin | 11a |
 
 ## Waiting on another row - 91
@@ -174,7 +173,7 @@ section 3 is where it is answered.
 | #18 | 37 | E | Docs, the living-page corrections, and the orphan sweep | all names no row |
 | #12 | 38 | J | The four verbs name their work | 24 is PENDING |
 | #13 | 38 | J | `leg` and `fold` leave the vocabulary | 12 is PENDING |
-| #14 | 38 | K | The judge fills the stamp | 8 is PENDING; 11b is PENDING; 13 is PENDING |
+| #14 | 38 | K | The judge fills the stamp | 11b is PENDING; 13 is PENDING |
 | #15b | 38 | L | The content-similarity judge fills its metrics and registers as a tenant | 14 is PENDING |
 | #24 | 38 | N | The council runs verbs of its own over a tenant list | 2 is PENDING |
 | #17 | 38 | O | The council runs the tenant and files its own outcome row | 24 is PENDING |
@@ -182,7 +181,7 @@ section 3 is where it is answered.
 | #18 | 38 | Q | The store groups under the judge that fills it | 17 is PENDING |
 | #19 | 38 | R | Where the content-similarity judge's merge line stands against its holdout | 18 is PENDING |
 | #21a | 38 | S | The council asks every tenant what it is behind on | 17 is PENDING; 24 is PENDING |
-| #21b | 38 | T | The content-similarity judge answers which nights it is behind on | 8 is PENDING; 11b is PENDING; 12 is PENDING; 21a is PENDING |
+| #21b | 38 | T | The content-similarity judge answers which nights it is behind on | 11b is PENDING; 12 is PENDING; 21a is PENDING |
 | #22 | 38 | U | The guard that stops a shard committing is renamed and re-reasoned | 21a is PENDING |
 | #23 | 38 | U | The council runs green with no judge in the repository | 17 is PENDING; 21a is PENDING; 24 is PENDING; 25 is PENDING |
 | #20 | 38 | V | The plan pointer | 19 is PENDING; 21b is PENDING; 23 is PENDING |
