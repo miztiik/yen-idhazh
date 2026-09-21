@@ -15,9 +15,12 @@ the room, and that page is the one case being heard in it today.
 ## It is a separate workflow because of the budget, not the schedule
 
 At the cap the same-story block permits - 200 pairs, judged in both orders -
-that is 400 model calls. At 77.6 seconds a call it is **8.6 hours of model time
-run serially**, and a GitHub job is killed at 6 hours with nothing written
-(`CLAUDE.md` Guardrail #2).
+that is 400 model calls. A pair costs a measured 110.98 seconds at its worst,
+so the cap is **6 hours 10 minutes of model time run serially**, and a GitHub
+job is killed at 6 hours with nothing written (`CLAUDE.md` Guardrail #2). At the
+average pair, 94.53 seconds, it is 5 hours 15 minutes - which clears the ceiling
+by 45 minutes, and a bound has to survive a bad night rather than an average one
+([what a judge pair costs](../../reference/benchmarks/what-a-judge-pair-costs.md)).
 
 **Today's median day is 33 pairs, and it would fit inside `digest.yml`
 comfortably.** That is the argument for the split rather than against it: sizing

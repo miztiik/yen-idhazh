@@ -611,24 +611,37 @@ on an old major, fails CI.
 `setup-node` still selects Node 22 for the frontend commands. That is the
 application runtime and is unrelated to the runtime an action itself declares.
 
-### One action is ours, and it is not pinned to a major
+### Two actions are ours, and neither is pinned to a major
 
-`.github/actions/candidate-config` is a composite action this repository owns.
-A `./`-prefixed action resolves to this repository at the commit the run checked
-out, so there is no major to approve and nothing for a version pin to add - it
-is already the code under test. The contract test asserts the directory exists
-rather than asserting a version, and a second test reads the shell it runs.
+`.github/actions/candidate-config` and `.github/actions/model-server` are
+composite actions this repository owns. A `./`-prefixed action resolves to this
+repository at the commit the run checked out, so there is no major to approve
+and nothing for a version pin to add - it is already the code under test. The
+contract test asserts the directory exists rather than asserting a version, and
+the harness reads what each one runs.
 
-It builds the scratch config: a copy of `config/` whose `models_file` points at
-the candidate, and which differs from the committed tree in that one line and
-nothing else. `measure.yml` and `validate.yml` both call it. A step duplicated
-across two files is a step that drifts the day one of them is edited, and these
-two workflows had already proved it.
+`candidate-config` builds the scratch config: a copy of `config/` whose
+`models_file` points at the candidate, and which differs from the committed tree
+in that one line and nothing else. `measure.yml` and `validate.yml` both call
+it. A step duplicated across two files is a step that drifts the day one of them
+is edited, and these two workflows had already proved it.
 
-**What the extraction cost, stated rather than implied.** The two workflows are
-47 lines shorter and there is one new file a reader has to open, plus 36 lines
-of test machinery that teaches the harness to read a composite action. It does
-not remove a check; it removes the second place the step could be edited.
+`model-server` is the five steps that put a healthy `llama-server` in front of a
+job: restore the cache, fetch on a miss, check the digests, start the server,
+and prove it answers for the weights it was handed. `digest.yml`'s `work` shard
+and `llm-council.yml`'s judging shard both call it, and they are the two jobs
+that run all five. They share one cache entry by construction now - there is one
+key literal, so the two cannot key it differently.
+
+**What the extraction cost, stated rather than implied.** For
+`candidate-config`: two workflows 47 lines shorter, one new file to open, and 36
+lines of test machinery that taught the harness to read a composite action's
+shell. For `model-server`: the two workflows are 155 lines shorter and the new
+file is 195, because it carries both callers' comments merged rather than two
+near-copies of them; the harness grew 117 lines, most of it one reader that
+follows a `./` action into its steps so that every oracle over the block still
+finds it. Neither extraction removes a check; each removes the second place a
+step could be edited.
 
 ## Design rationale
 
@@ -728,6 +741,46 @@ disliked.
 | One commit converting all five | A revert takes four working conversions out with the fifth, and the daily run is in that set - so the blast radius of a mistake is a published day |
 | Leave the pin copied, add a test that compares the copies | The test goes green on five agreeing copies and says nothing about the sixth place somebody adds next |
 | One script with an optional `WEIGHTS_FILE` | Every caller's weights refusals become optional to satisfy one caller that opens no weights. Converting `probe.yml` first forced the question "what does a job that opens no weights need" to be answered before any weights-carrying caller moved, and the answer was a second script, `install-llama-runtime.sh`, which `fetch-model-runtime.sh` sources |
+
+#### The model block is a block, and counting its inputs says the wrong thing
+
+The five steps that stand a model server up - restore the cache, fetch on a
+miss, check the digests, start the server, prove it answers - were two copies:
+`digest.yml`'s `work` shard and `llm-council.yml`'s judging shard. They had
+already drifted. The daily run put the weights revision into its cache key and
+the judging run got the same edit by hand afterwards, so for a while the only
+thing holding the two keys together was a test that compared two literals - and
+a comparison can only catch a drift somebody has already shipped. There is one
+literal now, and nothing left to compare it against.
+
+**The rule above counts inputs against callers, and on this block that count
+lies.** `model-server` takes ten inputs for two callers. None of them is a mode
+flag. Eight carry one fact out of the committed model entry, republished by
+whichever job the caller runs first; two carry what a composite action cannot
+reach for itself - the token, because `secrets` is not in scope inside an
+action, and the port, because it is declared in the caller's workflow `env`.
+Every input takes the same value in both callers and no input changes what the
+action does.
+
+**So the test is what an input CHANGES, not how many there are.** An input that
+selects behaviour is duplication wearing a shared name, and the count catches
+it. An input that carries a value the action cannot look up is plumbing, and
+plumbing scales with what the block needs rather than with how many callers it
+has.
+
+**The role is the input it deliberately does not take.** The action serves
+`models.summarize` and no caller chooses. That is exactly why the two callers
+can share one cache entry: they open the same bytes. A caller serving a
+different model needs a different key, a different recorded digest and a
+different alias to assert, which is a design change rather than a parameter.
+
+**The port is an input rather than an inherited variable.** A composite action's
+`run` steps are handed the job's environment, so `$LLAMA_PORT` would probably
+have resolved on its own - but "probably" is a production run to find out, and
+the failure would be a five-hour job that never starts a server. Handing it over
+costs one line per caller, leaves the port's one home in the caller's workflow
+`env`, and turns an assumption about the runner into a declaration the file
+states.
 
 #### What stays duplicated, and why
 

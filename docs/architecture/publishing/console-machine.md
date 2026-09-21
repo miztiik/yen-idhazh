@@ -9,7 +9,7 @@ two questions every panel names, the five routes and the strip, the standing ban
 and the one window that governs every page. How any figure here is allowed to
 read is [../../concepts/console-design.md](../../concepts/console-design.md), and
 the machinery every chart shares is [console-charts.md](console-charts.md).
-Eleven panels under **four headings**. Nine read `state/item-health/` and
+Twelve panels under **four headings**. Ten read `state/item-health/` and
 `state/host-fingerprint/`, which are the two instruments this route puts beside
 each other; three - the two machine panels and the split - read the machine
 record for the processor and the flags as well. All three are read at
@@ -27,6 +27,7 @@ ledgers add no telemetry column and no reader sees a cell of any of them.
 | Where the time went | Whether the slowest articles are getting slower | one plot a percentile, one mark a run | Whether the slow end of a run is moving, and how wide the gap is today. |
 | How close we are to the limits | How close an article came to using up the machine's memory | one mark an item of the newest run | How little the kernel had left at one article's worst moment, whether it gave the memory back, and how long the queue was. |
 | How close we are to the limits | How close the longest text came to the model's limit | one mark a run | Whether raising the truncation cap is even possible. |
+| What the model spends | What one article costs the machine | three figures over the span, each a range across the articles that recorded it | What a change to the prompt, the model or how many articles a day runs will cost before the run that pays for it. |
 | What the model spends | How much text the model has to read again each time | one column a day | Whether a bigger cache would save wall clock. |
 | What the model spends | How much of a run is reading and how much is writing | one group a run, in either unit | Which half of the model call the run actually spent itself on. |
 | What the model spends | What this would have cost somewhere else | four figures over the whole span, and one column a day or one running line | Whether the runner time was a good trade, and whether the trade is getting worse. |
@@ -221,6 +222,75 @@ three times.
 **Every run's own numbers stay on the page**, in a screen-reader list under the
 chart. The chart is the shape of the question; the list is the table it was made
 from, and nothing on this route is only in a picture.
+
+## What one article costs, and why it is not the run total shared out
+
+**A run total divided by the item count cannot disagree with the run total, so
+it checks nothing.** It is the same number wearing a different unit: every
+article of a run gets the mean by construction, a run whose slowest article cost
+ten times its quickest reports neither figure, and a change that moved only the
+slow end moves the printed number by a tenth of what it actually did. Every
+figure on this panel is measured per article and printed as a range - lowest,
+middle, highest - which is the only shape that can price a change before the run
+that pays for it. Rejected alternative: Fowler, Row #12.
+
+**Three costs, three instruments, and they are not interchangeable.**
+
+- **Processor time** is `cpu_busy_pct` times the processors the machine record
+  names, times the item's own clock. The kernel counts every logical processor
+  on one `/proc/stat` line, so the share is a share of all of them and the
+  multiplier is `threads`, never `cores`. On a machine running two threads a
+  core - which is what every committed record describes - using `cores` halves
+  every figure. `frontend/tests/console-article-cost.spec.ts` runs the same
+  arithmetic both ways and refuses the answer that used the wrong one.
+- **Model time** is `prefill_ms + decode_ms`, which the summarize stage sums
+  over whatever calls the article made before the row is written. It is a total
+  over the work the article needed, so nothing on this panel is keyed to how
+  many calls an article makes.
+- **Added memory** is the rise in `llama_rss_bytes` between neighbouring items
+  of one shard. A step, not a level: the level says what the server is holding,
+  and the question here is what one more article adds to it.
+
+**The memory step is taken between neighbours of ONE shard, and never across
+two.** A fresh shard starts a fresh model server, so the difference between the
+last item of one shard and the first of the next is a restart rather than an
+article. A gap in `item_index` is skipped for the same reason: whatever happened
+to the item the ledger missed is not the next item's doing. Authority: Susan,
+Row #12 decision 2.
+
+**The track holds zero, because the step goes below it.** Measured 2026-09-21
+over the 1,162 steps the committed ledger holds, 402 of them are falls - the
+server gives memory back as often as two times in five. A track running from the
+lowest reading to the highest would put the biggest fall at the left edge,
+exactly where the smallest rise would sit, so the sign would be invisible. The
+shared `spanTrack` runs `0..max` and cannot draw a negative low, which is why
+this panel carries its own track rather than borrowing that one.
+
+**A processor-second is unreadable without the hour it has to fit inside**, so
+the panel prints what one runner-hour supplies next to the figure - the
+processor count times 3,600 - and quotes it on the smallest machine the span ran
+on, because that is the one a cost has to fit inside. It then says how many
+articles that hour buys at the middle figure. A share of an hour was printed
+first and was cut: it rounds to `0.0%` as soon as an article is cheap, which
+reads as free, and it answers a question nobody asked. Measured 2026-09-21 over
+the 954 committed articles that resolve to a machine record, the middle article
+takes 1,861 processor-seconds against the 14,400 a runner-hour supplies on four
+logical processors - 7.7 articles an hour of the whole machine. Authority:
+Susan, Row #12 decision 4, under `CLAUDE.md` Guardrail #10.
+
+**Where no machine record names a processor count, the figure is a dash and the
+panel says why.** The item ledger records a share; only the machine record says
+what the share is a share of. Filling that in from the runner we usually get
+would publish an assumption as a measurement. Of the 1,325 committed articles
+that recorded both a busy share and a clock on 2026-09-21, 371 belong to runs
+the machine record never reached, so the panel prints both counts rather than
+quietly dropping the difference. Authority: Susan, Row #12 decision 5.
+
+**What the panel cannot answer, it names.** The memory step belongs to the
+model's work, and nothing in the ledger says which half of it - the prompt the
+server read or the reply it wrote. The measurement that would settle it is a
+resident-memory reading taken at each call boundary instead of one reading when
+the article ended. Authority: Susan, Row #12 decision 3.
 
 ## Two panels left the page, and what the reader lost is named
 
