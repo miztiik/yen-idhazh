@@ -324,16 +324,69 @@ export function modelWork(
 	);
 }
 
-/** The slice of a published day's runs the model-change boundary needs, and the
- * day the store behind it changed.
+/** The slice of a published day's runs the model-change boundary needs.
  *
- * Both are declared in `$lib/console/settings-moved`, which a panel imports and
- * which therefore cannot import this file back. Re-exported here because every
- * caller of `pipelineChanges` already reaches for them through this module.
+ * Declared in `$lib/console/settings-moved`, which a panel imports and which
+ * therefore cannot import this file back. Re-exported here because every caller
+ * of `pipelineChanges` already reaches for it through this module.
  */
-import { RECORDED_INPUTS_FROM, type RecordedRunDay } from '../console/settings-moved';
+import { type RecordedRunDay } from '../console/settings-moved';
 
-export { RECORDED_INPUTS_FROM, type RecordedRunDay };
+export { type RecordedRunDay };
+
+/** Which of the two records a day's identity came out of.
+ *
+ * The pipeline recorded what it ran as one opaque digest on the score ledger
+ * until 2026-09-12, and as a named input manifest from 2026-09-13. The two
+ * shapes always compare unequal, so a comparison across them would draw a
+ * boundary nothing caused. Naming the kind is what lets the walk below skip
+ * exactly that pair, and nothing else.
+ */
+type IdentityKind = 'stamp' | 'manifest';
+
+interface DayIdentity {
+	kind: IdentityKind;
+	values: Set<string>;
+}
+
+/** What each date ran, and which record says so.
+ *
+ * One flat pass per source, so the cost is the rows and the records rather than
+ * their product - both arrive bounded to the widest window preset.
+ *
+ * A date carrying both is a date something replayed: `assemble` rewrites
+ * `run.json` unconditionally, so re-running it over an old day gives that day an
+ * input manifest while its score rows keep their digest. The manifest wins and
+ * the digest beside it is not read, because a record that can name a field beats
+ * one that can only say a field moved.
+ */
+function identitiesByDate(
+	scores: Record<string, string>[],
+	runs: readonly RecordedRunDay[]
+): Map<string, DayIdentity> {
+	const found = new Map<string, DayIdentity>();
+	const add = (date: string, kind: IdentityKind, identity: string) => {
+		const held = found.get(date);
+		if (held === undefined || (held.kind === 'stamp' && kind === 'manifest')) {
+			found.set(date, { kind, values: new Set([identity]) });
+			return;
+		}
+		if (held.kind === kind) held.values.add(identity);
+	};
+	for (const row of scores) {
+		const date = row.date ?? '';
+		const stamp = row.pipeline_fingerprint ?? '';
+		if (date === '' || stamp === '') continue;
+		add(date, 'stamp', stamp);
+	}
+	for (const day of runs) {
+		for (const record of day.records) {
+			if (record.inputs === null || record.inputs === undefined) continue;
+			add(day.date, 'manifest', JSON.stringify(record.inputs));
+		}
+	}
+	return found;
+}
 
 /** Every day the pipeline that wrote the summaries was not the one before it.
  *
@@ -355,43 +408,29 @@ export { RECORDED_INPUTS_FROM, type RecordedRunDay };
  * carrying several is one boundary, because a day is one column and a change
  * inside it cannot be placed any finer.
  *
- * The cutover day itself is never a boundary: its predecessor's identity comes
- * from the score ledger and its own from the run record, so the comparison there
- * is a shape artefact rather than a fact about the pipeline.
+ * Two days recorded different ways are never a boundary: the store changed there
+ * and the pipeline need not have, and the two shapes compare unequal whatever
+ * happened. That is found in the records rather than on a date, so it holds for
+ * a replayed day and for a fixture as readily as for the one real changeover.
  *
- * Derived over the whole ledger and never over a window, so a chart opening on
- * the day after a change still knows the change happened.
+ * Derived over the widest window preset rather than the open one, so a chart
+ * opening on the day after a change still knows the change happened. The two
+ * arguments arrive bounded by their own callers (`docs/concepts/growing-reads.md`).
  */
 export function pipelineChanges(
 	scores: Record<string, string>[],
 	runs: readonly RecordedRunDay[] = []
 ): string[] {
-	const identities = new Map<string, Set<string>>();
-	const add = (date: string, identity: string) =>
-		identities.set(date, (identities.get(date) ?? new Set<string>()).add(identity));
-	for (const row of scores) {
-		const date = row.date ?? '';
-		const stamp = row.pipeline_fingerprint ?? '';
-		if (date === '' || stamp === '' || date >= RECORDED_INPUTS_FROM) continue;
-		add(date, stamp);
-	}
-	for (const day of runs) {
-		if (day.date < RECORDED_INPUTS_FROM) continue;
-		for (const record of day.records) {
-			if (record.inputs !== null && record.inputs !== undefined) {
-				add(day.date, JSON.stringify(record.inputs));
-			}
-		}
-	}
+	const identities = identitiesByDate(scores, runs);
 	const dates = [...identities.keys()].sort();
 	const changes: string[] = [];
 	for (let index = 1; index < dates.length; index += 1) {
-		// The cutover is a change of store, not of pipeline. Skipping it is the
-		// whole of the seam's cost, and it costs at most one true boundary.
-		if (dates[index - 1] < RECORDED_INPUTS_FROM && dates[index] >= RECORDED_INPUTS_FROM) continue;
-		const before = identities.get(dates[index - 1]) as Set<string>;
-		const now = identities.get(dates[index]) as Set<string>;
-		if ([...now].some((identity) => !before.has(identity))) changes.push(dates[index]);
+		const before = identities.get(dates[index - 1]) as DayIdentity;
+		const now = identities.get(dates[index]) as DayIdentity;
+		if (before.kind !== now.kind) continue;
+		if ([...now.values].some((identity) => !before.values.has(identity))) {
+			changes.push(dates[index]);
+		}
 	}
 	return changes;
 }
