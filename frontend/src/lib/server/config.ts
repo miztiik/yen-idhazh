@@ -281,6 +281,10 @@ export interface ConsoleConfig {
 	/** The same count that puts the day in the headline sentence. Equal to the
 	 * mark, because a signal whose expected value is zero has no spread to split. */
 	model_disk_reads_named: number;
+	/** Which percentile of an article's context use a run draws beside its largest. */
+	context_high_percentile: number;
+	/** The word the model server uses for a reply that ran out of room. */
+	context_cut_off_reason: string;
 }
 
 /** One heading on a console route, and the panels under it, in drawn order.

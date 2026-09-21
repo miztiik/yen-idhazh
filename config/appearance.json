@@ -23,6 +23,8 @@
     "chart_minutes_target": 6.0,
     "chart_rule_days": 14,
     "chart_width": 760,
+    "context_cut_off_reason": "length",
+    "context_high_percentile": 99.0,
     "default_window_days": 30,
     "doubt_rows": 10,
     "failure_list_max": 25,

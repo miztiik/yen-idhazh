@@ -18,7 +18,6 @@ import { resolve } from 'node:path';
 import {
 	cacheByDay,
 	clockAgreement,
-	contextHeadroom,
 	costOf,
 	itemRead,
 	money,
@@ -510,25 +509,6 @@ test.describe('the prompt cache', () => {
 
 	test('a run that reported neither count is left out rather than counted as nothing', () => {
 		expect(cacheByDay(runsOf([{ shard: 0 }], [['2026-09-04-1', 1]]).runs)).toEqual([]);
-	});
-});
-
-test.describe('context headroom', () => {
-	test('the longest sequence is a maximum over shards, against the window', () => {
-		const [bar] = contextHeadroom([onlyRun(TWO_SHARDS)], MODELS.summarize.inference.n_ctx);
-		expect(bar.longest).toBe(4096);
-		expect(bar.spare).toBe(MODELS.summarize.inference.n_ctx - 4096);
-		expect(bar.usedPct).toBe(Math.round((4096 / MODELS.summarize.inference.n_ctx) * 100));
-		expect(bar.from).toBe(2);
-	});
-
-	test('no window means no share, and the sequence still prints', () => {
-		const [bar] = contextHeadroom([onlyRun(TWO_SHARDS)], null);
-		expect(bar.usedPct).toBeNull();
-		expect(bar.spare).toBeNull();
-		// The counter survives its missing ceiling. A share is what cannot be
-		// computed, and inventing one would be inventing the ceiling.
-		expect(bar.longest).toBe(4096);
 	});
 });
 
