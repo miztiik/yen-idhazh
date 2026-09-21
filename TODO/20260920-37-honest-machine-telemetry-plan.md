@@ -90,7 +90,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 14 | The memory board drops the disputed mark | 2, 9 | C | PENDING | - | - | - |
 | 15 | The shard board gains the clocks nobody reads | 9 | C | DONE | p37r15 | #987 | worker |
 | 16 | Machine cards gain uptime, clock speed, cache size and copy speed | 6, 9 | C | DONE | p37r16 | #988 | worker |
-| 19 | Which prompts get re-read, and how fast | 9 | C | PENDING | - | - | - |
+| 19 | Which prompts get re-read, and how fast | 9 | C | IN REVIEW | p37r19 | #1002 | worker |
 | 20 | What is holding the runner's memory | 5, 9 | C | PENDING | - | - | - |
 | 21 | What the context window actually costs | 9 | C | IN REVIEW | p37r21 | #991 | worker |
 | 22 | Dotted rules where a setting moved | 9, 21 | C | PENDING | - | - | - |
