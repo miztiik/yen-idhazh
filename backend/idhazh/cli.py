@@ -565,11 +565,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.stage == "council-settle":
         # Beside its siblings: it runs after every shard has reported and calls
-        # no model of its own.
+        # no model of its own. It is also the one council verb that writes under
+        # `state/`, so it is the one that is handed the root.
         council_session.settle(
             settings.app.council,
             date=args.date or _today(),
             run_id=_council_run(parser, args.stage, args.run_id),
+            state_dir=common.STATE_ROOT if args.state_root is None else args.state_root,
         )
         return 0
 

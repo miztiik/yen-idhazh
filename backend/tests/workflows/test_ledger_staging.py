@@ -96,9 +96,6 @@ STORES_NOTHING_FILLS_YET: Final[Mapping[str, str]] = MappingProxyType(
         "state/content-similarity-judge/metrics": (
             "the content-similarity judge, on its way out of each unit of work it ran"
         ),
-        "state/llm-council/shard-outcomes": (
-            "the council, on its way out of each unit of work it ran"
-        ),
         "state/story-similarity/archive": "the fold, on the day a stamp under the record moves",
         "state/story-similarity/holdout-pairs.csv": (
             "a person, and no run ever - the file is typed by hand"
@@ -347,10 +344,17 @@ def _branch_verbs(branch: ast.If) -> list[str]:
 def _dispatched_modules() -> dict[str, set[ModuleType]]:
     """CLI verb -> the stage modules its own branch of `cli.main` enters.
 
-    A verb reaches a module when its branch calls a `stage_*` entry point on it. A
-    helper borrowed from another stage is not a dispatch: charging a job with another
+    A verb reaches a module when its branch calls a public function on it. A helper
+    borrowed from another stage is not a dispatch: charging a job with another
     stage's ledgers because it borrowed one function would ask for staging nobody
-    needs, and a test that asks for the wrong thing gets edited away.
+    needs, and a test that asks for the wrong thing gets edited away. Every borrowed
+    helper in the router is private, which is what the name is read for.
+
+    **The marker cannot be a name prefix.** The digest pipeline calls its entry
+    points `stage_*`; the council names its own after the work they do, because a
+    verb named for its mechanism is what this plan's rename removed. A prefix test
+    therefore saw the council enter no module at all and left its store charged to
+    no job.
     """
     reached: dict[str, set[ModuleType]] = {}
     for branch in ast.walk(ast.parse(inspect.getsource(cli.main))):
@@ -363,12 +367,12 @@ def _dispatched_modules() -> dict[str, set[ModuleType]]:
         for call in ast.walk(ast.Module(body=branch.body, type_ignores=[])):
             if not isinstance(call, ast.Call) or not isinstance(call.func, ast.Attribute):
                 continue
-            if not call.func.attr.startswith("stage_"):
+            if call.func.attr.startswith("_"):
                 continue
             if not isinstance(call.func.value, ast.Name):
                 continue
             entered = getattr(cli, call.func.value.id, None)
-            if isinstance(entered, ModuleType):
+            if isinstance(entered, ModuleType) and entered.__name__.startswith(f"{PACKAGE}."):
                 modules.add(entered)
         for verb in verbs:
             reached.setdefault(verb, set()).update(modules)

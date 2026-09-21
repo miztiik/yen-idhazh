@@ -20,13 +20,21 @@ import json
 from pathlib import Path
 from typing import Final
 
-from idhazh import config
+from idhazh import config, ledger
 from idhazh.council.registry import tenants
+from idhazh.council.session import shard_width
 
 #: How many jobs one repository may have running at once. GitHub's number, not
 #: ours: past it a job waits its turn, and lowering it would be a throttle
 #: nobody asked for (CLAUDE.md Guardrail #2).
 PLATFORM_JOB_CEILING: Final = 20
+
+#: The venue's own store, staged by the collecting job alongside whatever the
+#: tenants named. Built from the constants the store is addressed by rather than
+#: spelled, so a move of the tree moves this with it.
+COUNCIL_STORE: Final = (
+    f"{ledger.STATE_DIRNAME}/{ledger.COUNCIL_DIRNAME}/{ledger.SHARD_OUTCOMES_DIRNAME}"
+)
 
 
 def cells(config_dir: Path, *, dates: tuple[str, ...]) -> list[dict[str, object]]:
@@ -38,7 +46,7 @@ def cells(config_dir: Path, *, dates: tuple[str, ...]) -> list[dict[str, object]
     council = config.load(config_dir).app.council
     found: list[dict[str, object]] = []
     for host in tenants(council.tenants):
-        width = min(host.shard_count, council.shards)
+        width = shard_width(council, host)
         for date in dates:
             found += [
                 {"tenant": host.judge_id, "date": date, "shard": shard, "shards": width}
@@ -48,14 +56,21 @@ def cells(config_dir: Path, *, dates: tuple[str, ...]) -> list[dict[str, object]
 
 
 def committed_paths(config_dir: Path) -> tuple[str, ...]:
-    """Every store path tonight's tenants write, for the collecting job to stage.
+    """Every store path tonight's night writes, for the collecting job to stage.
 
     Asked of the tenants rather than spelled in the workflow. A second tenant's
     output was never going to be committed by a list of one tenant's four paths.
+
+    The venue's own store leads, because the venue records every unit it ran
+    whatever the tenant inside it wrote. A night with no tenant writes nothing at
+    all and names nothing, which is what keeps the commit step skipped.
     """
     council = config.load(config_dir).app.council
-    staged: list[str] = []
-    for host in tenants(council.tenants):
+    hosted = tenants(council.tenants)
+    if not hosted:
+        return ()
+    staged = [COUNCIL_STORE]
+    for host in hosted:
         staged += [path for path in host.committed_paths if path not in staged]
     return tuple(staged)
 

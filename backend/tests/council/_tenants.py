@@ -81,6 +81,69 @@ TENANT = PaperTenant()
 #: failure this makes visible.
 UNIMPORTABLE_SOURCE: Final = 'raise RuntimeError("the search imported a package with no tenant")\n'
 
+#: A tenant whose units end the way a night under test needs them to.
+#:
+#: Not a mock either. It computes every answer it gives; what a test chooses is
+#: the shape of the night - which unit dies before it reports, how the rest end,
+#: and whether the tenant ran a model at all. A mock would hand back a plausible
+#: row it never built, which is the failure mode this whole file exists to stay
+#: clear of (Guardrail #7).
+SCRIPTED_SOURCE: Final = '''
+"""One tenant whose units end the way a test needs them to."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from idhazh.contracts.base import DateStamp, RunId
+from idhazh.contracts.council_shard_outcome import ShardOutcome
+from idhazh.council.tenancy import ShardResult
+
+JUDGE_ID = "{slug}"
+
+#: The units that die before they report anything back.
+DEAD_UNITS = {dead_units}
+
+#: How every unit that does report ends, and what it says the model cost.
+OUTCOME = ShardOutcome("{outcome}")
+
+MODEL_CALLS = {model_calls}
+
+
+@dataclass
+class ScriptedTenant:
+    """A tenant that files nothing of its own and reports what it was written to."""
+
+    judge_id: str = JUDGE_ID
+    shard_count: int = {shard_count}
+    committed_paths: tuple[str, ...] = ()
+
+    def nights_outstanding(self, *, window: tuple[DateStamp, ...]) -> tuple[DateStamp, ...]:
+        return tuple(window)
+
+    def prepare(self, *, date: DateStamp, run_id: RunId) -> ShardResult:
+        return ShardResult(outcome=ShardOutcome.COMPLETED)
+
+    def run_shard(
+        self,
+        *,
+        date: DateStamp,
+        run_id: RunId,
+        shard: int,
+        shards: int,
+        deadline: float,
+    ) -> ShardResult:
+        if shard in DEAD_UNITS:
+            raise RuntimeError("this unit died before it reported anything back")
+        return ShardResult(outcome=OUTCOME, model_calls=MODEL_CALLS)
+
+    def settle(self, *, date: DateStamp, run_id: RunId) -> ShardResult:
+        return ShardResult(outcome=ShardOutcome.NOTHING_TO_DO)
+
+
+TENANT = ScriptedTenant()
+'''
+
 
 def a_venue(
     root: Path,
@@ -114,6 +177,40 @@ def a_venue(
         (neighbour / "__init__.py").write_text(
             UNIMPORTABLE_SOURCE, encoding="utf-8", newline="\n"
         )
+
+
+def a_scripted_venue(
+    root: Path,
+    *,
+    package: str,
+    slug: str,
+    shard_count: int,
+    dead_units: tuple[int, ...] = (),
+    outcome: str = "completed",
+    model_calls: int | None = None,
+) -> None:
+    """Write one tenant under `root` whose units end the way this test needs.
+
+    `dead_units` names the unit numbers that raise before reporting. `outcome`
+    is how every unit that does report ends, and `model_calls` is what it says
+    the model cost - `None` for a tenant that has no model at all.
+    """
+    (root / package).mkdir(parents=True, exist_ok=True)
+    (root / package / "__init__.py").write_text("", encoding="utf-8", newline="\n")
+    inside = root / package / slug.replace("-", "_")
+    inside.mkdir(parents=True, exist_ok=True)
+    (inside / "__init__.py").write_text("", encoding="utf-8", newline="\n")
+    (inside / "tenant.py").write_text(
+        SCRIPTED_SOURCE.format(
+            slug=slug,
+            shard_count=shard_count,
+            dead_units=repr(dead_units),
+            outcome=outcome,
+            model_calls=repr(model_calls),
+        ),
+        encoding="utf-8",
+        newline="\n",
+    )
 
 
 def forget(package: str) -> None:

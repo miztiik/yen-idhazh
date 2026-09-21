@@ -101,6 +101,7 @@ from typing import Final, NamedTuple, Protocol
 
 from idhazh import day_partition, month_partition
 from idhazh.contracts.base import RUN_ID_PATTERN, ServerJob
+from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, supersedes
@@ -271,6 +272,15 @@ STORY_SIMILARITY_PAIR_KEY: Final = ("date", "run_id", "pair_key", "judged_by_run
 #: in curated config must not make its dead address eligible again, and editing
 #: that feed's URL already produces a different key.
 FEED_RETIREMENT_KEY: Final = ("endpoint_key",)
+
+#: What makes two council rows the same record. `judge_id` is in the key and a
+#: night running two tenants is why: one council run has one run id, so tenant
+#: A's unit 0 and tenant B's unit 0 on one judged date carry the same date, the
+#: same run and the same unit number. Without the slug the settlement would
+#: delete the second as a repeat, and the night would read as half of what it
+#: was. A repeat under all four cells is a second attempt at one unit, which did
+#: the same work under the same clock, so the first row wins.
+COUNCIL_SHARD_OUTCOME_KEY: Final = ("date", "run_id", "judge_id", "shard")
 
 #: What makes two eval rows the same measurement. The address says which article,
 #: the digest says which words came out, and the scorer version says which
@@ -1536,6 +1546,33 @@ def append_fitted_thresholds(
     return landed - drop_repeated_rows(path, STORY_SIMILARITY_THRESHOLD_KEY)
 
 
+def append_council_shard_outcomes(
+    state_dir: Path, date: str, rows: Iterable[CouncilShardOutcome]
+) -> int:
+    """Append a night's recorded units of council work into that date's own file.
+
+    Settled against `COUNCIL_SHARD_OUTCOME_KEY` straight after the write, the
+    way `append_fitted_thresholds` is. A repeat under all four cells is a second
+    attempt at one unit, which ran the same work under the same clock, so the
+    first row wins and there is nothing to choose between them.
+
+    **A night with no unit to record writes no file**, which is the one place
+    this writer differs from the three above it. A header with no rows under it
+    is a real day file to the partition walker, so an empty write here would put
+    a permanent day in the prune target and the day inventory that no council
+    run ever had. The store's directory is kept in the checkout by its own
+    `.gitkeep`, so the staged path is there whether or not tonight wrote to it.
+
+    Returns how many rows the file gained, so a caller can log the count.
+    """
+    recorded = list(rows)
+    if not recorded:
+        return 0
+    path = council_shard_outcomes_path(state_dir, date)
+    landed = extend_ledger_file(path, CouncilShardOutcome.csv_columns(), recorded)
+    return landed - drop_repeated_rows(path, COUNCIL_SHARD_OUTCOME_KEY)
+
+
 def load_fitted_thresholds(
     state_dir: Path, *, today: str, within_days: int
 ) -> list[FittedSimilarityThreshold]:
@@ -2047,6 +2084,11 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     checkouts leaving one date fitted twice. Its sibling `scored-pairs/` joins on
     the same terms: `run_id` is in its key, so what settles there is a second
     attempt at one execution and never a second run of the day.
+
+    `state/llm-council/shard-outcomes/` joined on 2026-09-21 with its writer. Its
+    key carries `judge_id` as well as the run and the unit, because one council
+    run has one run id and a night hosting two tenants would otherwise file two
+    tenants' unit 0 under the same three cells.
     """
     flat: list[KeyedLedger] = [
         KeyedLedger(feed_retirements_path(state_dir), FEED_RETIREMENT_KEY, FeedRetirementRow),
@@ -2081,6 +2123,11 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
                 scored_pairs_path(state_dir, date),
                 STORY_SIMILARITY_PAIR_KEY,
                 StorySimilarityPair,
+            ),
+            KeyedLedger(
+                council_shard_outcomes_path(state_dir, date),
+                COUNCIL_SHARD_OUTCOME_KEY,
+                CouncilShardOutcome,
             ),
             KeyedLedger(
                 span_rollup_path(state_dir, date[:7]), SPAN_ROLLUP_KEY, SpanRollupRow
@@ -2118,6 +2165,12 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
             KeyedLedger(path, STORY_SIMILARITY_PAIR_KEY, StorySimilarityPair)
             for path in day_partition.day_files(
                 state_dir / STORY_SIMILARITY_DIRNAME / SCORED_PAIRS_DIRNAME
+            )
+        ),
+        *(
+            KeyedLedger(path, COUNCIL_SHARD_OUTCOME_KEY, CouncilShardOutcome)
+            for path in day_partition.day_files(
+                state_dir / COUNCIL_DIRNAME / SHARD_OUTCOMES_DIRNAME
             )
         ),
         *(

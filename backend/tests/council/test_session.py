@@ -20,15 +20,23 @@ from pathlib import Path
 import pytest
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
-from idhazh import cli, config
+from idhazh import cli, config, ledger
+from idhazh.contracts.council_shard_outcome import (
+    SELECTION_UNIT,
+    SETTLEMENT_UNIT,
+    CouncilShardOutcome,
+    ShardOutcome,
+)
 from idhazh.council import registry, session
 from idhazh.council.deadline import SECONDS_A_MINUTE
 
-from ._tenants import a_venue, forget, written
+from ._tenants import a_scripted_venue, a_venue, forget, written
 
 A_VENUE = "a_paper_venue"
 
 A_SLUG = "a-paper-tenant"
+
+ANOTHER_SLUG = "another-paper-tenant"
 
 A_DATE = "2026-09-20"
 
@@ -41,24 +49,70 @@ COUNCIL_VERBS = ("council-prepare", "council-settle")
 
 @pytest.fixture
 def venue(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
-    """A writable package on the import path, pointed at by the registry."""
+    """A writable package on the import path, and a scratch root off the checkout.
+
+    The council's own scratch root is a real directory inside the repository, so
+    a test that left it alone would write one night's rows into the tree it is
+    testing.
+    """
     monkeypatch.syspath_prepend(str(tmp_path))
     monkeypatch.setattr(registry, "TENANT_PACKAGE", A_VENUE)
+    monkeypatch.setattr(session, "COUNCIL_ROOT", tmp_path / "var" / "council")
     forget(A_VENUE)
     yield tmp_path
     forget(A_VENUE)
 
 
-def _config_registering(root: Path, slug: str) -> Path:
-    """A whole `config/` in a temp directory, with one slug registered."""
+def _config_registering(root: Path, *slugs: str) -> Path:
+    """A whole `config/` in a temp directory, with the named slugs registered."""
     target = root / "config"
     shutil.copytree(CONFIG_DIR, target)
     raw = json.loads(read_text(target / "idhazh.json"))
-    raw["council"]["tenants"] = [slug]
+    raw["council"]["tenants"] = list(slugs)
     (target / "idhazh.json").write_text(
         json.dumps(raw, indent=2), encoding="utf-8", newline="\n"
     )
     return target
+
+
+def _the_councils_record(state_root: Path) -> list[CouncilShardOutcome]:
+    """The night's own day file, read back through the contract that wrote it."""
+    lines = (
+        ledger.council_shard_outcomes_path(state_root, A_DATE)
+        .read_text(encoding="utf-8")
+        .splitlines()
+    )
+    columns = lines[0].split(",")
+    return [
+        CouncilShardOutcome.from_csv_row(dict(zip(columns, line.split(","), strict=True)))
+        for line in lines[1:]
+    ]
+
+
+def _a_whole_night(
+    config_root: Path, state_root: Path, *, slugs: tuple[str, ...], shards: int, dead: tuple[int, ...]
+) -> None:
+    """Pick the work, run every unit, then settle - all through the command line."""
+    common = ["--date", A_DATE, "--run-id", A_RUN, "--config", str(config_root)]
+    assert cli.main(["council-prepare", *common]) == 0
+    for slug in slugs:
+        for shard in range(shards):
+            argv = [
+                "council-shard",
+                "--tenant",
+                slug,
+                *common,
+                "--shard",
+                str(shard),
+                "--shards",
+                str(shards),
+            ]
+            if shard in dead:
+                with pytest.raises(RuntimeError):
+                    cli.main(argv)
+            else:
+                assert cli.main(argv) == 0
+    assert cli.main(["council-settle", *common, "--state-root", str(state_root)]) == 0
 
 
 def _judge_modules_reached(module: str, prefixes: tuple[str, ...]) -> list[str]:
@@ -174,7 +228,7 @@ def test_the_night_runs_every_hosted_tenant_for_the_date_it_was_given(venue: Pat
     council = config.load(config_root).app.council
 
     session.prepare(council, date=A_DATE, run_id=A_RUN)
-    session.settle(council, date=A_DATE, run_id=A_RUN)
+    session.settle(council, date=A_DATE, run_id=A_RUN, state_dir=venue / "state")
 
     tenant = written(A_VENUE, A_SLUG).TENANT
     assert tenant.prepared == [A_DATE]
@@ -192,6 +246,138 @@ def test_the_scratch_root_the_workflow_carries_is_the_one_the_council_names() ->
         f"{session.COUNCIL_ROOT_RELPATH}/{A_DATE}"
     )
     assert not Path(session.COUNCIL_ROOT_RELPATH).is_absolute()
+
+
+def test_a_unit_that_died_leaves_a_gap_the_recorded_width_makes_readable(
+    venue: Path, tmp_path: Path
+) -> None:
+    """The Oracle: three of four units recorded, and the pair says which is missing.
+
+    The outcome vocabulary has no word for a unit that died, and that is the
+    design - a unit the platform kills cannot write one either. What an operator
+    reads is the count: three rows that each say the work was split four ways.
+    """
+    a_scripted_venue(venue, package=A_VENUE, slug=A_SLUG, shard_count=4, dead_units=(2,))
+    config_root = _config_registering(venue, A_SLUG)
+    state_root = tmp_path / "state"
+
+    _a_whole_night(config_root, state_root, slugs=(A_SLUG,), shards=4, dead=(2,))
+
+    recorded = _the_councils_record(state_root)
+    ran = [row for row in recorded if row.shard >= 0]
+
+    assert sorted(row.shard for row in recorded) == [SETTLEMENT_UNIT, SELECTION_UNIT, 0, 1, 3]
+    assert [row.shard for row in ran] == [0, 1, 3], "the unit that died filed nothing"
+    assert {row.shards for row in recorded} == {4}
+    assert len(ran) < ran[0].shards, "the pair is what an operator reads as a missing unit"
+    assert {row.judge_id for row in recorded} == {A_SLUG}
+
+
+def test_a_unit_that_stopped_on_its_own_clock_still_has_its_row_filed(
+    venue: Path, tmp_path: Path
+) -> None:
+    """The second Oracle case. A unit that ran out of time is not a unit that vanished.
+
+    The council files the outcome the tenant reported and never infers one from
+    its own clock, so this row says `stopped_on_deadline` and carries the cost of
+    the work that did get done.
+    """
+    a_scripted_venue(
+        venue,
+        package=A_VENUE,
+        slug=A_SLUG,
+        shard_count=1,
+        outcome="stopped_on_deadline",
+        model_calls=7,
+    )
+    config_root = _config_registering(venue, A_SLUG)
+    state_root = tmp_path / "state"
+
+    _a_whole_night(config_root, state_root, slugs=(A_SLUG,), shards=1, dead=())
+
+    unit = next(row for row in _the_councils_record(state_root) if row.shard == 0)
+
+    assert unit.outcome is ShardOutcome.STOPPED_ON_DEADLINE
+    assert unit.model_calls == 7, "the count comes off what the tenant handed back"
+    assert unit.seconds_spent >= 0
+    assert unit.started_at.endswith("Z")
+    assert unit.run_id == A_RUN
+
+
+def test_a_tenant_with_no_model_files_empty_cost_cells_and_never_zeros(
+    venue: Path, tmp_path: Path
+) -> None:
+    """Null and zero are different facts, and only the tenant knows which it is.
+
+    Every one of these cells is copied off what the tenant handed back. The
+    council opens no store of a tenant's and reads no field of a tenant's
+    contract, so a tenant with no model files nothing rather than four zeros.
+    """
+    a_scripted_venue(venue, package=A_VENUE, slug=A_SLUG, shard_count=1)
+    config_root = _config_registering(venue, A_SLUG)
+    state_root = tmp_path / "state"
+
+    _a_whole_night(config_root, state_root, slugs=(A_SLUG,), shards=1, dead=())
+
+    unit = next(row for row in _the_councils_record(state_root) if row.shard == 0)
+
+    assert (unit.model_calls, unit.tokens_in, unit.tokens_out, unit.model_seconds) == (
+        None,
+        None,
+        None,
+        None,
+    )
+    assert unit.csv_row()["model_calls"] == "", "an empty cell, never a zero"
+
+
+def test_two_tenants_of_one_night_both_keep_their_own_first_unit(
+    venue: Path, tmp_path: Path
+) -> None:
+    """One council run has one run id, so the slug is what tells the two apart.
+
+    Without `judge_id` in the settlement key, tenant B's first unit carries the
+    same three cells as tenant A's and the pass that drops repeats would delete
+    one of them - a night that ran twice as much work as the record shows.
+    """
+    for slug in (A_SLUG, ANOTHER_SLUG):
+        a_scripted_venue(venue, package=A_VENUE, slug=slug, shard_count=1)
+    config_root = _config_registering(venue, A_SLUG, ANOTHER_SLUG)
+    state_root = tmp_path / "state"
+
+    _a_whole_night(config_root, state_root, slugs=(A_SLUG, ANOTHER_SLUG), shards=1, dead=())
+
+    recorded = _the_councils_record(state_root)
+
+    assert "judge_id" in ledger.COUNCIL_SHARD_OUTCOME_KEY
+    assert sorted((row.judge_id, row.shard) for row in recorded) == [
+        (A_SLUG, SETTLEMENT_UNIT),
+        (A_SLUG, SELECTION_UNIT),
+        (A_SLUG, 0),
+        (ANOTHER_SLUG, SETTLEMENT_UNIT),
+        (ANOTHER_SLUG, SELECTION_UNIT),
+        (ANOTHER_SLUG, 0),
+    ]
+
+
+def test_a_night_that_hosts_nobody_leaves_no_day_file_behind(tmp_path: Path) -> None:
+    """A header with no rows under it is a real day to the partition walker.
+
+    Written once, it is a phantom day in the prune target and the day inventory
+    for as long as the store exists - so a night with nothing to record writes
+    nothing at all. The store's directory is kept by its own `.gitkeep`.
+    """
+    state_root = tmp_path / "state"
+
+    assert (
+        cli.main(
+            ["council-settle", "--date", A_DATE, "--run-id", A_RUN, "--state-root", str(state_root)]
+        )
+        == 0
+    )
+
+    assert not ledger.council_shard_outcomes_path(state_root, A_DATE).exists()
+    assert (REPO_ROOT / ledger.STATE_DIRNAME / ledger.COUNCIL_DIRNAME
+            / ledger.SHARD_OUTCOMES_DIRNAME / ".gitkeep").exists()
 
 
 def test_no_judge_module_is_in_the_import_closure_of_a_council_verb() -> None:

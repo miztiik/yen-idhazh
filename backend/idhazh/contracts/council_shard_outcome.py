@@ -44,6 +44,14 @@ from idhazh.contracts.base import (
 #: cell and nothing else, so this is the only bound the column carries.
 JUDGE_ID_MAX_LENGTH = 64
 
+#: The two units that run once a date rather than once a shard, reserved below
+#: zero so neither can ever collide with a unit of the split. Picking the work
+#: and counting what came back are both units of council work that can die, and
+#: a death with no row against it is a night nobody can read.
+SELECTION_UNIT = -1
+
+SETTLEMENT_UNIT = -2
+
 #: The processor name as one printable line. Read from the kernel's own file, so
 #: it is the machine's words rather than ours, and a newline in it would split
 #: the row for any reader that takes a day file a line at a time.
@@ -70,6 +78,11 @@ class CouncilShardOutcome(Contract):
     __schema_stem__: ClassVar[str] = "council-shard-outcome"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21T12:00",
+            change="`shard` carries two reserved values below zero.",
+            why="The two units that run once a date could not file a row at all.",
+        ),
+        ChangelogEntry(
             version="2026-09-21",
             change="Initial shape: the unit, its clock, its outcome and the hosted cost.",
             why="Nothing recorded whether the council's own pipeline worked.",
@@ -90,12 +103,21 @@ class CouncilShardOutcome(Contract):
             "constant, so a typo is a source edit a reviewer sees."
         ),
     )
-    shard: int = Field(ge=0, description="Which unit of the split this row is about.")
+    shard: int = Field(
+        ge=SETTLEMENT_UNIT,
+        description=(
+            "Which unit of the split this row is about. Two values below zero are "
+            "reserved for the units that run once a date rather than once a shard: "
+            f"{SELECTION_UNIT} picked the work and {SETTLEMENT_UNIT} counted what came "
+            "back. Without them a run whose count died would leave no row saying so."
+        ),
+    )
     shards: int = Field(
         ge=1,
         description=(
             "How many units the work was split across. A run reporting fewer rows "
-            "than this left work unread, and the pair alone says so."
+            "than this left work unread, and the pair alone says so. The two reserved "
+            "units carry the run's real width, so one date's rows all agree."
         ),
     )
     outcome: ShardOutcome = Field(

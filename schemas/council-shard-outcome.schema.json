@@ -16,6 +16,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "`shard` carries two reserved values below zero.",
+      "version": "2026-09-21T12:00",
+      "why": "The two units that run once a date could not file a row at all."
+    },
+    {
       "change": "Initial shape: the unit, its clock, its outcome and the hosted cost.",
       "version": "2026-09-21",
       "why": "Nothing recorded whether the council's own pipeline worked."
@@ -96,13 +101,13 @@
       "type": "number"
     },
     "shard": {
-      "description": "Which unit of the split this row is about.",
-      "minimum": 0,
+      "description": "Which unit of the split this row is about. Two values below zero are reserved for the units that run once a date rather than once a shard: -1 picked the work and -2 counted what came back. Without them a run whose count died would leave no row saying so.",
+      "minimum": -2,
       "title": "Shard",
       "type": "integer"
     },
     "shards": {
-      "description": "How many units the work was split across. A run reporting fewer rows than this left work unread, and the pair alone says so.",
+      "description": "How many units the work was split across. A run reporting fewer rows than this left work unread, and the pair alone says so. The two reserved units carry the run's real width, so one date's rows all agree.",
       "minimum": 1,
       "title": "Shards",
       "type": "integer"
@@ -142,7 +147,7 @@
       "title": "Tokens Out"
     },
     "version": {
-      "default": "2026-09-21",
+      "default": "2026-09-21T12:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -160,5 +165,5 @@
   ],
   "title": "CouncilShardOutcome",
   "type": "object",
-  "version": "2026-09-21"
+  "version": "2026-09-21T12:00"
 }

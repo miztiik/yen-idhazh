@@ -336,9 +336,14 @@ jobs:
       # Every unit's output, merged into one tree. Each upload carries the date
       # and the tenant as directory levels, so two tenants' first unit land
       # beside each other rather than on top of each other.
+      #
+      # Every council artifact and not only the units': the planning job records
+      # its own selection unit the same way a judging unit records a shard, and
+      # that row travels in the selection artifact. Collecting only the units'
+      # uploads would leave the night's record short by one row a tenant.
       - uses: actions/download-artifact@v8
         with:
-          pattern: council-metrics-*
+          pattern: council-*
           merge-multiple: true
           path: backend/var/council
 

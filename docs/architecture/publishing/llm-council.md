@@ -275,6 +275,66 @@ them unreachable.
 The tenant's own slug is a directory level inside each upload, so two tenants'
 first unit land beside each other rather than on top of each other.
 
+## The venue keeps its own record of every unit it ran
+
+The council starts a clock, calls the tenant, and files one row of its own on
+the way out - into
+[../../../backend/idhazh/ledger.py](../../../backend/idhazh/ledger.py)'s
+`state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv`, through the same
+shipping path a tenant's own row travels on. The row says which unit ran, for
+which tenant, under which name, how it ended, how long it took, and what the
+work inside it cost the model. It says nothing that needs a name for the unit of
+work, so it reads the same whether the tenant made four hundred model calls or
+none.
+
+**Five units a tenant, not four.** Picking the work and counting what came back
+are units too, and both can die. They file at reserved numbers below zero, `-1`
+and `-2`, carrying the run's real width - so a night whose count died leaves a
+row saying so instead of leaving the venue blind.
+
+**The cost cells come off what the tenant handed back, and out of nothing else.**
+The council opens no store of a tenant's and reads no field of a tenant's own
+contract. A tenant with no model hands back empty cells, and empty is not zero:
+zero would read as a model that answered nothing, which is a different fact and
+only one of the two is a defect.
+
+**A unit that died files nothing, and that is the record.** The outcome
+vocabulary is three words - `completed`, `stopped_on_deadline`, `nothing_to_do` -
+and none of them says "this died". A unit the platform killed could not write
+one anyway. What says it is the missing row read against the `shards` cell its
+siblings carry: three rows that each say the work was split four ways is a night
+with one unit missing, and an operator needs nothing else to see it. A unit that
+ran out of its own clock is the opposite case and does file a row, because it
+stopped itself and had something to report.
+
+**The store is seeded with a `.gitkeep` and never with a header-only day file.**
+A header with no rows under it is a real day to the partition walker, so one
+would put a permanent day in the prune target and the day inventory that no
+council run ever had. A night with nothing to record therefore writes no file at
+all, and the commit step still finds its directory.
+
+### Design rationale: the venue files the row, not the tenant
+
+An earlier draft had the judge's own stages write this row. That made the
+venue's record of a unit depend on a tenant's diligence: a judge that forgot the
+line, or died before reaching it, left nothing behind at the one moment the
+record mattered. The council owns the invocation, so it owns the outcome - the
+row is filed in a `finally`, and it survives anything that goes wrong after the
+tenant handed its result back. Owner ruling, 2026-09-21.
+
+**`judge_id` is in the settlement key**, beside the date, the run and the unit
+number. One council run has one run id, so on a night hosting two tenants,
+tenant A's first unit and tenant B's first unit carry the same three cells - and
+the pass that drops repeated rows after a merge would delete one of them. The
+slug is what tells them apart. It is recorded rather than checked: the council
+writes down who ran and never declares who may exist.
+
+**No machine is recorded per unit.** The runner pool is already characterised by
+the digest pipeline, and the bandwidth probe that would fingerprint it wants
+1.9 GiB on a job whose two processes already hold up to 9.02 GiB of anonymous
+memory in 16 GB. The council's data is discardable, so the reading is not worth
+the only memory risk in the design. Carmack, 2026-09-21.
+
 ## Design rationale: the council's own path, not the segment store
 
 The digest pipeline files rows through `state/segments/` and a compaction verb

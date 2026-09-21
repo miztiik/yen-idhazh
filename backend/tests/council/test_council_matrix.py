@@ -99,7 +99,10 @@ def test_a_cell_carries_the_tenant_the_date_the_shard_and_that_tenants_width(
         {"tenant": "a-paper-tenant", "date": A_DATE, "shard": 0, "shards": 2},
         {"tenant": "a-paper-tenant", "date": A_DATE, "shard": 1, "shards": 2},
     ]
-    assert emitted["committed_paths"] == "state/paper"
+    assert emitted["committed_paths"].split() == [
+        council_matrix.COUNCIL_STORE,
+        "state/paper",
+    ], "the venue's own record is staged beside whatever the tenant named"
 
 
 def test_a_tenant_narrows_the_venues_width_and_cannot_widen_it(
@@ -181,6 +184,10 @@ def test_the_staged_paths_are_every_tenants_and_each_one_once(
     `git add` takes a path twice without complaint, so the duplicate costs
     nothing on the runner - what it costs is a reader of the commit step's
     arguments, who has to work out whether the repeat meant something.
+
+    The venue's own store leads the list. It is not a tenant's, and it is staged
+    on any night that hosts one, because the council records every unit it ran
+    whatever the tenant inside it wrote.
     """
     a_venue(
         venue,
@@ -195,6 +202,7 @@ def test_the_staged_paths_are_every_tenants_and_each_one_once(
     emitted = _emitted(capsys, config_root=config_root, dates=(A_DATE,))
 
     assert emitted["committed_paths"].split() == [
+        council_matrix.COUNCIL_STORE,
         "state/paper",
         "state/shared",
         "state/other",
