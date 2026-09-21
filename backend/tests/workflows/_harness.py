@@ -402,7 +402,7 @@ BROWSER_CACHE_PATH: Final = "~/.cache/ms-playwright"
 # reader, because a key written twice drifts and a drifted key never hits.
 BROWSER_VERSION_SOURCE: Final = ("ci.yml", "scope", "browsers", "playwright")
 
-MEASUREMENT_TARGETS: Final = frozenset({"bench", "image", "corpus", "batched", "budgets"})
+MEASUREMENT_TARGETS: Final = frozenset({"bench", "corpus", "batched", "budgets"})
 
 
 #: The bench is one target and two jobs: raw prefill and decode first, then a
