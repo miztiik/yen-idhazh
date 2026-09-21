@@ -15,7 +15,7 @@ from idhazh.contracts.base import Contract, StalePayloadError
 from idhazh.contracts.console_band import ConsoleBand, ConsoleRoute, RouteId
 from idhazh.contracts.console_payloads import CONSOLE_PAYLOADS, payloads_by_stem
 from idhazh.contracts.export import CONTRACTS
-from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.item_health import DROPPED_CELLS, RETIRED_CELLS, ItemHealthRow
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.knobs.windows import months_a_window_can_touch
@@ -92,6 +92,58 @@ def test_an_older_payload_this_build_can_still_read_just_reads(tmp_path: Path) -
     payload["version"] = "2026-01-01"
 
     assert VisualDecision.read(_staged(tmp_path, payload)).version == "2026-01-01"
+
+
+def _a_sealed_item_row() -> dict[str, Any]:
+    return dict(
+        json.loads(read_text(CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json"))
+    )
+
+
+@pytest.mark.parametrize("dropped", sorted(DROPPED_CELLS))
+def test_a_sealed_row_carrying_a_column_the_contract_dropped_still_reads(
+    dropped: str, tmp_path: Path
+) -> None:
+    """The incident this migration exists for, one dropped column at a time.
+
+    A work shard seals one of these the moment it finishes an item and a later
+    job of the same run reads it back hours afterwards. Run 35537015073 lost its
+    digest to exactly this: `cgroup_peak_bytes` left the row while the run was
+    in flight, and the rebuild refused a payload that was correct under the
+    contract that wrote it. A dropped column has no replacement, so the cell is
+    the only thing lost and the day is not.
+    """
+    payload = _a_sealed_item_row()
+    payload["version"] = "2026-01-01"
+    payload[dropped] = None
+
+    row = ItemHealthRow.read(_staged(tmp_path, payload, "ai-01.health.json"))
+
+    assert row.version == "2026-01-01"
+    assert not hasattr(row, dropped), "a dropped column is gone, not carried"
+
+
+def test_a_sealed_row_carrying_a_column_the_contract_renamed_is_still_named_stale(
+    tmp_path: Path,
+) -> None:
+    """The half that keeps the migration narrow.
+
+    A column in `RETIRED_CELLS` moved to another column, so a reader that
+    dropped it would publish a row missing a value that exists - which is the
+    silent loss `docs/architecture/publishing/committing.md` refuses. Only a
+    column with nothing to move to is dropped; everything else still stops the
+    run and names both stamps.
+    """
+    retired = sorted(RETIRED_CELLS)[0]
+    payload = _a_sealed_item_row()
+    payload["version"] = "2026-01-01"
+    payload[retired] = "summary"
+
+    with pytest.raises(StalePayloadError) as raised:
+        ItemHealthRow.read(_staged(tmp_path, payload, "ai-01.health.json"))
+
+    assert "2026-01-01" in str(raised.value)
+    assert ItemHealthRow.schema_version() in str(raised.value)
 
 
 def test_the_payload_a_stale_error_names_leaves_the_process_posix_and_relative(
