@@ -608,7 +608,7 @@ for a defect we own.
 ## Adding a column is a two-part change
 
 A new column on this row is not finished when the contract and the schema agree.
-`ledger._append` calls `require_matching_header` before it writes, and that
+`ledger.extend_ledger_file` calls `require_matching_header` before it writes, and that
 refuses any header that is not the contract's column list exactly. The day file
 the pipeline is currently appending to already exists with the old header, so
 the first run after the contract changes would raise:
@@ -637,7 +637,7 @@ Three things follow, and the first is the one most often got wrong:
 1. **A column may be filed beside the one it relates to.** `migrate_header` maps
  by name, never by position, so an appended column buys nothing here. Order
  still matters for `FeedHealthRow` and the other eight ledgers, which reach
- `_append` with no migration of their own - that is where
+ `extend_ledger_file` with no migration of their own - that is where
  `backend/tests/contracts/test_repo_structure.py::test_the_feed_health_ledger_columns_are_defined_once`
  spells the appending rule and why.
 2. **An added column costs no code at all.** `from_csv_row` reads each field
@@ -665,7 +665,7 @@ is about is the rows, and the way to get one that cannot age out is to build the
 older generation rather than to look for it
 (`backend/tests/test_ledger.py::A_RETIRED_GENERATION`).
 
-The guard in `_append` is deliberate and stays. Widening it to tolerate a prefix
+The guard in `extend_ledger_file` is deliberate and stays. Widening it to tolerate a prefix
 would let a column land silently in the wrong position on a file nobody re-read.
 
 ## Caveats

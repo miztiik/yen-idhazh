@@ -679,15 +679,17 @@ COMMIT_SCRIPT: Final = SCRIPTS_DIR / "commit-and-push.sh"
 
 COMMIT_SCRIPT_CALL: Final = ("bash", ".github/scripts/commit-and-push.sh")
 
-# Which workflow each label's step lives in. `bench` is the only one outside the
-# daily run: `measure.yml` is dispatched by hand, many times a day, and since
-# 2026-09-17 it pushes the machine it drew.
+# Which workflow each label's step lives in. `bench` is dispatched by hand, many
+# times a day, and since 2026-09-17 it pushes the machine it drew. The two
+# council labels run once a night on their own clock.
 COMMIT_WORKFLOWS: Final = {
     "plan": "digest.yml",
     "work": "digest.yml",
     "assemble": "digest.yml",
     "fold": "digest.yml",
     "bench": "measure.yml",
+    "verdicts": "llm-council.yml",
+    "record": "llm-council.yml",
 }
 
 COMMIT_JOBS: Final = {
@@ -696,6 +698,8 @@ COMMIT_JOBS: Final = {
     "assemble": "assemble",
     "fold": "assemble",
     "bench": BENCH_SERVER_JOB,
+    "verdicts": "fold",
+    "record": "fold",
 }
 
 COMMIT_STEPS: Final = {
@@ -704,6 +708,8 @@ COMMIT_STEPS: Final = {
     "assemble": "Commit the day",
     "fold": "Commit the folded telemetry",
     "bench": "Commit the machine this bench drew",
+    "verdicts": "Commit what the legs judged",
+    "record": "Commit the record and the line",
 }
 
 #: The catch-up for a run whose assemble never drained the segment store. The
@@ -720,11 +726,11 @@ COMMIT_BASE_ENV: Final = frozenset(
     {"COMMIT_MESSAGE", "NOTHING_STAGED_MESSAGE", "PUSH_FAILED_MESSAGE"}
 )
 
-# Only assemble can rebuild what it commits, so only assemble carries the three
-# settings that make the loop rebuild instead of merge - and only assemble
-# commits rendered assets, so only assemble drops a raced one. Every other job
-# takes the base three and nothing else: no path under `state/` has two writers
-# now, so no commit step settles anything after its rebase.
+# Two labels rebuild what they commit, and each one says which file it may
+# rebuild. Only assemble commits rendered assets, so only assemble drops a raced
+# one. Every other job takes the base three and nothing else: no path under
+# `state/` has two writers now, so those commit steps settle nothing after their
+# rebase.
 COMMIT_SCRIPT_ENV: Final = {
     "plan": COMMIT_BASE_ENV,
     "work": COMMIT_BASE_ENV,
@@ -732,6 +738,8 @@ COMMIT_SCRIPT_ENV: Final = {
     | {"REFRESH_PATHS", "REGENERATE_COMMAND", "DROP_RACED_ASSETS_COMMAND"},
     "fold": COMMIT_BASE_ENV,
     "bench": COMMIT_BASE_ENV,
+    "verdicts": COMMIT_BASE_ENV,
+    "record": COMMIT_BASE_ENV | {"REFRESH_PATHS", "REGENERATE_COMMAND"},
 }
 
 COMMIT_STAGED_PATHS: Final = {
@@ -789,6 +797,17 @@ COMMIT_STAGED_PATHS: Final = {
     # sweep's item-health, scores and traces land under the same trial root
     # because the whole state root moved, and nothing reads them back.
     "bench": [f"{BENCH_LEDGER_ROOT}/{ledger.HOST_FINGERPRINT_DIRNAME}"],
+    # The rows this night's units judged, replayed onto a new base when the push
+    # loses a race. They are what this run saw, so they are never regenerated.
+    "verdicts": ["state/story-similarity/scored-pairs"],
+    # The record is derived from those rows, so it is the only file here the
+    # loop may rebuild. The fitted row beside it is a row this run wrote and is
+    # replayed like the verdicts.
+    "record": [
+        "state/story-similarity/score-distribution.json",
+        "state/story-similarity/fitted-thresholds",
+        "state/story-similarity/archive",
+    ],
 }
 
 # The step that folds an out-of-window month before the step above commits it.
@@ -954,8 +973,8 @@ EXPRESSION_VALUES: Final = {
     "inputs.runtime_candidate": SUBSTITUTED_CANDIDATE,
 }
 
-# What assemble hands back to origin's tip before it rebuilds. The day's own
-# directory is never in this list: the `shard-visuals-*` artifacts unpack this
+# What a label hands back to origin's tip before it rebuilds. Assemble's day
+# directory is never in its list: the `shard-visuals-*` artifacts unpack this
 # run's rendered charts into it, and no producer in the assemble job can make
 # those again, so the two payload files are named one at a time.
 COMMIT_REFRESH_PATHS: Final = {
@@ -980,6 +999,7 @@ COMMIT_REFRESH_PATHS: Final = {
         "state/host-fingerprint",
         "state/segments",
     ],
+    "record": ["state/story-similarity/score-distribution.json"],
 }
 
 # The producer the harness drives through the loop. See its own docstring for
