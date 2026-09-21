@@ -74,7 +74,7 @@ Twenty rows. Read this before the tables.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 13 | The entry path is one action taking a model file | - | - | COLLAPSED - plan 42 row 5 carries the half that pays; the one-action half is priced in plan 42 section 0 | - | - | - |
 | 2 | The model file is plain JSON | - | - | COLLAPSED - plan 41 row 4 | - | - | - |
-| 5 | The installer stops naming a repository | - | - | COLLAPSED - handed to plan 40 row 1, its only consumer; the guard it owes is named in plan 42 section 0 | - | - | - |
+| 5 | The installer stops naming a repository | - | - | COLLAPSED - a generic interface, carried today by plan 40 row 1 as the first model file to use it; the guard it owes is named in plan 42 section 0 | - | - | - |
 | 16 | The thinking budget goes; the two-span call stays | - | - | COLLAPSED - plan 41 row 5 | - | - | - |
 | 18 | The model's own template renders the prompt | - | - | COLLAPSED - plan 41 row 7 | - | - | - |
 | 6 | The startup probe keeps one check, then none | - | - | COLLAPSED - plan 41 row 8 | - | - | - |
