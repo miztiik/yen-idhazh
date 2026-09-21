@@ -296,6 +296,9 @@ def _work_stage(
     run_plan = run_plan if run_plan is not None else plan()
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
     monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+    # The state root too, or a traced work stage writes its trace and its span
+    # rollup into the committed `state/` tree and `git status` is what tells you.
+    monkeypatch.setattr(common, "STATE_ROOT", tmp_path / "state")
     with RecordedEndpoint(200, *replies, hold_s=hold_s) as server:
         stage_work(
             run_plan,
