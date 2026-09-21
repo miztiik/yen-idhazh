@@ -209,7 +209,6 @@
 		{:else if id === 'memory-board'}
 			<MemoryBoardPanel
 				board={data.memory}
-				span={view.peakRssSpan}
 				moved={data.settingsMoved}
 				start={view.start}
 				end={view.end}
