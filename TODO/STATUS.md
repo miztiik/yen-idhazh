@@ -39,7 +39,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 | [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 11 | 11 | 4 |
 | [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 18 | 11 | 3 |
-| [20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md) | 17 | 0 | 17 | 10 |
+| [20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md) | 18 | 0 | 18 | 10 |
 | [20260921-40-bonsai-probe-plan.md](20260921-40-bonsai-probe-plan.md) | 7 | 0 | 7 | 4 |
 
 ## In flight - 0
@@ -105,7 +105,7 @@ section 3 is where it is answered.
 | #5 | 40 | A | The eight telemetry steps move across | - |
 | #6 | 40 | A | A trial state root, and what the run keeps | - |
 
-## Waiting on another row - 97
+## Waiting on another row - 98
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -201,6 +201,7 @@ section 3 is where it is answered.
 | #16 | 39 | B | The thinking budget and the two-span call go | 2 is PENDING |
 | #10 | 39 | C | The workflow censuses go | 3 is PENDING; 4 is PENDING |
 | #9 | 39 | C | The benchmark workflow's closed-world tests go | 3 is PENDING; 4 is PENDING |
+| #18 | 39 | C | The server renders the prompt, not us | 16 is PENDING |
 | #1 | 39 | D | The generated contract layer goes | 2 is PENDING; 3 is PENDING; 6 is PENDING; 16 is PENDING |
 | #12 | 39 | E | The engineering contract and the pages catch up | 1 is PENDING |
 | #3 | 40 | B | One plan job, so a fan-out agrees what it is reading | 2 is PENDING |
