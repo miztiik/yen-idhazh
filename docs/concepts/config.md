@@ -443,7 +443,7 @@ See [../how-to/fine-tune-a-model.md](../how-to/fine-tune-a-model.md).
 
 ## Runtime sweep surface
 
-`models.<role>.inference` holds both the ordinary deterministic decode knobs and
+the entry's settings holds both the ordinary deterministic decode knobs and
 the flag-sweep knobs, and there is one block per model entry rather than one for
 the pipeline. The sweep surface is explicit so a measurement changes one thing at
 a time through config, not through workflow literals:
@@ -480,14 +480,15 @@ command captures its error and only warns on failure. Other startup errors
 still stop the job. The log records the effective limit after the attempt,
 not a claim that the operating system locked the model's pages.
 
-`declared_for` is not a sweep knob. It is the sha256 of the entry the block sits
-in, and `ModelsConfig` refuses a config where the two disagree - so the settings
-travel with the weights or the config does not open.
+`declared_for` is not a sweep knob. It is the sha256 of the entry it sits on,
+and `idhazh.config.refuse_a_model_nothing_could_run` refuses a file where the
+two disagree - so the settings and the markers travel with the weights or the
+config does not open.
 
-`metrics` is on by default and emits `--metrics`, which makes llama-server
+`--metrics` is written into every committed file and makes llama-server
 publish its counters on `/metrics`. Two of them are what a run is read by:
 `llamacpp:n_tokens_max` is the highest context the server ever saw, so it says
-how close the day came to `n_ctx`; `llamacpp:n_busy_slots_per_decode` is the
+how close the day came to the window; `llamacpp:n_busy_slots_per_decode` is the
 average number of slots busy per decode, so it says whether batching happened at
 all. Without the second, a concurrency measurement that shows no gain cannot
 separate "more slots did not help" from "more slots were never used". The
@@ -573,22 +574,24 @@ the run finished with 6.8 times the bar
 
 Until 2026-09-09 there was one `models.inference` block and both roles were
 served on it. Editing `models.summarize` to name a different repository, file,
-revision and digest raised nothing at all: `ModelsConfig` accepted
-it, `llama-server` started on the old numbers, and the run published a whole
+revision and digest raised nothing at all: the config loaded, `llama-server`
+started on the old numbers, and the run published a whole
 plausible day. **It is not hypothetical.** The summarizer moved from the 8B to
 the 9B on 2026-08-27 and the block did not move with it, and the 4B visual
 planner has run on the summarizer's window and the summarizer's 22.1-minute
 request bound since the role existed.
 
-The block therefore sits on the entry, and carries `declared_for`. Two rules,
-and between them they cover both shapes the swap takes:
+The settings therefore sit on the entry, and the entry carries `declared_for`.
+One digest answers for the settings and the markers together, because both are
+measurements about one model and the repair is the same sentence. Two shapes of
+swap, and it covers both:
 
-- An entry with no block of its own does not fall back to one. Its default block
- declares nothing, the entry names measured weights, and the mismatch is
- refused by name.
-- An entry edited in place keeps its block, and the block still names the old
- digest. That is the shape a real swap takes, and it is the one a per-entry
- block alone would not have caught.
+- An entry with no settings of its own does not fall back to any. It names
+ measured weights and declares nothing they were derived against, and the
+ mismatch is refused by name.
+- An entry edited in place keeps its settings, and `declared_for` still names
+ the old digest. That is the shape a real swap takes, and it is the one a
+ per-entry block alone would not have caught.
 
 Both digests absent is legal and means an entry nobody has measured yet. Nothing
 runs on one: `idhazh.fingerprint.build_inputs` already refuses to record a run
@@ -638,8 +641,8 @@ written - `RunRecord.inputs.prompt_sha256` digests both turns rendered through
 them, so a marker that moved still moves the stamp. Ruled by Fowler,
 2026-09-13.
 
-**The stamp did not move.** `declared_for` is classified in
-`idhazh.fingerprint.NOT_DIGESTED`, so `pipeline_fingerprint` is byte-identical
+**The stamp did not move.** `declared_for` reaches no field of
+`PipelineInputs`, so `pipeline_fingerprint` is byte-identical
 across this change and every committed row stays comparable
 ([../architecture/contracts/determinism.md](../architecture/contracts/determinism.md)).
 Digesting it would have moved the stamp on a swap that `model_sha256` already
@@ -1283,8 +1286,8 @@ The distinction matters because a value in `config/` reads as an invitation to c
 Some numbers in `config/` are not there to be tuned. They are there to stop a bug running for six hours, or to say out loud that something has changed. A guard, an alarm and a limit look identical in JSON, so the name and the comment carry the whole difference:
 
 - `run.safety_ceiling_per_run` (80) **was** a crash guard and is now an editorial cap, and the name is the last thing that has not caught up. `items_planned` has been exactly the ceiling on every run since 2026-08-25, so supply overtook the guard and what it bounds today is the size of a run. Owner decision, 2026-09-05: it comes down to 80 from 160, and a day publishes half as many stories on purpose - the gain is that those 80 slots go to articles worth reading rather than to a second copy of one already chosen or a feed that has been publishing badly - see [../architecture/sources/discovery.md](../architecture/sources/discovery.md). Which half is dropped is an editorial call and not an arbitrary cut: a duplicate goes before a desk's only story. Lowering it also shrinks the worst case every downstream bound is checked against - a smaller run is a smaller worst shard - see [Design rationale](#design-rationale).
-- **`models.summarize.inference` carries no decode cap, and that is a decision rather than an omission.** It held two until 2026-09-21 - `max_answer_tokens` at 900 and `max_think_tokens` at null - and each sent a number where llama-server's own default is already unbounded by anything but the window, on a server started with no prediction flag. The answer cap guarded the single call `validate` sends and never reached the two calls a day actually makes: those derive their own budget from the grammar each reply is held to, `classify.calls.label_budget_tokens` at 6,491 and `summarize_and_plan_budget_tokens` at 4,735, both re-derived on every import. The thinking cap is the worked example of [A guard is not a limit](#a-guard-is-not-a-limit-and-its-name-has-to-say-so) failing the other way: 256 was never read off any of these weights, it sat below every published thinking budget we could find, and it landed in the band where a thought is **cut rather than finished**, which scores worse than no thought at the same budget ([arxiv 2504.09858](https://arxiv.org/abs/2504.09858)). Owner ruling, 2026-09-17, made it null; on 2026-09-21 both fields went. What bounds a decode now already existed and already fails loudly per item: `request_timeout_minutes` lands `model_timed_out`, and the window with no context shift lands `context_exceeded`. A config still spelling either name, or the older `max_output_tokens`, is refused by name.
-- `models.summarize.inference.request_timeout_minutes` (22.1) is a **per-request guard**. It limits one summarizer POST, not the shard. It protects the day from one local model request that accepts a connection and never replies: that item records `model_timed_out`, and the worker continues. The default is sized from the authoritative runner measurements in [../reference/pipeline-cost.md](../reference/pipeline-cost.md): the worst 8B long article plus one cold prompt prefix, doubled. `run.shard_timeout_minutes` stays the outer bound for the whole shard.
+- **the summarize entry carries no decode cap, and that is a decision rather than an omission.** It held two until 2026-09-21 - `max_answer_tokens` at 900 and `max_think_tokens` at null - and each sent a number where llama-server's own default is already unbounded by anything but the window, on a server started with no prediction flag. The answer cap guarded the single call `validate` sends and never reached the two calls a day actually makes: those derive their own budget from the grammar each reply is held to, `classify.calls.label_budget_tokens` at 6,491 and `summarize_and_plan_budget_tokens` at 4,735, both re-derived on every import. The thinking cap is the worked example of [A guard is not a limit](#a-guard-is-not-a-limit-and-its-name-has-to-say-so) failing the other way: 256 was never read off any of these weights, it sat below every published thinking budget we could find, and it landed in the band where a thought is **cut rather than finished**, which scores worse than no thought at the same budget ([arxiv 2504.09858](https://arxiv.org/abs/2504.09858)). Owner ruling, 2026-09-17, made it null; on 2026-09-21 both fields went. What bounds a decode now already existed and already fails loudly per item: `request_timeout_minutes` lands `model_timed_out`, and the window with no context shift lands `context_exceeded`. A config still spelling either name, or the older `max_output_tokens`, is refused by name.
+- `models.summarize.request.request_timeout_minutes` (22.1) is a **per-request guard**. It limits one summarizer POST, not the shard. It protects the day from one local model request that accepts a connection and never replies: that item records `model_timed_out`, and the worker continues. The default is sized from the authoritative runner measurements in [../reference/pipeline-cost.md](../reference/pipeline-cost.md): the worst 8B long article plus one cold prompt prefix, doubled. `run.shard_timeout_minutes` stays the outer bound for the whole shard.
 - `run.shard_timeout_minutes` (200) is a **job backstop**, and it is the outer bound the previous line hands off to. The `work` job reads it, so this is the only place the number is written. It is not a budget: the stage has no clock of its own, and a worker killed here uploads nothing, so the run loses every item that worker held rather than the tail it could not reach. It rose to 200 from 150 as headroom for the coming two-call summariser change, not because a worker got slower: at the 80-item ceiling a worker draws 20 items, half of the 40 it drew before, so the base work roughly halves and 150 alone would now be slack. The room is banked before that change lands, because a second model call an item takes the worst shard past 150 and a killed worker uploads nothing. It is sized from the worst measured shard, not the median - 135.4 minutes of the old 150 over 80 shard rows on 2026-09-02, against a 78.5-minute median ([../reference/pipeline-cost.md](../reference/pipeline-cost.md#what-a-work-shard-costs)) - and 200 is 56 percent of the six-hour platform ceiling. A worker that runs long is still answered by lowering `run.safety_ceiling_per_run`, never by raising this (Guardrail #2).
 - `collect.settled_failure_codes` is a **memory**, not a guard. It names the failure codes that will not change before tomorrow, and an address that failed today with one of them is not planned again today. Absent from it - and therefore retried - are the codes that can change within a day: a rate limit, a network error, a server error, an unreachable model. Measured over 2026-08-24 to 2026-08-29, 403 same-day repeats of a settled failure bought 2 items ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). An empty list restores the old behaviour exactly.
 - `run.visual_planner_budget_minutes` (40) was a **stage budget** and is gone. It said how long the separate visual planner stage could spend before it stopped asking the model and left the rest of the day undecided, sized *below* the `visuals` job's 50-minute timeout because a job killed at its timeout skips its upload step and loses every decision it had already made. Plan 11 row #6 retired the stage, the job and the knob on 2026-09-13: a picture is now decided inside the shard that read the article, so the only clock over it is `run.shard_timeout_minutes` ([../architecture/publishing/visuals.md](../architecture/publishing/visuals.md)).

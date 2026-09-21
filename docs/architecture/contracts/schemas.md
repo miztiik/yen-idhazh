@@ -44,6 +44,16 @@ The union alone cannot be tested against at run time, and a reader that has to n
 
 `frontend/src/lib/payload/types.ts` mirrors `schemas/digest-day.schema.json`, `digest-view`, `search-index` and `visual-data` by hand, and the published reading surface is typed from it. It is not converted yet: several of its types narrow the contract on purpose (`DigestViewItem` is a `Pick`, and `markup` is a build-time field that is deliberately not in the schema), so replacing it is a design change to the reading path rather than a rename. The chart view models under `frontend/src/lib/charts/` that share a name with a `machine-panels` definition are the same kind of case - `console-machine-panels.spec.ts` checks them against the schema at run time instead.
 
+## The model file has no generated schema
+
+`config/models/<name>.json` is validated by `ModelsConfig` and is deliberately absent from `contracts/export.py`, so no `models-config.schema.json` and no `frontend/src/contracts/models-config.ts` exist. **A configuration file this project authors needs no declared shape** (`CLAUDE.md` Guardrail #3, owner ruling 2026-09-21): nothing but this repository writes one and nothing but this repository reads one, so a generated schema restates a model that is already its only reader, and a generated frontend type restates a file the frontend opens by hand.
+
+What the entry still declares is what this project's own code names: the weights, the architecture, the turn envelope, and the digest the settings were derived against. **What it does not declare is the settings themselves.** The `server` block is llama-server's own flags, spelled as the binary spells them and emitted verbatim, and the `request` block is the four values that go in a request body. A typed field for a value this project hands straight to another program is a second spelling somebody has to keep in step - and llama-server refuses a flag it does not accept at every server start, which names it and does not start.
+
+Two keys are required and both are refused by name at configuration load, in `idhazh.config.refuse_a_model_nothing_could_run`: `server["--ctx-size"]`, because this project does real arithmetic on the window and the published site reads it at build time, and `request["request_timeout_minutes"]`, because four call sites multiply it by sixty and llama-server has no default to fall back on. Everything else is optional, and absent means the server's own default.
+
+**The recorded shape keeps the old key.** `ModelRef.inference` is a plain mapping so a `run.json` an earlier run wrote - carrying a weights digest, a decode cap and option names no build declares now - still reads (section 11).
+
 ## Why the models, and not the schemas, are the source
 
 A JSON Schema is a good interchange format and a poor authoring format: it cannot express a cross-field invariant readably, it has no place to put a validator, and nobody catches a typo in it at edit time. A Pydantic model is typed at authoring time, carries its invariants as code, and is directly usable by the producer that writes the payload. Generating downward from it means the validation the backend enforces and the types the frontend trusts cannot disagree.
@@ -65,7 +75,6 @@ The shapes, and where each one lives once written:
 | Model | Schema | Persisted as |
 | --- | --- | --- |
 | `AppConfig` | `app-config` | `config/idhazh.json` |
-| `ModelsConfig` | `models-config` | `config/models/<name>.json`, one file per model. Which one is active is `AppConfig.models_file` ([../../concepts/config.md](../../concepts/config.md)), so this is the one document whose persisted path is a value rather than a literal. |
 | `AppearanceConfig` | `appearance-config` | `config/appearance.json` |
 | `Sources` | `sources` | `config/sources.json` |
 | `Taxonomy` | `taxonomy` | `config/taxonomy.json` |
