@@ -1,3 +1,0 @@
-version,date,run_id,job,shard,fingerprint,cpu_model,cpu_vendor,cpu_family,cpu_model_number,cpu_stepping,microcode,cores,threads,l3_cache_bytes,mhz_max,mhz_at_probe,flags,boot_seconds,memcpy_gib_s,memcpy_probe_mib,vm_size,vm_location,vm_zone,vm_fault_domain,runner_name,measured_at,model_load_ms,job_seconds,server_prompt_tokens,server_prompt_seconds
-2026-09-20,2026-09-21,2026-09-21-35645482100,work,3,5301d30a5a74b44c,AMD EPYC 7763 64-Core Processor,AuthenticAMD,25,1,1,0xffffffff,2,4,33554432,,2645.1237499999997,avx2 f16c fma sse4_2,178.47,40.928897704981935,512,Standard_D4ads_v5,eastus,,0,GitHub Actions 1000036962,2026-09-21T19:36:44Z,,,,
-2026-09-20,2026-09-21,2026-09-21-35645482100,work,3,,,,,,,,,,,,,,,,,,,,,,,4367.76,8423,32168,3713.41
