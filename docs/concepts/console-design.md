@@ -965,7 +965,7 @@ read. Whether that run was unusual is then one look, rather than three numbers a
 reader converts and subtracts.
 
 **Why it exists: a sentence cannot be compared with the sentence beside it.**
-`Where the machine's time went besides the model` on `/console/machine/` carries
+`Where the machine's time went besides the model` on `/console/machine/` carried
 a processor share and a weight-opening time. Each was a reading followed by its
 span in prose, in a different unit from its neighbour and with its ends buried
 mid-paragraph, so a reader who wanted to know which of the two was the odd one
@@ -973,12 +973,22 @@ this run had to do the conversion by hand. Two tracks make that comparison free,
 and the shape is the one the memory panel's window grain already draws - so this
 is one shape reused rather than a second shape learned. Susan, 2026-09-20.
 
+**No panel draws a span track today.** That panel left the page later the same
+day, as a container of three unrelated figures with no question to title it
+with. The shape is kept whole, with its rules held in
+`frontend/tests/console-host-spans.spec.ts`, because the honest version of the
+processor share - the one that separates out the time the host gave another
+tenant - needs this band rather than a second one. **What that costs:** a rule
+nothing currently obeys, which is a rule that can rot without a page going red.
+A panel that draws it owes a page oracle putting a real band against the numbers
+printed beside it.
+
 **One shape, two drawings, stated rather than hidden.** The memory panel drew
-this shape first, in its own markup. The maths now lives once, in
-`frontend/src/lib/charts/span-track.ts`, and the host panel draws from it; the
-memory panel has not been repointed. **What that costs:** two pieces of markup
-that have to agree by eye, so a change to the band or the upright is a change in
-two places until the memory panel becomes a caller.
+this shape first, in its own markup. The maths lives once, in
+`frontend/src/lib/charts/span-track.ts`; the memory panel has not been
+repointed. **What that costs:** two pieces of markup that have to agree by eye,
+so a change to the band or the upright is a change in two places until the
+memory panel becomes a caller.
 
 **What the reader loses, named.** A span track says nothing about the shape
 between its ends, and nothing about when in the window each end fell: a figure
@@ -996,11 +1006,11 @@ band rather than to a split. A run that recorded nothing keeps the band it
 cannot be placed on: the window still measured something, and the missing
 upright is the fact.
 
-**A figure with no span is not given a track.** Parallel slots sits in that same
-panel as one line of text, because it is a count of what a server offered and
-has no low-to-high window to place a run inside. The tenth rule binds a figure
-with a span; a shape reused where it does not fit is a shape a reader stops
-trusting.
+**A figure with no span is not given a track.** The count of the slots a server
+was started with sat in that same panel as one line of text, because it is a
+count of what a server offered and has no low-to-high window to place a run
+inside. The tenth rule binds a figure with a span; a shape reused where it does
+not fit is a shape a reader stops trusting.
 
 Authority: Susan, 2026-09-20.
 
