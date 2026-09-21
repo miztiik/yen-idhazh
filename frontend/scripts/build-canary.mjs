@@ -253,12 +253,14 @@ function writeItemHealthCanary() {
 
 	/** Whether the machine took the model's memory back, on three named days.
 	 *
-	 * **Fixture, and a set of states no committed run has produced.** Measured
-	 * 2026-09-21 over the whole committed item ledger - 13,877 rows across 28
-	 * days - not one row carries `llama_major_faults` or `weights_pinned`, and
-	 * 378 rows over two days carry `os_mem_cached_bytes`. So every state the
-	 * disk-read panel exists to tell apart is unreachable from the archive, and
-	 * three of them have to sit on a fixture or no test can see them.
+	 * **Fixture, and a set of states no committed run has produced.** No row of
+	 * the committed item ledger carries `llama_major_faults` or
+	 * `weights_pinned` at all, and the rows carrying `os_mem_cached_bytes` sit
+	 * on two days - measured 2026-09-21 over 13,946 rows across 28 days, and it
+	 * is the property rather than the count that matters, because the ledger
+	 * grows every run. So every state the disk-read panel exists to tell apart
+	 * is unreachable from the archive, and three of them have to sit on a
+	 * fixture or no test can see them.
 	 *
 	 * One day a state, because a day is one tile:
 	 *
