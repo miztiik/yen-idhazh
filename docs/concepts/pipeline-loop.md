@@ -104,11 +104,12 @@ makes the writes, so two processes never share a path.
 
 **It is a separate workflow because of the budget the design permits, not the
 day the pipeline usually has.** At the configured cap of 200 pairs, judged in
-both orders, 400 calls at 77.6 seconds is 8.6 hours of model time serially -
-past the 6 h job ceiling, where GitHub kills the job and nothing is written
-(Guardrail #2). Today's median day of 33 pairs would fit inside `digest.yml`
-comfortably, which is exactly why sizing the shape off the median is the wrong
-move: the first busy day crosses the ceiling and writes nothing.
+both orders, a measured worst pair of 110.98 seconds is 6 hours 10 minutes of
+model time serially - past the 6 h job ceiling, where GitHub kills the job and
+nothing is written (Guardrail #2). Today's median day of 33 pairs would fit
+inside `digest.yml` comfortably, which is exactly why sizing the shape off the
+median is the wrong move: the first busy day crosses the ceiling and writes
+nothing.
 
 **A leg that dies costs its own pairs and nothing else.** `fail-fast` is off and
 the fold runs anyway, appending every row the surviving legs produced. What it
