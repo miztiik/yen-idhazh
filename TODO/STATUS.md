@@ -40,7 +40,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md) | 21 | 0 | 7 | 4 |
 | [20260921-40-bonsai-probe-plan.md](20260921-40-bonsai-probe-plan.md) | 7 | 0 | 7 | 4 |
 | [20260921-41-lane-a-model-file-plan.md](20260921-41-lane-a-model-file-plan.md) | 7 | 0 | 7 | 0 |
-| [20260921-42-lane-b-workflows-plan.md](20260921-42-lane-b-workflows-plan.md) | 11 | 0 | 11 | 2 |
+| [20260921-42-lane-b-workflows-plan.md](20260921-42-lane-b-workflows-plan.md) | 11 | 2 | 9 | 1 |
 
 ## In flight - 5
 
@@ -52,7 +52,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | #6 | 41 | A | The engineering contract catches up | `p41a` |
 | #7 | 41 | B | The markers are derived at server start | `p41b` |
 
-## Ready now - 47
+## Ready now - 46
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -105,10 +105,9 @@ section 3 is where it is answered.
 | #2 | 40 | A | The test workflow takes named addresses | - |
 | #5 | 40 | A | The eight telemetry steps move across | - |
 | #6 | 40 | A | A trial state root, and what the run keeps | - |
-| #1 | 42 | M | The runner stops paying for a graphics card it does not have | - |
 | #3 | 42 | A | The capability probe goes | - |
 
-## Waiting on another row - 89
+## Waiting on another row - 88
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -192,9 +191,8 @@ section 3 is where it is answered.
 | #7 | 40 | D | One dispatch, and the readings written up | 1 is PENDING; 4 is PENDING; 5 is PENDING; 6 is PENDING |
 | #3 | 41 | A | The draft head becomes a companion file | 2 is IN-FLIGHT |
 | #5 | 41 | A | The model file carries llama-server's own flags | 4 is IN-FLIGHT |
-| #2 | 42 | M | The plan job closes the clock it opens | 1 is PENDING |
 | #4 | 42 | A | The image benchmark goes | 3 is PENDING |
-| #5 | 42 | B | Five checks move into the thing they check | 2 is PENDING; 4 is PENDING |
+| #5 | 42 | B | Five checks move into the thing they check | 4 is PENDING |
 | #6 | 42 | B | Fourteen assertions go, and the lists become computed | 5 is PENDING |
 | #7 | 42 | C | The printer learns the whole file set, and the traversal closes | 6 is PENDING; plan 41 names no row |
 | #8 | 42 | C | The workflows read the model file instead of relaying it | 7 is PENDING |
