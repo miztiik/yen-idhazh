@@ -46,6 +46,7 @@
 	import MemoryBoardPanel from '$lib/console/machine/MemoryBoardPanel.svelte';
 	import ArticleCostPanel from '$lib/console/machine/ArticleCostPanel.svelte';
 	import PlatformMixPanel from '$lib/console/machine/PlatformMixPanel.svelte';
+	import ProcessorLostPanel from '$lib/console/machine/ProcessorLostPanel.svelte';
 	import PromptCachePanel from '$lib/console/machine/PromptCachePanel.svelte';
 	import ReadAgainstWrittenPanel from '$lib/console/machine/ReadAgainstWrittenPanel.svelte';
 	import ShardBoardPanel from '$lib/console/machine/ShardBoardPanel.svelte';
@@ -249,6 +250,15 @@
 				svg={data.clocksSvg}
 				tolerancePct={data.clocksTolerancePct}
 				chart={data.chart}
+			/>
+		{:else if id === 'processor-lost'}
+			<ProcessorLostPanel
+				span={view.processorLost}
+				run={data.processorLostByShard}
+				days={view.days}
+				{windowDays}
+				markedAt={data.processorLostThresholds.marked}
+				namedAt={data.processorLostThresholds.named}
 			/>
 		{:else if id === 'machine-cards'}
 			<MachineCardsPanel machines={data.machines} />

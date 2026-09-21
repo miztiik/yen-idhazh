@@ -23,6 +23,13 @@ import {
 	type ContextSpan
 } from '$lib/console/machine/context-cost';
 import { articleCost, type ArticleCost } from '$lib/console/machine/article-cost';
+import {
+	processorLostOverDays,
+	processorLostOverShards,
+	type LostThresholds,
+	type ProcessorLostRun,
+	type ProcessorLostSpan
+} from '$lib/console/machine/processor-lost';
 import { costChart, costOverDays, DEFAULT_COST_SHAPE } from '$lib/charts/cost';
 import { splitByMachine } from '$lib/charts/machine-split';
 import { machineCards, type MachineCards } from '$lib/charts/machine-cards';
@@ -111,6 +118,10 @@ export interface MachineWindow {
 	 * memory and model time, each as a range. Three figures and a few counts, so
 	 * a preset carries it rather than the rows behind it. */
 	articleCost: ArticleCost;
+	/** What the host gave to another tenant over this span, a tile a day. Tiles
+	 * and counts, never the rows: a day is one small object however many articles
+	 * it ran. */
+	processorLost: ProcessorLostSpan;
 }
 
 /** Everything a run-by-run chart draws, carried once rather than once a span.
@@ -145,6 +156,7 @@ const DRAWN_PANELS = [
 	'prompt-cache',
 	'context-headroom',
 	'two-clocks',
+	'processor-lost',
 	'machine-cards',
 	'platform-mix',
 	'tail-trend',
@@ -232,6 +244,16 @@ export async function load() {
 		...new Set([...counters.runs.map((run) => run.date), ...health.map((row) => row.date ?? '')])
 	].filter((date) => date !== '');
 
+	// The two shares a stolen-processor tile is drawn against, out of
+	// `console.*` rather than typed into the module (Guardrail #6). Both are
+	// declared estimates and say so where they are declared: no committed row
+	// separates what the host took from what we spent, because until the split
+	// landed the busy figure held both.
+	const lostThresholds: LostThresholds = {
+		marked: console_.processor_lost_pct_marked,
+		named: console_.processor_lost_pct_named
+	};
+
 	/** One span, and every figure that reads a span. */
 	function answer(days: number): MachineWindow {
 		const span = windowOfDays(dates, today, days, console_.today_anchor);
@@ -255,6 +277,9 @@ export async function load() {
 		// what share of the processors an article kept busy, and only the record
 		// says how many processors that share was taken across.
 		const perArticle = articleCost(healthRows, inSpan(fingerprints));
+		// Day grain here because a day tile is a fact about a span. The run grain is
+		// a snapshot and is worked out once, outside every span.
+		const lostToTenants = processorLostOverDays(healthRows, lostThresholds);
 
 		return {
 			days,
@@ -292,6 +317,7 @@ export async function load() {
 			}),
 			cacheDays: cacheByDay(runs),
 			articleCost: perArticle,
+			processorLost: lostToTenants,
 			// The newest run's own reading is a snapshot and sits on the memory
 			// board; this says whether that reading was unusual over the span.
 			peakRssSpan: spanOf(runs.map((run) => run.peakRssBytes.value)),
@@ -367,6 +393,14 @@ export async function load() {
 	// window grain is the span the loop above already derived for every preset,
 	// which this panel reads rather than deriving a second time.
 	const memory = memoryBoard(newest, health);
+	// The run grain of the stolen-processor panel, on the same terms as the two
+	// boards above: whether the loss landed on one part of a run or across all
+	// of it is a question about that run, and a span cannot narrow it.
+	const lostByShard: ProcessorLostRun = processorLostOverShards(
+		health,
+		newest === null ? null : { runId: newest.runId, date: newest.date },
+		lostThresholds
+	);
 	// One group a machine, never one figure over all of them. Measured 2026-09-17
 	// over the committed counters ledger, 86 of the 90 runs that name a processor
 	// drew more than one kind, so a pooled rate was a number about neither.
@@ -455,6 +489,8 @@ export async function load() {
 		settingsMoved: settingsMoved(manifests),
 		board,
 		memory,
+		processorLostByShard: lostByShard,
+		processorLostThresholds: lostThresholds,
 		newestRunId: newest?.runId ?? null,
 		split,
 		machines,

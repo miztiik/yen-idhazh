@@ -42,7 +42,13 @@
       "machine": [
         {
           "id": "what-the-machine-was-doing",
-          "panels": ["two-clocks", "machine-cards", "reading-against-writing", "platform-mix"],
+          "panels": [
+            "two-clocks",
+            "processor-lost",
+            "machine-cards",
+            "reading-against-writing",
+            "platform-mix"
+          ],
           "title": "What the machine was doing"
         },
         {

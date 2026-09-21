@@ -14,6 +14,7 @@ const FILES: Record<Exclude<FrontendGroup, 'console'>, readonly string[]> = {
 		'glance-and-rank', 'holdout', 'holdout-domain', 'item-health-day', 'merge-line', 'model-cards',
 		'one-pass-reductions',
 		'preview-port',
+		'processor-lost',
 		'run-axis',
 		'settings-moved',
 		'telemetry-header', 'telemetry-hold', 'throughput-window', 'time-split',

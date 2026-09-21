@@ -555,7 +555,13 @@ const PANEL_GROUP_DEFAULTS: PanelGroups = {
 		{
 			id: 'what-the-machine-was-doing',
 			title: 'What the machine was doing',
-			panels: ['two-clocks', 'machine-cards', 'reading-against-writing', 'platform-mix']
+			panels: [
+				'two-clocks',
+				'processor-lost',
+				'machine-cards',
+				'reading-against-writing',
+				'platform-mix'
+			]
 		},
 		{
 			id: 'where-the-time-went',
