@@ -101,7 +101,7 @@ section 3 is where it is answered.
 | #5 | 40 | A | The eight telemetry steps move across | - |
 | #6 | 40 | A | A trial state root, and what the run keeps | - |
 | #1 | 41 | A | The server-log reader goes | - |
-| #1 | 42 | A | The runner stops paying for a graphics card it does not have | - |
+| #1 | 42 | M | The runner stops paying for a graphics card it does not have | - |
 | #3 | 42 | A | The capability probe goes | - |
 
 ## Waiting on another row - 93
@@ -192,7 +192,7 @@ section 3 is where it is answered.
 | #5 | 41 | A | The model file carries llama-server's own flags | 4 is PENDING |
 | #6 | 41 | A | The engineering contract catches up | 5 is PENDING |
 | #7 | 41 | B | The markers are derived at server start | 6 is PENDING |
-| #2 | 42 | A | The plan job closes the clock it opens | 1 is PENDING |
+| #2 | 42 | M | The plan job closes the clock it opens | 1 is PENDING |
 | #4 | 42 | A | The image benchmark goes | 3 is PENDING |
 | #5 | 42 | B | Five checks move into the thing they check | 2 is PENDING; 4 is PENDING |
 | #6 | 42 | B | Fourteen assertions go, and the lists become computed | 5 is PENDING |
