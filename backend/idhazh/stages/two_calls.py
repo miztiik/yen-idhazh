@@ -567,7 +567,6 @@ def two_calls_one_item(
                 run_id=run_id,
                 trace=trace,
                 turns=model.turns,
-                max_think_tokens=inference.max_think_tokens,
             )
             label_ms = int((time.monotonic() - asked_at) * 1000)
             if one is None:
@@ -664,7 +663,6 @@ def two_calls_one_item(
                 run_id=run_id,
                 trace=trace,
                 turns=model.turns,
-                max_think_tokens=inference.max_think_tokens,
             )
             summary_ms = int((time.monotonic() - asked_at) * 1000)
             if two is None:

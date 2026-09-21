@@ -89,13 +89,7 @@ export interface InferenceConfig {
 	/** Which sample the sampler draws. It is the whole of the repeatability story above temperature 0: same inputs and same seed is the same reply, same inputs and a different seed is a different one. At temperature 0 it is dead code and nothing reads it, which is what it was until 2026-09-17. It is enumerated in the fingerprint either way, so a change of sampler cannot move the words without moving the stamp. */
 	seed?: number;
 
-	/** The thinking span's budget. Null means no cap: the span runs until the model writes turns.thinking_close, and the window is the only other thing that stops it. An integer bounds the span at that many tokens. A cap exists at all because a model that never closes its reasoning block would otherwise decode to n_ctx and be recorded as a truncated summary, which names the wrong cause - the closing marker is what normally ends the span, and the cap is what catches a model that never writes one. Set it only from a reading taken on the weights it is set for; a number carried over from other weights caps a thought mid-sentence, and a truncated thought is worse than no thought at the same budget (arxiv 2504.09858). It is read only where the entry declares turns.thinking_close; an entry that declares no closing marker spends none of it. */
-	max_think_tokens?: number | null;
-
-	/** The answer span's budget. A crash guard, not a length target: the prompt sets the length and this only stops a runaway decode from burning a shard's whole timeout. Sized at 250 the reply ran out of budget mid-object and failed as a shape error, which named the wrong cause - so it is set well above any summary we want. It was max_output_tokens until 2026-09-14, when one budget stopped being able to say which of two spans overran. */
-	max_answer_tokens?: number;
-
-	/** One summarizer POST may wait this long. Sized from the measured worst 8B long article plus one cold prompt prefix, doubled; the shard timeout remains the outer bound. */
+	/** One summarizer POST may wait this long. Sized from the measured worst 8B long article plus one cold prompt prefix, doubled; the shard timeout remains the outer bound. With no decode cap set anywhere, this and the window are the two bounds a runaway decode meets - each per item, each loud, and each already recorded. */
 	request_timeout_minutes?: number;
 
 	/** The weights this block is set for - the sha256 of the entry that carries it. Every number here is a measurement about one model on one runner, never a property of the pipeline, so the entry states which bytes the numbers were put in front of. Swap the weights and this is left behind, which is the one event the field exists to make loud. It says a person paired these numbers with these bytes; where the numbers came from is docs/concepts/config.md, because a runner and a date cannot be checked by a validator and a field nothing checks is a comment. */

@@ -230,6 +230,11 @@ class ModelsConfig(Contract):
     __schema_stem__: ClassVar[str] = "models-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21T03:00",
+            change="Both inference decode caps go; a run that pinned one still reads.",
+            why="Each sent a number where the runtime's own default is already unbounded.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T02:00",
             change="The draft head goes from the entry; a run that named one still reads.",
             why="It changed the summary on nine articles of nine, so it never was a free speed-up.",
@@ -243,11 +248,6 @@ class ModelsConfig(Contract):
             version="2026-09-20",
             change="Add optional CPU, cache, checkpoint and template controls.",
             why="Each model can declare the runtime settings it needs.",
-        ),
-        ChangelogEntry(
-            version="2026-09-17T02:00",
-            change="inference.seed is the sampling control rather than dead code.",
-            why="Every entry pins temperature 0.2, where the seed decides which token is drawn.",
         ),
         ChangelogEntry(
             version="2026-09-14",

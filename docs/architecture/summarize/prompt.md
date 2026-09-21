@@ -1,6 +1,6 @@
 # The summarizer prompt
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 What the Summarize stage asks a model for, and where every number in that ask
 comes from.
 
@@ -825,12 +825,11 @@ after this ordering goes live, this is the first thing to suspect.**
 
 ### The output budget is derived, not picked
 
-**Each call has one, and neither is the summariser role's
-`max_answer_tokens`.** That knob is a crash guard sized for a summary; it still
-sizes the single call and it sizes neither of these. `label_budget_tokens`
-and `summarize_and_plan_budget_tokens` run their arithmetic on every import and raise when
-the recorded number mismatches, so a bound cannot move without the budget moving
-with it.
+**Each call has one, and it is the only budget there is.** The summariser role
+carried a crash-guard number until 2026-09-21, it sized neither of these, and it
+is gone. `label_budget_tokens` and `summarize_and_plan_budget_tokens` run their
+arithmetic on every import and raise when the recorded number mismatches, so a
+bound cannot move without the budget moving with it.
 
 The summarize-and-plan call decodes the summary and the plan through one ceiling, and that number is
 arithmetic over the two shapes' own bounds. Every array in them carries a
@@ -1032,14 +1031,14 @@ runtime splits a reasoning channel off and every item fails on shape. So a call
 is decoded as two spans instead, and `models.<role>.turns.thinking_close` is the
 whole of the declaration.
 
-1. **Span one** is the same request body with the grammar taken off,
-   `n_predict` set from `max_think_tokens` and `stop` set to the declared
-   closing marker. It is derived from the answer body rather than rendered
-   again, so both spans open on one string object and the slot span one fills is
-   the slot span two continues.
+1. **Span one** is the same request body with the grammar taken off, `n_predict`
+   written as `-1` and `stop` set to the declared closing marker. It is derived
+   from the answer body rather than rendered again, so both spans open on one
+   string object and the slot span one fills is the slot span two continues.
 2. **Span two** is that body again, with the thinking spliced onto its prompt,
-   the closing marker written by us, and the schema back on. Its budget is
-   `max_answer_tokens` - the declared number, never a share of a combined one.
+   the closing marker written by us, and the schema back on. Its budget is the
+   one the caller derived from its own reply shape, never a share of a combined
+   number.
 
 **The thinking is discarded before anything reads it.** It reaches span two's
 request body and nothing else: no reader-facing surface, no persisted payload,
@@ -1047,11 +1046,13 @@ and not the reply the summarize-and-plan call replays. It is model-written text,
 exactly the channel Guardrail #11 exists to keep it out of, and it is not
 evidence of anything either.
 
-**Two budgets rather than one**, because one number over two spans cannot say
-whether a long think or a cut answer spent it. `max_think_tokens` is **null, and
-null means no cap**: the span ends on the closing marker, and `n_predict` is sent
-as `-1`, which is llama.cpp's own word for infinity. The rejected cap was 256,
-carried over from no reading of these weights.
+**Span one is uncapped, and `n_predict` is written rather than left alone.** The
+answer body it is derived from carries the caller's own grammar-derived number -
+four tokens on the judge's route - and a span that inherited it would think
+under a budget sized for the answer. `-1` is llama.cpp's own word for infinity,
+so the span ends on the closing marker or on the window and on nothing else. The
+role-level thinking cap was 256, carried over from no reading of these weights,
+and it left the config on 2026-09-21 with the answer cap beside it.
 
 **A null cap rests the whole span on the marker.** The cap existed because a
 model that never closes its reasoning block would decode to the window and be

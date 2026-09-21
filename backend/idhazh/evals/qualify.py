@@ -385,47 +385,36 @@ def context_fit(
     *,
     turns: TurnsConfig | None = None,
 ) -> GateOutcome:
-    """The complete chat-templated request plus the output budget fits, and the
-    cheap predictor never says yes when it should have said no.
+    """The complete chat-templated request fits the window, and the cheap
+    predictor never says yes when it should have said no.
 
     `prompt_tokens` is the runtime's own count of the whole templated request,
     so this measures the candidate tokenizer rather than a words-to-tokens
     estimate taken from another model family.
 
-    **It sizes the single call, and that is correct rather than stale.** The
-    budget it adds is `max_answer_tokens`, which sizes one summarize request -
-    plus `max_think_tokens` where the entry declares a closing marker, because a
-    thinking span decodes into the same sequence. The two-call path's budgets
-    are derived in `classify.calls` and are five and twenty-two times larger.
-    This gate reads what the qualification harness actually ran, and the harness
-    sends one summarize request an article - so reaching for a two-call budget
-    here would size a request nothing sent. What sizes the pair the daily run
-    dispatches is `test_the_two_calls_fit_the_window_at_the_cap`, which is a
-    config-level check and needs no observations.
+    **Nothing is reserved for the reply, because nothing caps it.** The two
+    decode budgets left `inference` on 2026-09-21, so what the reply gets is
+    whatever the window has left after the prompt - which is exactly what this
+    measures. A request with no headroom at all is still refused; what this gate
+    no longer promises is that the headroom is enough.
 
-    **A null `max_think_tokens` adds nothing, because there is nothing to add.**
-    An uncapped thinking span ends on the entry's closing marker or on the
-    window, so the reserve is the answer alone and the headroom this sum leaves
-    is what the thinking gets. The gate still refuses a request with no headroom;
-    it stops promising that the headroom is enough.
+    `turns` is carried for the signature's sake: the harness hands it the entry
+    it ran, and an envelope that thinks spends its reasoning inside this same
+    sequence rather than beside it.
     """
-    thinks = turns is not None and turns.thinks
-    reply = inference.max_answer_tokens + (inference.max_think_tokens or 0 if thinks else 0)
-    overflow = [o for o in observations if o.prompt_tokens + reply > inference.n_ctx]
+    overflow = [o for o in observations if o.prompt_tokens >= inference.n_ctx]
     under_reserved = [
-        o
-        for o in observations
-        if o.fits_context_predicted and o.prompt_tokens + reply > inference.n_ctx
+        o for o in observations if o.fits_context_predicted and o.prompt_tokens >= inference.n_ctx
     ]
     widest = max((o.prompt_tokens for o in observations), default=0)
     return _outcome(
         GateName.CONTEXT_FIT,
         passed=bool(observations) and not overflow and not under_reserved,
         measured=(
-            f"widest request {widest} + {reply} output tokens; "
+            f"widest request {widest} tokens, no reply reserve; "
             f"{len(overflow)} overflowed, {len(under_reserved)} under-reserved"
         ),
-        threshold=f"<= n_ctx {inference.n_ctx}; fits_context over-reserves",
+        threshold=f"< n_ctx {inference.n_ctx}; fits_context over-reserves",
         source=f"{_CONFIG} models.summarize.inference.n_ctx",
         detail=(
             "a request that does not fit is not a shorter summary, it is a reply "

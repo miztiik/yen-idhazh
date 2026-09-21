@@ -88,6 +88,7 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import config, ledger
+from idhazh.classify import calls
 from idhazh.contracts.base import WORK_JOB
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.day_partition import day_files
@@ -526,7 +527,7 @@ def main() -> int:
             args.state,
             cap_tokens=settings.app.extract.truncation_cap_tokens,
             context_tokens=settings.models.summarize.inference.n_ctx,
-            output_tokens=settings.models.summarize.inference.max_answer_tokens,
+            output_tokens=calls.summarize_and_plan_budget_tokens(settings.app.summarize),
         )
     )
     return 0

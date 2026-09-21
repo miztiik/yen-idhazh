@@ -164,7 +164,7 @@ function writeItemHealthCanary() {
 		'llama_rss_bytes', 'llama_rss_anon_bytes', 'llama_rss_peak_bytes', 'llama_major_faults',
 		'python_rss_bytes', 'python_rss_anon_bytes', 'model_id',
 		'model_quantisation', 'n_ctx_configured', 'n_parallel', 'n_threads', 'n_batch',
-		'weights_pinned', 'max_output_tokens', 'label_budget_tokens', 'summary_budget_tokens',
+		'weights_pinned', 'label_budget_tokens', 'summary_budget_tokens',
 		'run_visual_decision',
 		'temperature', 'failed_field', 'failed_rule', 'os_mem_available_bytes',
 		'os_mem_total_bytes', 'os_mem_cached_bytes', 'os_swap_free_bytes', 'os_swap_total_bytes',

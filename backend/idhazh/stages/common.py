@@ -319,14 +319,13 @@ def _two_spans(
     *,
     article: Article,
     turns: TurnsConfig,
-    max_think_tokens: int | None,
     endpoint: str,
     timeout: float,
 ) -> Completion:
     """One call, decoded as an unconstrained think and then the constrained answer.
 
-    **Span one is the same body with the grammar off, a hard budget and a stop
-    at the entry's closing marker.** It is derived from the answer body rather
+    **Span one is the same body with the grammar off, no budget and a stop at
+    the entry's closing marker.** It is derived from the answer body rather
     than rendered again, so both spans open on one string object and the KV slot
     span one filled is the slot span two continues - the prompt cache is asked
     for in `completion_payload` and this is what makes asking worth anything.
@@ -339,21 +338,18 @@ def _two_spans(
     was thought for, where the schema binds the decode from the first token and
     nothing written in span one can change the shape that comes back.
 
-    A span one that spends its whole budget is logged as what it is. It is not
-    an item failure: `answer_span` writes the closing marker itself, so the
-    block is closed either way and span two answers under its own budget. A null
-    budget cannot reach that log line at all - an uncapped span ends on the
-    marker or on the window, and the window is a request error rather than a
-    length stop.
+    An uncapped span ends on the marker or on the window, and the window is a
+    request error rather than a length stop - so a span one that runs long is a
+    failure with a code rather than a silent truncation.
     """
     thought = post(
-        thinking_span(payload, turns=turns, max_think_tokens=max_think_tokens),
+        thinking_span(payload, turns=turns),
         endpoint=endpoint,
         timeout=timeout,
     )
     if thought.hit_the_budget:
         LOG.warning(
-            "the thinking span spent its whole budget id=%s tokens=%s",
+            "the thinking span stopped on a length limit id=%s tokens=%s",
             article.item_id,
             thought.completion_tokens,
         )
@@ -387,7 +383,6 @@ def _ask_the_model(
     run_id: str | None,
     trace: telemetry.Tracer,
     turns: TurnsConfig | None = None,
-    max_think_tokens: int | None = 0,
 ) -> tuple[Completion | None, FailureCode]:
     """One request, its reply, and the code that says why there is none.
 
@@ -414,7 +409,6 @@ def _ask_the_model(
                     payload,
                     article=article,
                     turns=turns,
-                    max_think_tokens=max_think_tokens,
                     endpoint=endpoint,
                     timeout=timeout,
                 )

@@ -211,27 +211,6 @@
           "description": "llama-server -lv. None omits the flag and keeps the runtime default of 3, which prints twelve lines and none of them names flash attention, the KV buffer or the compute buffer. At 4 the whole model-loader block comes back, which is what lets a check read the attention state off the server's own line instead of off the flag we passed it. Measured 2026-09-09 on a 12th Gen Intel Core i7-1265U against llama.cpp b10444, three runs a case and zero spread: one server start goes from 12 lines and 1,085 bytes to about 206 lines and 16,011 bytes. That is a job artifact kept for two days, never a committed file. It changes what the server says about itself and nothing about what it decodes, so idhazh.fingerprint leaves it out of the stamp.",
           "title": "Log Verbosity"
         },
-        "max_answer_tokens": {
-          "default": 900,
-          "description": "The answer span's budget. A crash guard, not a length target: the prompt sets the length and this only stops a runaway decode from burning a shard's whole timeout. Sized at 250 the reply ran out of budget mid-object and failed as a shape error, which named the wrong cause - so it is set well above any summary we want. It was max_output_tokens until 2026-09-14, when one budget stopped being able to say which of two spans overran.",
-          "minimum": 1,
-          "title": "Max Answer Tokens",
-          "type": "integer"
-        },
-        "max_think_tokens": {
-          "anyOf": [
-            {
-              "minimum": 1,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "The thinking span's budget. Null means no cap: the span runs until the model writes turns.thinking_close, and the window is the only other thing that stops it. An integer bounds the span at that many tokens. A cap exists at all because a model that never closes its reasoning block would otherwise decode to n_ctx and be recorded as a truncated summary, which names the wrong cause - the closing marker is what normally ends the span, and the cap is what catches a model that never writes one. Set it only from a reading taken on the weights it is set for; a number carried over from other weights caps a thought mid-sentence, and a truncated thought is worse than no thought at the same budget (arxiv 2504.09858). It is read only where the entry declares turns.thinking_close; an entry that declares no closing marker spends none of it.",
-          "title": "Max Think Tokens"
-        },
         "metrics": {
           "default": true,
           "description": "If true, emit --metrics and llama-server serves its counters on /metrics. On by default: without them a run cannot say how close it came to n_ctx, and a concurrency result has no busy-slot number to read it by.",
@@ -335,7 +314,7 @@
         },
         "request_timeout_minutes": {
           "default": 22.1,
-          "description": "One summarizer POST may wait this long. Sized from the measured worst 8B long article plus one cold prompt prefix, doubled; the shard timeout remains the outer bound.",
+          "description": "One summarizer POST may wait this long. Sized from the measured worst 8B long article plus one cold prompt prefix, doubled; the shard timeout remains the outer bound. With no decode cap set anywhere, this and the window are the two bounds a runaway decode meets - each per item, each loud, and each already recorded.",
           "exclusiveMinimum": 0.0,
           "title": "Request Timeout Minutes",
           "type": "number"
@@ -996,6 +975,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "The embedded inference block loses both decode caps; an old run reads.",
+      "version": "2026-09-21T02:00",
+      "why": "Neither number bounded anything the window and the timeout did not."
+    },
+    {
       "change": "The embedded ModelRef loses `draft`; six records that carry it still read.",
       "version": "2026-09-21",
       "why": "The draft head is gone, and nothing replaces the field it was declared in."
@@ -1009,11 +993,6 @@
       "change": "A run records `shards`, the shard count the plan derived.",
       "version": "2026-09-19",
       "why": "A denominator taken off the numerator's own rows can never disagree."
-    },
-    {
-      "change": "A run records the merge line it grouped the day at.",
-      "version": "2026-09-18",
-      "why": "The line moves now, so a published day has to say which one shaped it."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -1037,7 +1016,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-21",
+      "default": "2026-09-21T02:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1049,5 +1028,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-09-21"
+  "version": "2026-09-21T02:00"
 }

@@ -143,22 +143,17 @@ def sampling_spelling(inference: InferenceConfig) -> str:
     recorded from the start for exactly this move: a change of sampler cannot
     shift the words without shifting this string.
 
-    Both span budgets are here and there is no reasoning flag beside them. What
-    turns reasoning on is the closing marker on the turn envelope, which arrives
-    under `turn_markers_sha256`; a flag here as well would be a second answer to
-    a question the envelope already answers.
-
-    A null thinking budget spells `UNCAPPED` rather than the number it resolves
-    to, because it resolves to no number: the span ends on the marker or on the
-    window, and both of those move with fields already enumerated elsewhere.
+    **No span budget is here, because no span carries one.** The two decode caps
+    left the block on 2026-09-21, and what bounds a span now is the window and
+    the per-request timeout - both enumerated elsewhere. There is no reasoning
+    flag here either: what turns reasoning on is the closing marker on the turn
+    envelope, which arrives under `turn_markers_sha256`.
     """
     return ";".join(
         (
             f"temperature={inference.temperature:.4f}",
             f"top_p={inference.top_p:.4f}",
             f"seed={inference.seed}",
-            f"max_answer_tokens={inference.max_answer_tokens}",
-            f"max_think_tokens={inference.max_think_tokens or UNCAPPED}",
         )
     )
 

@@ -12,7 +12,6 @@
       "flash_attention": "on",
       "load_mode": null,
       "log_verbosity": 4,
-      "max_answer_tokens": 900,
       "metrics": true,
       "n_batch": 512,
       "n_ctx": 65536,

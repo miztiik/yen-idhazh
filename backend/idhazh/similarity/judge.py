@@ -321,7 +321,6 @@ def read_once(
             thinking_span(
                 answer,
                 turns=entry.turns,
-                max_think_tokens=entry.inference.max_think_tokens,
                 temperature=entry.inference.temperature,
             )
         )

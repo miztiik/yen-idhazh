@@ -312,6 +312,11 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21T02:00",
+            change="The embedded inference block loses both decode caps; an old run reads.",
+            why="Neither number bounded anything the window and the timeout did not.",
+        ),
+        ChangelogEntry(
             version="2026-09-21",
             change="The embedded ModelRef loses `draft`; six records that carry it still read.",
             why="The draft head is gone, and nothing replaces the field it was declared in.",
@@ -325,11 +330,6 @@ class RunManifest(Contract):
             version="2026-09-19",
             change="A run records `shards`, the shard count the plan derived.",
             why="A denominator taken off the numerator's own rows can never disagree.",
-        ),
-        ChangelogEntry(
-            version="2026-09-18",
-            change="A run records the merge line it grouped the day at.",
-            why="The line moves now, so a published day has to say which one shaped it.",
         ),
         ChangelogEntry(
             version="2026-08-21",

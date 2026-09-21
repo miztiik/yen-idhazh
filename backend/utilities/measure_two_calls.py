@@ -67,6 +67,7 @@ from idhazh import config
 from idhazh.classify.calls import (
     build_label_request,
     build_summarize_and_plan_request,
+    label_budget_tokens,
     label_system_prompt,
     summarize_and_plan_budget_tokens,
     summarize_and_plan_user_turn,
@@ -944,7 +945,7 @@ def main(argv: list[str] | None = None) -> int:
         system_tokens = tokenizer.count(
             markers.turn("system", label_system_prompt(app.summarize))
         )
-        label_decode = model.inference.max_answer_tokens
+        label_decode = label_budget_tokens()
         summarize_and_plan_decode = summarize_and_plan_budget_tokens(app.summarize)
         ceiling = model.inference.n_ctx - (label_decode + summarize_and_plan_decode + rendered_turn)
         print(

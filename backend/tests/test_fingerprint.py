@@ -300,8 +300,6 @@ def test_the_folded_knobs_are_digested_through_their_spellings() -> None:
         "temperature",
         "top_p",
         "seed",
-        "max_answer_tokens",
-        "max_think_tokens",
         "checkpoint_min_step",
         "ctx_checkpoints",
         "cache_ram",
@@ -460,9 +458,7 @@ def test_a_moved_decoding_knob_moves_the_sampling_spelling() -> None:
     assert sampling_spelling(InferenceConfig(temperature=0.7)) != sampling_spelling(
         InferenceConfig()
     )
-    assert sampling_spelling(InferenceConfig(max_think_tokens=128)) != sampling_spelling(
-        InferenceConfig()
-    )
+    assert sampling_spelling(InferenceConfig(seed=7)) != sampling_spelling(InferenceConfig())
 
 
 def test_the_stamp_digests_the_weights_that_loaded_not_the_ones_configured() -> None:

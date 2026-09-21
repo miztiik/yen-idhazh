@@ -175,14 +175,14 @@ def test_a_config_that_still_spells_the_retired_thinking_flag_is_refused_by_name
 
 
 def test_a_config_that_still_spells_the_one_output_budget_is_refused_by_name() -> None:
-    """One budget over two spans could not say which span overran."""
+    """A decode cap in a person's file is refused, and the message says it is gone."""
     payload = entry_with()
     payload["summarize"]["inference"]["max_output_tokens"] = 900
 
     with pytest.raises(ValidationError) as raised:
         ModelsConfig.model_validate(payload)
 
-    assert "models.<role>.inference.max_answer_tokens" in str(raised.value)
+    assert "models.<role>.inference.max_output_tokens is gone" in str(raised.value)
 
 
 def test_the_committed_entry_names_the_keyword_rather_than_inheriting_it() -> None:
