@@ -506,7 +506,9 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	processor_lost_pct_marked: 1.0,
 	processor_lost_pct_named: 10.0,
 	model_disk_reads_marked: 1,
-	model_disk_reads_named: 1
+	model_disk_reads_named: 1,
+	context_high_percentile: 99.0,
+	context_cut_off_reason: 'length'
 };
 /** The running order a fresh clone draws, and the one the committed config
  * repeats. Four headings on Hardware, each naming a decision an operator takes

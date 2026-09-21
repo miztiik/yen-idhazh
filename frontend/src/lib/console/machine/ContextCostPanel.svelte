@@ -1,14 +1,17 @@
 <script lang="ts">
-	/** Whether raising the truncation cap is even possible.
+	/** What the model's reading limit already costs, not only whether it could grow.
 	 *
-	 * The longest sequence each run saw, prompt and answer together, against the
-	 * window the server was given. That is a question about the worst run in the
-	 * span rather than about the newest one, which is why the panel draws one
-	 * mark a run and keeps every run the span holds.
+	 * The panel used to draw one mark a run - the longest thing that run read -
+	 * and a dotted line for the room left over. The dotted line was the solid
+	 * one reflected in the limit rule, so it carried no second reading, and one
+	 * mark cannot say both what an ordinary article takes and what the worst one
+	 * takes. It now draws both ends: the longest article of the run, and the
+	 * high percentile under it. The gap between the top mark and the rule is the
+	 * slack, and it is the finding.
 	 */
 	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import Panel from '$lib/components/Panel.svelte';
-	import { contextColumns, type ContextBar } from '$lib/charts/machine';
+	import { contextColumns, highLabel, type ContextRun, type ContextSpan } from './context-cost';
 	import { grouped } from '$lib/charts/series';
 	import {
 		chartWidth,
@@ -31,43 +34,45 @@
 		start,
 		end,
 		contextWindow,
+		cost,
 		modelChanges,
 		chart,
 		windowDays,
-		days,
-		runsRead
+		days
 	}: {
-		rows: readonly ContextBar[];
+		rows: readonly ContextRun[];
 		start: string;
 		end: string;
 		contextWindow: number;
+		/** The span's own figures, worked out on the server from the same rows. */
+		cost: ContextSpan;
 		modelChanges: readonly string[];
 		chart: ChartConfig;
 		windowDays: number;
 		days: number;
-		runsRead: number;
 	} = $props();
 
 	let contextWidth = $state<number | null>(null);
 	let contextAt = $state<number | null>(null);
 
 	const contextRuns = $derived(inSpan(rows, start, end));
+	/** The limit the measured rows ran under. Where the span holds one it is
+	 * that one; where the setting moved inside the span no single token figure
+	 * is about the span, so the rule falls back to the configured value and the
+	 * sentence below names every limit it saw. */
+	const limit = $derived(cost.limits.length === 1 ? cost.limits[0] : contextWindow);
 	// The four shapes below are a function of the RUNS alone, so a resize reuses
-	// them and only a new span rebuilds them. `firstOfDay`, the caption columns,
-	// the boundary set and the domain used to sit inside the width-dependent
-	// derives, so a drag re-derived every caption and re-scanned the rule list a
-	// column; split out, a drag moves pixels and nothing else.
+	// them and only a new span rebuilds them.
 	const contextDates = $derived(firstOfDay(contextRuns));
-	const contextData = $derived(contextColumns(contextRuns, contextWindow));
+	const contextData = $derived(contextColumns(contextRuns, limit, cost.percentile));
 	const contextBoundaries = $derived(boundaryDates(modelChanges, contextDates));
-	/** The domain the plot is drawn against. It is a function of the sequences
-	 * and the window, never the width, so it is retained across a resize.
-	 * Zero-anchored, and the window is one of its bounds, so the limit is a line
-	 * on the plot rather than a number off the top. */
+	/** The domain the plot is drawn against. Zero-anchored, and the limit is one
+	 * of its bounds, so the ceiling is a line on the plot rather than a number
+	 * off the top - which is the whole point when every mark sits far below it. */
 	const contextExtent = $derived([
 		0,
-		contextWindow,
-		...contextRuns.flatMap((run) => [run.longest ?? 0, run.spare ?? 0])
+		limit,
+		...contextRuns.flatMap((run) => [run.largest ?? 0, run.high ?? 0])
 	]);
 	const contextBox = $derived(
 		frame(chartWidth(contextWidth, chart.width_px), chart.height_px, {
@@ -98,8 +103,7 @@
 			x: contextX[index] ?? 0,
 			// One set membership a column, built once a span, in place of a scan of
 			// the rule list a column. The set holds a boundary DAY's date and every
-			// run of that day carries it, so all its columns take the rule - which is
-			// exactly what the scan did.
+			// run of that day carries it, so all its columns take the rule.
 			rows: contextBoundaries.has(contextRuns[index]?.date ?? '')
 				? [...column.rows, MODEL_RULE_ROW]
 				: column.rows
@@ -113,9 +117,7 @@
 	/** Two polylines, built once each rather than per mark. */
 	function line(values: readonly (number | null)[]): string {
 		return values
-			.map((value, index) =>
-				value === null ? '' : `${contextX[index]},${contextAtY(value)}`
-			)
+			.map((value, index) => (value === null ? '' : `${contextX[index]},${contextAtY(value)}`))
 			.filter((point) => point !== '')
 			.join(' ');
 	}
@@ -124,8 +126,9 @@
 	}
 	/** The two series as polylines, built once a span-and-width rather than once
 	 * a render: inlined in the template, both were rebuilt on every hover. */
-	const contextSpareLine = $derived(line(contextRuns.map((run) => run.spare)));
-	const contextLongestLine = $derived(line(contextRuns.map((run) => run.longest)));
+	const contextHighLine = $derived(line(contextRuns.map((run) => run.high)));
+	const contextLargestLine = $derived(line(contextRuns.map((run) => run.largest)));
+	const highName = $derived(highLabel(cost.percentile).toLowerCase());
 </script>
 
 <div
@@ -143,17 +146,18 @@
 	<Panel
 		heading="h3"
 		id="context-headroom"
-		title="How close the longest text came to the model's limit"
-		note="Whether the cap on how much an article may send can move turns on the longest text in the span rather than the newest one - one mark a run, over the last {windowDays} days."
+		title="How much of the model's reading limit an article actually takes"
+		note="A limit far above every article ever read is room a setting could give back - one mark a run, over the last {windowDays} days."
 	>
 		{#if contextRuns.length === 0}
 			<p class="empty" data-machine-panel-empty="context">
-				No run in these {days} days recorded a longest sequence.
+				No run in these {days} days recorded both the limit it ran under and an article's own
+				tokens, so nothing here can say what the limit cost.
 			</p>
 		{:else}
 			<div
 				class="plot"
-				data-context-window={contextWindow}
+				data-context-window={limit}
 				data-readout-columns={contextStrip.length}
 			>
 				<div use:observeWidth={(px) => (contextWidth = px)}>
@@ -164,9 +168,9 @@
 						viewBox={`0 0 ${contextBox.width} ${contextBox.height}`}
 						role="img"
 						tabindex="0"
-						aria-label="The longest sequence each of {contextRuns.length} runs saw, against the {grouped(
-							contextWindow
-						)}-token context window, over {days} days. One mark is one run, oldest on the left."
+						aria-label="The longest article and {highName} of each of {contextRuns.length} runs, against the {grouped(
+							limit
+						)}-token limit, over {days} days. One column is one run, oldest on the left."
 						use:pointerReadout={{
 							marks: contextMarks,
 							width: contextBox.width,
@@ -192,31 +196,31 @@
 							</text>
 						{/each}
 
-						<!-- The window is a rule and never a bar. A limit is a line a
+						<!-- The limit is a rule and never a bar. A limit is a line a
 						     series approaches; a bar beside a bar invites the reader to
 						     compare two lengths and forget which one is the ceiling. -->
 						<line
 							x1={contextBox.left}
 							x2={contextBox.right}
-							y1={contextAtY(contextWindow)}
-							y2={contextAtY(contextWindow)}
+							y1={contextAtY(limit)}
+							y2={contextAtY(limit)}
 							stroke="var(--chart-marker)"
 							stroke-width="1.5"
-							data-context-limit={contextWindow}
+							data-context-limit={limit}
 						>
 							<title>
-								{`The server was given a ${grouped(contextWindow)}-token context window. A run cannot cross this line.`}
+								{`The server was given a ${grouped(limit)}-token limit. One call cannot cross this line.`}
 							</title>
 						</line>
 						<text
 							x={contextBox.right}
-							y={contextAtY(contextWindow) - 4}
+							y={contextAtY(limit) - 4}
 							text-anchor="end"
 							fill="var(--color-text-tertiary)"
 							font-size="10"
 							data-context-limit-label
 						>
-							{grouped(contextWindow)}-token window
+							{grouped(limit)}-token limit
 						</text>
 
 						{#each contextRules as rule (rule.date)}
@@ -245,29 +249,39 @@
 							/>
 						{/if}
 
-						<!-- Spare capacity is derived - it is the window minus the
-						     measurement - so it is drawn dotted to say it is not an
-						     independent reading of anything. -->
-						<polyline
-							points={contextSpareLine}
-							fill="none"
-							stroke="var(--chart-3)"
-							stroke-width="1.5"
-							stroke-dasharray="2 3"
-							data-context-series="spare"
-						/>
-						<g data-context-series="longest">
+						<!-- Both ends of every run. The lower line is the crowd and the
+						     upper one is the worst case; the decision to cut the limit
+						     turns on the upper one, so it takes the heavier stroke. -->
+						<g data-context-series="high">
 							<polyline
-								points={contextLongestLine}
+								points={contextHighLine}
+								fill="none"
+								stroke="var(--chart-3)"
+								stroke-width="1.5"
+							/>
+							{#each contextRuns as run, index (run.runId)}
+								{#if run.high !== null}
+									<circle
+										cx={contextX[index]}
+										cy={contextAtY(run.high)}
+										r="2"
+										fill="var(--chart-3)"
+									/>
+								{/if}
+							{/each}
+						</g>
+						<g data-context-series="largest">
+							<polyline
+								points={contextLargestLine}
 								fill="none"
 								stroke="var(--chart-1)"
 								stroke-width="2"
 							/>
 							{#each contextRuns as run, index (run.runId)}
-								{#if run.longest !== null}
+								{#if run.largest !== null}
 									<circle
 										cx={contextX[index]}
-										cy={contextAtY(run.longest)}
+										cy={contextAtY(run.largest)}
 										r="2.5"
 										fill="var(--chart-1)"
 									/>
@@ -315,32 +329,67 @@
 				</p>
 			{/if}
 
-			<p class="reads" data-context-basis>
-				{contextRuns.length}
-				{contextRuns.length === 1 ? 'run' : 'runs'} of these {days} days recorded a longest
-				sequence, out of {runsRead} the ledger could read. The worst of them reached
-				<strong>{grouped(Math.max(0, ...contextRuns.map((run) => run.longest ?? 0)))}</strong>
-				tokens of the {grouped(contextWindow)} the server was given.
+			<!-- The finding, in the order a reader needs it: what has never been
+			     used, how far the limit sits above an ordinary article, and whether
+			     anything was ever cut short. -->
+			<p class="reads" data-context-cost data-context-unused-pct={cost.unusedPct ?? ''}>
+				{#if cost.unusedPct === null || cost.largest === null}
+					{cost.items} of the {cost.rowsRead} articles these {days} days recorded carried both the
+					limit they ran under and their own tokens, which is too few to say what the limit cost.
+				{:else}
+					The longest article of these {days} days held
+					<strong>{grouped(cost.largest)}</strong>
+					tokens, which is {cost.largestPct}% of the {grouped(limit)} the server was given -
+					<strong>{cost.unusedPct}% of the limit has never been used, not once</strong>. A middle
+					article held {grouped(cost.median ?? 0)}, so the limit is
+					<strong>{cost.timesMedian}</strong> times the article it usually reads. Measured over
+					{cost.items} of the {cost.rowsRead} articles these days recorded; the rest are older than
+					the cells this reads.
+				{/if}
 			</p>
 
-			<!-- Every run's own three numbers, for a reader who cannot see the
-			     plot. The chart is the shape of the question; this is the table
-			     it was made from, and nothing is only in the picture. -->
+			<p class="reads" data-context-cutoff data-context-cutoff-calls={cost.cutOff}>
+				{#if cost.calls === 0}
+					No call in these {days} days recorded why its reply stopped, so nothing here can say
+					whether anything ran out of room.
+				{:else if cost.cutOff === 0}
+					Nothing has been cut short: across {grouped(cost.calls)} model calls the server never
+					once said a reply stopped because it ran out of room. It said
+					{cost.reasons.map((one) => `${one.reason} ${grouped(one.calls)} times`).join(', ')}.
+				{:else}
+					{grouped(cost.cutOff)} of {grouped(cost.calls)} model calls stopped because the reply
+					ran out of room, which is a budget that no longer fits.
+				{/if}
+			</p>
+
+			{#if cost.limits.length > 1}
+				<p class="reads" data-context-limits-moved>
+					The limit moved inside these {days} days - it was set to
+					{cost.limits.map((one) => grouped(one)).join(' and ')} tokens - so the shares above are
+					each article against its own limit and the rule is drawn at the configured
+					{grouped(contextWindow)}.
+				</p>
+			{/if}
+
+			<!-- Every run's own numbers, for a reader who cannot see the plot. The
+			     chart is the shape of the question; this is the table it was made
+			     from, and nothing is only in the picture. -->
 			<ul class="sr-only" data-context-runs>
 				{#each contextRuns as run (run.runId)}
-					<li data-context-run={run.runId} data-context-longest={run.longest ?? ''}>
-						{#if run.longest === null}
-							{run.runId}: no sequence length recorded, over {run.from}
-							{run.outOf === null
-								? 'shards, and this run manifest recorded no shard count'
-								: `of ${run.outOf} shards`}.
+					<li
+						data-context-run={run.runId}
+						data-context-largest={run.largest ?? ''}
+						data-context-high={run.high ?? ''}
+					>
+						{#if run.largest === null}
+							{run.runId}: no article recorded both the limit and its own tokens.
 						{:else}
-							{run.runId}: {grouped(run.longest)} of {grouped(contextWindow)} tokens,
-							{run.usedPct === null ? 'an unrecorded share' : `${run.usedPct}%`} used,
-							{run.spare === null ? 'unrecorded' : grouped(run.spare)} spare, over {run.from}
-							{run.outOf === null
-								? 'shards, and this run manifest recorded no shard count'
-								: `of ${run.outOf} shards`}.
+							{run.runId}: the longest article held {grouped(run.largest)} tokens,
+							{run.largestPct === null ? 'an unrecorded share' : `${run.largestPct}%`} of the limit;
+							{highName} held {run.high === null ? 'an unrecorded number' : grouped(run.high)}
+							tokens,
+							{run.highPct === null ? 'an unrecorded share' : `${run.highPct}%`}; over {run.items}
+							{run.items === 1 ? 'article' : 'articles'}.
 						{/if}
 					</li>
 				{/each}
