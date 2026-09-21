@@ -38,16 +38,17 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 | [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 26 | 3 | 2 |
-| [20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md) | 21 | 0 | 15 | 8 |
+| [20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md) | 21 | 0 | 7 | 4 |
 | [20260921-40-bonsai-probe-plan.md](20260921-40-bonsai-probe-plan.md) | 7 | 0 | 7 | 4 |
 | [20260921-41-lane-a-model-file-plan.md](20260921-41-lane-a-model-file-plan.md) | 7 | 0 | 7 | 1 |
+| [20260921-42-lane-b-workflows-plan.md](20260921-42-lane-b-workflows-plan.md) | 9 | 0 | 9 | 2 |
 
 ## In flight - 0
 
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 45
+## Ready now - 43
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -87,10 +88,6 @@ section 3 is where it is answered.
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
 | #19 | 38 | R | Where the content-similarity judge's merge line stands against its holdout | 7, 18 |
 | #21b | 38 | T | The content-similarity judge answers which nights it is behind on | 8, 11b, 12, 15b, 21a |
-| #13 | 39 | - | The entry path is one action taking a model file | - |
-| #4 | 39 | - | The capability probe goes | - |
-| #14 | 39 | - | The image benchmark goes, and two heavy wheels with it | - |
-| #20 | 39 | - | One commit call in the workflow that has four | - |
 | #7 | 39 | - | Qualification asks each article once | - |
 | #8 | 39 | - | Both test pipelines commit what they produce | - |
 | #15 | 39 | - | The hosted span sink goes | - |
@@ -100,8 +97,10 @@ section 3 is where it is answered.
 | #5 | 40 | A | The eight telemetry steps move across | - |
 | #6 | 40 | A | A trial state root, and what the run keeps | - |
 | #1 | 41 | A | The server-log reader goes | - |
+| #1 | 42 | A | The capability probe goes | - |
+| #3 | 42 | A | The image benchmark goes | - |
 
-## Waiting on another row - 89
+## Waiting on another row - 92
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -178,10 +177,6 @@ section 3 is where it is answered.
 | #12 | 36 | W3 / rejects-store | The rejects store + corpus fence (`state/rejects/`, 30-day prune) | 3 is PENDING; 7 is PENDING |
 | #13 | 36 | W4 / plan34-gaps | Retro: plan-34 latent gaps + the shared space-trap guard | 34 landed names no row; 6 is PENDING |
 | #20 | 38 | V | The plan pointer | 19 is PENDING; 21b is PENDING |
-| #5 | 39 | - | The installer stops naming a repository | 13 is PENDING; plan 41 PR A1 names no row |
-| #3 | 39 | - | The draft head goes | 13 is PENDING |
-| #9 | 39 | - | The benchmark workflow's closed-world tests go | 3 is PENDING; 4 is PENDING |
-| #10 | 39 | - | The workflow censuses go | 3 is PENDING; 4 is PENDING |
 | #17 | 39 | - | The utilities and evaluations nothing calls go | 7 is PENDING |
 | #1 | 39 | - | The generated contract layer goes | A names no row; B names no row; C names no row; D names no row |
 | #12 | 39 | - | The engineering contract and the pages catch up | 1 is PENDING |
@@ -194,6 +189,13 @@ section 3 is where it is answered.
 | #5 | 41 | A | The model file carries llama-server's own flags | 4 is PENDING |
 | #6 | 41 | A | The engineering contract catches up | 5 is PENDING |
 | #7 | 41 | B | The markers are derived at server start | 6 is PENDING |
+| #2 | 42 | A | Two runtime scripts become one | 1 is PENDING |
+| #4 | 42 | B | The draft head leaves the workflows | 2 is PENDING |
+| #5 | 42 | B | The benchmark joins the shared script and drops its own pin | 4 is PENDING |
+| #6 | 42 | B | The benchmark tests shrink to the six that name a defect | 5 is PENDING |
+| #7 | 42 | B | The server, weights and pin censuses become discovery or die | 5 is PENDING |
+| #8 | 42 | B | The benchmark arms learn the server died | 5 is PENDING |
+| #9 | 42 | C | The harness keeps only what more than one module reads | 6 is PENDING; 7 is PENDING; 8 is PENDING |
 
 ## Finished - 18 plans with no live row
 
