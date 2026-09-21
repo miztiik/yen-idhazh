@@ -89,6 +89,9 @@ STORE_MODULES: Final = (ledger, traces)
 # a commit step may be staging for nothing.
 STORES_NOTHING_FILLS_YET: Final[Mapping[str, str]] = MappingProxyType(
     {
+        "state/llm-council/shard-outcomes": (
+            "the council, on its way out of each unit of work it ran"
+        ),
         "state/story-similarity/archive": "the fold, on the day a stamp under the record moves",
         "state/story-similarity/holdout-pairs.csv": (
             "a person, and no run ever - the file is typed by hand"
