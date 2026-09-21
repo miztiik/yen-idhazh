@@ -72,9 +72,11 @@ by up to that much before any article is read.
 
 **A shard's own budget.** At the committed cap of 200 pairs over four shards, one
 shard draws 50 pairs. That is 78.8 minutes of model time at the average pair and
-92.5 minutes at the slowest one, against a 200-minute bound - so the committed
-budget clears its bound with more than half the clock unused, and the clock is
-not what limits how many pairs a night may judge.
+92.5 minutes at the slowest one, against the 175 minutes a unit has to work in -
+the 200-minute bound less the 13 the venue spends before the judging process
+starts and the 12 it keeps back for the records and the upload. So the committed
+budget uses 45 percent of its window at the average pair and 53 percent at the
+slowest, and the clock is not what limits how many pairs a night may judge.
 
 **Why the judging night is a workflow of its own.** All 200 pairs in one job is
 5 hours 15 minutes at the average pair and 6 hours 10 minutes at the slowest,

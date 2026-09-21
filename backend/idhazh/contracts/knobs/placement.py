@@ -57,18 +57,6 @@ HOLDOUT_TWO_STORY_MAX: Final = 0.9407
 #: moving it would re-size work nobody measured.
 SECONDS_A_CALL: Final = 77.6
 
-#: Wall clock for one judged pair - both readings of it - in seconds. The worst
-#: pair measured rather than the average one, because a bound has to survive a bad
-#: night: 110.98 s against a mean of 94.53 and a best of 72.80, population sd
-#: 7.84, over the 82 pairs of run 2026-09-18-35339202390. Judged 2026-09-18 across
-#: four stock ubuntu-latest runners on Qwen3.5-9B-Q4_K_M, and the four shards'
-#: means spread 88.24 to 99.89 s - a 13.2 percent difference from the machine
-#: alone (docs/reference/benchmarks/what-a-judge-pair-costs.md). Denominated in
-#: pairs and not calls: a pair's second call re-reads the first one's prompt
-#: prefix, so halving this would be a guess with the direction known and the size
-#: unknown.
-SECONDS_A_JUDGED_PAIR: Final = 110.98
-
 #: The knobs `adaptive_dedup_threshold` used to carry, and where each one went.
 #: Two changed unit as well as name: the fall cap is counted in slots of
 #: `bin_width` now rather than written as a score, and the one damping weight
@@ -250,8 +238,10 @@ class SimilarityThresholdConfig(Model):
             "on 2026-09-18 - is 1 hour 32 minutes of model time a shard, and 1 hour 19 "
             "minutes at the measured average of 94.53 s "
             "(docs/reference/benchmarks/what-a-judge-pair-costs.md). Raising it is a "
-            "job-timeout question before it is a quality one, and a validator refuses a "
-            "value that does not fit council.shard_timeout_minutes."
+            "job-timeout question before it is a quality one, and this judge refuses a "
+            "value that does not fit the window the council leaves a unit to work in - "
+            "checked when the council resolves this judge, not when config is read, "
+            "because the per-pair cost is this judge's own measurement."
         ),
     )
     flush_every_pairs: int = Field(

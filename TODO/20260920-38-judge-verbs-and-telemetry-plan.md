@@ -123,9 +123,9 @@ That sentence is worth nothing unless it is checkable, so it is five conditions 
 | 14 | The judge fills the stamp | 8, 11b, 13 | K | PENDING | - | - | - |
 | 15b | The content-similarity judge fills its metrics and registers as a tenant | 6, 14, 15a | L | PENDING | - | - | - |
 | 16 | The model block becomes one composite action | - | M | DONE | - | 1000 | worker |
-| 24 | The council runs verbs of its own over a tenant list | 2, 15a, 16 | N | DONE | p38n | - | worker |
-| 17 | The council runs the tenant and files its own outcome row | 5, 15a, 24 | O | DONE | p38o | - | worker |
-| 25 | The config check moves to the tenant that owns the number | 9, 24 | P | PENDING | - | - | - |
+| 24 | The council runs verbs of its own over a tenant list | 2, 15a, 16 | N | DONE | - | 1011 | worker |
+| 17 | The council runs the tenant and files its own outcome row | 5, 15a, 24 | O | DONE | - | 1013 | worker |
+| 25 | The config check moves to the tenant that owns the number | 9, 24 | P | DONE | - | 1012 | worker |
 | 18 | The store groups under the judge that fills it | 17 | Q | PENDING | - | - | - |
 | 19 | Where the content-similarity judge's merge line stands against its holdout | 7, 18 | R | PENDING | - | - | - |
 | 21a | The council asks every tenant what it is behind on | 15a, 17, 24 | S | PENDING | - | - | - |
