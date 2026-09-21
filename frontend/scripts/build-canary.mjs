@@ -278,26 +278,30 @@ function writeItemHealthCanary() {
 	 * before the columns wrote and which must never draw as a quiet day.
 	 *
 	 * The count climbs with the seat so that the day's own arithmetic is
-	 * checkable from this file, and so the first article of a shard - which the
-	 * panel leaves out, because a server that has just started is reading its
-	 * own memory in - is a row that really does carry a count rather than an
-	 * absence that would pass either way.
+	 * checkable from this file. The FIRST article of a shard carries a far larger
+	 * one - `starting` - because a server that has just started really does read
+	 * its whole weight file in, and that is the read the panel leaves out. Left
+	 * at zero it would make the exclusion untestable: a fold that quietly counted
+	 * the first article would get the same total as one that did not.
 	 *
 	 * Both pinning settings are real: `config/models/qwen3.5-9b-q4km.json` sets
 	 * `inference.load_mode` and the other four leave it null, so neither value
 	 * here is a setting the repository cannot produce.
 	 */
 	const MEMORY_DAYS = new Map([
-		[date, { waits: 4100, copies: 10_400_000_000, step: 1_900_000_000, pinned: 'False' }],
-		[earlier, { waits: 1700, copies: 10_200_000_000, step: 0, pinned: 'False' }],
-		[longAgo, { waits: 0, copies: 11_000_000_000, step: 0, pinned: 'True' }]
+		[
+			date,
+			{ waits: 4100, starting: 148000, copies: 10_400_000_000, step: 1_900_000_000, pinned: 'False' }
+		],
+		[earlier, { waits: 1700, starting: 148000, copies: 10_200_000_000, step: 0, pinned: 'False' }],
+		[longAgo, { waits: 0, starting: 148000, copies: 11_000_000_000, step: 0, pinned: 'True' }]
 	]);
 
 	const memory = (rowDate, seat) => {
 		const day = MEMORY_DAYS.get(rowDate);
 		if (!day) return {};
 		return {
-			llama_major_faults: day.waits * seat,
+			llama_major_faults: seat === 0 ? day.starting : day.waits * seat,
 			os_mem_cached_bytes: day.copies - day.step * seat,
 			weights_pinned: day.pinned
 		};
