@@ -18,7 +18,7 @@ import csv
 import os
 import re
 from pathlib import Path
-from typing import Final
+from typing import Final, cast
 
 from idhazh import ledger
 from idhazh.contracts.base import SLUG_PATTERN
@@ -71,24 +71,41 @@ def ship_judge_metrics(row: JudgeRow, *, judge_id: str, shard: int, out_dir: Pat
     return path
 
 
+def shipped_rows[Row: JudgeRow](
+    shipped_root: Path, *, judge_id: str, contract: type[Row]
+) -> list[Row]:
+    """Every row one tenant's units shipped, through the contract that wrote them.
+
+    Split out from the append below because the council's own record goes to a
+    store this module must not name: it is appended by the ledger writer that
+    owns that store's settlement key, and this is the half of the trip the two
+    payloads share.
+
+    A file an upload truncated fails here rather than reaching a committed
+    store. What it reads is bounded by how many units the run split into, not by
+    anything the archive has accumulated (Guardrail #12).
+    """
+    # `CsvContract` declares its reader as returning the row protocol rather than
+    # the class's own type, so the caller's contract is what names the row here.
+    return cast(
+        "list[Row]",
+        [
+            contract.from_csv_row(raw)
+            for path in sorted(_shipped_dir(shipped_root, judge_id).glob(f"*{SHIPPED_SUFFIX}"))
+            for raw in _rows_of(path)
+        ],
+    )
+
+
 def collect_judge_metrics(
     shipped_root: Path, *, judge_id: str, contract: type[JudgeRow], into: Path
 ) -> int:
     """Append every shipped row to the store the tenant named. Returns how many landed.
 
-    Each row is read back through the contract that wrote it, so a file an upload
-    truncated fails here rather than reaching the committed store. `into` is
-    handed in by the tenant, so the council spells no judge's store path and a
-    second tenant needs no change here.
-
-    What it reads is bounded by how many units the run split into, not by
-    anything the archive has accumulated (Guardrail #12).
+    `into` is handed in by the tenant, so the council spells no judge's store
+    path and a second tenant needs no change here.
     """
-    rows = [
-        contract.from_csv_row(raw)
-        for path in sorted(_shipped_dir(shipped_root, judge_id).glob(f"*{SHIPPED_SUFFIX}"))
-        for raw in _rows_of(path)
-    ]
+    rows = shipped_rows(shipped_root, judge_id=judge_id, contract=contract)
     return ledger.extend_ledger_file(into, contract.csv_columns(), rows)
 
 
