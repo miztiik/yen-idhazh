@@ -86,6 +86,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21T11:30",
+            change="council.tenants and council.shard_preamble_minutes, additive.",
+            why="The venue registers a tenant from config and knows what a job spends before it.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T05:00",
             change="console.context_high_percentile and console.context_cut_off_reason, additive.",
             why="The context panel draws two ends a run and names what a cut-off looks like.",
@@ -99,11 +104,6 @@ class AppConfig(Contract):
             version="2026-09-21T01:00",
             change="observability.host_fingerprint_bandwidth_cache_multiple, additive, default 2.",
             why="The probe and the console grade a row by it, so it cannot be two numbers.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21",
-            change="council block added; the judge's own block is now optional.",
-            why="The venue's runner numbers cannot sit inside a tenant that need not exist.",
         ),
         ChangelogEntry(
             version="2026-08-21",

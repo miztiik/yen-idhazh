@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from idhazh.contracts.base import Model
+from idhazh.contracts.base import Model, Slug
 
 
 class CouncilConfig(Model):
-    """The clock, the margin and the fan-out width one judging night runs under.
+    """The clocks, the fan-out width and the tenant list one judging night runs under.
 
     A top-level block rather than a knob under a tenant, because every number
     here prices a runner: a checkout, an install, a weights restore and a matrix
@@ -33,6 +33,20 @@ class CouncilConfig(Model):
             "stock runner on 2026-09-09, not from a judge call. A tenant that draws more "
             "work than fits is refused when its own block is read, never answered by "
             "raising this past GitHub's 6 h job ceiling."
+        ),
+    )
+    shard_preamble_minutes: int = Field(
+        default=13,
+        ge=0,
+        description=(
+            "How much of shard_timeout_minutes is gone before the judging process starts. "
+            "The job clock starts at provisioning; the process starts after a checkout, a "
+            "weights cache restore, a checksum verify and a health poll, and all four are "
+            "the venue's own fixed cost. 13 minutes is one minute above the worst case "
+            "those four steps have been measured at, which is 12.1 minutes: provisioning "
+            "0.41, cache restore up to 1.58, checksum verify 0.12, and a health poll "
+            "bounded at 10. Without it the in-process deadline lands AFTER GitHub's own "
+            "kill on a slow model load, and the reserve below protects nothing."
         ),
     )
     shard_wrap_up_minutes: int = Field(
@@ -62,5 +76,16 @@ class CouncilConfig(Model):
             "server on one runner does not fit at all. The ceiling of 8 is what a GitHub "
             "matrix leg costs rather than a measured limit. A tenant may narrow it "
             "downward, so this is the ceiling and the default rather than an instruction."
+        ),
+    )
+    tenants: tuple[Slug, ...] = Field(
+        default=(),
+        description=(
+            "Which tenants the council hosts, in the order it runs them. The one place a "
+            "tenant is registered: the council resolves each slug to the module that "
+            "declares it, and a slug nothing declares is refused by name. Empty is a "
+            "legal night - every step still runs and the venue judges nothing - because "
+            "a list in source would make adding a judge a code change and would put a "
+            "roster of who may exist back inside the venue."
         ),
     )
