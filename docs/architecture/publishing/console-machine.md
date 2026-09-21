@@ -108,7 +108,7 @@ seconds" figure averages two different machines together.
 
 **Hardware carried both timing panels until 2026-09-20, and carries neither
 now.** They merged into one panel on Pipelines - see [where a run's time
-went](#where-a-runs-time-went-is-one-panel-on-pipelines-at-two-grains). The move
+went](console.md#where-a-runs-time-went-is-one-panel-on-pipelines-at-two-grains). The move
 is what makes room on a route that had fifteen flat siblings.
 
 **The board is six columns on a desktop and one card a shard at 1280px and
