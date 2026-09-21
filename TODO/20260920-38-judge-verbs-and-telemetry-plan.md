@@ -117,7 +117,7 @@ That sentence is worth nothing unless it is checkable, so it is five conditions 
 | 1b | The judge stops safely and flushes as it goes | 1a | H | DONE | - | 997 | worker |
 | 10 | The judge's own bound reads a measured number | 9 | H | DONE | - | 997 | worker |
 | 11a | The model layer offers both spans and says what it decoded | - | I | DONE | - | 989 | worker |
-| 12 | The four verbs name their work | 9, 24 | J | DONE | p38j | - | worker |
+| 12 | The four verbs name their work | 9, 24 | J | DONE | - | 1014 | worker |
 | 13 | `leg` and `fold` leave the vocabulary | 12 | J | PENDING | - | - | - |
 | 11b | The content-similarity judge reads its own margin | 11a | K | DONE | - | 1007 | worker |
 | 14 | The judge fills the stamp | 8, 11b, 13 | K | PENDING | - | - | - |
