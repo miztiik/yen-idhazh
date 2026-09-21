@@ -106,13 +106,13 @@ That sentence is worth nothing unless it is checkable, so it is five conditions 
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 15a | The council's package, the tenancy protocol and the shipping capability | - | A | DONE | - | 990 | worker |
 | 9 | The council's clocks and its fan-out width move to a council block | - | B | DONE | - | 993 | worker |
-| 1a | The council bounds its shard and ships whatever it wrote | 9, 15a | C | DONE | p38a | - | worker |
+| 1a | The council bounds its shard and ships whatever it wrote | 9, 15a | C | DONE | - | 994 | worker |
 | 2 | The council knows which run it is | 1a | D | PENDING | - | - | - |
 | 3 | The separation and the dictum, written where the next agent reads it | - | E | PENDING | - | - | - |
 | 4 | The judge-call stamp, declared once and naming no judge | - | F | DONE | - | 992 | worker |
 | 5 | The council's own shard-outcome record | 4 | F | DONE | - | 992 | worker |
-| 6 | The content-similarity judge's own metrics | 5 | G | DONE | p38g | - | worker |
-| 7 | The content-similarity judge's merge-line benchmark record | 5 | G | DONE | p38g | - | worker |
+| 6 | The content-similarity judge's own metrics | 5 | G | DONE | - | 995 | worker |
+| 7 | The content-similarity judge's merge-line benchmark record | 5 | G | DONE | - | 995 | worker |
 | 8 | The pair row gains the stamp, and the store is rewritten | - | G | PENDING | - | - | - |
 | 1b | The judge stops safely and flushes as it goes | 1a | H | PENDING | - | - | - |
 | 10 | The judge's own bound reads a measured number | 9 | H | PENDING | - | - | - |
@@ -357,7 +357,7 @@ The council calls `metrics.csv_row()` and the class-side `csv_columns()` and wri
 
 ### `MergeLineHoldoutScore` - new (`backend/idhazh/contracts/merge_line_holdout_score.py`)
 
-`class MergeLineHoldoutScore(Contract)`. `__schema_stem__ = "content-similarity-judge-merge-line-holdout-score"`. Key: `("date", "run_id")`. Store: `state/content-similarity-judge/line-holdout-scores/<YYYY>/<MM>/<DD>.csv`.
+`class MergeLineHoldoutScore(Contract)`. `__schema_stem__ = "content-similarity-judge-merge-line-holdout-score"`. Key: `("date", "run_id")`. Store: `state/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>.csv`.
 
 **It does not inherit the call stamp.** No judge reads anything here: the holdout rows carry no verdict, the scoring applies a threshold to a recomputed similarity, and the labels were written by a model outside the pipeline. Eight call columns would be five nulls and one asserting an instrument that never ran.
 
@@ -505,7 +505,8 @@ All three stores join the prune targets (CLAUDE.md 1b: a prune verb per store) a
 
 - **Side: judge.**
 - **Scope:** the judging stage takes the deadline it is handed, stops on it between units, writes its verdict file from the first pair onward, and reports which outcome it reached.
-- **Files touched:** `backend/idhazh/stages/judge_shard.py`, `backend/idhazh/contracts/knobs/placement.py`, `config/idhazh.json`, `backend/tests/test_similarity_judge.py`, `schemas/app-config.schema.json` (generated)
+- **Files touched:** `backend/idhazh/stages/judge_shard.py`, `backend/idhazh/cli.py`, `backend/idhazh/contracts/knobs/placement.py`, `config/idhazh.json`, `backend/tests/test_similarity_judge.py`, `schemas/app-config.schema.json` (generated)
+- **`cli.py` is in this list because row #1a's worker found it missing.** Row #1a computes the deadline and hands it over, but deliberately did not widen `stage_judge_shard`'s signature, because a parameter accepted and ignored is a stub (Guardrail #7). So the caller is this row's: without one line in `cli.py`, the judging stage accepts a deadline that nothing passes it and the bound still does not fire on a real night.
 - **Acceptance gates:** local - the similarity test module, contract export, drift gate. CI - full suite.
 - **Oracle:** the stage driven against a fixture selection with a client that raises after k pairs leaves a file holding exactly k rows; a stage handed an already-passed deadline writes a header-only file, reports `stopped_on_deadline`, and exits 0.
 - **Decisions:**
