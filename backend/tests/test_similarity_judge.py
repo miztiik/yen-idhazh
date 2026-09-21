@@ -210,6 +210,16 @@ def _a_deadline_no_shard_will_reach() -> float:
     return time.monotonic() + 3600.0
 
 
+def _a_council_run(date: str) -> str:
+    """The name a council night files its rows under.
+
+    Never the draw's own `<date>-1`. The column a shard fills with this exists
+    because the run that read a pair and the run that published the day are two
+    different runs, and one string standing for both could not tell them apart.
+    """
+    return f"{date}-9"
+
+
 def _a_day(*, planted_in: str | None = None) -> DigestDay:
     """The committed day fixture, optionally with one summary carrying an attack.
 
@@ -244,7 +254,35 @@ def _drawn(
     left: DigestItem, right: DigestItem, *, shard: int, date: str, cosine: float = 0.93
 ) -> StorySimilarityPair:
     """One row of the draw, in the shape the scoring stage leaves it."""
-    keys = sorted((derive_url_key(left.source_url), derive_url_key(right.source_url)))
+    return _a_drawn_row(
+        sorted((derive_url_key(left.source_url), derive_url_key(right.source_url))),
+        shard=shard,
+        date=date,
+        cosine=cosine,
+    )
+
+
+def _drawn_beyond_the_window(*, shard: int, date: str) -> StorySimilarityPair:
+    """A drawn row naming two addresses no day this shard can open published.
+
+    The real shape of an unreadable pair rather than a corrupt one: the draw was
+    taken while the same-story window still reached both items, and by the time a
+    shard opened the file the day either was published on had aged out.
+    """
+    return _a_drawn_row(
+        sorted(
+            derive_url_key(f"https://example.invalid/aged-out/{side}")
+            for side in ("left", "right")
+        ),
+        shard=shard,
+        date=date,
+    )
+
+
+def _a_drawn_row(
+    keys: list[str], *, shard: int, date: str, cosine: float = 0.93
+) -> StorySimilarityPair:
+    """Two address keys as the contract holds a drawn pair, with nothing judged yet."""
     return StorySimilarityPair.model_validate(
         {
             "date": date,
@@ -930,6 +968,7 @@ def test_an_article_asking_to_be_merged_is_still_two_stories(
     with JudgeServer(_reply("two-events"), vocabulary=_vocabulary("judge-first-tokens")) as server:
         report = judge_item_pairs.stage_judge_item_pairs(
             day.date,
+            run_id=_a_council_run(day.date),
             shard=0,
             shards=4,
             settings=_settings(),
@@ -986,6 +1025,7 @@ def test_a_verdict_file_round_trips_through_the_contract(
     with JudgeServer(_reply("one-event"), vocabulary=_vocabulary("judge-first-tokens")) as server:
         report = judge_item_pairs.stage_judge_item_pairs(
             day.date,
+            run_id=_a_council_run(day.date),
             shard=0,
             shards=4,
             settings=settings,
@@ -1056,6 +1096,7 @@ def test_a_pair_the_grammar_did_not_hold_is_written_down_and_the_shard_reads_on(
     with JudgeServer(*replies, vocabulary=_vocabulary("judge-first-tokens")) as server:
         report = judge_item_pairs.stage_judge_item_pairs(
             day.date,
+            run_id=_a_council_run(day.date),
             shard=0,
             shards=4,
             settings=settings,
@@ -1111,6 +1152,7 @@ def test_a_shard_that_owned_nothing_still_leaves_a_file(
     with JudgeServer(_reply("one-event"), vocabulary=_vocabulary("judge-first-tokens")) as server:
         report = judge_item_pairs.stage_judge_item_pairs(
             day.date,
+            run_id=_a_council_run(day.date),
             shard=0,
             shards=4,
             settings=_settings(),
@@ -1149,6 +1191,7 @@ def test_a_shard_handed_a_deadline_that_has_passed_judges_nothing_and_says_so(
     with JudgeServer(_reply("one-event"), vocabulary=_vocabulary("judge-first-tokens")) as server:
         report = judge_item_pairs.stage_judge_item_pairs(
             day.date,
+            run_id=_a_council_run(day.date),
             shard=0,
             shards=4,
             settings=_settings(),
@@ -1161,6 +1204,11 @@ def test_a_shard_handed_a_deadline_that_has_passed_judges_nothing_and_says_so(
 
     assert report.outcome is ShardOutcome.STOPPED_ON_DEADLINE
     assert (report.owned, report.judged) == (1, 0), "it owned the pair and left it unjudged"
+    assert (report.metrics.pairs_dealt, report.metrics.pairs_abandoned) == (1, 1), (
+        "a pair the shard never reached is abandoned, which is what lets the funnel "
+        "still close on the shard the deadline exists to let report"
+    )
+    assert report.metrics.decode_seconds_total is None, "it made no call to time"
     assert read_text(report.path) == ",".join(StorySimilarityPair.csv_columns()) + "\n"
 
 
@@ -1201,6 +1249,7 @@ def test_a_shard_that_dies_mid_draw_keeps_every_pair_it_had_already_judged(
             with pytest.raises(ValueError, match="neither a choice nor a completion"):
                 judge_item_pairs.stage_judge_item_pairs(
                     day.date,
+                    run_id=_a_council_run(day.date),
                     shard=0,
                     shards=4,
                     settings=settings,
@@ -1252,6 +1301,7 @@ def test_the_shard_stops_on_the_instant_the_councils_own_clocks_describe(
     with JudgeServer(_reply("one-event"), vocabulary=_vocabulary("judge-first-tokens")) as server:
         judge_item_pairs.stage_judge_item_pairs(
             day.date,
+            run_id=_a_council_run(day.date),
             shard=0,
             shards=4,
             settings=settings,
@@ -1264,3 +1314,151 @@ def test_the_shard_stops_on_the_instant_the_councils_own_clocks_describe(
 
     written = judge_root / day.date / judge_item_pairs.VERDICTS_DIRNAME / "0.csv"
     assert read_text(written) == ",".join(StorySimilarityPair.csv_columns()) + "\n"
+
+
+def test_the_funnel_the_shard_reports_adds_up_to_what_it_was_dealt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Three pairs, three different endings, and one row that has to account for all.
+
+    A pair the grammar did not hold, a pair whose items the window no longer
+    reaches, and a pair that read. The unreadable one sits in the middle, which is
+    what proves the shard carried on past it rather than stopping.
+
+    The identity is not added up here. The contract is what holds the four terms
+    to what the shard was dealt, so a test that summed them itself would agree
+    with a writer that had them all wrong in the same direction.
+    """
+    settings = _settings()
+    day = _a_day()
+    root = _a_day_on_disk(tmp_path, day)
+    monkeypatch.setattr(common, "PUBLIC_ROOT", root)
+    run_dir = tmp_path / "judge" / day.date
+    drawn = [
+        _drawn(day.items[0], day.items[1], shard=0, date=day.date),
+        _drawn_beyond_the_window(shard=0, date=day.date),
+        _drawn(day.items[0], day.items[2], shard=0, date=day.date),
+    ]
+    assemble.write_atomic(
+        run_dir / judge_item_pairs.DRAW_FILENAME, judge_item_pairs._as_csv(drawn)
+    )
+    patched = _reply("the-word-was-patched-in-afterwards")
+    replies = (patched, patched, _reply("one-event"), _reply("one-event"))
+
+    with JudgeServer(*replies, vocabulary=_vocabulary("judge-first-tokens")) as server:
+        report = judge_item_pairs.stage_judge_item_pairs(
+            day.date,
+            run_id=_a_council_run(day.date),
+            shard=0,
+            shards=4,
+            settings=settings,
+            digest_root=root,
+            run_dir=run_dir,
+            deadline=_a_deadline_no_shard_will_reach(),
+            base_url=server.base_url,
+        )
+
+    row = report.metrics
+    stamp = stamps.judge_inputs(settings)
+
+    assert (report.owned, report.judged, report.unreadable, report.refused) == (3, 2, 1, 1)
+    assert (row.pairs_dealt, row.pairs_read, row.pairs_refused) == (3, 1, 1)
+    assert (row.pairs_unreadable, row.pairs_abandoned) == (1, 0)
+    assert row.pairs_agreed == 1, "the pair that read answered the same way twice"
+    assert row.disagreement_rate == 0.0
+    assert row.unclear_rate == 0.0, "the agreed pair answered YES, so none of them is unclear"
+    assert row.first_token_margin_median is not None
+    assert row.decode_seconds_total is not None and row.decode_seconds_max is not None
+    assert row.decode_seconds_max <= row.decode_seconds_total, (
+        "one call cannot have taken longer than every call added up"
+    )
+    assert (row.date, row.run_id, row.shard) == (day.date, _a_council_run(day.date), 0)
+    assert (row.judge_model, row.prompt_digest, row.grammar_digest) == (
+        stamp.judge_model,
+        stamp.prompt_digest,
+        stamp.grammar_digest,
+    )
+    assert report.model_calls == 4, "two pairs read, two calls each, counted at the seam"
+    assert report.tokens_in > 0 and report.tokens_out > 0
+
+
+def test_a_shard_that_read_nothing_measures_nothing_rather_than_zero(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An empty rate and a zero rate are opposite facts about a shard.
+
+    Zero would say the shard measured every pair it was dealt and found nothing
+    wrong. Empty says it measured nothing, which is what a shard owning no pair
+    did.
+    """
+    day = _a_day()
+    root = _a_day_on_disk(tmp_path, day)
+    monkeypatch.setattr(common, "PUBLIC_ROOT", root)
+    run_dir = tmp_path / "judge" / day.date
+    assemble.write_atomic(
+        run_dir / judge_item_pairs.DRAW_FILENAME,
+        judge_item_pairs._as_csv([_drawn(day.items[0], day.items[1], shard=1, date=day.date)]),
+    )
+
+    with JudgeServer(_reply("one-event"), vocabulary=_vocabulary("judge-first-tokens")) as server:
+        report = judge_item_pairs.stage_judge_item_pairs(
+            day.date,
+            run_id=_a_council_run(day.date),
+            shard=0,
+            shards=4,
+            settings=_settings(),
+            digest_root=root,
+            run_dir=run_dir,
+            deadline=_a_deadline_no_shard_will_reach(),
+            base_url=server.base_url,
+        )
+
+    row = report.metrics
+
+    assert row.pairs_dealt == 0
+    assert row.disagreement_rate is None and row.unclear_rate is None
+    assert row.first_token_margin_median is None
+    assert row.decode_seconds_total is None and row.decode_seconds_max is None
+    assert row.judge_model is None, "no model ran, and a named model would say one did"
+    assert (report.model_calls, report.tokens_in, report.tokens_out) == (0, 0, 0)
+
+
+def test_a_judged_row_names_the_night_that_read_it_and_not_the_day_it_published(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two runs, two columns. The draw's run published the day; the council read it.
+
+    `judged_by_run_id` is in the settlement key, so while every row carried the
+    same empty cell a re-judge of a pair was dropped as a repeat of the row it
+    was meant to replace.
+    """
+    day = _a_day()
+    root = _a_day_on_disk(tmp_path, day)
+    monkeypatch.setattr(common, "PUBLIC_ROOT", root)
+    run_dir = tmp_path / "judge" / day.date
+    drawn = _drawn(day.items[0], day.items[1], shard=0, date=day.date)
+    assemble.write_atomic(
+        run_dir / judge_item_pairs.DRAW_FILENAME, judge_item_pairs._as_csv([drawn])
+    )
+
+    with JudgeServer(_reply("one-event"), vocabulary=_vocabulary("judge-first-tokens")) as server:
+        report = judge_item_pairs.stage_judge_item_pairs(
+            day.date,
+            run_id=_a_council_run(day.date),
+            shard=0,
+            shards=4,
+            settings=_settings(),
+            digest_root=root,
+            run_dir=run_dir,
+            deadline=_a_deadline_no_shard_will_reach(),
+            base_url=server.base_url,
+        )
+
+    written = _rows(report.path)[0]
+
+    assert written.judged_by_run_id == _a_council_run(day.date)
+    assert written.run_id == drawn.run_id
+    assert written.judged_by_run_id != written.run_id, (
+        "the draw's own run and the council's night are two different runs, and a "
+        "shard writing one into both columns says nothing at all"
+    )
