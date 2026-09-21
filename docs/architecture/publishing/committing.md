@@ -175,21 +175,18 @@ a field, the reader raises where nothing is wrong with the data.
 **The window is most of the day.** Five scheduled runs, each 164 to 184 minutes,
 so a merge lands inside a live run more often than not. Two consequences:
 
-- **Check for an in-flight run before merging a contract change.** A `gates`
- step does it on every pull request: a branch that touches
- `backend/idhazh/contracts/` fails the check while a Content refresh run is in
- progress, and a re-run once that run finishes is what clears it. It is the
- closest thing to a lock across two workflows the platform offers, so it lowers
- the odds rather than closing them - it cannot stop a merge nobody ran a check
- on. `gh run list --workflow digest.yml --status in_progress` is the same
- question by hand.
+- **Check for an in-flight run before merging a contract change.**
+ `gh run list --workflow digest.yml --status in_progress` answers it. A change
+ that removes, renames or retypes a field on any payload under `backend/var/`
+ waits for the run to finish.
 - **The failure is loud and the day is lost, not corrupted.** `assemble` raises
  rather than publishing a half-read day, and the next scheduled run rebuilds
- from its own payloads under the new contract. So the cost is one digest. That
- is why the check above times the merge instead of a general guard reading
- every old shape: that guard is the migration `CLAUDE.md` section 11 requires
- when a payload is committed, and these are not. The one case where the old
- shape is already written down is covered below, and it cost nothing to read.
+ from its own payloads under the new contract. So the cost is one digest, and
+ the answer is to time the merge rather than to build a general guard - that
+ guard would have to read every old shape, which is the migration `CLAUDE.md`
+ section 11 requires when a payload is committed. These are not. The one case
+ where the old shape is already written down is covered below, and reading it
+ cost nothing.
 
 **The error names the condition, which is a smaller claim than fixing it.**
 Every read of a payload one job of a run wrote and a later job reads goes
@@ -199,8 +196,8 @@ and the payload will not load, it raises `StalePayloadError` carrying both
 stamps and the remedy, instead of a list of fields that are not wrong. A payload
 stamped with the build's own version still raises the parser's own error
 untouched - that is a defect and dressing it up would hide every real bug behind
-a story about timing. The bullet above still holds: the day is lost, and the
-next scheduled run rebuilds it.
+a story about timing. The bullet above still holds: the day is lost, the next
+scheduled run rebuilds it, and timing the merge is the thing that prevents it.
 
 **A column the contract says it dropped is dropped on the way in.** One slice of
 this is not a timing problem at all. `ItemHealthRow` already declares, in
@@ -222,10 +219,11 @@ would publish a row missing a value that exists. A rename, a retype, a new
 required field and a removal nobody declared all still stop the run and still
 name both stamps.
 
-Three wider fixes were considered and none is taken.
+Four wider fixes were considered and none is taken.
 
 | Option | Why rejected |
 | --- | --- |
+| Fail a pull request that touches `backend/idhazh/contracts/` while a run is live | Built, measured, and removed the same day. Five scheduled runs at 3 h 34 min each occupy 74 percent of the day, so the check would redden three contract pull requests in four and ask for a manual re-run each time - to prevent a failure that costs one digest and repairs itself on the next run. The information is worth a person's `gh run list`; it is not worth a red check. Owner decision, 2026-09-21 |
 | Extend `CLAUDE.md` section 11 to cover every payload under `backend/var/` | It would close the hole rather than report it - a rename would ship a reader for the old shape and the straddling run would publish. The cost is that every rename on those shapes becomes expand-migrate-contract, two commits and a window of hours where both shapes are read. That is a change to a persisted-contract rule, so it is Level 5 and the owner's, not a fix PR's. What shipped above is the one case that needs none of that: the old shape is already declared, and reading it is a deletion rather than a second reader |
 | Re-run the producer instead of the assembler | `assemble` is what merges the day with what is already published, so skipping it is not an option, and re-running the whole day costs the run again |
 | Degrade the item, as section 1a would otherwise reach for | The three cases that principle names are all the outside world failing; this is the build and the disk disagreeing. Degrading would publish a day quietly missing N items because somebody merged a rename, and nothing would come back to correct it |
