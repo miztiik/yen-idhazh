@@ -1,9 +1,9 @@
 """When must one shard stop, and how does the tenant learn it?
 
-The council owns both clocks because the council owns the runner: the job
+The council owns every clock here because the council owns the runner: the job
 timeout, the checkout, the install and the weights restore are the venue's, and
 no tenant can see any of them. So what crosses to a tenant is one instant rather
-than two knobs. A tenant handed an instant needs no config block and no config
+than three knobs. A tenant handed an instant needs no config block and no config
 reader to stop on time, which is what lets a judge with neither still be
 stopped.
 
@@ -35,14 +35,20 @@ def compute_shard_deadline(council: CouncilConfig, *, started: float) -> float:
     """The monotonic instant a shard must stop by.
 
     `started` is when the shard's own process began, and the caller reads it
-    because only the process knows: the job's clock started before a checkout, an
-    install and a weights restore that this reading is not about.
+    because only the process knows. The job's clock started earlier, at
+    provisioning, and the checkout, the weights restore, the checksum verify and
+    the health poll all ran on it before this process existed - so the window is
+    the bound less what the venue already spent AND less what the shard keeps
+    back. Subtracting only the reserve put the deadline after the platform's own
+    kill whenever the model was slow to load, which is the one case the reserve
+    exists for.
 
-    A margin at least as long as the bound leaves the shard no time at all, which
-    is what a margin that large means. The floor is what stops it reading as a
-    deadline that had already passed before the shard began.
+    A preamble and a margin that together reach the bound leave the shard no time
+    at all, which is what two clocks that large mean. The floor is what stops it
+    reading as a deadline that had already passed before the shard began.
     """
-    minutes = max(council.shard_timeout_minutes - council.shard_wrap_up_minutes, 0)
+    spent = council.shard_preamble_minutes + council.shard_wrap_up_minutes
+    minutes = max(council.shard_timeout_minutes - spent, 0)
     return started + minutes * SECONDS_A_MINUTE
 
 

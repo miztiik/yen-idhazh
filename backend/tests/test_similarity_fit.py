@@ -648,10 +648,10 @@ def test_a_day_that_never_published_is_not_a_run_to_fail(
     )
 
 
-def test_the_row_is_written_from_a_date_and_a_run_id_on_the_command_line(
+def test_the_row_is_written_from_a_date_and_a_run_id_the_council_minted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The two things the verb is handed are the day it judges and the name the council minted.
+    """The two things the stage is handed are the day it judges and the name the council minted.
 
     The published day's run manifest is removed, so there is no digest run on
     disk to borrow a name from and nothing to read an ordinal out of. The row
@@ -659,7 +659,7 @@ def test_the_row_is_written_from_a_date_and_a_run_id_on_the_command_line(
     validated on the way into the file, so a name `RunId` refuses never reaches
     the store.
 
-    Before the council minted its own, this verb read the manifest for the one
+    Before the council minted its own, this stage read the manifest for the one
     string it wanted and returned `None` without it, so this day fitted nothing.
     """
     digest_root = tmp_path / "digest"
@@ -669,21 +669,14 @@ def test_the_row_is_written_from_a_date_and_a_run_id_on_the_command_line(
     state = tmp_path / "state"
     minted = council_run_id(opened_on=COUNCIL_DAY, platform_run_id=PLATFORM_RUN)
 
-    exit_code = cli.main(
-        [
-            "judge-fit",
-            "--date",
-            DATE,
-            "--run-id",
-            minted,
-            "--state-root",
-            str(state),
-            "--digest-root",
-            str(digest_root),
-        ]
+    stage_judge_fit(
+        DATE,
+        run_id=minted,
+        settings=config.load(config.REPO_ROOT / "config"),
+        state_dir=state,
+        digest_root=digest_root,
     )
 
-    assert exit_code == 0
     written = ledger.load_fitted_thresholds(state, today=DATE, within_days=1)
     assert [one.run_id for one in written] == [minted]
 
@@ -696,7 +689,7 @@ def test_a_council_verb_refuses_to_invent_a_run_it_was_not_given() -> None:
     night never drew.
     """
     with pytest.raises(SystemExit) as refused:
-        cli.main(["judge-fit", "--date", DATE])
+        cli.main(["council-settle", "--date", DATE])
 
     assert refused.value.code == 2, "argparse refuses a bad command line with 2"
 

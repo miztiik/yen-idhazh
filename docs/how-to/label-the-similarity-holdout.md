@@ -34,12 +34,14 @@ The sheet is built from **drawn pairs**, not from the published days directly. A
 drawn pair carries the two articles' address keys and the score the pass gave
 them, which is what lets the sheet sort by distance from the line.
 
-`idhazh judge-draw` writes one `backend/var/judge/<date>/draw.csv` a day
-([run-the-pipeline.md](run-the-pipeline.md)). That tree is not committed, so a
-fresh clone has none of it and you draw the days you want first:
+`idhazh council-prepare` writes one `backend/var/judge/<date>/draw.csv` a day
+([run-the-pipeline.md](run-the-pipeline.md)). It runs the selection step of every
+tenant registered in `council.tenants`, so it writes nothing until the
+content-similarity judge's slug is in that list. That tree is not committed, so
+a fresh clone has none of it and you draw the days you want first:
 
 ```powershell
-python -m idhazh judge-draw --date 2026-09-18
+python -m idhazh council-prepare --date 2026-09-18 --run-id 2026-09-19-1
 ```
 
 Any tree of CSVs carrying `date`, `pair_key`, `left_url_key`, `right_url_key`
@@ -217,6 +219,6 @@ weighted back to that day's own band populations.
 
 - [../architecture/publishing/autotune-content-similarity.md](../architecture/publishing/autotune-content-similarity.md) - what the line decides, how it moves, and what the current marks say about it.
 - [label-the-faithfulness-queue.md](label-the-faithfulness-queue.md) - the other labelling loop, over summaries rather than pairs.
-- [run-the-pipeline.md](run-the-pipeline.md) - producing a day, and the `judge-draw` verb that writes the draw.
+- [run-the-pipeline.md](run-the-pipeline.md) - producing a day, and the `council-prepare` verb that writes the draw.
 - [../reference/repository-layout.md](../reference/repository-layout.md) - why the holdout file is one of two committed `state/` files nothing generated.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - `SimilarityHoldoutPair`, the shape of one row.

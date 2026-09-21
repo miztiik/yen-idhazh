@@ -1,16 +1,20 @@
 name: LLM-COUNCIL
 
-# The judge, once a night, on its own clock. It reads yesterday's published day,
-# asks a model which borderline pairs are one story, folds the answers into a
-# fixed-size record and fits the merge line off it.
+# The council, once a night, on its own clock. It asks every tenant registered
+# in `council.tenants` to pick its work for the day, fans out over one job a
+# tenant a shard, and settles what came back.
 #
 # **Council, not judges, and the name is about where this goes** (owner,
-# 2026-09-18). Today the four legs shard a list and never confer, so on today's
+# 2026-09-18). Today the units shard a list and never confer, so on today's
 # shape `judges` would be the more literal word. What is coming is not one
 # question: autotune argues a case and needs something to adjudicate it - a
 # judge, a jury or a plain heuristic - and some of those paths will put a person
 # in the loop. One roof for all of them, named for the room rather than for the
 # one job being done in it this month.
+#
+# **The venue names no tenant.** Every verb below is the council's own and every
+# store it commits is named by the tenants themselves, so a repository with no
+# judge in it runs this file end to end and judges nothing.
 #
 # It is not part of `digest.yml`, and the reason is the budget the design
 # permits rather than the day the pipeline usually has. At the `pair_budget` cap
@@ -28,10 +32,9 @@ on:
     # 22:00 UTC. The last digest cron is 20 18 * * *, and a scheduled run there
     # starts 40-70 minutes late and then takes 164-184 minutes (ubuntu-latest,
     # 2026-08-23/24, n=3), so it normally finishes between 21:44 and 22:34. The
-    # first 34 minutes of a judge run can therefore land inside the tail of a
-    # publish. Both push to `main` and the fold's two commit calls already
-    # handle that; what the overlap costs is a queued cache restore, never a
-    # failed run.
+    # first 34 minutes of a council run can therefore land inside the tail of a
+    # publish. Both push to `main` and the settle's commit call already handles
+    # that; what the overlap costs is a queued cache restore, never a failed run.
     - cron: '0 22 * * *'
   workflow_dispatch:
     inputs:
@@ -49,7 +52,7 @@ concurrency:
 env:
   # The one place this workflow says which port, for the reason `digest.yml`
   # gives: `server_argv` binds it and `idhazh.llm.server` reads it for the
-  # address the leg posts to.
+  # address a unit posts to.
   LLAMA_PORT: '8080'
 
 jobs:
@@ -59,8 +62,10 @@ jobs:
     outputs:
       date: ${{ steps.decide.outputs.date }}
       run_id: ${{ steps.identity.outputs.run_id }}
-      shards: ${{ steps.fanout.outputs.shards }}
       matrix: ${{ steps.fanout.outputs.matrix }}
+      max_parallel: ${{ steps.fanout.outputs.max_parallel }}
+      dates: ${{ steps.fanout.outputs.dates }}
+      committed_paths: ${{ steps.fanout.outputs.committed_paths }}
       shard_timeout_minutes: ${{ steps.bounds.outputs.shard_timeout_minutes }}
       summarize_repo: ${{ steps.models.outputs.summarize_repo }}
       summarize_revision: ${{ steps.models.outputs.summarize_revision }}
@@ -92,7 +97,7 @@ jobs:
           DATE="${DISPATCH_DATE:-}"
           # Yesterday, because a day publishes five times and the last slot can
           # still be running at 22:00. Judging a day that is still being written
-          # would draw pairs from a day the next run replaces.
+          # would draw from a day the next run replaces.
           [ -n "$DATE" ] || DATE=$(date -u -d 'yesterday' +%F)
           # The same anchored pattern `digest.yml` uses, for the same reason: a
           # typo files rows at an address no reader ever looks at, silently,
@@ -107,7 +112,7 @@ jobs:
       # The name every row this night writes is filed under, minted once here.
       # A job output for the same reason the bound is: the later jobs read it
       # through `needs`, and a name minted per job would compute the date prefix
-      # four times - so a run crossing midnight would file one night's rows
+      # once a job - so a run crossing midnight would file one night's rows
       # under two addresses.
       #
       # The council mints its own rather than borrowing the digest run's, which
@@ -126,7 +131,7 @@ jobs:
           python -m idhazh.council.run_identity --platform-run-id "$PLATFORM_RUN_ID" \
             | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
-      # The model refs, read once from config and published to every leg. They
+      # The model refs, read once from config and published to every unit. They
       # travel as job OUTPUTS rather than as `env`, because `needs` resolves
       # before a job's first step and `steps` does not - and the weights cache
       # key below has to name the file it holds.
@@ -135,7 +140,7 @@ jobs:
           set -euo pipefail
           python3 backend/utilities/model_refs.py configured >> "$GITHUB_OUTPUT"
 
-      # The build every leg is about to install, asked once of the file that
+      # The build every unit is about to install, asked once of the file that
       # decides it. A job output for the same reason the refs are.
       - id: runtime
         name: Say which llama.cpp build this run installs
@@ -144,13 +149,13 @@ jobs:
           bash .github/scripts/llama-cpp-pin.sh \
             | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
-      # How long a leg may take, read from the one file that says so. A job
+      # How long one unit may take, read from the one file that says so. A job
       # OUTPUT because `timeout-minutes` resolves from `needs` before the job's
       # first step, and `steps` is not readable there.
       #
       # Asserted to be a bare positive whole number at the one point that writes
       # it. `timeout-minutes` takes whatever it is handed, so a value Actions
-      # cannot read as a number leaves the leg with no bound at all and the run
+      # cannot read as a number leaves the unit with no bound at all and the run
       # finds out at the 6 h ceiling, where GitHub kills it with nothing
       # written.
       - id: bounds
@@ -159,48 +164,70 @@ jobs:
           python3 backend/utilities/shard_bound.py --key council.shard_timeout_minutes \
             >> "$GITHUB_OUTPUT"
 
-      # How many shards split the night, read off the council's own block. A
-      # literal here would be a second answer to how wide the fan-out is, and the
-      # two can disagree - the draw would deal four ways while three shards ran,
-      # and a quarter of the night would go unjudged with nothing saying so.
+      # What tonight fans out to, asked of the tenants rather than computed
+      # here. A cell is flat - a tenant, a date, a shard and that tenant's own
+      # width - because a per-tenant width is not a third axis: a cross product
+      # would hand every tenant the widest tenant's width and pay a weights
+      # restore for work that runs no model.
       #
-      # The council's block and not a tenant's, because the width sizes this
-      # matrix: read out of a judge's config path, this step raises before the
-      # planning job plans anything on a night with no judge configured.
+      # `max_parallel` is the cell count under the platform's own ceiling, never
+      # the shard width. Bound to the width, two tenants over two dates would
+      # run sixteen cells in four waves and finish across two other schedules.
       - id: fanout
+        name: Say what tonight fans out to and what it will commit
+        env:
+          JUDGED_DATE: ${{ steps.decide.outputs.date }}
         run: |
           set -euo pipefail
-          SHARDS=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["council"]["shards"])')
-          echo "shards=$SHARDS" >> "$GITHUB_OUTPUT"
-          echo "matrix=$(python -c "import json,sys; print(json.dumps(list(range(int(sys.argv[1])))))" "$SHARDS")" >> "$GITHUB_OUTPUT"
+          python3 backend/utilities/council_matrix.py --date "$JUDGED_DATE" \
+            | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
-      # It reads two committed files and scores what they already carry. No
-      # model, no socket, no fetcher.
-      - name: Draw the borderline pairs
+      # Every tenant picks its own work, once a date, before any unit runs. It
+      # reads committed files and scores what they already carry - no model, no
+      # socket, no fetcher.
+      - name: Pick the work for each date
+        env:
+          COUNCIL_DATES: ${{ steps.fanout.outputs.dates }}
+          COUNCIL_RUN_ID: ${{ steps.identity.outputs.run_id }}
         run: |
           set -euo pipefail
-          python -m idhazh judge-draw \
-            --date "${{ steps.decide.outputs.date }}" \
-            --run-id "${{ steps.identity.outputs.run_id }}"
+          echo "$COUNCIL_DATES" | jq -r '.[]' | while read -r judged; do
+            python -m idhazh council-prepare --date "$judged" --run-id "$COUNCIL_RUN_ID"
+          done
 
+      # The whole council scratch root rather than one file inside it, so the
+      # date and the tenant survive as directory levels. Two tenants' selections
+      # then land beside each other in the merged download rather than on top of
+      # each other, which an artifact named for neither could not prevent.
+      #
+      # Nothing writes this directory until a tenant is registered, so an empty
+      # upload is the no-tenant case rather than a failure.
       - uses: actions/upload-artifact@v7
         with:
-          name: judge-draw
-          path: backend/var/judge/${{ steps.decide.outputs.date }}/draw.csv
+          name: council-selection-${{ steps.decide.outputs.date }}
+          path: backend/var/council
+          if-no-files-found: warn
           retention-days: 1
 
   judge:
     needs: draw
+    # An empty matrix is a strategy-evaluation failure, and the run reds on it
+    # rather than skipping quietly. No tenant registered is a legal night, and
+    # the guard is what makes it one; a tenant registered whose cells did not
+    # build is not, and the difference has to be visible from the run list.
+    if: needs.draw.outputs.matrix != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: ${{ fromJSON(needs.draw.outputs.shard_timeout_minutes) }}
     strategy:
-      # A leg that runs out of clock costs its pairs for that day and nothing
-      # else. The fold still runs, still appends every row the other legs
-      # produced, and refuses to fold a partial day into the record.
+      # A unit that runs out of clock costs its own work for that day and
+      # nothing else. The settle still runs, still appends every row the other
+      # units produced, and refuses to fold a partial day into a record.
       fail-fast: false
-      max-parallel: ${{ fromJSON(needs.draw.outputs.shards) }}
+      max-parallel: ${{ fromJSON(needs.draw.outputs.max_parallel) }}
       matrix:
-        shard: ${{ fromJSON(needs.draw.outputs.matrix) }}
+        # A flat list of cells, so a tenant's own shard width travels on the
+        # cell that uses it. `include` with no base keys is one job per entry.
+        include: ${{ fromJSON(needs.draw.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v6
 
@@ -213,12 +240,15 @@ jobs:
       - name: Install
         run: pip install -e .
 
-      # Before the leg reads it. Without the draw a leg has nothing to judge and
-      # `judge-shard` fails on a missing file.
+      # Before the unit reads it. Without the selection a unit has nothing to
+      # work on. By pattern rather than by name, and every date at once: the
+      # artifact carries its own date as a directory level, so a merged download
+      # reassembles the tree and this unit reads the one date it was given.
       - uses: actions/download-artifact@v8
         with:
-          name: judge-draw
-          path: backend/var/judge/${{ needs.draw.outputs.date }}
+          pattern: council-selection-*
+          merge-multiple: true
+          path: backend/var/council
 
       # The cache, the fetch, the digest check, the server and the health probe.
       # One action, shared with `digest.yml`, which ran the same five steps as a
@@ -243,52 +273,51 @@ jobs:
           draft_file: ${{ needs.draw.outputs.draft_file }}
           draft_sha256: ${{ needs.draw.outputs.draft_sha256 }}
 
-      - name: Judge this leg's pairs
+      # One cell is one tenant, so the in-process deadline the verb computes is
+      # about this tenant's span and nobody else's. Two tenants in one job would
+      # each be handed the whole span the venue meant for one of them.
+      - name: Run this unit of the tenant's work
+        env:
+          COUNCIL_RUN_ID: ${{ needs.draw.outputs.run_id }}
         run: |
           set -euo pipefail
-          python -m idhazh judge-shard \
-            --date "${{ needs.draw.outputs.date }}" \
+          python -m idhazh council-shard \
+            --tenant "${{ matrix.tenant }}" \
+            --date "${{ matrix.date }}" \
+            --run-id "$COUNCIL_RUN_ID" \
             --shard ${{ matrix.shard }} \
-            --shards ${{ needs.draw.outputs.shards }}
+            --shards ${{ matrix.shards }}
 
-      # The leg uploads and commits nothing. Four legs each committing into one
-      # union-merged day file would buy four pushes that can each lose a race
-      # against a digest run, four rebases, and a leg that dies after pushing
-      # half its rows. One fold is one push.
+      # The unit commits nothing. Many units each committing into one
+      # union-merged day file would buy many pushes that can each lose a race
+      # against a digest run, many rebases, and a unit that dies after pushing
+      # half its rows. One settle is one push.
+      #
+      # An artifact rather than a commit, and the reason is that a commit would
+      # not reach the reader: every checkout here names no ref, so each job is
+      # pinned to the commit the run was triggered at and a row pushed at 22:40
+      # is invisible to a job checked out at 22:00.
       #
       # `always()`, because the exposure was never the collecting job dying - it
-      # is a leg dying. A leg that stops on its own clock, or is killed on the
-      # platform's, has still judged every pair it reached, and without this
-      # those verdicts go in the bin however much of the bound they cost.
+      # is a unit dying. A unit that stopped on its own clock, or was killed on
+      # the platform's, has still done every piece of work it reached, and
+      # without this that work goes in the bin however much of the bound it
+      # cost. The selection is excluded because this job downloaded it rather
+      # than wrote it.
       - if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: judge-verdicts-${{ matrix.shard }}
-          path: backend/var/judge/${{ needs.draw.outputs.date }}/verdicts/${{ matrix.shard }}.csv
-          retention-days: 1
-
-      # What the hosted work measured about its own instrument, on its own way
-      # out. An artifact rather than a commit, and the reason is that a commit
-      # would not reach the reader: every checkout here names no ref, so each
-      # job is pinned to the commit the run was triggered at and a row pushed at
-      # 22:40 is invisible to a job checked out at 22:00.
-      #
-      # `always()`, because a unit that stopped on its own clock still measured
-      # what it reached, and that is the reading the night is judged on. Nothing
-      # writes this directory until a tenant is registered, so an empty upload is
-      # the no-tenant case rather than a failure.
-      - if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: council-metrics-${{ matrix.shard }}
-          path: backend/var/council/${{ needs.draw.outputs.date }}/metrics
+          name: council-metrics-${{ matrix.tenant }}-${{ matrix.date }}-${{ matrix.shard }}
+          path: |
+            backend/var/council
+            !backend/var/council/*/selection
           if-no-files-found: warn
           retention-days: 1
 
   fold:
     needs: [draw, judge]
-    # A leg that died still leaves the others' rows worth keeping, and the day
-    # still owes a fitted row saying why it was held.
+    # A unit that died still leaves the others' work worth keeping, and a date
+    # still owes whatever its tenants settle.
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -304,82 +333,50 @@ jobs:
       - name: Install
         run: pip install -e .
 
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: judge-verdicts-*
-          merge-multiple: true
-          path: backend/var/judge/${{ needs.draw.outputs.date }}/verdicts
-
-      # Every unit's metrics, merged into one tree. Each upload carries the
-      # tenant's own slug as a directory level, so two tenants' shard 0 land
+      # Every unit's output, merged into one tree. Each upload carries the date
+      # and the tenant as directory levels, so two tenants' first unit land
       # beside each other rather than on top of each other.
       - uses: actions/download-artifact@v8
         with:
           pattern: council-metrics-*
           merge-multiple: true
-          path: backend/var/council/${{ needs.draw.outputs.date }}/metrics
+          path: backend/var/council
 
-      # One process appends every leg's rows into one day file, so two writers
-      # never share a path: no merge driver to trust, no union stacking to
-      # census afterwards, and no key to settle across legs.
-      #
-      # A day missing a leg is NOT folded into the record. The record counts a
-      # date once and refuses a second fold, so folding three legs of four would
-      # make the fourth leg's verdicts unreachable for ever. The day's fitted row
-      # then says `legs_missing` and a re-dispatch folds the whole day cleanly.
-      - name: Fold the day into the record
+      # One job looping the dates rather than one job a date. Two jobs of one
+      # run pushing `main` would race each other, and the workflow-level
+      # `concurrency` group does not serialise jobs inside a run.
+      - name: Settle each date
+        env:
+          COUNCIL_DATES: ${{ needs.draw.outputs.dates }}
+          COUNCIL_RUN_ID: ${{ needs.draw.outputs.run_id }}
         run: |
           set -euo pipefail
-          python -m idhazh judge-fold \
-            --date "${{ needs.draw.outputs.date }}" \
-            --run-id "${{ needs.draw.outputs.run_id }}"
+          echo "$COUNCIL_DATES" | jq -r '.[]' | while read -r judged; do
+            python -m idhazh council-settle --date "$judged" --run-id "$COUNCIL_RUN_ID"
+          done
 
-      # After the fold and before the commits. Nothing reads the line it writes
-      # until `assemble.same_story.adaptive_dedup_threshold.enabled` is turned
-      # on, so this step cannot change a published day today.
-      - name: Fit the merge line
+      # One call and one push, over every path the night's tenants named. The
+      # venue spells none of them: a list of one tenant's paths is a list that
+      # never commits a second tenant's output.
+      #
+      # No `REGENERATE_COMMAND`, because the council is the only writer of a
+      # tenant's own store and `concurrency` runs one council at a time - so a
+      # lost race is a race against a digest run, which writes none of these
+      # paths, and replaying what this run wrote onto the new base is the whole
+      # of what is needed.
+      #
+      # Skipped when no tenant is registered: `git add` with no path is an error
+      # rather than a no-op, and a night that judged nothing has nothing to say.
+      - name: Commit what the night's tenants wrote
+        if: needs.draw.outputs.committed_paths != ''
+        env:
+          COMMIT_MESSAGE: "council: ${{ needs.draw.outputs.date }}"
+          NOTHING_STAGED_MESSAGE: "the night's tenants wrote nothing"
+          PUSH_FAILED_MESSAGE: "could not push what the night judged after three attempts"
+          COMMITTED_PATHS: ${{ needs.draw.outputs.committed_paths }}
         run: |
           set -euo pipefail
-          python -m idhazh judge-fit \
-            --date "${{ needs.draw.outputs.date }}" \
-            --run-id "${{ needs.draw.outputs.run_id }}"
-
-      # Two calls, rows first. The rows are what this run saw and are replayed
-      # onto a new base when the push loses a race; the record is derived from
-      # them and is rebuilt instead, which is why it is the only one of the two
-      # that names a `REGENERATE_COMMAND` and a `REFRESH_PATHS`.
-      - name: Commit what the legs judged
-        env:
-          COMMIT_MESSAGE: "judge: ${{ needs.draw.outputs.date }}"
-          NOTHING_STAGED_MESSAGE: "no pairs were judged"
-          PUSH_FAILED_MESSAGE: "could not push the judged pairs after three attempts"
-        run: >-
-          bash .github/scripts/commit-and-push.sh
-          state/story-similarity/scored-pairs
-
-      # The record is the only derived file here, so it is the only one this
-      # call may rebuild. The fitted row is a row this run WROTE - what the
-      # evidence said on this date - so a lost race replays it onto the new base
-      # the way `state/seen` is replayed, and never regenerates it: a second fit
-      # against a moved tip would answer a different question and overwrite the
-      # answer to this one.
-      #
-      # Rebuilding the record is safe because this workflow is its only writer
-      # and `concurrency` runs one judge at a time. A rebase restores the same
-      # bytes this run started from, the date is not in `folded_dates`, and the
-      # fold lands once.
-      - name: Commit the record and the line
-        env:
-          COMMIT_MESSAGE: "judge record: ${{ needs.draw.outputs.date }}"
-          NOTHING_STAGED_MESSAGE: "the record did not move"
-          PUSH_FAILED_MESSAGE: "could not push the record after three attempts"
-          REFRESH_PATHS: >-
-            state/story-similarity/score-distribution.json
-          REGENERATE_COMMAND: >-
-            python -m idhazh judge-fold --date ${{ needs.draw.outputs.date }}
-            --run-id ${{ needs.draw.outputs.run_id }}
-        run: >-
-          bash .github/scripts/commit-and-push.sh
-          state/story-similarity/score-distribution.json
-          state/story-similarity/fitted-thresholds
-          state/story-similarity/archive
+          # Word splitting is the point: the paths arrive as one space-separated
+          # value and the script takes them as separate arguments.
+          # shellcheck disable=SC2086
+          bash .github/scripts/commit-and-push.sh $COMMITTED_PATHS

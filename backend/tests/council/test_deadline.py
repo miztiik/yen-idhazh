@@ -77,28 +77,61 @@ def _committed_clocks() -> CouncilConfig:
 def test_the_deadline_leaves_the_margin_the_council_asked_for() -> None:
     """The deadline sits one margin before the instant the platform would kill the job.
 
-    Driven from whatever the committed block says rather than from a number
-    written here, so raising either clock moves the deadline and never this test.
+    The job's clock and the process's clock are not the same clock. The platform
+    starts counting at provisioning and the process starts after a checkout, a
+    weights restore, a checksum verify and a health poll, so the kill lands one
+    preamble later than `started` plus the bound. Driven from whatever the
+    committed block says rather than from a number written here, so raising any
+    of the three clocks moves the deadline and never this test.
     """
     council = _committed_clocks()
     started = 1_000.0
-    killed_at = started + council.shard_timeout_minutes * SECONDS_A_MINUTE
+    preamble = council.shard_preamble_minutes * SECONDS_A_MINUTE
+    killed_at = started - preamble + council.shard_timeout_minutes * SECONDS_A_MINUTE
 
     deadline = compute_shard_deadline(council, started=started)
 
     assert killed_at - deadline == council.shard_wrap_up_minutes * SECONDS_A_MINUTE
 
 
+def test_the_window_shrinks_by_what_the_job_spent_before_the_process_began() -> None:
+    """The defect the preamble exists for, held in the direction it failed.
+
+    Subtracting only the reserve gave a deadline that landed AFTER the
+    platform's own kill whenever the model was slow to load - so on the one
+    night the reserve was for, it protected nothing. The two clocks below differ
+    only in the preamble, and the window has to differ by exactly that.
+    """
+    started = 1_000.0
+    short = CouncilConfig(
+        shard_timeout_minutes=200, shard_preamble_minutes=0, shard_wrap_up_minutes=12
+    )
+    long = CouncilConfig(
+        shard_timeout_minutes=200, shard_preamble_minutes=13, shard_wrap_up_minutes=12
+    )
+
+    lost = compute_shard_deadline(short, started=started) - compute_shard_deadline(
+        long, started=started
+    )
+
+    assert lost == 13 * SECONDS_A_MINUTE
+
+
 def test_a_margin_as_long_as_the_bound_leaves_no_time_at_all() -> None:
     """The floor, and what it is for.
 
-    Without it a margin longer than the bound gives a deadline behind the start
-    instant, which reads as a shard that ran out of clock before it began. With
-    it the shard has nothing left, which is what a margin that large means.
+    Without it a preamble and a margin longer than the bound give a deadline
+    behind the start instant, which reads as a shard that ran out of clock
+    before it began. With it the shard has nothing left, which is what two
+    clocks that large mean.
     """
     started = 1_000.0
-    exact = CouncilConfig(shard_timeout_minutes=30, shard_wrap_up_minutes=30)
-    beyond = CouncilConfig(shard_timeout_minutes=30, shard_wrap_up_minutes=90)
+    exact = CouncilConfig(
+        shard_timeout_minutes=30, shard_preamble_minutes=0, shard_wrap_up_minutes=30
+    )
+    beyond = CouncilConfig(
+        shard_timeout_minutes=30, shard_preamble_minutes=10, shard_wrap_up_minutes=90
+    )
 
     assert compute_shard_deadline(exact, started=started) == started
     assert compute_shard_deadline(beyond, started=started) == started

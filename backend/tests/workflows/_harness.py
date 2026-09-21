@@ -710,16 +710,20 @@ COMMIT_SCRIPT: Final = SCRIPTS_DIR / "commit-and-push.sh"
 COMMIT_SCRIPT_CALL: Final = ("bash", ".github/scripts/commit-and-push.sh")
 
 # Which workflow each label's step lives in. `bench` is dispatched by hand, many
-# times a day, and since 2026-09-17 it pushes the machine it drew. The two
-# council labels run once a night on their own clock.
+# times a day, and since 2026-09-17 it pushes the machine it drew.
+#
+# The council's own commit step is deliberately absent. Every label here stages
+# paths spelled in the workflow file, which is what lets a test read them, split
+# them and run the script over a real repository. The council stages what its
+# tenants named, so there is no path in the file to read - and a night with no
+# tenant stages nothing at all. `test_llm_council_workflow.py` is where that
+# step is held, against the tenants rather than against a list.
 COMMIT_WORKFLOWS: Final = {
     "plan": "digest.yml",
     "work": "digest.yml",
     "assemble": "digest.yml",
     "fold": "digest.yml",
     "bench": "measure.yml",
-    "verdicts": "llm-council.yml",
-    "record": "llm-council.yml",
 }
 
 COMMIT_JOBS: Final = {
@@ -728,8 +732,6 @@ COMMIT_JOBS: Final = {
     "assemble": "assemble",
     "fold": "assemble",
     "bench": BENCH_SERVER_JOB,
-    "verdicts": "fold",
-    "record": "fold",
 }
 
 COMMIT_STEPS: Final = {
@@ -738,8 +740,6 @@ COMMIT_STEPS: Final = {
     "assemble": "Commit the day",
     "fold": "Commit the folded telemetry",
     "bench": "Commit the machine this bench drew",
-    "verdicts": "Commit what the legs judged",
-    "record": "Commit the record and the line",
 }
 
 #: The catch-up for a run whose assemble never drained the segment store. The
@@ -768,8 +768,6 @@ COMMIT_SCRIPT_ENV: Final = {
     | {"REFRESH_PATHS", "REGENERATE_COMMAND", "DROP_RACED_ASSETS_COMMAND"},
     "fold": COMMIT_BASE_ENV,
     "bench": COMMIT_BASE_ENV,
-    "verdicts": COMMIT_BASE_ENV,
-    "record": COMMIT_BASE_ENV | {"REFRESH_PATHS", "REGENERATE_COMMAND"},
 }
 
 COMMIT_STAGED_PATHS: Final = {
@@ -827,17 +825,6 @@ COMMIT_STAGED_PATHS: Final = {
     # sweep's item-health, scores and traces land under the same trial root
     # because the whole state root moved, and nothing reads them back.
     "bench": [f"{BENCH_LEDGER_ROOT}/{ledger.HOST_FINGERPRINT_DIRNAME}"],
-    # The rows this night's units judged, replayed onto a new base when the push
-    # loses a race. They are what this run saw, so they are never regenerated.
-    "verdicts": ["state/story-similarity/scored-pairs"],
-    # The record is derived from those rows, so it is the only file here the
-    # loop may rebuild. The fitted row beside it is a row this run wrote and is
-    # replayed like the verdicts.
-    "record": [
-        "state/story-similarity/score-distribution.json",
-        "state/story-similarity/fitted-thresholds",
-        "state/story-similarity/archive",
-    ],
 }
 
 # The step that folds an out-of-window month before the step above commits it.
@@ -998,6 +985,10 @@ SUBSTITUTED_CANDIDATE: Final = "candidate"
 #: `SUBSTITUTED_DATE` - a judging run opens after the day it judges.
 SUBSTITUTED_COUNCIL_RUN: Final = "2026-08-26-35534060762"
 
+#: The tenant one cell of the council's matrix runs. A slug and nothing more:
+#: the venue never checks it against a list of who may exist.
+SUBSTITUTED_TENANT: Final = "a-paper-tenant"
+
 EXPRESSION_VALUES: Final = {
     "needs.plan.outputs.date": SUBSTITUTED_DATE,
     "needs.plan.outputs.day_dir": SUBSTITUTED_DAY_DIR,
@@ -1007,6 +998,9 @@ EXPRESSION_VALUES: Final = {
     "steps.decide.outputs.date": SUBSTITUTED_DATE,
     "github.sha": SUBSTITUTED_SHA,
     "matrix.shard": SUBSTITUTED_SHARD,
+    "matrix.shards": SUBSTITUTED_SHARDS,
+    "matrix.tenant": SUBSTITUTED_TENANT,
+    "matrix.date": SUBSTITUTED_DATE,
     "inputs.runtime_candidate": SUBSTITUTED_CANDIDATE,
 }
 
@@ -1036,7 +1030,6 @@ COMMIT_REFRESH_PATHS: Final = {
         "state/host-fingerprint",
         "state/segments",
     ],
-    "record": ["state/story-similarity/score-distribution.json"],
 }
 
 # The producer the harness drives through the loop. See its own docstring for
@@ -1471,6 +1464,10 @@ def _stage_invocations(
     An Actions expression is not shell, so it is blanked before the line is
     split. What the platform puts there cannot turn a stage invocation into a
     different one.
+
+    `idhazh` has to be the whole word. `python -m idhazh.council.run_identity`
+    runs a module rather than a verb, and reading it as one leaves no word
+    called `idhazh` in the line to take the next word after.
     """
     jobs = _mapping(workflow.get("jobs"), f"{workflow_name} jobs")
     found: list[tuple[str, str, str, list[str]]] = []
@@ -1481,7 +1478,7 @@ def _stage_invocations(
                 continue
             blanked = re.sub(r"\$\{\{.*?\}\}", "expression", script, flags=re.DOTALL)
             for line in blanked.replace("\\\n", " ").splitlines():
-                if not re.search(r"\bpython3?\s+-m\s+idhazh\b", line):
+                if not re.search(r"\bpython3?\s+-m\s+idhazh(?=\s)", line):
                     continue
                 words = shlex.split(line)
                 stage = words[words.index("idhazh") + 1]
