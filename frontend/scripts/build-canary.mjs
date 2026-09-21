@@ -122,10 +122,17 @@ function writeItemHealthCanary() {
 	// zero, and a day timed in part.
 	//
 	// The machine cells that no committed run has written yet are named and left
-	// empty - the six `os_` ones, the stolen share, the fault count, the two
-	// anonymous-memory readings and the pinning flag. A plausible figure nobody
-	// measured is worse here than a dash: this file is what the console's
+	// empty - three of the six `os_` ones, the stolen share, the fault count, the
+	// two anonymous-memory readings and the pinning flag. A plausible figure
+	// nobody measured is worse here than a dash: this file is what the console's
 	// arithmetic is checked against.
+	//
+	// The kernel's own memory account - what the machine has, what was left at
+	// the item's worst moment and what was left when it ended - IS written, and
+	// only on the newest day. That is the shape the committed archive has: the
+	// three columns landed late, so most days carry none of them. The memory
+	// board leads with that account, so a fixture without it could only ever
+	// reach the board's empty state.
 	const COLUMNS = [
 		'version', 'date', 'run_id', 'item_id', 'url_key', 'canonical_url', 'vertical',
 		'source_id', 'stage', 'outcome', 'code', 'http_status', 'source_chars', 'source_words',
@@ -284,6 +291,9 @@ function writeItemHealthCanary() {
 	 * `n_ctx_configured` is the committed `inference.n_ctx`, because a fixture
 	 * that disagreed with the config would draw a context share no run had.
 	 *
+	 * `kernelRecorded` is what puts the newest day's kernel account on the row
+	 * and leaves the refused row without one. See the comment beside it.
+	 *
 	 * `gapMs` overrides the unclaimed remainder. Only the refused row below sets
 	 * it, and only to a negative value - see that row for why. The total is built
 	 * from the stages plus the gap either way, so the contract's rule that the
@@ -313,6 +323,24 @@ function writeItemHealthCanary() {
 		// rows name none either, so the fallback cannot quietly fill the cell in and
 		// the board has a row that says "Not recorded".
 		const unrecorded = `${rowDate}-${run}-${seat.shard}` === `${date}-2-1`;
+		// The kernel's own account, on the newest day and on every row of it but
+		// the refused one. `gapMs` is set by the refused builder and by nothing
+		// else, so it is what marks the row this fixture uses to carry states no
+		// committed day holds - here, an item drawn with no kernel reading, which
+		// is the memory board's hatched mark and its printed skip count.
+		const kernelRecorded = rowDate === date && gapMs === undefined;
+		// Inside the range 378 committed rows carrying the floor actually span,
+		// measured 2026-09-21: 2.96 to 9.48 GB left, on a machine reporting
+		// 16,766,410,752 B. The server's end-of-item figure sits 50 to 70 MB under
+		// its own high-water mark, which is the gap those rows show.
+		//
+		// The item ids on a day are consecutive, so `spread` is too - and a floor
+		// stepping one unit an item would draw four marks a reader cannot tell
+		// apart. 173 is coprime with 1000, so it scatters those consecutive ids
+		// across the whole range in steps of about a gigabyte.
+		const scatter = (spread * 173) % 1000;
+		const floor = 3200000000 + scatter * 6000000;
+		const peak = 12000000000 + (spread % 1000) * 1000000;
 		return {
 			...seat,
 			queue_wait_ms: waitMs,
@@ -334,8 +362,12 @@ function writeItemHealthCanary() {
 			cpu_model: unrecorded ? '' : 'AMD EPYC 7763 64-Core Processor',
 			cpu_busy_pct: Math.round((60 + (spread % 3500) / 100) * 100) / 100,
 			load_1m: Math.round((2 + (spread % 600) / 100) * 100) / 100,
-			llama_rss_peak_bytes: 12000000000 + (spread % 1000) * 1000000,
+			llama_rss_peak_bytes: peak,
+			llama_rss_bytes: peak - 50000000 - (spread % 200) * 100000,
 			python_rss_bytes: 1700000000 + (spread % 1000) * 100000,
+			os_mem_total_bytes: kernelRecorded ? 16766410752 : '',
+			os_mem_available_min_bytes: kernelRecorded ? floor : '',
+			os_mem_available_bytes: kernelRecorded ? floor + (scatter % 300) * 1000000 : '',
 			n_ctx_configured: 65536
 		};
 	};

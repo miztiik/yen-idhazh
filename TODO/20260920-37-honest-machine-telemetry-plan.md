@@ -87,7 +87,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 11 | Is the kernel taking the model's weights back | 5, 8, 9 | C | PENDING | - | - | - |
 | 12 | What one article costs the machine | 9 | C | PENDING | - | - | - |
 | 13 | Two panels leave the page | 9 | C | PENDING | - | - | - |
-| 14 | The memory board drops the disputed mark | 2, 9 | C | PENDING | - | - | - |
+| 14 | The memory board drops the disputed mark | 2, 9 | C | DONE | p37r14b | - | worker |
 | 15 | The shard board gains the clocks nobody reads | 9 | C | DONE | p37r15 | #987 | worker |
 | 16 | Machine cards gain uptime, clock speed, cache size and copy speed | 6, 9 | C | DONE | p37r16 | #988 | worker |
 | 19 | Which prompts get re-read, and how fast | 9 | C | PENDING | - | - | - |
@@ -407,7 +407,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 1 | The disputed mark comes off the page and stays in the ledger | Susan - an instrument known to be wrong says so on the surface that would have drawn it, and nothing is deleted while Row #2 is open |
 | 2 | The lead becomes the within-item floor of what the kernel had left | Susan - a shard maximum cannot show this, because one item can take the machine to the ceiling while its shard reads as normal |
 | 3 | The end-of-item process reading is drawn as a bracket labelled at most, never as a track against the machine's total | Susan, correcting herself 2026-09-20. A process resident-set figure drawn against a total reads as a budget, and that is the exact figure this project retracted on 2026-09-09. Row #20's bar is the board's second half |
-| 4 | A day with no kernel columns draws no mark and prints the date the reading begins | Susan - 227 of 13,717 committed rows carry them, so this is the common case rather than the edge case. Never a zero line, never a silent fallback to the disputed mark |
+| 4 | A day with no kernel columns draws no mark and prints the date the reading begins | Susan - most committed rows do not carry them, so this is the common case rather than the edge case. Re-measured 2026-09-21 over the committed `state/item-health/` tree, 378 of 13,877 rows carry the three columns and the earliest is 2026-09-19; the count rots as the archive grows and the property does not. Never a zero line, never a silent fallback to the disputed mark |
 
 - **Rejected alternatives:**
 

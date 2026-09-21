@@ -1,6 +1,6 @@
 # Console Design
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 How a figure on the operator console is worded, coloured, ranked and drawn. It is
 the operator half of [design-system.md](design-system.md), which keeps the
 vocabulary the whole site resolves - the tokens, the colour ramps, the motion set
@@ -916,12 +916,11 @@ half-quote, and a rule whose reason has stopped holding is a rule to change.
   whose title asks one question and whose shape answers the other is the
   commonest defect on this console: of the eight panels that failed review on
   2026-09-17, five failed on this rule and only three on their drawing. The
-  rule's own proof is the peak-memory panel - a per-shard maximum is the verdict
-  reading, and the item that took the model process to 83.1 percent of the
-  runner's 16 GiB is invisible behind it. One measurement, two questions, one of
-  them built. **What a scattered verdict costs the operator:** he reads ten
-  Hardware panels and only then reaches the panel that tells him whether the
-  instruments agree.
+  rule's own proof is the memory panel - a per-shard maximum is the verdict
+  reading, and the item that took the machine nearest running out is invisible
+  behind it. One measurement, two questions, one of them built. **What a
+  scattered verdict costs the operator:** he reads ten Hardware panels and only
+  then reaches the panel that tells him whether the instruments agree.
 
 Authority: Susan, 2026-09-17. Which surface answers which of the two questions is
 [../architecture/publishing/console.md](../architecture/publishing/console.md);
@@ -989,8 +988,8 @@ a processor share and a weight-opening time. Each was a reading followed by its
 span in prose, in a different unit from its neighbour and with its ends buried
 mid-paragraph, so a reader who wanted to know which of the two was the odd one
 this run had to do the conversion by hand. Two tracks make that comparison free,
-and the shape is the one the memory panel's window grain already draws - so this
-is one shape reused rather than a second shape learned. Susan, 2026-09-20.
+and the shape is the one the memory panel's window grain drew first - so this is
+one shape reused rather than a second shape learned. Susan, 2026-09-20.
 
 **No panel draws a span track today.** That panel left the page later the same
 day, as a container of three unrelated figures with no question to title it
@@ -1002,12 +1001,13 @@ nothing currently obeys, which is a rule that can rot without a page going red.
 A panel that draws it owes a page oracle putting a real band against the numbers
 printed beside it.
 
-**One shape, two drawings, stated rather than hidden.** The memory panel drew
-this shape first, in its own markup. The maths lives once, in
-`frontend/src/lib/charts/span-track.ts`; the memory panel has not been
-repointed. **What that costs:** two pieces of markup that have to agree by eye,
-so a change to the band or the upright is a change in two places until the
-memory panel becomes a caller.
+**One shape, one place it is written down, and no copy to keep in step.** The
+memory panel drew this shape first, in its own markup, and the maths then moved
+once into `frontend/src/lib/charts/span-track.ts`. On 2026-09-21 that markup
+went too: the window grain drew only the model server's high-water mark, and
+that mark came off the page with its instrument in dispute. So the two pieces of
+markup that had to agree by eye are both gone, and `span-track.ts` is the one
+place the shape is written.
 
 **What the reader loses, named.** A span track says nothing about the shape
 between its ends, and nothing about when in the window each end fell: a figure

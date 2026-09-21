@@ -46,27 +46,6 @@ import {
 
 export const prerender = true;
 
-/** The span of a figure across the runs that reported it, and how many did.
- *
- * A range and not a mean: the whole finding this route exists to publish is
- * that two shards of one run differ by more than 4x, and a mean of a lottery
- * reports neither end of it. `from` of zero means nothing measured it, which is
- * a different fact from a measurement of zero.
- */
-function spanOf(
-	values: readonly (number | null)[]
-): { low: number | null; high: number | null; from: number; outOf: number } {
-	const known = values.filter((value): value is number => value !== null);
-	return {
-		low: known.length === 0 ? null : Math.min(...known),
-		high: known.length === 0 ? null : Math.max(...known),
-		from: known.length,
-		outOf: values.length
-	};
-}
-
-export type FigureSpan = ReturnType<typeof spanOf>;
-
 /** Everything one span of days answers, worked out once for each span the
  * control offers.
  *
@@ -87,7 +66,6 @@ export interface MachineWindow {
 	 * the counters above and can be in a different state on the same day. */
 	machineRecord: RecordingNotes;
 	cacheDays: CacheDay[];
-	peakRssSpan: FigureSpan;
 	/** What kinds of machine the platform gave us over this span, and how often. */
 	fleet: FleetView;
 	tokens: RunWork[];
@@ -151,9 +129,9 @@ const DRAWN_PANELS = [
  * slow day across Pipelines and Hardware sees both on one span.
  *
  * **A panel about one run does not follow the window.** The shard board, the
- * reading/writing split, the peak-memory bars and the clock check are
- * snapshots: a window is a span, and a span cannot narrow a single run. Each
- * names the run or the day it is about instead.
+ * reading/writing split, the memory board and the clock check are snapshots: a
+ * window is a span, and a span cannot narrow a single run. Each names the run
+ * or the day it is about instead.
  */
 export async function load() {
 	const console_ = consoleConfig();
@@ -263,9 +241,6 @@ export async function load() {
 				figures: 'machine record'
 			}),
 			cacheDays: cacheByDay(runs),
-			// The newest run's own reading is a snapshot and sits on the memory
-			// board; this says whether that reading was unusual over the span.
-			peakRssSpan: spanOf(runs.map((run) => run.peakRssBytes.value)),
 			// Counted once a preset here rather than in a browser, which holds no
 			// ledger to count. At most eight kinds a span, so five presets is forty
 			// small objects.

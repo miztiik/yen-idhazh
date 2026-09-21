@@ -22,11 +22,9 @@ import {
 	contextColumns,
 	contextHeadroom,
 	latencyColumns,
-	peakMemory,
 	percentileHistory,
 	seconds,
-	PERCENTILES,
-	RUNNER_MEMORY_BYTES
+	PERCENTILES
 } from '../src/lib/charts/machine';
 import { readDayShards } from '../src/lib/server/payload';
 import {
@@ -1036,137 +1034,6 @@ test.describe('Row #19 - context headroom is one chart with a limit rule', () =>
 			.locator(`[data-context-run="${runs[runs.length - 1]}"]`)
 			.getAttribute('data-context-longest');
 		expect(said.replace(/,/g, '')).toContain(String(listed));
-	});
-});
-
-test.describe('Row #20 - peak memory is a maximum and never a sum', () => {
-	const highest = 7_000_000_000;
-
-	test('THE ORACLE: the run figure is the largest shard, not their total', () => {
-		const run = only(read(FULL).runs, '2026-09-02-1');
-		const view = peakMemory(run);
-		// 6 GB and 7 GB. A sum would report 13 GB on a machine that has 16.
-		expect(view.shards.map((shard) => [shard.shard, shard.bytes])).toEqual([
-			[0, 6_000_000_000],
-			[1, highest]
-		]);
-		expect(view.highWater, 'the aggregate is not the maximum').toBe(highest);
-		expect(view.highWater, 'the aggregate summed the shards').not.toBe(13_000_000_000);
-		expect(view.from).toBe(2);
-		expect(view.outOf).toBe(2);
-		expect(view.pctOfRunner).toBe(Math.round((highest / RUNNER_MEMORY_BYTES) * 100));
-		// Every bar runs to the same ceiling, so their lengths compare.
-		const tracks = new Set(view.shards.map((shard) => shard.marks.track));
-		expect(tracks.size, 'the per-shard bars are drawn on different tracks').toBe(1);
-		expect(view.marks.sense, 'the polarity is decided at the paint site').toBe('lower-is-better');
-	});
-
-	test('THE ORACLE: a run the reader refuses contributes nothing to either', () => {
-		// Two servers answered for shard 0 of `2026-08-29-3`, so the run cannot be
-		// made into one run. It is in the ledger below and must be in neither the
-		// per-shard bars nor the aggregate - not as a shard, and not as a zero.
-		const refusedRun = [
-			row({
-				runId: '2026-08-29-3',
-				date: '2026-08-29',
-				shard: 0,
-				peakRssBytes: 15_000_000_000,
-				serverPromptSeconds: 100
-			}),
-			row({
-				runId: '2026-08-29-3',
-				date: '2026-08-29',
-				shard: 0,
-				peakRssBytes: 15_000_000_000,
-				serverPromptSeconds: 250
-			}),
-			row({ runId: '2026-08-29-3', date: '2026-08-29', shard: 1, peakRssBytes: 9_000_000_000 })
-		];
-		const { runs, refused } = read([...FULL, ...refusedRun]);
-		expect(refused.map((one) => one.runId)).toEqual(['2026-08-29-3']);
-		expect(runs.map((run) => run.runId)).not.toContain('2026-08-29-3');
-
-		// The page reads the newest run the READER handed over, which is the clean
-		// one - the refused run's 15 GB is nowhere.
-		for (const run of runs) {
-			const view = peakMemory(run);
-			expect(view.runId).not.toBe('2026-08-29-3');
-			expect(view.highWater, 'the refused run reached the aggregate').not.toBe(15_000_000_000);
-			expect(view.shards.map((shard) => shard.bytes)).not.toContain(15_000_000_000);
-		}
-	});
-
-	test('a shard that recorded nothing is left out, never drawn as no memory', () => {
-		const partial = [
-			row({ runId: '2026-09-02-9', shard: 0, peakRssBytes: 5_000_000_000 }),
-			row({ runId: '2026-09-02-9', shard: 1 })
-		];
-		const view = peakMemory(
-			only(read(partial, { planned: [['2026-09-02-9', 4]] }).runs, '2026-09-02-9')
-		);
-		expect(view.shards.map((shard) => shard.shard)).toEqual([0]);
-		expect(view.from).toBe(1);
-		expect(view.outOf).toBe(4);
-		expect(view.highWater).toBe(5_000_000_000);
-	});
-
-	test('no shard recorded it at all is an empty panel, never a zero', () => {
-		const view = peakMemory(only(read([row({ shard: 0 })], { planned: [['2026-09-02-1', 2]] }).runs, '2026-09-02-1'));
-		expect(view.empty).toBe(true);
-		expect(view.highWater).toBeNull();
-		expect(view.highWater).not.toBe(0);
-	});
-
-	test('THE ORACLE: the built page prints the ledger own bytes, and no sum', async ({ page }) => {
-		await page.goto('/console/machine/');
-		// The per-shard bars are the shard grain of the merged memory panel, so
-		// the grain has to be the one on screen before they are in the document.
-		await page
-			.locator('[data-shape-switch="memory-grain"] [data-shape-option="shard"]')
-			.click();
-
-		const drawn = await page.evaluate(() => {
-			const panel = document.querySelector('[data-peak-memory]');
-			if (panel === null) return null;
-			return {
-				runId: panel.getAttribute('data-peak-memory') ?? '',
-				highWater: Number(
-					panel.querySelector('[data-memory-high-water]')?.getAttribute('data-memory-high-water')
-				),
-				shards: [...panel.querySelectorAll('[data-memory-shard]')].map((node) => ({
-					shard: Number(node.getAttribute('data-memory-shard')),
-					bytes: Number(node.getAttribute('data-memory-bytes'))
-				}))
-			};
-		});
-		expect(drawn, 'no peak-memory panel on the page').not.toBeNull();
-
-		// Recomputed from the canary item ledger, not from the module. One figure a
-		// shard: the highest any of that shard's items reached.
-		const byShard = new Map<number, number>();
-		for (const row of canaryHealth()) {
-			if (row.run_id !== drawn!.runId || row.llama_rss_peak_bytes === '') continue;
-			const value = Number(row.llama_rss_peak_bytes);
-			if (!Number.isFinite(value)) continue;
-			const shard = Number(row.shard);
-			byShard.set(shard, Math.max(byShard.get(shard) ?? 0, value));
-		}
-		const bytes = [...byShard.values()];
-		expect(bytes.length, 'the newest canary run records no memory').toBeGreaterThan(0);
-		expect(drawn!.shards.map((shard) => shard.bytes).sort()).toEqual([...bytes].sort());
-		expect(drawn!.highWater, 'the page drew something other than the maximum').toBe(
-			Math.max(...bytes)
-		);
-		const total = bytes.reduce((carry, value) => carry + value, 0);
-		if (bytes.length > 1) {
-			expect(drawn!.highWater, 'the page summed the shards').not.toBe(total);
-		}
-		// The figure the panel exists for, in the unit the runner's limit is quoted
-		// in, beside the limit itself.
-		await expect(page.locator('[data-peak-memory]')).toContainText(/GiB/);
-		await expect(page.locator('[data-peak-memory]')).toContainText(
-			`of the runner's ${(RUNNER_MEMORY_BYTES / 1024 / 1024 / 1024).toFixed(2)} GiB`
-		);
 	});
 });
 

@@ -1,10 +1,16 @@
-/** Does the memory panel show the item a per-shard maximum hides?
+/** Does the memory panel lead with how close one item took the machine to its
+ * limit, and does it stay off the mark whose instrument is disputed?
  *
- * The panel exists because one measurement was asked two questions and only one
- * of them was built. A per-shard high-water mark is the verdict reading - how
- * near the ceiling the run got - and behind it sits the item that took the model
- * server there. On the committed ledger that item reached 83.1 percent of the
- * runner's 16 GiB and no panel drew it.
+ * The panel used to lead with `llama_rss_peak_bytes`, a per-shard maximum of a
+ * process high-water mark. That column is `VmHWM`: it covers the model server's
+ * whole life rather than the item, and it reads lower than an earlier item's
+ * whenever the kernel reclaims a page. It is still written to the ledger and it
+ * is drawn nowhere on this panel.
+ *
+ * The lead is `os_mem_available_min_bytes` - the least the kernel had left at
+ * one item's worst moment. That is the reading the question is about, and a
+ * shard maximum cannot show it: one item can take the machine to its floor
+ * while the shard it sits in reads as a normal shard.
  *
  * Two halves, for the two things that can be wrong. The builder tests drive the
  * fold over fixture ledger rows and recompute every expectation from those rows,
@@ -92,6 +98,7 @@ const THREE_ITEMS: ShardReading[] = [
 		itemId: 'item-a',
 		startedAt: '2026-09-04T06:00:00Z',
 		peakRssBytes: 11 * GIB,
+		serverRssBytes: 10 * GIB,
 		workerRssBytes: 1 * GIB,
 		memAvailableMin: 4 * GIB,
 		memAvailable: 5 * GIB,
@@ -103,6 +110,7 @@ const THREE_ITEMS: ShardReading[] = [
 		itemId: 'item-b',
 		startedAt: '2026-09-04T06:10:00Z',
 		peakRssBytes: 13 * GIB,
+		serverRssBytes: 12 * GIB,
 		workerRssBytes: 1229 * MIB,
 		memAvailableMin: 2 * GIB,
 		memAvailable: 2 * GIB + 205 * MIB,
@@ -114,6 +122,7 @@ const THREE_ITEMS: ShardReading[] = [
 		itemId: 'item-c',
 		startedAt: '2026-09-04T06:20:00Z',
 		peakRssBytes: 12 * GIB,
+		serverRssBytes: 11 * GIB,
 		workerRssBytes: 1536 * MIB,
 		memAvailableMin: 3 * GIB,
 		memAvailable: 3 * GIB + 410 * MIB,
@@ -123,87 +132,150 @@ const THREE_ITEMS: ShardReading[] = [
 	})
 ];
 
-test.describe('memory and load, three grains', () => {
-	test('THE ORACLE: the printed item maximum is the maximum over the item rows', () => {
+test.describe('the memory board, at item grain', () => {
+	test('THE ORACLE: the printed item minimum is the minimum over the item rows', () => {
 		const { run, health } = fixture(THREE_ITEMS);
 		const board = memoryBoard(run, health);
 
 		// Recomputed from the fixture rows rather than read back off the view.
-		const peaks = health
-			.filter((row) => row.run_id === RUN && row.llama_rss_peak_bytes !== '')
-			.map((row) => Number(row.llama_rss_peak_bytes));
-		expect(peaks.length, 'the fixture recorded no item memory').toBe(3);
-		expect(board.itemHighWater, 'the panel prints something other than the item maximum').toBe(
-			Math.max(...peaks)
-		);
+		const floors = health
+			.filter((row) => row.run_id === RUN && row.os_mem_available_min_bytes !== '')
+			.map((row) => Number(row.os_mem_available_min_bytes));
+		expect(floors.length, 'the fixture recorded no kernel floor').toBe(3);
+		expect(
+			board.floorLowBytes,
+			'the panel leads with something other than the item minimum'
+		).toBe(Math.min(...floors));
+		// A MINIMUM and not a maximum: the question is how little was left.
+		expect(board.floorLowBytes).toBeLessThan(Math.max(...floors));
 		// And it names the item that owns it, which is the whole reason the grain
-		// exists: a per-shard maximum is one number with no owner.
-		expect(board.worstItemId).toBe('item-b');
-		expect(board.items.filter((one) => one.worst).map((one) => one.itemId)).toEqual(['item-b']);
-		// The shard grain of the same run reads the same maximum, so the two
-		// grains cannot disagree about one measurement.
-		expect(board.shard.highWater).toBe(Math.max(...peaks));
+		// exists: a per-shard figure is one number with no owner.
+		expect(board.floorItemId).toBe('item-b');
+		expect(board.items.filter((one) => one.tightest).map((one) => one.itemId)).toEqual([
+			'item-b'
+		]);
+		// The share is of what was still FREE, against the denominator the board
+		// drew against.
+		expect(board.floorLowPct).toBe(
+			Math.round((Math.min(...floors) / board.ceilingBytes) * 100)
+		);
 	});
 
-	test('THE ORACLE: all three grains and the load series are built from one call', () => {
+	test('THE ORACLE: the disputed high-water mark reaches no figure on the board', () => {
 		const { run, health } = fixture(THREE_ITEMS);
 		const board = memoryBoard(run, health);
 
-		// Item grain: one entry an item, in run order off the item's own clock.
-		expect(board.items.map((one) => one.itemId)).toEqual(['item-a', 'item-b', 'item-c']);
-		// Shard grain: the per-shard bars, unchanged.
-		expect(board.shard.empty).toBe(false);
-		expect(board.shard.shards.map((one) => one.shard)).toEqual([0]);
-		// The load series, which is the second series and not a second panel.
-		expect(board.loadHigh).toBe(6.5);
-		expect(board.cores).toBe(4);
-		expect(board.load.empty, 'load has no core count to be read against').toBe(false);
-		// Busy runs near 100 on every row, which is why load is drawn beside it.
-		expect(board.busySpan.median).toBe(88);
-		expect(board.busySpan.max).toBe(100);
-		expect(board.loadEmpty).toBe(false);
+		// Every row carries it, and it is the largest byte figure in the fixture.
+		const peaks = health.map((row) => Number(row.llama_rss_peak_bytes));
+		expect(Math.max(...peaks), 'the fixture stopped carrying the disputed column').toBe(
+			13 * GIB
+		);
+
+		// No figure the board hands the page equals it, and the item entries carry
+		// no field for it at all. A caveat under a mark does not stop the mark
+		// being read, so the mark is not built.
+		const drawn = [
+			board.floorLowBytes,
+			board.serverEndHighWater,
+			board.workerHighWater,
+			board.bothHighWater,
+			board.bracketScaleBytes,
+			board.scaleBytes
+		];
+		expect(drawn, 'the disputed maximum is still a drawn figure').not.toContain(13 * GIB);
+		expect(Object.keys(board.items[0])).not.toContain('peakBytes');
+		// The byte domain is the kernel's, so a resident-set mark cannot widen it.
+		expect(board.scaleBytes).toBe(board.ceilingBytes);
 	});
 
-	test('THE ORACLE: null OS columns are an empty grain, never a flat line at zero', () => {
-		// Same three items, every machine cell blank. This is a day older than the
-		// cells, which is a missing reading rather than an item that used none.
-		const blank = THREE_ITEMS.map((one) => ({
+	test('THE ORACLE: an item with no kernel reading is counted, never drawn at zero', () => {
+		// item-c predates the kernel columns: it carries the process cells the
+		// older run wrote and none of the three the kernel account added.
+		const mixed = fixture(
+			THREE_ITEMS.map((one) =>
+				one.itemId === 'item-c'
+					? { ...one, memTotal: '' as const, memAvailable: '' as const, memAvailableMin: '' as const }
+					: one
+			)
+		);
+		const board = memoryBoard(mixed.run, mixed.health);
+
+		expect(board.from, 'the unrecorded item was dropped from the strip').toBe(3);
+		expect(board.headroomFrom).toBe(2);
+		expect(board.kernelSkipped, 'the skipped item was not counted').toBe(1);
+		const gap = board.items.find((one) => one.itemId === 'item-c');
+		expect(gap?.headroom.empty, 'an unmeasured kernel mark was drawn').toBe(true);
+		expect(gap?.headroom.floorBytes).toBeNull();
+		expect(gap?.headroom.floorBytes, 'absence was drawn as a measurement of zero').not.toBe(0);
+		// The lead is still the minimum over the items that DID record one.
+		expect(board.floorLowBytes).toBe(2 * GIB);
+
+		// And the panel can say when the reading starts, off the rows it was
+		// handed rather than off the archive.
+		expect(board.kernelBeginsOn).toBe(DATE);
+		expect(board.readFrom).toBe(DATE);
+	});
+
+	test('a run older than the kernel columns draws no mark and names the date', () => {
+		// One run with the kernel account, one older run without. The older run is
+		// the one drawn, so the track states its absence.
+		const older = THREE_ITEMS.map((one) => ({
 			...one,
-			peakRssBytes: '' as const,
-			workerRssBytes: '' as const,
-			memAvailableMin: '' as const,
-			memAvailable: '' as const,
+			date: '2026-09-03',
+			runId: '2026-09-03-1',
 			memTotal: '' as const,
-			load: '' as const,
-			cpuBusyMin: '' as const,
-			cpuBusyMax: '' as const
+			memAvailable: '' as const,
+			memAvailableMin: '' as const
 		}));
-		const { run, health } = fixture(blank);
+		const { health } = ledgers(
+			THREE_ITEMS.map((one) => ({ date: DATE, runId: RUN, ...one }))
+		);
+		const { hosts: oldHosts, health: oldHealth } = ledgers(older);
+		const { runs, refused } = machineCounters(
+			oldHosts,
+			oldHealth,
+			plan(['2026-09-03-1', 2]),
+			limits()
+		);
+		expect(refused, 'the older fixture was refused').toEqual([]);
+		expect(runs, 'the older fixture folded into no run').toHaveLength(1);
+		const board = memoryBoard(runs[0], [...oldHealth, ...health]);
+
+		expect(board.headroomFrom, 'a run with no kernel cells drew a mark').toBe(0);
+		expect(board.floorLowBytes).toBeNull();
+		expect(board.floorItemId).toBeNull();
+		// The date the reading begins, taken from the rows in hand and bounded by
+		// the earliest date among them - never a claim about the whole archive.
+		expect(board.kernelBeginsOn).toBe(DATE);
+		expect(board.readFrom).toBe('2026-09-03');
+	});
+
+	test('THE ORACLE: the two brackets run to the larger of themselves, not the machine', () => {
+		const { run, health } = fixture(THREE_ITEMS);
 		const board = memoryBoard(run, health);
 
-		expect(board.itemsEmpty, 'a blank day drew item marks').toBe(true);
-		expect(board.items).toEqual([]);
-		expect(board.itemHighWater).toBeNull();
-		expect(board.itemHighWater, 'absence was drawn as a measurement of zero').not.toBe(0);
-		expect(board.loadHigh).toBeNull();
-		expect(board.loadEmpty).toBe(true);
-		expect(board.busySpan.empty).toBe(true);
-		// The shard grain is empty for the same reason, so the whole panel is.
-		expect(board.shard.empty).toBe(true);
-		expect(board.empty).toBe(true);
+		const servers = health.map((row) => Number(row.llama_rss_bytes));
+		const workers = health.map((row) => Number(row.python_rss_bytes));
+		expect(board.serverEndHighWater).toBe(Math.max(...servers));
+		expect(board.workerHighWater).toBe(Math.max(...workers));
+		// The bracket scale is the larger bracket and never the ceiling, so the
+		// pair reads as two processes compared and never as a share of a budget.
+		expect(board.bracketScaleBytes).toBe(Math.max(...servers, ...workers));
+		expect(board.bracketScaleBytes).not.toBe(board.ceilingBytes);
+		expect(board.bracketScaleBytes).toBeLessThan(board.ceilingBytes);
 	});
 
-	test('the two maxima added are an upper bound unless one item held both', () => {
+	test('the two brackets added are an upper bound unless one item held both', () => {
 		const { run, health } = fixture(THREE_ITEMS);
 		const board = memoryBoard(run, health);
 		// item-b holds the largest model-server figure and item-c the largest
 		// worker figure, so no moment of this run held both.
 		expect(board.coPeak).toBe(false);
-		expect(board.itemHighWater).toBe(13 * GIB);
+		expect(board.serverEndHighWater).toBe(12 * GIB);
 		expect(board.workerHighWater).toBe(1536 * MIB);
-		expect(board.bothHighWater).toBe(13 * GIB + 1536 * MIB);
+		expect(board.bothHighWater).toBe(12 * GIB + 1536 * MIB);
 
-		// Move the worker maximum onto the item that owns the memory maximum and
+		// Move the worker maximum onto the item that owns the server maximum and
 		// the same sum becomes a reading.
 		const together = THREE_ITEMS.map((one) =>
 			one.itemId === 'item-b' ? { ...one, workerRssBytes: 2 * GIB } : one
@@ -228,7 +300,7 @@ test.describe('memory and load, three grains', () => {
 			item({
 				itemId: 'item-leak',
 				startedAt: '2026-09-04T07:00:00Z',
-				peakRssBytes: 13 * GIB,
+				serverRssBytes: 13 * GIB,
 				memAvailableMin: 3 * GIB,
 				memAvailable: 3 * GIB - 512 * MIB,
 				load: 4
@@ -238,20 +310,48 @@ test.describe('memory and load, three grains', () => {
 		expect(mark.recoveredBytes).toBe(-512 * MIB);
 	});
 
-	test('an item with no headroom cells keeps its memory bar and says the mark is absent', () => {
-		const mixed = fixture([
-			item({
-				itemId: 'item-held-only',
-				startedAt: '2026-09-04T08:00:00Z',
-				peakRssBytes: 10 * GIB,
-				load: 2
-			})
-		]);
-		const one = memoryBoard(mixed.run, mixed.health).items[0];
-		expect(one.peakBytes).toBe(10 * GIB);
-		expect(one.headroom.empty, 'an unmeasured headroom mark was drawn').toBe(true);
-		expect(one.headroom.floorBytes).toBeNull();
-		expect(one.headroom.endBytes).toBeNull();
+	test('the load series is built from the same call', () => {
+		const { run, health } = fixture(THREE_ITEMS);
+		const board = memoryBoard(run, health);
+
+		// One entry an item, in run order off the item's own clock.
+		expect(board.items.map((one) => one.itemId)).toEqual(['item-a', 'item-b', 'item-c']);
+		expect(board.loadHigh).toBe(6.5);
+		expect(board.cores).toBe(4);
+		expect(board.load.empty, 'load has no core count to be read against').toBe(false);
+		// Busy runs near 100 on every row, which is why load is drawn beside it.
+		expect(board.busySpan.median).toBe(88);
+		expect(board.busySpan.max).toBe(100);
+		expect(board.loadEmpty).toBe(false);
+	});
+
+	test('null machine columns are an empty panel, never a flat line at zero', () => {
+		// Same three items, every machine cell blank. This is a day older than the
+		// cells, which is a missing reading rather than an item that used none.
+		const blank = THREE_ITEMS.map((one) => ({
+			...one,
+			peakRssBytes: '' as const,
+			serverRssBytes: '' as const,
+			workerRssBytes: '' as const,
+			memAvailableMin: '' as const,
+			memAvailable: '' as const,
+			memTotal: '' as const,
+			load: '' as const,
+			cpuBusyMin: '' as const,
+			cpuBusyMax: '' as const
+		}));
+		const { run, health } = fixture(blank);
+		const board = memoryBoard(run, health);
+
+		expect(board.itemsEmpty, 'a blank day drew item marks').toBe(true);
+		expect(board.items).toEqual([]);
+		expect(board.floorLowBytes).toBeNull();
+		expect(board.floorLowBytes, 'absence was drawn as a measurement of zero').not.toBe(0);
+		expect(board.bracketScaleBytes, 'an empty bracket drew a length').toBe(0);
+		expect(board.loadHigh).toBeNull();
+		expect(board.loadEmpty).toBe(true);
+		expect(board.busySpan.empty).toBe(true);
+		expect(board.empty).toBe(true);
 	});
 
 	test('THE ORACLE: MemTotal is the denominator, and the tell that it is another machine', () => {
@@ -289,7 +389,9 @@ test.describe('memory and load, three grains', () => {
 				shard: 1,
 				startedAt: '2026-09-04T06:30:00Z',
 				memTotal: 8 * GIB,
-				peakRssBytes: 7 * GIB,
+				memAvailableMin: 5 * GIB,
+				memAvailable: 5 * GIB,
+				serverRssBytes: 7 * GIB,
 				load: 1.5
 			})
 		]);
@@ -320,7 +422,7 @@ test.describe('memory and load, three grains', () => {
 		const board = memoryBoard(null, []);
 		expect(board.empty).toBe(true);
 		expect(board.items).toEqual([]);
-		expect(board.itemHighWater).toBeNull();
+		expect(board.floorLowBytes).toBeNull();
 		expect(board.runId).toBe('');
 	});
 });
@@ -351,7 +453,7 @@ function measured(cell: string | null | undefined): number | null {
 }
 
 test.describe('the memory panel puts the item grain on the page', () => {
-	test('THE ORACLE: the item maximum on the page recomputes from the canary ledger', async ({
+	test('THE ORACLE: the item minimum on the page recomputes from the canary ledger', async ({
 		page
 	}) => {
 		await page.goto('/console/machine/');
@@ -363,28 +465,92 @@ test.describe('the memory panel puts the item grain on the page', () => {
 		const runId = await board.getAttribute('data-memory-board');
 		expect(runId, 'the panel drew no run').not.toBe('empty');
 
-		const peaks = canaryRows('item-health')
+		const floors = canaryRows('item-health')
 			.filter((row) => row.run_id === runId)
-			.map((row) => measured(row.llama_rss_peak_bytes))
+			.map((row) => measured(row.os_mem_available_min_bytes))
 			.filter((value): value is number => value !== null);
-		expect(peaks.length, 'the newest canary run records no item memory').toBeGreaterThan(0);
+		expect(floors.length, 'the newest canary run records no kernel floor').toBeGreaterThan(0);
 
 		// The figure the panel exists for, on an attribute rather than in prose:
 		// a sentence can be renamed and a negative prose assertion then passes
 		// while the page prints the wrong number.
-		expect(Number(await board.getAttribute('data-memory-item-high-water'))).toBe(
-			Math.max(...peaks)
-		);
-		const owner = await board.getAttribute('data-memory-worst-item');
-		expect(owner, 'the maximum reached the page with no item owning it').not.toBe('');
+		expect(Number(await board.getAttribute('data-memory-floor-low'))).toBe(Math.min(...floors));
+		const owner = await board.getAttribute('data-memory-floor-item');
+		expect(owner, 'the minimum reached the page with no item owning it').not.toBe('');
 
-		// And exactly one mark is flagged as the worst, whatever ties behind it:
-		// "the item that owns the maximum" has to be an item a reader can go and
-		// look at, so a tie is named once.
-		const worst = board.locator('[data-memory-item-worst="true"]');
-		await expect(worst).toHaveCount(1);
-		expect(await worst.getAttribute('data-memory-item')).toBe(owner);
-		expect(Number(await worst.getAttribute('data-memory-item-peak'))).toBe(Math.max(...peaks));
+		// And exactly one mark is flagged, whatever ties behind it: "the item that
+		// took the machine lowest" has to be an item a reader can go and look at,
+		// so a tie is named once.
+		const tightest = board.locator('[data-memory-item-tightest="true"]');
+		await expect(tightest).toHaveCount(1);
+		expect(await tightest.getAttribute('data-memory-item')).toBe(owner);
+		expect(Number(await tightest.getAttribute('data-memory-item-floor'))).toBe(
+			Math.min(...floors)
+		);
+	});
+
+	test('THE ORACLE: an item with no kernel reading is hatched and its count printed', async ({
+		page
+	}) => {
+		await page.goto('/console/machine/');
+		const board = page.locator('[data-memory-board]');
+		const runId = await board.getAttribute('data-memory-board');
+
+		const rows = canaryRows('item-health').filter((row) => row.run_id === runId);
+		// The canary's newest run carries one row the kernel account never
+		// reached, beside rows it did.
+		const drawn = rows.filter(
+			(row) =>
+				measured(row.llama_rss_bytes) !== null ||
+				measured(row.python_rss_bytes) !== null ||
+				measured(row.os_mem_available_min_bytes) !== null ||
+				measured(row.os_mem_available_bytes) !== null
+		);
+		const without = drawn.filter((row) => measured(row.os_mem_available_min_bytes) === null);
+		expect(without.length, 'the canary run has no item missing the kernel reading').toBe(1);
+
+		expect(Number(await board.getAttribute('data-memory-kernel-skipped'))).toBe(without.length);
+		expect(Number(await board.getAttribute('data-memory-kernel-from'))).toBe(
+			drawn.length - without.length
+		);
+		// Printed, not only drawn: a hatched mark a reader cannot count is not a
+		// count. And the sentence names the date the reading begins.
+		const gap = board.locator('[data-memory-kernel-gap]');
+		await expect(gap).toBeVisible();
+		await expect(gap).toContainText('no kernel reading');
+		const begins = await board.getAttribute('data-memory-kernel-begins');
+		expect(begins, 'the page names no date for the start of the reading').not.toBe('');
+		await expect(gap).toContainText(begins!);
+		// The sentence is bounded by what the page read, not by the archive.
+		const from = await board.getAttribute('data-memory-read-from');
+		expect(from, 'the page bounds its sentence to nothing').not.toBe('');
+		await expect(gap).toContainText(from!);
+	});
+
+	test('THE ORACLE: the disputed mark is off the page and the page says so', async ({ page }) => {
+		await page.goto('/console/machine/');
+		const board = page.locator('[data-memory-board]');
+		const runId = await board.getAttribute('data-memory-board');
+
+		const peaks = canaryRows('item-health')
+			.filter((row) => row.run_id === runId)
+			.map((row) => measured(row.llama_rss_peak_bytes))
+			.filter((value): value is number => value !== null);
+		expect(peaks.length, 'the canary stopped writing the disputed column').toBeGreaterThan(0);
+
+		// It stays in the ledger and it reaches no attribute the panel publishes.
+		const drawnValues = await board.evaluate((node) =>
+			[...node.attributes]
+				.filter((one) => one.name.startsWith('data-memory-'))
+				.map((one) => one.value)
+		);
+		expect(drawnValues, 'the disputed maximum is on the panel').not.toContain(
+			String(Math.max(...peaks))
+		);
+		// And the surface that would have drawn it is where the reason is said.
+		await expect(board.locator('[data-memory-not-drawn]')).toContainText(
+			'not drawn here'
+		);
 	});
 
 	test('every item mark carries its own figures, recomputed from the ledger', async ({ page }) => {
@@ -407,7 +573,7 @@ test.describe('the memory panel puts the item grain on the page', () => {
 			const row = byItem.get(id);
 			expect(row, `${id} is on the page and not in the ledger`).toBeTruthy();
 			for (const [attribute, column] of [
-				['data-memory-item-peak', 'llama_rss_peak_bytes'],
+				['data-memory-item-server-end', 'llama_rss_bytes'],
 				['data-memory-item-worker', 'python_rss_bytes'],
 				['data-memory-item-floor', 'os_mem_available_min_bytes'],
 				['data-memory-item-end', 'os_mem_available_bytes'],
@@ -423,39 +589,23 @@ test.describe('the memory panel puts the item grain on the page', () => {
 		}
 	});
 
-	test('THE ORACLE: the grain switch reaches all three grains from one payload', async ({
+	test('the brackets are labelled at most and drawn against the larger of themselves', async ({
 		page
 	}) => {
 		await page.goto('/console/machine/');
 		const board = page.locator('[data-memory-board]');
-		const control = board.locator('[data-shape-switch="memory-grain"]');
 
-		// Top right of its own panel, and radio inputs rather than a verb.
-		await expect(control).toBeVisible();
-		await expect(board.locator('[data-memory-pane="item"]')).toBeVisible();
-
-		await control.locator('[data-shape-option="shard"]').click();
-		await expect(board.locator('[data-memory-pane="shard"]')).toBeVisible();
-		// The shard grain is the panel that used to stand alone, and it still
-		// reads the maximum and never the sum.
-		const bars = board.locator('[data-memory-shard]');
-		expect(await bars.count(), 'the shard grain drew no bars').toBeGreaterThan(0);
-		const shardBytes: number[] = [];
-		for (let index = 0; index < (await bars.count()); index += 1) {
-			shardBytes.push(Number(await bars.nth(index).getAttribute('data-memory-bytes')));
-		}
-		const high = Number(
-			await board.locator('[data-memory-high-water]').getAttribute('data-memory-high-water')
-		);
-		expect(high, 'the shard grain summed its shards').toBe(Math.max(...shardBytes));
-
-		await control.locator('[data-shape-option="span"]').click();
-		const track = board.locator('[data-memory-span-high]');
-		await expect(track).toBeVisible();
-		// The window grain is a range mark, which is what the four sentences it
-		// replaced could not be compared as.
-		const low = Number(await track.getAttribute('data-memory-span-low'));
-		expect(Number(await track.getAttribute('data-memory-span-high'))).toBeGreaterThanOrEqual(low);
+		const server = measured(await board.getAttribute('data-memory-server-end-high-water'));
+		const worker = measured(await board.getAttribute('data-memory-worker-high-water'));
+		const scale = Number(await board.getAttribute('data-memory-bracket-scale'));
+		expect(server, 'the model server bracket has no figure').not.toBeNull();
+		expect(worker, 'the worker bracket has no figure').not.toBeNull();
+		// Against the larger of the two and never against the machine, so the pair
+		// cannot be read as a share of a budget.
+		expect(scale).toBe(Math.max(server!, worker!));
+		expect(scale).not.toBe(Number(await board.getAttribute('data-memory-ceiling')));
+		await expect(board.locator('[data-memory-figure="server-end"]')).toContainText('at most');
+		await expect(board.locator('[data-memory-figure="worker-end"]')).toContainText('at most');
 	});
 
 	test('the panel names its denominator and says what it cannot separate', async ({ page }) => {

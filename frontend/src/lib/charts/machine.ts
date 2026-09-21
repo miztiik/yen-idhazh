@@ -26,7 +26,7 @@ import { percentOf } from './rank';
 import { grouped } from './series';
 import { stacked, type StackShape } from './stacked';
 import { targetMarks, type TargetMarks } from './targetbar';
-import { paint, type ChartToken, type Polarity } from './theme';
+import { paint, type ChartToken } from './theme';
 
 /** The runner's memory, from CLAUDE.md Guardrail #2: 4 vCPU, 16 GB RAM, no GPU.
  *
@@ -36,15 +36,6 @@ import { paint, type ChartToken, type Polarity } from './theme';
  * longer fits be made to look as though it did.
  */
 export const RUNNER_MEMORY_BYTES = 16 * 1024 * 1024 * 1024;
-
-/** Which way is better for a memory high-water mark, said once, here.
- *
- * At the measure and never at the paint site: a bar and a delta drawn from the
- * same figure on two different panels cannot then disagree about which
- * direction is good. Less is better because the ceiling is the runner's and we
- * cannot raise it - a mark that climbs is a run getting nearer to not fitting.
- */
-export const MEMORY_POLARITY: Polarity = 'lower-is-better';
 
 /** The room an engine-drawn value axis needs for its own widest label.
  *
@@ -614,79 +605,6 @@ export function contextColumns(
 }
 
 // ---------------------------------------------------------------------------
-// Peak memory, per shard and in one number
-// ---------------------------------------------------------------------------
-
-/** One shard's own memory high-water mark, against the runner's. */
-export interface ShardMemory {
-	shard: number;
-	bytes: number;
-	marks: TargetMarks;
-}
-
-/** What one run did to the runner's 16 GB.
- *
- * The aggregate is a MAXIMUM and never a sum. Shards are separate jobs on
- * separate hosts, so adding four of them reports a machine that never existed -
- * and it would read as 50 GB on a box that has 16.
- */
-export interface MemoryView {
-	runId: string;
-	date: string;
-	/** Ascending by shard index. Only shards that reported the cell. */
-	shards: ShardMemory[];
-	/** The largest of those. Null where no shard reported one. */
-	highWater: number | null;
-	/** That figure against `RUNNER_MEMORY_BYTES`, whole percent. */
-	pctOfRunner: number | null;
-	marks: TargetMarks;
-	/** Shards that reported the cell, and shards the run split into. */
-	from: number;
-	/** Null where the run's manifest recorded no shard count, which is unknown
-	 * and is drawn as unknown - never as the count of who answered. */
-	outOf: number | null;
-	empty: boolean;
-}
-
-/** The run's own memory high-water mark, and every shard behind it.
- *
- * The item ledger's `llama_rss_peak_bytes` landed on 2026-08-30, so most
- * committed rows are blank in
- * it. A blank is drawn as absence: this returns only the shards that reported,
- * and carries the run's shard count beside them so the page can say how much of
- * the run the figure covers rather than treating an unmeasured shard as a shard
- * that used no memory.
- */
-export function peakMemory(run: MachineRun | null): MemoryView {
-	const reported =
-		run === null
-			? []
-			: run.reported
-					.filter((shard): shard is ShardCounters & { peakRssBytes: number } =>
-						shard.peakRssBytes !== null
-					)
-					.sort((a, b) => a.shard - b.shard);
-	const highWater = reported.length === 0 ? null : Math.max(...reported.map((s) => s.peakRssBytes));
-	return {
-		runId: run?.runId ?? '',
-		date: run?.date ?? '',
-		shards: reported.map((shard) => ({
-			shard: shard.shard,
-			bytes: shard.peakRssBytes,
-			// Every bar is read against the same ceiling, so the four of them are
-			// one picture rather than four differently scaled ones.
-			marks: targetMarks(shard.peakRssBytes, RUNNER_MEMORY_BYTES, MEMORY_POLARITY)
-		})),
-		highWater,
-		pctOfRunner: highWater === null ? null : Math.round((highWater / RUNNER_MEMORY_BYTES) * 100),
-		marks: targetMarks(highWater, RUNNER_MEMORY_BYTES, MEMORY_POLARITY),
-		from: reported.length,
-		outOf: run?.shards ?? null,
-		empty: highWater === null
-	};
-}
-
-// ---------------------------------------------------------------------------
 // Memory and load, at the item grain
 // ---------------------------------------------------------------------------
 
@@ -702,9 +620,6 @@ export function peakMemory(run: MachineRun | null): MemoryView {
  * size. Stated once here for the same reason `CLOCKS_AGREE_WITHIN_PCT` is.
  */
 export const MEM_TOTAL_AGREES_WITHIN_PCT = 10;
-
-/** Which of the three grains the panel is drawing. */
-export type MemoryGrain = 'item' | 'shard' | 'span';
 
 /** What one item left the kernel, at its worst moment and at its last.
  *
@@ -726,21 +641,19 @@ export interface HeadroomMark {
 	empty: boolean;
 }
 
-/** One item of one run: what it held, what it left, and what it queued. */
+/** One item of one run: what it left the kernel, what it held, and what it queued. */
 export interface ItemMemory {
 	itemId: string;
 	shard: number;
 	/** The clock the run order is taken from. Empty where the row carried none,
 	 * which puts the item last rather than first. */
 	startedAt: string;
-	/** llama-server's own high-water mark over this item. The figure a per-shard
-	 * maximum hides, and the one that reaches five sixths of the ceiling. */
-	peakBytes: number | null;
-	/** The worker process when the item ended. A second process on the same box,
-	 * and never added to the figure above without saying what the sum is. */
+	/** What the model server was holding when the item ended, and what the
+	 * worker process was. Two readings of two processes at one moment; they
+	 * carry no width here because neither is drawn against the machine's total
+	 * (see `bracketScaleBytes`). */
+	serverEndBytes: number | null;
 	workerBytes: number | null;
-	peakWidth: string;
-	workerWidth: string;
 	headroom: HeadroomMark;
 	/** The one-minute load when the item ended. Past the core count it is a
 	 * queue, which is a different fact from a busy processor. */
@@ -749,42 +662,48 @@ export interface ItemMemory {
 	/** Processor busy over the item's model window, trough as fill and peak as
 	 * notch. Near 100 on every row, which is why load is drawn beside it. */
 	busy: RangeMark;
-	/** True on the one item that owns the run's memory maximum. */
-	worst: boolean;
+	/** True on the one item that took the kernel lowest. */
+	tightest: boolean;
 }
 
-/** Memory and machine load over one run, at every grain the panel offers.
+/** Memory and machine load over one run, item by item.
  *
  * **A break panel.** It takes the extreme and the item that owns it, over every
- * item of one run. The verdict reading - how near the ceiling the run got - is
- * the shard grain, and it is here as the second grain rather than as a second
- * panel, because one measurement asked two questions is one panel.
+ * item of one run. The lead is how close a single item took the machine to
+ * running out, which is the one grain that can show it: a per-shard maximum
+ * reads as a normal shard while one of its items is on the ceiling.
  */
 export interface MemoryBoardView {
 	runId: string;
 	date: string;
 	/** One entry an item, in run order. The x every track here shares. */
 	items: ItemMemory[];
-	/** The shard grain, exactly as the peak-memory bars drew it. */
-	shard: MemoryView;
-	/** The largest any single item took the model server to. */
-	itemHighWater: number | null;
-	itemHighWaterPct: number | null;
+	/** THE LEAD: the least the kernel had left at any item's worst moment. */
+	floorLowBytes: number | null;
+	/** That figure as a share of the ceiling, whole percent - what was still
+	 * free, not what was used. */
+	floorLowPct: number | null;
 	/** The item that owns that figure, by name. */
-	worstItemId: string | null;
-	/** The largest worker reading over the same items. */
+	floorItemId: string | null;
+	/** The largest end-of-item reading each process reached over the run. Two
+	 * brackets and never a track: see `bracketScaleBytes`. */
+	serverEndHighWater: number | null;
 	workerHighWater: number | null;
-	/** The two maxima added. */
+	/** The two brackets added. */
 	bothHighWater: number | null;
-	bothHighWaterPct: number | null;
 	/** True only where both maxima fall on the SAME item. False makes the sum an
 	 * upper bound rather than a reading, and the panel says which it is. */
 	coPeak: boolean;
-	/** What every byte figure here is drawn against. */
+	/** What the two brackets are drawn against: the larger of them, so the pair
+	 * is a comparison of two processes and never a share of the machine. A
+	 * resident-set figure drawn against a machine total reads as a budget, and
+	 * that is the figure this project retracted on 2026-09-09. */
+	bracketScaleBytes: number;
+	/** What every kernel figure here is drawn against. */
 	ceilingBytes: number;
-	/** The byte domain every byte track shares: the ceiling and every drawn
+	/** The byte domain the kernel track shares: the ceiling and every drawn
 	 * value, so a reading past the ceiling draws past the line rather than
-	 * stopping on it, and the grains stay comparable across the switch. */
+	 * stopping on it. */
 	scaleBytes: number;
 	/** The machine's own MemTotal, where the rows carried one. */
 	measuredTotalBytes: number | null;
@@ -806,11 +725,20 @@ export interface MemoryBoardView {
 	 * Null where no shard recorded its own item count. */
 	from: number;
 	outOf: number | null;
-	/** Items that carried each of the three tracks. A track no item measured is
-	 * a sentence rather than a row of marks with nothing in them. */
+	/** Items that carried each of the tracks. A track no item measured is a
+	 * sentence rather than a row of marks with nothing in them. */
 	heldFrom: number;
 	headroomFrom: number;
 	loadFrom: number;
+	/** Drawn items the kernel reading skipped. Printed rather than drawn, so a
+	 * day older than the columns is a stated count and never a line at zero. */
+	kernelSkipped: number;
+	/** The earliest date carrying the kernel reading among the rows this build
+	 * was handed, and the earliest date in those rows whatever they carried.
+	 * The pair bounds every sentence the panel writes about the reading's age
+	 * to the span it actually read - never to the whole archive. */
+	kernelBeginsOn: string | null;
+	readFrom: string | null;
 	itemsEmpty: boolean;
 	loadEmpty: boolean;
 	empty: boolean;
@@ -832,13 +760,17 @@ function widthOf(value: number | null, scale: number): string {
 	return percentOf(value === null || scale <= 0 ? 0 : Math.min(value / scale, 1));
 }
 
-/** One run's memory and load, item by item, with the shard grain beside it.
+/** One run's memory and load, item by item.
  *
  * `health` is the item ledger, bounded by the caller; only the handed run's own
- * rows are read. The denominator is the machine's own MemTotal where the rows
- * carried one and the runner's 16 GiB where they did not - and the two are
- * printed together, because a MemTotal that disagrees with the runner is the
- * tell that every other OS cell is about a different machine.
+ * rows are drawn, and the rest are read for one thing only - the earliest date
+ * carrying the kernel's own reading, which is what bounds every sentence the
+ * panel writes about that reading's age.
+ *
+ * The denominator is the machine's own MemTotal where the rows carried one and
+ * the runner's 16 GiB where they did not - and the two are printed together,
+ * because a MemTotal that disagrees with the runner is the tell that every
+ * other OS cell is about a different machine.
  *
  * The domain takes the ceiling in beside the drawn values rather than as its
  * maximum, so an item past the ceiling still draws past the line.
@@ -847,9 +779,20 @@ export function memoryBoard(
 	run: MachineRun | null,
 	health: readonly Record<string, string>[]
 ): MemoryBoardView {
-	const shard = peakMemory(run);
 	const runId = run?.runId ?? '';
 	const rows = runId === '' ? [] : health.filter((row) => (row.run_id ?? '') === runId);
+
+	// The two dates that bound the age sentence. Both come off the rows handed
+	// in, so the panel can say when the kernel reading starts without claiming
+	// anything about days nobody read.
+	const dated = health.map((row) => (row.date ?? '').trim()).filter((date) => date !== '');
+	const kernelDates = health
+		.filter((row) => numberCell(row, 'os_mem_available_min_bytes') !== null)
+		.map((row) => (row.date ?? '').trim())
+		.filter((date) => date !== '');
+	const readFrom = dated.length === 0 ? null : dated.reduce((a, b) => (a < b ? a : b));
+	const kernelBeginsOn =
+		kernelDates.length === 0 ? null : kernelDates.reduce((a, b) => (a < b ? a : b));
 
 	// The smaller of two totals, per decision 8: a run that drew two machine
 	// sizes is read against the smaller of them, because the smaller is the one
@@ -867,7 +810,7 @@ export function memoryBoard(
 
 	const drawn = rows.filter(
 		(row) =>
-			numberCell(row, 'llama_rss_peak_bytes') !== null ||
+			numberCell(row, 'llama_rss_bytes') !== null ||
 			numberCell(row, 'python_rss_bytes') !== null ||
 			numberCell(row, 'os_mem_available_min_bytes') !== null ||
 			numberCell(row, 'os_mem_available_bytes') !== null
@@ -883,8 +826,8 @@ export function memoryBoard(
 		return leftAt.localeCompare(rightAt);
 	});
 
-	const peaks = ordered
-		.map((row) => numberCell(row, 'llama_rss_peak_bytes'))
+	const servers = ordered
+		.map((row) => numberCell(row, 'llama_rss_bytes'))
 		.filter((value): value is number => value !== null);
 	const workers = ordered
 		.map((row) => numberCell(row, 'python_rss_bytes'))
@@ -896,23 +839,37 @@ export function memoryBoard(
 		.map((row) => numberCell(row, 'os_mem_available_bytes'))
 		.filter((value): value is number => value !== null);
 
-	const itemHighWater = peaks.length === 0 ? null : Math.max(...peaks);
-	const workerHighWater = workers.length === 0 ? null : Math.max(...workers);
-	const worstRow =
-		itemHighWater === null
+	// THE LEAD. A minimum and not a maximum: the question is how little the
+	// kernel had left, and the item that owns it is the one a reader goes and
+	// looks at.
+	const floorLowBytes = floors.length === 0 ? null : Math.min(...floors);
+	const floorRow =
+		floorLowBytes === null
 			? null
-			: (ordered.find((row) => numberCell(row, 'llama_rss_peak_bytes') === itemHighWater) ?? null);
-	const worstItemId = worstRow === null ? null : (worstRow.item_id ?? '').trim() || null;
-	// The two maxima added is a reading only where one item held both. Anywhere
+			: (ordered.find((row) => numberCell(row, 'os_mem_available_min_bytes') === floorLowBytes) ??
+				null);
+	const floorItemId = floorRow === null ? null : (floorRow.item_id ?? '').trim() || null;
+
+	const serverEndHighWater = servers.length === 0 ? null : Math.max(...servers);
+	const workerHighWater = workers.length === 0 ? null : Math.max(...workers);
+	const serverRow =
+		serverEndHighWater === null
+			? null
+			: (ordered.find((row) => numberCell(row, 'llama_rss_bytes') === serverEndHighWater) ?? null);
+	// The two brackets added is a reading only where one item held both. Anywhere
 	// else it is arithmetic over two moments that never met.
 	const coPeak =
-		worstRow !== null &&
+		serverRow !== null &&
 		workerHighWater !== null &&
-		numberCell(worstRow, 'python_rss_bytes') === workerHighWater;
+		numberCell(serverRow, 'python_rss_bytes') === workerHighWater;
 
-	// Every byte track on the panel runs to this, ceiling included, so a reading
-	// past the ceiling draws past the line rather than stopping on it.
-	const scaleBytes = Math.max(denominator, ...peaks, ...workers, ...floors, ...ends);
+	// The kernel track runs to this, ceiling included, so a reading past the
+	// ceiling draws past the line rather than stopping on it.
+	const scaleBytes = Math.max(denominator, ...floors, ...ends);
+	// The brackets run to the larger of themselves and never to the machine's
+	// total, because a resident-set figure drawn against a total reads as a
+	// budget - the figure this project retracted on 2026-09-09.
+	const bracketScaleBytes = Math.max(0, serverEndHighWater ?? 0, workerHighWater ?? 0);
 
 	const loads = ordered
 		.map((row) => numberCell(row, 'load_1m'))
@@ -928,17 +885,13 @@ export function memoryBoard(
 	const items: ItemMemory[] = ordered.map((row) => {
 		const floorBytes = numberCell(row, 'os_mem_available_min_bytes');
 		const endBytes = numberCell(row, 'os_mem_available_bytes');
-		const peakBytes = numberCell(row, 'llama_rss_peak_bytes');
-		const workerBytes = numberCell(row, 'python_rss_bytes');
 		const load = numberCell(row, 'load_1m');
 		return {
 			itemId: (row.item_id ?? '').trim(),
 			shard: numberCell(row, 'shard') ?? 0,
 			startedAt: (row.item_started_at ?? '').trim(),
-			peakBytes,
-			workerBytes,
-			peakWidth: widthOf(peakBytes, scaleBytes),
-			workerWidth: widthOf(workerBytes, scaleBytes),
+			serverEndBytes: numberCell(row, 'llama_rss_bytes'),
+			workerBytes: numberCell(row, 'python_rss_bytes'),
 			headroom: {
 				floorBytes,
 				endBytes,
@@ -952,15 +905,15 @@ export function memoryBoard(
 			busy: rangeMark(numberCell(row, 'cpu_busy_min'), numberCell(row, 'cpu_busy_max'), 100),
 			// The one row, not every row that ties with it. Two items that reached
 			// the same byte are a tie the panel names once, because "the item that
-			// owns the maximum" has to be an item a reader can go and look at.
-			worst: row === worstRow
+			// took the machine lowest" has to be an item a reader can go and look at.
+			tightest: row === floorRow
 		};
 	});
 
 	const bothHighWater =
-		itemHighWater === null || workerHighWater === null ? null : itemHighWater + workerHighWater;
-	const share = (value: number | null) =>
-		value === null ? null : Math.round((value / denominator) * 100);
+		serverEndHighWater === null || workerHighWater === null
+			? null
+			: serverEndHighWater + workerHighWater;
 	// Items the shards said they had, which is a different number from the items
 	// that carried a reading. One count a shard, summed over the shards that
 	// recorded one - never the largest, which would report one shard's work as
@@ -972,19 +925,20 @@ export function memoryBoard(
 		const at = numberCell(row, 'shard');
 		if (count !== null && at !== null) planned.set(at, count);
 	}
+	const headroomFrom = items.filter((one) => !one.headroom.empty).length;
 
 	return {
 		runId,
 		date: run?.date ?? '',
 		items,
-		shard,
-		itemHighWater,
-		itemHighWaterPct: share(itemHighWater),
-		worstItemId,
+		floorLowBytes,
+		floorLowPct: floorLowBytes === null ? null : Math.round((floorLowBytes / denominator) * 100),
+		floorItemId,
+		serverEndHighWater,
 		workerHighWater,
 		bothHighWater,
-		bothHighWaterPct: share(bothHighWater),
 		coPeak,
+		bracketScaleBytes,
 		ceilingBytes: denominator,
 		scaleBytes,
 		measuredTotalBytes,
@@ -996,12 +950,15 @@ export function memoryBoard(
 		busySpan: rangeMark(busyLow, busyHighs.length === 0 ? null : Math.max(...busyHighs), 100),
 		from: items.length,
 		outOf: planned.size === 0 ? null : sum([...planned.values()]),
-		heldFrom: peaks.length,
-		headroomFrom: items.filter((one) => !one.headroom.empty).length,
+		heldFrom: servers.length,
+		headroomFrom,
 		loadFrom: loads.length,
+		kernelSkipped: items.length - headroomFrom,
+		kernelBeginsOn,
+		readFrom,
 		itemsEmpty: items.length === 0,
 		loadEmpty: loadHigh === null && busyLow === null && busyHighs.length === 0,
-		empty: items.length === 0 && shard.empty
+		empty: items.length === 0
 	};
 }
 

@@ -206,7 +206,7 @@
 		{#if id === 'shard-board'}
 			<ShardBoardPanel board={data.board} timeoutMinutes={data.shardTimeoutMinutes} />
 		{:else if id === 'memory-board'}
-			<MemoryBoardPanel board={data.memory} span={view.peakRssSpan} windowDays={view.days} />
+			<MemoryBoardPanel board={data.memory} />
 		{:else if id === 'reading-against-writing'}
 			<MachineSplitPanel split={data.split} />
 		{:else if id === 'prompt-cache'}

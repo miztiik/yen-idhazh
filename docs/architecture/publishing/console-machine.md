@@ -1,6 +1,6 @@
 # What the Hardware route draws
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 `/console/machine/` answers a question no other route can ask: what machine did
 the run actually get, and does the day's rate mean anything because of it.
 
@@ -25,7 +25,7 @@ ledgers add no telemetry column and no reader sees a cell of any of them.
 | What the machine was doing | What kinds of machine we keep being given | one group a day, one bar a machine kind | What kinds of machine we keep being handed, and whether that is changing. |
 | Where the time went | Which parts of the last run took longest | one row a shard | Was the day slow because of the work or because of the machine. |
 | Where the time went | Whether the slowest articles are getting slower | one plot a percentile, one mark a run | Whether the slow end of a run is moving, and how wide the gap is today. |
-| How close we are to the limits | How close an article came to using up the machine's memory | one mark an item, with a shard grain and a window grain | Which item took the machine nearest its limit, whether it gave the memory back, and how long the queue was. |
+| How close we are to the limits | How close an article came to using up the machine's memory | one mark an item of the newest run | How little the kernel had left at one article's worst moment, whether it gave the memory back, and how long the queue was. |
 | How close we are to the limits | How close the longest text came to the model's limit | one mark a run | Whether raising the truncation cap is even possible. |
 | What the model spends | How much text the model has to read again each time | one column a day | Whether a bigger cache would save wall clock. |
 | What the model spends | How much of a run is reading and how much is writing | one group a run, in either unit | Which half of the model call the run actually spent itself on. |
@@ -238,20 +238,50 @@ whole ladder of one run as a single shape. Reading it off the five plots means
 reading straight down one column instead, which the shared scale was already
 built for. Authority: Susan, 2026-09-20.
 
-## One measurement asked two questions is one panel, not two
+## The memory board leads with what the kernel had left
 
-**A per-shard maximum is the verdict reading, and it hides the item that owns
-it.** Until 2026-09-20 the run's high-water mark was drawn twice - once as
-per-shard bars and once again as a sentence in the panel about what the server
-did outside the model call - and the item's own high-water mark was drawn
-nowhere. Measured 2026-09-17 over `state/item-health/2026/09/17.csv`, 80 rows
-and 74 carrying host samples, **one item took the model server to 13.30 GiB, 83.1
-percent of the runner's 16 GiB**, and the shard that item ran on reported a
-figure that read as a normal run. So the two questions are one panel with a
-grain switch: item, shard, and the span across the open window. Authority:
-Susan, 2026-09-17. **What the reader loses: nothing.** The sentence that left is
-the window grain, where it is a track beside the run's own mark rather than a
-figure to hold in the head.
+**The lead is `os_mem_available_min_bytes`, the least the kernel had left at one
+item's worst moment.** That is the reading the panel's question is about -
+whether a bigger model fits - because a resident-set mark says what a process
+held and not what was still free. And it has to be taken per item: one item can
+take the machine to its floor while the shard it sits in reads as a normal
+shard, so a per-shard figure cannot show it. Authority: Susan, 2026-09-20.
+
+**The model server's own high-water mark is not drawn here, and the panel says
+so.** `llama_rss_peak_bytes` is `VmHWM`: the kernel prints the larger of the
+current resident set and a stored mark it refreshes only when the process gives
+memory back, so the figure covers the server's whole life rather than the item
+and reads lower than an earlier item's whenever a page is reclaimed
+([why it reads lower](../../reference/host-metrics.md#why-the-model-servers-memory-mark-reads-lower-than-it-did)).
+The column is still written to the ledger and nothing on the panel is built on
+it. A caveat under a mark does not stop the mark being read, so the mark is off
+the page rather than footnoted. **What the reader loses:** the only recorded
+process-level peak, and with it any idea of how near the server got to the
+ceiling BETWEEN two item boundaries. The end-of-item reading below is what is
+left, and it is a lower bound on that peak.
+
+**The shard grain and the window grain went with it.** Both drew only
+`llama_rss_peak_bytes`, so both would have been the dropped mark under another
+name, and the grain switch had nothing left to switch between.
+
+**The two end-of-item process readings are brackets labelled at most, never
+tracks.** `llama_rss_bytes` and `python_rss_bytes` run to the larger of
+themselves rather than to the machine's total, and they are drawn overlapping.
+A resident-set figure drawn against a total reads as a budget, and that is the
+exact figure this project retracted on 2026-09-09; a reader cannot add two
+brackets that visibly overlap, which is the whole point of the shape. The bar
+that does partition the machine is a separate panel. Authority: Susan,
+correcting herself 2026-09-20.
+
+**An item with no kernel reading is hatched and counted in a sentence, never
+drawn at zero and never filled in from the dropped mark.** Re-measured
+2026-09-21 over the committed `state/item-health/` tree, 378 of 13,877 rows
+carry the three kernel columns and the earliest is dated 2026-09-19 - exact
+counts over committed files, so no spread. **Most committed rows do not carry
+them, so this is the common case rather than the edge case**, and the count is
+the figure that ages rather than the property. The sentence names the date the
+reading begins and the earliest date the page read, so it is bounded by the span
+it drew and never claims anything about days nobody opened.
 
 **The item mark runs floor to recovery, not floor alone.**
 `os_mem_available_min_bytes` says how close the item took the machine to its
@@ -268,10 +298,10 @@ different facts and neither implies the other**, so both are drawn, beside the
 memory they explain. A panel of its own would have been an eighth writer on a
 file seven rows already serialise over.
 
-**The two maxima added are an upper bound unless one item held both.** The
-memory maximum and the worker maximum fall on different items on the committed
-ledger, so their sum - 91.3 percent of the ceiling - is arithmetic over two
-moments that never met. The panel says which of the two it is printing.
+**The two brackets added are an upper bound unless one item held both.** The
+server maximum and the worker maximum fall on different items on the committed
+ledger, so their sum is arithmetic over two moments that never met. The panel
+says which of the two it is printing.
 
 **`os_mem_total_bytes` is the denominator and the tell.** `/proc/meminfo` is not
 namespaced, so inside a container it reports the HOST rather than the job. A
@@ -288,43 +318,8 @@ call, so which phase owns the peak - reading the prompt or writing the answer -
 is unanswerable here, and the panel says so on the panel. A memory panel silent
 about what it did not separate invites a reader to assume it did.
 
-## Peak memory is a maximum, and never a sum
-
-**Shards are separate jobs on separate hosts.** Adding four of them reports a
-machine that never existed, and on this ledger the sum would read about 53 GB on
-a runner that has 16. So the run's figure is the LARGEST of its shards, the
-per-shard bars sit beside it on the shard grain of the panel above, and the
-oracle in
-[../../../frontend/tests/console-machine-data.spec.ts](../../../frontend/tests/console-machine-data.spec.ts)
-asserts the aggregate is the maximum and is not the total. Authority: Carmack,
-2026-08-31.
-
-**The 16 GB runner is the rule the marks are read against**, and every bar runs
-to the same track so their lengths compare. Measured 2026-09-01 over the 11
-committed runs that carry the cell, the high-water mark is **14,155,517,952 B -
-13.18 GiB, 82 percent of the runner** - on shard 1 of run
-`2026-08-31-33448379177`. **That is llama-server's resident-set high-water mark,
-and it is neither the job's total nor the memory the machine had free.** The
-python beside the server is not in it, and a resident-set mark counts mapped
-weight pages the kernel can evict. So the panel says which shard ran nearest the
-track, and nothing more. What decides whether a bigger model fits is free
-memory, and the run of 2026-09-09 is the first to measure it: `MemAvailable`
-bottomed out at 6.84 GiB
-([MemAvailable went up by 1.21 GiB](../../reference/benchmarks/a-run-at-the-doubled-window-and-cap.md#memavailable-went-up-by-121-gib-and-the-runner-is-why)).
-
-**No tint and no band.** Nobody has agreed how near 16 GB is too near, and a
-colour would publish a threshold that does not exist. Authority: Susan.
-
-**An unmeasured shard is left out and counted, never drawn as zero.**
-`peak_rss_bytes` landed on 2026-08-30, so a shard older than that reports
-nothing: measured 2026-09-01, 44 of the 76 committed rows carry it. The panel
-draws the shards that reported and names how many of the run's shards those
-were.
-
-**The polarity is declared at the measure, not at the paint site.**
-`MEMORY_POLARITY` sits beside `RUNNER_MEMORY_BYTES` in
-`frontend/src/lib/charts/machine.ts`, so a bar and a delta drawn from the same
-figure on two panels cannot disagree about which direction is good.
+**No tint and no band.** Nobody has agreed how little headroom is too little,
+and a colour would publish a threshold that does not exist. Authority: Susan.
 
 ## Three clocks address a slow shard
 

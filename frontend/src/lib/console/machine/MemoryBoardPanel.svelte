@@ -7,25 +7,16 @@
 	import Panel from '$lib/components/Panel.svelte';
 	import MemoryBoard from '$lib/components/MemoryBoard.svelte';
 	import type { MemoryBoardView } from '$lib/charts/machine';
-	import type { FigureSpan } from '$lib/charts/span-track';
 
-	let {
-		board,
-		span,
-		windowDays
-	}: {
-		board: MemoryBoardView;
-		span: FigureSpan;
-		windowDays: number;
-	} = $props();
+	let { board }: { board: MemoryBoardView } = $props();
 </script>
 
 <Panel
 	heading="h3"
 	id="memory-board"
 	title="How close an article came to using up the machine's memory"
-	note="One article can take the machine to its ceiling while the part of the run it sits in reads as normal, which is what decides whether a bigger model fits - one mark an item of the newest run."
+	note="One article can take the machine to its floor while the part of the run it sits in reads as normal, and how little the kernel had left is what decides whether a bigger model fits - one mark an item of the newest run."
 	wide
 >
-	<MemoryBoard {board} {span} {windowDays} />
+	<MemoryBoard {board} />
 </Panel>
