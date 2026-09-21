@@ -91,8 +91,8 @@ Eleven rows, six pull requests, four waves.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The runner stops paying for a graphics card it does not have | P1 | - | **M** | PENDING | - | - | - |
 | 2 | The plan job closes the clock it opens | P1 | 1 | **M** | PENDING | - | - | - |
-| 3 | The capability probe goes | P2 | - | A | PENDING | - | - | - |
-| 4 | The image benchmark goes | P2 | 3 | A | PENDING | - | - | - |
+| 3 | The capability probe goes | P2 | - | A | DONE | p42p2 | - | P2 |
+| 4 | The image benchmark goes | P2 | 3 | A | DONE | p42p2 | - | P2 |
 | 5 | Five checks move into the thing they check | P3 | 2, 4 | B | PENDING | - | - | - |
 | 6 | Fourteen assertions go, and the lists become computed | P3 | 5 | B | PENDING | - | - | - |
 | 7 | The printer learns the whole file set, and the traversal closes | P4 | 6, plan 41 | C | PENDING | - | - | - |
