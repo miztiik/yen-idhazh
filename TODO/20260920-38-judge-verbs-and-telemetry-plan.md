@@ -175,7 +175,7 @@ After those three land, three groups open at once and the file lists must be re-
 | 12 | The four verbs name their work | 9, 24 | J | DONE | - | 1014 | worker |
 | 13 | `leg` and `fold` leave the vocabulary | 12 | J | DONE | - | 1016 | worker |
 | 11b | The content-similarity judge reads its own margin | 11a | K | DONE | - | 1007 | worker |
-| 14 | The judge fills the stamp | 8, 11b, 13 | K | PENDING | - | - | - |
+| 14 | The judge fills the stamp | 8, 11b, 13 | K | DONE | - | 1021 | worker |
 | 15b | The content-similarity judge fills its metrics and registers as a tenant | 6, 14, 15a | L | PENDING | - | - | - |
 | 16 | The model block becomes one composite action | - | M | DONE | - | 1000 | worker |
 | 24 | The council runs verbs of its own over a tenant list | 2, 15a, 16 | N | DONE | - | 1011 | worker |

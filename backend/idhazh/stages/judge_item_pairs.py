@@ -28,9 +28,9 @@ from idhazh import assemble, config
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.council_shard_outcome import ShardOutcome
 from idhazh.contracts.digest_day import DigestItem
-from idhazh.contracts.story_similarity_pair import StorySimilarityPair
+from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
 from idhazh.llm.server import DEFAULT_ENDPOINT, completion_url, post, token_pieces
-from idhazh.similarity import judge, prompt
+from idhazh.similarity import judge, prompt, stamps
 from idhazh.stages.assemble import _earlier_days
 from idhazh.stages.common import LOG, _load_day
 
@@ -88,6 +88,7 @@ def stage_judge_item_pairs(
     """
     entry = judge.entry_of(settings)
     timeout = entry.inference.request_timeout_minutes * 60.0
+    stamp = stamps.judge_inputs(settings)
     flush_every = settings.app.assemble.same_story.judging_knobs().flush_every_pairs
     drawn = _rows_this_shard_owns(run_dir / DRAW_FILENAME, shard=shard, shards=shards)
     # Asked once a shard, before any pair is judged. A verdict every returned token
@@ -126,7 +127,7 @@ def stage_judge_item_pairs(
             unreadable += 1
             continue
         verdicts = judge.judge_pair(left, right, client=client, settings=settings)
-        judged.append(_with_the_verdict(row, verdicts, judge_model=entry.id))
+        judged.append(_with_the_verdict(row, verdicts, stamp=stamp))
         if len(judged) % flush_every == 0:
             assemble.write_atomic(path, _as_csv(judged))
 
@@ -137,6 +138,22 @@ def stage_judge_item_pairs(
             shard,
             date,
             unreadable,
+        )
+
+    # A refused pair is judged, written and counted here, and left out of the
+    # record later for having no agreed verdict. It is warned about because the
+    # shard is the only place that sees them arriving one after another: a
+    # decoder that came loose refuses every pair after it, and that is worth
+    # reading in the run's log rather than only in the file afterwards.
+    refused = sum(1 for row in judged if row.grammar_applied is False)
+    if refused:
+        LOG.warning(
+            "judge-item-pairs shard=%s date=%s recorded %s of %s judged pair(s) whose "
+            "decode did not open inside the grammar",
+            shard,
+            date,
+            refused,
+            len(judged),
         )
 
     # Unconditional, and after the loop as well as inside it. It is what leaves a
@@ -215,27 +232,51 @@ def _items_by_url_key(
 
 
 def _with_the_verdict(
-    drawn: StorySimilarityPair, verdicts: judge.Judged, *, judge_model: str
+    drawn: StorySimilarityPair, verdicts: judge.Judged, *, stamp: stamps.JudgeStamp
 ) -> StorySimilarityPair:
-    """The drawn row with the eight judging columns filled in.
+    """The drawn row with the judging columns filled in, config stamp and all.
 
     Rebuilt through the contract rather than copied, so the rule that a verdict
     arrives with the judge that produced it is applied to what this shard wrote
     rather than to what the draw already carried.
+
+    **Every value that describes the ask comes off one stamp.** The stamp reads
+    the same entry the shard decodes with, so a row cannot name one model and be
+    judged under another, and the temperature written here is the number that
+    went out rather than the number the config holds.
+
+    **A refused reading writes an empty verdict rather than raising.** The row
+    still carries its clock, its window and `grammar_applied` false, and that is
+    the whole point of recording the refusal: a shard that raised here left the
+    pair absent, and absent already means nothing drew it.
     """
     return StorySimilarityPair.model_validate(
         drawn.model_dump(mode="json")
         | {
-            "verdict": verdicts.verdict.value,
-            "verdict_swapped": verdicts.verdict_swapped.value,
+            "verdict": _word(verdicts.verdict),
+            "verdict_swapped": _word(verdicts.verdict_swapped),
             "usable": verdicts.usable,
             "first_token_margin": verdicts.first_token_margin,
-            "judge_model": judge_model,
-            "prompt_digest": prompt.prompt_digest(),
-            "grammar_digest": prompt.grammar_digest(),
+            "judge_model": stamp.judge_model,
+            "prompt_digest": stamp.prompt_digest,
+            "grammar_digest": stamp.grammar_digest,
             "decode_seconds": verdicts.decode_seconds,
+            "judge_temperature": stamp.judge_temperature,
+            "decode_digest": stamp.decode_digest,
+            "grammar_applied": verdicts.grammar_applied,
+            "first_token_probabilities": verdicts.first_token_window or None,
+            "thinking_spans": verdicts.thinking_spans,
         }
     )
+
+
+def _word(verdict: SameStoryVerdict | None) -> str | None:
+    """The verdict as the column holds it, and empty where there is none.
+
+    A reading the grammar did not hold has no verdict, and reaching for `.value`
+    on it would raise in the one place that exists to write the refusal down.
+    """
+    return None if verdict is None else verdict.value
 
 
 def _as_csv(rows: list[StorySimilarityPair]) -> str:

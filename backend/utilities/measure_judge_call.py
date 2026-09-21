@@ -393,7 +393,10 @@ def one_call(
         pair_key=pair.pair_key,
         order=order,
         wall_ms=read.decode_seconds * 1000.0,
-        verdict=read.verdict.value,
+        # Empty where the grammar did not hold. `read_once` records that rather
+        # than raising, so this instrument keeps the timings of a call it was
+        # asked to measure instead of losing a whole block to one bad reply.
+        verdict=read.verdict.value if read.verdict is not None else "",
         first_token_margin=read.first_token_margin,
     )
 
