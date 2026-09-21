@@ -98,7 +98,7 @@ Eleven rows, six pull requests, four waves.
 | 7 | The printer learns the whole file set, and the traversal closes | P4 | 6, plan 41 | C | PENDING | - | - | - |
 | 8 | The workflows read the model file instead of relaying it | P4 | 7 | C | PENDING | - | - | - |
 | 9 | The cache names the set, and the binary gets its own key | P4 | 8 | C | PENDING | - | - | - |
-| 10 | The benchmark arms learn the server died, and the repeat count is config | P5 | 9 | D | PENDING | - | - | - |
+| 10 | The benchmark arms learn the server died, and the repeat count is config | P5 | 9 | D | DONE | p42p5 | - | P5 |
 | 11 | The harness keeps only what more than one module reads | P6 | 9 | D | PENDING | - | - | - |
 
 ### The six pull requests and the files each owns
