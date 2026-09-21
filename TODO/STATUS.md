@@ -38,7 +38,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 | [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 20 | 2 | 0 |
-| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 20 | 9 | 3 |
+| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 21 | 8 | 3 |
 | [20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md) | 20 | 0 | 20 | 11 |
 | [20260921-40-bonsai-probe-plan.md](20260921-40-bonsai-probe-plan.md) | 7 | 0 | 7 | 4 |
 
@@ -83,7 +83,7 @@ section 3 is where it is answered.
 | #5 | 35 | A / search | Live-day search - instant + semantic (+ frontend `key_points` owner, C2) | - |
 | #7 | 35 | A / eval-core | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - |
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
-| #13 | 38 | J | `leg` and `fold` leave the vocabulary | 12 |
+| #14 | 38 | K | The judge fills the stamp | 8, 11b, 13 |
 | #19 | 38 | R | Where the content-similarity judge's merge line stands against its holdout | 7, 18 |
 | #21a | 38 | S | The council asks every tenant what it is behind on | 15a, 17, 24 |
 | #13 | 39 | - | The entry path is one action taking a model file | - |
@@ -102,7 +102,7 @@ section 3 is where it is answered.
 | #5 | 40 | A | The eight telemetry steps move across | - |
 | #6 | 40 | A | A trial state root, and what the run keeps | - |
 
-## Waiting on another row - 92
+## Waiting on another row - 91
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -180,7 +180,6 @@ section 3 is where it is answered.
 | #13 | 36 | W4 / plan34-gaps | Retro: plan-34 latent gaps + the shared space-trap guard | 34 landed names no row; 6 is PENDING |
 | #17 | 37 | D | Every published column names its reader | - |
 | #18 | 37 | E | Docs, the living-page corrections, and the orphan sweep | all names no row |
-| #14 | 38 | K | The judge fills the stamp | 13 is PENDING |
 | #15b | 38 | L | The content-similarity judge fills its metrics and registers as a tenant | 14 is PENDING |
 | #21b | 38 | T | The content-similarity judge answers which nights it is behind on | 21a is PENDING |
 | #22 | 38 | U | The guard that stops a shard committing is renamed and re-reasoned | 21a is PENDING |
