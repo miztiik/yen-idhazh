@@ -108,7 +108,7 @@ That sentence is worth nothing unless it is checkable, so it is five conditions 
 | 9 | The council's clocks and its fan-out width move to a council block | - | B | DONE | - | 993 | worker |
 | 1a | The council bounds its shard and ships whatever it wrote | 9, 15a | C | DONE | - | 994 | worker |
 | 2 | The council knows which run it is | 1a | D | PENDING | - | - | - |
-| 3 | The separation and the dictum, written where the next agent reads it | - | E | DONE | p38e | - | worker |
+| 3 | The separation and the dictum, written where the next agent reads it | - | E | DONE | - | 996 | worker |
 | 4 | The judge-call stamp, declared once and naming no judge | - | F | DONE | - | 992 | worker |
 | 5 | The council's own shard-outcome record | 4 | F | DONE | - | 992 | worker |
 | 6 | The content-similarity judge's own metrics | 5 | G | DONE | - | 995 | worker |
