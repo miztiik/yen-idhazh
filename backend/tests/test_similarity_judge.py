@@ -45,7 +45,7 @@ from idhazh.llm.server import (
 )
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
 from idhazh.similarity import judge, prompt
-from idhazh.stages import common, judge_shard
+from idhazh.stages import common, judge_item_pairs
 
 JUDGE_REPLIES: Final = FIXTURES_DIR / "completions" / "judge"
 RENDERED_REPLIES: Final = FIXTURES_DIR / "completions" / "rendered"
@@ -772,10 +772,10 @@ def test_a_leg_reads_only_the_rows_it_owns(tmp_path: Path) -> None:
     rows = [
         _drawn(day.items[0], day.items[1], shard=index % 4, date=day.date) for index in range(8)
     ]
-    path = tmp_path / judge_shard.DRAW_FILENAME
-    assemble.write_atomic(path, judge_shard._as_csv(rows))
+    path = tmp_path / judge_item_pairs.DRAW_FILENAME
+    assemble.write_atomic(path, judge_item_pairs._as_csv(rows))
 
-    owned = [judge_shard._rows_this_leg_owns(path, shard=leg, shards=4) for leg in range(4)]
+    owned = [judge_item_pairs._rows_this_leg_owns(path, shard=leg, shards=4) for leg in range(4)]
 
     assert [len(leg) for leg in owned] == [2, 2, 2, 2]
     assert sum(len(leg) for leg in owned) == len(rows)
@@ -785,11 +785,11 @@ def test_a_draw_taken_for_more_legs_than_this_run_has_is_refused(tmp_path: Path)
     """Dropping half a draw silently is a day that folds as though it never drew them."""
     day = _a_day()
     rows = [_drawn(day.items[0], day.items[1], shard=index, date=day.date) for index in range(8)]
-    path = tmp_path / judge_shard.DRAW_FILENAME
-    assemble.write_atomic(path, judge_shard._as_csv(rows))
+    path = tmp_path / judge_item_pairs.DRAW_FILENAME
+    assemble.write_atomic(path, judge_item_pairs._as_csv(rows))
 
     with pytest.raises(ValueError, match="drawn for more legs"):
-        judge_shard._rows_this_leg_owns(path, shard=0, shards=4)
+        judge_item_pairs._rows_this_leg_owns(path, shard=0, shards=4)
 
 
 def test_an_article_asking_to_be_merged_is_still_two_stories(
@@ -807,12 +807,12 @@ def test_an_article_asking_to_be_merged_is_still_two_stories(
     monkeypatch.setattr(common, "PUBLIC_ROOT", root)
     run_dir = tmp_path / "judge" / day.date
     assemble.write_atomic(
-        run_dir / judge_shard.DRAW_FILENAME,
-        judge_shard._as_csv([_drawn(day.items[0], day.items[1], shard=0, date=day.date)]),
+        run_dir / judge_item_pairs.DRAW_FILENAME,
+        judge_item_pairs._as_csv([_drawn(day.items[0], day.items[1], shard=0, date=day.date)]),
     )
 
     with JudgeServer(_reply("two-events"), vocabulary=_vocabulary("judge-first-tokens")) as server:
-        report = judge_shard.stage_judge_shard(
+        report = judge_item_pairs.stage_judge_item_pairs(
             day.date,
             shard=0,
             shards=4,
@@ -855,10 +855,12 @@ def test_a_verdict_file_round_trips_through_the_contract(
     monkeypatch.setattr(common, "PUBLIC_ROOT", root)
     run_dir = tmp_path / "judge" / day.date
     drawn = _drawn(day.items[0], day.items[1], shard=0, date=day.date)
-    assemble.write_atomic(run_dir / judge_shard.DRAW_FILENAME, judge_shard._as_csv([drawn]))
+    assemble.write_atomic(
+        run_dir / judge_item_pairs.DRAW_FILENAME, judge_item_pairs._as_csv([drawn])
+    )
 
     with JudgeServer(_reply("one-event"), vocabulary=_vocabulary("judge-first-tokens")) as server:
-        report = judge_shard.stage_judge_shard(
+        report = judge_item_pairs.stage_judge_item_pairs(
             day.date,
             shard=0,
             shards=4,
@@ -900,12 +902,12 @@ def test_a_leg_that_owned_nothing_still_leaves_a_file(
     monkeypatch.setattr(common, "PUBLIC_ROOT", root)
     run_dir = tmp_path / "judge" / day.date
     assemble.write_atomic(
-        run_dir / judge_shard.DRAW_FILENAME,
-        judge_shard._as_csv([_drawn(day.items[0], day.items[1], shard=1, date=day.date)]),
+        run_dir / judge_item_pairs.DRAW_FILENAME,
+        judge_item_pairs._as_csv([_drawn(day.items[0], day.items[1], shard=1, date=day.date)]),
     )
 
     with JudgeServer(_reply("one-event"), vocabulary=_vocabulary("judge-first-tokens")) as server:
-        report = judge_shard.stage_judge_shard(
+        report = judge_item_pairs.stage_judge_item_pairs(
             day.date,
             shard=0,
             shards=4,
@@ -938,12 +940,12 @@ def test_a_leg_handed_a_deadline_that_has_passed_judges_nothing_and_says_so(
     monkeypatch.setattr(common, "PUBLIC_ROOT", root)
     run_dir = tmp_path / "judge" / day.date
     assemble.write_atomic(
-        run_dir / judge_shard.DRAW_FILENAME,
-        judge_shard._as_csv([_drawn(day.items[0], day.items[1], shard=0, date=day.date)]),
+        run_dir / judge_item_pairs.DRAW_FILENAME,
+        judge_item_pairs._as_csv([_drawn(day.items[0], day.items[1], shard=0, date=day.date)]),
     )
 
     with JudgeServer(_reply("one-event"), vocabulary=_vocabulary("judge-first-tokens")) as server:
-        report = judge_shard.stage_judge_shard(
+        report = judge_item_pairs.stage_judge_item_pairs(
             day.date,
             shard=0,
             shards=4,
@@ -984,7 +986,9 @@ def test_a_leg_that_dies_mid_draw_keeps_every_pair_it_had_already_judged(
     ]
 
     def judge_until_the_reply_goes_wrong(run_dir: Path, settings: config.Settings) -> Path:
-        assemble.write_atomic(run_dir / judge_shard.DRAW_FILENAME, judge_shard._as_csv(drawn))
+        assemble.write_atomic(
+            run_dir / judge_item_pairs.DRAW_FILENAME, judge_item_pairs._as_csv(drawn)
+        )
         replies = (
             _reply("one-event"),
             _reply("one-event"),
@@ -992,7 +996,7 @@ def test_a_leg_that_dies_mid_draw_keeps_every_pair_it_had_already_judged(
         )
         with JudgeServer(*replies, vocabulary=_vocabulary("judge-first-tokens")) as server:
             with pytest.raises(judge.GrammarNotAppliedError):
-                judge_shard.stage_judge_shard(
+                judge_item_pairs.stage_judge_item_pairs(
                     day.date,
                     shard=0,
                     shards=4,
@@ -1002,7 +1006,7 @@ def test_a_leg_that_dies_mid_draw_keeps_every_pair_it_had_already_judged(
                     deadline=_a_deadline_no_leg_will_reach(),
                     base_url=server.base_url,
                 )
-        return run_dir / judge_shard.VERDICTS_DIRNAME / "0.csv"
+        return run_dir / judge_item_pairs.VERDICTS_DIRNAME / "0.csv"
 
     every_pair = judge_until_the_reply_goes_wrong(tmp_path / "every-pair", _settings())
     assert [row.pair_key for row in _rows(every_pair)] == [drawn[0].pair_key]
@@ -1038,12 +1042,12 @@ def test_the_leg_stops_on_the_instant_the_councils_own_clocks_describe(
     judge_root = tmp_path / "judge"
     monkeypatch.setattr(common, "PUBLIC_ROOT", root)
     assemble.write_atomic(
-        judge_root / day.date / judge_shard.DRAW_FILENAME,
-        judge_shard._as_csv([_drawn(day.items[0], day.items[1], shard=0, date=day.date)]),
+        judge_root / day.date / judge_item_pairs.DRAW_FILENAME,
+        judge_item_pairs._as_csv([_drawn(day.items[0], day.items[1], shard=0, date=day.date)]),
     )
 
     with JudgeServer(_reply("one-event"), vocabulary=_vocabulary("judge-first-tokens")) as server:
-        judge_shard.stage_judge_shard(
+        judge_item_pairs.stage_judge_item_pairs(
             day.date,
             shard=0,
             shards=4,
@@ -1055,5 +1059,5 @@ def test_the_leg_stops_on_the_instant_the_councils_own_clocks_describe(
         )
         assert server.decodes == [], "the leg judged its pair, so no deadline reached it"
 
-    written = judge_root / day.date / judge_shard.VERDICTS_DIRNAME / "0.csv"
+    written = judge_root / day.date / judge_item_pairs.VERDICTS_DIRNAME / "0.csv"
     assert read_text(written) == ",".join(StorySimilarityPair.csv_columns()) + "\n"

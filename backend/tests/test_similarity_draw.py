@@ -54,7 +54,7 @@ from idhazh.similarity.draw import (
 )
 from idhazh.similarity.stamps import ScorerStamp, scorer_inputs
 from idhazh.stages import common
-from idhazh.stages.judge_draw import DRAW_FILENAME, stage_judge_draw
+from idhazh.stages.pick_item_pairs import DRAW_FILENAME, stage_pick_item_pairs
 
 #: The date the committed run-manifest fixture is addressed by. The manifest is
 #: what makes the day a real published one; the run a drawn row names is the
@@ -380,7 +380,7 @@ def test_the_draw_round_trips_through_the_contract(
     monkeypatch.setattr(common, "PUBLIC_ROOT", digest_root)
     out_dir = tmp_path / "judge"
 
-    drawn = stage_judge_draw(
+    drawn = stage_pick_item_pairs(
         DATE,
         run_id=COUNCIL_RUN,
         settings=config.load(CONFIG_DIR),
@@ -435,7 +435,7 @@ def test_the_draw_samples_the_config_band_and_never_the_line_a_fit_applied(
             update={"same_story": same_story.model_copy(update={"floor_min": floor})}
         )
         driven = replace(settings, app=settings.app.model_copy(update={"assemble": assemble_block}))
-        return stage_judge_draw(
+        return stage_pick_item_pairs(
             DATE,
             run_id=COUNCIL_RUN,
             settings=driven,
@@ -462,7 +462,7 @@ def test_a_day_that_is_not_on_disk_writes_an_empty_draw(tmp_path: Path) -> None:
     """
     out_dir = tmp_path / "judge"
 
-    drawn = stage_judge_draw(
+    drawn = stage_pick_item_pairs(
         DATE,
         run_id=COUNCIL_RUN,
         settings=config.load(CONFIG_DIR),

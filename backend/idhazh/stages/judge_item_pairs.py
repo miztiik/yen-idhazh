@@ -1,7 +1,8 @@
-"""The judging leg: one draw and one shard number in, one verdict file out.
+"""Are these item pairs the same story? One shard's answers, one verdict file out.
 
-One stage, one module. `idhazh.cli` chooses which stage runs and holds no stage
-body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
+One stage, one module. The router does not name it: the council reaches it
+through the tenant that owns this judge (CLAUDE.md section 1a, "A router is the
+sharpest case").
 
 This leg opens no ledger, commits nothing, and decides nothing about the line. It
 reads the draw the scoring stage wrote, judges the rows this shard owns, and
@@ -58,7 +59,7 @@ class ShardReport:
     outcome: ShardOutcome
 
 
-def stage_judge_shard(
+def stage_judge_item_pairs(
     date: str,
     *,
     shard: int,
@@ -111,8 +112,8 @@ def stage_judge_shard(
         if time.monotonic() >= deadline:
             outcome = ShardOutcome.STOPPED_ON_DEADLINE
             LOG.warning(
-                "judge shard=%s date=%s stopped on its deadline with %s of %s pair(s) "
-                "judged",
+                "judge-item-pairs shard=%s date=%s stopped on its deadline with %s of %s "
+                "pair(s) judged",
                 shard,
                 date,
                 len(judged),
@@ -131,8 +132,8 @@ def stage_judge_shard(
 
     if unreadable:
         LOG.warning(
-            "judge shard=%s date=%s skipped %s drawn pair(s) whose items the window no "
-            "longer reaches",
+            "judge-item-pairs shard=%s date=%s skipped %s drawn pair(s) whose items the "
+            "window no longer reaches",
             shard,
             date,
             unreadable,
@@ -152,7 +153,7 @@ def stage_judge_shard(
         outcome=outcome,
     )
     LOG.info(
-        "judge shard=%s date=%s owned=%s judged=%s usable=%s outcome=%s",
+        "judge-item-pairs shard=%s date=%s owned=%s judged=%s usable=%s outcome=%s",
         report.shard,
         report.date,
         report.owned,

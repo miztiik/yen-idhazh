@@ -1,7 +1,8 @@
-"""The day's verdict files in, the day's committed rows and the record out.
+"""Count one day's verdict files into the record, and commit the rows they carry.
 
-One stage, one module. `idhazh.cli` chooses which stage runs and holds no stage
-body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
+One stage, one module. The router does not name it: the council reaches it
+through the tenant that owns this judge (CLAUDE.md section 1a, "A router is the
+sharpest case").
 
 It calls no model and opens no socket. The counting arithmetic is in
 `idhazh.similarity.fold`; this module reads the legs' files, appends the day's
@@ -22,7 +23,7 @@ from idhazh.similarity import fold
 from idhazh.similarity.stamps import judge_inputs, scorer_inputs
 from idhazh.stages import common
 from idhazh.stages.common import LOG
-from idhazh.stages.judge_shard import VERDICTS_DIRNAME
+from idhazh.stages.judge_item_pairs import VERDICTS_DIRNAME
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,7 +51,7 @@ def _verdict_rows(path: Path) -> list[StorySimilarityPair]:
     return [StorySimilarityPair.from_csv_row(raw) for raw in reader]
 
 
-def stage_judge_fold(
+def stage_count_verdicts(
     date: str,
     *,
     run_id: str,
@@ -101,7 +102,7 @@ def stage_judge_fold(
         )
         archived = stem
         record = fold.empty_record(knobs, scorer=scorer, judge=judge)
-        LOG.info("judge fold date=%s archived=%s was=%s now=%s", date, stem, *moved)
+        LOG.info("count-verdicts date=%s archived=%s was=%s now=%s", date, stem, *moved)
 
     if len(present) < shards:
         report = FoldReport(
@@ -128,7 +129,7 @@ def stage_judge_fold(
         )
 
     LOG.info(
-        "judge fold date=%s run=%s legs=%s/%s appended=%s folded=%s held=%s",
+        "count-verdicts date=%s run=%s legs=%s/%s appended=%s folded=%s held=%s",
         report.date,
         report.run_id,
         report.legs_present,
