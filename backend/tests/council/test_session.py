@@ -420,6 +420,12 @@ def test_no_judge_module_is_in_the_import_closure_of_a_council_verb() -> None:
     the one registry of CSV rows and which the tenancy protocol reads its row
     types from. That edge is the ledger's and predates this check; what is held
     here is that no judge's CODE is reachable from a council verb.
+
+    **This is the RUN-TIME half and it is kept for one reason**: a module pulled
+    in by name rather than by an import statement, which no syntax tree resolves.
+    `test_council_runs_without_a_judge.py` is the static half - it reads the
+    import statements, so it catches a coupling on the commit that adds it, and
+    it is the one that holds the three contracts above to exactly three.
     """
     found = _judge_modules_reached(
         "idhazh.council.session", ("idhazh.similarity", *JUDGE_STAGE_MODULES)

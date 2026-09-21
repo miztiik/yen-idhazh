@@ -37,17 +37,17 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 4 |
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
-| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 23 | 6 | 4 |
+| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 25 | 4 | 2 |
 | [20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md) | 21 | 0 | 15 | 8 |
 | [20260921-40-bonsai-probe-plan.md](20260921-40-bonsai-probe-plan.md) | 7 | 0 | 7 | 4 |
-| [20260921-41-lane-a-model-file-plan.md](20260921-41-lane-a-model-file-plan.md) | 9 | 0 | 9 | 1 |
+| [20260921-41-lane-a-model-file-plan.md](20260921-41-lane-a-model-file-plan.md) | 7 | 0 | 7 | 1 |
 
 ## In flight - 0
 
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 47
+## Ready now - 45
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -87,8 +87,6 @@ section 3 is where it is answered.
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
 | #15b | 38 | L | The content-similarity judge fills its metrics and registers as a tenant | 6, 14, 15a |
 | #19 | 38 | R | Where the content-similarity judge's merge line stands against its holdout | 7, 18 |
-| #22 | 38 | U | The guard that stops a shard committing is renamed and re-reasoned | 16, 21a |
-| #23 | 38 | U | The council runs green with no judge in the repository | 15a, 17, 21a, 24, 25 |
 | #13 | 39 | - | The entry path is one action taking a model file | - |
 | #4 | 39 | - | The capability probe goes | - |
 | #14 | 39 | - | The image benchmark goes, and two heavy wheels with it | - |
@@ -103,7 +101,7 @@ section 3 is where it is answered.
 | #6 | 40 | A | A trial state root, and what the run keeps | - |
 | #1 | 41 | A | The server-log reader goes | - |
 
-## Waiting on another row - 92
+## Waiting on another row - 90
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -180,7 +178,7 @@ section 3 is where it is answered.
 | #12 | 36 | W3 / rejects-store | The rejects store + corpus fence (`state/rejects/`, 30-day prune) | 3 is PENDING; 7 is PENDING |
 | #13 | 36 | W4 / plan34-gaps | Retro: plan-34 latent gaps + the shared space-trap guard | 34 landed names no row; 6 is PENDING |
 | #21b | 38 | T | The content-similarity judge answers which nights it is behind on | 15b is PENDING |
-| #20 | 38 | V | The plan pointer | 19 is PENDING; 21b is PENDING; 23 is PENDING |
+| #20 | 38 | V | The plan pointer | 19 is PENDING; 21b is PENDING |
 | #5 | 39 | - | The installer stops naming a repository | 13 is PENDING; plan 41 PR A1 names no row |
 | #3 | 39 | - | The draft head goes | 13 is PENDING |
 | #9 | 39 | - | The benchmark workflow's closed-world tests go | 3 is PENDING; 4 is PENDING |
@@ -191,14 +189,12 @@ section 3 is where it is answered.
 | #3 | 40 | B | One plan job, so a fan-out agrees what it is reading | 2 is PENDING |
 | #4 | 40 | C | The fan-out | 3 is PENDING |
 | #7 | 40 | D | One dispatch, and the readings written up | 1 is PENDING; 4 is PENDING; 5 is PENDING; 6 is PENDING |
-| #2 | 41 | A | The decode stamp goes | 1 is PENDING |
-| #3 | 41 | A | The server address is a value the job sets | 2 is PENDING |
-| #4 | 41 | A | The draft head goes from the model shape | 3 is PENDING |
-| #5 | 41 | A | The model file is a plain mapping | 4 is PENDING |
-| #6 | 41 | A | Both decode caps go | 5 is PENDING |
-| #7 | 41 | A | The engineering contract catches up | 5 is PENDING |
-| #8 | 41 | B | The model's own template writes the markers | 7 is PENDING |
-| #9 | 41 | B | The startup probe keeps the render check | 8 is PENDING |
+| #2 | 41 | A | The decode stamp and the dead fingerprint go | 1 is PENDING |
+| #3 | 41 | A | The draft head goes from the model shape | 2 is PENDING |
+| #4 | 41 | A | Both decode caps go | 3 is PENDING |
+| #5 | 41 | A | The model file carries llama-server's own flags | 4 is PENDING |
+| #6 | 41 | A | The engineering contract catches up | 5 is PENDING |
+| #7 | 41 | B | The markers are derived at server start | 6 is PENDING |
 
 ## Finished - 18 plans with no live row
 

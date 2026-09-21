@@ -28,6 +28,7 @@ from ._harness import (
     SUBSTITUTED_DATE,
     _action_call,
     _declared_steps,
+    _effective_shell,
     _job,
     _load_workflows,
     _local_action_inputs,
@@ -493,18 +494,24 @@ def test_reading_an_artifact_is_a_scope_the_permissions_block_grants() -> None:
         assert settings["github-token"] == "${{ secrets.GITHUB_TOKEN }}"
 
 
-def test_no_unit_commits() -> None:
-    """Many units pushing into one union-merged file buys many races and many rebases.
+def test_no_shard_commits() -> None:
+    """A row a shard commits during the run is invisible to the job that counts them.
 
-    One settle is one push, so two processes never write one path: no merge
-    driver to trust, no union stacking to census afterwards, and no key to
-    settle across units.
+    Every checkout in this file names no ref, so each job is pinned to the commit
+    the run was triggered at. The collecting job decides whether every shard
+    reported by counting what it downloaded, and it is reading a tree from 22:00
+    - a row pushed at 22:40 is not in it. The artifact is the only way across,
+    and no config edit can retire that.
+
+    Read through the shell CLOSURE rather than off the `run:` body. `_steps`
+    resolves the composite action the model block moved into, and
+    `_effective_shell` follows the shipped scripts that action calls, so a commit
+    issued one delegation away is still seen.
     """
-    bodies = [
-        _script(step, "a judge step") for step in _steps(_judges(), "judge") if "run" in step
-    ]
+    shells = [_effective_shell(step) for step in _steps(_judges(), "judge")]
 
-    assert not [body for body in bodies if "commit-and-push.sh" in body]
+    assert [shell for shell in shells if shell], "the judging job runs no shell to search"
+    assert not [shell for shell in shells if Path(COMMIT_SCRIPT).name in shell]
 
 
 def test_the_night_makes_one_commit_call_over_the_paths_its_tenants_named() -> None:
