@@ -45,6 +45,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added judged_dates. An older record reads its counted dates as its memory.",
+      "version": "2026-09-21T20:00",
+      "why": "A reset archives the counts, and which nights were read is not a count."
+    },
+    {
       "change": "`folded_dates` is now `counted_dates`. The old key still reads.",
       "version": "2026-09-21T12:00",
       "why": "Borrowed vocabulary for the count this field already holds."
@@ -182,6 +187,16 @@
       "description": "Whether a reasoning span ran in front of every verdict counted here. A column of its own because `decode_digest` cannot see it: the only posted key a thinking envelope moves is the prompt, and the prompt is excluded. Without it a record counted cold and a record counted after reasoning are one population.",
       "title": "Judge Thinks"
     },
+    "judged_dates": {
+      "default": [],
+      "description": "Every date this judge has ever counted, sorted, and kept when an instrument move archives the counts. The counts are thrown away because they answer a different question afterwards; the fact that a night was read is not a count, so it stays. This is the list the outstanding-nights answer is taken from, and it holds every date in `counted_dates`.",
+      "items": {
+        "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+        "type": "string"
+      },
+      "title": "Judged Dates",
+      "type": "array"
+    },
     "key_point_weight": {
       "anyOf": [
         {
@@ -234,7 +249,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-21T12:00",
+      "default": "2026-09-21T20:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -248,5 +263,5 @@
   ],
   "title": "StorySimilarityDistribution",
   "type": "object",
-  "version": "2026-09-21T12:00"
+  "version": "2026-09-21T20:00"
 }

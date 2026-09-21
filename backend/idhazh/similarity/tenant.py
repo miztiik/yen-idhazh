@@ -19,6 +19,7 @@ from typing import Final
 from idhazh import config, ledger
 from idhazh.contracts.base import DateStamp, RunId
 from idhazh.contracts.council_shard_outcome import ShardOutcome
+from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
 from idhazh.contracts.story_similarity_pair import ContentSimilarityJudgeId
 from idhazh.council import metrics_sink, session
 from idhazh.council.tenancy import ShardResult
@@ -73,16 +74,46 @@ class ContentSimilarityJudge:
     def committed_paths(self) -> tuple[str, ...]:
         return COMMITTED_PATHS
 
-    def nights_outstanding(self, *, window: tuple[DateStamp, ...]) -> tuple[DateStamp, ...]:
-        """Which nights inside the council's window this judge has not counted.
+    def nights_outstanding(
+        self, *, window: tuple[DateStamp, ...], state_dir: Path | None = None
+    ) -> tuple[DateStamp, ...]:
+        """Which nights inside the council's window this judge has never read.
 
-        None yet. Naming a night here dispatches a repair job for it, and what
-        this judge has counted is not read back by anything - so every answer but
-        an empty one would spend a runner on work nobody can tell was needed.
-        Tonight is planned whatever this returns, so saying nothing costs the
-        night nothing.
+        The record is one file of a fixed size and the window is handed in, so
+        this costs the same on the thousandth night as on the first (CLAUDE.md
+        Guardrail #12). No day file is opened and no directory is listed.
+
+        **A night is outstanding when the record has no memory of it at all.**
+        `judged_dates` holds every date this judge has ever counted, including
+        the ones an instrument move archived the counts for, so a date the record
+        once read is never named again. That is deliberate: the counts for it are
+        gone and a re-judge would not bring them back, because the record refuses
+        to count a date twice. Naming it would buy a runner-night of work that
+        cannot land.
+
+        **What it does name is the night that died.** A run that lost a shard
+        appended every row the surviving shards judged and left the date out of
+        both lists, because a partial day cannot be counted and cannot be
+        repaired later. That date is in neither list, so it comes back here and
+        the next council night dispatches it.
+
+        **No record yet means nothing has been read.** The first run after this
+        judge moves in has no file to open, and the council's own floor is what
+        keeps the answer from reaching back to the venue's birth.
+
+        `state_dir` is this judge's own test seam and the council never passes
+        it. The default is the root the counting verb writes to, so the reader
+        and the writer cannot drift apart.
         """
-        return ()
+        state = state_dir if state_dir is not None else config.REPO_ROOT / ledger.STATE_DIRNAME
+        record_path = ledger.score_distribution_path(state)
+        if not record_path.exists():
+            return ()
+        record = StorySimilarityDistribution.from_json(
+            record_path.read_text(encoding="utf-8")
+        )
+        read = set(record.judged_dates)
+        return tuple(night for night in window if night not in read)
 
     def prepare(self, *, date: DateStamp, run_id: RunId) -> ShardResult:
         """Score the day's cross-source pairs again and deal the draw.

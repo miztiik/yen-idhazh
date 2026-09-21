@@ -60,6 +60,9 @@ export interface StorySimilarityDistribution {
 	/** Every date already counted, sorted. A date already here is refused a second time rather than doubling its counts, which makes a re-run free instead of damaging. */
 	counted_dates?: string[];
 
+	/** Every date this judge has ever counted, sorted, and kept when an instrument move archives the counts. The counts are thrown away because they answer a different question afterwards; the fact that a night was read is not a count, so it stays. This is the list the outstanding-nights answer is taken from, and it holds every date in `counted_dates`. */
+	judged_dates?: string[];
+
 	/** The band, slot by slot, lowest first. Fixed size: the record never grows as the archive does, which is why the fit reads it and never the day tree (Guardrail #12). */
 	slots: ScoreSlot[];
 }

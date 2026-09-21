@@ -84,6 +84,13 @@ def stage_count_verdicts(
     a day that could not be counted are two different facts, and holding the
     readings back would delete the evidence of the first to record the second.
 
+    **An instrument move archives the counts and keeps the date memory.** The
+    counts go because they answer a different question under the new instrument.
+    The list of nights already read comes across, because that is not a count -
+    and without it the council would be told every night in its window is
+    outstanding the first time somebody changes the model, which is a week of
+    runners re-judging days this judge has already read.
+
     **`shipped_root` and `judge_id` are handed in rather than resolved here.**
     The directory the units uploaded into belongs to the venue and the slug
     belongs to the tenant, so a stage that spelled either would be a stage that
@@ -122,7 +129,9 @@ def stage_count_verdicts(
             ledger.score_distribution_archive_path(state, stem), record.to_json()
         )
         archived = stem
-        record = counting.empty_record(knobs, scorer=scorer, judge=judge)
+        record = counting.empty_record(
+            knobs, scorer=scorer, judge=judge, judged_dates=record.judged_dates
+        )
         LOG.info("count-verdicts date=%s archived=%s was=%s now=%s", date, stem, *moved)
 
     if len(present) < shards:
