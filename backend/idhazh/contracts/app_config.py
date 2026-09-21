@@ -88,6 +88,14 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21T15:00",
+            change=(
+                "council.first_night, council.repair_window_nights and "
+                "council.repair_dates_a_night, additive."
+            ),
+            why="A night plans the older dates its tenants are behind on, inside a bounded window.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T13:00",
             change="council descriptions say shard where they said leg. No knob moved.",
             why="`leg` was a second name for the shard the council already sizes by.",
@@ -101,11 +109,6 @@ class AppConfig(Contract):
             version="2026-09-21T11:30",
             change="council.tenants and council.shard_preamble_minutes, additive.",
             why="The venue registers a tenant from config and knows what a job spends before it.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T05:00",
-            change="console.context_high_percentile and console.context_cut_off_reason, additive.",
-            why="The context panel draws two ends a run and names what a cut-off looks like.",
         ),
         ChangelogEntry(
             version="2026-08-21",
