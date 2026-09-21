@@ -1,6 +1,6 @@
 # Agent Notes - Gates and Builds
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-21
 Traps in the commands that decide whether a change is done: the test selector,
 pytest, ruff, mypy, the schema drift gate, the build, the canary day, and the
 measurement recipes that run on top of them. Index and scope:
@@ -67,6 +67,8 @@ npm --prefix frontend run test:changed -- --list
 ```
 
 ## Contracts and schemas
+
+**A changelog can break its cap with neither side writing a sixth entry.** `backend/tests/contracts/test_changelog_shape.py` allows five - the four newest changes and one pointer at git (`CLAUDE.md` section 11). Two branches that each prepend one entry to the same contract merge to six with no conflict, and the gate then reports a count at a line number and says nothing about a merge, which reads as a hand-edit of your own. The tell is that the entries above the pointer name two changes you did not make one of. The resolution is fixed and needs no judgement: keep both new entries newest-first, then delete the oldest entry that is not the pointer.
 
 **A worktree borrowing another checkout's venv exports into whichever tree that venv was installed from, and the drift gate then passes on the wrong tree.** The editable install resolves `idhazh` through a meta-path finder, so neither the working directory nor the `python.exe` you named moves it: run from worktree `A` with the root checkout's interpreter and `python -m idhazh.contracts.export` can write `B/schemas/` and `B/frontend/src/contracts/`, print paths that look right, and leave `A` untouched. `git status --porcelain -- schemas/` is then empty for the best possible reason and the worst one at once. It is also a write into a sibling's checkout, which is the contamination the execution contract forbids. Ask where the package came from before believing any export, and set `PYTHONPATH` - it wins over the finder:
 
@@ -218,6 +220,12 @@ A throwaway spec under `frontend/tests/` would be swept up by the shared selecto
 **A branch that deletes a name merges without conflict and fails at import.** Git compares text; nothing checks that the symbol another branch started calling still exists. A branch can replace `cli.INDEX_ROOT` with a function and `main` added eleven tests that patch the constant - a clean `ort` merge, then eleven failures naming one attribute. Whoever merges second owns the semantic conflict, whichever branch introduced it, and the replacement has to be checked rather than assumed to resolve to the same value.
 
 **The dangerous half is often the part git calls clean**, and it need not be a name. Two rows that both auto-merged one route page - one narrowing bars to a window, one adding a strip above them - produced a file drawing windowed bars over a strip that still read the whole ledger. Every symbol resolved and the suite passed. The cheap early warning before merging: `git grep` the names your branch deletes, from `git diff --name-only main...HEAD`. It exits 1 when it finds nothing, which a `&&` chain reads as failure.
+
+**Two console checks pass after a merge while asserting less than either branch asked for.** `frontend/tests/console-title.spec.ts` carries a per-route heading floor and `frontend/tests/console-window.spec.ts` names every windowed surface. Two branches that each add a panel raise the floor by one in identical words, so the merge keeps one increment where two were owed and `toBeGreaterThanOrEqual` is still satisfied - green, and one panel short. It fired three times on one plan. The tell is that the merged number equals one branch's number rather than the sum of what both added, which no reviewer sees in a one-character diff. Derive both from the tree rather than reading the merged file: the floor is the group headings plus the panels in `config/appearance.json` - four plus fifteen is the nineteen the Hardware route asserts on 2026-09-21 - and the surface list is a grep.
+
+```powershell
+git grep -oh 'data-windowed="[a-z-]*"' -- frontend/src | Sort-Object -Unique
+```
 
 **Read the failure before blaming your own change.** A whole file of failures sharing one identical `AttributeError` or `ImportError`, on a surface your row never touched, is a rename that crossed a branch.
 

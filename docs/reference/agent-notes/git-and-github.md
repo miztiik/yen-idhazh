@@ -1,6 +1,6 @@
 # Agent Notes - Git and GitHub
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 
 Traps in `git`, worktrees, merges and the `gh` CLI. Index and scope:
 [../agent-notes.md](../agent-notes.md).
@@ -119,6 +119,12 @@ Restore by explicit path; never `git restore.` (section 8). Discarding costs not
 git ls-files --error-unmatch <path> # "did you forget to git add" = untracked
 ```
 
+**A fix can read as applied and still never reach the commit.** Reading the file back after an edit confirms the working tree, which is not what a push ships - so the edit, the read-back and the push can all succeed and the pull request carry none of it. Two staging faults produce it, and both exit quietly. Slicing `git status --porcelain` with `$_.Substring(3)` keeps the path on an ordinary `?? ` or ` M ` line and mangles a `DU ` or `D  ` one, and `git add -- <a path already staged as deleted>` errors, which under a single `git add` call for the whole list leaves every remaining path unstaged. **The tell is that both halves have to hold**: `git status --porcelain` empty AND `git show --stat HEAD` listing the files you meant.
+
+```powershell
+git status --porcelain; git show --stat HEAD
+```
+
 **Before deleting a leftover branch**, all three legs must hold: the pull request reads `MERGED` from a live `gh pr view`, its `mergeCommit` is an ancestor of `origin/main`, and the residual diff is stale content only. A branch tip beyond its `headRefOid` is usually a rebase under a new sha - find it by subject with `git log origin/main --oneline --diff-filter=A -- <file the commit created>`. GitHub keeps `refs/pull/<n>/head` for a merged pull request for ever.
 
 **`git branch --merged` answers "none of them" in a repository that squash-merges**, which is not the same as "none are merged". Ask whether the branch would still change the base:
@@ -170,6 +176,8 @@ Expect to redo it on every rebase. Two guards make the redo safe: refuse to writ
 git restore --source=origin/main -- frontend/public/telemetry
 python -m idhazh.telemetry.publish.public_telemetry
 ```
+
+**A publisher takes the DIGEST root, not the published root, and handing it the wrong one writes a directory nobody looks at.** `series.console_root(digest_root)` is `digest_root.parent`, so a re-derivation pointed at `frontend/public` lands in `frontend/machine/` - an untracked tree of plausible files, exit 0, and the conflicted shard still conflicted. The tell is `git status --porcelain` naming a new untracked directory one level above where you expected the write; pass `frontend/public/digest`.
 
 Before merging anything that rewrites `frontend/public/`, check `gh run list --workflow digest.yml --limit 3` for a run in flight and wait it out.
 
@@ -236,6 +244,12 @@ $runs = gh run list --repo <owner/repo> --branch <branch> --limit 10 --json name
 **`gh run list` intermittently answers `error connecting to api.github.com`** on a box with several agents making calls at once. Retry before you go and read CI; two failures in a row on different subcommands is a different signal.
 
 ## Reading a run
+
+**A green run conclusion can mean the gate never ran.** The `scope` job decides which jobs start, and a commit touching only data paths gets `browser=skipped` - GitHub folds a skipped job into a `success` conclusion, so the run reads as a full pass. `main`'s browser job was red for about nine hours on 2026-09-20, from `896688ed` at 12:35 UTC to `6c5bccd6` at 21:19 UTC; sixteen commits in that window reported the failure and twenty reported all-green with the browser job skipped, so a reader who arrived between two of them saw a healthy trunk. **The tell is that the conclusion is one word and the job list is not** - a skipped job and a passing job give the same conclusion, and only the list separates them. Read the list, never the conclusion:
+
+```powershell
+gh api repos/<owner>/<repo>/commits/<sha>/check-runs --jq '.check_runs[]|.name+"="+((.conclusion)//"running")'
+```
 
 **No log of any kind is readable while the run is going.** `gh run view <runId> --job <jobId> --log` and the run-level form both exit 1 with `logs will be available when it is complete`, even for a job that finished twenty minutes ago - and redirecting makes it worse, because the file is then 82 bytes of that sentence. What IS readable mid-run is the artifacts: `gh run download <runId> --name plan` gives the run plan, and each `items-<n>` appears as its shard finishes.
 

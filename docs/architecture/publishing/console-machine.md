@@ -52,8 +52,7 @@ edit rather than a markup move; the route's own `load` refuses a list that names
 a panel it does not draw, or leaves one out, so a typo fails the build rather
 than dropping a panel off the page in silence. A titled group steps its panels'
 titles to an `h3` under its own `h2`, which is what makes the grouping a
-document outline and not a row of dividers. Authority: Susan, rulings A and B of
-Row #9 of the honest-machine-telemetry plan, 2026-09-20.
+document outline and not a row of dividers. Authority: Susan, 2026-09-20.
 
 **The grain moved off the heading and onto the panel.** A group used to carry
 it: everything under `The open window` followed the span control and everything
@@ -186,7 +185,7 @@ draws two marks a run, because one mark cannot carry both the ordinary article
 and the worst one and the decision to cut the limit turns on the worst. Under
 the chart, one sentence names the share of the limit that has never been used
 and how many times the limit is the article it usually reads. Authority: Susan,
-plan 37 row 21. **What the reader loses: the dotted spare line**, which was the
+2026-09-21. **What the reader loses: the dotted spare line**, which was the
 solid line reflected in the rule and carried no second reading.
 
 **The grain is one model call, and that correction roughly halves the figure.**
@@ -200,7 +199,8 @@ one row set: the old arithmetic read 26,706 tokens at its worst and the honest
 peak is 13,569, which is 41 percent of a 65,536-token limit against 21 percent.
 The overstatement is 1.97x at the worst row and 1.92x at the middle one.
 **Nothing here counts calls** - a slot is measured when the ledger filled it -
-because the count is a config value (plan 37, the standing rule).
+because how many a model makes is a config value
+([../sources/item-health.md](../sources/item-health.md#design-rationale)).
 
 **Nothing has ever been cut off.** Every finish reason in the archive says the
 model stopped on its own: 2,624 of 2,624 calls, measured 2026-09-21. The word

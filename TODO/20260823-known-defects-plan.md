@@ -1,15 +1,17 @@
 # Known defects
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-21
 
-**Two defects are open.** Both need evidence or a ruling. Defect 2
-needed three repairs before a person could label anything, and all three
+**Four defects are open.** Two need evidence or a ruling and two need code.
+Defect 2 needed three repairs before a person could label anything, and all three
 shipped. The owner settled the counting rule on 2026-08-27, which took the
 draw from 32 of 60 to 60 of 60. What is left is **60 human labels** and eight
 more run-days at one scorer, and neither is code. Defect 18 is the opposite
 shape: the code now works and the measurement it produces still cannot fire, so
-what it needs is a ruling on which instrument to keep. **This file cannot be
-deleted by writing more of it.**
+what it needs is a ruling on which instrument to keep. Defects 23 and 24 were
+filed on 2026-09-21 by the plan that rebuilt the Hardware route; each is a known
+fix with a named blast radius rather than an open question. **This file cannot
+be deleted by writing more of it.**
 
 Defects 15, 16 and 17 closed on 2026-08-27. Defects 19 and 20 were filed later,
 on 2026-09-12, by two rows that found them and declined to widen into them. Both
@@ -38,6 +40,58 @@ decision. Current project behaviour belongs in `docs/` (Guardrail #4).
 | 20 | The `publishing` group dirties a file the build fingerprint hashes, so it can never certify its own build | 2 | CLOSED 2026-09-13 (PR #660) |
 | 21 | A test walked every published telemetry shard, and it was the only thing reading them back | 2 | CLOSED 2026-09-13 |
 | 22 | The same story publishes several times in one day, and each copy says only one source carried it | 3 | CLOSED 2026-09-14 |
+| 23 | The canary day records no settings, so nothing renders the rules that say a setting moved | 2 | **OPEN - the pure module is tested; the page is not** |
+| 24 | `failed_field` costs a cell on every row and answers nobody | 5 | **OPEN - draw it or migrate it out** |
+
+## 24 - `failed_field` costs a cell on every row and answers nobody (OPEN)
+
+`backend/utilities/empty_column_census.py` exits non-zero naming one column.
+`failed_field` on the item row is empty on all **14,026 committed rows**,
+measured 2026-09-21, and nothing under `frontend/src` draws it - so it has
+neither a reader nor a writer that has ever written. `two_calls.py` can fill it,
+with the field a refused reply failed on, and no refused reply has yet named one.
+
+**It is not deleted yet because removing a published column is a migration, not
+an edit.** The shape is the one that removed `cgroup_peak_bytes`: add the name to
+`DROPPED_CELLS` in `backend/idhazh/contracts/item_health.py`, stamp the schema
+`version` and append its changelog entry, write the read-side migration in the
+same commit so a row an earlier run wrote still loads, and update the canary
+builder. The contract refuses a silent removal, which is what makes this four
+edits rather than one, and it is Level 5 because it changes a persisted contract.
+
+**The other half of the census's verdict is to draw it**, and that needs a panel
+somebody wants. `failed_rule` sits beside it under the same heading and does
+carry values, so a reader for the pair is not obviously worthless - which is the
+choice this defect is open on.
+
+Found on 2026-09-21 by the census that shipped with the reader annotations, which
+declined to widen into it.
+
+## 23 - The canary day records no settings, so nothing renders the rules (OPEN)
+
+Four Hardware panels draw a dotted rule on every date a run recorded a changed
+setting, with a readout naming what moved. No test renders one. The canary day
+carries **22 run entries and not one has an `inputs` block**, so every panel that
+reads the record draws its named absent state instead, and a browser check
+asserting a rule would assert nothing.
+
+What is covered is the pure module: `frontend/tests/settings-moved.spec.ts`
+drives `frontend/src/lib/console/settings-moved.ts` from a six-day fixture that
+carries states the committed archive has never produced. That holds the
+arithmetic and the words. It cannot hold the page - whether the rule draws
+behind the data marks rather than over them, whether the readout reaches the
+reader, or whether a date with a rule and no reading draws both, which is the
+state the panel exists for.
+
+**The fix is a canary change, and the blast radius is why this is filed rather
+than done.** `backend/utilities/build_canary_day.py` writes those run records and
+four other panels' specs read the tree it builds, so a widened record is a change
+every browser spec on that route runs against. The smallest version gives one
+canary date an `inputs` block and leaves the rest without one, because that
+mixture is the state the committed archive is actually in.
+
+Found on 2026-09-21 by the row that shipped the rules, which declined to widen
+into it.
 
 ## 22 - The same story publishes several times in one day (CLOSED 2026-09-14)
 

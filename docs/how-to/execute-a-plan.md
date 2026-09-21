@@ -1,6 +1,6 @@
 # How to execute a plan-doc (the execution contract)
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-21
 The mechanics for running a `TODO/<YYYYMMDD>-<slug>-plan.md` that [author-a-plan.md](author-a-plan.md) produced. Authoring writes the plan; this doc runs it, and owns the autonomy policy it runs under (section "Escalation").
 
 ASCII only in agent/customization Markdown: "-", "->", ">=", "section".
@@ -82,6 +82,8 @@ A plan-doc carrying an earlier wording of this stamp is run under this doc as it
 Merging stays serialized - one at a time, re-checking the next branch against the advanced `main` - so a green branch never lands on a stale base. **A merge that conflicts or goes red returns that row to its owner, and the pool keeps running.** Reconcile it at the next dependency boundary rather than stopping the line for it.
 
 **Check every dispatch against the rows already in flight by diffing their `Files touched` lists.** A plan asserting that its parallel rows are disjoint is making a claim, not stating a fact ([git-and-github.md](../reference/agent-notes/git-and-github.md)). Where a ready row shares a file with one in flight, hold it and write the new `Depends-on` into the Status Reckoner, so the next dispatch reads it instead of re-deriving it.
+
+**Rows that share one surface do not parallelise, and the pool width is what makes that expensive.** Measured on one plan whose whole second half drew the same page: every remaining row edited that route's server module and its chart module, four were kept in flight anyway, and every merge after the first needed a hand resolution. Several were semantic - each side had deleted what the other kept, and git called the file clean ([gates-and-builds.md](../reference/agent-notes/gates-and-builds.md)). **Holding a row costs one merge of waiting; dispatching it onto a file in flight costs a resolution nobody reviewed.** Where a whole group shares one surface, the group is serial whatever `Parallel N` says, and the refactor that splits the surface is the row that makes the rest of them parallel - so it runs first or the width is fiction.
 
 ### The workers are parallel; the machine is not
 
