@@ -19,8 +19,14 @@ from conftest import CONFIG_DIR, REPO_ROOT
 from utilities import shard_bound
 
 from ._harness import (
+    MODEL_SERVER_ACTION,
+    MODEL_SERVER_CALLERS,
+    MODEL_SERVER_STEPS,
+    _action_call,
+    _declared_steps,
     _job,
     _load_workflows,
+    _local_action_inputs,
     _normalize_condition,
     _script,
     _step,
@@ -143,23 +149,37 @@ def test_the_bound_reader_still_answers_its_first_caller() -> None:
     assert shard_bound.minutes(CONFIG_DIR, key=TIMEOUT_KEY) >= 1
 
 
-def test_the_weights_key_is_the_string_the_daily_run_writes() -> None:
-    """Same key, character for character, once the producing job is normalised.
+def test_the_leg_reaches_the_model_through_the_one_shared_action() -> None:
+    """The five steps live in one file, so there is no second key to compare.
 
-    A raw text comparison would fail a correct implementation: `digest.yml` reads
-    its refs off `needs.plan` and this file off `needs.draw`. What must match is
-    everything else, because a second key is a second multi-gigabyte cache entry
-    competing for eviction - and it would throw away the only throughput reading
-    this feature has, which was taken on these weights.
+    This job and the daily run's work shard spelled the same cache, fetch,
+    digest check, start and health probe with only the publishing job's name
+    between them, and they had already drifted once: the daily run gained a
+    weights revision in its cache key and this file got the same edit by hand
+    afterwards. A test that compared two literals is what a second copy costs,
+    and it can only catch a drift somebody has already shipped.
+
+    One literal costs nothing, so what is asserted here is that the copy is
+    gone: this job calls the action and spells none of the five names itself.
+    A cache step written back into this file would key a second multi-gigabyte
+    entry that competes for eviction, and would throw away the only throughput
+    reading this feature has - which was taken on these weights.
     """
+    assert (FILENAME, "judge") in MODEL_SERVER_CALLERS
+    given = _action_call(_judges(), "judge", MODEL_SERVER_ACTION)
+    assert set(given) == set(_local_action_inputs(MODEL_SERVER_ACTION))
 
-    def key_of(filename: str, job: str) -> str:
-        cache = _step(_load_workflows()[filename], job, "id", "weights")
-        with_key = cache.get("with")
-        assert isinstance(with_key, dict)
-        return re.sub(r"needs\.[a-z_]+\.outputs\.", "needs.<job>.outputs.", str(with_key["key"]))
+    spelled = [
+        str(step.get("name"))
+        for step in _declared_steps(_judges(), "judge")
+        if step.get("name") in MODEL_SERVER_STEPS
+    ]
+    assert not spelled, f"the leg owns a second copy of {spelled}"
 
-    assert key_of(FILENAME, "judge") == key_of("digest.yml", "work")
+    # A `./` action is this repository at the commit the run checked out, so a
+    # job that calls one before checking out has nothing to call.
+    names = _named("judge")
+    assert names.index("actions/checkout@v6") < names.index(MODEL_SERVER_ACTION)
 
 
 def test_the_leg_fetches_the_draw_before_it_reads_it() -> None:
