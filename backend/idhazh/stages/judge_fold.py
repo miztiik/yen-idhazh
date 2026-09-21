@@ -27,9 +27,10 @@ from idhazh.stages.judge_shard import VERDICTS_DIRNAME
 
 @dataclass(frozen=True, slots=True)
 class FoldReport:
-    """What the fold did, for the caller to log and for row 8 to write a reason from."""
+    """What the fold did, for the caller to log and for a later row to read a reason from."""
 
     date: str
+    run_id: str
     legs_expected: int
     legs_present: int
     rows_appended: int
@@ -52,6 +53,7 @@ def _verdict_rows(path: Path) -> list[StorySimilarityPair]:
 def stage_judge_fold(
     date: str,
     *,
+    run_id: str,
     settings: config.Settings,
     state_dir: Path | None = None,
     judge_root: Path | None = None,
@@ -65,6 +67,12 @@ def stage_judge_fold(
     verdicts would be unreachable for ever. Refusing costs one day of evidence
     until somebody re-dispatches the date; folding a partial day costs a quarter
     of it permanently, with nothing saying so.
+
+    **`run_id` is the council's own, and this verb writes it into no cell.** The
+    rows it appends were stamped by the draw and the record carries no run at
+    all, so what the name buys here is that the fold's own report and log line
+    say which night folded the day. Without it a fold cannot be tied to the run
+    that produced it at all.
     """
     knobs = settings.app.assemble.same_story.judging_knobs()
     shards = settings.app.council.shards
@@ -98,6 +106,7 @@ def stage_judge_fold(
     if len(present) < shards:
         report = FoldReport(
             date=date,
+            run_id=run_id,
             legs_expected=shards,
             legs_present=len(present),
             rows_appended=appended,
@@ -109,6 +118,7 @@ def stage_judge_fold(
         assemble.write_atomic(record_path, fold.fold_day(record, rows, date=date).to_json())
         report = FoldReport(
             date=date,
+            run_id=run_id,
             legs_expected=shards,
             legs_present=len(present),
             rows_appended=appended,
@@ -118,8 +128,9 @@ def stage_judge_fold(
         )
 
     LOG.info(
-        "judge fold date=%s legs=%s/%s appended=%s folded=%s held=%s",
+        "judge fold date=%s run=%s legs=%s/%s appended=%s folded=%s held=%s",
         report.date,
+        report.run_id,
         report.legs_present,
         report.legs_expected,
         report.rows_appended,
