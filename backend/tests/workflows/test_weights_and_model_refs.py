@@ -14,12 +14,15 @@ from conftest import CONFIG_DIR, REPO_ROOT, read_text
 from utilities import model_refs
 
 from ._harness import (
+    ACTIONS_DIR,
     CONFIG_FILE_NAME,
     DRAFT_REF_OUTPUTS,
     LLAMA_RUNTIME_WORKFLOWS,
     MODEL_ENV_NAMES,
     MODEL_REF_FIELDS,
     MODEL_REF_OUTPUTS,
+    MODEL_SERVER_ACTION,
+    MODEL_SERVER_CALLERS,
     MODELS_DOCUMENT,
     MODELS_POINTER_KEY,
     PINNED_LLAMA_BUILD,
@@ -28,6 +31,7 @@ from ._harness import (
     WEIGHTS_CHECKS,
     WEIGHTS_FETCH_FORM,
     WORKFLOWS_DIR,
+    _action_call,
     _committed_models,
     _config_key_paths,
     _declared_dispatch_inputs,
@@ -40,7 +44,6 @@ from ._harness import (
     _names,
     _own_nodes,
     _pin_output_name,
-    _plan_output,
     _reads_the_environment,
     _run_bodies,
     _runtime_cache_keys,
@@ -122,7 +125,14 @@ def test_the_health_check_names_the_weights_that_answered() -> None:
     assert '["summarize"]["id"]' in script, "the alias comes from config"
     assert "/v1/models" in script, "assert the served alias"
     assert "/props" in script, "assert the loaded path"
-    assert _plan_output("summarize_file") in script
+
+    # The step lives in the shared action now, so it reads the filename by name
+    # rather than from one caller's job outputs. Asserted through the step's own
+    # `env`, because a probe comparing the served path against a name nothing
+    # filled would pass on an empty string and say nothing at all.
+    given = _mapping(health.get("env"), "the health step env")
+    assert given.get("WEIGHTS_FILE") == _expression("inputs.weights_file")
+    assert "${WEIGHTS_FILE}" in script
 
 
 def test_no_arm_starts_measuring_before_it_knows_which_model_answered() -> None:
@@ -195,14 +205,23 @@ def test_no_workflow_that_loads_weights_writes_a_model_ref_or_a_moving_one() -> 
     repo_shape = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]*GGUF\b")
     publishers = re.compile(r"\b(?:Qwen|unsloth|bartowski|TheBloke)\b")
 
-    for filename in sorted(LLAMA_RUNTIME_WORKFLOWS):
-        text = read_text(WORKFLOWS_DIR / filename)
+    # The action the five weights steps moved into is read on the same terms. A
+    # rule that stopped at `.github/workflows/` would have stopped covering the
+    # fetch the day it was extracted, which is the one thing an extraction must
+    # not buy.
+    named = [WORKFLOWS_DIR / filename for filename in sorted(LLAMA_RUNTIME_WORKFLOWS)]
+    named.append(ACTIONS_DIR / MODEL_SERVER_ACTION.rsplit("/", 1)[-1] / "action.yml")
+
+    for path in named:
+        filename = path.name
+        text = read_text(path)
         assert ".gguf" not in text, f"{filename}: a weights filename belongs in config"
         assert not hub.search(text), f"{filename}: a repository literal belongs in config"
         assert not repo_shape.search(text), f"{filename}: a repository literal belongs in config"
         assert not publishers.search(text), f"{filename}: a model publisher belongs in config"
         assert not branch.search(text), f"{filename}: a download must name an immutable commit"
 
+    for filename in sorted(LLAMA_RUNTIME_WORKFLOWS):
         for scope, env in _every_env(_load_workflows()[filename]):
             for name, value in env.items():
                 if name not in MODEL_ENV_NAMES:
@@ -437,47 +456,62 @@ def test_no_inline_program_rebinds_a_name_it_read_from_the_environment() -> None
 
 
 def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
-    """Every part of what the entry holds, and all of them from one source.
+    """The Oracle. Every part of what the entry holds, and all of them from one source.
 
     The fetch step runs only on a cache miss, so a key that omits any part turns
     that step into dead code and serves the wrong bytes silently. The revision
     is one of those parts: two uploads share a filename, so without it a
     repinned config gets a hit whose bytes then fail the checksum on every run
-    until the entry expires. The composed string is asserted too: an expression
-    that does not resolve leaves a literal `${{` in the key, and Actions would
-    key the cache on that text.
+    until the entry expires.
 
-    The build half is a `plan` output rather than a workflow variable, because
-    the pin moved into `.github/scripts/llama-cpp-pin.sh` and the job that reads
-    it publishes what it read. `needs` resolves before a worker's first step and
-    `steps` does not, which is the same reason the weights half travels that way.
+    **There is one key now, so this is not a comparison between two workflows.**
+    The block moved into `model-server` and neither caller spells a key any
+    more, which is what makes them share the entry rather than merely agree
+    about it. What the literal is held against instead is the pair of committed
+    files that decide its halves: each half is substituted for what the model
+    entry and the pin say, and the composed string is compared character for
+    character. An expression that does not resolve leaves a literal `${{` in the
+    key, and Actions would key the cache on that text.
+
+    The other half of the Oracle is the caller: each one has to hand those
+    inputs a job output that republished config, because a literal there would
+    compose the same string today and be a second answer to what the entry
+    holds. `needs` resolves before a job's first step and `steps` does not,
+    which is why the refs travel that way at all.
     """
-    workflow = _load_workflows()["digest.yml"]
-    keys = dict(_runtime_cache_keys(workflow))
-    assert set(keys) == set(WEIGHTS_CACHE_ROLES)
+    workflows = _load_workflows()
+    keys = {
+        (filename, job_name): dict(_runtime_cache_keys(workflows[filename]))[job_name]
+        for filename, job_name in MODEL_SERVER_CALLERS
+    }
+    assert len(set(keys.values())) == 1, f"one entry cannot hold two sets of weights: {keys}"
+    key = next(iter(keys.values()))
+
+    weights = _expression("inputs.weights_file")
+    revision = _expression("inputs.weights_revision")
+    build = _expression(f"inputs.{_pin_output_name()}")
+    assert key == f"llm-{weights}-{revision}-{build}-{WEIGHTS_CACHE_SUFFIX}"
 
     models = _committed_models()
-    for job_name, role in WEIGHTS_CACHE_ROLES.items():
-        weights = _plan_output(f"{role}_file")
-        revision = _plan_output(f"{role}_revision")
-        build = _plan_output(_pin_output_name())
-        assert keys[job_name] == (
-            f"llm-{weights}-{revision}-{build}-{WEIGHTS_CACHE_SUFFIX}"
-        ), job_name
+    role = WEIGHTS_CACHE_ROLES["work"]
+    composed = (
+        key.replace(weights, models[role]["file"])
+        .replace(revision, models[role]["revision"])
+        .replace(build, PINNED_LLAMA_BUILD)
+    )
+    assert "${{" not in composed, "every half of the key must resolve"
+    assert composed == (
+        f"llm-{models[role]['file']}-{models[role]['revision']}"
+        f"-{PINNED_LLAMA_BUILD}-{WEIGHTS_CACHE_SUFFIX}"
+    )
 
-        composed = (
-            keys[job_name]
-            .replace(weights, models[role]["file"])
-            .replace(revision, models[role]["revision"])
-            .replace(build, PINNED_LLAMA_BUILD)
-        )
-        assert "${{" not in composed, f"{job_name}: every half of the key must resolve"
-        assert composed == (
-            f"llm-{models[role]['file']}-{models[role]['revision']}"
-            f"-{PINNED_LLAMA_BUILD}-{WEIGHTS_CACHE_SUFFIX}"
-        ), job_name
-
-    assert len(set(keys.values())) == len(keys), "one entry cannot hold two sets of weights"
+    published = re.compile(r"\$\{\{ needs\.[a-z_]+\.outputs\.[a-z_0-9]+ \}\}")
+    for filename, job_name in sorted(MODEL_SERVER_CALLERS):
+        given = _action_call(workflows[filename], job_name, MODEL_SERVER_ACTION)
+        for name in ("weights_file", "weights_revision", _pin_output_name()):
+            assert published.fullmatch(given[name]), (
+                f"{filename}/{job_name} hands {name} the literal {given[name]!r}"
+            )
 
 
 #: Where each bench-side workflow decides what the candidate is: the step that

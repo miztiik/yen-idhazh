@@ -31,6 +31,36 @@ WORKFLOWS_DIR: Final = REPO_ROOT / ".github" / "workflows"
 
 SCRIPTS_DIR: Final = REPO_ROOT / ".github" / "scripts"
 
+ACTIONS_DIR: Final = REPO_ROOT / ".github" / "actions"
+
+#: How a workflow names an action that lives in this repository. A `./` path
+#: resolves to the tree the run checked out, so what it runs is already under
+#: test - but it sits outside `.github/workflows/`, which is where every oracle
+#: here starts reading.
+LOCAL_ACTION_PREFIX: Final = "./"
+
+#: The five steps that stand a model server up, as one action. `digest.yml` and
+#: `llm-council.yml` ran them as two copies that had to be edited together, and
+#: the cache key was the half that drifted. Named here so the tests ask which
+#: jobs call it rather than which jobs spell it.
+MODEL_SERVER_ACTION: Final = "./.github/actions/model-server"
+
+#: Which jobs stand a model server up through that action. Closed-world: a third
+#: caller belongs here, and a job that goes back to spelling the five steps for
+#: itself fails rather than quietly owning a second copy.
+MODEL_SERVER_CALLERS: Final = {("digest.yml", "work"), ("llm-council.yml", "judge")}
+
+#: The five steps that action owns, in the order it runs them. A caller that
+#: still spells one of these names owns a second copy of it, which is what the
+#: extraction removed.
+MODEL_SERVER_STEPS: Final = (
+    "Cache weights and runtime",
+    "Fetch runtime and weights",
+    "Verify the weights",
+    "Start the model",
+    "Check model health",
+)
+
 EXPECTED_WORKFLOWS: Final = {
     "backfill.yml": ("Vector backfill", frozenset({"workflow_dispatch"})),
     "ci.yml": ("CI", frozenset({"pull_request", "push", "workflow_dispatch"})),
@@ -1316,11 +1346,98 @@ def _job(workflow: dict[str, object], name: str) -> dict[str, object]:
     return _mapping(jobs.get(name), f"job {name}")
 
 
-def _steps(workflow: dict[str, object], job_name: str) -> list[dict[str, object]]:
+_PARSED_ACTION_STEPS: dict[str, list[dict[str, object]]] = {}
+
+_PARSED_ACTIONS: dict[str, dict[str, object]] = {}
+
+
+def _local_action(uses: str) -> dict[str, object]:
+    """A repository-local composite action, read and parsed once per action."""
+    if uses not in _PARSED_ACTIONS:
+        path = REPO_ROOT / uses.removeprefix(LOCAL_ACTION_PREFIX) / "action.yml"
+        document = yaml.load(read_text(path), Loader=yaml.BaseLoader)
+        assert isinstance(document, dict), f"{uses} must contain a YAML mapping"
+        _PARSED_ACTIONS[uses] = cast(dict[str, object], document)
+    return _PARSED_ACTIONS[uses]
+
+
+def _local_action_inputs(uses: str) -> dict[str, dict[str, object]]:
+    """What a repository-local composite action asks its callers for."""
+    declared = _local_action(uses).get("inputs")
+    if declared is None:
+        return {}
+    return {
+        name: _mapping(body, f"{uses} input {name}")
+        for name, body in _mapping(declared, f"{uses} inputs").items()
+    }
+
+
+def _local_action_steps(uses: str) -> list[dict[str, object]]:
+    """The steps a repository-local composite action runs.
+
+    Copied on the way out for the reason `_load_workflows` copies: a caller that
+    edited one would be editing what every later test reads, and that failure is
+    order-dependent.
+    """
+    if uses not in _PARSED_ACTION_STEPS:
+        runs = _mapping(_local_action(uses).get("runs"), f"{uses} runs")
+        assert runs.get("using") == "composite", f"{uses} must be a composite action"
+        steps = runs.get("steps")
+        assert isinstance(steps, list), f"{uses} must declare steps"
+        assert all(isinstance(step, dict) for step in steps), f"{uses} steps must be mappings"
+        _PARSED_ACTION_STEPS[uses] = cast(list[dict[str, object]], steps)
+    return copy.deepcopy(_PARSED_ACTION_STEPS[uses])
+
+
+def _declared_steps(workflow: dict[str, object], job_name: str) -> list[dict[str, object]]:
+    """What a job's own file spells, with no action resolved.
+
+    `_steps` answers what a job runs; this answers what it says. An extraction
+    is exactly the difference between those two, so a test that a block moved
+    has to be able to read both sides of it.
+    """
     raw_steps = _job(workflow, job_name).get("steps")
     assert isinstance(raw_steps, list), f"job {job_name} steps must contain a YAML list"
     assert all(isinstance(step, dict) for step in raw_steps), f"job {job_name} steps must be mappings"
     return cast(list[dict[str, object]], raw_steps)
+
+
+def _action_call(workflow: dict[str, object], job_name: str, uses: str) -> dict[str, str]:
+    """What a job hands a local action, as one mapping, asserted to be called once."""
+    matches = [step for step in _declared_steps(workflow, job_name) if step.get("uses") == uses]
+    assert len(matches) == 1, f"job {job_name} must call {uses} exactly once"
+    given = matches[0].get("with")
+    if given is None:
+        return {}
+    return {
+        name: str(value)
+        for name, value in _mapping(given, f"job {job_name} {uses} 'with'").items()
+    }
+
+
+def _steps(workflow: dict[str, object], job_name: str) -> list[dict[str, object]]:
+    """A job's steps, with a repository-local composite action resolved in place.
+
+    A step that calls `./.github/actions/<name>` runs that action's steps, so a
+    reader stopping at the workflow file would report that a converted job no
+    longer caches its weights, no longer checks a digest and no longer starts a
+    server - which is the opposite of what happened. This file already follows
+    one level of delegation into a shipped `.sh` (`_effective_shell`,
+    `_starter_shell`); this is the same rule for the other kind of extraction,
+    and it is what lets a step move without every oracle over it going quiet.
+
+    The reference itself is kept, so a caller can still ask which action a job
+    calls, and the action's own steps follow it in the order the runner runs
+    them. An `if:` on either side is not evaluated: what this answers is what a
+    job runs, never what it ran on one night.
+    """
+    resolved: list[dict[str, object]] = []
+    for step in _declared_steps(workflow, job_name):
+        resolved.append(step)
+        uses = step.get("uses")
+        if isinstance(uses, str) and uses.startswith(LOCAL_ACTION_PREFIX):
+            resolved.extend(_local_action_steps(uses))
+    return resolved
 
 
 def _step(
@@ -1440,7 +1557,7 @@ def _composite_action_script(name: str) -> str:
     stops seeing it. This is what keeps those oracles pointed at the shell after
     it moves out of a workflow file.
     """
-    path = WORKFLOWS_DIR.parent / "actions" / name / "action.yml"
+    path = ACTIONS_DIR / name / "action.yml"
     document = yaml.safe_load(read_text(path))
     runs = _mapping(_mapping(document, path.name).get("runs"), f"{name} runs")
     assert runs.get("using") == "composite", f"{name} must be a composite action"

@@ -258,11 +258,16 @@ dispatch that names nothing simply keys on the configured model's digest.
 
 ## One function builds the server command, and one variable says the port
 
-`digest.yml`, `validate.yml` and `measure.yml` each stand up a `llama-server`,
-and none of them writes a flag. Every one imports `server_argv` from
-`backend/idhazh/llm/server.py`, which renders the whole command from
+`digest.yml`, `llm-council.yml`, `validate.yml` and `measure.yml` each stand up
+a `llama-server`, and none of them writes a flag. Every one imports `server_argv`
+from `backend/idhazh/llm/server.py`, which renders the whole command from
 `config/idhazh.json`. A contract test holds that from both sides: exactly one
 Python file spells those flags, and no command in any workflow spells one.
+
+The first two reach the server through `.github/actions/model-server`, which
+carries the whole block - cache, fetch, digest check, start, health probe - so
+the start call itself is written once for both
+([github-actions.md](github-actions.md)).
 
 There used to be a second renderer, `backend/utilities/llama_server_argv.py`,
 and it existed for exactly one reason. Both `digest.yml` inference jobs ran

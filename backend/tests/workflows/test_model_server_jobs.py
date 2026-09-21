@@ -14,6 +14,7 @@ from idhazh.llm.server import DEFAULT_ENDPOINT, DEFAULT_PORT
 from idhazh.telemetry import silicon
 
 from ._harness import (
+    ACTIONS_DIR,
     ARGV_MODULE_CALL,
     CGROUP_PEAK_PATH,
     COUNTERS_FLAG,
@@ -27,6 +28,9 @@ from ._harness import (
     METRICS_ENDPOINT,
     METRICS_FILE,
     METRICS_SERIES,
+    MODEL_SERVER_ACTION,
+    MODEL_SERVER_CALLERS,
+    MODEL_SERVER_STEPS,
     PYTHON_PROCS_FIELDS,
     PYTHON_PROCS_FILE,
     RSS_SAMPLE_FIELDS,
@@ -46,10 +50,13 @@ from ._harness import (
     SERVER_STARTERS,
     START_SERVER_SCRIPT,
     WORKFLOWS_DIR,
+    _action_call,
     _artifact_upload,
     _bash,
+    _declared_steps,
     _isolated_env,
     _load_workflows,
+    _local_action_inputs,
     _mapping,
     _script,
     _server_starters,
@@ -131,6 +138,83 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
             # search reports a flag nobody wrote.
             spelled = re.search(rf"(?<![\w-]){re.escape(flag)}(?![\w-])", commands)
             assert not spelled, f"{where} spells {flag} instead of importing it"
+
+
+def test_the_model_block_is_one_action_with_a_contract_its_callers_can_read() -> None:
+    """The Oracle for the extraction. One copy of the five steps, and a stated contract.
+
+    `digest.yml`'s work shard and `llm-council.yml`'s judging leg ran the same
+    cache, fetch, digest check, start and health probe as two copies, and the
+    copies had already drifted: the daily run put the weights revision into its
+    cache key and the other file got the same edit by hand afterwards. An action
+    only removes that if nothing may go round it, so the caller set is
+    closed-world and a caller that spells one of the five names again fails here.
+
+    `idhazh-pipeline-tests.yaml` spells four of them and is left alone on
+    purpose: it serves a candidate rather than the configured model, and it
+    restarts the server inside the job to move a slot count. A shared block that
+    took those two as parameters would be the duplication wearing one name.
+
+    An action is a contract, so the contract is asserted rather than described.
+    Every input carries a description, every optional one carries a default, and
+    the declared set and the read set are compared both ways - an input nobody
+    reads is a promise the action does not keep, and a `${{ inputs.x }}` nobody
+    declared resolves to the empty string with no error at all, which is how a
+    cache key silently loses a half.
+
+    The action knows nothing about who called it, so the block can be built and
+    tested without either caller being in the room.
+    """
+    workflows = _load_workflows()
+    calling = {
+        (filename, job_name)
+        for filename, workflow in workflows.items()
+        for job_name in _mapping(workflow.get("jobs"), f"{filename} jobs")
+        for step in _declared_steps(workflow, job_name)
+        if step.get("uses") == MODEL_SERVER_ACTION
+    }
+    assert calling == MODEL_SERVER_CALLERS
+
+    for filename, job_name in sorted(MODEL_SERVER_CALLERS):
+        spelled = [
+            str(step.get("name"))
+            for step in _declared_steps(workflows[filename], job_name)
+            if step.get("name") in MODEL_SERVER_STEPS
+        ]
+        assert not spelled, f"{filename}/{job_name} owns a second copy of {spelled}"
+
+    declared = _local_action_inputs(MODEL_SERVER_ACTION)
+    for name, body in sorted(declared.items()):
+        description = body.get("description")
+        assert isinstance(description, str) and description.strip(), f"{name} has no description"
+        if body.get("required") == "true":
+            assert "default" not in body, f"{name} is required and cannot have a default"
+        else:
+            assert "default" in body, f"{name} is optional and names no default"
+
+    text = read_text(ACTIONS_DIR / MODEL_SERVER_ACTION.rsplit("/", 1)[-1] / "action.yml")
+    read = set(re.findall(r"\$\{\{\s*inputs\.([a-z_0-9]+)\s*\}\}", text))
+    assert read == set(declared), f"declared {sorted(declared)} and read {sorted(read)}"
+
+    for filename, job_name in sorted(MODEL_SERVER_CALLERS):
+        given = _action_call(workflows[filename], job_name, MODEL_SERVER_ACTION)
+        assert set(given) == set(declared), f"{filename}/{job_name} hands over {sorted(given)}"
+        names = [
+            str(step.get("name") or step.get("uses") or "")
+            for step in _declared_steps(workflows[filename], job_name)
+        ]
+        # A `./` action is this repository at the commit the run checked out, so
+        # a job that calls one before checking out has nothing to call.
+        assert names.index("actions/checkout@v6") < names.index(MODEL_SERVER_ACTION), (
+            f"{filename}/{job_name} calls the action before it has the tree"
+        )
+
+    # The role is `models.summarize` and no caller chooses it, which is why the
+    # two can share one cache entry - so naming it is correct. Naming a CALLER
+    # is not: a block that knows who called it is a block one caller cannot be
+    # built or tested without.
+    for caller in ("judg", "council", "digest.yml"):
+        assert caller not in text.lower(), f"the action names its caller: {caller}"
 
 
 @requires_bash

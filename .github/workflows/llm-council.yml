@@ -195,97 +195,28 @@ jobs:
           name: judge-draw
           path: backend/var/judge/${{ needs.draw.outputs.date }}
 
-      # The same key `digest.yml`'s work job writes, character for character
-      # once the producing job's name is substituted. Two things follow: the
-      # daily run has already created the entry, so this restores rather than
-      # downloads and adds ZERO bytes to the 10 GB allowance; and the
-      # repository's own throughput reading transfers to this workload, because
-      # it was taken on these weights.
-      - name: Cache weights and runtime
-        id: weights
-        uses: actions/cache@v6
+      # The cache, the fetch, the digest check, the server and the health probe.
+      # One action, shared with `digest.yml`, which ran the same five steps as a
+      # second copy. Two things follow from sharing it: the two runs cannot key
+      # the cache differently, so the daily run has already created the entry
+      # and this restores rather than downloads and adds ZERO bytes to the 10 GB
+      # allowance; and the repository's own throughput reading transfers to this
+      # workload, because it was taken on these weights.
+      #
+      # The port is handed over rather than inherited: it has one home, the
+      # workflow `env` above, and this is the line that carries it in.
+      - uses: ./.github/actions/model-server
         with:
-          path: |
-            backend/models
-            backend/bin
-          key: llm-${{ needs.draw.outputs.summarize_file }}-${{ needs.draw.outputs.summarize_revision }}-${{ needs.draw.outputs.llama_cpp_build }}-v4
-
-      # One shared script, and every value it reads arrives through `env` rather
-      # than pasted into it (Guardrail #11). Why it names an immutable revision
-      # is written in the script, once.
-      - name: Fetch runtime and weights
-        if: steps.weights.outputs.cache-hit != 'true'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          WEIGHTS_REPO: ${{ needs.draw.outputs.summarize_repo }}
-          WEIGHTS_REVISION: ${{ needs.draw.outputs.summarize_revision }}
-          WEIGHTS_FILE: ${{ needs.draw.outputs.summarize_file }}
-          DRAFT_REPO: ${{ needs.draw.outputs.draft_repo }}
-          DRAFT_REVISION: ${{ needs.draw.outputs.draft_revision }}
-          DRAFT_FILE: ${{ needs.draw.outputs.draft_file }}
-        run: bash .github/scripts/fetch-model-runtime.sh
-
-      # No `if:`. This runs on a cache hit as well as a miss, because a restored
-      # entry is the one case where nobody watched the bytes arrive. A verdict
-      # filed under weights that never ran is worse than no verdict, because the
-      # record it folds into is stamped with the model it thinks produced it.
-      - name: Verify the weights
-        run: |
-          set -euo pipefail
-          EXPECTED=$(python -c 'import json, pathlib; config = json.load(open("config/idhazh.json", encoding="utf-8")); models = json.load(open(pathlib.Path("config") / config["models_file"], encoding="utf-8")); print(models["summarize"]["sha256"] or "")')
-          if [ -z "$EXPECTED" ]; then
-            echo "config records no sha256 for models.summarize" >&2
-            exit 1
-          fi
-          echo "${EXPECTED}  backend/models/${{ needs.draw.outputs.summarize_file }}" | sha256sum --check
-          if [ -n "${{ needs.draw.outputs.draft_file }}" ]; then
-            echo "${{ needs.draw.outputs.draft_sha256 }}  backend/models/${{ needs.draw.outputs.draft_file }}" | sha256sum --check
-          fi
-
-      # One server a leg, and one leg a runner. Four servers on four logical
-      # CPUs is an experiment this repository has already run: `llama-server` at
-      # 8 threads is slower than at 4 on this host at every prompt length, and
-      # 16 percent slower at decode. And one server does not leave room for a
-      # second - measured over four captures of run 2026-08-29-3 on 2026-09-08,
-      # one server peaks at 12.57 to 13.16 GiB and reaches 14.31 GiB with the
-      # shard's python, 96.0 percent of the 16 GB runner.
-      - name: Start the model
-        env:
-          LLAMA_WEIGHTS: backend/models/${{ needs.draw.outputs.summarize_file }}
-        run: |
-          .github/scripts/start-llama-server.sh summarize llama-server
-
-      - name: Check model health
-        run: |
-          set -euo pipefail
-          for _ in $(seq 1 120); do
-            curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" && break
-            sleep 5
-          done
-          # Assert it, do not hope. Without this the loop simply ends, every
-          # pair fails as unreachable, and the leg uploads an empty verdict file
-          # that reads as a day with nothing to judge.
-          curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null || {
-            echo "llama-server never became healthy" >&2
-            tail -50 llama-server.log >&2
-            exit 1
-          }
-          # Healthy says a server answers. It does not say which weights it
-          # answers for, and every verdict is stamped with the config alias
-          # whether or not the server agrees.
-          MODEL_ALIAS=$(python -c 'import json, pathlib; config = json.load(open("config/idhazh.json", encoding="utf-8")); models = json.load(open(pathlib.Path("config") / config["models_file"], encoding="utf-8")); print(models["summarize"]["id"])')
-          curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" \
-            | jq -e --arg alias "$MODEL_ALIAS" '[.data[].id] | index($alias) != null' > /dev/null || {
-            echo "the server does not serve ${MODEL_ALIAS}" >&2
-            curl -s "http://127.0.0.1:${LLAMA_PORT}/v1/models" >&2 || true
-            exit 1
-          }
-          curl -sf "http://127.0.0.1:${LLAMA_PORT}/props" \
-            | jq -e --arg file "${{ needs.draw.outputs.summarize_file }}" '[.. | strings | select(endswith($file))] | length > 0' > /dev/null || {
-            echo "the loaded weights are not ${{ needs.draw.outputs.summarize_file }}" >&2
-            curl -s "http://127.0.0.1:${LLAMA_PORT}/props" >&2 || true
-            exit 1
-          }
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          port: ${{ env.LLAMA_PORT }}
+          weights_repo: ${{ needs.draw.outputs.summarize_repo }}
+          weights_revision: ${{ needs.draw.outputs.summarize_revision }}
+          weights_file: ${{ needs.draw.outputs.summarize_file }}
+          llama_cpp_build: ${{ needs.draw.outputs.llama_cpp_build }}
+          draft_repo: ${{ needs.draw.outputs.draft_repo }}
+          draft_revision: ${{ needs.draw.outputs.draft_revision }}
+          draft_file: ${{ needs.draw.outputs.draft_file }}
+          draft_sha256: ${{ needs.draw.outputs.draft_sha256 }}
 
       - name: Judge this leg's pairs
         run: |

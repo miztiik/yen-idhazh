@@ -122,7 +122,7 @@ That sentence is worth nothing unless it is checkable, so it is five conditions 
 | 11b | The content-similarity judge reads its own margin | 11a | K | PENDING | - | - | - |
 | 14 | The judge fills the stamp | 8, 11b, 13 | K | PENDING | - | - | - |
 | 15b | The content-similarity judge fills its metrics and registers as a tenant | 6, 14, 15a | L | PENDING | - | - | - |
-| 16 | The model block becomes one composite action | - | M | PENDING | - | - | - |
+| 16 | The model block becomes one composite action | - | M | DONE | p38m | - | worker |
 | 24 | The council runs verbs of its own over a tenant list | 2, 15a, 16 | N | PENDING | - | - | - |
 | 17 | The council runs the tenant and files its own outcome row | 5, 15a, 24 | O | PENDING | - | - | - |
 | 25 | The config check moves to the tenant that owns the number | 9, 24 | P | PENDING | - | - | - |
