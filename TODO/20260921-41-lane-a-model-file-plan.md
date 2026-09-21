@@ -15,7 +15,8 @@ Execute per docs/how-to/execute-a-plan.md: one owner, one worktree per pull requ
 | Hard scope - in | Delete the reader that parses the server's log. Delete the decode stamp whole, and the dead run fingerprint with it. Delete the draft-head fields. Delete both decode caps and the arithmetic that reconciled them. Make the model file carry llama-server's own flag spellings in a server block, with a request block beside it for the four values that are not server flags - which deletes the translation tables, the deny list and the import-time assertion together. Delete the run-identity closure, which has no production caller. Derive each model's turn markers from its own template at server start, holding them in memory, which deletes the turn block, its eight keys and the check that audited our copy of it. Amend the two clauses of the engineering contract this plan contradicts, in the pull request that contradicts them. |
 | Hard scope - out | See the table below. |
 | Supersedes | Plan 39 rows 2, 6, 11, 16, 18, 21, the model-shape half of row 3, and the Guardrail #3 and section 11 clauses of row 12. Those rows are `COLLAPSED` in plan 39's Reckoner and are not executed from there. |
-| Hands to Lane B | Plan 39 row 5 (the installer stops naming a repository) runs as Lane B's last row, behind row 13 and behind pull request A of this plan - it adds `<role>.runtime` to the model file, which the typed shape refuses until row 5 here lands. Plan 39 row 3's workflow half is absorbed by row 13. The two log-format assertions at `backend/tests/workflows/test_model_server_jobs.py:446` and `:487` belong to plan 39 row 10, not to row 1 here. |
+| Waits on Lane B | **Pull request A of this plan merges after pull request B1 of [`20260921-42-lane-b-workflows-plan.md`](20260921-42-lane-b-workflows-plan.md).** `backend/tests/workflows/test_runtime_accepts.py:11` imports `SpeculationType`, which row 3 here deletes, and a deleted import raises at test collection rather than at an assertion. Plan 42 row 1 deletes that test. |
+| Hands to Lane B | Plan 39 row 3's workflow half is plan 42 row 4, and it adds no key to the model file. Plan 39 row 5 (`<role>.runtime`) is handed to plan 40 row 1, its only consumer, so nothing in this plan waits on it. The two log-format assertions at `backend/tests/workflows/test_model_server_jobs.py:446` and `:487` belong to plan 42 row 7, not to row 1 here. |
 | ESCALATE triggers | (1) Row 7 moves the turn-marker boundary check from configuration load to server start. It must still run in every process that decodes, before the first article, and refuse identically. If it cannot, stop - that is Guardrail #11's control, and only its position moves. (2) Row 5 retypes `ModelRef.inference`, which all 34 committed `run.json` files embed; the run manifest's version stamp and changelog line ship in the same commit or the row stops. (3) Row 3 deletes `ModelRef.draft`, which 6 committed run records carry; the read-side line ships in the same commit or the row stops. (4) Rows 2 and 4 remove columns from committed ledgers; each uses that ledger's retired-cell mechanism, and where none exists the row builds one rather than rewriting committed data by hand. (5) `MODELS_FILE_PATTERN` must survive byte-identical. (6) Row 6 amends `CLAUDE.md`; it lands inside pull request A, never after. (7) Any row that would raise a runner budget figure (Guardrail #2). |
 | Chosen strategy | Two pull requests, split at the prompt path. A carries everything that cannot change a rendered prompt. B carries the markers, which is the only change here that can, so a moved prompt has exactly one candidate cause. Fowler rules the contracts, Carmack the runtime, Andre the decode surface. |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 1.` |
@@ -115,7 +116,7 @@ Two blocks under each role:
 
 **Nine keys this project reads by name** - `n_ctx`, `n_batch`, `n_threads`, `n_parallel`, `load_mode`, `temperature`, `top_p`, `seed`, `request_timeout_minutes` - reach their readers through one nine-entry alias map from our name to the flag name, declared once beside the builder. Four of them are persisted under our names on the run record and drawn in words on a console panel, which is why the alias map exists rather than a rename.
 
-Entry-level keys keep their current names: `id`, `repo`, `revision`, `file`, `sha256`, `byte_count`, `arch`. `<role>.runtime` arrives with Lane B and is not declared here. `turns` leaves entirely in row 7.
+Entry-level keys keep their current names: `id`, `repo`, `revision`, `file`, `sha256`, `byte_count`, `arch`. `<role>.runtime` arrives with plan 40 row 1 and is not declared here. `turns` leaves entirely in row 7.
 
 **Deleted from the file**: `declared_for` on the turns block, `draft`, `max_answer_tokens`, `max_think_tokens`, and every key's old name once the server block carries the flag. All five committed files are rewritten once, mechanically, in row 5.
 
@@ -205,7 +206,7 @@ The section 1a, section 9 and section 10 amendments stay with plan 39 row 1, bec
  | 1 | Whether an optimisation engaged is the runtime's business, and this project asked by parsing a log line at a raised verbosity | Carmack |
  | 2 | **The census runs before the deletion, not after.** `flash_attention_state` has no caller in the tree today, so no console surface loses a field and no browser smoke is owed - but the row proves that rather than assuming it | Carmack and Fowler |
  | 3 | `RETIRED_TURN_MARKERS` guards against a file deleted on 2026-09-13 reappearing. Nine lines, no consumer, and no mechanism that could recreate it. It rides with this row because this row already opens the loader | Fowler |
- | 4 | The two log-format assertions in `backend/tests/workflows/test_model_server_jobs.py` are not about this reader. They check a workflow's log-matching step, which is plan 39 row 10's subject | Carmack |
+ | 4 | The two log-format assertions in `backend/tests/workflows/test_model_server_jobs.py` are not about this reader. They check a workflow's log-matching step, which is plan 42 row 7's subject | Carmack |
  | 5 | The error-body classifier stays. It sorts a failure into this project's own taxonomy | Fowler |
 
 - **Rejected alternatives:**
@@ -257,14 +258,14 @@ The section 1a, section 9 and section 10 amendments stay with plan 39 row 1, bec
   - `backend/tests/test_summarize.py`, `backend/tests/test_fingerprint.py`
   - the documentation pages that describe it
 - **Acceptance gates:** local - `python -m pytest backend/tests -q -k 'summarize or fingerprint or model'`; CI - full suite. ESCALATE trigger 3 applies.
-- **Oracle:** a committed `run.json` carrying a draft head parses after the change, asserted against one of the six real files; and no Python module or contract mentions a draft head, a speculation kind or a speculative argument, proved by census. The first half can fail and is why this is its own row. What it cannot settle: whether the workflow wiring is gone - that half is Lane B's.
+- **Oracle:** a committed `run.json` carrying a draft head parses after the change, asserted against one of the six real files; and no Python module or contract mentions a draft head, a speculation kind or a speculative argument, proved by census. The first half can fail and is why this is its own row. What it cannot settle: whether the workflow wiring is gone - that half is plan 42 row 4's.
 - **Decisions:**
 
  | # | Decision | Authority |
  | --- | --- | --- |
  | 1 | It is deleted rather than kept unused. A measurement on 2026-09-12 found it changes the output on nine articles of nine, so it was never a free speed-up | Owner ruling 2026-09-21 |
- | 2 | **The row splits at the seam its own scope carries.** The model-shape half runs here because it edits the files row 5 rewrites. The fetch half - a companion-file list, a download loop and an installer publishing each landed path - touches no contract module and runs in Lane B with row 13 | Carmack and Fowler |
- | 3 | The census closes twice: here for the Python and contract surface, and again at Lane B's close, because the fetch half is what makes speculative decoding reachable again as configuration | Carmack |
+ | 2 | **The row splits at the seam its own scope carries.** The model-shape half runs here because it edits the files row 5 rewrites. The workflow half - the action's four draft inputs, the fetch script's draft branches and four workflows' pass-through wiring - touches no contract module and runs as plan 42 row 4 | Carmack and Fowler |
+ | 3 | The census closes twice: here for the Python and contract surface, and again at plan 42's close for `.github/` and the workflow tests | Carmack |
 
 - **Rejected alternatives:**
 
