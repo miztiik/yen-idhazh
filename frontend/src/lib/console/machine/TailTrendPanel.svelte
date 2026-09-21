@@ -20,16 +20,22 @@
 		dayColumns,
 		frame,
 		linearAxis,
+		modelRuleRow,
 		modelRuleTitle,
 		modelRules,
 		noModelRuleNote,
 		observeWidth,
 		pointerReadout,
 		readoutMarks,
-		MODEL_RULE_ROW,
 		type Frame
 	} from '$lib/charts/frame';
 	import { shortDate } from '$lib/format';
+	import {
+		namesMoved,
+		settingsByDate,
+		unreadRuleNote,
+		type SettingsMoved
+	} from '$lib/console/settings-moved';
 	import { boundaryDates, firstOfDay, inSpan, runTicks, MARK_PAD } from './run-axis';
 	import type { ChartConfig } from '$lib/server/config';
 
@@ -38,6 +44,7 @@
 		start,
 		end,
 		modelChanges,
+		moved,
 		chart,
 		windowDays,
 		days,
@@ -48,6 +55,9 @@
 		start: string;
 		end: string;
 		modelChanges: readonly string[];
+		/** What the run record says moved, by date. A date in `modelChanges` with no
+		 * entry here moved something the record cannot name. */
+		moved: readonly SettingsMoved[];
 		chart: ChartConfig;
 		windowDays: number;
 		days: number;
@@ -106,14 +116,28 @@
 		)
 	);
 	const tailRules = $derived(modelRules(modelChanges, tailDates, tailX));
+	/** The words for one date, or none where the record could not name them. */
+	const movedOn = $derived(settingsByDate(moved));
 	const tailStrip = $derived(
 		tailData.map((column, index) => ({
 			...column,
 			x: tailX[index] ?? 0,
 			rows: tailBoundaries.has(tailRuns[index]?.date ?? '')
-				? [...column.rows, MODEL_RULE_ROW]
+				? [...column.rows, modelRuleRow(namesMoved(movedOn.get(tailRuns[index]?.date ?? '') ?? []))]
 				: column.rows
 		}))
+	);
+	/** Days this span covers, that a setting moved on, and that no run of this
+	 * chart timed enough items to draw. Decision 4 of Row #22: the rule and the
+	 * absence are both drawn, because the days nobody measured are exactly the
+	 * days a before-and-after is least safe to read across. */
+	const tailUnread = $derived(
+		moved.filter(
+			(one) =>
+				one.date >= start &&
+				one.date <= end &&
+				!tailRuns.some((run) => run.date === one.date)
+		)
 	);
 	const tailMarks = $derived(readoutMarks(tailStrip));
 	const tailResting = $derived(tailStrip.at(-1) ?? null);
@@ -171,6 +195,9 @@
 				No run in these {days} days timed {floor} items, which is the floor
 				below which a p99 is just the last item.
 			</p>
+			{#if tailUnread.length > 0}
+				<p class="reads" data-model-rule-unread="machine-latency">{unreadRuleNote(tailUnread)}</p>
+			{/if}
 		{:else}
 			<div class="plot" data-readout-columns={tailStrip.length}>
 				<div use:observeWidth={(px) => (tailWidth = px)}>
@@ -260,7 +287,7 @@
 								stroke-dasharray="3 3"
 								data-model-rule-line={rule.date}
 							>
-								<title>{modelRuleTitle(rule.date)}</title>
+								<title>{modelRuleTitle(rule.date, namesMoved(movedOn.get(rule.date) ?? []))}</title>
 							</line>
 						{/each}
 
@@ -315,6 +342,10 @@
 				<p class="reads">
 					<span data-model-rule-empty="machine-latency">{noModelRuleNote(days)}</span>
 				</p>
+			{/if}
+
+			{#if tailUnread.length > 0}
+				<p class="reads" data-model-rule-unread="machine-latency">{unreadRuleNote(tailUnread)}</p>
 			{/if}
 
 			<p class="reads" data-latency-note>

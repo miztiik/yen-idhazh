@@ -486,14 +486,24 @@ export function modelRules(
 /** What one rule says to anybody who points at it.
  *
  * One sentence in one place, so two charts cannot describe one event
- * differently. It names the set the stamp actually covers rather than saying
- * "the model": the stamp moves for a reworded prompt or a rebuilt runtime as
- * readily as for new weights, and four of the five stamps in the ledger cannot
- * be expanded into their cause at all (measured 2026-08-27,
+ * differently. Where the run record named the fields that moved, they are named
+ * here; where it did not, the sentence names the set the stamp covers rather
+ * than saying "the model", because the stamp moves for a reworded prompt or a
+ * rebuilt runtime as readily as for new weights and four of the five stamps in
+ * the ledger cannot be expanded into their cause at all (measured 2026-08-27,
  * `docs/concepts/evaluation.md`). Naming one candidate cause would be a guess.
+ *
+ * `settings` arrives already in words - `$lib/console/settings-moved` owns the
+ * translation from a contract field name, so no chart holds a second copy of it.
  */
-export function modelRuleTitle(date: string): string {
-	return `A new model, prompt or setting started on ${shortDate(date)}. Everything left of this line was written by the one before it.`;
+export function modelRuleTitle(date: string, settings: string = ''): string {
+	const what = settings === '' ? 'A new model, prompt or setting' : capitalise(settings);
+	return `${what} started on ${shortDate(date)}. Everything left of this line was written by the one before it.`;
+}
+
+/** A sentence opener out of a phrase that begins "the ...". */
+function capitalise(text: string): string {
+	return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 /** The readout row a chart prints on a day the pipeline changed.
@@ -506,6 +516,18 @@ export const MODEL_RULE_ROW: ReadoutRow = {
 	value: 'changed on this day',
 	colour: ''
 };
+
+/** The same row, naming what moved where the record named it.
+ *
+ * The label never changes, so a reader stepping the columns with an arrow key
+ * meets one heading whatever the day holds, and every setting the day moved is
+ * on one line - five hairlines on one date would be a smear, and five lines in
+ * the strip would be the same smear written out.
+ */
+export function modelRuleRow(settings: string): ReadoutRow {
+	if (settings === '') return MODEL_RULE_ROW;
+	return { ...MODEL_RULE_ROW, value: `${settings} changed on this day` };
+}
 
 /** What a chart says where the days it drew hold no change.
  *
