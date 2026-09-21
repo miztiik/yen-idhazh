@@ -799,7 +799,17 @@ jobs:
           # block, which this step is not for.
           # `n_ctx_slot` and `n_ctx_seq` are one field under two llama.cpp
           # spellings, and the pin does not stop a later bump from renaming it.
-          grep -E '^[0-9.]+ [A-Z] (srv|slot) |n_ctx_slot|n_ctx_seq|n_ctx_per_seq' llama-server.log || true
+          pattern='^[0-9.]+ [A-Z] (srv|slot) |n_ctx_slot|n_ctx_seq|n_ctx_per_seq'
+          grep -E "$pattern" llama-server.log || true
+          # What that pattern found, against what the log holds. A pattern that
+          # matches nothing prints nothing and exits 0, which is how `^(srv|slot) `
+          # survived two measured runs finding 1 line in 40 - the line beside it
+          # did match, so the step never looked empty. This counts on the real
+          # log, on the real build, on every run, so it says so the day
+          # llama.cpp renames a field.
+          matched=$(grep -cE "$pattern" llama-server.log || true)
+          total=$(wc -l < llama-server.log)
+          echo "matched ${matched:-0} of ${total} lines of llama-server.log"
           # `f_sim_best` is the shared prefix over the incoming prompt and
           # `f_keep` the same prefix over what the slot held. The distribution is
           # where a prefix-reuse loss shows; the presence of the line is not.
@@ -826,11 +836,28 @@ jobs:
         run: |
           cat memory-peak.txt 2>/dev/null || echo "memory-peak.txt not found"
           if [ -f rss-samples.tsv ]; then
+            # The header row decides which column is which. Reading by position
+            # meant a column inserted anywhere but the end shifted every field
+            # after it, and the log then reported `python_procs` - a count of
+            # three - as a peak in kilobytes. Nothing failed and the number was
+            # out by six orders of magnitude. A name that is gone says so and
+            # stops, which is the whole class of defect.
             awk -F'\t' '
-              NR > 1 {
-                if ($3 + 0 > llama) llama = $3 + 0
-                if ($6 + 0 > py) py = $6 + 0
-                if ($2 + $4 > together) together = $2 + $4
+              NR == 1 {
+                for (i = 1; i <= NF; i++) at[$i] = i
+                split("llama_vmrss_kb llama_vmhwm_kb python_vmrss_kb python_vmhwm_kb", want, " ")
+                for (i in want) {
+                  if (!(want[i] in at)) {
+                    printf "rss-samples.tsv has no %s column\n", want[i]
+                    exit 1
+                  }
+                }
+                next
+              }
+              {
+                if ($(at["llama_vmhwm_kb"]) + 0 > llama) llama = $(at["llama_vmhwm_kb"]) + 0
+                if ($(at["python_vmhwm_kb"]) + 0 > py) py = $(at["python_vmhwm_kb"]) + 0
+                if ($(at["llama_vmrss_kb"]) + $(at["python_vmrss_kb"]) > together) together = $(at["llama_vmrss_kb"]) + $(at["python_vmrss_kb"])
               }
               END {
                 printf "peak llama VmHWM %d kB, peak python VmHWM %d kB, most the two held at once %d kB, n=%d samples\n", llama, py, together, NR - 1
