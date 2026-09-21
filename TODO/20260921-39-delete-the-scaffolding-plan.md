@@ -44,25 +44,45 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 ## Section 1 - Status Reckoner
 
+Ordered by execution, not by row number. The row numbers are identities and do not move; the order below is what an owner runs, and it changed after the advisory review on 2026-09-21 (section 1a).
+
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The generated contract layer goes | - | A | PENDING | - | - | - |
-| 2 | The model file is plain JSON | 1 | B | PENDING | - | - | - |
-| 3 | The draft head goes | 1 | B | PENDING | - | - | - |
+| 13 | The entry path is one action taking a model file | - | A | PENDING | - | - | - |
+| 2 | The model file is plain JSON | - | A | PENDING | - | - | - |
+| 5 | The installer stops naming a repository | 2 | B | PENDING | - | - | - |
+| 6 | The startup probe keeps one check | 2 | B | PENDING | - | - | - |
+| 16 | The thinking budget and the two-span call go | 2 | B | PENDING | - | - | - |
+| 3 | The draft head goes | - | A | PENDING | - | - | - |
 | 4 | The capability probe goes | - | A | PENDING | - | - | - |
-| 5 | The installer stops naming a repository | 2 | C | PENDING | - | - | - |
-| 6 | The startup probe keeps one check | 2 | C | PENDING | - | - | - |
-| 7 | Qualification asks each article once | 1 | B | PENDING | - | - | - |
-| 8 | Both test pipelines commit what they produce | 1 | B | PENDING | - | - | - |
-| 9 | The benchmark workflow's closed-world tests go | 3,4 | C | PENDING | - | - | - |
-| 10 | The workflow censuses go | 3,4 | C | PENDING | - | - | - |
-| 11 | The server-log reader goes | - | A | PENDING | - | - | - |
-| 12 | The engineering contract and the pages catch up | 1 | B | PENDING | - | - | - |
-| 13 | The entry path is one script and one action | 2,3,4,5 | D | PENDING | - | - | - |
 | 14 | The image benchmark goes, and two heavy wheels with it | - | A | PENDING | - | - | - |
 | 15 | The hosted span sink goes | - | A | PENDING | - | - | - |
+| 10 | The workflow censuses go | 3,4 | C | PENDING | - | - | - |
+| 9 | The benchmark workflow's closed-world tests go | 3,4 | C | PENDING | - | - | - |
+| 11 | The server-log reader goes | - | A | PENDING | - | - | - |
+| 17 | The utilities and evaluations nothing calls go | - | A | PENDING | - | - | - |
+| 7 | Qualification asks each article once | - | A | PENDING | - | - | - |
+| 8 | Both test pipelines commit what they produce | - | A | PENDING | - | - | - |
+| 1 | The generated contract layer goes | 2,3,6,16 | D | PENDING | - | - | - |
+| 12 | The engineering contract and the pages catch up | 1 | E | PENDING | - | - | - |
 
-**Row #12 is not last.** The clauses it amends are contradicted the moment row #1 lands, and CLAUDE.md section 0 requires a conflicting rule to be amended in the same change. Its first task ships inside row #1's pull request; the rest of the documentation follows once the other rows are done.
+**Row #12 is not last in practice.** Its first clause amendment ships inside row #2's pull request, because row #2 contradicts the contract the moment it lands and CLAUDE.md section 0 requires the conflicting rule to move in the same change. The rest of the documentation follows row #1.
+
+## Section 1a - What the advisory review changed, 2026-09-21
+
+Fowler, Carmack and Andre reviewed the plan. Three of its statements were wrong and the order was wrong.
+
+| What the plan said | What is true | Ruled |
+| --- | --- | --- |
+| Row #1 runs first, because everything shrinks after it | Generated lines are the cheapest in the repository to hold and the most expensive to remove. The toll a person actually pays - six edits to name one option - is removed by row #2, and standing a model up is made cheap by row #13. Row #1 now runs late | Owner, on all three advisors agreeing |
+| Row #13 calls the benchmark, qualification and pipeline-test workflows "call sites" of the shared model-server action | They are not call sites. Only the nightly run and the council call it. The other three each carry their **own copy** of fetch, verify, start and health - seven copies, about 465 lines. Row #13 now deletes the copies | Carmack |
+| Row #13's action takes a token and a port | It takes a **model file path**. The action reads the summarize role out of one fixed configuration file today, which is exactly why three workflows wrote their own copy | Carmack |
+| Row #7's oracle is that all ten gates return the same verdict | That oracle cannot fail: the row's own evidence is that no gate reads the replay dimension, so it passes whether the code is right or wrong. The oracle is now the read-side migration on committed payloads | Fowler |
+| Plan 40: a 27B at two bits projects near 14 GiB against a 16 GB runner | Memory is not the leading risk. The incumbent peaks at 12.57 to 13.16 GiB for the server on a 5.29 GiB model, driven by the 65,536 window and its cache rather than the weights. At a 32,768 window the larger model fits with more headroom than production has now. The risks in order are: does the fork binary execute, then decode rate, then the window, then the packing | Carmack |
+
+Two zero-cost defects were found while reading and are folded into row #2: a thinking budget of zero reads as uncapped because the code spells it `or 0`, and a missing turn-marker key renders an anonymous turn because the reader spells it `.get(..., "")`. Row #2 uses direct indexing and an explicit `is None` instead.
+
+Four proposals were declined. Keeping the capability probe until the fork is proven (owner: gone now). Keeping a second startup check (owner: one check). Pointing the benchmark target at the fork before the cleanup (owner: clean up first). Bounding the summaries collection by dispatch count rather than days (Fowler proposed it; the retention window stays, because a collection with no time bound is the growth Guardrail #12 names).
 
 ## Section 2 - Row #1 - The generated contract layer goes
 
@@ -90,6 +110,10 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
  | 2 | The three live types are inlined by hand next to the code that imports them. Hand-written is what the site already does for the day payload, the search index and the console band | Fowler |
  | 3 | The drift gate goes with the artefacts. It checked that a generated file still matched the thing that generated it, which is a loop | Fowler |
  | 4 | The Pydantic models stay. They are the validation; the schemas were a copy of them in another notation | Fowler |
+ | 5 | **The page that describes the layer is deleted, not refreshed.** `docs/architecture/contracts/schemas.md` is routed to by the agent bootstrap, so the next agent reading a page titled for schemas builds what it describes. This is the single most likely way the whole layer returns | Fowler |
+ | 6 | **The agent pointer is amended by its words.** `AGENTS.md` says the contracts are generated from the models in three places, and agent tools read that file instead of the engineering contract. An unnamed amendment is one nobody checks, so row #12's clause table names those three phrases the way it names the five | Fowler |
+ | 7 | **The changelog requirement dies with its consumer.** The prose on every contract is copied into the generated schema and nowhere else, and a guard raises when it is empty. Deleting the consumer and leaving the requirement taxes every future contract with two sentences nobody reads. The version stamp stays; the prose, the guard and the test that walks every contract file go | Fowler |
+ | 8 | **A green suite is not the proof here.** Three surviving tests are parametrized over a glob of the deleted directory and will pass with zero cases rather than fail. The check is a comparison of collected test counts before and after, not pass or fail, and the shared constant pointing at the deleted directory is removed in the same commit | Fowler |
 
 - **Rejected alternatives:**
 
@@ -125,7 +149,9 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
  | 3 | `declared_for` is deleted. It was refused unless it equalled a digest already in the same object, so it carried no information | Fowler |
  | 4 | The refusals for renamed keys are deleted. They are migration scaffolding for renames that already landed, and no committed file carries an old spelling | Fowler |
  | 5 | The turn-marker check stays and runs against the plain dictionary. It is the trust boundary, not a type check | Fowler, Guardrail #11 |
- | 6 | The run's recorded identity hashes the whole options map. This is better than what it replaces, where an option outside a named list of five moved the output without moving the record | Fowler |
+ | 6 | The run's recorded identity hashes the whole options map in a canonical form - keys sorted, scalars normalised - so a change in key order cannot move the stamp. It also prints the sampling values beside the hash, because a person reading a failed verdict needs the number, not a digest | Fowler, with Andre on what an evaluation record must carry |
+ | 7 | **The reader indexes directly and compares against `None` explicitly.** Two defects exist today and both get worse untyped: a thinking budget of zero reads as uncapped because the code spells it `or 0`, and a missing turn-marker key renders an anonymous turn because the reader spells it `.get(..., "")`. Direct indexing raises at load and names the key. This costs nothing | Andre |
+ | 8 | **The field on the application configuration that holds the model file becomes an untyped mapping that permits unknown keys.** Left typed with extras forbidden, the first new option is a validation error and re-adding the field is the obvious fix | Fowler |
 
 - **Rejected alternatives:**
 
@@ -253,7 +279,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
   - `backend/tests/workflows/test_qualification_and_browser.py` and the qualification tests
   - `docs/concepts/evaluation.md`
 - **Acceptance gates:** local - `python -m pytest backend/tests -k qualif -q`; CI - full suite. ESCALATE trigger 3 applies.
-- **Oracle:** all ten gates return the same verdict on a recorded payload with the replay dimension collapsed to one, gate by gate. Run it against the base tree first to confirm it can fail.
+- **Oracle:** a qualification payload written before this change still reads after it, asserted against a committed payload that carries the deleted fields. That is the check, and it can fail. **The obvious oracle - that all ten gates return the same verdict - cannot fail**, because the row's own evidence is that no gate reads the replay dimension, so it passes whether the code is right or wrong. What the migration check cannot settle: how widely a sampler's wording varies; that reading leaves with the diagnostic and nothing replaces it.
 - **Decisions:**
 
  | # | Decision | Authority |
@@ -417,36 +443,38 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
  | 1 | Take a named exception for each row instead of amending the contract | Twelve exceptions to one rule is the rule being wrong | Twelve dated notes and a guardrail nobody believes | Fowler |
  | 2 | Amend the contract after the rows land | Leaves the repository in a state where its own contract forbids its own code | Nothing saved; it is a sequencing error | Owner |
 
-## Section 14 - Row #13 - The entry path is one script and one action
+## Section 14 - Row #13 - The entry path is one action taking a model file
 
-- **Scope:** Collapse the three shell scripts that stand a model up into one, and let the composite action read the model file instead of being handed eight values a caller dug out of it.
+- **Scope:** Delete the seven hand-copied blocks of fetch, verify, start and health spread across three workflows, collapse the three shell scripts into one, and let the composite action take a model file path instead of eight values a caller dug out of a fixed configuration.
 - **Files touched:**
   - `.github/scripts/llama-cpp-pin.sh`, `install-llama-runtime.sh`, `fetch-model-runtime.sh` (three become one)
-  - `.github/scripts/start-llama-server.sh`
+  - `.github/scripts/start-llama-server.sh` (its one-arm role dispatch and its limit echoes)
   - `.github/actions/model-server/action.yml`
-  - `.github/workflows/digest.yml`, `validate.yml`, `llm-council.yml`, `idhazh-pipeline-tests.yaml`, `measure.yml` (their call sites)
+  - `.github/workflows/measure.yml` (four copies), `validate.yml` (one), `idhazh-pipeline-tests.yaml` (one)
+  - `.github/workflows/digest.yml`, `llm-council.yml` (their call sites, for the new input)
   - `backend/tests/workflows/_harness.py`
   - `docs/reference/ci-model-runtime.md`
 - **Acceptance gates:** local - `python -m pytest backend/tests/workflows -q`, `shellcheck` on the merged script; CI - full suite, and one real dispatch of the pipeline test before the row closes.
-- **Oracle:** standing a model up is one action call with two inputs, and the binary and weights that land on the runner are byte-identical to what lands today - proved by the digest checks that already run on both. What it cannot settle: whether the merged script is easier to read; that is a judgement, and the line count is the only part of it that is a fact.
-- **The count today:** 132 lines across three shell scripts, plus a 195-line action with eight inputs, plus a 72-line start script, plus a 50-line configuration action. About 450 lines to install a binary, download a file and start a process.
+- **Oracle:** every workflow that stands a model up does it through one action call, proved by grep finding no remaining inline fetch or health step; and the binary and weights that land on the runner are byte-identical to what lands today, proved by the digest checks that already run on both ends.
+- **The count, corrected 2026-09-21:** only the nightly run and the council call the shared action. The benchmark workflow carries four copies of the block, the qualification workflow one and the pipeline test one - about 465 lines. Adding the three shell scripts (132), the action itself (195) and the start script (72), it is roughly 860 lines to install a binary, download a file and start a process.
 - **Decisions:**
 
  | # | Decision | Authority |
  | --- | --- | --- |
- | 1 | The three scripts become one. They were split so one caller could install the binary without downloading weights; row #4 deletes that caller, so the reason is gone | Carmack |
- | 2 | The action takes a token and a port. Everything else it needs is in the model file, which row #2 makes a plain dictionary one utility can read | Carmack |
- | 3 | The three draft inputs go with row #3 | Carmack |
- | 4 | The health check asks one endpoint. Asking three was belt and suspenders over a digest check that already pins the exact file | Carmack |
+ | 1 | The action takes a **model file path**, defaulting to the committed pointer. It reads one fixed configuration file today, which is the coupling that made three workflows write their own copy | Carmack |
+ | 2 | The seven copies are deleted, not tidied. Per-workflow freedom to start a server differently is what produced four copies of one download | Carmack |
+ | 3 | The three scripts become one. They were split so one caller could install the binary without weights; row #4 deletes that caller | Carmack |
+ | 4 | The health check asks one endpoint. Asking three was belt and suspenders over a digest check that already pins the file | Owner ruling 2026-09-21 |
  | 5 | The weights digest check stays. It is the one step on this path that guards bytes rather than restating configuration | Carmack |
+ | 6 | The candidate weights cache leaves the three dispatch workflows and stays in the nightly run and the council. A candidate is always a cache miss, so restoring it costs a fraction of a dispatch and buys nothing | Carmack |
 
 - **Rejected alternatives:**
 
  | # | Option | Why rejected | What it would cost to take | Authority |
  | --- | --- | --- | --- | --- |
- | 1 | Keep the three scripts and only drop the inputs | The split's stated reason is deleted by row #4, so keeping it keeps a shape whose justification is gone | About 60 lines and two files a reader has to open to follow one download | Carmack |
- | 2 | Delete the composite action and inline its steps | Five steps re-spelled in each of five workflows | About 195 lines removed and roughly 400 added | Carmack |
- | 3 | Collapse the configuration action in too | It does a different job - it builds the configuration a dispatch runs on - and folding it in makes one thing that does two | About 50 lines, and a file with two answers | Fowler |
+ | 1 | Keep the three scripts and only drop the action's inputs | The split's stated reason is deleted by row #4, and the seven copies survive - which is the actual cost | About 465 lines left standing, and every future workflow copying an eighth time | Carmack |
+ | 2 | Delete the composite action and inline its steps everywhere | That is the current state, and it is what this row exists to end | About 195 lines removed and roughly 400 added | Carmack |
+ | 3 | Collapse the configuration action in too | It builds the configuration a dispatch runs on, which is a different job | About 50 lines, and one file with two answers | Fowler |
 
 ## Section 15 - Row #14 - The image benchmark goes, and two heavy wheels with it
 
@@ -501,3 +529,69 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
  | --- | --- | --- | --- | --- |
  | 1 | Keep it, since the extra is opt-in and unused | An unused second implementation is the thing that rots, and it is a sink pointed at a third party sitting in a repository whose contract says there is no sink | About 120 lines across four files, a knob, an extra, and a contradiction a reader has to resolve | Fowler |
  | 2 | Keep the sink interface and delete only the hosted implementation | An interface with one implementation is the implementation | About 40 lines kept for a shape with nothing behind it | Fowler |
+
+## Section 17 - Row #16 - The thinking budget and the two-span call go
+
+- **Scope:** Delete the reasoning-token budget, which llama-server has no parameter for and this project implements itself, and with it the machinery that splits one logical call into two requests.
+- **Files touched:**
+  - `backend/idhazh/llm/server.py` (`thinking_span`, `answer_span`, the budget arithmetic in the request bodies)
+  - `backend/idhazh/stages/common.py` (the two-span caller)
+  - `backend/idhazh/stages/two_calls.py`
+  - `backend/idhazh/similarity/judge.py`
+  - `backend/idhazh/summarize.py`
+  - `backend/idhazh/evals/qualify.py` (the context arithmetic that adds the budget)
+  - `backend/idhazh/fingerprint.py`
+  - `backend/idhazh/contracts/knobs/inference.py`
+  - `backend/idhazh/contracts/judge_call.py`, `story_similarity_pair.py` (the span-count cells)
+  - `config/models/` (the entries that declare a budget)
+  - `backend/tests/` for each of the above
+- **Acceptance gates:** local - `python -m pytest backend/tests -k 'summarize or classify or judge or qualif' -q`; CI - full suite.
+- **Oracle:** one reasoning call is one request, and the answer it returns satisfies the same schema it satisfies today - asserted against a recorded server response for a thinking entry and a non-thinking entry. What it cannot settle: how long a reasoning model now runs before it answers. That is a measurement, and plan 40's dispatch is where it is taken.
+- **The finding:** llama-server carries no reasoning-budget parameter. `server_argv` spells no such option - `--reasoning-preserve` controls whether reasoning text is returned, not how much is produced. The budget is this project's own construction: one call is sent twice, once with the reasoning cap and once with the schema.
+- **Decisions:**
+
+ | # | Decision | Authority |
+ | --- | --- | --- |
+ | 1 | A budget this project invented for a runtime that has no such parameter is this project's scaffolding, and it goes | Owner ruling 2026-09-21 |
+ | 2 | The two-span split goes with it, because the split exists only to apply the budget. One request a call replaces two | Carmack |
+ | 3 | The risk is named rather than guarded: a reasoning model now runs until it stops or reaches the one remaining cap. Plan 40's dispatch measures what that costs, which is the experiment the owner asked for rather than a knob set in advance | Owner ruling 2026-09-21 |
+ | 4 | The span-count cells on the two judge records go. A count of spans in a world with one span is a column of ones | Fowler |
+
+- **Rejected alternatives:**
+
+ | # | Option | Why rejected | What it would cost to take | Authority |
+ | --- | --- | --- | --- | --- |
+ | 1 | Keep the budget, delete only the typed field | The field is not the cost. The two-span call is, and it is two requests and a re-prefill for every reasoning item | About 250 lines kept, and one extra request a call | Carmack |
+ | 2 | Wait for plan 40's dispatch before deciding | The dispatch measures what running without a budget costs. It cannot measure that while the budget is still applied | One dispatch, and a reading about the budget rather than the model | Andre |
+
+## Section 18 - Row #17 - The utilities and evaluations nothing calls go
+
+- **Scope:** Delete the command-line utilities with no caller anywhere, the evaluation paths with no consumer, and the plan-queue tooling that parses markdown a person wrote.
+- **Files touched:**
+  - `backend/utilities/` - the eleven with no code reference, confirmed by census before each deletion
+  - `backend/utilities/plan_status.py` and its test
+  - `backend/idhazh/evals/labels.py`, `backend/idhazh/contracts/label_row.py`, `backend/utilities/label_queue.py` and their tests
+  - `backend/idhazh/evals/retrieval.py` and its test, plus the two configuration knobs only that test reads
+  - `backend/idhazh/evals/qualify.py`, `backend/idhazh/evals/metrics.py`, `backend/idhazh/contracts/qualification.py` (five demoted score fields no gate reads)
+  - `backend/tests/test_marks.py`
+  - `docs/` pages describing each
+- **Acceptance gates:** local - `python -m pytest backend/tests -q`; CI - full suite.
+- **Oracle:** every deleted module has no importer and no workflow invocation, established by census **before** each deletion rather than after. The census is the check, and it must include `.github/` and `docs/` as well as the code, because a utility named only in a runbook still has a user.
+- **Decisions:**
+
+ | # | Decision | Authority |
+ | --- | --- | --- |
+ | 1 | A one-shot measurement utility retires once its answer is written down. Re-taking the measurement costs writing the script again, which is the correct price for something run once | Fowler |
+ | 2 | The human-label queue goes. It has zero committed rows and was run once; it returns as a short script the day somebody labels something | Andre |
+ | 3 | The retrieval evaluation goes. Its only reader is its own test, it walks the growing committed archive - which CLAUDE.md section 13 forbids by name - and its bar is a date a person bumps to keep it green | Andre |
+ | 4 | Five demoted score fields go. **The two counterweights stay**: without them a faithfulness floor drives the system toward bland copying, and they see what the faithfulness score cannot | Andre |
+ | 5 | The plan-queue tooling goes. It is tooling to read a file a person wrote, and an agent reads the file | Fowler |
+ | 6 | What is lost is named, not waved away: nothing then measures whether archive search finds the right story. The replacement is a fixture of query and answer pairs, written the day search changes | Andre |
+
+- **Rejected alternatives:**
+
+ | # | Option | Why rejected | What it would cost to take | Authority |
+ | --- | --- | --- | --- | --- |
+ | 1 | Keep the retrieval evaluation as the only search-quality measure | An evaluation whose input grows with the archive and whose bar is a hand-bumped date is a maintenance cost wearing a measurement's clothes | About 990 lines, and a test that goes red because somebody published a day | Fowler |
+ | 2 | Delete the two counterweight score fields as well | A faithfulness floor with no counterweight rewards copying the source, which is the failure the counterweights exist to see | About 40 lines, and a quality signal that moves the wrong way | Andre |
+ | 3 | Delete the commit-and-push script, also large | It has eight call sites and a test that drives the real script through race and rebase cases against real repositories. That is this project's own code being wrong, which is what the plan's rule keeps a check for | A retry loop in five workflows, none of them executable in a test | Fowler |
