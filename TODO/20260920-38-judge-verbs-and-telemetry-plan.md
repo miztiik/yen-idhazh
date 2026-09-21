@@ -105,12 +105,12 @@ That sentence is worth nothing unless it is checkable, so it is five conditions 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 15a | The council's package, the tenancy protocol and the shipping capability | - | A | DONE | - | 990 | worker |
-| 9 | The council's clocks and its fan-out width move to a council block | - | B | DONE | p38b | - | worker |
+| 9 | The council's clocks and its fan-out width move to a council block | - | B | DONE | - | 993 | worker |
 | 1a | The council bounds its shard and ships whatever it wrote | 9, 15a | C | PENDING | - | - | - |
 | 2 | The council knows which run it is | 1a | D | PENDING | - | - | - |
 | 3 | The separation and the dictum, written where the next agent reads it | - | E | PENDING | - | - | - |
-| 4 | The judge-call stamp, declared once and naming no judge | - | F | DONE | p38f | - | worker |
-| 5 | The council's own shard-outcome record | 4 | F | DONE | p38f | - | worker |
+| 4 | The judge-call stamp, declared once and naming no judge | - | F | DONE | - | 992 | worker |
+| 5 | The council's own shard-outcome record | 4 | F | DONE | - | 992 | worker |
 | 6 | The content-similarity judge's own metrics | 5 | G | PENDING | - | - | - |
 | 7 | The content-similarity judge's merge-line benchmark record | 5 | G | PENDING | - | - | - |
 | 8 | The pair row gains the stamp, and the store is rewritten | - | G | PENDING | - | - | - |
@@ -278,7 +278,9 @@ The council calls `metrics.csv_row()` and the class-side `csv_columns()` and wri
 
 ### `CouncilShardOutcome` - the council's own record (`backend/idhazh/contracts/council_shard_outcome.py`)
 
-`class CouncilShardOutcome(Contract)`. `__schema_stem__ = "council-shard-outcome"`. One row per shard per run. Key: `("date", "run_id", "shard")`. Store: `state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv`.
+`class CouncilShardOutcome(Contract)`. `__schema_stem__ = "council-shard-outcome"`. One row per shard per run. Key: `("date", "run_id", "judge_id", "shard")`. Store: `state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv`.
+
+**`judge_id` is in the key, and row #5's worker is why.** One council run has one run id, so on a night running two tenants, tenant A's unit 0 and tenant B's unit 0 on the same judged date are the same three cells - and the settlement pass would delete the second as a repeat. That contradicts row #5 decision 3, which puts `judge_id` on the row precisely so a two-tenant night is attributable. Row #17 registers the key with the writer.
 
 **It carries nothing that needs a name for the unit of work.** That is the whole of the separation: this row is about the pipeline, and it reads the same whether the judge it hosted made four hundred model calls or none.
 
