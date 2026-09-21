@@ -205,7 +205,7 @@ the file on disk against `models.summarize.sha256` in the active model file, on 
 cache hit as well as a miss, because a restored cache entry is the one case where
 nobody watched the bytes arrive. So do the two measurement jobs that load the summarizer.
 The rule is written once, under
-[Every download fails loudly, and every weight is checked](#every-download-fails-loudly-and-every-weight-is-checked).
+[Every download fails loudly, and every weight is checked](ci-model-runtime.md#every-download-fails-loudly-and-every-weight-is-checked).
 The health check then asserts that
 `GET /v1/models` returns the configured alias and that `GET /props` names the
 configured filename. A shard that fails either one stops before it summarizes

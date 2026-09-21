@@ -47,7 +47,7 @@ everything before a word of the article arrives.
 **997 and the 1.585 below are the two figures on this page that a gate reads, so
 they are pinned in code rather than only written here.** They are
 `PROMPT_OVERHEAD_TOKENS` and `WORST_TOKENS_A_WORD` in
-[../../backend/idhazh/measured.py](../../backend/idhazh/measured.py), each
+[../../../backend/idhazh/measured.py](../../../backend/idhazh/measured.py), each
 carrying the weights above as its `subject`, and that module refuses either one
 the day the active model file names different weights.
 
@@ -76,7 +76,7 @@ overrun at whatever cap is committed.
 that could not have shipped apart: at the 8,192 window in force on 2026-09-08 a
 10,000-token cap sizes at 172 percent of the window.
 `test_the_longest_article_the_cap_allows_still_fits_the_window` in
-[../../backend/tests/contracts/](../../backend/tests/contracts/)
+[../../../backend/tests/contracts/](../../../backend/tests/contracts/)
 reads both sides from `config/` and fails on any later pair that does not fit.
 **It sizes the single call, which is the path being retired** - the two-call
 pair sizes at 54,887 of the same window
@@ -107,7 +107,7 @@ has now run at the new fingerprint and still cannot answer it**, because the
 `date` input would overwrite a published day, so the priced run summarized
 different articles from its baseline and no quality comparison may be drawn from
 the pair ([what the doubled window and the doubled cap
-cost](#what-the-doubled-window-and-the-doubled-cap-cost-measured-2026-09-09)).
+cost](../pipeline-cost.md#what-the-doubled-window-and-the-doubled-cap-cost-measured-2026-09-09)).
 One run of eval rows now exists on the far side of the boundary. What settles
 the question is a second run at this same fingerprint over a frozen article set,
 against rows written at the same fingerprint - not against anything older, since

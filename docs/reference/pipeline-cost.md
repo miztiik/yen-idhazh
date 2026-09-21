@@ -671,14 +671,18 @@ three python processes to one llama-server. The figure is an upper bound in two
 directions at once, which is the safe direction to be wrong in and the wrong
 direction to subtract from a total.
 
-**Three: the total has never been measured.** Nothing in this repository reads
-`/proc/meminfo`, `MemTotal`, `MemAvailable`, `Committed_AS`, `memory.current` or
-`memory.max` - **zero matches** across `backend/`, `.github/`, `frontend/src/` and
-`config/`, searched 2026-09-09. One cgroup file is read, `/sys/fs/cgroup/memory.peak`,
-and it has measured absent every time: `cgroup_peak_bytes` is empty on **all 225
-rows** of `state/runtime-counters.csv`, counted 2026-09-09. `python_peak_rss_bytes`
-is empty on all 225 too, so the ledger cannot even reproduce the sum in the table
-above - that came from the four capture files and from nowhere else.
+**Three: the total had never been measured, as of 2026-09-09.** Nothing in this
+repository read `/proc/meminfo`, `MemTotal`, `MemAvailable`, `Committed_AS`,
+`memory.current` or `memory.max` - **zero matches** across `backend/`, `.github/`,
+`frontend/src/` and `config/`, searched 2026-09-09. One cgroup file was read,
+`/sys/fs/cgroup/memory.peak`, and it measured absent every time:
+`cgroup_peak_bytes` was empty on **all 225 rows** of
+`state/runtime-counters.csv`, counted 2026-09-09. `python_peak_rss_bytes` was
+empty on all 225 too, so the ledger could not even reproduce the sum in the
+table above - that came from the four capture files and from nowhere else.
+**Neither survives.** That ledger was retired, and the column was deleted from
+the item row on 2026-09-20 because a kernel file absent on every runner can
+never fill one. The next section is the reading that closed this point.
 
 **And nothing has run out of memory.** Those 225 rows span 56 runs, 193 of them
 carrying a peak, and each row exists because the job lived long enough to write

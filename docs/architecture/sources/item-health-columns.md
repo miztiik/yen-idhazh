@@ -264,30 +264,43 @@ Whether changing a knob helped. Config is committed, but a run reads its own day
 ## An empty column means nothing carries it yet
 
 **Read an absence as "nothing carries this into the row", never as "this item
-had no value".** For most of this page's life that was the whole story: 70 of
-113 columns were empty because each had landed with the instrument that measures
-it and without the wiring that carries the same value into the ledger row.
+had no value".** For most of this page's life that was the whole story: most
+columns were empty because each had landed with the instrument that measures it
+and without the wiring that carries the same value into the ledger row.
 
 **That is over.** Since 2026-09-16 both writers prefer the row the shard sealed
-rather than rebuilding it from the article and the summary payloads. The first
-day published under that rule filled **66 columns at once**: 43 of 113 over the
-23 days before it, 109 of 113 with it. Nine are still empty, and each one is
-empty for a reason of its own rather than for want of wiring:
+rather than rebuilding it from the article and the summary payloads, and the
+first day published under that rule filled **66 columns at once** (measured
+2026-09-16). What is still empty is empty for a reason of its own rather than
+for want of wiring, and there are two of those reasons:
 
-| Column | Why nothing carries it |
+| Why it is empty | What to read into it |
 | --- | --- |
-| `truncation_cap_tokens` | The cap has never fired on a committed day. A cell nothing cut is empty, not zero |
-| `cgroup_peak_bytes` | The kernel file is absent on every GitHub-hosted runner this project has probed |
-| `failed_field` | No refused reply has yet named one field. It fills the day a reply is refused for a reason that has one |
-| the six `os_` columns | Minted 2026-09-17. No run has written a row yet |
+| The thing it records has not happened yet | `truncation_cap_tokens` is empty because the cap has never fired on a committed day, and `failed_field` because no refused reply has yet named one field. A cell nothing filled is empty, not zero |
+| The column is newer than every committed run | A column minted after the last run has no row to sit on. The five machine columns minted on 2026-09-20 are in exactly that state, and the first scheduled run after them is the measurement |
+
+**Do not read a list of empty columns off this page.** Which columns are empty
+moves every time a run writes a day, so it is an operator question rather than a
+documented fact (Guardrail #10).
+[`backend/utilities/empty_column_census.py`](../../../backend/utilities/empty_column_census.py)
+walks both ledgers and prints the answer, and it exits non-zero on a column that
+has neither a reader nor a writer. Measured 2026-09-21 over 29 day files and
+14,026 rows, `truncation_cap_tokens` and `failed_field` were the only two
+columns empty on every row.
+
+**A column deleted rather than left empty is a third case, and it leaves this
+page.** `cgroup_peak_bytes` read a kernel file absent on every GitHub-hosted
+runner this project has probed, so no run could ever fill it. It was deleted on
+2026-09-20 and its heading sits in `DROPPED_CELLS`, which is what lets the day
+files an earlier run wrote still read back
+([item-health.md](item-health.md#what-the-machine-had-against-what-a-process-held)).
 
 **The six `os_` columns are the machine's own account of itself**, against the
 RSS marks above them, which are what a process held. They are also the only
-reading that can say whether these runners carry swap at all: nothing committed
-records it today, so the first day written after they land is the measurement.
-
-That count is a reading and not a rule (Guardrail #10). Re-run the command
-rather than trusting this paragraph.
+reading that can say whether these runners carry swap at all, and the first days
+to record them say they do: over 378 rows on two days, swap in use was non-zero
+on 346 of them, at a median of 60 KiB and a worst of 657.9 MiB against a
+3.00 GiB swap file (measured 2026-09-21).
 
 **Every column has a producer.** `slot_id`, `kv_tokens_at_start` and
 `prefix_shared_with_previous` were the last three with none, because nobody had
