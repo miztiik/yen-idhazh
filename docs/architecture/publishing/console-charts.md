@@ -448,17 +448,18 @@ the CSV.
 Measured 2026-09-21 over the committed archive: **20 of 120 run entries carry a
 recorded input manifest, across 7 of the 30 committed days** - 13 to 18 and 20
 September. Over those seven days the prompt took **6 distinct values**, and
-2026-09-15 moved six settings at once: the article extractor, the context size,
-the prompt, the sampling settings, the sanitizer and the truncation cap. One of
-the seven, 2026-09-20, recorded a manifest and moved nothing, which is the state
-that tells a reader the instrument was working. The historical branch still
-draws every day before the cutover, and the commit that dropped
-`pipeline_fingerprint` from nine contracts left it on `EvalRow` - which is
-`state/scores/`, the file `payload.ts` reads at build time and hands to this
-module - rather than on the published projection of that ledger, which nothing
-under `frontend/src/` opened and which was deleted on 2026-09-16. Dropping it
-would make this panel report that nothing moved across the days before the
-record existed, which is a wrong answer where the design asks for a missing one.
+2026-09-15 moved seven settings at once: the article extractor, the context
+size, the prompt, the sampling settings, the sanitizer, the truncation cap and
+the turn markers. One of the seven days, 2026-09-20, recorded a manifest and
+moved nothing, which is the state that tells a reader the instrument was
+working. The historical branch still draws every day before the cutover, and the
+commit that dropped `pipeline_fingerprint` from nine contracts left it on
+`EvalRow` - which is `state/scores/`, the file `payload.ts` reads at build time
+and hands to this module - rather than on the published projection of that
+ledger, which nothing under `frontend/src/` opened and which was deleted on
+2026-09-16. Dropping it would make this panel report that nothing moved across
+the days before the record existed, which is a wrong answer where the design
+asks for a missing one.
 
 **A day is a boundary when it ran an identity the previous recorded day did not
 run.** A day that only stopped using one of yesterday's started nothing, so it
@@ -541,10 +542,11 @@ by name since 2026-09-12, so the same comparison that places the line can say
 what it is.
 
 **One rule a date, never one a setting, and one readout line naming all of
-them.** Measured 2026-09-21, 2026-09-15 moved six settings at once. Six
+them.** Measured 2026-09-21, 2026-09-15 moved seven settings at once. Seven
 hairlines on one date is a smear on exactly the date that most needs reading,
-and six lines in the strip is the same smear written out. Ruled by Susan (Craft
-and Delight), 2026-09-20.
+and seven lines in the strip is the same smear written out. Ruled by Susan
+(Craft and Delight), 2026-09-20, who priced it at five - the count is a reading
+of a growing archive and the rule is what survives it.
 
 **No new column.** The record already hangs off `RunRecord.inputs` and
 `loadManifests` already passes it through, so the marker reads what is there. A
