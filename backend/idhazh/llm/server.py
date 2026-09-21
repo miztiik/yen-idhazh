@@ -479,30 +479,6 @@ def server_argv(
         argv.append("--metrics")
     if not inference.startup_warmup:
         argv.append("--no-warmup")
-    # The draft head, when the entry declares one. Its path is the target's own
-    # directory, because one fetch step writes both files and a second way of
-    # saying where weights live is a second way to be wrong.
-    #
-    # Every flag here is spelled the way build b10598 spells it, which is not
-    # the way most of the internet spells it: `--draft-max` and `--draft-min`
-    # were REMOVED and the binary now exits telling you to use
-    # `--spec-draft-n-max` and `--spec-draft-n-min`. A spelling taken from an
-    # older page is a server that will not start.
-    if model.draft is not None:
-        argv.extend(
-            (
-                "--spec-draft-model",
-                str(weights.parent / model.draft.file),
-                "--spec-type",
-                model.draft.spec_type.value,
-                "--spec-draft-n-max",
-                str(model.draft.n_max),
-                "--spec-draft-n-min",
-                str(model.draft.n_min),
-                "--spec-draft-p-min",
-                str(model.draft.p_min),
-            )
-        )
     return argv
 
 
@@ -529,21 +505,18 @@ def request_payload(
 
     **This route decodes one span and the runtime owns the split.** The prompt
     is rendered by the model's own template, so a caller cannot stop the decode
-    at a marker and restart it under a grammar; what it can do is size the
-    budget for both spans, which is why a thinking envelope sends the two
-    budgets added together. The digest's own path renders its bytes and gets the
-    two spans separately (`thinking_span`, `answer_span`).
+    at a marker and restart it under a grammar. The digest's own path renders
+    its bytes and gets the two spans separately (`thinking_span`,
+    `answer_span`).
 
-    **An uncapped thinking envelope sends no `max_tokens` at all.** One span
-    carries both here, so a null cap makes the sum unbounded and there is no
-    honest number to send; omitting the key is the one spelling that means
-    exactly that, because the server is started without `--predict` and its own
-    default is `-1`, infinity bounded by the window
-    (`tests/fixtures/runtime/b10598-llama-server-help.txt`). Sending
-    `max_answer_tokens` alone instead would cut the answer by whatever the
-    thinking spent.
+    **No token cap is sent, on either envelope.** One span carries both here, so
+    any number would have to be the sum of two budgets and a thinking envelope
+    has no honest sum to send. The server is started without `--predict` and its
+    own default is `-1`, infinity bounded by the window
+    (`tests/fixtures/runtime/b10598-llama-server-help.txt`), so omitting the key
+    says exactly what is true: the window stops this decode, and the
+    per-request timeout stops the wait.
     """
-    thinking = turns.thinks
     payload: dict[str, Any] = {
         "model": model_id,
         "messages": [
@@ -559,15 +532,11 @@ def request_payload(
             "json_schema": {"name": schema_name, "strict": True, "schema": output_schema},
         },
     }
-    if not thinking:
-        payload["max_tokens"] = inference.max_answer_tokens
-    elif inference.max_think_tokens is not None:
-        payload["max_tokens"] = inference.max_answer_tokens + inference.max_think_tokens
     # A null keyword is a template that reads none, so the key is absent rather
     # than carrying a name no template answers to; the entry refuses that pair
     # with a closing marker declared.
     if turns.thinking_kwarg is not None:
-        payload["chat_template_kwargs"] = {turns.thinking_kwarg: thinking}
+        payload["chat_template_kwargs"] = {turns.thinking_kwarg: turns.thinks}
     return payload
 
 
@@ -592,8 +561,10 @@ def completion_payload(
     **The budget is handed in rather than read off `inference`**, for the same
     reason `continued_completion_payload` takes one: a rendered call is held to
     a shape of its own, and a budget sized for some other shape cuts a reply
-    that did exactly what the grammar allowed. `inference.max_answer_tokens` is
-    the summariser role's number and sizes the single call that still reads it.
+    that did exactly what the grammar allowed. It is the caller's own
+    grammar-derived number and there is no role-level cap behind it: the
+    `inference` block carried two until 2026-09-21 and neither bounded this
+    route.
 
     **This is the answer span, whether or not one is thought in front of it.**
     Under a thinking envelope `thinking_span` derives span one from this body
@@ -681,7 +652,6 @@ def thinking_span(
     answer: Mapping[str, Any],
     *,
     turns: TurnsConfig,
-    max_think_tokens: int | None,
     temperature: float | None = None,
 ) -> dict[str, Any]:
     """Span one: this call's own prompt, decoded unconstrained and stopped at the marker.
@@ -704,28 +674,24 @@ def thinking_span(
     which is what every committed entry wants - each pins 0.2, and a span that
     stops at a marker is in no danger. A caller that pins 0.0 for a one-word
     answer is a different case: greedy decoding on a span whose length is
-    uncapped by default runs until it repeats itself, and the repetition ends
-    only at the marker it is looping instead of writing, or at the window.
+    uncapped runs until it repeats itself, and the repetition ends only at the
+    marker it is looping instead of writing, or at the window.
 
-    The budget becomes the thinking budget and the stop is the entry's own
-    closing marker, so a model that would run on is cut where its reasoning
-    block would have ended - and llama-server excludes the stop string from what
-    it returns, which is why `answer_span` writes the marker itself rather than
-    trusting the reply to carry it.
+    **`n_predict` is written here rather than left alone, and that is the whole
+    reason the constant survives.** The answer body this span is derived from
+    carries the caller's own grammar-derived budget, and a span that inherited
+    it would think under a number sized for the answer - four tokens on the
+    judge's route. `-1` is the spelling `--predict` documents, `number of tokens
+    to predict (default: -1, -1 = infinity)`, recorded in
+    `tests/fixtures/runtime/b10598-llama-server-help.txt`. The span then ends on
+    the entry's own closing marker or on the window, and on nothing else - and
+    llama-server excludes the stop string from what it returns, which is why
+    `answer_span` writes the marker itself rather than trusting the reply to
+    carry it.
 
-    **A null cap is sent as `-1`, which the runtime reads as infinity.** That is
-    the spelling `--predict` documents - `number of tokens to predict (default:
-    -1, -1 = infinity)`, recorded in
-    `tests/fixtures/runtime/b10598-llama-server-help.txt` - and it is the same
-    parameter the body names. The span then ends on the marker or on the window,
-    and on nothing else.
-
-    **A budget alone would not do.** A model that never closes the block would
-    spend the whole cap and the failure would be recorded as a truncated
-    summary, which names the wrong cause. A stop alone would not do either: a
-    block that never closes would eat the window - which is exactly what a null
-    cap accepts, and why an uncapped entry rests its whole weight on the marker
-    being the bytes this model actually writes.
+    **A stop alone would not do**, because a block that never closes eats the
+    window - which is exactly what this accepts, and why an uncapped span rests
+    its whole weight on the marker being the bytes this model actually writes.
     """
     close = turns.thinking_close
     if close is None:
@@ -734,7 +700,7 @@ def thinking_span(
             "a caller reached for one on an envelope that does not think"
         )
     span = {name: value for name, value in answer.items() if name not in _ANSWER_ONLY_KEYS}
-    span["n_predict"] = UNCAPPED_N_PREDICT if max_think_tokens is None else max_think_tokens
+    span["n_predict"] = UNCAPPED_N_PREDICT
     span["stop"] = [close]
     if temperature is not None:
         span["temperature"] = temperature

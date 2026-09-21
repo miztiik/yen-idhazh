@@ -1,6 +1,6 @@
 # The Recorded Input Manifest
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-21
 
 What a run records about its own inputs, where each value is read from, and the one alarm built on that record. This page owns the enumeration and what the record cannot see.
 
@@ -122,7 +122,7 @@ The closed set spans all three shapes rather than the inference block alone, bec
 | Knob | Where it lands |
 | --- | --- |
 | `n_ctx`, `n_batch`, `n_ubatch`, `n_threads` | Their own fields. They change how the partial sums accumulate. |
-| `temperature`, `top_p`, `seed`, `max_answer_tokens`, `max_think_tokens` | `sampling`, one canonical spelling of the decoding parameters. Two budgets rather than one: a call decodes a thinking span and then an answer, and one number over two spans could not say which of them overran. A null thinking budget spells `uncapped` rather than the number it resolves to, because it resolves to no number. |
+| `temperature`, `top_p`, `seed` | `sampling`, one canonical spelling of the decoding parameters. No span budget is in it, because no span carries one: the two decode caps left the block on 2026-09-21, and what bounds a span is the window and the per-request timeout, both enumerated elsewhere. |
 | `cache_type_k`, `cache_type_v`, `flash_attention`, `n_parallel`, `n_threads_batch` | `runtime_flags`, one canonical spelling of the knobs that move the arithmetic. A quantised KV cache, another attention kernel, a second slot and a different prompt-thread count each change how the partial sums accumulate. |
 | The turn envelope | `turn_markers_sha256`, and `prompt_sha256` as well, because the prompt is rendered through the envelope. |
 | Everything else | `NOT_DIGESTED`, with the reason it cannot move an output written beside it. |

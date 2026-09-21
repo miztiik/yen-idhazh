@@ -3,7 +3,6 @@
   "summarize": {
     "arch": "llama",
     "byte_count": null,
-    "draft": null,
     "file": "Qwen3-8B-Q4_K_M.gguf",
     "hf_base_repo": null,
     "id": "qwen3-8b-q4-k-m",
@@ -21,8 +20,6 @@
       "jinja": null,
       "load_mode": null,
       "log_verbosity": 9,
-      "max_answer_tokens": 320,
-      "max_think_tokens": 64,
       "metrics": true,
       "n_batch": 256,
       "n_ctx": 4096,

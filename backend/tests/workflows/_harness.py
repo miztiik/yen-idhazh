@@ -692,7 +692,6 @@ RUNTIME_CANDIDATES: Final = frozenset(
         "threads",
         "threads_batch",
         "np2_inflight",
-        "no_draft",
     }
 )
 

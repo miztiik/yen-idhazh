@@ -284,11 +284,15 @@ def _worst_sequence_tokens(committed: AppConfig) -> tuple[int, int]:
     article whose prose tokenizes harder than that overruns the budget its own
     cap gave it, and both windows have to cover the article that did rather than
     the one that behaved.
+
+    The answer term is the summarize-and-plan call's derived budget. It was the
+    role's `max_answer_tokens` until 2026-09-21, and with that knob gone the
+    only number that says how long a reply can be is the one derived from the
+    shape the reply is held to.
     """
-    inference = committed_models().summarize.inference
     cut_words = int(committed.extract.truncation_cap_tokens / TOKENS_PER_WORD)
     worst_prompt = PROMPT_OVERHEAD_TOKENS + int(cut_words * WORST_TOKENS_A_WORD)
-    return worst_prompt, worst_prompt + inference.max_answer_tokens
+    return worst_prompt, worst_prompt + summarize_and_plan_budget_tokens(committed.summarize)
 
 
 def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
@@ -300,11 +304,12 @@ def test_the_longest_article_the_cap_allows_still_fits_the_window() -> None:
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     inference = committed_models().summarize.inference
     worst_prompt, worst_sequence = _worst_sequence_tokens(committed)
+    answer = summarize_and_plan_budget_tokens(committed.summarize)
 
     assert worst_sequence <= inference.n_ctx, (
         f"the longest article extract.truncation_cap_tokens "
         f"({committed.extract.truncation_cap_tokens}) lets through is "
-        f"{worst_prompt} prompt tokens, and {inference.max_answer_tokens} of answer "
+        f"{worst_prompt} prompt tokens, and {answer} of answer "
         f"puts the sequence at {worst_sequence} against a window of {inference.n_ctx}. "
         "Raise models.summarize.inference.n_ctx beside the cap, or lower the cap."
     )

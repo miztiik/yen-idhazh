@@ -3,109 +3,23 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from enum import StrEnum
 from types import MappingProxyType
 from typing import Annotated, Any, ClassVar, Final, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
-from idhazh.contracts.base import ChangelogEntry, CommitSha, Contract, Model, Sha256, Slug
+from idhazh.contracts.base import (
+    ChangelogEntry,
+    CommitSha,
+    Contract,
+    Model,
+    Sha256,
+    Slug,
+    without_retired_keys,
+)
 from idhazh.contracts.knobs.inference import SUPERSEDED_INFERENCE_NAMES, InferenceConfig
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 from idhazh.contracts.knobs.turns import TurnsConfig
-
-
-class SpeculationType(StrEnum):
-    """Which kind of speculation the runtime is told to use.
-
-    Only the three this project can actually stand up. Build b10598 accepts
-    eleven - the full list is `none`, `draft-simple`, `draft-eagle3`,
-    `draft-mtp`, `draft-dflash`, `draft-dspark` and five `ngram-*` variants,
-    read off `llama-server --help` by `.github/workflows/probe.yml` on
-    2026-09-15. The ones left out either need a purpose-built draft head
-    nobody has published for our weights, or a lookup cache nothing here
-    writes. A closed choice is what stops an operator naming one of them and
-    getting a server that starts and drafts nothing.
-
-    `draft-mtp` is here because the head now exists: Unsloth publishes a
-    multi-token-prediction head for the Gemma entry, and the publisher's guide
-    names this exact value. Naming `draft-simple` for that head instead is not
-    a slow server, it is a dead one - every request failed on
-    `decode() failed: failed to process speculative batch`, five of five, on
-    run 34941400155.
-    """
-
-    DRAFT_SIMPLE = "draft-simple"
-    DRAFT_MTP = "draft-mtp"
-    NGRAM_SIMPLE = "ngram-simple"
-
-
-class DraftConfig(Model):
-    """A second, much smaller set of weights that guesses ahead of the first.
-
-    **Speculative decoding is output-identical by construction, and this
-    configuration is not doing that.** The target is supposed to verify every
-    drafted token and reject any it would not have produced, so the text is the
-    text the target would have written alone. The publisher of these weights
-    makes exactly that claim for this head and this flag. Two paired dispatches
-    refused it on nine of nine articles: every summary changed when the head was
-    on. Whether the cause is the head, the acceptance rule or the pinned
-    llama.cpp build is unmeasured -
-    `docs/reference/benchmarks/what-the-draft-head-is-worth.md` holds the
-    readings and what is still open.
-
-    **So this block is not a decoding knob priced on cost alone.** Until a
-    configuration is shown to be output-identical, turning the head on or off is
-    a model change and the configuration that was qualified is the one that has
-    to publish.
-
-    What it can also do is waste time. A draft the target keeps rejecting costs a
-    forward pass per rejected token and returns nothing, so the acceptance rate
-    is the number that says whether it paid. `llama-server` publishes it:
-    `llamacpp:spec_decode_num_accepted_tokens_total` over
-    `llamacpp:spec_decode_num_draft_tokens_total`, both already in the
-    `/metrics` body a shard reads at job end.
-    """
-
-    repo: str = Field(min_length=1, description="Hugging Face repository the draft GGUF is in.")
-    revision: CommitSha = Field(
-        description="The hub commit. Required here and optional on ModelRef: a block "
-        "somebody added by hand is a block that can pin properly from the start."
-    )
-    file: str = Field(min_length=1)
-    sha256: Sha256 = Field(description="Refused before the server starts, like the target's.")
-    byte_count: int | None = Field(default=None, ge=1)
-    spec_type: SpeculationType = Field(default=SpeculationType.DRAFT_SIMPLE)
-    n_max: int = Field(
-        default=3,
-        ge=1,
-        le=64,
-        description=(
-            "How many tokens are drafted before the target verifies. The runtime's own "
-            "default. Higher drafts further ahead and wastes more when the draft is "
-            "wrong, so it is a bet on how predictable the text is."
-        ),
-    )
-    n_min: int = Field(default=0, ge=0, le=64)
-    p_min: float = Field(
-        default=0.0,
-        ge=0.0,
-        le=1.0,
-        description=(
-            "Below this probability the draft stops guessing and lets the target "
-            "decode. 0.0 is the runtime default and means never stop early."
-        ),
-    )
-
-    @model_validator(mode="after")
-    def _a_minimum_above_the_maximum_drafts_nothing(self) -> Self:
-        if self.n_min > self.n_max:
-            raise ValueError(
-                f"draft.n_min is {self.n_min} and draft.n_max is {self.n_max}. A minimum "
-                "above the maximum asks the runtime for a draft length that cannot "
-                "exist, and it starts anyway and drafts nothing"
-            )
-        return self
 
 
 class ModelRef(Model):
@@ -170,19 +84,30 @@ class ModelRef(Model):
             "rather than inherited."
         ),
     )
-    draft: DraftConfig | None = Field(
-        default=None,
-        description=(
-            "A second, smaller set of weights that drafts tokens this entry's model "
-            "then verifies. Null is the default and means one model and no "
-            "speculation. It sits beside `inference` rather than inside it because it "
-            "names weights of its own - a repository, a commit, a filename and a "
-            "digest - and a block that fetches a file is not a decoding knob. On "
-            "`ModelRef` rather than `ModelEntry` so a run record says whether the day "
-            "was drafted; a run that cannot answer that cannot explain its own "
-            "throughput."
-        ),
-    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def _a_run_written_while_a_draft_head_was_declared_still_reads(cls, data: Any) -> Any:
+        """The read-side migration a run record is owed (`CLAUDE.md` section 11).
+
+        Six committed `run.json` files name a draft head, and `extra="forbid"`
+        would refuse every one of them the day the field went. Dropped rather
+        than renamed: nothing replaces it, so there is no number to carry.
+
+        It is silent here and loud on `ModelEntry`, which is the same split
+        `InferenceConfig` draws - there a payload an earlier run wrote, here a
+        block a person typed, and accepting the second in silence teaches a knob
+        that nothing reads.
+        """
+        return without_retired_keys(data, *RETIRED_ENTRY_NAMES)
+
+
+#: The entry key a `run.json` written before 2026-09-21 carries and nothing
+#: carries now. A draft head is not a decoding knob priced on cost alone: two
+#: paired dispatches on 2026-09-12 changed the summary on nine articles of nine
+#: with the head on, so it was never the output-identical speed-up its publisher
+#: claims. Nothing replaces it.
+RETIRED_ENTRY_NAMES: Final[Mapping[str, str]] = MappingProxyType({"draft": ""})
 
 
 class ModelEntry(ModelRef):
@@ -235,6 +160,7 @@ class ModelEntry(ModelRef):
         today's build reading yesterday's run.
         """
         if isinstance(data, dict):
+            refuse_a_removed_knob("models.<role>", data, RETIRED_ENTRY_NAMES)
             refuse_a_removed_knob(
                 "models.<role>.inference", data.get("inference"), SUPERSEDED_INFERENCE_NAMES
             )
@@ -304,6 +230,16 @@ class ModelsConfig(Contract):
     __schema_stem__: ClassVar[str] = "models-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21T03:00",
+            change="Both inference decode caps go; a run that pinned one still reads.",
+            why="Each sent a number where the runtime's own default is already unbounded.",
+        ),
+        ChangelogEntry(
+            version="2026-09-21T02:00",
+            change="The draft head goes from the entry; a run that named one still reads.",
+            why="It changed the summary on nine articles of nine, so it never was a free speed-up.",
+        ),
+        ChangelogEntry(
             version="2026-09-21",
             change="Add an optional judge entry, decoding on the served role's weights.",
             why="The judge could only open a thinking channel by moving the summariser too.",
@@ -312,16 +248,6 @@ class ModelsConfig(Contract):
             version="2026-09-20",
             change="Add optional CPU, cache, checkpoint and template controls.",
             why="Each model can declare the runtime settings it needs.",
-        ),
-        ChangelogEntry(
-            version="2026-09-17T02:00",
-            change="inference.seed is the sampling control rather than dead code.",
-            why="Every entry pins temperature 0.2, where the seed decides which token is drawn.",
-        ),
-        ChangelogEntry(
-            version="2026-09-17",
-            change="inference.max_think_tokens accepts null, and null is the default.",
-            why="A cap set from no reading of these weights truncates a thought mid-sentence.",
         ),
         ChangelogEntry(
             version="2026-09-14",

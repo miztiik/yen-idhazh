@@ -560,7 +560,7 @@ def test_a_summary_under_the_floor_fails_and_a_long_one_does_not() -> None:
 
 
 def test_a_request_that_does_not_fit_the_context_fails() -> None:
-    over = INFERENCE.n_ctx - INFERENCE.max_answer_tokens + 1
+    over = INFERENCE.n_ctx
     broken = with_one_bad_call(a_passing_shard(), prompt_tokens=over)
     outcome = outcomes_of(broken)[GateName.CONTEXT_FIT]
     assert outcome.status is GateStatus.FAILED
@@ -570,7 +570,7 @@ def test_a_request_that_does_not_fit_the_context_fails() -> None:
 def test_the_cheap_predictor_may_not_under_reserve() -> None:
     """`fits_context` saying yes to a request that overflows is the failure mode
     the gate exists for: it is the check that runs before every production call."""
-    over = INFERENCE.n_ctx - INFERENCE.max_answer_tokens + 1
+    over = INFERENCE.n_ctx
     broken = with_one_bad_call(
         a_passing_shard(), prompt_tokens=over, fits_context_predicted=True
     )

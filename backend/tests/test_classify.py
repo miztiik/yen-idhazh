@@ -578,11 +578,13 @@ class TestTheLabelCallsDerivedBudget:
 
         An oracle that cannot go red is not an oracle. The number the label call was
         sent until 2026-09-13 fails the assertion above, which is why the reply
-        that filled half of what this shape admits was cut mid-string.
+        that filled half of what this shape admits was cut mid-string. That knob
+        carried 900 and is written here as the literal it was, because the knob
+        itself left `inference` on 2026-09-21.
         """
         widest = widest_json_characters(label_schema())
 
-        assert widest / CHARS_PER_OUTPUT_TOKEN > InferenceConfig().max_answer_tokens
+        assert widest / CHARS_PER_OUTPUT_TOKEN > 900
 
     def test_a_bound_that_moves_moves_the_budget_with_it(self) -> None:
         """Re-derived, not restated. This is what "derived" has to mean to be worth saying."""
@@ -610,7 +612,6 @@ class TestTheLabelCallsDerivedBudget:
         payload = label_payload(dense)
 
         assert payload["n_predict"] == label_budget_tokens()
-        assert payload["n_predict"] != InferenceConfig().max_answer_tokens
         assert "max_tokens" not in payload, (
             "two budget keys in one body and the server answers whichever it reads first"
         )

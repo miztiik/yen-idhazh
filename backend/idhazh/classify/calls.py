@@ -22,11 +22,11 @@ built here and `idhazh.stages.work.stage_work` dispatches them, adjacently per i
 the gate in front of them and the picture they lead to are wired at that same
 call site.
 
-**Each call's output budget is derived from its own grammar.** Neither is the
-summariser role's `max_answer_tokens`, which is sized for a summary and knows
-nothing about either shape - and which cost one ordinary 346-word article its
-whole item on 2026-09-12, because the label call's reply passed 900 tokens and was cut
-mid-string. The label call's reply is one flat object, so there is no half to recover
+**Each call's output budget is derived from its own grammar.** The summariser
+role carried one sized for a summary until 2026-09-21, it knew nothing about
+either shape, and it cost one ordinary 346-word article its whole item on
+2026-09-12: the label call's reply passed 900 tokens and was cut mid-string. The
+label call's reply is one flat object, so there is no half to recover
 from a cut; what it has instead is that a cut is reported as one
 (`FailureCode.LABELS_TRUNCATED`) rather than raised as a JSON error several
 frames from the cause.
@@ -361,9 +361,10 @@ def label_budget_tokens() -> int:
     so the longest reply the grammar admits is arithmetic over the bounds, and
     the arithmetic runs again on every import - move a bound and this number
     moves with it, without anybody remembering to. Until 2026-09-13 the budget
-    was `models.summarize.inference.max_output_tokens` - `max_answer_tokens`
-    since 2026-09-14 - sized for a summary and knowing nothing about this shape,
-    and one ordinary 346-word article lost its whole item to it.
+    was the summariser role's own, sized for a summary and knowing nothing about
+    this shape, and one ordinary 346-word article lost its whole item to it.
+    That role-level number is gone entirely since 2026-09-21, so this arithmetic
+    is the only thing that bounds the call.
 
     **It is not the summarize-and-plan call's rule, and the reason is arithmetic rather than
     taste.** `summarize_and_plan_budget_tokens` spends its prose as words and counts everything
@@ -555,8 +556,8 @@ def build_label_request(
     The prompt bytes are rendered here rather than by the model's chat
     template, which is what lets the summarize-and-plan call open with them unchanged. The output
     budget is derived from this call's own grammar, as the summarize-and-plan call's is from both
-    replies' bounds together; the role's `max_answer_tokens` sizes the single
-    call and is not this shape's number.
+    replies' bounds together. There is no role-level budget behind either: the
+    `inference` block carried one until 2026-09-21 and it sized neither shape.
 
     `prompt_config` reaches the label call because the system turn carries both jobs
     now. Every number it spends is a config-level one, the same on every item,

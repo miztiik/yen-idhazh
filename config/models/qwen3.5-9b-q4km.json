@@ -19,7 +19,6 @@
       "jinja": true,
       "load_mode": "mmap+mlock",
       "log_verbosity": 4,
-      "max_answer_tokens": 2000,
       "metrics": true,
       "n_batch": 2048,
       "n_ctx": 65536,

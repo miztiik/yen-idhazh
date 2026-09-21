@@ -2,57 +2,6 @@
 // Never hand-edited: the drift gate regenerates it and fails on any diff
 // (CLAUDE.md section 1a). Edit the Pydantic model instead.
 
-/**
- * A second, much smaller set of weights that guesses ahead of the first.
- *
- * **Speculative decoding is output-identical by construction, and this
- * configuration is not doing that.** The target is supposed to verify every
- * drafted token and reject any it would not have produced, so the text is the
- * text the target would have written alone. The publisher of these weights
- * makes exactly that claim for this head and this flag. Two paired dispatches
- * refused it on nine of nine articles: every summary changed when the head was
- * on. Whether the cause is the head, the acceptance rule or the pinned
- * llama.cpp build is unmeasured -
- * `docs/reference/benchmarks/what-the-draft-head-is-worth.md` holds the
- * readings and what is still open.
- *
- * **So this block is not a decoding knob priced on cost alone.** Until a
- * configuration is shown to be output-identical, turning the head on or off is
- * a model change and the configuration that was qualified is the one that has
- * to publish.
- *
- * What it can also do is waste time. A draft the target keeps rejecting costs a
- * forward pass per rejected token and returns nothing, so the acceptance rate
- * is the number that says whether it paid. `llama-server` publishes it:
- * `llamacpp:spec_decode_num_accepted_tokens_total` over
- * `llamacpp:spec_decode_num_draft_tokens_total`, both already in the
- * `/metrics` body a shard reads at job end.
- */
-export interface DraftConfig {
-	/** Hugging Face repository the draft GGUF is in. */
-	repo: string;
-
-	/** The hub commit. Required here and optional on ModelRef: a block somebody added by hand is a block that can pin properly from the start. */
-	revision: string;
-
-	file: string;
-
-	/** Refused before the server starts, like the target's. */
-	sha256: string;
-
-	byte_count?: number | null;
-
-	spec_type?: SpeculationType;
-
-	/** How many tokens are drafted before the target verifies. The runtime's own default. Higher drafts further ahead and wastes more when the draft is wrong, so it is a bet on how predictable the text is. */
-	n_max?: number;
-
-	n_min?: number;
-
-	/** Below this probability the draft stops guessing and lets the target decode. 0.0 is the runtime default and means never stop early. */
-	p_min?: number;
-}
-
 /** Decoding is pinned here so a change of output is a reviewable diff. */
 export interface InferenceConfig {
 	/** The window one sequence gets. The default stays 8192 because it is the conservative window for weights nobody has put in front of a runner; each model file sets its own window. Whether its KV cache fits is decided by what the machine has free, not by the process's resident memory alone - docs/reference/pipeline-cost.md. */
@@ -133,13 +82,7 @@ export interface InferenceConfig {
 	/** Which sample the sampler draws. It is the whole of the repeatability story above temperature 0: same inputs and same seed is the same reply, same inputs and a different seed is a different one. At temperature 0 it is dead code and nothing reads it, which is what it was until 2026-09-17. It is enumerated in the fingerprint either way, so a change of sampler cannot move the words without moving the stamp. */
 	seed?: number;
 
-	/** The thinking span's budget. Null means no cap: the span runs until the model writes turns.thinking_close, and the window is the only other thing that stops it. An integer bounds the span at that many tokens. A cap exists at all because a model that never closes its reasoning block would otherwise decode to n_ctx and be recorded as a truncated summary, which names the wrong cause - the closing marker is what normally ends the span, and the cap is what catches a model that never writes one. Set it only from a reading taken on the weights it is set for; a number carried over from other weights caps a thought mid-sentence, and a truncated thought is worse than no thought at the same budget (arxiv 2504.09858). It is read only where the entry declares turns.thinking_close; an entry that declares no closing marker spends none of it. */
-	max_think_tokens?: number | null;
-
-	/** The answer span's budget. A crash guard, not a length target: the prompt sets the length and this only stops a runaway decode from burning a shard's whole timeout. Sized at 250 the reply ran out of budget mid-object and failed as a shape error, which named the wrong cause - so it is set well above any summary we want. It was max_output_tokens until 2026-09-14, when one budget stopped being able to say which of two spans overran. */
-	max_answer_tokens?: number;
-
-	/** One summarizer POST may wait this long. Sized from the measured worst 8B long article plus one cold prompt prefix, doubled; the shard timeout remains the outer bound. */
+	/** One summarizer POST may wait this long. Sized from the measured worst 8B long article plus one cold prompt prefix, doubled; the shard timeout remains the outer bound. With no decode cap set anywhere, this and the window are the two bounds a runaway decode meets - each per item, each loud, and each already recorded. */
 	request_timeout_minutes?: number;
 
 	/** The weights this block is set for - the sha256 of the entry that carries it. Every number here is a measurement about one model on one runner, never a property of the pipeline, so the entry states which bytes the numbers were put in front of. Swap the weights and this is left behind, which is the one event the field exists to make loud. It says a person paired these numbers with these bytes; where the numbers came from is docs/concepts/config.md, because a runner and a date cannot be checked by a validator and a field nothing checks is a comment. */
@@ -185,38 +128,12 @@ export interface ModelEntry {
 	/** The runtime this entry's weights are served on. It sits on the entry for the same reason `hf_base_repo` does: held apart, a model swap moves the weights and leaves the numbers, and llama-server starts on them without raising. `ModelsConfig` refuses a block whose declared_for is not this entry's sha256, so a default block under measured weights is refused rather than inherited. */
 	inference?: InferenceConfig;
 
-	/** A second, smaller set of weights that drafts tokens this entry's model then verifies. Null is the default and means one model and no speculation. It sits beside `inference` rather than inside it because it names weights of its own - a repository, a commit, a filename and a digest - and a block that fetches a file is not a decoding knob. On `ModelRef` rather than `ModelEntry` so a run record says whether the day was drafted; a run that cannot answer that cannot explain its own throughput. */
-	draft?: DraftConfig | null;
-
 	/** The architecture name inside the GGUF - its `general.architecture` key, which reads `qwen35` for the weights this entry names. Required and with no default, for the reason `turns` is: an entry that inherits the incumbent's architecture claims something nobody checked. `idhazh.llm.server.prove_the_entry` reads the key back out of the file the server was pointed at and refuses the run before the first item when the two disagree, which is what makes this a fact rather than a claim. It catches a repackaged GGUF under a familiar name - the one case where the digest, the alias and the filename all agree and only the words get worse. */
 	arch: string;
 
 	/** The turn envelope these weights are rendered with. Required and with no default: an entry that forgets its markers must fail rather than inherit the incumbent's, because inheriting them renders a prompt the grammar still accepts and nothing else can see is wrong. */
 	turns: TurnsConfig;
 }
-
-/**
- * Which kind of speculation the runtime is told to use.
- *
- * Only the three this project can actually stand up. Build b10598 accepts
- * eleven - the full list is `none`, `draft-simple`, `draft-eagle3`,
- * `draft-mtp`, `draft-dflash`, `draft-dspark` and five `ngram-*` variants,
- * read off `llama-server --help` by `.github/workflows/probe.yml` on
- * 2026-09-15. The ones left out either need a purpose-built draft head
- * nobody has published for our weights, or a lookup cache nothing here
- * writes. A closed choice is what stops an operator naming one of them and
- * getting a server that starts and drafts nothing.
- *
- * `draft-mtp` is here because the head now exists: Unsloth publishes a
- * multi-token-prediction head for the Gemma entry, and the publisher's guide
- * names this exact value. Naming `draft-simple` for that head instead is not
- * a slow server, it is a dead one - every request failed on
- * `decode() failed: failed to process speculative batch`, five of five, on
- * run 34941400155.
- */
-export const SPECULATION_TYPE = ['draft-simple', 'draft-mtp', 'ngram-simple'] as const;
-
-export type SpeculationType = (typeof SPECULATION_TYPE)[number];
 
 /**
  * Where this model's template takes the system text. Two, and no third.

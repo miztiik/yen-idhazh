@@ -237,7 +237,6 @@ def test_the_item_health_ledger_columns_are_defined_once() -> None:
         "n_threads",
         "n_batch",
         "weights_pinned",
-        "max_output_tokens",
         "label_budget_tokens",
         "summary_budget_tokens",
         "run_visual_decision",

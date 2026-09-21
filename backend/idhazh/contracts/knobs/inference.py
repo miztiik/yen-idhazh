@@ -8,7 +8,7 @@ from typing import Any, Final, Literal, Self
 
 from pydantic import Field, model_validator
 
-from idhazh.contracts.base import Model, Sha256
+from idhazh.contracts.base import Model, Sha256, without_retired_keys
 
 
 class InferenceConfig(Model):
@@ -183,45 +183,15 @@ class InferenceConfig(Model):
             "of sampler cannot move the words without moving the stamp."
         ),
     )
-    max_think_tokens: int | None = Field(
-        default=None,
-        ge=1,
-        description=(
-            "The thinking span's budget. Null means no cap: the span runs until the "
-            "model writes turns.thinking_close, and the window is the only other "
-            "thing that stops it. An integer bounds the span at that many tokens. A "
-            "cap exists at all because a model that never closes its reasoning block "
-            "would otherwise decode to n_ctx and be recorded as a truncated summary, "
-            "which names the wrong cause - the closing marker is what normally ends "
-            "the span, and the cap is what catches a model that never writes one. Set "
-            "it only from a reading taken on the weights it is set for; a number "
-            "carried over from other weights caps a thought mid-sentence, and a "
-            "truncated thought is worse than no thought at the same budget "
-            "(arxiv 2504.09858). It is read only where the entry declares "
-            "turns.thinking_close; an entry that declares no closing marker spends "
-            "none of it."
-        ),
-    )
-    max_answer_tokens: int = Field(
-        default=900,
-        ge=1,
-        description=(
-            "The answer span's budget. A crash guard, not a length target: the prompt "
-            "sets the length and this only stops a runaway decode from burning a "
-            "shard's whole timeout. Sized at 250 the reply ran out of budget "
-            "mid-object and failed as a shape error, which named the wrong cause - so "
-            "it is set well above any summary we want. It was max_output_tokens until "
-            "2026-09-14, when one budget stopped being able to say which of two spans "
-            "overran."
-        ),
-    )
     request_timeout_minutes: float = Field(
         default=22.1,
         gt=0.0,
         description=(
             "One summarizer POST may wait this long. Sized from the measured worst "
             "8B long article plus one cold prompt prefix, doubled; the shard timeout "
-            "remains the outer bound."
+            "remains the outer bound. With no decode cap set anywhere, this and the "
+            "window are the two bounds a runaway decode meets - each per item, each "
+            "loud, and each already recorded."
         ),
     )
     declared_for: Sha256 | None = Field(
@@ -248,7 +218,7 @@ class InferenceConfig(Model):
 
     @model_validator(mode="before")
     @classmethod
-    def _a_run_written_before_the_two_spans_still_reads(cls, data: Any) -> Any:
+    def _a_run_written_while_a_span_was_capped_still_reads(cls, data: Any) -> Any:
         """The read-side migration for a block a run record embeds.
 
         **This shape is two things at once, and that is why the refusal is not
@@ -258,61 +228,50 @@ class InferenceConfig(Model):
         yesterday's run wrote - and a build that cannot read yesterday's payload
         is a release blocker (`CLAUDE.md` section 11).
 
-        `max_output_tokens` is renamed rather than dropped: it sized the answer
-        of a single call, which is what `max_answer_tokens` sizes, so the number
-        a run recorded keeps its meaning. `thinking` is dropped, because reasoning
-        is declared on the turn envelope now and `ModelRef` carries no envelope -
-        and every run written under the old flag wrote it false, so no reading is
-        lost.
-
-        A payload that carries both spellings is left alone, so the shape refuses
-        it: two budgets in one block is not a payload this can read.
+        Every retired name here is dropped rather than renamed, because nothing
+        replaces any of them. The two decode caps sent a number where the
+        runtime's own default is already unbounded by anything but the window,
+        and `max_output_tokens` was the single budget they were split out of.
+        `thinking` was a decoding flag that could never have worked on its own -
+        the output schema binds the decode from the first token, so a think
+        opener is not a legal token - and reasoning is declared by the closing
+        marker on the turn envelope instead.
         """
-        if not isinstance(data, dict):
-            return data
-        touched = frozenset(data) & (frozenset(MIGRATED_INFERENCE_NAMES) | RETIRED_INFERENCE_NAMES)
-        if not touched:
-            return data
-        migrated: dict[Any, Any] = {}
-        for name, value in data.items():
-            if name in RETIRED_INFERENCE_NAMES:
-                continue
-            successor = MIGRATED_INFERENCE_NAMES.get(name, name)
-            migrated[name if successor in data else successor] = value
-        return migrated
+        return without_retired_keys(data, *RETIRED_INFERENCE_NAMES)
 
 
-#: The `models.<role>.inference` knobs this block used to carry.
-#: `max_output_tokens` was one budget over what is now two spans, so it could not
-#: say whether a long think or a cut answer spent it; it is renamed to the span
-#: it actually sized. `thinking` was a decoding flag that could never have
-#: worked on its own - the output schema binds the decode from the first token,
-#: so a think opener is not a legal token - and reasoning is declared by the
-#: closing marker on the turn envelope instead.
+#: The `models.<role>.inference` knobs this block used to carry. Each is refused
+#: by name rather than by "extra inputs are not permitted", which tells an
+#: operator nothing about where their number went.
+#:
+#: `max_think_tokens` and `max_answer_tokens` were the two decode caps, and
+#: `max_output_tokens` was the one budget they were split out of in 2026-09-14.
+#: All three sent a number where llama-server's own default is already unbounded
+#: by anything but the window, and the server is started with no prediction
+#: flag - so what actually stopped a runaway decode was never the cap. The two
+#: bounds that remain are the per-request timeout, which lands `model_timed_out`,
+#: and the window with no context shift, which lands `CONTEXT_EXCEEDED`. Both
+#: are per item and both are already recorded. `thinking` was a decoding flag
+#: the output schema made unreachable; reasoning is declared by
+#: `turns.thinking_close`.
 #:
 #: **This map refuses a config file and never a run record.** `ModelEntry` is
 #: the shape a person edits and is where it is read; the same block inside a
-#: `ModelRef` a run wrote is migrated instead, by the two maps below.
+#: `ModelRef` a run wrote is migrated instead, by the map below.
 SUPERSEDED_INFERENCE_NAMES: Final[Mapping[str, str]] = MappingProxyType(
     {
-        "max_output_tokens": "max_answer_tokens",
+        "max_output_tokens": "",
+        "max_answer_tokens": "",
+        "max_think_tokens": "",
         "thinking": "models.<role>.turns.thinking_close",
     }
 )
 
 
-#: What a run record written before 2026-09-14 spells its output budget, and the
-#: name that carries the same number now. A rename rather than a drop: the old
-#: key sized the answer of a single call and so does the new one, so the number
-#: the run recorded keeps its meaning (Guardrail #10).
-MIGRATED_INFERENCE_NAMES: Final[Mapping[str, str]] = MappingProxyType(
-    {"max_output_tokens": "max_answer_tokens"}
+#: Every knob a run record written before 2026-09-21 can carry and nothing
+#: carries now. Dropped rather than migrated: no field here has a successor to
+#: hold its number, and a reading of a cap that no longer bounds anything is not
+#: a reading worth carrying forward (Guardrail #10).
+RETIRED_INFERENCE_NAMES: Final[frozenset[str]] = frozenset(
+    {"max_output_tokens", "max_answer_tokens", "max_think_tokens", "thinking"}
 )
-
-
-#: The knob a run record written before 2026-09-14 carried and nothing carries
-#: now. Reasoning is declared by `turns.thinking_close`, and `ModelRef` - the
-#: shape a run records - carries no turn envelope at all. Every run written
-#: under the old flag wrote it false, because the output schema made anything
-#: else fail on shape, so dropping it loses no reading.
-RETIRED_INFERENCE_NAMES: Final[frozenset[str]] = frozenset({"thinking"})
