@@ -23,8 +23,16 @@ from typing import Any
 
 from idhazh import config
 from idhazh.contracts.digest_day import DigestItem
+from idhazh.contracts.knobs.models import ModelEntry
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict
-from idhazh.llm.server import Completion, TokenChoice, grammar_completion_payload
+from idhazh.llm.server import (
+    Completion,
+    TokenChoice,
+    answer_span,
+    grammar_completion_payload,
+    one_reply,
+    thinking_span,
+)
 from idhazh.similarity import prompt
 
 #: The one seam between a verdict and a socket. A judge hands over a request body
@@ -51,6 +59,16 @@ class Reading:
     first_token_margin: float | None
     decode_seconds: float
     prompt_tokens: int
+    #: How many reasoning spans ran in front of the answer - 0 cold, 1 under a
+    #: thinking envelope. `decode_digest` cannot see the difference, because the
+    #: only posted key an envelope moves is the prompt and the prompt is not
+    #: stamped, so the count is carried rather than derived later.
+    thinking_spans: int = 0
+    #: What the reasoning span wrote, held for the length of this call and
+    #: persisted nowhere. It is model-written text about two strangers' web
+    #: pages, so it is trusted no further than a fetched page: it reaches no
+    #: reader, no row and no second prompt of ours (Guardrail #11).
+    thinking: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,17 +103,99 @@ def verdict_of(text: str) -> SameStoryVerdict:
 
 
 def margin_of(choices: Sequence[TokenChoice]) -> float | None:
-    """The gap between the two likeliest first tokens, as probabilities.
+    """The gap between the two likeliest VERDICTS, over the mass the grammar admits.
 
-    None where the server reported fewer than two alternatives. A 0.0 there would
-    read as the one thing this column exists to catch - a grammar that chose
-    while the model was indifferent - and it would read that way on every reply
-    from a server that was never asked for alternatives at all.
+    Three steps, and each one answers a way the raw top-two gap was wrong.
+
+    **Bucketed by prefix.** A window holds tokens, and a token is the opening of
+    a legal reply rather than a legal reply. `NO` and ` NO` are one verdict said
+    twice, and a rule that subtracts them reports a near-zero gap on a reply the
+    model was certain about. Each token is summed into the verdict its stripped
+    text opens.
+
+    **Unattributable tokens are dropped.** A lone space and a lone empty token
+    are prefixes of every legal reply, so neither says which verdict the model
+    was reaching for. Counting one into all three adds the same mass three times
+    and moves no gap it should move.
+
+    **Renormalised over what is left.** The window is the model's own
+    distribution and not the grammar's - measured, 18 of 25 returned tokens were
+    illegal here and they carry mass of their own
+    (`docs/reference/benchmarks/what-the-margin-rule-changes.md`). Dividing by
+    the legal mass is what turns the number into a gap between the answers the
+    caller allowed rather than a gap inside the whole vocabulary.
+
+    None where fewer than two verdicts got any mass at all - a window that named
+    one verdict, a window of nothing but illegal tokens, and a server that was
+    never asked for alternatives all land here. A 1.0 would read as the model
+    agreeing completely with the grammar, which is the opposite of what a window
+    that could not say means, and a 0.0 would read as the one thing this column
+    exists to catch.
     """
-    if len(choices) < 2:
+    mass = dict.fromkeys(SameStoryVerdict, 0.0)
+    for choice in choices:
+        opened = prompt.verdicts_opened_by(choice.token)
+        if len(opened) != 1:
+            continue
+        mass[next(iter(opened))] += exp(choice.logprob)
+    legal = sum(mass.values())
+    ranked = sorted((share for share in mass.values() if share > 0.0), reverse=True)
+    if len(ranked) < 2:
         return None
-    ranked = sorted((exp(choice.logprob) for choice in choices), reverse=True)
-    return max(0.0, min(1.0, ranked[0] - ranked[1]))
+    return max(0.0, min(1.0, (ranked[0] - ranked[1]) / legal))
+
+
+def entry_of(settings: config.Settings) -> ModelEntry:
+    """Which model entry this judge decodes with, in the one place that decides it.
+
+    `models.judge` where the active models file declares one, and the summariser's
+    entry otherwise. The two name the same weights by contract, so a judge role
+    changes how a verdict is decoded and never which file the runner's cache has
+    to hold - the cache restore is the largest fixed cost in the pipeline
+    (Guardrail #2).
+
+    Read here by the decode, by the stamp and by the leg, so a run cannot judge
+    under one entry and record another.
+    """
+    return settings.models.judge or settings.models.summarize
+
+
+def decode_body(
+    settings: config.Settings, *, system: str, user: str
+) -> dict[str, Any]:
+    """The request body one judging call posts, built once and read three ways.
+
+    The decode runs it, the stamp digests it, and a test asserts on it. A stamp
+    built off a config block instead would agree with the config and disagree
+    with what went out, which is the one case worth seeing.
+
+    **The temperature is the judging knob's, not the entry's.** The entry pins
+    what suits writing a summary; this decode is the one whose answer is compared
+    against itself with the two summaries swapped, and that comparison only reads
+    position bias while the sampler is adding nothing of its own. `top_p` and
+    `seed` still come off the entry, because neither decides anything at
+    temperature 0.
+
+    The alternatives window is sized to what the grammar admits at the answer's
+    opening - every non-empty prefix of a legal reply - rather than to the three
+    verdict words. Sized to the words it holds one verdict spelled two ways and
+    nothing else, and `margin_of` then has one verdict to rank and answers null.
+    Measured on 2026-09-21: at the old width every reply returned exactly that.
+    """
+    entry = entry_of(settings)
+    tuning = settings.app.assemble.same_story.judging_knobs()
+    return grammar_completion_payload(
+        model_id=entry.id,
+        system=system,
+        user=user,
+        grammar=prompt.grammar(),
+        inference=entry.inference.model_copy(
+            update={"temperature": tuning.judge_temperature}
+        ),
+        turns=entry.turns,
+        max_answer_tokens=prompt.REPLY_TOKENS,
+        first_token_alternatives=len(prompt.first_token_prefixes()),
+    )
 
 
 def read_once(
@@ -107,33 +207,43 @@ def read_once(
 ) -> Reading:
     """One constrained decode, and the two checks that say it was constrained.
 
-    The model is `models.summarize` - the one the digest already runs. Naming a
-    second would double the weights the runner's cache carries, and the cache
-    restore is the largest fixed cost in the pipeline (Guardrail #2).
+    The model is `judge.entry_of` - the summariser's entry, or a judge role
+    declared beside it on the same weights.
 
-    **The temperature is the judging knob's, not the entry's.** The entry pins
-    what suits writing a summary; this decode is the one whose answer is
-    compared against itself with the two summaries swapped, and that comparison
-    only reads position bias while the sampler is adding nothing of its own.
-    `top_p` and `seed` still come off the entry, because neither decides
-    anything at temperature 0.
+    **A reasoning span runs only where the entry declares a closing marker.** An
+    entry with none cannot be asked for one: the answer body carries a grammar of
+    a few literals, so a span held to it could not write a reasoning block at all,
+    and `thinking_span` refuses rather than sending one. Where a marker is
+    declared the answer is decoded in span two with the grammar back on and the
+    reasoning behind it in the prompt, so the verdict is read off the answer and
+    never off the thinking.
     """
-    entry = settings.models.summarize
-    tuning = settings.app.assemble.same_story.judging_knobs()
-    payload = grammar_completion_payload(
-        model_id=entry.id,
+    entry = entry_of(settings)
+    answer = decode_body(
+        settings,
         system=prompt.system_turn(),
         user=prompt.user_turn(left, right),
-        grammar=prompt.grammar(),
-        inference=entry.inference.model_copy(
-            update={"temperature": tuning.judge_temperature}
-        ),
-        turns=entry.turns,
-        max_answer_tokens=prompt.REPLY_TOKENS,
-        first_token_alternatives=len(SameStoryVerdict),
     )
     started = time.perf_counter()
-    reply = client(payload)
+    if entry.turns.thinks:
+        thought = client(
+            thinking_span(
+                answer,
+                turns=entry.turns,
+                max_think_tokens=entry.inference.max_think_tokens,
+                temperature=entry.inference.temperature,
+            )
+        )
+        reply = one_reply(
+            thought=thought,
+            answer=client(
+                answer_span(answer, thought=thought.content, turns=entry.turns)
+            ),
+        )
+        thinking, spans = thought.content, 1
+    else:
+        reply = client(answer)
+        thinking, spans = "", 0
     elapsed = time.perf_counter() - started
     verdict = verdict_of(reply.content)
     _the_first_token_opened_the_word_that_came_back(reply.first_token_choices, verdict)
@@ -142,6 +252,8 @@ def read_once(
         first_token_margin=margin_of(reply.first_token_choices),
         decode_seconds=elapsed,
         prompt_tokens=reply.prompt_tokens,
+        thinking_spans=spans,
+        thinking=thinking,
     )
 
 
@@ -181,16 +293,17 @@ def _the_first_token_opened_the_word_that_came_back(
 
     A server that reported no alternatives says nothing here and is not refused
     for it - `first_token_margin` is nullable for the same reason. A first token
-    that is only the grammar's own optional space says nothing either: the word
-    starts at the next position, and that position is not the one being read.
+    that opens more than one verdict says nothing either: a lone space and a lone
+    empty token are prefixes of every legal reply, so the word starts at the next
+    position and that position is not the one being read.
+
+    Asked through the same rule the margin buckets on, so a token the margin
+    credits to a verdict and a token this check accepts for it are one answer.
     """
     if not choices:
         return
     written = choices[0].token
-    if not written.strip():
-        return
-    opened = written[1:] if written.startswith(" ") else written
-    if verdict.value.startswith(opened):
+    if verdict in prompt.verdicts_opened_by(written):
         return
     raise GrammarNotAppliedError(
         f"the judge answered {verdict.value} and its likeliest first token was "

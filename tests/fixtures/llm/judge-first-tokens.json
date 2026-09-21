@@ -1,11 +1,58 @@
 {
+  " NO": {
+    "tokens": [
+      {
+        "id": 5486,
+        "piece": " NO"
+      }
+    ]
+  },
+  " UNCLEAR": {
+    "tokens": [
+      {
+        "id": 72691,
+        "piece": " UNC"
+      },
+      {
+        "id": 23196,
+        "piece": "LEAR"
+      }
+    ]
+  },
+  " YES": {
+    "tokens": [
+      {
+        "id": 13677,
+        "piece": " YES"
+      }
+    ]
+  },
   "NO": {
-    "tokens": [8996]
+    "tokens": [
+      {
+        "id": 8725,
+        "piece": "NO"
+      }
+    ]
   },
   "UNCLEAR": {
-    "tokens": [1861, 26120, 934]
+    "tokens": [
+      {
+        "id": 12270,
+        "piece": "UNC"
+      },
+      {
+        "id": 23196,
+        "piece": "LEAR"
+      }
+    ]
   },
   "YES": {
-    "tokens": [14004, 1570]
+    "tokens": [
+      {
+        "id": 13602,
+        "piece": "YES"
+      }
+    ]
   }
 }

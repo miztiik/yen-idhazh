@@ -48,6 +48,15 @@ export interface StorySimilarityDistribution {
 	/** sha256 of the grammar the verdicts were produced under. */
 	grammar_digest?: string | null;
 
+	/** The sampler temperature every verdict in this record was decoded at. Null on a record written before the column existed, which is the one value it means: a sampler nobody recorded, not a sampler set to nothing. */
+	judge_temperature?: number | null;
+
+	/** sha256 of what the judging call asked the decoder to do, minus the prompt, the grammar and the model name - each of which is stamped here in a column of its own. It catches a sampler field that moved with no other column moving, which is a change to what a verdict means that the six named values cannot see. */
+	decode_digest?: string | null;
+
+	/** Whether a reasoning span ran in front of every verdict counted here. A column of its own because `decode_digest` cannot see it: the only posted key a thinking envelope moves is the prompt, and the prompt is excluded. Without it a record counted cold and a record counted after reasoning are one population. */
+	judge_thinks?: boolean | null;
+
 	/** Every date already counted, sorted. A second fold of one date is refused rather than doubling its counts, which makes a re-run free instead of damaging. */
 	folded_dates?: string[];
 
