@@ -32,7 +32,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 4070
+						"modelLoadMs": 4070,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					},
 					{
 						"shard": 1,
@@ -60,7 +65,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 3788
+						"modelLoadMs": 3788,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					},
 					{
 						"shard": 2,
@@ -88,7 +98,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 3573
+						"modelLoadMs": 3573,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					},
 					{
 						"shard": 3,
@@ -116,7 +131,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 3808
+						"modelLoadMs": 3808,
+						"unclaimedSeconds": 7.854,
+						"clocksDisagreed": 1,
+						"clockedItems": 12,
+						"queueMedianSeconds": 12.75,
+						"queueMaxSeconds": 23.75
 					}
 				],
 				"readSeconds": {
@@ -255,7 +275,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 3683
+						"modelLoadMs": 3683,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					},
 					{
 						"shard": 1,
@@ -283,7 +308,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 4047
+						"modelLoadMs": 4047,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					},
 					{
 						"shard": 2,
@@ -311,7 +341,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 4033
+						"modelLoadMs": 4033,
+						"unclaimedSeconds": 7.86,
+						"clocksDisagreed": 1,
+						"clockedItems": 12,
+						"queueMedianSeconds": 12.5,
+						"queueMaxSeconds": 23.5
 					},
 					{
 						"shard": 3,
@@ -339,7 +374,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 4002
+						"modelLoadMs": 4002,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					}
 				],
 				"readSeconds": {
@@ -478,7 +518,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 3773
+						"modelLoadMs": 3773,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					},
 					{
 						"shard": 1,
@@ -506,7 +551,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 4062
+						"modelLoadMs": 4062,
+						"unclaimedSeconds": 7.866,
+						"clocksDisagreed": 1,
+						"clockedItems": 12,
+						"queueMedianSeconds": 12.25,
+						"queueMaxSeconds": 23.25
 					},
 					{
 						"shard": 2,
@@ -534,7 +584,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 3805
+						"modelLoadMs": 3805,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					},
 					{
 						"shard": 3,
@@ -562,7 +617,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 3888
+						"modelLoadMs": 3888,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					}
 				],
 				"readSeconds": {
@@ -701,7 +761,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 3759
+						"modelLoadMs": 3759,
+						"unclaimedSeconds": 7.872,
+						"clocksDisagreed": 1,
+						"clockedItems": 12,
+						"queueMedianSeconds": 12,
+						"queueMaxSeconds": 23
 					},
 					{
 						"shard": 1,
@@ -729,7 +794,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 3934
+						"modelLoadMs": 3934,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					},
 					{
 						"shard": 2,
@@ -757,7 +827,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 3619
+						"modelLoadMs": 3619,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					},
 					{
 						"shard": 3,
@@ -785,7 +860,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 3521
+						"modelLoadMs": 3521,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					}
 				],
 				"readSeconds": {
@@ -924,7 +1004,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 3994
+						"modelLoadMs": 3994,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					},
 					{
 						"shard": 1,
@@ -952,7 +1037,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 3610
+						"modelLoadMs": 3610,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					},
 					{
 						"shard": 2,
@@ -980,7 +1070,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 3966
+						"modelLoadMs": 3966,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					},
 					{
 						"shard": 3,
@@ -1008,7 +1103,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 3632
+						"modelLoadMs": 3632,
+						"unclaimedSeconds": 7.878,
+						"clocksDisagreed": 1,
+						"clockedItems": 12,
+						"queueMedianSeconds": 11.75,
+						"queueMaxSeconds": 22.75
 					}
 				],
 				"readSeconds": {
@@ -1147,7 +1247,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 4120
+						"modelLoadMs": 4120,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					},
 					{
 						"shard": 1,
@@ -1175,7 +1280,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 3641
+						"modelLoadMs": 3641,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					},
 					{
 						"shard": 2,
@@ -1203,7 +1313,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 4250
+						"modelLoadMs": 4250,
+						"unclaimedSeconds": 6.384,
+						"clocksDisagreed": 2,
+						"clockedItems": 12,
+						"queueMedianSeconds": 11.5,
+						"queueMaxSeconds": 22.5
 					},
 					{
 						"shard": 3,
@@ -1231,7 +1346,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 3975
+						"modelLoadMs": 3975,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					}
 				],
 				"readSeconds": {
@@ -1370,7 +1490,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 3819
+						"modelLoadMs": 3819,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					},
 					{
 						"shard": 1,
@@ -1398,7 +1523,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 3529
+						"modelLoadMs": 3529,
+						"unclaimedSeconds": 6.48,
+						"clocksDisagreed": 2,
+						"clockedItems": 12,
+						"queueMedianSeconds": 11.25,
+						"queueMaxSeconds": 22.25
 					},
 					{
 						"shard": 2,
@@ -1426,7 +1556,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 3540
+						"modelLoadMs": 3540,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					},
 					{
 						"shard": 3,
@@ -1454,7 +1589,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 4083
+						"modelLoadMs": 4083,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					}
 				],
 				"readSeconds": {
@@ -1593,7 +1733,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 3560
+						"modelLoadMs": 3560,
+						"unclaimedSeconds": 6.576,
+						"clocksDisagreed": 2,
+						"clockedItems": 12,
+						"queueMedianSeconds": 11,
+						"queueMaxSeconds": 22
 					},
 					{
 						"shard": 1,
@@ -1621,7 +1766,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 4074
+						"modelLoadMs": 4074,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					},
 					{
 						"shard": 2,
@@ -1649,7 +1799,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 3716
+						"modelLoadMs": 3716,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					},
 					{
 						"shard": 3,
@@ -1677,7 +1832,12 @@
 						"loadMax": null,
 						"swapFreeMinBytes": null,
 						"swapTotalBytes": null,
-						"modelLoadMs": 4013
+						"modelLoadMs": 4013,
+						"unclaimedSeconds": null,
+						"clocksDisagreed": 0,
+						"clockedItems": 0,
+						"queueMedianSeconds": null,
+						"queueMaxSeconds": null
 					}
 				],
 				"readSeconds": {

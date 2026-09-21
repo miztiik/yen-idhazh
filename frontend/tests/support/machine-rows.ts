@@ -73,6 +73,12 @@ export interface ShardReading {
 	/** The processor the item ledger recorded, where the machine record missed
 	 * the shard. Left empty unless a spec is checking that fallback. */
 	itemCpuModel?: string;
+	/** Milliseconds of this item no named step claimed. **Signed**: below zero
+	 * says the named steps claim more time than the item took, which is two
+	 * clocks disagreeing and is a state the committed archive has never held. */
+	unclaimedMs?: number | '';
+	/** Milliseconds this item waited before its worker started it. */
+	queueWaitMs?: number | '';
 }
 
 const DATE = '2026-09-02';
@@ -135,7 +141,9 @@ export function itemRow(reading: ShardReading): Record<string, string> {
 		python_rss_bytes: cell(reading.workerRssBytes),
 		item_started_at: cell(reading.startedAt),
 		shard_item_count: cell(reading.shardItemCount),
-		cpu_model: cell(reading.itemCpuModel)
+		cpu_model: cell(reading.itemCpuModel),
+		stage_gap_ms: cell(reading.unclaimedMs),
+		queue_wait_ms: cell(reading.queueWaitMs)
 	};
 }
 

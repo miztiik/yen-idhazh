@@ -116,7 +116,13 @@ export function healthRows(sizes: Sizes): Record<string, string>[] {
 			output_tokens: String(150 + Math.round(next() * 120)),
 			cpu_busy_pct: String(85 + Math.round(next() * 10)),
 			llama_rss_peak_bytes: String(12_000_000_000 + Math.round(next() * 1_000_000_000)),
-			cpu_model: index % 2 === 0 ? 'AMD EPYC 9V45' : 'AMD EPYC 9V74'
+			cpu_model: index % 2 === 0 ? 'AMD EPYC 9V45' : 'AMD EPYC 9V74',
+			// The two clock cells, derived from the index rather than the sequence,
+			// so adding them moved no value the golden already held. Every ninth
+			// item is below zero: `stage_gap_ms` is signed, and a reduction that
+			// clamped it would pass over rows that are all positive.
+			stage_gap_ms: index % 9 === 0 ? String(-(200 + index * 3)) : String(400 + index * 7),
+			queue_wait_ms: String(index * 250)
 		});
 	}
 	return rows;

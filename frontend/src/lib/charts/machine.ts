@@ -161,6 +161,28 @@ export interface BoardRow {
 	swapState: SwapState;
 	/** What the shard paid opening the weights, before its first item. */
 	modelLoadMs: number | null;
+	/** Seconds of this shard's items that no named stage claimed, added over
+	 * them and drawn exactly as the ledger stores it.
+	 *
+	 * **Signed, and never recomputed here.** The column is the one thing that can
+	 * catch a regression in a stage nobody named, and a figure this page worked
+	 * out from the stage clocks would agree with them by construction. Below zero
+	 * means the named stages claim more time than the items took - two clocks
+	 * disagreeing - and that is the reading, not a zero. */
+	unclaimedSeconds: number | null;
+	/** How many of the shard's items carried unclaimed time below zero. A sum can
+	 * cancel; a count cannot. */
+	clocksDisagreed: number;
+	/** How many of the shard's item rows carried an unclaimed figure at all. The
+	 * denominator the count above is read against. */
+	clockedItems: number;
+	/** The typical item's wait and the worst one, on the board's clock scale.
+	 *
+	 * Never a total. Each item's wait covers the queue ahead of it, so adding
+	 * them counts that queue once per item. */
+	queue: RangeMark;
+	queueMedianSeconds: number | null;
+	queueMaxSeconds: number | null;
 	jobSeconds: number | null;
 	/** The job clock against `run.shard_timeout_minutes`. */
 	job: TargetMarks;
@@ -196,7 +218,10 @@ export interface ShardBoardView {
 	/** The fastest reader over the slowest. Null with fewer than two readers -
 	 * one shard cannot spread against itself. */
 	readSpread: number | null;
-	/** The seconds the widest bar stands for. Every row shares it. */
+	/** The seconds the widest bar stands for. Every row shares it, and the queue
+	 * bars share it with the model bars - which is the whole point of drawing the
+	 * wait here rather than as a number of its own: a queue longer than the model
+	 * time is a length a reader can see against it. */
 	scaleSeconds: number;
 	/** The tokens a second the widest rate bar stands for, taken from the rates
 	 * drawn and never from a fixed ceiling. A 4x spread draws a quarter-length
@@ -304,7 +329,15 @@ export function shardBoard(
 	const totals = run.reported
 		.map(modelSeconds)
 		.filter((value): value is number => value !== null);
-	const scaleSeconds = totals.length === 0 ? 0 : Math.max(...totals);
+	// The queue bars are drawn on this scale too, so it has to reach the longest
+	// wait as well as the heaviest model clock. A shard that queued longer than it
+	// computed then draws a longer bar, which is the sentence the pair exists to
+	// let a reader read.
+	const waits = run.reported
+		.map((shard) => shard.queueMaxSeconds)
+		.filter((value): value is number => value !== null);
+	const clocks = [...totals, ...waits];
+	const scaleSeconds = clocks.length === 0 ? 0 : Math.max(...clocks);
 
 	// Both domains come from the values drawn. The memory one takes the runner's
 	// ceiling in beside them rather than as its maximum, so a shard that went
@@ -375,6 +408,12 @@ export function shardBoard(
 			swapTotalBytes: shard.swapTotalBytes,
 			swapState: swapStateOf(shard.swapTotalBytes),
 			modelLoadMs: shard.modelLoadMs,
+			unclaimedSeconds: shard.unclaimedSeconds,
+			clocksDisagreed: shard.clocksDisagreed,
+			clockedItems: shard.clockedItems,
+			queue: rangeMark(shard.queueMedianSeconds, shard.queueMaxSeconds, scaleSeconds),
+			queueMedianSeconds: shard.queueMedianSeconds,
+			queueMaxSeconds: shard.queueMaxSeconds,
 			jobSeconds: shard.jobSeconds,
 			job: targetMarks(shard.jobSeconds, timeoutSeconds ?? 0, 'lower-is-better')
 		};
