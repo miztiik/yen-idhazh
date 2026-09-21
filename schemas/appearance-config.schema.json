@@ -942,6 +942,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "console.panel_groups.machine gains the article-cost panel.",
+      "version": "2026-09-21T12:00",
+      "why": "What one article costs has to be priceable before the run that pays it."
+    },
+    {
       "change": "console.context_high_percentile and console.context_cut_off_reason, additive.",
       "version": "2026-09-21",
       "why": "The context panel draws two ends a run and names what a cut-off looks like."
@@ -955,11 +960,6 @@
       "change": "console.panel_groups.machine is four decision groups, not three time grains.",
       "version": "2026-09-20T14:00",
       "why": "A heading naming a grain answers no question an operator arrives with."
-    },
-    {
-      "change": "Four console thresholds, additive: lost processor time and model disk reads.",
-      "version": "2026-09-20T13:00",
-      "why": "Whether a day is marked or named is a setting, not a literal in a chart."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -997,7 +997,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-09-21",
+      "default": "2026-09-21T12:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1005,5 +1005,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-09-21"
+  "version": "2026-09-21T12:00"
 }

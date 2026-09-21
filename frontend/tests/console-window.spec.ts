@@ -314,6 +314,7 @@ test('THE ORACLE: the Machine route obeys the same control over its own surfaces
 		found.map((surface) => surface.name).sort(),
 		'the machine route publishes no windowed surfaces, so the oracle asserts nothing'
 	).toEqual([
+		'machine-article-cost',
 		'machine-cache',
 		'machine-context',
 		'machine-cost',
