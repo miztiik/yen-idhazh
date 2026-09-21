@@ -21,6 +21,7 @@ import {
 } from '$lib/console/machine/context-cost';
 import { promptReuse, type PromptReuse } from '$lib/console/machine/prompt-reuse';
 import { articleCost, type ArticleCost } from '$lib/console/machine/article-cost';
+import { diskReads, type DiskReads } from '$lib/console/machine/disk-reads';
 import { costChart, costOverDays, DEFAULT_COST_SHAPE } from '$lib/charts/cost';
 import { memoryHeld } from '$lib/console/machine/memory-held';
 import { splitByMachine } from '$lib/charts/machine-split';
@@ -90,6 +91,11 @@ export interface MachineWindow {
 	 * memory and model time, each as a range. Three figures and a few counts, so
 	 * a preset carries it rather than the rows behind it. */
 	articleCost: ArticleCost;
+	/** Whether the machine took the model's memory back over this span: one
+	 * reading a day, the disk copies beside it, and what the runs recorded about
+	 * holding that memory down. One tile a day is small enough to carry per
+	 * preset, and the fold cannot be redone in a browser that holds no ledger. */
+	diskReads: DiskReads;
 }
 
 /** Everything a run-by-run chart draws, carried once rather than once a span.
@@ -125,6 +131,7 @@ const DRAWN_PANELS = [
 	'prompt-reuse',
 	'context-headroom',
 	'two-clocks',
+	'disk-reads',
 	'machine-cards',
 	'platform-mix',
 	'tail-trend',
@@ -239,6 +246,14 @@ export async function load() {
 		// what share of the processors an article kept busy, and only the record
 		// says how many processors that share was taken across.
 		const perArticle = articleCost(healthRows, inSpan(fingerprints));
+		// The one instrument that can see the machine taking the model's memory
+		// back: those pages are file pages, so they leave a memory reading and
+		// touch no swap counter on the way out. Both marks come off `console`
+		// rather than being written here (Guardrail #6).
+		const disk = diskReads(healthRows, {
+			marked: console_.model_disk_reads_marked,
+			named: console_.model_disk_reads_named
+		});
 
 		return {
 			days,
@@ -276,6 +291,7 @@ export async function load() {
 			}),
 			reuse: promptReuse(healthRows, healthTable.columns),
 			articleCost: perArticle,
+			diskReads: disk,
 			// Counted once a preset here rather than in a browser, which holds no
 			// ledger to count. At most eight kinds a span, so five presets is forty
 			// small objects.

@@ -74,6 +74,33 @@ Three things follow, and each is the reason a simpler design was refused.
 - **Removing a judge is a config edit and a directory delete.** Never a router
   edit.
 
+### Resolving is also when a tenant may refuse the night
+
+A tenant module may declare
+`refuse_a_night_this_tenant_cannot_finish`, and the resolver calls it on the
+tenant that answered to the slug - on that one and on no other. A tenant nobody
+registered cannot stop a night it is not in, even though the search has to import
+it to read its slug.
+
+**The planning job resolves every registered slug before it can build its
+matrix**, so a refusal lands there: before the matrix exists, before any job is
+dispatched, and before a runner has restored a model's weights. "Before a model
+call" would be a weaker claim - it is also true of a point after a cache restore
+and a server start, which is most of what a wasted job costs.
+
+**It is not an eighth member of the tenancy protocol.** The protocol is what a
+tenant presents while it runs; this is asked before it does. A tenant whose work
+has no cost to weigh against the venue's clock declares nothing and is asked
+nothing.
+
+The content-similarity judge is what declares one today, in
+[../../../backend/idhazh/similarity/budget.py](../../../backend/idhazh/similarity/budget.py):
+its draw of pairs, at its own measured per-pair cost, against the window below.
+The number is that judge's reading, so the check is that judge's too. Until
+2026-09-21 it was a validator on `AppConfig`, which put one judge's measurement
+in the import closure of every module that reads config - the council's own
+included. Owner ruling, 2026-09-21.
+
 ## The matrix is a flat list of cells
 
 The planning job asks
@@ -143,6 +170,13 @@ At the committed numbers the arithmetic is 200 minus 13 minus 12, so a unit has
 job's own 200, so its deadline lands at about minute 188 - twelve minutes before
 GitHub would kill it, which is exactly the reserve.
 
+**175 minutes is also what a tenant's own fit check weighs its draw against.**
+It reads the window from the same function the clock does rather than from a
+second copy of the subtraction. Until 2026-09-21 the check compared against the
+whole 200, so a draw that fit the bound and not the work was accepted at config
+load and cut off at runtime - the 25 minutes between the two is the gap that
+admitted it.
+
 ### Design rationale: the preamble is a clock, not a bigger bound
 
 Until 2026-09-21 the window was the bound less the reserve, and the zero was the
@@ -163,7 +197,8 @@ the council's policy, set against the platform's 6 h job ceiling and the nightly
 schedule. A bound derived from a measured per-pair cost would be the coupling
 this page exists to refuse, one layer down: a second judge with different
 economics would move a number that is not its to move. A tenant that cannot fit
-inside the window is refused by its own fit check. Owner ruling, 2026-09-21.
+inside the window is refused by its own fit check, raised when the planning job
+resolves it. Owner ruling, 2026-09-21.
 
 **Nothing in the council checks the instant it handed over.** Only the tenant
 knows what a unit of work is and where stopping leaves a readable result, so the
@@ -274,6 +309,66 @@ them unreachable.
 
 The tenant's own slug is a directory level inside each upload, so two tenants'
 first unit land beside each other rather than on top of each other.
+
+## The venue keeps its own record of every unit it ran
+
+The council starts a clock, calls the tenant, and files one row of its own on
+the way out - into
+[../../../backend/idhazh/ledger.py](../../../backend/idhazh/ledger.py)'s
+`state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv`, through the same
+shipping path a tenant's own row travels on. The row says which unit ran, for
+which tenant, under which name, how it ended, how long it took, and what the
+work inside it cost the model. It says nothing that needs a name for the unit of
+work, so it reads the same whether the tenant made four hundred model calls or
+none.
+
+**Five units a tenant, not four.** Picking the work and counting what came back
+are units too, and both can die. They file at reserved numbers below zero, `-1`
+and `-2`, carrying the run's real width - so a night whose count died leaves a
+row saying so instead of leaving the venue blind.
+
+**The cost cells come off what the tenant handed back, and out of nothing else.**
+The council opens no store of a tenant's and reads no field of a tenant's own
+contract. A tenant with no model hands back empty cells, and empty is not zero:
+zero would read as a model that answered nothing, which is a different fact and
+only one of the two is a defect.
+
+**A unit that died files nothing, and that is the record.** The outcome
+vocabulary is three words - `completed`, `stopped_on_deadline`, `nothing_to_do` -
+and none of them says "this died". A unit the platform killed could not write
+one anyway. What says it is the missing row read against the `shards` cell its
+siblings carry: three rows that each say the work was split four ways is a night
+with one unit missing, and an operator needs nothing else to see it. A unit that
+ran out of its own clock is the opposite case and does file a row, because it
+stopped itself and had something to report.
+
+**The store is seeded with a `.gitkeep` and never with a header-only day file.**
+A header with no rows under it is a real day to the partition walker, so one
+would put a permanent day in the prune target and the day inventory that no
+council run ever had. A night with nothing to record therefore writes no file at
+all, and the commit step still finds its directory.
+
+### Design rationale: the venue files the row, not the tenant
+
+An earlier draft had the judge's own stages write this row. That made the
+venue's record of a unit depend on a tenant's diligence: a judge that forgot the
+line, or died before reaching it, left nothing behind at the one moment the
+record mattered. The council owns the invocation, so it owns the outcome - the
+row is filed in a `finally`, and it survives anything that goes wrong after the
+tenant handed its result back. Owner ruling, 2026-09-21.
+
+**`judge_id` is in the settlement key**, beside the date, the run and the unit
+number. One council run has one run id, so on a night hosting two tenants,
+tenant A's first unit and tenant B's first unit carry the same three cells - and
+the pass that drops repeated rows after a merge would delete one of them. The
+slug is what tells them apart. It is recorded rather than checked: the council
+writes down who ran and never declares who may exist.
+
+**No machine is recorded per unit.** The runner pool is already characterised by
+the digest pipeline, and the bandwidth probe that would fingerprint it wants
+1.9 GiB on a job whose two processes already hold up to 9.02 GiB of anonymous
+memory in 16 GB. The council's data is discardable, so the reading is not worth
+the only memory risk in the design. Carmack, 2026-09-21.
 
 ## Design rationale: the council's own path, not the segment store
 

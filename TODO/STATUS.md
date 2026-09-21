@@ -37,15 +37,17 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260914-27-pipeline-observability-plan.md](20260914-27-pipeline-observability-plan.md) | 11 | 0 | 11 | 4 |
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
-| [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 11 | 11 | 4 |
-| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 16 | 13 | 3 |
+| [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 11 | 11 | 3 |
+| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 18 | 11 | 3 |
+| [20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md) | 18 | 0 | 18 | 10 |
+| [20260921-40-bonsai-probe-plan.md](20260921-40-bonsai-probe-plan.md) | 7 | 0 | 7 | 4 |
 
 ## In flight - 0
 
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 35
+## Ready now - 48
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -82,14 +84,27 @@ section 3 is where it is answered.
 | #7 | 35 | A / eval-core | Remove `lead_coverage` (+ day-metrics bucket + qualification, C4) | - |
 | #8 | 35 | A / eval-core | Add coherence + coverage scorers (recorded-only) | - |
 | #10 | 37 | C | Did another tenant take the processor | 5, 8, 9 |
-| #11 | 37 | C | Is the kernel taking the model's weights back | 5, 8, 9 |
 | #13 | 37 | C | Two panels leave the page | 9 |
 | #19 | 37 | C | Which prompts get re-read, and how fast | 9 |
 | #12 | 38 | J | The four verbs name their work | 9, 24 |
-| #17 | 38 | O | The council runs the tenant and files its own outcome row | 5, 15a, 24 |
-| #25 | 38 | P | The config check moves to the tenant that owns the number | 9, 24 |
+| #18 | 38 | Q | The store groups under the judge that fills it | 17 |
+| #21a | 38 | S | The council asks every tenant what it is behind on | 15a, 17, 24 |
+| #13 | 39 | A | The entry path is one action taking a model file | - |
+| #2 | 39 | A | The model file is plain JSON | - |
+| #3 | 39 | A | The draft head goes | - |
+| #4 | 39 | A | The capability probe goes | - |
+| #14 | 39 | A | The image benchmark goes, and two heavy wheels with it | - |
+| #15 | 39 | A | The hosted span sink goes | - |
+| #11 | 39 | A | The server-log reader goes | - |
+| #17 | 39 | A | The utilities and evaluations nothing calls go | - |
+| #7 | 39 | A | Qualification asks each article once | - |
+| #8 | 39 | A | Both test pipelines commit what they produce | - |
+| #1 | 40 | A | The model entry, and whether it fits | - |
+| #2 | 40 | A | The test workflow takes named addresses | - |
+| #5 | 40 | A | The eight telemetry steps move across | - |
+| #6 | 40 | A | A trial state root, and what the run keeps | - |
 
-## Waiting on another row - 89
+## Waiting on another row - 99
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -165,23 +180,33 @@ section 3 is where it is answered.
 | #8 | 36 | W4 / apply-gate (alone) | Flip the flag: withhold = absent + item-health telemetry (E7 placement) | 7 is PENDING |
 | #12 | 36 | W3 / rejects-store | The rejects store + corpus fence (`state/rejects/`, 30-day prune) | 3 is PENDING; 7 is PENDING |
 | #13 | 36 | W4 / plan34-gaps | Retro: plan-34 latent gaps + the shared space-trap guard | 34 landed names no row; 6 is PENDING |
+| #11 | 37 | C | Is the kernel taking the model's weights back | - |
 | #12 | 37 | C | What one article costs the machine | - |
 | #14 | 37 | C | The memory board drops the disputed mark | - |
 | #20 | 37 | C | What is holding the runner's memory | - |
 | #21 | 37 | C | What the context window actually costs | - |
 | #22 | 37 | C | Dotted rules where a setting moved | 21 is UNKNOWN |
-| #17 | 37 | D | Every published column names its reader | 10 is PENDING; 11 is PENDING; 12 is UNKNOWN; 13 is PENDING; 14 is UNKNOWN; 19 is PENDING; 20 is UNKNOWN; 21 is UNKNOWN; 22 is UNKNOWN |
+| #17 | 37 | D | Every published column names its reader | 10 is PENDING; 11 is UNKNOWN; 12 is UNKNOWN; 13 is PENDING; 14 is UNKNOWN; 19 is PENDING; 20 is UNKNOWN; 21 is UNKNOWN; 22 is UNKNOWN |
 | #18 | 37 | E | Docs, the living-page corrections, and the orphan sweep | all names no row |
 | #13 | 38 | J | `leg` and `fold` leave the vocabulary | 12 is PENDING |
 | #14 | 38 | K | The judge fills the stamp | 13 is PENDING |
 | #15b | 38 | L | The content-similarity judge fills its metrics and registers as a tenant | 14 is PENDING |
-| #18 | 38 | Q | The store groups under the judge that fills it | 17 is PENDING |
 | #19 | 38 | R | Where the content-similarity judge's merge line stands against its holdout | 18 is PENDING |
-| #21a | 38 | S | The council asks every tenant what it is behind on | 17 is PENDING |
 | #21b | 38 | T | The content-similarity judge answers which nights it is behind on | 12 is PENDING; 21a is PENDING |
 | #22 | 38 | U | The guard that stops a shard committing is renamed and re-reasoned | 21a is PENDING |
-| #23 | 38 | U | The council runs green with no judge in the repository | 17 is PENDING; 21a is PENDING; 25 is PENDING |
+| #23 | 38 | U | The council runs green with no judge in the repository | 21a is PENDING |
 | #20 | 38 | V | The plan pointer | 19 is PENDING; 21b is PENDING; 23 is PENDING |
+| #5 | 39 | B | The installer stops naming a repository | 2 is PENDING |
+| #6 | 39 | B | The startup probe keeps one check | 2 is PENDING |
+| #16 | 39 | B | The thinking budget and the two-span call go | 2 is PENDING |
+| #10 | 39 | C | The workflow censuses go | 3 is PENDING; 4 is PENDING |
+| #9 | 39 | C | The benchmark workflow's closed-world tests go | 3 is PENDING; 4 is PENDING |
+| #18 | 39 | C | The server renders the prompt, not us | 16 is PENDING |
+| #1 | 39 | D | The generated contract layer goes | 2 is PENDING; 3 is PENDING; 6 is PENDING; 16 is PENDING |
+| #12 | 39 | E | The engineering contract and the pages catch up | 1 is PENDING |
+| #3 | 40 | B | One plan job, so a fan-out agrees what it is reading | 2 is PENDING |
+| #4 | 40 | C | The fan-out | 3 is PENDING |
+| #7 | 40 | D | One dispatch, and the readings written up | 1 is PENDING; 4 is PENDING; 5 is PENDING; 6 is PENDING |
 
 ## Finished - 18 plans with no live row
 

@@ -20,10 +20,10 @@ export interface CouncilShardOutcome {
 	/** Which tenant this unit hosted. Without it a night running two tenants files rows nobody can attribute. Recorded rather than validated: there is no membership check, because the council records who ran and never declares who may exist. The value arrives from the tenant's own module constant, so a typo is a source edit a reviewer sees. */
 	judge_id: string;
 
-	/** Which unit of the split this row is about. */
+	/** Which unit of the split this row is about. Two values below zero are reserved for the units that run once a date rather than once a shard: -1 picked the work and -2 counted what came back. Without them a run whose count died would leave no row saying so. */
 	shard: number;
 
-	/** How many units the work was split across. A run reporting fewer rows than this left work unread, and the pair alone says so. */
+	/** How many units the work was split across. A run reporting fewer rows than this left work unread, and the pair alone says so. The two reserved units carry the run's real width, so one date's rows all agree. */
 	shards: number;
 
 	/** How the unit ended. A unit killed by the platform writes no row at all, and absence against the recorded count is what says so. */
