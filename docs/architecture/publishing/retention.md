@@ -1,6 +1,6 @@
 # Retention
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 
 What may be deleted, when, and what bounds every collection a run appends to.
 Unpublishing a day, the state tree's own ceilings, and the score shards that
@@ -286,6 +286,7 @@ primitive pointed at the repository is the one accident nobody can undo.
 | `feed-health` | `observability.feed_health_keep_months` |
 | `host-fingerprint` | `observability.host_fingerprint_keep_months` |
 | `item-health` | `observability.item_health_full_grain_months` |
+| `llm-council-shard-outcomes` | nothing today - one row per unit of work per night, and a night is a handful of units |
 | `score-index` | `observability.scores_full_grain_months` |
 | `scores` | `observability.scores_full_grain_months` |
 | `story-similarity-fitted-thresholds` | nothing today - one row a day at about 400 bytes across 33 columns is 146 KB a year at any `pair_budget` |
@@ -307,6 +308,16 @@ The judged pairs are folded into `score-distribution.json` once and never read
 again, so deleting a day of them takes nothing away from the fit. Deleting a
 fitted row does take something away: it leaves a day out of the step-change
 guard's median and out of what step 4 compares this week against.
+
+**`llm-council-shard-outcomes` is in the vocabulary before anything writes it.**
+The shape and the path land ahead of the step that appends to them (Guardrail
+#3), and the two story-similarity stores are the precedent: a store an operator
+cannot name is a store a day cannot be taken out of, and a range over a store
+with no file selects nothing and says so. What it holds is the council's own
+pipeline record - which units of work started, which finished, which stopped on
+their own clock - so a day removed from it takes away how one night went and
+nothing a tenant measured. A tenant's own readings are in a tenant's own store
+under that tenant's slug.
 
 **`state/day-metrics/` and `state/traces/` are day-shaped and deliberately
 outside it.** They file `<DD>.json` and `<DD>-<run>-<shard>.jsonl`, which

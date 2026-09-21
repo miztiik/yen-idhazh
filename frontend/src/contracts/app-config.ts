@@ -304,6 +304,29 @@ export interface ConsolePanelGroup {
 	panels: string[];
 }
 
+/**
+ * The clock, the margin and the fan-out width one judging night runs under.
+ *
+ * A top-level block rather than a knob under a tenant, because every number
+ * here prices a runner: a checkout, an install, a weights restore and a matrix
+ * leg. No tenant can see any of them.
+ *
+ * Until 2026-09-21 the bound sat in `run`, which is the digest pipeline's, and
+ * the width sat inside the content-similarity judge's own block - so a
+ * repository with no judge configured had no width to size its matrix by and
+ * no clock to stop a shard on.
+ */
+export interface CouncilConfig {
+	/** How long one judging shard may run before GitHub kills it. 200 minutes is 2 hours 9 minutes of model time at the content-similarity judge's cap of 200 pairs over 4 shards, plus 71 minutes of headroom against a fixed cost of about 6 minutes for the checkout, the weights cache restore and the server start. That model time is derived from 9.85 tokens a second measured on a stock runner on 2026-09-09, not from a judge call. A tenant that draws more work than fits is refused when its own block is read, never answered by raising this past GitHub's 6 h job ceiling. */
+	shard_timeout_minutes?: number;
+
+	/** How much of shard_timeout_minutes a judging shard keeps back for itself, so it stops on its own clock instead of being killed on the platform's. A shard killed at the bound uploads nothing, so every verdict it had already produced dies with the units it had not started. The reserve covers what happens after the last unit: writing the records and the artifact upload. Its own knob rather than a copy of run.shard_wrap_up_minutes, because a work shard is a different stage with a different preamble. Raise it if an upload is ever cut off, and never lower it to fit one more unit. */
+	shard_wrap_up_minutes?: number;
+
+	/** How many shards split one night. The workflow reads it to size its own matrix, so it is the venue's number rather than a tenant's. 4, because one llama-server on the configured weights already peaks at 12.57 to 13.16 GiB and reaches 14.31 GiB with the shard's python - 96.0 percent of the 16 GB runner, measured 2026-09-08 over four shards of run 2026-08-29-3. A second server on one runner does not fit at all. The ceiling of 8 is what a GitHub matrix leg costs rather than a measured limit. A tenant may narrow it downward, so this is the ceiling and the default rather than an instruction. */
+	shards?: number;
+}
+
 export interface DriftConfig {
 	month_over_month_pct?: number;
 
@@ -898,9 +921,6 @@ export interface RunConfig {
 	/** The work job's own timeout, which digest.yml reads from here. A backstop, never a budget: a worker has no clock of its own, and one killed at this bound uploads nothing, so the run loses every item that worker held. It rose to 200 from 150 as headroom for the coming two-call summariser change, not because any worker got slower - at run.safety_ceiling_per_run of 80 a worker draws 20 items, half of the 40 it drew before, so the base work roughly halves. Sized from the worst measured shard, not the median: over 80 shard rows on 2026-09-02 the worst used 135.4 minutes of the old 150-minute bound and the median used 78.5, and the second model call an item spends exactly that margin. **Re-derived on 2026-09-14 for the two-span item and left at 200.** The worst of those 80 rows carried 40 items, so the worst measured item is 203.1 s; each of the item's two calls now opens with a 256-token thinking span, which is 42.6 s a span at the measured 6.01 +/- 0.11 tokens a second (2026-08-23, ubuntu-latest, EPYC 9V74, llama.cpp b10598, three repeats), so the derived worst item is 288.3 s and a 20-item worker's worst shard is 96.1 minutes. 200 is 56 percent of the six-hour platform ceiling, well inside Guardrail #2. A slow worker is still answered by lowering the ceiling, never by raising this. */
 	shard_timeout_minutes?: number;
 
-	/** How long one judging leg may run before GitHub kills it. 200 minutes is 2 hours 9 minutes of model time at the day's cap of 200 pairs over 4 legs, plus 71 minutes of headroom against a fixed cost of about 6 minutes for the checkout, the weights cache restore and the server start. The model time is derived from 9.85 tokens a second measured on a stock runner on 2026-09-09, not from a judge call; row 17 measures one and replaces this arithmetic. */
-	judge_shard_timeout_minutes?: number;
-
 	/**
 	 * How much of shard_timeout_minutes the worker keeps back for itself, so it stops on its own clock instead of being killed on the platform's. A worker killed at shard_timeout_minutes uploads nothing, so every item it had already finished dies with the ones it had not started: on 2026-09-15 two of four shards went that way and the day published 66 stories against a plan of 80.
 	 *
@@ -949,7 +969,8 @@ export interface SameStoryConfig {
 	/** What the weighted score has to reach before two items are one story, and EVERY pair inside a group has to reach it - not only each item against the one it joined. On the same 0-to-1 scale as every term, because the weights sum to 1.0. Set by labels rather than by taste: 0.94 is the first round hundredth above the highest pair marked as two stories in the eleven committed days read on 2026-09-01, which put that pair at 0.9317. The 200 pairs labelled on 2026-09-19 put it at 0.9407 instead - ABOVE this line - so the margin this number used to carry is gone and the line now admits one known two-story pair. No line fixes that: the same labels mark a pair at 0.9406 as one story and another at 0.9409 as one story, so the two populations interleave inside three slots. Raising this costs missed duplicates, which a reader sees as the same story twice; lowering it costs a false merge, which is a story that never ran, so the two errors are not equal and this number leans high. It was measured against the cosine alone, which is what the shipped weights still score. */
 	floor_min?: number;
 
-	adaptive_dedup_threshold?: SimilarityThresholdConfig;
+	/** The content-similarity judge's own knobs, absent when that judge is not configured. Optional rather than built by a default factory, because a factory cannot express 'no judge is configured' - absent and present-at-defaults read the same afterwards, so nothing could tell the council's own night apart from a night this judge runs. The council's runner numbers are in `council` and stand whether or not this block does. */
+	adaptive_dedup_threshold?: SimilarityThresholdConfig | null;
 }
 
 /**
@@ -1006,11 +1027,8 @@ export interface SimilarityThresholdConfig {
 	/** Whether the guard actually holds the line or only records that it would have. Ships off, because enforcing a hold on a multiple nobody has measured lets an unchecked number freeze the line. Removal condition: delete this flag once step_change_multiple carries a value measured from fourteen written rows. */
 	step_change_guard_enforced?: boolean;
 
-	/** How many pairs a day may be judged. 200 pairs judged twice is 400 calls, which is 100 calls on each of four legs, which at 77.6 seconds a call is 2 hours 9 minutes of model time a leg. That figure is derived from 9.85 tokens a second measured on a stock runner, not from a judge call; row 17 measures a real one. Raising it is a job-timeout question before it is a quality one, and a validator refuses a value that does not fit the leg. */
+	/** How many pairs a day may be judged. 200 pairs judged twice is 400 calls, which at the council's committed four shards is 100 calls on each, which at 77.6 seconds a call is 2 hours 9 minutes of model time a shard. That figure is derived from 9.85 tokens a second measured on a stock runner, not from a judge call; row 17 measures a real one. Raising it is a job-timeout question before it is a quality one, and a validator refuses a value that does not fit council.shard_timeout_minutes. */
 	pair_budget?: number;
-
-	/** How many judging legs split the day. 4 legs, one llama-server each, because one server on the configured weights already peaks at 12.57 to 13.16 GiB and reaches 14.31 GiB with the shard's python - 96.0 percent of the 16 GB runner, measured 2026-09-08 over four shards of run 2026-08-29-3. A second server on one runner does not fit at all. The ceiling of 8 is what a GitHub matrix leg costs rather than a measured limit. */
-	shards?: number;
 
 	/** How far the judge's sampler may stray from the likeliest word. 0.0, because every pair is read twice with the two summaries swapped and the two readings are then compared: at 0.0 a disagreement is position bias, which is the thing disagreement_max gates on. Above 0.0 the same pair can answer differently with nothing swapped at all, so the comparison measures sampling noise instead and the gate stops meaning what its own name says. It sits here rather than on models.summarize.inference because that entry pins its temperature for writing summaries, which is a different job on the same weights. */
 	judge_temperature?: number;
@@ -1315,6 +1333,8 @@ export interface AppConfig {
 	version?: string;
 
 	run?: RunConfig;
+
+	council?: CouncilConfig;
 
 	bench?: BenchConfig;
 

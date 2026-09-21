@@ -283,11 +283,16 @@ function writeItemHealthCanary() {
 	 * checking the page against this file can see which row a figure came from.
 	 * `n_ctx_configured` is the committed `inference.n_ctx`, because a fixture
 	 * that disagreed with the config would draw a context share no run had.
+	 *
+	 * `gapMs` overrides the unclaimed remainder. Only the refused row below sets
+	 * it, and only to a negative value - see that row for why. The total is built
+	 * from the stages plus the gap either way, so the contract's rule that the
+	 * gap is what the named stages left over holds whichever branch runs.
 	 */
-	const clock = (rowDate, run, id, [fetchMs, extractMs, summarizeMs], model, calls) => {
+	const clock = (rowDate, run, id, [fetchMs, extractMs, summarizeMs], model, calls, gapMs) => {
 		const spread = [...id].reduce((total, letter) => total + letter.charCodeAt(0), 0);
 		const faithfulness = 20 + (spread % 40);
-		const gap = 60 + (spread % 120);
+		const gap = gapMs ?? 60 + (spread % 120);
 		const rate = (tokens, ms) => (ms > 0 ? Math.round(((1000 * tokens) / ms) * 100) / 100 : '');
 		const share = (cached, prompt) =>
 			prompt > 0 ? Math.round(((100 * cached) / prompt) * 100) / 100 : '';
@@ -297,6 +302,11 @@ function writeItemHealthCanary() {
 		const summaryMs = summary ? summarizeMs - labelMs : '';
 		const planMs = summary ? Math.round(summaryMs * 0.18) : '';
 		const totalMs = fetchMs + extractMs + summarizeMs + faithfulness + gap;
+		if (totalMs < 0) {
+			throw new Error(
+				`canary item ${id} would cost ${totalMs} ms, and an item cannot cost less than nothing`
+			);
+		}
 		const waitMs = spread % 900;
 		const seat = place(rowDate, run, id, totalMs, waitMs);
 		// The one shard the machine record reached with no processor on it. Its item
@@ -437,7 +447,21 @@ function writeItemHealthCanary() {
 	 *
 	 * Its three stage numbers are this day's own medians, so adding it moves
 	 * none of them.
+	 *
+	 * **Its unclaimed time is below zero, and no committed day holds that.** The
+	 * ledger's `stage_gap_ms` is signed on purpose: under zero says the named
+	 * steps claim more time than the item took, which is two clocks disagreeing
+	 * rather than an item that cost nothing. Nothing could draw that state until
+	 * a fixture carried it, and the failure path is where it would really come
+	 * from - a refused reply costs the server the whole prompt, and the item
+	 * ledger and the server have disagreed about that cost before. 852 ms is a
+	 * fixture value chosen to stay inside this row's 982 ms of named stages, so
+	 * the item still costs more than nothing, and to be large enough that the
+	 * shard total it lands in stays under zero rather than being cancelled by the
+	 * two positive rows beside it.
 	 */
+	const UNCLAIMED_BELOW_ZERO_MS = -852;
+
 	const refused = (rowDate, run, id, [fetchMs, extractMs, summarizeMs], model) =>
 		line({
 			...item(rowDate, run, id),
@@ -455,7 +479,15 @@ function writeItemHealthCanary() {
 			output_tokens: model[3],
 			cached_tokens: model[4],
 			...extraction(id),
-			...clock(rowDate, run, id, [fetchMs, extractMs, summarizeMs], model)
+			...clock(
+				rowDate,
+				run,
+				id,
+				[fetchMs, extractMs, summarizeMs],
+				model,
+				undefined,
+				UNCLAIMED_BELOW_ZERO_MS
+			)
 		});
 
 	/** What the cap cost each source, so the source table has a table to draw.

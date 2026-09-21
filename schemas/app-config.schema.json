@@ -677,6 +677,37 @@
       "title": "ConsolePanelGroup",
       "type": "object"
     },
+    "CouncilConfig": {
+      "additionalProperties": false,
+      "description": "The clock, the margin and the fan-out width one judging night runs under.\n\nA top-level block rather than a knob under a tenant, because every number\nhere prices a runner: a checkout, an install, a weights restore and a matrix\nleg. No tenant can see any of them.\n\nUntil 2026-09-21 the bound sat in `run`, which is the digest pipeline's, and\nthe width sat inside the content-similarity judge's own block - so a\nrepository with no judge configured had no width to size its matrix by and\nno clock to stop a shard on.",
+      "properties": {
+        "shard_timeout_minutes": {
+          "default": 200,
+          "description": "How long one judging shard may run before GitHub kills it. 200 minutes is 2 hours 9 minutes of model time at the content-similarity judge's cap of 200 pairs over 4 shards, plus 71 minutes of headroom against a fixed cost of about 6 minutes for the checkout, the weights cache restore and the server start. That model time is derived from 9.85 tokens a second measured on a stock runner on 2026-09-09, not from a judge call. A tenant that draws more work than fits is refused when its own block is read, never answered by raising this past GitHub's 6 h job ceiling.",
+          "maximum": 350,
+          "minimum": 1,
+          "title": "Shard Timeout Minutes",
+          "type": "integer"
+        },
+        "shard_wrap_up_minutes": {
+          "default": 12,
+          "description": "How much of shard_timeout_minutes a judging shard keeps back for itself, so it stops on its own clock instead of being killed on the platform's. A shard killed at the bound uploads nothing, so every verdict it had already produced dies with the units it had not started. The reserve covers what happens after the last unit: writing the records and the artifact upload. Its own knob rather than a copy of run.shard_wrap_up_minutes, because a work shard is a different stage with a different preamble. Raise it if an upload is ever cut off, and never lower it to fit one more unit.",
+          "minimum": 0,
+          "title": "Shard Wrap Up Minutes",
+          "type": "integer"
+        },
+        "shards": {
+          "default": 4,
+          "description": "How many shards split one night. The workflow reads it to size its own matrix, so it is the venue's number rather than a tenant's. 4, because one llama-server on the configured weights already peaks at 12.57 to 13.16 GiB and reaches 14.31 GiB with the shard's python - 96.0 percent of the 16 GB runner, measured 2026-09-08 over four shards of run 2026-08-29-3. A second server on one runner does not fit at all. The ceiling of 8 is what a GitHub matrix leg costs rather than a measured limit. A tenant may narrow it downward, so this is the ceiling and the default rather than an instruction.",
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Shards",
+          "type": "integer"
+        }
+      },
+      "title": "CouncilConfig",
+      "type": "object"
+    },
     "DriftConfig": {
       "additionalProperties": false,
       "properties": {
@@ -1693,14 +1724,6 @@
     "RunConfig": {
       "additionalProperties": false,
       "properties": {
-        "judge_shard_timeout_minutes": {
-          "default": 200,
-          "description": "How long one judging leg may run before GitHub kills it. 200 minutes is 2 hours 9 minutes of model time at the day's cap of 200 pairs over 4 legs, plus 71 minutes of headroom against a fixed cost of about 6 minutes for the checkout, the weights cache restore and the server start. The model time is derived from 9.85 tokens a second measured on a stock runner on 2026-09-09, not from a judge call; row 17 measures one and replaces this arithmetic.",
-          "maximum": 350,
-          "minimum": 1,
-          "title": "Judge Shard Timeout Minutes",
-          "type": "integer"
-        },
         "max_parallel": {
           "default": 4,
           "description": "The most workers a run may derive for itself. It is four rather than the eight digest.yml lets an operator dispatch, because eight has never published a day; the three conditions that would move it are in docs/reference/pipeline-cost.md.",
@@ -1780,7 +1803,16 @@
       "description": "How alike two of a day's items have to be before they are one story.\n\nOne score, and the score is a weighted sum of terms that each run 0 to 1.\nNested rather than three flat knobs under `assemble` because the weights\ncarry an invariant ACROSS them - they sum to 1.0 - and a knob whose legal\nvalue depends on another knob's value belongs in the model where a validator\ncan see both.\n\n**The sum-to-one rule is what keeps the floor meaning something.** The floor\nis a number on the same 0-to-1 scale as every term, so a person reading\n`config/idhazh.json` can compare the floor against a term without first\nworking out what the weights add up to. Let them sum to 1.3 and the floor\nsilently becomes easier to clear every time a weight moves, which is the\nfailure this model exists to make impossible.\n\nIt ships with all the weight on the cosine, which is exactly what the pass\nscored before this model existed. The weights are fitted against hand labels\nin a later change; until then this is a rewrite that changes no published\ngroup rather than a retune.",
       "properties": {
         "adaptive_dedup_threshold": {
-          "$ref": "#/$defs/SimilarityThresholdConfig"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SimilarityThresholdConfig"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The content-similarity judge's own knobs, absent when that judge is not configured. Optional rather than built by a default factory, because a factory cannot express 'no judge is configured' - absent and present-at-defaults read the same afterwards, so nothing could tell the council's own night apart from a night this judge runs. The council's runner numbers are in `council` and stand whether or not this block does."
         },
         "cosine_weight": {
           "default": 1.0,
@@ -1928,7 +1960,7 @@
         },
         "pair_budget": {
           "default": 200,
-          "description": "How many pairs a day may be judged. 200 pairs judged twice is 400 calls, which is 100 calls on each of four legs, which at 77.6 seconds a call is 2 hours 9 minutes of model time a leg. That figure is derived from 9.85 tokens a second measured on a stock runner, not from a judge call; row 17 measures a real one. Raising it is a job-timeout question before it is a quality one, and a validator refuses a value that does not fit the leg.",
+          "description": "How many pairs a day may be judged. 200 pairs judged twice is 400 calls, which at the council's committed four shards is 100 calls on each, which at 77.6 seconds a call is 2 hours 9 minutes of model time a shard. That figure is derived from 9.85 tokens a second measured on a stock runner, not from a judge call; row 17 measures a real one. Raising it is a job-timeout question before it is a quality one, and a validator refuses a value that does not fit council.shard_timeout_minutes.",
           "minimum": 1,
           "title": "Pair Budget",
           "type": "integer"
@@ -1955,14 +1987,6 @@
           "maximum": 90,
           "minimum": 1,
           "title": "Settled Window Days",
-          "type": "integer"
-        },
-        "shards": {
-          "default": 4,
-          "description": "How many judging legs split the day. 4 legs, one llama-server each, because one server on the configured weights already peaks at 12.57 to 13.16 GiB and reaches 14.31 GiB with the shard's python - 96.0 percent of the 16 GB runner, measured 2026-09-08 over four shards of run 2026-08-29-3. A second server on one runner does not fit at all. The ceiling of 8 is what a GitHub matrix leg costs rather than a measured limit.",
-          "maximum": 8,
-          "minimum": 1,
-          "title": "Shards",
           "type": "integer"
         },
         "step_change_guard_enforced": {
@@ -2520,18 +2544,18 @@
   "changelog": [
     {
       "change": "console.context_high_percentile and console.context_cut_off_reason, additive.",
-      "version": "2026-09-21",
+      "version": "2026-09-21T02:00",
       "why": "The context panel draws two ends a run and names what a cut-off looks like."
+    },
+    {
+      "change": "council block added; the judge's own block is now optional.",
+      "version": "2026-09-21",
+      "why": "The venue's runner numbers cannot sit inside a tenant that need not exist."
     },
     {
       "change": "observability.host_fingerprint_bandwidth_mib renamed to ..._floor_mib.",
       "version": "2026-09-20T01:00",
       "why": "The probe now derives its buffer from the cache, so the value is a floor."
-    },
-    {
-      "change": "observability.runtime_counters_scrape, removed with the store it governed.",
-      "version": "2026-09-20",
-      "why": "The four cells a reader wants are on the host row, from the same scrape."
     },
     {
       "change": "observability.host_fingerprint_keep_months, additive, default null.",
@@ -2560,6 +2584,9 @@
     },
     "console": {
       "$ref": "#/$defs/ConsoleConfig"
+    },
+    "council": {
+      "$ref": "#/$defs/CouncilConfig"
     },
     "drift": {
       "$ref": "#/$defs/DriftConfig"
@@ -2617,7 +2644,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-21",
+      "default": "2026-09-21T02:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2628,5 +2655,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-21"
+  "version": "2026-09-21T02:00"
 }

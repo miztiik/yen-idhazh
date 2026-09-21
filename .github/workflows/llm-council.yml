@@ -56,7 +56,7 @@ jobs:
       date: ${{ steps.decide.outputs.date }}
       shards: ${{ steps.fanout.outputs.shards }}
       matrix: ${{ steps.fanout.outputs.matrix }}
-      judge_shard_timeout_minutes: ${{ steps.bounds.outputs.judge_shard_timeout_minutes }}
+      shard_timeout_minutes: ${{ steps.bounds.outputs.shard_timeout_minutes }}
       summarize_repo: ${{ steps.models.outputs.summarize_repo }}
       summarize_revision: ${{ steps.models.outputs.summarize_revision }}
       summarize_file: ${{ steps.models.outputs.summarize_file }}
@@ -129,18 +129,21 @@ jobs:
       - id: bounds
         run: |
           set -euo pipefail
-          python3 backend/utilities/shard_bound.py --key judge_shard_timeout_minutes \
+          python3 backend/utilities/shard_bound.py --key council.shard_timeout_minutes \
             >> "$GITHUB_OUTPUT"
 
-      # How many legs split the day, read off the same knob the draw deals
-      # against. A literal here would be a second answer to how wide the fan-out
-      # is, and the two can disagree - the draw would deal four ways while three
-      # legs ran, and a quarter of the day would go unjudged with nothing saying
-      # so.
+      # How many shards split the night, read off the council's own block. A
+      # literal here would be a second answer to how wide the fan-out is, and the
+      # two can disagree - the draw would deal four ways while three shards ran,
+      # and a quarter of the night would go unjudged with nothing saying so.
+      #
+      # The council's block and not a tenant's, because the width sizes this
+      # matrix: read out of a judge's config path, this step raises before the
+      # planning job plans anything on a night with no judge configured.
       - id: fanout
         run: |
           set -euo pipefail
-          SHARDS=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["assemble"]["same_story"]["adaptive_dedup_threshold"]["shards"])')
+          SHARDS=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["council"]["shards"])')
           echo "shards=$SHARDS" >> "$GITHUB_OUTPUT"
           echo "matrix=$(python -c "import json,sys; print(json.dumps(list(range(int(sys.argv[1])))))" "$SHARDS")" >> "$GITHUB_OUTPUT"
 
@@ -160,7 +163,7 @@ jobs:
   judge:
     needs: draw
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ fromJSON(needs.draw.outputs.judge_shard_timeout_minutes) }}
+    timeout-minutes: ${{ fromJSON(needs.draw.outputs.shard_timeout_minutes) }}
     strategy:
       # A leg that runs out of clock costs its pairs for that day and nothing
       # else. The fold still runs, still appends every row the other legs
@@ -298,6 +301,24 @@ jobs:
           path: backend/var/judge/${{ needs.draw.outputs.date }}/verdicts/${{ matrix.shard }}.csv
           retention-days: 1
 
+      # What the hosted work measured about its own instrument, on its own way
+      # out. An artifact rather than a commit, and the reason is that a commit
+      # would not reach the reader: every checkout here names no ref, so each
+      # job is pinned to the commit the run was triggered at and a row pushed at
+      # 22:40 is invisible to a job checked out at 22:00.
+      #
+      # `always()`, because a unit that stopped on its own clock still measured
+      # what it reached, and that is the reading the night is judged on. Nothing
+      # writes this directory until a tenant is registered, so an empty upload is
+      # the no-tenant case rather than a failure.
+      - if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: council-metrics-${{ matrix.shard }}
+          path: backend/var/council/${{ needs.draw.outputs.date }}/metrics
+          if-no-files-found: warn
+          retention-days: 1
+
   fold:
     needs: [draw, judge]
     # A leg that died still leaves the others' rows worth keeping, and the day
@@ -322,6 +343,15 @@ jobs:
           pattern: judge-verdicts-*
           merge-multiple: true
           path: backend/var/judge/${{ needs.draw.outputs.date }}/verdicts
+
+      # Every unit's metrics, merged into one tree. Each upload carries the
+      # tenant's own slug as a directory level, so two tenants' shard 0 land
+      # beside each other rather than on top of each other.
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: council-metrics-*
+          merge-multiple: true
+          path: backend/var/council/${{ needs.draw.outputs.date }}/metrics
 
       # One process appends every leg's rows into one day file, so two writers
       # never share a path: no merge driver to trust, no union stacking to

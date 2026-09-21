@@ -119,7 +119,7 @@ def read_once(
     anything at temperature 0.
     """
     entry = settings.models.summarize
-    tuning = settings.app.assemble.same_story.adaptive_dedup_threshold
+    tuning = settings.app.assemble.same_story.judging_knobs()
     payload = grammar_completion_payload(
         model_id=entry.id,
         system=prompt.system_turn(),

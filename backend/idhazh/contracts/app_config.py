@@ -33,6 +33,7 @@ from idhazh.contracts.knobs.assist import AssistConfig
 from idhazh.contracts.knobs.bench import BenchConfig
 from idhazh.contracts.knobs.collect import CollectConfig
 from idhazh.contracts.knobs.console import ConsoleConfig
+from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.contracts.knobs.evaluation import DriftConfig, EvaluationConfig
 from idhazh.contracts.knobs.extract import ElementsConfig, ExtractConfig
 from idhazh.contracts.knobs.finetune import FinetuneConfig, ReferenceDatasetConfig
@@ -85,19 +86,19 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-09-21",
+            version="2026-09-21T02:00",
             change="console.context_high_percentile and console.context_cut_off_reason, additive.",
             why="The context panel draws two ends a run and names what a cut-off looks like.",
+        ),
+        ChangelogEntry(
+            version="2026-09-21",
+            change="council block added; the judge's own block is now optional.",
+            why="The venue's runner numbers cannot sit inside a tenant that need not exist.",
         ),
         ChangelogEntry(
             version="2026-09-20T01:00",
             change="observability.host_fingerprint_bandwidth_mib renamed to ..._floor_mib.",
             why="The probe now derives its buffer from the cache, so the value is a floor.",
-        ),
-        ChangelogEntry(
-            version="2026-09-20",
-            change="observability.runtime_counters_scrape, removed with the store it governed.",
-            why="The four cells a reader wants are on the host row, from the same scrape.",
         ),
         ChangelogEntry(
             version="2026-09-19T09:00",
@@ -112,6 +113,7 @@ class AppConfig(Contract):
     )
 
     run: RunConfig = Field(default_factory=RunConfig)
+    council: CouncilConfig = Field(default_factory=CouncilConfig)
     bench: BenchConfig = Field(default_factory=BenchConfig)
     collect: CollectConfig = Field(default_factory=CollectConfig)
     extract: ExtractConfig = Field(default_factory=ExtractConfig)
@@ -225,26 +227,29 @@ class AppConfig(Contract):
         return self
 
     @model_validator(mode="after")
-    def _a_day_of_judging_fits_inside_one_leg(self) -> Self:
-        """A budget a leg cannot finish is a job GitHub kills with nothing uploaded.
+    def _a_day_of_judging_fits_the_councils_shard_bound(self) -> Self:
+        """A budget a shard cannot finish is a job GitHub kills with nothing uploaded.
 
-        Checked here because it reads `assemble.same_story` and `run`, which are
-        two blocks, and `AppConfig` is the lowest model holding both. The
-        refusal prints the arithmetic rather than a bare comparison: a person
-        raising the budget has three knobs to choose between, and the message
-        has to say which.
+        Per tenant, and only while that tenant is configured. The bound and the
+        width are the council's; the pair budget and the per-call cost are the
+        content-similarity judge's, so a config with no judge in it has nothing
+        to check. The refusal prints the arithmetic rather than a bare
+        comparison: a person raising the budget has three knobs to choose
+        between, and the message has to say which.
         """
         knobs = self.assemble.same_story.adaptive_dedup_threshold
-        a_leg = math.ceil(knobs.pair_budget / knobs.shards)
-        seconds = a_leg * 2 * SECONDS_A_CALL
-        bound = self.run.judge_shard_timeout_minutes * 60
+        if knobs is None:
+            return self
+        a_shard = math.ceil(knobs.pair_budget / self.council.shards)
+        seconds = a_shard * 2 * SECONDS_A_CALL
+        bound = self.council.shard_timeout_minutes * 60
         if seconds > bound:
             raise ValueError(
-                f"pair_budget {knobs.pair_budget} over {knobs.shards} legs is {a_leg} pairs "
-                f"a leg, which is {a_leg * 2} calls at {SECONDS_A_CALL} s, which is "
-                f"{seconds:.0f} s against run.judge_shard_timeout_minutes of "
-                f"{self.run.judge_shard_timeout_minutes} ({bound} s). Lower pair_budget, "
-                "raise shards, or raise the timeout - which may not go past GitHub's 6 h "
-                "job ceiling"
+                f"pair_budget {knobs.pair_budget} over {self.council.shards} shards is "
+                f"{a_shard} pairs a shard, which is {a_shard * 2} calls at "
+                f"{SECONDS_A_CALL} s, which is {seconds:.0f} s against "
+                f"council.shard_timeout_minutes of {self.council.shard_timeout_minutes} "
+                f"({bound} s). Lower pair_budget, raise council.shards, or raise the "
+                "timeout - which may not go past GitHub's 6 h job ceiling"
             )
         return self
