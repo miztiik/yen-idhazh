@@ -20,6 +20,7 @@ import {
 	type ContextSpan
 } from '$lib/console/machine/context-cost';
 import { promptReuse, type PromptReuse } from '$lib/console/machine/prompt-reuse';
+import { articleCost, type ArticleCost } from '$lib/console/machine/article-cost';
 import { costChart, costOverDays, DEFAULT_COST_SHAPE } from '$lib/charts/cost';
 import { splitByMachine } from '$lib/charts/machine-split';
 import { machineCards, type MachineCards } from '$lib/charts/machine-cards';
@@ -105,6 +106,10 @@ export interface MachineWindow {
 	 * same terms as `work`: the run marks are in `series.context`, out of the
 	 * same call, so the sentence and the chart cannot be two answers. */
 	context: ContextSpan;
+	/** What one article cost the machine over this span - processor time, added
+	 * memory and model time, each as a range. Three figures and a few counts, so
+	 * a preset carries it rather than the rows behind it. */
+	articleCost: ArticleCost;
 }
 
 /** Everything a run-by-run chart draws, carried once rather than once a span.
@@ -135,6 +140,7 @@ const DRAWN_PANELS = [
 	'shard-board',
 	'memory-board',
 	'reading-against-writing',
+	'article-cost',
 	'prompt-reuse',
 	'context-headroom',
 	'two-clocks',
@@ -248,6 +254,10 @@ export async function load() {
 		// The rows stay behind: they are carried once, bounded to the widest preset,
 		// in `series.context`. Only the scalars differ per span.
 		const context = contextCost(healthRows, contextOptions).span;
+		// The machine record is the second instrument here: the item ledger says
+		// what share of the processors an article kept busy, and only the record
+		// says how many processors that share was taken across.
+		const perArticle = articleCost(healthRows, inSpan(fingerprints));
 
 		return {
 			days,
@@ -284,6 +294,7 @@ export async function load() {
 				figures: 'machine record'
 			}),
 			reuse: promptReuse(healthRows, healthTable.columns),
+			articleCost: perArticle,
 			// The newest run's own reading is a snapshot and sits on the memory
 			// board; this says whether that reading was unusual over the span.
 			peakRssSpan: spanOf(runs.map((run) => run.peakRssBytes.value)),

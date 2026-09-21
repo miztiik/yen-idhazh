@@ -947,6 +947,11 @@
       "why": "The panel now reads one span a request rather than one column a day."
     },
     {
+      "change": "console.panel_groups.machine gains the article-cost panel.",
+      "version": "2026-09-21T12:00",
+      "why": "What one article costs has to be priceable before the run that pays it."
+    },
+    {
       "change": "console.context_high_percentile and console.context_cut_off_reason, additive.",
       "version": "2026-09-21",
       "why": "The context panel draws two ends a run and names what a cut-off looks like."
