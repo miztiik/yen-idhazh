@@ -235,6 +235,15 @@ network. No test imports any of them, and `langfuse` is imported inside one
 function that only runs when `LANGFUSE_HOST` and its key pair are all set. The
 local span sink needs none of it.
 
+**The two workflows that install `faithfulness` take `torch` from
+`https://download.pytorch.org/whl/cpu` first, then the extra.** The default PyPI
+wheel for Linux carries the graphics-card runtime, and a runner has no graphics
+card (`CLAUDE.md` Guardrail #2), so the plain install spent gigabytes on a
+runtime it could never execute. The index stays in the workflow rather than in
+the extra, because a local version pinned in `pyproject.toml` would follow a
+developer whose own machine does have a card. Install the extra however you like
+locally - nothing in the gate set imports it.
+
 ## Running the gates when the machine is shared
 
 Several agents work in their own worktrees on one box, and each starts its own

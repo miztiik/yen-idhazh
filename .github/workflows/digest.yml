@@ -435,11 +435,20 @@ jobs:
       # builds the server command. It used to run after that step, and the whole
       # reason a second copy of the flag list existed was to be readable from a
       # job that had not installed the package yet.
+      #
+      # `torch` comes from the processor-only index first, and the extra then
+      # finds it already satisfied. The default PyPI wheel for Linux carries the
+      # graphics-card runtime, and this runner has no graphics card (Guardrail
+      # #2) - so every shard of every run downloaded and unpacked a few gigabytes
+      # it could never execute. The index is the one `measure.yml` already names.
+      # It cannot go in the extra: a local version pinned there would follow a
+      # developer whose machine does have a card.
       - name: Install
         run: |
           if [ "${{ needs.plan.outputs.faithfulness }}" = "false" ]; then
             pip install -e .
           else
+            pip install --index-url https://download.pytorch.org/whl/cpu torch
             pip install -e ".[faithfulness]"
           fi
 
