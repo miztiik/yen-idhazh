@@ -8,6 +8,7 @@ and a fixture that grows with the archive would make these slower every week
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from typing import Final
 
@@ -34,7 +35,8 @@ def a_scorer() -> ScorerStamp:
 
 def a_judge() -> JudgeStamp:
     return JudgeStamp(judge_model="qwen3-5-9b-q4-k-m", prompt_digest="a" * 64,
-                      grammar_digest="b" * 64)
+                      grammar_digest="b" * 64, judge_temperature=0.0,
+                      decode_digest="c" * 64, thinks=False)
 
 
 def a_record() -> StorySimilarityDistribution:
@@ -164,6 +166,47 @@ def test_a_changed_scorer_stamp_archives_and_starts_empty() -> None:
     assert fold.archive_stem(record) != fold.archive_stem(
         fold.empty_record(KNOBS, scorer=moved, judge=a_judge())
     )
+
+
+@pytest.mark.parametrize("field", ["judge_temperature", "decode_digest", "thinks"])
+def test_every_value_the_record_stamps_is_a_value_the_detector_sees(field: str) -> None:
+    """A stamp column the detector cannot see is a stamp that lies.
+
+    The record would archive under a name nobody can explain: the counts move to
+    a new file and the operator reading the held line is told nothing moved.
+    """
+    record = a_record()
+    after = {
+        "judge_temperature": dataclasses.replace(a_judge(), judge_temperature=0.2),
+        "decode_digest": dataclasses.replace(a_judge(), decode_digest="d" * 64),
+        "thinks": dataclasses.replace(a_judge(), thinks=True),
+    }[field]
+
+    assert fold.inputs_changed(record, knobs=KNOBS, scorer=a_scorer(), judge=after) is not None
+    assert fold.archive_stem(record) != fold.archive_stem(
+        fold.empty_record(KNOBS, scorer=a_scorer(), judge=after)
+    )
+
+
+def test_a_record_written_before_the_decode_columns_resets_once() -> None:
+    """The read-side migration, and what it costs.
+
+    A record written under the older shape carries the three decode values null,
+    loads here, and stamps to a value it never stamped to - so the first fold
+    after the widening archives it and counts on from zero. That is the reset,
+    it is by construction rather than by an input moving, and it happens once.
+    """
+    record = a_record()
+    older = record.model_copy(
+        update={"judge_temperature": None, "decode_digest": None, "judge_thinks": None}
+    )
+
+    assert older.record_stamp() != record.record_stamp()
+    assert fold.inputs_changed(older, knobs=KNOBS, scorer=a_scorer(), judge=a_judge()) == (
+        "None",
+        "0.0",
+    )
+    assert fold.inputs_changed(record, knobs=KNOBS, scorer=a_scorer(), judge=a_judge()) is None
 
 
 def test_one_pair_judged_twice_is_counted_once_at_the_newer_run() -> None:

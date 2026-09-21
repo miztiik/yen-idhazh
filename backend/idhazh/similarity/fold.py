@@ -63,6 +63,9 @@ def empty_record(
             "judge_model": judge.judge_model,
             "prompt_digest": judge.prompt_digest,
             "grammar_digest": judge.grammar_digest,
+            "judge_temperature": judge.judge_temperature,
+            "decode_digest": judge.decode_digest,
+            "judge_thinks": judge.thinks,
             "folded_dates": (),
             "slots": tuple(
                 ScoreSlot(bin_low=knobs.band_low + index * knobs.bin_width)
@@ -197,9 +200,14 @@ def inputs_changed(
     """The old value and the new value of the first field that moved, or `None`.
 
     Returns the pair rather than a bare flag, because the operator reading a held
-    line needs to know WHICH input moved: the encoder, a weight, the model, or a
-    reworded ask. Compared in a fixed order so two runs over one changed record
-    name the same field.
+    line needs to know WHICH input moved: the encoder, a weight, the model, a
+    reworded ask, a sampler, or a reasoning span in front of the verdict.
+    Compared in a fixed order so two runs over one changed record name the same
+    field.
+
+    **Every value the record stamps is compared here.** A stamp column the
+    detector cannot see is a stamp that lies: the record would archive under a
+    new name with nothing able to say which input moved it.
     """
     for was, now in (
         (record.scorer_model, scorer.scorer_model),
@@ -208,6 +216,9 @@ def inputs_changed(
         (record.judge_model, judge.judge_model),
         (record.prompt_digest, judge.prompt_digest),
         (record.grammar_digest, judge.grammar_digest),
+        (record.judge_temperature, judge.judge_temperature),
+        (record.decode_digest, judge.decode_digest),
+        (record.judge_thinks, judge.thinks),
         (record.band_low, knobs.band_low),
         (record.band_high, knobs.band_high),
         (record.bin_width, knobs.bin_width),

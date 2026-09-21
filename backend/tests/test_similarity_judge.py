@@ -18,7 +18,7 @@ import json
 import shutil
 import threading
 import time
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -31,6 +31,7 @@ from idhazh import assemble, cli, config
 from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.council_shard_outcome import ShardOutcome
 from idhazh.contracts.digest_day import DigestDay, DigestItem
+from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
 from idhazh.llm.server import (
     TokenChoice,
@@ -44,7 +45,13 @@ from idhazh.similarity import judge, prompt
 from idhazh.stages import common, judge_shard
 
 JUDGE_REPLIES: Final = FIXTURES_DIR / "completions" / "judge"
+RENDERED_REPLIES: Final = FIXTURES_DIR / "completions" / "rendered"
 VOCABULARIES: Final = FIXTURES_DIR / "llm"
+
+#: The committed entry that declares a closing marker for a reasoning block. A
+#: real file from `config/models/` rather than an entry written here: the channel
+#: a test opens is the one an operator would open.
+THINKING_ENTRY_FILE: Final = "qwen3.5-9b-q4km-thinking.json"
 
 #: What a page writes when it wants to be merged with something it is not. It
 #: sits inside a summary, which is where it would really arrive: the summariser
@@ -135,10 +142,24 @@ def _reply(name: str) -> bytes:
     return (JUDGE_REPLIES / f"{name}.json").read_bytes()
 
 
+def _rendered_reply(name: str) -> bytes:
+    """One recorded envelope off the rendered-completion route, read inside the test."""
+    return (RENDERED_REPLIES / f"{name}.json").read_bytes()
+
+
 def _vocabulary(name: str) -> dict[str, Any]:
     payload = json.loads(read_text(VOCABULARIES / f"{name}.json"))
     assert isinstance(payload, dict)
     return payload
+
+
+def _spells(vocabulary: dict[str, Any]) -> Callable[[str], list[str]]:
+    """A recorded `/tokenize` reply read as the spellings it carries.
+
+    The fixture is the server's own reply shape, so the same file drives the
+    loopback route a leg really asks and the unit test that asks nothing.
+    """
+    return lambda reply: [str(token["piece"]) for token in vocabulary[reply]["tokens"]]
 
 
 def _settings() -> config.Settings:
@@ -151,6 +172,21 @@ def _settings_flushing_every(pairs: int) -> config.Settings:
     app = settings.app.model_copy(deep=True)
     app.assemble.same_story.judging_knobs().flush_every_pairs = pairs
     return dataclasses.replace(settings, app=app)
+
+
+def _settings_judging_behind_a_thinking_span() -> config.Settings:
+    """The committed settings with a judge role taken off a committed model file.
+
+    Re-validated rather than copied in, so the rule that a second entry names the
+    weights the server already holds is applied to what this test builds.
+    """
+    settings = _settings()
+    thinking = ModelsConfig.from_json(read_text(CONFIG_DIR / "models" / THINKING_ENTRY_FILE))
+    models = ModelsConfig.model_validate(
+        settings.models.model_dump(mode="json")
+        | {"judge": thinking.summarize.model_dump(mode="json")}
+    )
+    return dataclasses.replace(settings, models=models)
 
 
 def _a_deadline_no_leg_will_reach() -> float:
@@ -315,31 +351,70 @@ def test_a_changed_grammar_changes_the_grammar_digest() -> None:
     assert derive_text_digest(moved) != prompt.grammar_digest()
 
 
-def test_the_three_words_differ_at_their_first_token() -> None:
+def test_the_grammar_still_renders_the_string_every_committed_row_was_judged_under() -> None:
+    """The grammar is built from the enum now, and its bytes are a persisted value.
+
+    `grammar_digest` is a column on every row and a value in the record's own
+    stamp, so a respelling that admits exactly the same six strings would archive
+    the record and hold the merge line for a change nobody made.
+    """
+    assert prompt.grammar() == 'root ::= " "? ("YES" | "NO" | "UNCLEAR")'
+    assert prompt.LEGAL_REPLIES == ("YES", "NO", "UNCLEAR", " YES", " NO", " UNCLEAR")
+
+
+def test_the_window_is_sized_to_what_the_grammar_admits_not_to_the_answer_set() -> None:
+    """Six legal strings, twenty-five non-empty prefixes, and no number written down."""
+    prefixes = prompt.first_token_prefixes()
+
+    assert prefixes == {
+        reply[:length]
+        for reply in prompt.LEGAL_REPLIES
+        for length in range(1, len(reply) + 1)
+    }
+    assert len(prefixes) > len(SameStoryVerdict), (
+        "a window sized to the three words holds one verdict spelled twice and nothing else"
+    )
+
+
+def test_a_token_opening_more_than_one_verdict_names_none_of_them() -> None:
+    """The lone space and the lone empty token are prefixes of every legal reply."""
+    assert prompt.verdicts_opened_by(" ") == set(SameStoryVerdict)
+    assert prompt.verdicts_opened_by("") == set(SameStoryVerdict)
+    assert prompt.verdicts_opened_by(" UNC") == {SameStoryVerdict.UNCLEAR}
+    assert prompt.verdicts_opened_by("N") == {SameStoryVerdict.NO}
+    assert prompt.verdicts_opened_by("No") == set(), "a prefix is matched exactly or not at all"
+
+
+def test_every_verdict_has_an_opening_token_that_opens_no_other() -> None:
     """One probability read reports a three-way distribution only while this holds.
 
-    Driven by a recorded `/tokenize` reply rather than by a table of ids: a table
-    is right for one set of weights and silent when the weights move.
+    Driven by a recorded `/tokenize` reply rather than by a table of tokens: a
+    table is right for one set of weights and silent when the weights move.
     """
     vocabulary = _vocabulary("judge-first-tokens")
 
-    ids = prompt.first_token_ids(lambda word: list(vocabulary[word]["tokens"]))
+    openings = prompt.first_token_openings(_spells(vocabulary))
 
-    assert len(set(ids)) == 3
-    assert ids == (14004, 8996, 1861), "YES, NO and UNCLEAR, in the order the enum declares"
+    assert set(openings) == set(SameStoryVerdict)
+    assert len(set(openings.values())) == 3, "two verdicts cannot share one opening"
+    assert _spells(vocabulary)("UNCLEAR")[0] != SameStoryVerdict.UNCLEAR.value, (
+        "these weights split UNCLEAR across two tokens, which is the case a rule "
+        "bucketing on whole words scores at zero"
+    )
 
 
-def test_a_vocabulary_that_collapses_two_verdicts_is_refused() -> None:
+def test_a_vocabulary_that_gives_one_verdict_no_opening_of_its_own_is_refused() -> None:
     """The bite proof for the test above, and the failure it exists to catch.
 
-    A collapsed vocabulary breaks nothing visible - every reply still parses and
-    every row still writes - it only makes `first_token_margin` meaningless for as
-    long as nobody looks at it.
+    A verdict every returned token could belong to something else takes none of
+    the window's mass, so the margin reports a gap between the other two as
+    though the third had been weighed and rejected. Nothing fails visibly: every
+    reply still parses and every row still writes.
     """
     vocabulary = _vocabulary("judge-first-tokens-collapsed")
 
-    with pytest.raises(ValueError, match="cannot tell the three apart"):
-        prompt.first_token_ids(lambda word: list(vocabulary[word]["tokens"]))
+    with pytest.raises(ValueError, match="opens every spelling of"):
+        prompt.first_token_openings(_spells(vocabulary))
 
 
 def test_the_rendered_prompt_does_not_end_in_a_space() -> None:
@@ -448,7 +523,7 @@ def test_every_decode_carries_the_grammar_and_asks_for_the_first_position() -> N
     assert decodes, "no body was posted, so this proves nothing"
     for body in decodes:
         assert body["grammar"] == prompt.grammar()
-        assert body["n_probs"] == 3
+        assert body["n_probs"] == len(prompt.first_token_prefixes())
         assert body["n_predict"] == prompt.REPLY_TOKENS
         assert "json_schema" not in body, "two controls in one body is a build deciding which wins"
 
@@ -520,10 +595,142 @@ def test_a_confident_reading_and_an_indifferent_one_are_told_apart() -> None:
     sure = judge.margin_of(confident.first_token_choices)
     unsure = judge.margin_of(indifferent.first_token_choices)
 
-    assert sure == pytest.approx(0.9607, abs=5e-4)
-    assert unsure == pytest.approx(0.0069, abs=5e-4)
+    assert sure == pytest.approx(0.9605, abs=5e-4)
+    assert unsure == pytest.approx(0.0070, abs=5e-4)
     assert judge.margin_of(()) is None, "a server that reported nothing measured nothing"
+
+
+def test_one_verdict_spelled_twice_is_one_verdict() -> None:
+    """The reading the old rule got wrong, on the window production really returns.
+
+    Recorded at the three-wide window the judge asked for until this change:
+    `NO`, `No` and ` NO`. Two of those are NO, so subtracting the top two
+    subtracted NO from itself and reported 0.9997 - a number that happens to be
+    right here and is right by accident, because the same arithmetic on a reply
+    the model was torn about reports a near-zero gap between one verdict and its
+    own second spelling.
+
+    Under the prefix rule the three tokens name one verdict between them, so
+    there is no second verdict to rank and the answer is that the window could
+    not say. That is what makes the wider window a requirement rather than an
+    improvement: at three tokens there is often nothing to compare.
+    """
+    narrow = parse_completion(_reply("a-window-of-one-verdict-spelled-twice").decode("utf-8"))
+
+    assert [choice.token for choice in narrow.first_token_choices] == ["NO", "No", " NO"]
+    assert judge.margin_of(narrow.first_token_choices) is None
+
+
+def test_a_token_that_names_no_single_verdict_is_dropped_rather_than_counted_three_times()  -> None:
+    """The bare empty token is really in the window, at rank 4 of 25.
+
+    Proved by equality rather than by a number: the margin over the recorded
+    window and the margin over that window with the unattributable token taken
+    out are the same value. A rule that counted it into all three verdicts would
+    move both sides of the gap and the two would differ.
+    """
+    wide = parse_completion(_reply("a-window-the-grammar-admits").decode("utf-8"))
+    unattributable = [
+        choice.token
+        for choice in wide.first_token_choices
+        if len(prompt.verdicts_opened_by(choice.token)) > 1
+    ]
+
+    kept = judge.margin_of(wide.first_token_choices)
+    without = judge.margin_of(
+        tuple(choice for choice in wide.first_token_choices if choice.token not in unattributable)
+    )
+
+    assert unattributable == [""], "the window no longer carries the case this test is about"
+    assert kept == without
+    assert kept is not None
+
+
+def test_a_window_whose_verdicts_are_all_space_prefixed_still_reads() -> None:
+    """The reading a rule matching whole words would have thrown away.
+
+    Most vocabularies spell ` YES` and `YES` as different tokens, and the chat
+    template this judge runs under makes the space-prefixed one the natural first
+    choice. A rule comparing a returned token against the three bare words scores
+    every verdict at zero here and answers null on a reply the model was clear
+    about.
+    """
+    window = (
+        TokenChoice(token_id=1, token=" YES", logprob=-0.1),
+        TokenChoice(token_id=2, token=" NO", logprob=-2.0),
+    )
+
+    assert judge.margin_of(window) == pytest.approx(0.7398, abs=5e-4)
+
+
+def test_a_window_of_nothing_the_grammar_admits_measured_nothing() -> None:
+    """Zero legal mass is a window that could not say, and 0.0 would read as a finding."""
+    window = (
+        TokenChoice(token_id=1, token="Sure", logprob=-0.1),
+        TokenChoice(token_id=2, token="Both", logprob=-1.0),
+    )
+
+    assert judge.margin_of(window) is None
     assert judge.margin_of((TokenChoice(token_id=1, token="NO", logprob=-0.1),)) is None
+
+
+def test_a_thinking_entry_reads_its_verdict_off_the_answer_span() -> None:
+    """Span one reasons, span two answers, and only span two is read as a verdict.
+
+    Both replies are recorded envelopes. The thought is prose, so a code path
+    that parsed it as a verdict would raise rather than pass quietly - which is
+    what makes this an oracle rather than a description.
+    """
+    day = _a_day()
+    settings = _settings_judging_behind_a_thinking_span()
+    thought = _rendered_reply("thinking-span-one")
+    with JudgeServer(thought, _rendered_reply("thinking-span-two")) as server:
+        reading = judge.read_once(
+            day.items[0], day.items[1], client=_client(server), settings=settings
+        )
+        decodes = server.decodes
+
+    close = settings.models.judge.turns.thinking_close if settings.models.judge else None
+    assert reading.verdict is SameStoryVerdict.YES
+    assert reading.thinking_spans == 1
+    assert reading.thinking == json.loads(thought)["content"]
+    with pytest.raises(judge.GrammarNotAppliedError):
+        judge.verdict_of(reading.thinking)
+    assert len(decodes) == 2
+    assert "grammar" not in decodes[0], "a span held to three literals cannot reason"
+    assert "n_probs" not in decodes[0]
+    assert decodes[0]["stop"] == [close]
+    assert decodes[1]["grammar"] == prompt.grammar()
+    assert decodes[1]["prompt"] == decodes[0]["prompt"] + reading.thinking + close
+    assert reading.first_token_margin is not None, "the margin is read off the answer's window"
+
+
+def test_a_settings_with_no_judge_role_decodes_one_span_and_says_so() -> None:
+    """The committed default. A fresh clone judges exactly as it judges today."""
+    day = _a_day()
+    settings = _settings()
+    with JudgeServer(_reply("two-events")) as server:
+        reading = judge.read_once(
+            day.items[0], day.items[1], client=_client(server), settings=settings
+        )
+        decodes = server.decodes
+
+    assert settings.models.judge is None
+    assert judge.entry_of(settings) is settings.models.summarize
+    assert reading.thinking_spans == 0
+    assert reading.thinking == ""
+    assert len(decodes) == 1
+
+
+def test_a_judge_role_decodes_on_the_weights_the_summariser_server_holds() -> None:
+    """One server, one file. A second entry moves the decode and never the weights."""
+    settings = _settings_judging_behind_a_thinking_span()
+    judging = settings.models.judge
+
+    assert judging is not None
+    assert judge.entry_of(settings) is judging
+    assert judging.sha256 == settings.models.summarize.sha256
+    assert judging.turns.thinks and not settings.models.summarize.turns.thinks
 
 
 def test_a_verdict_is_the_word_and_at_most_one_leading_space() -> None:

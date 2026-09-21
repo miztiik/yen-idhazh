@@ -119,7 +119,7 @@ That sentence is worth nothing unless it is checkable, so it is five conditions 
 | 11a | The model layer offers both spans and says what it decoded | - | I | DONE | - | 989 | worker |
 | 12 | The four verbs name their work | 9, 24 | J | PENDING | - | - | - |
 | 13 | `leg` and `fold` leave the vocabulary | 12 | J | PENDING | - | - | - |
-| 11b | The content-similarity judge reads its own margin | 11a | K | PENDING | - | - | - |
+| 11b | The content-similarity judge reads its own margin | 11a | K | DONE | p38k | - | worker |
 | 14 | The judge fills the stamp | 8, 11b, 13 | K | PENDING | - | - | - |
 | 15b | The content-similarity judge fills its metrics and registers as a tenant | 6, 14, 15a | L | PENDING | - | - | - |
 | 16 | The model block becomes one composite action | - | M | DONE | - | 1000 | worker |
