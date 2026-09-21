@@ -15,6 +15,7 @@ from __future__ import annotations
 import csv
 import dataclasses
 import json
+import logging
 import shutil
 import threading
 import time
@@ -44,11 +45,12 @@ from idhazh.llm.server import (
     render_prompt,
 )
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
-from idhazh.similarity import judge, prompt
+from idhazh.similarity import counting, judge, prompt, stamps
 from idhazh.stages import common, judge_item_pairs
 
 JUDGE_REPLIES: Final = FIXTURES_DIR / "completions" / "judge"
 RENDERED_REPLIES: Final = FIXTURES_DIR / "completions" / "rendered"
+ERROR_REPLIES: Final = FIXTURES_DIR / "completions" / "errors"
 VOCABULARIES: Final = FIXTURES_DIR / "llm"
 
 #: The committed entry that declares a closing marker for a reasoning block. A
@@ -148,6 +150,17 @@ def _reply(name: str) -> bytes:
 def _rendered_reply(name: str) -> bytes:
     """One recorded envelope off the rendered-completion route, read inside the test."""
     return (RENDERED_REPLIES / f"{name}.json").read_bytes()
+
+
+def _error_reply(name: str) -> bytes:
+    """One recorded error body, which is neither a choice nor a completion.
+
+    A real reply from a real server having a bad day. `parse_completion` refuses
+    it, which is how a test reaches the one failure a judging shard still dies
+    on: a reply the grammar did not hold is written down now, so it can no longer
+    stand in for a shard that stopped.
+    """
+    return (ERROR_REPLIES / f"{name}.json").read_bytes()
 
 
 def _vocabulary(name: str) -> dict[str, Any]:
@@ -490,6 +503,26 @@ def test_two_agreeing_unclear_readings_are_usable() -> None:
     assert result.usable is True
 
 
+def test_two_readings_the_grammar_did_not_hold_are_not_an_agreement() -> None:
+    """Two nulls are two failures, not one answer given twice.
+
+    Comparing them as equal would mark the pair usable, and the fold would then
+    count a verdict nobody gave. The contract refuses such a row outright, so the
+    shard would die at its own writer - which is the defect arriving one layer
+    too late to name.
+    """
+    day = _a_day()
+    with JudgeServer(_reply("the-grammar-was-not-applied")) as server:
+        result = judge.judge_pair(
+            day.items[0], day.items[1], client=_client(server), settings=_settings()
+        )
+
+    assert result.verdict is None
+    assert result.verdict_swapped is None
+    assert result.usable is False
+    assert result.grammar_applied is False
+
+
 def test_a_pair_is_read_twice_with_the_two_summaries_swapped() -> None:
     """The second call is the first one with the arguments exchanged, and nothing else."""
     day = _a_day()
@@ -557,33 +590,55 @@ def test_the_decode_is_sent_at_the_judging_knob_and_not_the_entry() -> None:
         assert body["seed"] == settings.models.summarize.inference.seed
 
 
-def test_a_reply_the_grammar_could_not_have_written_fails_the_shard() -> None:
-    """No prose path, on purpose.
+def test_a_reply_the_grammar_could_not_have_written_is_written_down(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """No prose path, on purpose - and no dead shard either.
 
     A parser that read `so the answer is YES` back into a YES would restore the
     whole class of failure the grammar removes, on exactly the days something had
-    already gone wrong with the decoder.
+    already gone wrong with the decoder. So the reply becomes no verdict at all.
+
+    It is recorded rather than thrown, because the shard's only other move was to
+    die - and every pair after it then went missing, which on this store already
+    means nothing drew them. The reading keeps the call it paid for, and the
+    reason reaches the run's log, which is the only place that still holds it.
     """
     day = _a_day()
     with JudgeServer(_reply("the-grammar-was-not-applied")) as server:
-        with pytest.raises(judge.GrammarNotAppliedError, match="was not constrained"):
-            judge.read_once(
+        with caplog.at_level(logging.WARNING, logger="idhazh"):
+            read = judge.read_once(
                 day.items[0], day.items[1], client=_client(server), settings=_settings()
             )
 
+    assert read.verdict is None
+    assert read.grammar_applied is False
+    assert "was not constrained" in caplog.text
+    assert read.prompt_tokens > 0, "the call happened, and it cost what it cost"
+    assert read.decode_seconds > 0.0
 
-def test_a_first_token_outside_the_grammar_fails_the_shard() -> None:
+
+def test_a_first_token_outside_the_grammar_is_written_down(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     """A word that parses and a first position that does not is a reply somebody patched.
 
     Under the grammar those two cannot differ - it binds the decode from the first
-    token - so this is the failure a content check on its own cannot see.
+    token - so this is the failure a content check on its own cannot see. It lands
+    on the row the same way a reply the grammar could not have written does: no
+    verdict, the flag false, and the window that gave it away still on the row.
     """
     day = _a_day()
     with JudgeServer(_reply("the-word-was-patched-in-afterwards")) as server:
-        with pytest.raises(judge.GrammarNotAppliedError, match="shaped after the decode"):
-            judge.read_once(
+        with caplog.at_level(logging.WARNING, logger="idhazh"):
+            read = judge.read_once(
                 day.items[0], day.items[1], client=_client(server), settings=_settings()
             )
+
+    assert read.verdict is None
+    assert read.grammar_applied is False
+    assert "shaped after the decode" in caplog.text
+    assert read.first_token_window, "the window the check read is still on the reading"
 
 
 def test_a_confident_reading_and_an_indifferent_one_are_told_apart() -> None:
@@ -706,6 +761,67 @@ def test_a_thinking_entry_reads_its_verdict_off_the_answer_span() -> None:
     assert decodes[1]["grammar"] == prompt.grammar()
     assert decodes[1]["prompt"] == decodes[0]["prompt"] + reading.thinking + close
     assert reading.first_token_margin is not None, "the margin is read off the answer's window"
+
+
+def test_a_pairs_calls_are_counted_rather_than_derived_from_its_pairs() -> None:
+    """Two calls cold, four behind a reasoning span, and the tokens of every one of them.
+
+    The thinking arm is the one that matters. Twice the pairs is the right answer
+    cold and wrong by half here, so a figure derived that way would under-report
+    every reasoning span the run paid for, and no cold test could see it.
+
+    The token totals are checked against the recorded envelopes rather than
+    against each other, so a reading that dropped a span's tokens fails here.
+    """
+    day = _a_day()
+    cold_reply = _reply("one-event")
+    spans = (_rendered_reply("thinking-span-one"), _rendered_reply("thinking-span-two"))
+    with JudgeServer(cold_reply) as cold_server:
+        cold = judge.judge_pair(
+            day.items[0], day.items[1], client=_client(cold_server), settings=_settings()
+        )
+    with JudgeServer(*spans) as thinking_server:
+        thinking = judge.judge_pair(
+            day.items[0],
+            day.items[1],
+            client=_client(thinking_server),
+            settings=_settings_judging_behind_a_thinking_span(),
+        )
+
+    recorded = parse_completion(cold_reply.decode("utf-8"))
+    written = [parse_completion(span.decode("utf-8")).completion_tokens for span in spans]
+
+    assert cold.calls == 2
+    assert thinking.calls == 4, "a reading behind a reasoning span is two calls, not one"
+    assert cold.thinking_spans == 0
+    assert thinking.thinking_spans == 1
+    assert cold.prompt_tokens == recorded.prompt_tokens * 2, "both readings, both prompts"
+    assert cold.completion_tokens == recorded.completion_tokens * 2
+    assert thinking.completion_tokens == sum(written) * 2, "the reasoning span is paid for too"
+    assert 0.0 < cold.decode_seconds_max <= cold.decode_seconds
+
+
+def test_a_pair_whose_first_reading_was_refused_still_makes_its_second_call() -> None:
+    """Both calls always run, so the pair's clock means what its column says it means.
+
+    `decode_seconds` is written on the row as both calls. A shard that gave up on
+    a refused first reading would keep writing that column and would silently be
+    writing one call into it - a measurement nothing downstream could tell from a
+    pair that answered quickly.
+    """
+    day = _a_day()
+    with JudgeServer(_reply("the-word-was-patched-in-afterwards"), _reply("one-event")) as server:
+        result = judge.judge_pair(
+            day.items[0], day.items[1], client=_client(server), settings=_settings()
+        )
+        decodes = server.decodes
+
+    assert len(decodes) == 2, "the second reading was skipped over the first one's refusal"
+    assert result.calls == 2
+    assert result.verdict is None
+    assert result.verdict_swapped is SameStoryVerdict.YES
+    assert result.usable is False
+    assert result.grammar_applied is False, "one call outside the grammar makes the pair false"
 
 
 def test_the_decode_digest_cannot_tell_the_two_envelopes_apart() -> None:
@@ -846,10 +962,18 @@ def test_a_verdict_file_round_trips_through_the_contract(
 ) -> None:
     """Row 7 reads this file with `from_csv_row` and needs no second parser.
 
-    It also proves the eight judging columns are filled together: the contract
-    refuses a verdict that does not name the judge behind it, so a shard that wrote
-    one and forgot the digests could not get a row past this.
+    It also proves the judging columns are filled together: the contract refuses a
+    verdict that does not name the judge behind it, so a shard that wrote one and
+    forgot the digests could not get a row past this.
+
+    **The window is checked against the recorded envelope, never against the
+    margin.** Both the margin and the window come out of one tuple of choices, so
+    a test that re-derived one from the other could not go red. Reading the
+    fixture back through the production parser is an independent answer to what
+    the server said, and it is what catches a writer that stored the swapped
+    call's window, dropped the log probability, or exponentiated it.
     """
+    settings = _settings()
     day = _a_day()
     root = _a_day_on_disk(tmp_path, day)
     monkeypatch.setattr(common, "PUBLIC_ROOT", root)
@@ -864,7 +988,7 @@ def test_a_verdict_file_round_trips_through_the_contract(
             day.date,
             shard=0,
             shards=4,
-            settings=_settings(),
+            settings=settings,
             digest_root=root,
             run_dir=run_dir,
             deadline=_a_deadline_no_shard_will_reach(),
@@ -872,6 +996,8 @@ def test_a_verdict_file_round_trips_through_the_contract(
         )
 
     rows = _rows(report.path)
+    stamp = stamps.judge_inputs(settings)
+    recorded = parse_completion(_reply("one-event").decode("utf-8")).first_token_choices
 
     assert (report.owned, report.judged, report.usable) == (1, 1, 1)
     assert report.outcome is ShardOutcome.COMPLETED
@@ -881,12 +1007,88 @@ def test_a_verdict_file_round_trips_through_the_contract(
     assert row.verdict is SameStoryVerdict.YES
     assert row.verdict_swapped is SameStoryVerdict.YES
     assert row.usable is True
-    assert row.judge_model == _settings().models.summarize.id
+    assert row.judge_model == settings.models.summarize.id
     assert row.prompt_digest == prompt.prompt_digest()
     assert row.grammar_digest == prompt.grammar_digest()
     assert row.first_token_margin is not None
     assert row.decode_seconds is not None
+    assert row.judge_id == "content-similarity-judge"
+    assert row.judge_temperature == stamp.judge_temperature
+    assert row.decode_digest == stamp.decode_digest
+    assert row.grammar_applied is True
+    assert row.thinking_spans == 0, "the committed entry declares no reasoning span"
+    assert row.first_token_probabilities is not None
+    window = json.loads(row.first_token_probabilities)
+    assert recorded, "the recorded envelope carries no window, so this proves nothing"
+    assert [entry[0] for entry in window] == [choice.token for choice in recorded]
+    assert window[0][1] == pytest.approx(recorded[0].logprob, abs=5e-7)
+    assert window[0][1] <= 0.0, "stored as the log probability the margin is computed at"
     assert StorySimilarityPair.from_csv_row(row.csv_row()) == row
+
+
+def test_a_pair_the_grammar_did_not_hold_is_written_down_and_the_shard_reads_on(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The refusal reaches the row, the pair after it is still judged, and the fold drops it.
+
+    Absence on this store already means nothing drew the pair. A shard that died
+    on a loose decoder wrote that same absence over every pair behind it, so an
+    operator could not tell a decoder that came apart from a day nobody judged.
+
+    The second pair answers inside the grammar, which is what proves the shard
+    carried on rather than quietly recording every remaining pair as refused.
+    """
+    settings = _settings()
+    day = _a_day()
+    root = _a_day_on_disk(tmp_path, day)
+    monkeypatch.setattr(common, "PUBLIC_ROOT", root)
+    run_dir = tmp_path / "judge" / day.date
+    drawn = [
+        _drawn(day.items[0], day.items[1], shard=0, date=day.date),
+        _drawn(day.items[0], day.items[2], shard=0, date=day.date),
+    ]
+    assemble.write_atomic(
+        run_dir / judge_item_pairs.DRAW_FILENAME, judge_item_pairs._as_csv(drawn)
+    )
+    patched = _reply("the-word-was-patched-in-afterwards")
+    replies = (patched, patched, _reply("one-event"), _reply("one-event"))
+
+    with JudgeServer(*replies, vocabulary=_vocabulary("judge-first-tokens")) as server:
+        report = judge_item_pairs.stage_judge_item_pairs(
+            day.date,
+            shard=0,
+            shards=4,
+            settings=settings,
+            digest_root=root,
+            run_dir=run_dir,
+            deadline=_a_deadline_no_shard_will_reach(),
+            base_url=server.base_url,
+        )
+
+    rows = _rows(report.path)
+    refused, held = rows[0], rows[1]
+    counted = counting.day_counts(
+        rows,
+        record=counting.empty_record(
+            settings.app.assemble.same_story.judging_knobs(),
+            scorer=stamps.scorer_inputs(settings),
+            judge=stamps.judge_inputs(settings),
+        ),
+    )
+
+    assert report.outcome is ShardOutcome.COMPLETED
+    assert (report.owned, report.judged, report.usable) == (2, 2, 1)
+    assert refused.grammar_applied is False
+    assert refused.verdict is None
+    assert refused.verdict_swapped is None
+    assert refused.usable is False
+    assert refused.decode_seconds is not None, "the pair still paid for both of its calls"
+    assert refused.first_token_probabilities is not None, "the window that gave it away"
+    assert held.grammar_applied is True, "the shard read the pair after the refused one"
+    assert held.usable is True
+    assert sum(slot.same + slot.different + slot.unclear for slot in counted.values()) == 1, (
+        "the fold counted the refused pair as a verdict"
+    )
 
 
 def test_a_shard_that_owned_nothing_still_leaves_a_file(
@@ -967,9 +1169,10 @@ def test_a_shard_that_dies_mid_draw_keeps_every_pair_it_had_already_judged(
 ) -> None:
     """The whole point of writing as it goes: what is finished survives what is not.
 
-    The server answers two readings and then replies with something the grammar
-    could not have written, so the shard fails inside its second pair. Under a
-    single write at the end that file would not exist at all.
+    The server answers two readings and then replies with a recorded server
+    error, which is neither a choice nor a completion - so the shard fails inside
+    its second pair. Under a single write at the end that file would not exist at
+    all.
 
     The cadence is driven from the config rather than assumed: at the committed
     value the finished pair is on disk, and at a cadence of two the same crash
@@ -992,10 +1195,10 @@ def test_a_shard_that_dies_mid_draw_keeps_every_pair_it_had_already_judged(
         replies = (
             _reply("one-event"),
             _reply("one-event"),
-            _reply("the-grammar-was-not-applied"),
+            _error_reply("server-unavailable"),
         )
         with JudgeServer(*replies, vocabulary=_vocabulary("judge-first-tokens")) as server:
-            with pytest.raises(judge.GrammarNotAppliedError):
+            with pytest.raises(ValueError, match="neither a choice nor a completion"):
                 judge_item_pairs.stage_judge_item_pairs(
                     day.date,
                     shard=0,
