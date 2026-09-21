@@ -59,15 +59,17 @@ def derived(case: dict[str, Any]) -> TurnMarkers:
     )
 
 
-@pytest.mark.parametrize(
-    "model_file",
-    [
-        "gemma-4-e4b-qat.json",
-        "ornith-1.5-9b-q5km.json",
-        "qwen3.5-9b-q4km-thinking.json",
-        "qwen3.5-9b-q4km.json",
-    ],
-)
+def committed_model_files() -> list[str]:
+    """Every model file the repository commits, by name.
+
+    Read rather than listed, so a model added tomorrow is covered by the Oracle
+    below on the day it lands. The hand-typed list this replaced named four of
+    the five already there.
+    """
+    return sorted(path.name for path in (CONFIG_DIR / "models").glob("*.json"))
+
+
+@pytest.mark.parametrize("model_file", committed_model_files())
 def test_the_derived_markers_render_the_prompt_the_typed_ones_rendered(
     model_file: str,
 ) -> None:
