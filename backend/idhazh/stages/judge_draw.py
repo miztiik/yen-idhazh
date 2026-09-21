@@ -23,7 +23,7 @@ from idhazh.similarity import draw
 from idhazh.similarity.stamps import ScorerStamp, scorer_inputs
 from idhazh.stages import common
 from idhazh.stages.assemble import _earlier_days
-from idhazh.stages.common import LOG, _load_day, _load_manifest
+from idhazh.stages.common import LOG, _load_day
 
 #: What the legs read. One name per day, because a day has one draw.
 DRAW_FILENAME = "draw.csv"
@@ -89,20 +89,10 @@ def _as_csv(rows: list[StorySimilarityPair]) -> str:
     return buffer.getvalue()
 
 
-def _newest_run_id(digest_root: Path, date: str) -> str | None:
-    """Which run published the day this draw is about.
-
-    Off the run manifest rather than off the day payload, because the day's own
-    run list carries the ordinal and not the identity - and two runs of one date
-    share an ordinal where they do not share a run id.
-    """
-    manifest = _load_manifest(assemble.day_dir(digest_root, date) / "run.json")
-    return manifest.runs[-1].run_id if manifest is not None else None
-
-
 def stage_judge_draw(
     date: str,
     *,
+    run_id: str,
     settings: config.Settings,
     digest_root: Path = common.PUBLIC_ROOT,
     out_dir: Path = common.JUDGE_ROOT,
@@ -127,9 +117,14 @@ def stage_judge_draw(
     of what a later precision figure can be read off; sampling them away would
     leave the run unable to say how many of its own merges were wrong.
 
-    A day that is not on disk, or has no manifest beside it, writes an empty
-    draw and says why. A missing day is nothing to judge rather than a run to
-    fail.
+    **`run_id` is the council's own and is handed in.** The run that scored a
+    pair is the run that drew it, which is what the pair row's own column says;
+    reading it off the day's manifest filed these rows under a digest run that
+    never opened this file. The council mints one name in its planning job and
+    passes it here, so a night's rows cannot arrive under two addresses.
+
+    A day that is not on disk writes an empty draw and says why. A missing day
+    is nothing to judge rather than a run to fail.
     """
     same_story = settings.app.assemble.same_story
     tuning = same_story.judging_knobs()
@@ -139,8 +134,7 @@ def stage_judge_draw(
     path = out_dir / date / DRAW_FILENAME
 
     day = _load_day(assemble.day_dir(digest_root, date) / "digest.json")
-    run_id = _newest_run_id(digest_root, date)
-    if day is None or run_id is None:
+    if day is None:
         LOG.warning(
             "judge draw found no published day to read date=%s out=%s", date, draw_relpath(date)
         )

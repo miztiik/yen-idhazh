@@ -194,6 +194,61 @@ survive the artifact's 24-hour retention. Neither is true today. Adopting
 segments then also needs the collecting job to see commits made during its own
 run, which it has no way to do.
 
+## Design rationale: the night names itself
+
+Every row this workflow writes carries a `run_id`. Until 2026-09-21 the council
+had none, so the draw and the fit both read one off the published day's run
+manifest - and a council row was filed under the digest run that published the
+day it read. That run never drew a pair, never called a model, ran on a
+different machine, and opened on a different day.
+
+**The council mints its own name now.** Once, in the planning job, from the day
+the council RUNS and the run id the platform gave the run:
+`2026-09-21-35534060762`. It is published as a job output and every verb that
+writes a row is handed it, the same way the shard bound and the model refs
+already cross.
+[../../../backend/idhazh/council/run_identity.py](../../../backend/idhazh/council/run_identity.py)
+holds the one function that makes it, and nothing in it names a judge, opens a
+store or resolves an ordinal.
+
+Three things about the shape, each of which reads as the obvious answer and is
+not.
+
+- **The prefix is the day the council runs, never the day it judges.** A reader
+  takes a run id's first ten characters as the day its run opened and measures
+  the lag to publication from them, so a judged-date prefix would publish a
+  standing lag of a day that nothing waited. The judged date is the `date`
+  column, which is what routes a row to its store.
+- **It is the platform's run id, never its run number.** The number starts again
+  in each workflow, so a council name would eventually equal a digest run's id
+  in a column that carries both meanings.
+- **It is minted once, never per job.** The prefix is a day, so four jobs each
+  reading the platform's value would split a run that crossed midnight across
+  two addresses with nothing able to say the two were one night.
+
+### Two meanings in one column, and how a reader tells them apart
+
+`run_id` on a row written before this change means **the run that published the
+day**. On a row written after it, it means **the run that judged it**. Two
+stores carry both across time: the judged pairs and the fitted lines. On
+2026-09-21 that was 82 pair rows and 1 fitted row, all under
+`2026-09-18-35339202390`.
+
+The **`version` stamp every row already carries is the discriminator** (owner
+ruling, 2026-09-21). It costs nothing, because the row carries it either way.
+
+There is a second test that needs no stamp at all, and it is exact rather than
+approximate. **A digest run's id is prefixed with the day it published, so on
+every row written the old way `run_id` starts with that row's own `date`.** A
+council name is prefixed with the day the council ran, which is the day after
+the one it judges. So `run_id[:10] == date` is the old meaning and
+`run_id[:10] > date` is the new one, on both stores, with nothing to look up.
+
+**What this does not change.** The judged date is still the `date` column and
+still decides which file a row lands in. And the pair row's own contract already
+said `run_id` was "the run that scored the pair" - the code was what disagreed
+with it.
+
 ## What is heard here
 
 | Case | Decides | Status |

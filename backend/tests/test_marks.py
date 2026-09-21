@@ -121,6 +121,7 @@ UNMARKED_MODULES: Final = frozenset(
         "test_reference_dataset",
         "test_reference_set",
         "test_retention_oracle",
+        "test_run_identity",
         "test_run_timeline_producer",
         "test_same_story",
         "test_same_story_window",
