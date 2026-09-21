@@ -583,6 +583,15 @@ instruments in one column. Which decoded position the answer opens at is handed
 in for the same reason: where a caller's answer starts is a fact about that
 caller's spans, not about this layer.
 
+**The probability mode is sent rather than left to the build.** Whether the
+numbers beside the word are the model's own or the distribution after the
+grammar reshaped it decides whether renormalising them means anything, and no
+workflow pins a llama.cpp build. It is measured rather than assumed: on
+`b10444-5f754ea0e` the window is the model's own, the build honours a request
+for 25 alternatives, and asking for the post-sampling numbers returns no window
+at all - [which probabilities the server
+returns](../../reference/benchmarks/which-probabilities-the-server-returns.md).
+
 **The decode stamp is defined by what it leaves out.** Three keys are excluded
 and everything else posted is in it, so a caller that starts sending a new
 sampler field is stamped under a new digest without anybody remembering to
