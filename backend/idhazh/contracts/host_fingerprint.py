@@ -21,7 +21,9 @@ down in `docs/reference/host-metrics.md`.
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Self
+from collections.abc import Mapping
+from types import MappingProxyType
+from typing import Any, ClassVar, Final, Self
 
 from pydantic import Field
 
@@ -54,6 +56,66 @@ WATCHED_FLAGS: tuple[str, ...] = (
     "f16c",
     "fma",
     "sse4_2",
+)
+
+#: The surface that reads each column, by the path that reads it. Every column of
+#: this row appears exactly once, so minting a column without saying who will
+#: read it fails `backend/tests/contracts/test_column_readers.py` rather than
+#: landing quietly and costing a cell on every job for the rest of the archive.
+#:
+#: **A reader is where the value is turned into an answer**, not where it is
+#: written and not where it is carried past. The probe that fills the cell, the
+#: ledger that appends it and the generated TypeScript that types it are all on
+#: the other side of the question.
+#:
+#: **One column names one reader, even where several read it.** The one named is
+#: the surface that would notice first if the column stopped arriving, which is
+#: the fact a person deleting a column needs. A second reader is found by search;
+#: the first one to break is not.
+#:
+#: What this cannot settle is whether the named surface still DRAWS the value -
+#: only that it still names the column. A panel that reads a cell and then throws
+#: it away passes here and fails the browser check instead.
+COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
+    {
+        "frontend/src/lib/server/host-fingerprint.ts": (
+            "version",
+            "measured_at",
+            "runner_name",
+            "cpu_vendor",
+            "mhz_max",
+            "model_load_ms",
+            "job_seconds",
+            "server_prompt_tokens",
+            "server_prompt_seconds",
+        ),
+        "frontend/src/lib/charts/machine-cards.ts": (
+            "job",
+            "fingerprint",
+            "cpu_model",
+            "cpu_family",
+            "cpu_model_number",
+            "cpu_stepping",
+            "microcode",
+            "l3_cache_bytes",
+            "mhz_at_probe",
+            "flags",
+            "boot_seconds",
+            "memcpy_gib_s",
+            "memcpy_probe_mib",
+            "vm_size",
+            "vm_location",
+            "vm_zone",
+            "vm_fault_domain",
+        ),
+        "frontend/src/lib/charts/machine.ts": ("cores",),
+        "frontend/src/lib/console/machine/article-cost.ts": (
+            "date",
+            "run_id",
+            "shard",
+            "threads",
+        ),
+    }
 )
 
 

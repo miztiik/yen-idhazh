@@ -428,7 +428,7 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | The unclaimed-time column is drawn as it is stored, sign included | Susan - it is signed on purpose, and a negative value means two clocks disagreed. Taking the absolute value discards the finding |
-| 2 | It is the highest-value unread column on the row | Susan - its own contract calls it the one column that can catch a regression in a stage nobody named, and nothing on the site reads it |
+| 2 | It is the highest-value unread column on the `state/item-health/` row | Susan - its own contract calls it the one column that can catch a regression in a stage nobody named. **Corrected 2026-09-21 by Row #17 from "nothing on the site reads it", which was true of this row and false of the published one.** `stage_gap_ms` is a column on two different contracts. `ItemHealthRow.stage_gap_ms` was unread until this row drew it. `PublicTelemetryRow.stage_gap_ms` is a separate published column and the Pipelines route has always drawn it, as the `gap` band of `TIME_BANDS` in `frontend/src/lib/charts/series.ts`, placed by `frontend/src/lib/charts/glance.ts`. The decision stands; only its reason narrows |
 | 3 | Queue time joins the clock track rather than becoming a figure | Susan - the board already draws a job clock and a model clock and cannot say how much of the gap was queueing, and the two have different fixes |
 
 - **Rejected alternatives:**
