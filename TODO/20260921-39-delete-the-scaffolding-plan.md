@@ -73,13 +73,13 @@ Twenty rows. Read this before the tables.
 | # | Row title | Lane | Depends-on | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 13 | The entry path is one action taking a model file | B | - | PENDING | - | - | - |
-| 2 | The model file is plain JSON | A | - | PENDING | - | - | - |
-| 5 | The installer stops naming a repository | A | 2 | PENDING | - | - | - |
-| 16 | The thinking budget goes; the two-span call stays | A | 2 | PENDING | - | - | - |
-| 18 | The model's own template renders the prompt | A | 2 | PENDING | - | - | - |
-| 6 | The startup probe keeps one check, then none | A | 18 | PENDING | - | - | - |
-| 11 | The server-log reader goes | A | - | PENDING | - | - | - |
-| 3 | The draft head goes | B | - | PENDING | - | - | - |
+| 2 | The model file is plain JSON | - | - | COLLAPSED - plan 41 row 4 | - | - | - |
+| 5 | The installer stops naming a repository | B | 13, plan 41 PR A1 | PENDING | - | - | - |
+| 16 | The thinking budget goes; the two-span call stays | - | - | COLLAPSED - plan 41 row 5 | - | - | - |
+| 18 | The model's own template renders the prompt | - | - | COLLAPSED - plan 41 row 7 | - | - | - |
+| 6 | The startup probe keeps one check, then none | - | - | COLLAPSED - plan 41 row 8 | - | - | - |
+| 11 | The server-log reader goes | - | - | COLLAPSED - plan 41 row 1; its two workflow log assertions moved to row 10 | - | - | - |
+| 3 | The draft head goes | B | 13 | PENDING - workflow half only; the model shape half is plan 41 row 3 | - | - | - |
 | 4 | The capability probe goes | B | - | PENDING | - | - | - |
 | 9 | The benchmark workflow's closed-world tests go | B | 3,4 | PENDING | - | - | - |
 | 10 | The workflow censuses go | B | 3,4 | PENDING | - | - | - |
@@ -88,25 +88,29 @@ Twenty rows. Read this before the tables.
 | 7 | Qualification asks each article once | C | - | PENDING | - | - | - |
 | 17 | The utilities and evaluations nothing calls go | C | 7 | PENDING | - | - | - |
 | 8 | Both test pipelines commit what they produce | C | - | PENDING | - | - | - |
-| 21 | One request builder, and the pipeline stops naming a server | A | 2,18 | PENDING | - | - | - |
+| 21 | One request builder, and the pipeline stops naming a server | - | - | COLLAPSED - the address clause is plan 41 row 2; the transport change is out of this plan, priced in plan 41 section 0 | - | - | - |
 | 15 | The hosted span sink goes | D | - | PENDING | - | - | - |
 | 19 | One console route list, not nine | D | - | PENDING | - | - | - |
 | 1 | The generated contract layer goes | E | A,B,C,D | PENDING | - | - | - |
-| 12 | The engineering contract and the pages catch up | E | 1 | PENDING | - | - | - |
+| 12 | The engineering contract and the pages catch up | E | 1 | PENDING - sections 1a, 9 and 10 only; the schema-declaration guardrail and section 11 moved to plan 41 row 6 | - | - | - |
+
+**Lane A is executed from [`20260921-41-lane-a-model-file-plan.md`](20260921-41-lane-a-model-file-plan.md), not from here.** That plan carries the rows above marked `COLLAPSED`, in two pull requests, with the contracts they need declared. The rows stay listed here so their numbers still resolve.
 
 ### The lanes, and why each is one pull request
 
 | Lane | Rows | The file they share | Parallel with |
 | --- | --- | --- | --- |
-| **A - the model file** | 2, 5, 16, 18, 6, 11 | `backend/idhazh/llm/server.py`, `backend/idhazh/contracts/knobs/`, `config/models/` | B, C, D |
-| **B - the workflows** | 13, 3, 4, 9, 10, 14, 20 | `.github/`, `backend/tests/workflows/_harness.py` | A, C, D |
-| **C - the ledgers and evaluations** | 7, 17, 8 | `backend/idhazh/evals/qualify.py`, `backend/idhazh/contracts/qualification.py`, `backend/idhazh/ledger.py` | A, B, D |
-| **D - the site and the sink** | 15, 19 | `frontend/tests/`, `backend/idhazh/telemetry/` | A, B, C |
+| **A - the model file** | moved to plan 41 | `backend/idhazh/llm/server.py`, `backend/idhazh/contracts/knobs/`, `config/models/` | B, C, D |
+| **B - the workflows** | 13, 3, 4, 9, 10, 14, 20, 5 | `.github/`, `backend/tests/workflows/_harness.py` | C, D |
+| **C - the ledgers and evaluations** | 7, 17, 8 | `backend/idhazh/evals/qualify.py`, `backend/idhazh/contracts/qualification.py`, `backend/idhazh/ledger.py` | B, D |
+| **D - the site and the sink** | 15, 19 | `frontend/tests/`, `backend/idhazh/telemetry/` | B, C |
 | **E - last, alone** | 1, 12 | every contract module and the engineering contract | nothing |
 
-**Lane E runs alone and last.** Row #1 touches a generated twin of every contract the other four lanes edit, so running it beside them is a conflict on every file that moved. Row #12's first clause amendment is the one exception and ships inside lane A's pull request, because row #2 contradicts the contract the moment it lands.
+**Lane E runs alone and last.** Row #1 touches a generated twin of every contract the other lanes edit, so running it beside them is a conflict on every file that moved.
 
-**Parallel N = 4.** Four lanes, one worker each, one pull request each. A worker carries its lane's rows in order in one worktree. A lane returns when its pull request is green.
+**Lane B's row #5 is its last row and waits on plan 41's first pull request**, because it adds a key to the model file that the typed shape refuses until that shape is gone.
+
+**Parallel N = 3 here, plus plan 41.** Lanes B, C and D run at once, one worker each, one pull request each. A worker carries its lane's rows in order in one worktree.
 
 ## Section 1b - The contracts, declared before any code
 

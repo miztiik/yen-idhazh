@@ -38,15 +38,16 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 | [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 22 | 7 | 5 |
-| [20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md) | 21 | 0 | 21 | 11 |
+| [20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md) | 21 | 0 | 15 | 8 |
 | [20260921-40-bonsai-probe-plan.md](20260921-40-bonsai-probe-plan.md) | 7 | 0 | 7 | 4 |
+| [20260921-41-lane-a-model-file-plan.md](20260921-41-lane-a-model-file-plan.md) | 8 | 0 | 8 | 1 |
 
 ## In flight - 0
 
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 48
+## Ready now - 46
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -88,9 +89,6 @@ section 3 is where it is answered.
 | #22 | 38 | U | The guard that stops a shard committing is renamed and re-reasoned | 16, 21a |
 | #23 | 38 | U | The council runs green with no judge in the repository | 15a, 17, 21a, 24, 25 |
 | #13 | 39 | - | The entry path is one action taking a model file | - |
-| #2 | 39 | - | The model file is plain JSON | - |
-| #11 | 39 | - | The server-log reader goes | - |
-| #3 | 39 | - | The draft head goes | - |
 | #4 | 39 | - | The capability probe goes | - |
 | #14 | 39 | - | The image benchmark goes, and two heavy wheels with it | - |
 | #20 | 39 | - | One commit call in the workflow that has four | - |
@@ -102,8 +100,9 @@ section 3 is where it is answered.
 | #2 | 40 | A | The test workflow takes named addresses | - |
 | #5 | 40 | A | The eight telemetry steps move across | - |
 | #6 | 40 | A | A trial state root, and what the run keeps | - |
+| #1 | 41 | A | The server-log reader goes | - |
 
-## Waiting on another row - 87
+## Waiting on another row - 91
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -181,19 +180,23 @@ section 3 is where it is answered.
 | #13 | 36 | W4 / plan34-gaps | Retro: plan-34 latent gaps + the shared space-trap guard | 34 landed names no row; 6 is PENDING |
 | #15b | 38 | L | The content-similarity judge fills its metrics and registers as a tenant | 14 is PENDING |
 | #20 | 38 | V | The plan pointer | 19 is PENDING; 21b is PENDING; 23 is PENDING |
-| #5 | 39 | - | The installer stops naming a repository | 2 is PENDING |
-| #16 | 39 | - | The thinking budget goes; the two-span call stays | 2 is PENDING |
-| #18 | 39 | - | The model's own template renders the prompt | 2 is PENDING |
-| #6 | 39 | - | The startup probe keeps one check, then none | 18 is PENDING |
+| #5 | 39 | - | The installer stops naming a repository | 13 is PENDING; plan 41 PR A1 names no row |
+| #3 | 39 | - | The draft head goes | 13 is PENDING |
 | #9 | 39 | - | The benchmark workflow's closed-world tests go | 3 is PENDING; 4 is PENDING |
 | #10 | 39 | - | The workflow censuses go | 3 is PENDING; 4 is PENDING |
 | #17 | 39 | - | The utilities and evaluations nothing calls go | 7 is PENDING |
-| #21 | 39 | - | One request builder, and the pipeline stops naming a server | 2 is PENDING; 18 is PENDING |
 | #1 | 39 | - | The generated contract layer goes | A names no row; B names no row; C names no row; D names no row |
 | #12 | 39 | - | The engineering contract and the pages catch up | 1 is PENDING |
 | #3 | 40 | B | One plan job, so a fan-out agrees what it is reading | 2 is PENDING |
 | #4 | 40 | C | The fan-out | 3 is PENDING |
 | #7 | 40 | D | One dispatch, and the readings written up | 1 is PENDING; 4 is PENDING; 5 is PENDING; 6 is PENDING |
+| #2 | 41 | A | The server address is a value the job sets | 1 is PENDING |
+| #3 | 41 | A | The draft head goes from the model shape | 2 is PENDING |
+| #4 | 41 | A | The model file is a plain mapping | 3 is PENDING |
+| #5 | 41 | A | Span one gets a cap | 4 is PENDING |
+| #6 | 41 | A | The engineering contract catches up | 4 is PENDING |
+| #7 | 41 | B | The model's own template writes the markers | 6 is PENDING |
+| #8 | 41 | B | The startup probe keeps the render check | 7 is PENDING |
 
 ## Finished - 19 plans with no live row
 

@@ -64,7 +64,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 6 | A trial state root, and what the run keeps | - | A | PENDING | - | - | - |
 | 7 | One dispatch, and the readings written up | 1,4,5,6 | D | PENDING | - | - | - |
 
-**Depends-on outside this plan:** [TODO/20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md) comes first. Row #1 here needs its rows #1, #2 and #5 - the generated contract layer gone, the model file plain JSON, and the installer able to resolve a build the model names. Rows #4 and #5 here need its row #10, which deletes the closed-world tests that refuse a new job standing a model server up. Nothing in this plan starts before those four are `DONE`.
+**Depends-on outside this plan:** two plans come first. Row #1 here needs pull request A1 of [TODO/20260921-41-lane-a-model-file-plan.md](20260921-41-lane-a-model-file-plan.md) - the model file a plain mapping, so a new entry needs no typed field - and then rows #1 and #5 of [TODO/20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md): the generated contract layer gone, and the installer able to resolve a build the model names. Rows #4 and #5 here need plan 39's row #10, which deletes the closed-world tests that refuse a new job standing a model server up. Nothing in this plan starts before all four are `DONE`.
 
 ## Section 2 - Row #1 - The model entry, and whether it fits
 
