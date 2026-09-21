@@ -277,6 +277,7 @@
     "evaluation_enabled": false,
     "feed_health_keep_months": 20,
     "host_fingerprint": false,
+    "host_fingerprint_bandwidth_cache_multiple": 3,
     "host_fingerprint_bandwidth_floor_mib": 256,
     "host_fingerprint_keep_months": 26,
     "item_health_aggregate_keep_months": 36,

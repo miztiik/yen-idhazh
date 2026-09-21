@@ -90,13 +90,6 @@ METADATA_TIMEOUT_SECONDS: Final = 2.0
 #: not decide what a machine's bandwidth was.
 MEMCPY_REPEATS: Final = 3
 
-#: How many times the reported cache each side of the copy has to be. Not a knob:
-#: the probe holds two buffers, so at this multiple the working set is four times
-#: the cache and no part of the copy can be served from it. A smaller multiple
-#: stops being a memory reading; a larger one buys nothing and costs the runner's
-#: memory before the model server starts.
-CACHE_MULTIPLE: Final = 2
-
 _MIB: Final = 1024 * 1024
 _GIB: Final = 1024 * 1024 * 1024
 
@@ -188,7 +181,7 @@ def boot_seconds(text: str | None = None) -> float | None:
     return _as_float(cells[0]) if cells else None
 
 
-def probe_buffer_mib(floor_mib: int, l3_cache_bytes: int | None) -> int:
+def probe_buffer_mib(floor_mib: int, l3_cache_bytes: int | None, cache_multiple: int) -> int:
     """How large each side of the copy has to be on THIS machine, in MiB.
 
     The size decides what the probe measures, so it cannot be a constant. The
@@ -198,6 +191,10 @@ def probe_buffer_mib(floor_mib: int, l3_cache_bytes: int | None) -> int:
     own report raises it, so a part with more cache than anybody has drawn cannot
     quietly turn the reading into a cache reading.
 
+    `cache_multiple` is the margin, and the console grades a committed row by the
+    same value: a row whose buffer did not clear the cache by it has its copy
+    speed withheld rather than drawn.
+
     A floor of zero stays zero: that is the caller saying do not probe at all. A
     machine that reports no cache keeps the floor, because an unknown cache is
     not a small one and there is nothing else to derive from.
@@ -205,7 +202,7 @@ def probe_buffer_mib(floor_mib: int, l3_cache_bytes: int | None) -> int:
     if floor_mib <= 0 or l3_cache_bytes is None or l3_cache_bytes <= 0:
         return floor_mib
     whole_mib = -(-l3_cache_bytes // _MIB)  # round up, so the result clears the cache
-    return max(floor_mib, CACHE_MULTIPLE * whole_mib)
+    return max(floor_mib, cache_multiple * whole_mib)
 
 
 def memcpy_gib_s(probe_mib: int) -> float | None:
@@ -303,6 +300,7 @@ def read_row(
     job: ServerJob,
     shard: int,
     probe_floor_mib: int,
+    probe_cache_multiple: int,
     ask_placement: bool = True,
     cpuinfo: str | None = None,
     cache_root: Path | None = None,
@@ -326,7 +324,7 @@ def read_row(
     }
     # The recorded size is the derived one, never the configured floor, so the
     # column says what was probed rather than what somebody asked for.
-    probe_mib = probe_buffer_mib(probe_floor_mib, l3_cache_bytes)
+    probe_mib = probe_buffer_mib(probe_floor_mib, l3_cache_bytes, probe_cache_multiple)
     return HostFingerprintRow(
         date=date,
         run_id=run_id,
@@ -381,6 +379,7 @@ def stage_fingerprint(
         job=job,
         shard=shard,
         probe_floor_mib=knobs.host_fingerprint_bandwidth_floor_mib,
+        probe_cache_multiple=knobs.host_fingerprint_bandwidth_cache_multiple,
     )
     attempt = run_context.run_attempt()
     landed = ledger.write_segment(

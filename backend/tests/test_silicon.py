@@ -122,6 +122,7 @@ def test_the_row_reads_family_model_stepping_off_the_text_it_is_given() -> None:
         job=ServerJob.WORK,
         shard=0,
         probe_floor_mib=0,
+        probe_cache_multiple=2,
         ask_placement=False,
         cpuinfo=CPUINFO_XEON,
     )
@@ -141,6 +142,7 @@ def test_the_clock_is_the_mean_across_processors_and_threads_is_their_count() ->
         job=ServerJob.WORK,
         shard=0,
         probe_floor_mib=0,
+        probe_cache_multiple=2,
         ask_placement=False,
         cpuinfo=CPUINFO_XEON,
     )
@@ -159,6 +161,7 @@ def test_a_probe_size_of_zero_switches_the_bandwidth_reading_off() -> None:
         job=ServerJob.WORK,
         shard=0,
         probe_floor_mib=0,
+        probe_cache_multiple=2,
         ask_placement=False,
         cpuinfo=CPUINFO_MILAN,
     )
@@ -208,8 +211,18 @@ def test_a_cache_larger_than_the_floor_raises_the_buffer_clear_of_it() -> None:
     Both figures are drawn machines: 480 MiB is the Xeon 6973P-C and 260 MiB the
     Xeon 8573C, and a 512 MiB constant covers neither by twice.
     """
-    assert silicon.probe_buffer_mib(512, 480 * 1024 * 1024) == 960
-    assert silicon.probe_buffer_mib(512, 260 * 1024 * 1024) == 520
+    assert silicon.probe_buffer_mib(512, 480 * 1024 * 1024, 2) == 960
+    assert silicon.probe_buffer_mib(512, 260 * 1024 * 1024, 2) == 520
+
+
+def test_the_cache_margin_is_the_knob_and_the_buffer_moves_with_it() -> None:
+    """The substitution test on the margin itself (CLAUDE.md Guardrail #6).
+
+    The console grades a committed row by this same value, so a probe that held
+    its own copy of it could size a buffer the page then refused.
+    """
+    assert silicon.probe_buffer_mib(1, 260 * 1024 * 1024, 1) == 260
+    assert silicon.probe_buffer_mib(1, 260 * 1024 * 1024, 4) == 1040
 
 
 def test_a_small_cache_keeps_the_configured_floor_and_the_floor_still_decides_it() -> None:
@@ -218,25 +231,25 @@ def test_a_small_cache_keeps_the_configured_floor_and_the_floor_still_decides_it
     The second pair is the substitution test: the floor is the only input that
     moved, and the answer moved with it (CLAUDE.md Guardrail #6).
     """
-    assert silicon.probe_buffer_mib(512, 32 * 1024 * 1024) == 512
-    assert silicon.probe_buffer_mib(1024, 32 * 1024 * 1024) == 1024
+    assert silicon.probe_buffer_mib(512, 32 * 1024 * 1024, 2) == 512
+    assert silicon.probe_buffer_mib(1024, 32 * 1024 * 1024, 2) == 1024
 
 
 def test_a_machine_that_reports_no_cache_keeps_the_floor_rather_than_losing_the_probe() -> None:
     """An unknown cache is not a small one, and there is nothing else to derive from."""
-    assert silicon.probe_buffer_mib(512, None) == 512
+    assert silicon.probe_buffer_mib(512, None, 2) == 512
 
 
 def test_the_off_switch_survives_a_machine_with_a_large_cache() -> None:
     """Zero says do not probe. A derivation that overrode it would take the knob away."""
-    assert silicon.probe_buffer_mib(0, 480 * 1024 * 1024) == 0
+    assert silicon.probe_buffer_mib(0, 480 * 1024 * 1024, 2) == 0
 
 
 def test_a_cache_that_is_not_a_whole_number_of_mib_is_still_cleared() -> None:
     """Rounding down would leave the buffer inside the cache, which is the whole defect."""
     odd = 3 * 1024 * 1024 + 1
 
-    assert silicon.probe_buffer_mib(1, odd) * 1024 * 1024 >= 2 * odd
+    assert silicon.probe_buffer_mib(1, odd, 2) * 1024 * 1024 >= 2 * odd
 
 
 def test_the_row_records_the_buffer_it_probed_and_not_the_floor_it_was_handed(
@@ -253,6 +266,7 @@ def test_the_row_records_the_buffer_it_probed_and_not_the_floor_it_was_handed(
         job=ServerJob.WORK,
         shard=0,
         probe_floor_mib=1,
+        probe_cache_multiple=2,
         ask_placement=False,
         cpuinfo=CPUINFO_MILAN,
         cache_root=a_cache_tree(tmp_path, "4M"),

@@ -202,9 +202,26 @@ class ObservabilityConfig(Model):
             "buffer that does not clear the cache measures cache and reads as a "
             "memory figure several times too high, and the reported L3 across the "
             "machines this project draws spans 32 MiB to 480 MiB. So the probe "
-            "raises the buffer to twice whatever cache the machine it drew reports, "
-            "and this value is what a machine reporting no cache at all gets. "
-            "memcpy_probe_mib on the row records the size that was used."
+            "raises the buffer to host_fingerprint_bandwidth_cache_multiple times "
+            "whatever cache the machine it drew reports, and this value is what a "
+            "machine reporting no cache at all gets. memcpy_probe_mib on the row "
+            "records the size that was used."
+        ),
+    )
+    host_fingerprint_bandwidth_cache_multiple: int = Field(
+        default=2,
+        ge=1,
+        description=(
+            "How many times the reported cache each side of the memory-bandwidth "
+            "probe has to be. The probe holds two buffers, so at 2 the working set "
+            "is four times the cache and no part of the copy can be served from it; "
+            "below that the reading stops being a memory reading, and above it the "
+            "runner pays memory it does not get back before the model server starts. "
+            "It is one value because two readers need the same one: the probe sizes "
+            "its buffer by it, and the console grades a committed row by it and "
+            "withholds the copy speed of a row whose buffer did not clear the cache "
+            "by this much. Two numbers in two languages would let a row the probe "
+            "wrote correctly be refused by the page that draws it."
         ),
     )
     sample_rate: float = Field(

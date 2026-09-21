@@ -509,10 +509,29 @@ quotable number on the route.
  and the missing one is what decode dispatches on. **Never read** and
  **reported none of them** are different facts: the first draws no chip and
  says so.
-- **The bandwidth reading and the buffer it was taken with are one sentence.** A
- buffer at or below L3 never left cache and reads several times high, so the
- sentence says `this measured cache, not memory` rather than leaving a reader
- to compare two numbers in different places.
+- **The copy rate and the buffer it was taken with are one sentence, and a rate
+ nobody can grade is withheld.** The buffer has to be at least
+ `observability.host_fingerprint_bandwidth_cache_multiple` times the machine's
+ cache before anybody can say the copy left it. Measured 2026-09-21 over the 65
+ committed host rows, nine fall short - a 512 MiB buffer against 260 MiB or
+ 480 MiB of L3 - and **those nine are the slowest rates in the fleet, not the
+ fastest**, so the short buffer is a reason to distrust them rather than
+ evidence they read high. Rejected: printing them with a caveat. A caveat under
+ a number does not stop the number being compared, and these sit at one end of
+ any ranking.
+- **A card says what clock the machine ran at and how long it had been up.**
+ Uptime is there because a machine started minutes ago still has an empty page
+ cache, which is one of the two reasons a run reads its weights back off disk -
+ without it the eviction strip has one explanation instead of two. That reason
+ is why the reading earns its place and **is not printed on the panel**: a
+ Hardware subtitle is one sentence ending in its own grain, so a second sentence
+ explaining a card would break the rule that keeps the page scannable. Every
+ committed row is a freshly started machine: 2.6 to 38 minutes of uptime, median
+ 3.8 minutes, over 65 rows on 2026-09-21. **The clock prints alone.** The
+ ceiling column a share would divide by is empty on all 65, so a card that drew
+ a percentage of it would publish the empty-column defect a second time. Both
+ are sentences rather than bars: one reading each, with nothing to compare it
+ against.
 - **L3 and the copy rate are lengths on a track every card of the panel
  shares.** Two numbers in two sentences on two cards is a subtraction the
  reader performs; two bars on one domain is a difference the eye reads. The
@@ -526,15 +545,15 @@ quotable number on the route.
   - **MiB of cache and GiB/s of copy rate share no axis.** They are two
     quantities, so neither reading can be read off the other's length. The
     twenty-to-one test does not apply between them and is never taken.
-  - **A cache reading is refused rather than pooled with the memory ones**, for
-    the reason the sentence above already carries: a buffer inside L3 reads
-    several times a memory rate, and on one track it would draw as the fastest
-    machine of the run. The card says why its rate is not drawn.
+  - **An ungraded rate is refused rather than pooled with the graded ones**, for
+    the reason the sentence above already carries: nobody can say what a copy
+    over a buffer that did not clear the cache measured, and a length on the
+    shared track would claim they can. The card says why its rate is not drawn.
   - **Under two readings of a kind there is no bar.** A lone bar's domain is
     its own value, so it fills the track whatever it says, and a full bar reads
     as a maximum rather than as the only one. Named on the card, because a bar
     missing beside a bar drawn is the state a reader would otherwise have to
-    work out. The three refusals are `absent`, `alone` and `cache`, and
+    work out. The three refusals are `absent`, `alone` and `ungraded`, and
     `data-machine-bar-state` carries whichever holds.
 - **A count of machine kinds is a count and never a rate.** No percentage, no
  probability, no pie: what the next job will draw is precisely what the

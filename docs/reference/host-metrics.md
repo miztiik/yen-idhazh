@@ -279,9 +279,9 @@ is not a peak that only rises.
 
 | Column | Type | What it is | What it is for |
 | --- | --- | --- | --- |
-| `mhz_max` | float? | `CPU max MHz` | The ceiling the host publishes, where it publishes one |
-| `mhz_at_probe` | float? | Mean `cpu MHz` across processors at probe time | **Not a reading under load.** The probe runs before the job's heaviest step, so this says what the machine idles at |
-| `boot_seconds` | float? | Uptime when the probe ran | A small number is a freshly started machine; a large one was pooled and handed to us |
+| `mhz_max` | float? | `CPU max MHz` | The ceiling the host publishes, where it publishes one. **Empty on all 65 committed rows, measured 2026-09-21**, so nothing may be drawn as a share of it |
+| `mhz_at_probe` | float? | Mean `cpu MHz` across processors at probe time | **Not a reading under load.** The probe runs before the job's heaviest step, so this says what the machine idles at. 2,500 to 3,420 MHz across the committed rows, median 2,665 |
+| `boot_seconds` | float? | Uptime when the probe ran | A small number is a freshly started machine with a cold page cache; a large one was pooled and handed to us. **Every machine drawn so far is the first case**: 156 s to 2,277 s, median 227 s, over 65 rows |
 | `memcpy_gib_s` | float? | Large-block copy rate, bytes read plus written | **Decode is bandwidth bound and this is the only bandwidth reading anywhere** |
 | `memcpy_probe_mib` | int? | The buffer each side of the copy used, as used rather than as configured | Says whether `memcpy_gib_s` measured memory or cache |
 
@@ -293,12 +293,20 @@ switches the probe off and leaves the rate empty**, which is different from a
 rate of zero.
 
 **The probe sizes itself against the machine, from 2026-09-20.** The buffer is
-the larger of that floor and twice the L3 this machine reports, so a part with
-more cache than anybody has drawn cannot quietly turn the reading into a cache
-reading. There is no longer a sentence here asking a person to raise a constant
-when a bigger part arrives. What it costs: on a machine reporting 480 MiB the
-probe holds two buffers of 960 MiB, so 1.9 GiB of the runner's 16 GB, taken
-before the model server starts.
+the larger of that floor and
+`observability.host_fingerprint_bandwidth_cache_multiple` times the L3 this
+machine reports, so a part with more cache than anybody has drawn cannot quietly
+turn the reading into a cache reading. There is no longer a sentence here asking
+a person to raise a constant when a bigger part arrives. What it costs: on a
+machine reporting 480 MiB the probe holds two buffers of 960 MiB, so 1.9 GiB of
+the runner's 16 GB, taken before the model server starts.
+
+**The console grades a committed row by that same value, and withholds the rate
+of a row that falls short of it.** One number rather than two, because a probe
+and a page holding separate copies of it could disagree, and the page would then
+refuse a row the probe wrote correctly. A withheld rate is not printed at all:
+the card says what buffer was used against what cache, how many times it was, and
+how many times it had to be.
 
 **A row divides `memcpy_probe_mib` by `l3_cache_bytes` to grade its own rate**,
 and rows written before that date do not survive the division. Measured
