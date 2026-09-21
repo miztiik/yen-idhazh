@@ -40,7 +40,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 23 | 6 | 4 |
 | [20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md) | 21 | 0 | 15 | 8 |
 | [20260921-40-bonsai-probe-plan.md](20260921-40-bonsai-probe-plan.md) | 7 | 0 | 7 | 4 |
-| [20260921-41-lane-a-model-file-plan.md](20260921-41-lane-a-model-file-plan.md) | 9 | 0 | 9 | 1 |
+| [20260921-41-lane-a-model-file-plan.md](20260921-41-lane-a-model-file-plan.md) | 7 | 0 | 7 | 1 |
 
 ## In flight - 0
 
@@ -103,7 +103,7 @@ section 3 is where it is answered.
 | #6 | 40 | A | A trial state root, and what the run keeps | - |
 | #1 | 41 | A | The server-log reader goes | - |
 
-## Waiting on another row - 92
+## Waiting on another row - 90
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -191,14 +191,12 @@ section 3 is where it is answered.
 | #3 | 40 | B | One plan job, so a fan-out agrees what it is reading | 2 is PENDING |
 | #4 | 40 | C | The fan-out | 3 is PENDING |
 | #7 | 40 | D | One dispatch, and the readings written up | 1 is PENDING; 4 is PENDING; 5 is PENDING; 6 is PENDING |
-| #2 | 41 | A | The decode stamp goes | 1 is PENDING |
-| #3 | 41 | A | The server address is a value the job sets | 2 is PENDING |
-| #4 | 41 | A | The draft head goes from the model shape | 3 is PENDING |
-| #5 | 41 | A | The model file is a plain mapping | 4 is PENDING |
-| #6 | 41 | A | Both decode caps go | 5 is PENDING |
-| #7 | 41 | A | The engineering contract catches up | 5 is PENDING |
-| #8 | 41 | B | The model's own template writes the markers | 7 is PENDING |
-| #9 | 41 | B | The startup probe keeps the render check | 8 is PENDING |
+| #2 | 41 | A | The decode stamp and the dead fingerprint go | 1 is PENDING |
+| #3 | 41 | A | The draft head goes from the model shape | 2 is PENDING |
+| #4 | 41 | A | Both decode caps go | 3 is PENDING |
+| #5 | 41 | A | The model file carries llama-server's own flags | 4 is PENDING |
+| #6 | 41 | A | The engineering contract catches up | 5 is PENDING |
+| #7 | 41 | B | The markers are derived at server start | 6 is PENDING |
 
 ## Finished - 18 plans with no live row
 
