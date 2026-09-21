@@ -94,7 +94,7 @@ Eleven rows, six pull requests, four waves.
 | 3 | The capability probe goes | P2 | - | A | DONE | p42p2 | - | P2 |
 | 4 | The image benchmark goes | P2 | 3 | A | DONE | p42p2 | - | P2 |
 | 5 | Five checks move into the thing they check | P3 | 2, 4 | B | DONE | p42p3 | - | P3 |
-| 6 | Fourteen assertions go, and the lists become computed | P3 | 5 | B | PENDING | - | - | - |
+| 6 | Fourteen assertions go, and the lists become computed | P3 | 5 | B | DONE | p42p3 | - | P3 |
 | 7 | The printer learns the whole file set, and the traversal closes | P4 | 6, plan 41 | C | PENDING | - | - | - |
 | 8 | The workflows read the model file instead of relaying it | P4 | 7 | C | PENDING | - | - | - |
 | 9 | The cache names the set, and the binary gets its own key | P4 | 8 | C | PENDING | - | - | - |

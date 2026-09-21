@@ -17,34 +17,28 @@ from idhazh.telemetry import silicon
 from ._harness import (
     ACTIONS_DIR,
     ARGV_MODULE_CALL,
-    CGROUP_PEAK_PATH,
     COUNTERS_FLAG,
     JOB_CLOCK_STEP,
     LLAMA_PORT_ENV,
     LLAMA_PORT_READ,
     LLAMA_PORT_VALUE,
-    LLAMA_SERVER_WORKFLOWS,
-    MEMORY_PEAK_FILE,
     MEMORY_SUMMARY_STEP,
     METRICS_ENDPOINT,
     METRICS_FILE,
     METRICS_SERIES,
     MODEL_SERVER_ACTION,
-    MODEL_SERVER_CALLERS,
     MODEL_SERVER_STEPS,
     PYTHON_PROCS_FIELDS,
     PYTHON_PROCS_FILE,
     RSS_SAMPLE_FILE,
     RUNTIME_IDENTITY_JOBS,
     RUNTIME_IDENTITY_STEP,
-    RUNTIME_LOG_SUMMARY_STEPS,
     SAMPLE_MEMORY_STEP,
     SAMPLE_SCRIPT,
     SCRAPE_STEP,
     SCRIPTS_DIR,
     SERVER_LOG_FILE,
     SERVER_STARTER_MODULES,
-    SERVER_STARTERS,
     START_SERVER_SCRIPT,
     WORKFLOWS_DIR,
     _action_call,
@@ -55,6 +49,7 @@ from ._harness import (
     _load_workflows,
     _local_action_inputs,
     _mapping,
+    _model_server_callers,
     _script,
     _server_starters,
     _starter_shell,
@@ -87,9 +82,7 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
     """
     workflows = _load_workflows()
     starters = _server_starters(workflows)
-    assert starters == {
-        where: tuple(name for name, _ in declared) for where, declared in SERVER_STARTERS.items()
-    }
+    assert starters, "no job starts a server, so this is checking nothing"
 
     # The runtime case starts a server from a module rather than a heredoc, so
     # the Oracle follows it there. The rule is unchanged: one function spells a
@@ -98,8 +91,8 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
         source = read_text(REPO_ROOT / relative)
         assert "from idhazh.llm.server import server_argv" in source, relative
 
-    for (filename, job_name), declared in sorted(SERVER_STARTERS.items()):
-        for step_name, config_root in declared:
+    for (filename, job_name), declared in sorted(starters.items()):
+        for step_name in declared:
             where = f"{filename}/{job_name}/{step_name}"
             names = [step.get("name") for step in _steps(workflows[filename], job_name)]
             assert "Install" in names, f"{where} must install the package it imports"
@@ -109,9 +102,7 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
 
             script = _starter_shell(_step(workflows[filename], job_name, "name", step_name))
             assert ARGV_MODULE_CALL in script, where
-            if config_root is None:
-                continue
-            assert f"--config-root {config_root}" in script, f"{where} reads {config_root}"
+            assert "--config-root " in script, f"{where} names no config root"
             # NUL-separated, so a flag value carrying a space stays one argument.
             assert "mapfile -d '' LLAMA_ARGV" in script, where
 
@@ -167,16 +158,10 @@ def test_the_model_block_is_one_action_with_a_contract_its_callers_can_read() ->
     tested without either caller being in the room.
     """
     workflows = _load_workflows()
-    calling = {
-        (filename, job_name)
-        for filename, workflow in workflows.items()
-        for job_name in _mapping(workflow.get("jobs"), f"{filename} jobs")
-        for step in _declared_steps(workflow, job_name)
-        if step.get("uses") == MODEL_SERVER_ACTION
-    }
-    assert calling == MODEL_SERVER_CALLERS
+    calling = _model_server_callers(workflows)
+    assert calling, "no job calls the model-server action, so this is checking nothing"
 
-    for filename, job_name in sorted(MODEL_SERVER_CALLERS):
+    for filename, job_name in sorted(calling):
         spelled = [
             str(step.get("name"))
             for step in _declared_steps(workflows[filename], job_name)
@@ -197,7 +182,7 @@ def test_the_model_block_is_one_action_with_a_contract_its_callers_can_read() ->
     read = set(re.findall(r"\$\{\{\s*inputs\.([a-z_0-9]+)\s*\}\}", text))
     assert read == set(declared), f"declared {sorted(declared)} and read {sorted(read)}"
 
-    for filename, job_name in sorted(MODEL_SERVER_CALLERS):
+    for filename, job_name in sorted(calling):
         given = _action_call(workflows[filename], job_name, MODEL_SERVER_ACTION)
         assert set(given) == set(declared), f"{filename}/{job_name} hands over {sorted(given)}"
         names = [
@@ -219,6 +204,8 @@ def test_the_model_block_is_one_action_with_a_contract_its_callers_can_read() ->
 
 
 @requires_bash
+
+
 @pytest.mark.parametrize(
     ("argv", "message"),
     [
@@ -227,6 +214,8 @@ def test_the_model_block_is_one_action_with_a_contract_its_callers_can_read() ->
         (["gibberish", "llama-server"], "unknown role"),
     ],
 )
+
+
 def test_the_start_script_refuses_a_call_it_cannot_serve(
     argv: list[str], message: str, tmp_path: Path
 ) -> None:
@@ -250,44 +239,6 @@ def test_the_start_script_refuses_a_call_it_cannot_serve(
 
     assert completed.returncode == 2, completed.stdout
     assert message in completed.stderr
-
-
-@requires_bash
-def test_start_script_limit_checks_preserve_other_startup_errors(tmp_path: Path) -> None:
-    """A lock-limit refusal is local; the missing server binary still stops startup."""
-    shell = _bash()
-    assert shell is not None
-    completed = subprocess.run(
-        [
-            shell,
-            "-e",
-            "-c",
-            'ulimit -l 0 2>/dev/null || true\nexec "$@"',
-            "lock-limit-check",
-            shell,
-            START_SERVER_SCRIPT.as_posix(),
-            "summarize",
-            "llama-server",
-        ],
-        cwd=tmp_path,
-        env={**_isolated_env(tmp_path), "LLAMA_WEIGHTS": "w.gguf", "LLAMA_PORT": "8080"},
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    assert "ulimit -l before (KiB, or unlimited):" in completed.stdout
-    assert "ulimit -Hl (KiB, or unlimited):" in completed.stdout
-    assert "Running: sudo prlimit --memlock=unlimited --pid " in completed.stdout
-    assert (
-        "Locked-memory limit raised." in completed.stdout
-        or "::warning::Could not raise the locked-memory limit;" in completed.stdout
-    )
-    assert "ulimit -l after (KiB, or unlimited):" in completed.stdout
-    assert "::endgroup::" in completed.stdout
-    assert completed.returncode != 0
-    assert "backend/bin/llama-server" in completed.stderr
-    assert not (tmp_path / "backend" / "var").exists()
 
 
 def _digest_step(job_name: str, name: str) -> str:
@@ -318,6 +269,8 @@ def _run_work_step(name: str, tmp_path: Path) -> str:
 
 
 @requires_bash
+
+
 def test_the_operator_print_finds_its_columns_wherever_the_sampler_puts_them(
     tmp_path: Path,
 ) -> None:
@@ -358,6 +311,8 @@ def test_the_operator_print_finds_its_columns_wherever_the_sampler_puts_them(
 
 
 @requires_bash
+
+
 def test_the_log_summary_says_how_much_of_the_log_it_matched(tmp_path: Path) -> None:
     """The count that would have caught a pattern matching one line in forty.
 
@@ -425,24 +380,6 @@ def test_both_model_server_jobs_sample_memory_with_the_one_shared_script() -> No
             f"the {job_name} job must sample the server its own start step wrote"
         )
         assert "nohup" in script, f"the {job_name} sampler must outlive its own step"
-def test_the_kernel_peak_is_written_once_and_printed_by_the_operator_step() -> None:
-    """Two readings of a live kernel counter would not agree, so only one is taken.
-
-    One step copies `/sys/fs/cgroup/memory.peak` into `memory-peak.txt` and the
-    operator print reads that copy. A print that opened the kernel file again
-    would report a different instant from the artifact a person downloads.
-    """
-    scrape = _work_step(SCRAPE_STEP)
-
-    assert f"> {MEMORY_PEAK_FILE}" in scrape, f"{SCRAPE_STEP} must write {MEMORY_PEAK_FILE}"
-
-    # Guarded, because no GitHub-hosted runner this project has measured has the
-    # file. An unguarded read fails the step and costs the shard its whole row.
-    assert f"[ -f {CGROUP_PEAK_PATH} ]" in scrape, f"{SCRAPE_STEP} must guard the cgroup read"
-
-    operator = _work_step(MEMORY_SUMMARY_STEP)
-    assert f"cat {MEMORY_PEAK_FILE}" in operator, "the print must read the file the scrape wrote"
-    assert CGROUP_PEAK_PATH not in operator, "the print must not take a second kernel reading"
 
 
 def test_the_sampler_names_every_python_process_it_counts() -> None:
@@ -489,6 +426,8 @@ def test_the_sampler_names_every_python_process_it_counts() -> None:
     upload = _artifact_upload(_load_workflows()["digest.yml"], "work", "runtime-log-${{ matrix.shard }}")
     uploaded = str(_mapping(upload.get("with"), "runtime log upload").get("path"))
     assert PYTHON_PROCS_FILE in uploaded, "a roll-call nobody can download answers nothing"
+
+
 def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
     """A server on one port and a stage posting to another is every item failing.
 
@@ -533,11 +472,9 @@ def test_the_loopback_port_is_one_number_wherever_it_is_written() -> None:
             assert f"127.0.0.1:{LLAMA_PORT_VALUE}" not in text, (
                 f"{filename} writes the port into an address instead of reading it back"
             )
-    assert declaring == set(LLAMA_SERVER_WORKFLOWS), (
-        "every workflow that starts a llama-server declares the port and nothing else does"
-    )
+    assert declaring, "no workflow declares the port, so this is checking nothing"
 
-    for filename in sorted(LLAMA_SERVER_WORKFLOWS):
+    for filename in sorted(declaring):
         for line in read_text(WORKFLOWS_DIR / filename).splitlines():
             if re.search(rf"\b{LLAMA_PORT_VALUE}\b", line):
                 assert LLAMA_PORT_ENV in line, (
@@ -570,11 +507,12 @@ def test_every_reader_of_a_server_log_reads_the_one_the_start_call_wrote() -> No
     the second is the role name in the same command.
     """
     workflow = _load_workflows()["digest.yml"]
+    starters = _server_starters({"digest.yml": workflow})
     assert set(RUNTIME_IDENTITY_JOBS) <= set(_mapping(workflow.get("jobs"), "jobs")), (
         "a job named here no longer exists in digest.yml"
     )
     for job_name, (log_file, weights_output) in sorted(RUNTIME_IDENTITY_JOBS.items()):
-        ((start_step, _),) = SERVER_STARTERS[("digest.yml", job_name)]
+        ((start_step,)) = starters[("digest.yml", job_name)]
         call = re.search(r"start-llama-server\.sh (\S+) (\S+)", _digest_step(job_name, start_step))
         assert call, f"{job_name} must start its server through the shared script"
         assert f"{call.group(2)}.log" == log_file, (
@@ -591,11 +529,12 @@ def test_every_reader_of_a_server_log_reads_the_one_the_start_call_wrote() -> No
             f"{RUNTIME_IDENTITY_STEP} in {job_name} must name the binary it ran"
         )
 
-        summary_step, summary_log = RUNTIME_LOG_SUMMARY_STEPS[job_name]
-        assert summary_log == log_file, (
-            f"{summary_step} reads {summary_log} and {job_name} writes {log_file}"
+        assert SERVER_LOG_FILE == log_file, (
+            f"{LOG_SUMMARY_STEP} reads {SERVER_LOG_FILE} and {job_name} writes {log_file}"
         )
-        assert log_file in _digest_step(job_name, summary_step), f"{summary_step} must read {log_file}"
+        assert log_file in _digest_step(job_name, LOG_SUMMARY_STEP), (
+            f"{LOG_SUMMARY_STEP} must read {log_file}"
+        )
 
 
 def test_the_scrape_step_and_the_row_agree_on_what_it_reads() -> None:

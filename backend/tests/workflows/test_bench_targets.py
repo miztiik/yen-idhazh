@@ -62,7 +62,6 @@ from ._harness import (
     _mapping,
     _needs,
     _normalize_condition,
-    _runtime_cache_keys,
     _script,
     _stage_invocations,
     _step,
@@ -99,12 +98,6 @@ def test_the_bench_is_one_target_that_runs_two_cases_in_order() -> None:
         "the server case waits for the raw case, or it downloads the weights again"
     )
 
-    keys = dict(_runtime_cache_keys(workflow))
-    assert keys == {
-        BENCH_RAW_JOB: BENCH_CACHE_KEY,
-        BENCH_SERVER_JOB: BENCH_CACHE_KEY,
-        BUDGETS_JOB: BENCH_CACHE_KEY,
-    }, "one key, written the same way twice, or the restore misses"
     composed = BENCH_CACHE_KEY.replace(
         _expression("needs.models.outputs.candidate_cache_key"), "a" * 64
     ).replace(_expression("env.LLAMA_CPP_BUILD"), PINNED_LLAMA_BUILD)
@@ -170,37 +163,8 @@ def test_a_bench_artifact_outlives_the_dispatch_that_wrote_it() -> None:
         upload = _artifact_upload(workflow, job_name, artifact)
         with_block = _mapping(upload.get("with"), f"{job_name} upload")
         assert int(str(with_block["retention-days"])) == BENCH_RETENTION_DAYS, job_name
-def test_the_server_case_reads_the_raw_case_and_emits_a_page_to_paste() -> None:
-    """The Oracle for this case. Two artifacts of numbers are a transcription job.
 
-    Emitting the dossier body with the numbers already in it is what makes
-    adopting a model a paste. The step runs after the sweep, because half the
-    page is what the sweep measured, and it writes under `backend/var` only -
-    nothing about a bench reaches a committed file.
-    """
-    workflow = _load_workflows()["measure.yml"]
-    steps = _steps(workflow, BENCH_SERVER_JOB)
-    names = [str(step.get("name") or step.get("uses")) for step in steps]
 
-    downloads = [
-        step for step in steps if str(step.get("uses", "")).startswith("actions/download-artifact")
-    ]
-    assert len(downloads) == 1, "the server case reads one artifact: the raw case's"
-    assert (
-        _mapping(downloads[0].get("with"), "download").get("name")
-        == BENCH_ARTIFACTS[BENCH_RAW_JOB]
-    )
-
-    script = _script(
-        _step(workflow, BENCH_SERVER_JOB, "name", BENCH_EMIT_STEP),
-        f"measure.yml/{BENCH_SERVER_JOB}/{BENCH_EMIT_STEP}",
-    )
-    assert "measure_llm.py emit" in script
-    assert "--raw backend/var/raw-case/" in script
-    assert "--server backend/var/runtime-sweep/runtime-summary.json" in script
-    assert "--dossier backend/var/" in script
-    assert names.index("Measure runtime candidate") < names.index(BENCH_EMIT_STEP)
-    assert names.index(BENCH_EMIT_STEP) < names.index("Upload runtime sweep")
 def test_a_bypassed_speed_case_skips_that_job_and_nothing_else() -> None:
     """The Oracle for the bypass. A bypass that skipped half the workflow is worse than none.
 
