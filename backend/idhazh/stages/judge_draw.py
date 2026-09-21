@@ -108,9 +108,9 @@ def stage_judge_draw(
     publishing run carrying a step whose output it never reads.
 
     **The read is bounded by the window and never by the archive** (Guardrail
-    #12). One day payload, one run manifest beside it, and the `ceil(window /
-    24)` earlier days `_earlier_days` already declares - one at the 36-hour
-    default. Nothing here walks a collection a run appends to.
+    #12). One day payload and the `ceil(window / 24)` earlier days
+    `_earlier_days` already declares - one at the 36-hour default. Nothing here
+    walks a collection a run appends to.
 
     **The pairs at or above the line the day was built with are never cut.**
     Those are the merges a reader is already living with, so they are the whole
