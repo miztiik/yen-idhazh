@@ -443,6 +443,7 @@ class ConsoleConfig(Model):
                     panels=[
                         "two-clocks",
                         "processor-lost",
+                        "disk-reads",
                         "machine-cards",
                         "reading-against-writing",
                         "platform-mix",
@@ -461,6 +462,7 @@ class ConsoleConfig(Model):
                     title="How close we are to the limits",
                     panels=[
                         "memory-board",
+                        "memory-held",
                         "context-headroom",
                     ],
                 ),

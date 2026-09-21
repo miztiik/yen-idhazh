@@ -1,8 +1,15 @@
 """`config/idhazh.json` - the one tree every block hangs from, and the rules that cross two of them.
 
 One block's knobs live in `idhazh.contracts.knobs.<block>`. This file holds the
-aggregate and the six validators no single block can run, because each of them
+aggregate and the five validators no single block can run, because each of them
 reads two.
+
+**A rule that reads two blocks is not automatically this file's.** One of them
+weighed a judge's draw against the council's clock, and it lived here until
+2026-09-21 - which put that judge's measured per-pair cost in the import closure
+of every module that reads config. A rule belongs here when neither block owns
+the number it turns on; when one of them does, the rule goes to that owner and
+asks the other side for its figure.
 
 A knob is something a reasonable operator might want set differently without
 changing a fact. The runner's own ceilings - 4 vCPU, the 6 h job cap, the 10 GB
@@ -40,12 +47,7 @@ from idhazh.contracts.knobs.finetune import FinetuneConfig, ReferenceDatasetConf
 from idhazh.contracts.knobs.models import SUPERSEDED_MODELS_NAMES, ModelsConfig, ModelsFile
 from idhazh.contracts.knobs.observability import LoggingConfig, ObservabilityConfig
 from idhazh.contracts.knobs.page_weight import PageWeightConfig
-from idhazh.contracts.knobs.placement import (
-    SECONDS_A_JUDGED_PAIR,
-    AssembleConfig,
-    LensWeightsConfig,
-    PlacementConfig,
-)
+from idhazh.contracts.knobs.placement import AssembleConfig, LensWeightsConfig, PlacementConfig
 from idhazh.contracts.knobs.prune import PruneConfig
 from idhazh.contracts.knobs.removed import refuse_a_removed_knob
 from idhazh.contracts.knobs.retention import RetentionConfig
@@ -86,6 +88,16 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21T12:40",
+            change="The judging-budget fit check left this contract for the tenant that owns it.",
+            why="Reading config pulled one judge's measured pair cost into every reader.",
+        ),
+        ChangelogEntry(
+            version="2026-09-21T11:30",
+            change="council.tenants and council.shard_preamble_minutes, additive.",
+            why="The venue registers a tenant from config and knows what a job spends before it.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T05:00",
             change="console.context_high_percentile and console.context_cut_off_reason, additive.",
             why="The context panel draws two ends a run and names what a cut-off looks like.",
@@ -94,16 +106,6 @@ class AppConfig(Contract):
             version="2026-09-21T04:30",
             change="assemble.same_story.adaptive_dedup_threshold.flush_every_pairs, default 1.",
             why="A shard that stops early kept nothing, and pairs are the only unit it has.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T01:00",
-            change="observability.host_fingerprint_bandwidth_cache_multiple, additive, default 2.",
-            why="The probe and the console grade a row by it, so it cannot be two numbers.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21",
-            change="council block added; the judge's own block is now optional.",
-            why="The venue's runner numbers cannot sit inside a tenant that need not exist.",
         ),
         ChangelogEntry(
             version="2026-08-21",
@@ -224,34 +226,4 @@ class AppConfig(Contract):
             months_a_window_can_touch(self.console.max_window_days),
             window_days=self.console.max_window_days,
         )
-        return self
-
-    @model_validator(mode="after")
-    def _a_day_of_judging_fits_the_councils_shard_bound(self) -> Self:
-        """A budget a shard cannot finish is a job GitHub kills with nothing uploaded.
-
-        Per tenant, and only while that tenant is configured. The bound and the
-        width are the council's; the pair budget and the per-pair cost are the
-        content-similarity judge's, so a config with no judge in it has nothing
-        to check. The cost is the worst pair measured rather than the average
-        one: a budget sized on the average fails on the night the work is hard.
-        The refusal prints the arithmetic rather than a bare comparison: a person
-        raising the budget has three knobs to choose between, and the message has
-        to say which.
-        """
-        knobs = self.assemble.same_story.adaptive_dedup_threshold
-        if knobs is None:
-            return self
-        a_shard = math.ceil(knobs.pair_budget / self.council.shards)
-        seconds = a_shard * SECONDS_A_JUDGED_PAIR
-        bound = self.council.shard_timeout_minutes * 60
-        if seconds > bound:
-            raise ValueError(
-                f"pair_budget {knobs.pair_budget} over {self.council.shards} shards is "
-                f"{a_shard} pairs a shard, which at {SECONDS_A_JUDGED_PAIR} s a pair is "
-                f"{seconds:.0f} s against "
-                f"council.shard_timeout_minutes of {self.council.shard_timeout_minutes} "
-                f"({bound} s). Lower pair_budget, raise council.shards, or raise the "
-                "timeout - which may not go past GitHub's 6 h job ceiling"
-            )
         return self

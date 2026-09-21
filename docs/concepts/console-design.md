@@ -1174,6 +1174,79 @@ reading of the canary ledger. **The series count appears in no assertion** -
 that is what proves the sentence stopped scaling with the series
 ([../../frontend/tests/console-timings.spec.ts](../../frontend/tests/console-timings.spec.ts)).
 
+## What is holding the machine's memory is two parts a reader may add, and two brackets they may not
+
+> **Abutting slices invite addition.** Where the numbers cannot be added, the marks overlap on purpose, and the reader never has to be told.
+
+The bar first asked for was four slices side by side summing to the machine: the
+model server, our own python, the page cache and what is free. **It cannot be
+drawn, and that is measured rather than feared.** Stacking those four exceeds the
+machine on **378 of 378 committed rows that carry a machine reading, by 1.21x at
+the narrowest and 1.87x at the widest, measured 2026-09-21** over
+`state/item-health/`. Two independent double-counts produce it. The weight file
+is mapped rather than read in, so its pages are resident in the model server and
+counted in the page cache at the same moment. And what the kernel reports as
+available is mostly that same reclaimable page cache, so the page cache is
+already inside the free slice.
+
+**So the bar draws only what partitions the machine, and everything else is a
+bracket.** Two parts abut and add up exactly: what the kernel says it could still
+hand out, and what is held. Under them sit the two process readings, each
+labelled *at most*, **both anchored at the bar's origin so they visibly sit on
+top of each other**, with the stretch they both claim tinted across both rows. A
+reader can add two bars drawn end to end and cannot add two that overlap. That is
+the whole mechanism: the refusal is in the geometry, and the caption only
+explains what the eye has already been stopped from doing.
+
+**A bracket is drawn against the whole bar, never inside the held part.** The
+model server's resident set is **larger than everything the kernel calls held on
+375 of those 378 rows** - a median of 75.5 percent of the machine against 52.3
+percent held. Drawing it inside the held part would be a false statement about
+99.2 percent of the record, and it would quietly retract the word *at most*: the
+difference is the mapped weight pages, which are resident and reclaimable at the
+same time.
+
+**Where the row carries what each process holds on its own, the held part splits
+and the bar has four abutting parts after all.** Anonymous memory is not
+file-backed, so it cannot double-count with the page cache and the parts close.
+Those two columns exist on the item row and **no committed row carries either**,
+so the four-part shape reaches a reader through the canary first. The panel draws
+whichever shape the row supports and **prints which one the reader is looking
+at**, per bar and in a sentence under the list.
+
+**The remainder keeps its sign, and the bar is widened rather than trimmed.**
+Where the two own-memory readings together exceed what the kernel says is held,
+two readings taken a moment apart have disagreed. The bar is drawn against a
+scale that holds the overshoot, the machine's own edge is marked inside it, and
+the amount is printed. Clamping the remainder to zero would delete the finding
+while leaving every sum looking correct - the same rule the unclaimed-time column
+already carries.
+
+**The swap is ruled underneath, on the swap file's own scale.** Measured over the
+same 378 rows: a median of 60 KiB, a p90 of 61.1 MiB and a worst of 657.9 MiB
+against a 3.00 GiB swap file. On the machine's scale the median is four
+ten-thousandths of one percent and paints nothing, which is the sub-pixel band the
+chart rules refuse; on the swap file's scale the worst row is 21.4 percent and is
+a mark worth drawing. Either way the figure is printed in words beside it, and a
+swap that reads zero says so rather than drawing an empty track with no
+explanation.
+
+**One bar is one moment.** Each day draws the row where the kernel had the least
+left to hand out, and names the article it came from, so every part of that bar
+is read off one row. An average of two moments that never met is not a thing the
+machine was ever holding.
+
+The arithmetic is proved without a browser and the geometry is proved with one.
+The sum is asserted exactly, with no tolerance: a tolerance is the gap the
+1.87x stack fits back through
+([../../frontend/tests/memory-held.spec.ts](../../frontend/tests/memory-held.spec.ts)).
+The overlap is read off the two brackets' boxes on the page and held to the
+narrower one's full width, so a change that put them end to end fails even
+though every number stayed right
+([../../frontend/tests/console-memory-held.spec.ts](../../frontend/tests/console-memory-held.spec.ts)).
+What the readings say, and what the model behind the four-part shape is, are in
+[../reference/pipeline-cost.md](../reference/pipeline-cost.md#the-machines-own-reading-arrived-and-the-survival-now-makes-sense).
+
 ## A console panel reserves its room, and names which nothing it is holding
 
 > **A reserved box with no failure state lies, and a failure state with no reserved box shifts the layout.** They are one decision and they shipped as one row.

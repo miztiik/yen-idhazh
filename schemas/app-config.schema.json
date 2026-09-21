@@ -679,8 +679,15 @@
     },
     "CouncilConfig": {
       "additionalProperties": false,
-      "description": "The clock, the margin and the fan-out width one judging night runs under.\n\nA top-level block rather than a knob under a tenant, because every number\nhere prices a runner: a checkout, an install, a weights restore and a matrix\nleg. No tenant can see any of them.\n\nUntil 2026-09-21 the bound sat in `run`, which is the digest pipeline's, and\nthe width sat inside the content-similarity judge's own block - so a\nrepository with no judge configured had no width to size its matrix by and\nno clock to stop a shard on.",
+      "description": "The clocks, the fan-out width and the tenant list one judging night runs under.\n\nA top-level block rather than a knob under a tenant, because every number\nhere prices a runner: a checkout, an install, a weights restore and a matrix\nleg. No tenant can see any of them.\n\nUntil 2026-09-21 the bound sat in `run`, which is the digest pipeline's, and\nthe width sat inside the content-similarity judge's own block - so a\nrepository with no judge configured had no width to size its matrix by and\nno clock to stop a shard on.",
       "properties": {
+        "shard_preamble_minutes": {
+          "default": 13,
+          "description": "How much of shard_timeout_minutes is gone before the judging process starts. The job clock starts at provisioning; the process starts after a checkout, a weights cache restore, a checksum verify and a health poll, and all four are the venue's own fixed cost. 13 minutes is one minute above the worst case those four steps have been measured at, which is 12.1 minutes: provisioning 0.41, cache restore up to 1.58, checksum verify 0.12, and a health poll bounded at 10. Without it the in-process deadline lands AFTER GitHub's own kill on a slow model load, and the reserve below protects nothing.",
+          "minimum": 0,
+          "title": "Shard Preamble Minutes",
+          "type": "integer"
+        },
         "shard_timeout_minutes": {
           "default": 200,
           "description": "How long one judging shard may run before GitHub kills it. 200 minutes is 2 hours 9 minutes of model time at the content-similarity judge's cap of 200 pairs over 4 shards, plus 71 minutes of headroom against a fixed cost of about 6 minutes for the checkout, the weights cache restore and the server start. That model time is derived from 9.85 tokens a second measured on a stock runner on 2026-09-09, not from a judge call. A tenant that draws more work than fits is refused when its own block is read, never answered by raising this past GitHub's 6 h job ceiling.",
@@ -703,6 +710,16 @@
           "minimum": 1,
           "title": "Shards",
           "type": "integer"
+        },
+        "tenants": {
+          "default": [],
+          "description": "Which tenants the council hosts, in the order it runs them. The one place a tenant is registered: the council resolves each slug to the module that declares it, and a slug nothing declares is refused by name. Empty is a legal night - every step still runs and the venue judges nothing - because a list in source would make adding a judge a code change and would put a roster of who may exist back inside the venue.",
+          "items": {
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "type": "string"
+          },
+          "title": "Tenants",
+          "type": "array"
         }
       },
       "title": "CouncilConfig",
@@ -1974,7 +1991,7 @@
         },
         "pair_budget": {
           "default": 200,
-          "description": "How many pairs a day may be judged. 200 pairs over the council's committed four shards is 50 pairs a shard, which at the worst pair measured - 110.98 s on 2026-09-18 - is 1 hour 32 minutes of model time a shard, and 1 hour 19 minutes at the measured average of 94.53 s (docs/reference/benchmarks/what-a-judge-pair-costs.md). Raising it is a job-timeout question before it is a quality one, and a validator refuses a value that does not fit council.shard_timeout_minutes.",
+          "description": "How many pairs a day may be judged. 200 pairs over the council's committed four shards is 50 pairs a shard, which at the worst pair measured - 110.98 s on 2026-09-18 - is 1 hour 32 minutes of model time a shard, and 1 hour 19 minutes at the measured average of 94.53 s (docs/reference/benchmarks/what-a-judge-pair-costs.md). Raising it is a job-timeout question before it is a quality one, and this judge refuses a value that does not fit the window the council leaves a unit to work in - checked when the council resolves this judge, not when config is read, because the per-pair cost is this judge's own measurement.",
           "minimum": 1,
           "title": "Pair Budget",
           "type": "integer"
@@ -2557,6 +2574,16 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "The judging-budget fit check left this contract for the tenant that owns it.",
+      "version": "2026-09-21T12:40",
+      "why": "Reading config pulled one judge's measured pair cost into every reader."
+    },
+    {
+      "change": "council.tenants and council.shard_preamble_minutes, additive.",
+      "version": "2026-09-21T11:30",
+      "why": "The venue registers a tenant from config and knows what a job spends before it."
+    },
+    {
       "change": "console.context_high_percentile and console.context_cut_off_reason, additive.",
       "version": "2026-09-21T05:00",
       "why": "The context panel draws two ends a run and names what a cut-off looks like."
@@ -2565,16 +2592,6 @@
       "change": "assemble.same_story.adaptive_dedup_threshold.flush_every_pairs, default 1.",
       "version": "2026-09-21T04:30",
       "why": "A shard that stops early kept nothing, and pairs are the only unit it has."
-    },
-    {
-      "change": "observability.host_fingerprint_bandwidth_cache_multiple, additive, default 2.",
-      "version": "2026-09-21T01:00",
-      "why": "The probe and the console grade a row by it, so it cannot be two numbers."
-    },
-    {
-      "change": "council block added; the judge's own block is now optional.",
-      "version": "2026-09-21",
-      "why": "The venue's runner numbers cannot sit inside a tenant that need not exist."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2658,7 +2675,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-21T05:00",
+      "default": "2026-09-21T12:40",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2669,5 +2686,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-21T05:00"
+  "version": "2026-09-21T12:40"
 }

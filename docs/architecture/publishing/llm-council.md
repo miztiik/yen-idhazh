@@ -27,37 +27,178 @@ comfortably.** That is the argument for the split rather than against it: sizing
 the shape off the median means the first busy day crosses the ceiling and writes
 nothing at all.
 
-## Legs judge, and only the fold writes
+## Three verbs, and all three are the council's own
 
-Four legs run in parallel, one `llama-server` each, and **none of them commits
-anything**. A `fold` job downloads every leg's verdicts and makes the writes, so
-two processes never share a path.
+The workflow runs `council-prepare`, `council-shard` and `council-settle`, and
+nothing else. Each one resolves the slugs in `council.tenants`, calls the
+matching member of the tenancy protocol on every tenant it got, and files what
+comes back. **Until 2026-09-21 it ran one judge's four commands instead**, and
+the command router imported that judge's four stage modules at the top of the
+file - so deleting the judge broke every council verb, and the venue's whole
+runtime was one tenant's vocabulary.
 
-`fail-fast` is off. **A leg that dies costs its own pairs and nothing else** -
-the fold runs anyway and keeps every row the surviving legs produced. What it
-will not do is fold a day into the record with a leg missing, because the record
-counts what was looked at.
+| The verb | What it does | When |
+| --- | --- | --- |
+| `council-prepare` | every tenant picks its own work | once a date, in the planning job, before any unit runs |
+| `council-shard` | one tenant runs one unit of that work, under the venue's clock | one job a cell of the matrix |
+| `council-settle` | every tenant counts, fits, or does nothing | once a date, in the collecting job, after every unit has reported |
+
+**Removing the imports was not the whole cut.** The four verb names also sat in
+the router's own tuple of what it accepts, in a flag's help text, and in four
+dispatch branches. A check that parses import statements goes green over a verb
+name spelled as a string, so the strings went with the imports. Measured on this
+repository: importing the router used to pull twelve of the judge's modules into
+memory and now pulls two, and both of those arrive through the digest
+pipeline's own use of the applied merge line rather than through anything the
+council runs.
+
+## The tenant list, and why it is empty
+
+`council.tenants` is an ordered list of slugs in `config/idhazh.json`. It is the
+one place a judge is registered, and it ships **empty**.
+
+A slug resolves to the module that declares it: the council reads the directory
+listing of its own package, finds each subpackage that has a `tenant` module in
+it, and imports one until a declared slug matches. **Every one of those imports
+happens inside a function**, so no council module carries a judge in its import
+closure - and a package with no `tenant` module is never imported at all, so one
+tenant's broken import cannot hide another tenant's slug.
+
+Three things follow, and each is the reason a simpler design was refused.
+
+- **No list in Python.** A map from slug to module would make adding a judge a
+  code change, and it would be a roster of who may exist - which is what the
+  central judge identifier was deleted for.
+- **A slug nothing declares is refused by name.** Skipping it would run every
+  step, report nothing wrong, and judge less than the config asked for.
+- **Removing a judge is a config edit and a directory delete.** Never a router
+  edit.
+
+### Resolving is also when a tenant may refuse the night
+
+A tenant module may declare
+`refuse_a_night_this_tenant_cannot_finish`, and the resolver calls it on the
+tenant that answered to the slug - on that one and on no other. A tenant nobody
+registered cannot stop a night it is not in, even though the search has to import
+it to read its slug.
+
+**The planning job resolves every registered slug before it can build its
+matrix**, so a refusal lands there: before the matrix exists, before any job is
+dispatched, and before a runner has restored a model's weights. "Before a model
+call" would be a weaker claim - it is also true of a point after a cache restore
+and a server start, which is most of what a wasted job costs.
+
+**It is not an eighth member of the tenancy protocol.** The protocol is what a
+tenant presents while it runs; this is asked before it does. A tenant whose work
+has no cost to weigh against the venue's clock declares nothing and is asked
+nothing.
+
+The content-similarity judge is what declares one today, in
+[../../../backend/idhazh/similarity/budget.py](../../../backend/idhazh/similarity/budget.py):
+its draw of pairs, at its own measured per-pair cost, against the window below.
+The number is that judge's reading, so the check is that judge's too. Until
+2026-09-21 it was a validator on `AppConfig`, which put one judge's measurement
+in the import closure of every module that reads config - the council's own
+included. Owner ruling, 2026-09-21.
+
+## The matrix is a flat list of cells
+
+The planning job asks
+[../../../backend/utilities/council_matrix.py](../../../backend/utilities/council_matrix.py)
+what the night fans out to, and publishes the answer as job outputs. A cell
+carries four values - the tenant, the date, the shard, and **that tenant's own
+width**.
+
+**Not a cross product of three vectors.** A per-tenant width is not a third
+axis: a product would hand every tenant the widest tenant's width, and a tenant
+that runs no model would pay four weights cache restores for work that uses none
+of them. So the width travels on the cell that uses it.
+
+**The wave is the cell count under the platform's own twenty-job ceiling, never
+the shard width.** Bound to the width, two tenants over two dates would be
+sixteen cells in four waves - about 5.4 hours of wall clock for 81 minutes of
+work, finishing after the next digest cron and across the scheduled prune. Bound
+to the cell count it is one wave.
+
+**An empty matrix reds the run rather than skipping quietly**, so the judging
+job carries `if: needs.draw.outputs.matrix != '[]'`. No workflow here had ever
+built a zero-width matrix, so there was no pattern to copy: Actions refuses to
+evaluate a strategy with no values, and without the guard the legal night above
+would fail on an error nobody could read. The collecting job keeps `always()`.
+
+## Units judge, and only the collecting job writes
+
+Units run in parallel, one `llama-server` each, and **none of them commits
+anything**. A `fold` job downloads every unit's output and makes one commit call,
+over every path the night's tenants named. Two processes never share a path.
+
+`fail-fast` is off. **A unit that dies costs its own work and nothing else** -
+the settle runs anyway and keeps everything the surviving units produced.
+
+**The venue spells no store path.** A list of one tenant's paths is a list that
+never commits a second tenant's output, so the paths come back from
+`committed_paths` on the protocol and reach the commit step as one job output. A
+night with no tenant registered stages nothing, and the step is skipped: `git
+add` with no path is an error rather than a no-op.
+
+There is no regeneration command on that call. The council is the only writer of
+a tenant's own store and `concurrency` runs one council at a time, so a lost
+race is a race against a digest run - which writes none of these paths. Replaying
+what this run wrote onto the new base is the whole of what is needed.
 
 ## The clock a unit stops on, and the upload that runs either way
 
-**The venue owns both clocks, because the venue owns the runner.** The job
+**The venue owns every clock here, because the venue owns the runner.** The job
 timeout, the checkout, the install and the weights restore are all the council's
-and no tenant can see any of them, so `council.shard_timeout_minutes` and
-`council.shard_wrap_up_minutes` sit in the council's own config block. The
-second is the reserve: how much of the bound a unit keeps back for writing its
-records and getting its artifact away.
+and no tenant can see any of them, so `council.shard_timeout_minutes`,
+`council.shard_preamble_minutes` and `council.shard_wrap_up_minutes` sit in the
+council's own config block. The first is how long GitHub lets a unit hold a
+runner. The second is what the venue has already spent before the judging
+process starts. The third is the reserve: how much a unit keeps back for writing
+its records and getting its artifact away.
 
-**What crosses to a tenant is one instant, not two knobs.**
+**What crosses to a tenant is one instant, not three knobs.**
 [../../../backend/idhazh/council/deadline.py](../../../backend/idhazh/council/deadline.py)
-subtracts the reserve from the bound, adds it to the instant the unit's own
-process began, and hands the result over. A tenant handed an instant needs no
-config block and no config reader to stop on time, which is how a judge with
-neither can still be stopped - and how the clock is gated against a four-line
-fake instead of a model.
+subtracts the preamble and the reserve from the bound, adds what is left to the
+instant the unit's own process began, and hands the result over. A tenant handed
+an instant needs no config block and no config reader to stop on time, which is
+how a judge with neither can still be stopped - and how the clock is gated
+against a four-line fake instead of a model.
 
-The zero is the process rather than the job, because only the process knows when
-it began: the job's clock started before a checkout, an install and a weights
-restore that this reading is not about.
+At the committed numbers the arithmetic is 200 minus 13 minus 12, so a unit has
+175 minutes to work in. The judging process starts about 13 minutes into the
+job's own 200, so its deadline lands at about minute 188 - twelve minutes before
+GitHub would kill it, which is exactly the reserve.
+
+**175 minutes is also what a tenant's own fit check weighs its draw against.**
+It reads the window from the same function the clock does rather than from a
+second copy of the subtraction. Until 2026-09-21 the check compared against the
+whole 200, so a draw that fit the bound and not the work was accepted at config
+load and cut off at runtime - the 25 minutes between the two is the gap that
+admitted it.
+
+### Design rationale: the preamble is a clock, not a bigger bound
+
+Until 2026-09-21 the window was the bound less the reserve, and the zero was the
+process. Those two do not meet: the platform starts counting at provisioning and
+the process starts after a checkout, a weights cache restore, a checksum verify
+and a health poll. So the in-process deadline landed **after** GitHub's own kill
+whenever the model was slow to load, and the protection was inert on the one
+night it was for.
+
+The fix is a third clock rather than a bigger bound. Measured worst case for
+those four steps is about 12.1 minutes - provisioning 0.41, cache restore 0.63
+to 1.58, checksum verify 0.12, and a health poll bounded at 10 - so the default
+is 13, one minute above it.
+
+**`council.shard_timeout_minutes` stays at 200 and no council number is derived
+from a judge's throughput.** How long the venue lets one unit occupy a runner is
+the council's policy, set against the platform's 6 h job ceiling and the nightly
+schedule. A bound derived from a measured per-pair cost would be the coupling
+this page exists to refuse, one layer down: a second judge with different
+economics would move a number that is not its to move. A tenant that cannot fit
+inside the window is refused by its own fit check, raised when the planning job
+resolves it. Owner ruling, 2026-09-21.
 
 **Nothing in the council checks the instant it handed over.** Only the tenant
 knows what a unit of work is and where stopping leaves a readable result, so the
@@ -168,6 +309,66 @@ them unreachable.
 
 The tenant's own slug is a directory level inside each upload, so two tenants'
 first unit land beside each other rather than on top of each other.
+
+## The venue keeps its own record of every unit it ran
+
+The council starts a clock, calls the tenant, and files one row of its own on
+the way out - into
+[../../../backend/idhazh/ledger.py](../../../backend/idhazh/ledger.py)'s
+`state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv`, through the same
+shipping path a tenant's own row travels on. The row says which unit ran, for
+which tenant, under which name, how it ended, how long it took, and what the
+work inside it cost the model. It says nothing that needs a name for the unit of
+work, so it reads the same whether the tenant made four hundred model calls or
+none.
+
+**Five units a tenant, not four.** Picking the work and counting what came back
+are units too, and both can die. They file at reserved numbers below zero, `-1`
+and `-2`, carrying the run's real width - so a night whose count died leaves a
+row saying so instead of leaving the venue blind.
+
+**The cost cells come off what the tenant handed back, and out of nothing else.**
+The council opens no store of a tenant's and reads no field of a tenant's own
+contract. A tenant with no model hands back empty cells, and empty is not zero:
+zero would read as a model that answered nothing, which is a different fact and
+only one of the two is a defect.
+
+**A unit that died files nothing, and that is the record.** The outcome
+vocabulary is three words - `completed`, `stopped_on_deadline`, `nothing_to_do` -
+and none of them says "this died". A unit the platform killed could not write
+one anyway. What says it is the missing row read against the `shards` cell its
+siblings carry: three rows that each say the work was split four ways is a night
+with one unit missing, and an operator needs nothing else to see it. A unit that
+ran out of its own clock is the opposite case and does file a row, because it
+stopped itself and had something to report.
+
+**The store is seeded with a `.gitkeep` and never with a header-only day file.**
+A header with no rows under it is a real day to the partition walker, so one
+would put a permanent day in the prune target and the day inventory that no
+council run ever had. A night with nothing to record therefore writes no file at
+all, and the commit step still finds its directory.
+
+### Design rationale: the venue files the row, not the tenant
+
+An earlier draft had the judge's own stages write this row. That made the
+venue's record of a unit depend on a tenant's diligence: a judge that forgot the
+line, or died before reaching it, left nothing behind at the one moment the
+record mattered. The council owns the invocation, so it owns the outcome - the
+row is filed in a `finally`, and it survives anything that goes wrong after the
+tenant handed its result back. Owner ruling, 2026-09-21.
+
+**`judge_id` is in the settlement key**, beside the date, the run and the unit
+number. One council run has one run id, so on a night hosting two tenants,
+tenant A's first unit and tenant B's first unit carry the same three cells - and
+the pass that drops repeated rows after a merge would delete one of them. The
+slug is what tells them apart. It is recorded rather than checked: the council
+writes down who ran and never declares who may exist.
+
+**No machine is recorded per unit.** The runner pool is already characterised by
+the digest pipeline, and the bandwidth probe that would fingerprint it wants
+1.9 GiB on a job whose two processes already hold up to 9.02 GiB of anonymous
+memory in 16 GB. The council's data is discardable, so the reading is not worth
+the only memory risk in the design. Carmack, 2026-09-21.
 
 ## Design rationale: the council's own path, not the segment store
 

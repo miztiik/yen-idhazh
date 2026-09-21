@@ -54,7 +54,7 @@ from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.qualification import (
     CandidateIdentity,
 )
-from idhazh.council.deadline import compute_shard_deadline
+from idhazh.council import session as council_session
 from idhazh.embed import Embedder
 from idhazh.evals import sampling
 from idhazh.evals.hhem import (
@@ -74,10 +74,6 @@ from idhazh.stages import (
     compact,
     decide,
     harvest,
-    judge_draw,
-    judge_fit,
-    judge_fold,
-    judge_shard,
     prune_stamp,
     prune_state,
     qualify,
@@ -149,10 +145,9 @@ STAGES: Final[tuple[str, ...]] = (
     "backfill-vectors",
     "site-weight",
     "validate-days",
-    "judge-draw",
-    "judge-fit",
-    "judge-fold",
-    "judge-shard",
+    "council-prepare",
+    "council-settle",
+    "council-shard",
     # Listed so `--help` names every verb, and never parsed: `main` hands the
     # line to the telemetry package before this parser is built.
     telemetry_cli.VERB,
@@ -453,13 +448,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="The training window `harvest` rolls. Never the reference set.",
     )
     parser.add_argument(
-        "--out-dir",
-        type=Path,
-        default=common.JUDGE_ROOT,
+        "--tenant",
+        default=None,
         help=(
-            "Where `judge-draw` leaves the day's draw, one directory per date. It is "
-            "uploaded as an artifact and never committed: the legs rewrite the rows "
-            "they judge, and a committed rewrite would stack two versions of one row."
+            "Which registered tenant `council-shard` runs a shard of, by the slug "
+            "`council.tenants` names. One cell of the matrix is one tenant: two sharing "
+            "a job would each be handed the whole span the venue meant for one of them."
         ),
     )
     parser.add_argument(
@@ -558,39 +552,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         state_dir = common.STATE_ROOT if args.state_root is None else args.state_root
         return validate_days.stage_validate_days(args.digest_root, args.day, state_dir=state_dir)
 
-    if args.stage == "judge-draw":
-        # Above the fetcher because it reads two committed files and scores what
-        # they already carry. It calls no model either: the draw says which pairs
-        # are worth a model's time, and a later step is what spends it.
-        judge_draw.stage_judge_draw(
-            args.date or _today(),
+    if args.stage == "council-prepare":
+        # Above the fetcher because picking the work is the council resolving its
+        # own config and handing a date to whatever answers to a slug. Starting a
+        # fetcher here would read every host's robots.txt for nothing.
+        council_session.prepare(
+            settings.app.council,
+            date=args.date or _today(),
             run_id=_council_run(parser, args.stage, args.run_id),
-            settings=settings,
-            digest_root=args.digest_root,
-            out_dir=args.out_dir,
         )
         return 0
 
-    if args.stage == "judge-fold":
-        # Beside its siblings: it reads the legs' files and one committed record,
-        # calls no model, and opens no socket.
-        judge_fold.stage_judge_fold(
-            args.date or _today(),
+    if args.stage == "council-settle":
+        # Beside its siblings: it runs after every shard has reported and calls
+        # no model of its own. It is also the one council verb that writes under
+        # `state/`, so it is the one that is handed the root.
+        council_session.settle(
+            settings.app.council,
+            date=args.date or _today(),
             run_id=_council_run(parser, args.stage, args.run_id),
-            settings=settings,
-            state_dir=args.state_root,
-        )
-        return 0
-
-    if args.stage == "judge-fit":
-        # After the fold in the same job, and beside it here: the fold writes the
-        # record this reads. Nothing reads the line it writes until row 9.
-        judge_fit.stage_judge_fit(
-            args.date or _today(),
-            run_id=_council_run(parser, args.stage, args.run_id),
-            settings=settings,
-            state_dir=args.state_root,
-            digest_root=args.digest_root,
+            state_dir=common.STATE_ROOT if args.state_root is None else args.state_root,
         )
         return 0
 
@@ -598,23 +579,27 @@ def main(argv: Sequence[str] | None = None) -> int:
         # Above the fetcher for the same reason: it rewrites one committed field.
         return prune_stamp.stage_prune_stamp(corpus_dir=args.corpus_dir, date=args.date or _today())
 
-    if args.stage == "judge-shard":
-        # Above the fetcher because a judging leg reads the committed days and
-        # posts to loopback. Starting a fetcher here would read every host's
-        # robots.txt to answer a question about two summaries already on disk.
-        judged_on = args.date or _today()
-        judge_shard.stage_judge_shard(
-            judged_on,
+    if args.stage == "council-shard":
+        # Above the fetcher because a hosted unit reads committed files and posts
+        # to loopback. Starting a fetcher here would read every host's robots.txt
+        # to answer a question about files already on disk.
+        if args.tenant is None:
+            parser.error(
+                "council-shard needs --tenant: a cell of the matrix names which "
+                "registered tenant it is a shard of, and a shard with no tenant would "
+                "spend a whole runner deciding it had nothing to do"
+            )
+        council_session.run_shard(
+            settings.app.council,
+            slug=args.tenant,
+            date=args.date or _today(),
+            run_id=_council_run(parser, args.stage, args.run_id),
             shard=args.shard,
             shards=args.shards,
-            settings=settings,
-            digest_root=common.PUBLIC_ROOT,
-            run_dir=common.JUDGE_ROOT / judged_on,
             # Read here rather than at the top of this file: the checkout, the
-            # install and the weights restore ran before this process and are not
-            # what the judging clock is about.
-            deadline=compute_shard_deadline(settings.app.council, started=time.monotonic()),
-            base_url=args.base_url,
+            # install and the weights restore ran before this process, and the
+            # council's own preamble knob is what accounts for them.
+            started=time.monotonic(),
         )
         return 0
 

@@ -30,7 +30,9 @@ import {
 	type ProcessorLostRun,
 	type ProcessorLostSpan
 } from '$lib/console/machine/processor-lost';
+import { diskReads, type DiskReads } from '$lib/console/machine/disk-reads';
 import { costChart, costOverDays, DEFAULT_COST_SHAPE } from '$lib/charts/cost';
+import { memoryHeld } from '$lib/console/machine/memory-held';
 import { splitByMachine } from '$lib/charts/machine-split';
 import { machineCards, type MachineCards } from '$lib/charts/machine-cards';
 import { machineKeys, machineRamp } from '$lib/charts/machine-colour';
@@ -100,6 +102,11 @@ export interface MachineWindow {
 	 * and counts, never the rows: a day is one small object however many articles
 	 * it ran. */
 	processorLost: ProcessorLostSpan;
+	/** Whether the machine took the model's memory back over this span: one
+	 * reading a day, the disk copies beside it, and what the runs recorded about
+	 * holding that memory down. One tile a day is small enough to carry per
+	 * preset, and the fold cannot be redone in a browser that holds no ledger. */
+	diskReads: DiskReads;
 }
 
 /** Everything a run-by-run chart draws, carried once rather than once a span.
@@ -129,12 +136,14 @@ export interface RunSeries {
 const DRAWN_PANELS = [
 	'shard-board',
 	'memory-board',
+	'memory-held',
 	'reading-against-writing',
 	'article-cost',
 	'prompt-cache',
 	'context-headroom',
 	'two-clocks',
 	'processor-lost',
+	'disk-reads',
 	'machine-cards',
 	'platform-mix',
 	'tail-trend',
@@ -258,6 +267,14 @@ export async function load() {
 		// Day grain here because a day tile is a fact about a span. The run grain is
 		// a snapshot and is worked out once, outside every span.
 		const lostToTenants = processorLostOverDays(healthRows, lostThresholds);
+		// The one instrument that can see the machine taking the model's memory
+		// back: those pages are file pages, so they leave a memory reading and
+		// touch no swap counter on the way out. Both marks come off `console`
+		// rather than being written here (Guardrail #6).
+		const disk = diskReads(healthRows, {
+			marked: console_.model_disk_reads_marked,
+			named: console_.model_disk_reads_named
+		});
 
 		return {
 			days,
@@ -296,6 +313,7 @@ export async function load() {
 			cacheDays: cacheByDay(runs),
 			articleCost: perArticle,
 			processorLost: lostToTenants,
+			diskReads: disk,
 			// Counted once a preset here rather than in a browser, which holds no
 			// ledger to count. At most eight kinds a span, so five presets is forty
 			// small objects.
@@ -375,6 +393,11 @@ export async function load() {
 		newest === null ? null : { runId: newest.runId, date: newest.date },
 		lostThresholds
 	);
+	// One bar a day, over every day the widest preset reaches, so the panel can
+	// take the open span off the control without this deriving a second time.
+	// Split from `memoryBoard` on purpose: that panel asks how near one run came
+	// to the ceiling, and this one asks what the whole machine was holding.
+	const held = memoryHeld(health);
 	// One group a machine, never one figure over all of them. Measured 2026-09-17
 	// over the committed counters ledger, 86 of the 90 runs that name a processor
 	// drew more than one kind, so a pooled rate was a number about neither.
@@ -465,6 +488,7 @@ export async function load() {
 		memory,
 		processorLostByShard: lostByShard,
 		processorLostThresholds: lostThresholds,
+		memoryHeld: held,
 		newestRunId: newest?.runId ?? null,
 		split,
 		machines,

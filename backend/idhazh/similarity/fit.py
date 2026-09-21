@@ -1,8 +1,9 @@
 """Where does the merge line go, given the record and the line that is applied now?
 
 Pure arithmetic over a fixed record and a handful of written rows. Nothing here
-opens a file, calls a model or looks at a clock - `idhazh.stages.judge_fit` does
-the reading and the writing, and this module answers only the placement question.
+opens a file, calls a model or looks at a clock - `idhazh.stages.set_merge_line`
+does the reading and the writing, and this module answers only the placement
+question.
 
 Five steps, in this order and never another: walk the record to a proposal, ask
 whether the proposal is far enough from today's line to be a move at all, damp

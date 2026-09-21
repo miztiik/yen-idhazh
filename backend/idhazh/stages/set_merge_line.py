@@ -1,11 +1,13 @@
-"""The record and one day in, one fitted row out. Nothing reads the number yet.
+"""Where the merge line should sit today, from the record and one published day.
 
-One stage, one module. `idhazh.cli` chooses which stage runs and holds no stage
-body of its own (CLAUDE.md section 1a, "A router is the sharpest case").
+One stage, one module. The router does not name it: the council reaches it
+through the tenant that owns this judge (CLAUDE.md section 1a, "A router is the
+sharpest case").
 
-It calls no model and opens no socket. The five steps are in
-`idhazh.similarity.fit`; this module reads the record, the day and the written
-rows, decides whether the gates let a fit run, and writes the row either way.
+It calls no model and opens no socket. Nothing reads the number it writes yet.
+The five steps are in `idhazh.similarity.fit`; this module reads the record, the
+day and the written rows, decides whether the gates let a fit run, and writes
+the row either way.
 
 **A row goes down on a held day too.** A line that moves itself has to leave a
 record on the days it stayed put, or a reader cannot tell a day the evidence
@@ -68,7 +70,7 @@ def _ruler(
     )
 
 
-def stage_judge_fit(
+def stage_set_merge_line(
     date: str,
     *,
     run_id: str,
@@ -101,7 +103,7 @@ def stage_judge_fit(
 
     day = _load_day(assemble.day_dir(digest_root, date) / "digest.json")
     if day is None:
-        LOG.warning("judge fit found no published day to fit for date=%s", date)
+        LOG.warning("set-merge-line found no published day to fit for date=%s", date)
         return None
 
     record_path = ledger.score_distribution_path(state)
@@ -243,7 +245,7 @@ def stage_judge_fit(
     )
     ledger.append_fitted_thresholds(state, date, [row])
     LOG.info(
-        "judge fit date=%s run=%s previous=%s proposed=%s applied=%s clamp=%s held=%s "
+        "set-merge-line date=%s run=%s previous=%s proposed=%s applied=%s clamp=%s held=%s "
         "settled=%s shift=%s typical=%s",
         row.date,
         row.run_id,

@@ -41,9 +41,11 @@
 	import WindowControl from '$lib/components/WindowControl.svelte';
 	import ContextCostPanel from '$lib/console/machine/ContextCostPanel.svelte';
 	import CounterfactualCostPanel from '$lib/console/machine/CounterfactualCostPanel.svelte';
+	import DiskReadsPanel from '$lib/console/machine/DiskReadsPanel.svelte';
 	import MachineCardsPanel from '$lib/console/machine/MachineCardsPanel.svelte';
 	import MachineSplitPanel from '$lib/console/machine/MachineSplitPanel.svelte';
 	import MemoryBoardPanel from '$lib/console/machine/MemoryBoardPanel.svelte';
+	import MemoryHeldPanel from '$lib/console/machine/MemoryHeldPanel.svelte';
 	import ArticleCostPanel from '$lib/console/machine/ArticleCostPanel.svelte';
 	import PlatformMixPanel from '$lib/console/machine/PlatformMixPanel.svelte';
 	import ProcessorLostPanel from '$lib/console/machine/ProcessorLostPanel.svelte';
@@ -215,6 +217,13 @@
 				end={view.end}
 				windowDays={view.days}
 			/>
+		{:else if id === 'memory-held'}
+			<MemoryHeldPanel
+				record={data.memoryHeld}
+				start={view.start}
+				end={view.end}
+				days={view.days}
+			/>
 		{:else if id === 'reading-against-writing'}
 			<MachineSplitPanel split={data.split} />	{:else if id === 'article-cost'}
 		<ArticleCostPanel
@@ -250,15 +259,17 @@
 				tolerancePct={data.clocksTolerancePct}
 				chart={data.chart}
 			/>
-		{:else if id === 'processor-lost'}
-			<ProcessorLostPanel
-				span={view.processorLost}
-				run={data.processorLostByShard}
-				days={view.days}
-				{windowDays}
-				markedAt={data.processorLostThresholds.marked}
-				namedAt={data.processorLostThresholds.named}
-			/>
+			{:else if id === 'processor-lost'}
+				<ProcessorLostPanel
+					span={view.processorLost}
+					run={data.processorLostByShard}
+					days={view.days}
+					{windowDays}
+					markedAt={data.processorLostThresholds.marked}
+					namedAt={data.processorLostThresholds.named}
+				/>
+			{:else if id === 'disk-reads'}
+				<DiskReadsPanel reads={view.diskReads} days={view.days} {windowDays} />
 		{:else if id === 'machine-cards'}
 			<MachineCardsPanel machines={data.machines} />
 		{:else if id === 'platform-mix'}

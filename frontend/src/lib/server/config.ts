@@ -558,6 +558,7 @@ const PANEL_GROUP_DEFAULTS: PanelGroups = {
 			panels: [
 				'two-clocks',
 				'processor-lost',
+				'disk-reads',
 				'machine-cards',
 				'reading-against-writing',
 				'platform-mix'
@@ -571,7 +572,7 @@ const PANEL_GROUP_DEFAULTS: PanelGroups = {
 		{
 			id: 'how-close-to-the-limits',
 			title: 'How close we are to the limits',
-			panels: ['memory-board', 'context-headroom']
+			panels: ['memory-board', 'memory-held', 'context-headroom']
 		},
 		{
 			id: 'what-the-model-spends',

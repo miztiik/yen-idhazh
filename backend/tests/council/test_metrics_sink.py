@@ -255,15 +255,17 @@ def test_a_truncated_upload_fails_before_it_reaches_the_store(tmp_path: Path) ->
 def test_the_upload_name_matches_what_the_collecting_job_downloads() -> None:
     """An artifact nobody downloads is a reading the runner deletes.
 
-    Both sides are read out of the workflow, so a rename of either one fails here
-    rather than on a night nobody is watching.
+    Every upload a unit makes, not the one named for a directory: a unit that
+    gains a second artifact gains it here too, and an upload nobody collects is
+    the whole failure this asks about. Both sides are read out of the workflow,
+    so a rename of either one fails here rather than on a night nobody is
+    watching.
     """
     workflow = yaml.safe_load(read_text(COUNCIL_WORKFLOW))
     uploaded = [
         str(step["with"]["name"])
         for step in workflow["jobs"]["judge"]["steps"]
         if str(step.get("uses", "")).startswith("actions/upload-artifact")
-        and METRICS_DIRNAME in str(step["with"]["path"])
     ]
     patterns = [
         str(step["with"]["pattern"])
@@ -272,11 +274,12 @@ def test_the_upload_name_matches_what_the_collecting_job_downloads() -> None:
         and "pattern" in step["with"]
     ]
 
-    assert len(uploaded) == 1, "one metrics upload a unit, or this test names the wrong step"
-    assert any(fnmatch.fnmatch(uploaded[0], pattern) for pattern in patterns), (
-        f"{uploaded[0]} is uploaded and no download pattern in the collecting job "
-        f"({', '.join(patterns)}) matches it, so the rows are deleted with the runner."
-    )
+    assert uploaded, "a unit uploads nothing, so this test proves nothing"
+    for name in uploaded:
+        assert any(fnmatch.fnmatch(name, pattern) for pattern in patterns), (
+            f"{name} is uploaded and no download pattern in the collecting job "
+            f"({', '.join(patterns)}) matches it, so the rows are deleted with the runner."
+        )
 
 
 def _read_back(path: Path) -> list[PaperMetrics]:

@@ -318,6 +318,7 @@ test('THE ORACLE: the Machine route obeys the same control over its own surfaces
 		'machine-cache',
 		'machine-context',
 		'machine-cost',
+		'machine-disk-reads',
 		'machine-fleet',
 		'machine-latency',
 		'machine-processor-lost',

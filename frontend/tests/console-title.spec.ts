@@ -42,13 +42,13 @@ import { expect, test, type Page } from '@playwright/test';
  * `/console/judgement/` draws two on 2026-09-17: the `Stories the day merged`
  * panel, and the heading over the absence that names what the model still does
  * not record. `/console/voices/` drew one until 2026-09-14, when four panels
- * moved onto it. `/console/machine/` draws seventeen since 2026-09-21 - four
- * group headings and the thirteen panel titles under them.
+ * moved onto it. `/console/machine/` draws nineteen since 2026-09-21 - four
+ * group headings and the fifteen panel titles under them.
  */
 const ROUTES: Record<string, number> = {
 	'/console/': 3,
 	'/console/model/': 3,
-	'/console/machine/': 17,
+	'/console/machine/': 19,
 	'/console/voices/': 3,
 	'/console/judgement/': 2
 };
