@@ -163,6 +163,17 @@ SCORE_DISTRIBUTION_FILENAME: Final = "score-distribution.json"
 #: the checkout does not hold aborts the whole step.
 SCORE_ARCHIVE_DIRNAME: Final = "archive"
 
+#: The council's own prefix, and the one store under it that records how a night
+#: went. Nested for the reason `state/story-similarity/` is: everything the venue
+#: writes about itself hangs off one word, so a commit step stages one prefix and
+#: a reader sees the whole footprint in one place.
+#:
+#: Two directory levels under `state/` and no more. The day inventory globs one
+#: level and two, so a third would be invisible to it and the miss would be
+#: silent.
+COUNCIL_DIRNAME: Final = "llm-council"
+SHARD_OUTCOMES_DIRNAME: Final = "shard-outcomes"
+
 FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
 
 #: Where a writer puts its rows before a compaction folds them into a head. Not
@@ -679,6 +690,27 @@ def score_distribution_archive_path(state_dir: Path, stamp: str) -> Path:
     """
     root = state_dir / STORY_SIMILARITY_DIRNAME / SCORE_ARCHIVE_DIRNAME
     return root / f"{stamp}.json"
+
+
+def council_shard_outcomes_relpath(date: str) -> str:
+    """`state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv` - POSIX, for a log line."""
+    stem = f"{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+    return f"{STATE_DIRNAME}/{COUNCIL_DIRNAME}/{SHARD_OUTCOMES_DIRNAME}/{stem}"
+
+
+def council_shard_outcomes_path(state_dir: Path, date: str) -> Path:
+    """The day file this date's council run records its own units of work in.
+
+    A day rather than a month, for the two things the grain buys every ledger
+    beside it: two runs collide on a file only when they are the same day, and a
+    night taken back off the record is one `rm`. The council runs once a night,
+    so a day file holds one night of units and nothing else.
+
+    The date is the digest date the run judged, which is what a reader asking
+    "how did the night of the 20th go" means by the question.
+    """
+    root = state_dir / COUNCIL_DIRNAME / SHARD_OUTCOMES_DIRNAME
+    return root / date[:4] / date[5:7] / f"{date[8:10]}.csv"
 
 
 def shards_in_window(today: str, within_days: int) -> list[str]:
