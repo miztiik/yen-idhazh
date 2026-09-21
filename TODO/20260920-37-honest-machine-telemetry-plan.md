@@ -83,18 +83,18 @@ Everything else: dispatch the personas in DEBATE per docs/how-to/execute-a-plan.
 | 4 | The sampler stops calling theft our work | 2, 3 | B | DONE | p37r4 | - | worker |
 | 9 | Panels grouped by the decision they serve | 7 | B | DONE | p37r9 | #981 | worker |
 | 5 | `ItemHealthRow` gains three columns and loses one | 4 | C | DONE | p37r5 | #982 | worker |
-| 10 | Did another tenant take the processor | 5, 8, 9 | C | IN REVIEW | p37r10 | #1010 | worker |
-| 11 | Is the kernel taking the model's weights back | 5, 8, 9 | C | IN REVIEW | p37r11 | #1008 | worker |
-| 12 | What one article costs the machine | 9 | C | IN REVIEW | p37r12 | #1001 | - |
-| 13 | Two panels leave the page | 9 | C | PENDING | - | - | - |
-| 14 | The memory board drops the disputed mark | 2, 9 | C | IN REVIEW | p37r14b | #998 | worker |
+| 10 | Did another tenant take the processor | 5, 8, 9 | C | DONE | p37r10 | #1010 | worker |
+| 11 | Is the kernel taking the model's weights back | 5, 8, 9 | C | DONE | p37r11 | #1008 | worker |
+| 12 | What one article costs the machine | 9 | C | DONE | p37r12 | #1001 | worker |
+| 13 | Two panels leave the page | 9 | C | DONE | p37r13 | #986 | worker |
+| 14 | The memory board drops the disputed mark | 2, 9 | C | DONE | p37r14b | #998 | worker |
 | 15 | The shard board gains the clocks nobody reads | 9 | C | DONE | p37r15 | #987 | worker |
 | 16 | Machine cards gain uptime, clock speed, cache size and copy speed | 6, 9 | C | DONE | p37r16 | #988 | worker |
-| 19 | Which prompts get re-read, and how fast | 9 | C | IN REVIEW | p37r19 | #1002 | worker |
-| 20 | What is holding the runner's memory | 5, 9 | C | IN REVIEW | p37r20 | #1003 | worker |
-| 21 | What the context window actually costs | 9 | C | IN REVIEW | p37r21 | #991 | worker |
-| 22 | Dotted rules where a setting moved | 9, 21 | C | IN REVIEW | p37r22 | #1006 | worker |
-| 17 | Every published column names its reader | 5, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22 | D | PENDING | - | - | - |
+| 19 | Which prompts get re-read, and how fast | 9 | C | DONE | p37r19 | #1002 | worker |
+| 20 | What is holding the runner's memory | 5, 9 | C | DONE | p37r20 | #1003 | worker |
+| 21 | What the context window actually costs | 9 | C | DONE | p37r21 | #991 | worker |
+| 22 | Dotted rules where a setting moved | 9, 21 | C | DONE | p37r22 | #1006 | worker |
+| 17 | Every published column names its reader | 5, 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22 | D | IN REVIEW | p37r17 | - | worker |
 | 18 | Docs, the living-page corrections, and the orphan sweep | all | E | PENDING | - | - | - |
 
 **Rows are listed in dispatch order, not numeric order.** A row number records when it was written; the `Depends-on` column records when it runs.
