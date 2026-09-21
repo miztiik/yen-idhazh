@@ -1247,6 +1247,57 @@ though every number stayed right
 What the readings say, and what the model behind the four-part shape is, are in
 [../reference/pipeline-cost.md](../reference/pipeline-cost.md#the-machines-own-reading-arrived-and-the-survival-now-makes-sense).
 
+## A reading that is quiet on most days is a strip of tiles, never a line
+
+> **A rare event has no useful value axis.** Draw one tile a day at a fixed
+> height, in three states, and lead with the finding in words.
+
+A rare reading is one that sits at zero or is absent on most of the days in the
+window and matters enormously on the few where it does not - a processor another
+tenant took, the kernel reading the model's weights back off disk. **A line or an
+area over days cannot draw one, and the reason is the value axis.** Auto-scaled,
+the axis takes its top from the largest day in view, so a window whose worst day
+was trivial draws exactly like a window whose worst day was severe and the reader
+learns nothing from the shape. Fixed to the threshold instead, almost every day
+is a flat line on the floor, the panel looks broken, and the reader stops
+opening it. There is no third setting. Authority: Susan, 2026-09-20.
+
+**So the panel is a strip: one tile a day, or one tile a shard, and the tile
+carries a state rather than a height.** Three states, never two:
+
+| State | What it means | How it is drawn |
+| --- | --- | --- |
+| Not recorded | The run predates the column, or the machine did not answer | A blank cell, visibly different from a quiet one |
+| Recorded and quiet | The reading was taken and sat under the first threshold | An outlined tile |
+| Recorded and fired | The reading crossed the first threshold | A filled tile |
+
+**Two states would be the default failure**, because the archive for a new
+column is mostly absent and an absence drawn as a quiet day is a panel claiming a
+clean machine on every run that predates its own instrument.
+
+**Two thresholds a signal, and both are config knobs.** The first decides whether
+the tile fills; the second decides whether the panel's headline sentence names a
+worst case. One threshold cannot do both: a bar low enough to catch a day worth
+looking at is far too low to be worth a sentence. They are declared as
+`console.<signal>_marked` and `console.<signal>_named` in
+[`config/appearance.json`](../../config/appearance.json), the contract refuses a
+`_marked` above its own `_named`, and moving either is a config edit with no
+source change (Guardrail #6). Authority: Susan, Row #8.
+
+**The panel leads with the finding as a sentence and the strip is the
+evidence.** A panel whose finding is only a shape makes the reader do the
+reading, and the whole point of a rare-event panel is that it is scanned and not
+studied. **The strip is the same height whether or not anything fired**, so an
+operator who has learned where it sits checks it in one glance and the page does
+not reflow on the morning something goes wrong.
+
+**Where the underlying figure changed meaning on a date, the strip prints the
+correction.** A reading that was collected differently before some date is two
+readings sharing one name, and a panel that draws both without saying so reports
+a clean past. The processor-lost strip carries that sentence because the busy
+figure counted stolen time as ours until 2026-09-20
+([../architecture/sources/item-health.md](../architecture/sources/item-health.md#what-the-processors-did-and-what-was-taken-from-them)).
+
 ## A console panel reserves its room, and names which nothing it is holding
 
 > **A reserved box with no failure state lies, and a failure state with no reserved box shifts the layout.** They are one decision and they shipped as one row.

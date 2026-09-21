@@ -1,6 +1,6 @@
 # What the pipeline records about the machine it ran on
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 
 Every column of the host fingerprint, what it means, and what it is for. One row
 a job, by every job that draws its own runner - written in two halves, one at job
@@ -10,10 +10,13 @@ Read this when a number surprises you and you want to know which machine
 produced it. Why the record exists at all, and what the fleet does to a reading,
 is [the processor lottery](benchmarks/the-processor-lottery.md).
 
-**Three panels on the operator console read it, from 2026-09-17.** Which
-machines one run was given, whether some machines do the same work slower, and
-what kinds of machine we keep being given over a window. What each may
-draw and what it may never draw is
+**The operator console reads it, from 2026-09-17.** Which machines one run was
+given, whether some machines do the same work slower, what kinds of machine we
+keep being given over a window, and what the job's own clock and its weights
+load cost. Which panels draw it today is
+[../architecture/publishing/console-machine.md](../architecture/publishing/console-machine.md),
+because the panel list is a config file and a count repeated here would go stale
+on a config edit. What each may draw and what it may never draw is
 [../concepts/console-design.md](../concepts/console-design.md). The whole column
 set is still operator-only: the console reads it at build time under
 `$lib/server/` and no cell of it crosses to a reader.
