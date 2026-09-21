@@ -1,6 +1,6 @@
 # Item Health Columns
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 
 Where each of item health's 123 columns comes from: which module puts a value
 under the name, whether that value reaches the ledger row, and whether any
@@ -301,6 +301,11 @@ owns what each one means and why the second call is excluded.
 
 - [item-health.md](item-health.md) - the ledger itself: where a row lands, what
   a column means, what counts against a source, and what it costs to store.
+- The other half of this question is on the contract rather than on a page.
+  `COLUMN_READERS` and `UNREAD_CELLS` in `backend/idhazh/contracts/item_health.py`
+  name which surface READS each column, where this page names which module fills
+  it, and `python backend/utilities/empty_column_census.py` crosses the two over
+  both committed ledgers to find a column with neither.
 - [../../concepts/growing-reads.md](../../concepts/growing-reads.md) - why the
   archive read behind the last column is a utility rather than a gate.
 - [../contracts/schemas.md](../contracts/schemas.md) - how a column is added,

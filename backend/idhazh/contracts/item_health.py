@@ -107,6 +107,200 @@ RETIRED_CELLS: Final[Mapping[str, str]] = MappingProxyType(
 #: taking that run's day with it.
 DROPPED_CELLS: Final[frozenset[str]] = frozenset({"runner_name", "cgroup_peak_bytes"})
 
+#: The surface that reads each column, by the path that reads it. Every column of
+#: this row appears exactly once here or once in `UNREAD_CELLS` below, so minting
+#: a column without saying who will read it fails
+#: `backend/tests/contracts/test_column_readers.py` rather than landing quietly
+#: and costing a cell on every item for the rest of the archive.
+#:
+#: **A reader is where the value is turned into an answer**, not where it is
+#: written and not where it is carried past. The stage that fills the cell, the
+#: ledger that appends it, the canary that fabricates one and the generated
+#: TypeScript that types it are all on the other side of the question. So is a
+#: surface that names the column only in prose.
+#:
+#: **One column names one reader, even where several read it.** The one named is
+#: the surface that would notice first if the column stopped arriving, which is
+#: the fact a person deleting a column needs. A second reader is found by search;
+#: the first one to break is not.
+#:
+#: What this cannot settle is whether the named surface still DRAWS the value -
+#: only that it still names the column. A panel that reads a cell and then throws
+#: it away passes here and fails the browser check instead.
+COLUMN_READERS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
+    {
+        "frontend/src/lib/charts/series.ts": (
+            "vertical",
+            "source_id",
+            "stage",
+            "outcome",
+            "code",
+            "source_words",
+            "summary_words",
+            "fetch_ms",
+            "extract_ms",
+            "summarize_ms",
+            "source_words_before_cap",
+            "model_calls",
+            "label_kind",
+            "label_prefill_ms",
+            "label_decode_ms",
+            "label_output_tokens",
+            "summary_kind",
+            "summary_prefill_ms",
+            "summary_decode_ms",
+            "summary_input_tokens",
+            "summary_output_tokens",
+            "summary_cached_tokens",
+            "queue_wait_ms",
+            "label_ms",
+            "summary_ms",
+            "visual_plan_ms",
+            "visual_plan_ms_is_estimate",
+            "faithfulness_ms",
+            "model_wait_ms",
+            "stage_gap_ms",
+            "visual_plan_tokens_written",
+            "label_prefill_tokens_per_s",
+            "label_decode_tokens_per_s",
+            "summary_prefill_tokens_per_s",
+            "summary_decode_tokens_per_s",
+            "cpu_model",
+        ),
+        "frontend/src/lib/charts/machine.ts": (
+            "item_started_at",
+            "shard_item_count",
+            "cpu_busy_max",
+            "cpu_busy_min",
+            "load_1m",
+            "os_mem_available_min_bytes",
+        ),
+        "frontend/src/lib/console/machine/article-cost.ts": (
+            "date",
+            "run_id",
+            "shard",
+            "item_index",
+            "prefill_ms",
+            "decode_ms",
+            "item_total_ms",
+            "cpu_busy_pct",
+            "llama_rss_bytes",
+        ),
+        "frontend/src/lib/console/machine/memory-held.ts": (
+            "item_id",
+            "llama_rss_anon_bytes",
+            "python_rss_bytes",
+            "python_rss_anon_bytes",
+            "os_mem_available_bytes",
+            "os_mem_total_bytes",
+            "os_swap_free_bytes",
+            "os_swap_total_bytes",
+        ),
+        "frontend/src/lib/console/machine/disk-reads.ts": (
+            "llama_major_faults",
+            "weights_pinned",
+            "os_mem_cached_bytes",
+        ),
+        "frontend/src/lib/console/machine/processor-lost.ts": ("cpu_steal_pct",),
+        "frontend/src/lib/console/machine/context-cost.ts": ("n_ctx_configured",),
+        "frontend/src/lib/console/item-cost.ts": (
+            "input_tokens",
+            "output_tokens",
+            "cached_tokens",
+            "label_input_tokens",
+            "label_cached_tokens",
+        ),
+        "frontend/src/lib/console/settings-moved.ts": (
+            "truncation_cap_tokens",
+            "n_threads",
+            "n_batch",
+        ),
+        "frontend/src/lib/server/machine-counters.ts": ("job", "llama_rss_peak_bytes"),
+        "frontend/src/lib/server/model-work.ts": ("version", "url_key", "model_id"),
+        "frontend/src/lib/server/payload.ts": ("detail", "elements_found"),
+        "backend/utilities/server_memory_mark.py": ("item_ended_at",),
+        "backend/utilities/slot_probe.py": (
+            "slot_id",
+            "kv_tokens_at_start",
+            "prefix_shared_with_previous",
+        ),
+    }
+)
+
+#: Columns this row carries that nothing reads, grouped by the question each
+#: group would answer if a surface drew it. A name here is not a name excused: it
+#: is a column shipping a cell on every item of every run to answer nobody, and
+#: the group heading is the case for either drawing it or deleting it.
+#:
+#: **The list may shrink freely and grows only on purpose.** Draw one of these
+#: and the test refuses the row until the name moves up into `COLUMN_READERS`;
+#: mint a new column with no reader and the only way past the test is to type it
+#: in here, under a heading, in a diff a reviewer sees. That visibility is the
+#: whole mechanism - it cannot stop an orphan being created, only stop one being
+#: created silently.
+#:
+#: Measured 2026-09-21 by `backend/utilities/empty_column_census.py` and by a
+#: search of every surface under `frontend/src` and `backend/utilities`. One of
+#: these is worse than unread: `failed_field` is also empty on all 14,026
+#: committed rows, so it has neither a reader nor a writer and the census exits
+#: non-zero naming it.
+UNREAD_CELLS: Final[Mapping[str, tuple[str, ...]]] = MappingProxyType(
+    {
+        "what the ranker was thinking when it chose this item": (
+            "selection_score",
+            "authority_score",
+            "tier_score",
+            "feed_weight",
+            "feed_reliability",
+            "lens_bonus",
+            "recency_bonus",
+            "carriage_step",
+            "watchlist_bonus",
+            "carried_by",
+            "watchlist_hit",
+            "on_front_page",
+        ),
+        "where a fetch spent its time, inside the one number that is drawn": (
+            "fetch_connect_ms",
+            "fetch_ttfb_ms",
+            "robots_ms",
+            "retry_count",
+            "retry_total_ms",
+        ),
+        "what arrived from the source, as opposed to what was made of it": (
+            "canonical_url",
+            "http_status",
+            "source_chars",
+            "tier",
+            "source_form",
+            "published_at",
+            "time_source",
+            "span_integrity",
+            "element_class",
+        ),
+        "how a call ended, and how much of its prompt the server already held": (
+            "label_cache_pct",
+            "summary_cache_pct",
+            "label_finish_reason",
+            "summary_finish_reason",
+            "recovered",
+        ),
+        "which settings the run used, beyond the three a panel already names": (
+            "model_quantisation",
+            "n_parallel",
+            "temperature",
+            "max_output_tokens",
+            "label_budget_tokens",
+            "summary_budget_tokens",
+            "run_visual_decision",
+        ),
+        "which rule refused a reply, and on which field": (
+            "failed_field",
+            "failed_rule",
+        ),
+    }
+)
+
 
 class ItemStage(StrEnum):
     """The pipeline's stage vocabulary - one name per step an item passes through.
