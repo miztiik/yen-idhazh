@@ -38,14 +38,14 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 | [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 9 | 13 | 10 |
-| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 2 | 27 | 6 |
+| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 3 | 26 | 7 |
 
 ## In flight - 0
 
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 44
+## Ready now - 45
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -91,14 +91,15 @@ section 3 is where it is answered.
 | #19 | 37 | C | Which prompts get re-read, and how fast | 9 |
 | #20 | 37 | C | What is holding the runner's memory | 5, 9 |
 | #21 | 37 | C | What the context window actually costs | 9 |
-| #9 | 38 | B | The council's clocks and its fan-out width move to a council block | - |
+| #1a | 38 | C | The council bounds its shard and ships whatever it wrote | 9, 15a |
 | #3 | 38 | E | The separation and the dictum, written where the next agent reads it | - |
 | #4 | 38 | F | The judge-call stamp, declared once and naming no judge | - |
 | #8 | 38 | G | The pair row gains the stamp, and the store is rewritten | - |
+| #10 | 38 | H | The judge's own bound reads a measured number | 9 |
 | #11b | 38 | K | The content-similarity judge reads its own margin | 11a |
 | #16 | 38 | M | The model block becomes one composite action | - |
 
-## Waiting on another row - 96
+## Waiting on another row - 94
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -177,20 +178,18 @@ section 3 is where it is answered.
 | #22 | 37 | C | Dotted rules where a setting moved | 21 is PENDING |
 | #17 | 37 | D | Every published column names its reader | 10 is PENDING; 11 is PENDING; 12 is PENDING; 13 is PENDING; 14 is PENDING; 15 is PENDING; 16 is PENDING; 19 is PENDING; 20 is PENDING; 21 is PENDING; 22 is PENDING |
 | #18 | 37 | E | Docs, the living-page corrections, and the orphan sweep | all names no row |
-| #1a | 38 | C | The council bounds its shard and ships whatever it wrote | 9 is PENDING |
 | #2 | 38 | D | The council knows which run it is | 1a is PENDING |
 | #5 | 38 | F | The council's own shard-outcome record | 4 is PENDING |
 | #6 | 38 | G | The content-similarity judge's own metrics | 5 is PENDING |
 | #7 | 38 | G | The content-similarity judge's merge-line benchmark record | 5 is PENDING |
 | #1b | 38 | H | The judge stops safely and flushes as it goes | 1a is PENDING |
-| #10 | 38 | H | The judge's own bound reads a measured number | 9 is PENDING |
-| #12 | 38 | J | The four verbs name their work | 9 is PENDING; 24 is PENDING |
+| #12 | 38 | J | The four verbs name their work | 24 is PENDING |
 | #13 | 38 | J | `leg` and `fold` leave the vocabulary | 12 is PENDING |
 | #14 | 38 | K | The judge fills the stamp | 8 is PENDING; 11b is PENDING; 13 is PENDING |
 | #15b | 38 | L | The content-similarity judge fills its metrics and registers as a tenant | 6 is PENDING; 14 is PENDING |
 | #24 | 38 | N | The council runs verbs of its own over a tenant list | 2 is PENDING; 16 is PENDING |
 | #17 | 38 | O | The council runs the tenant and files its own outcome row | 5 is PENDING; 24 is PENDING |
-| #25 | 38 | P | The config check moves to the tenant that owns the number | 9 is PENDING; 24 is PENDING |
+| #25 | 38 | P | The config check moves to the tenant that owns the number | 24 is PENDING |
 | #18 | 38 | Q | The store groups under the judge that fills it | 17 is PENDING |
 | #19 | 38 | R | Where the content-similarity judge's merge line stands against its holdout | 7 is PENDING; 18 is PENDING |
 | #21a | 38 | S | The council asks every tenant what it is behind on | 17 is PENDING; 24 is PENDING |
