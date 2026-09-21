@@ -12,6 +12,10 @@ from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.council.deadline import compute_shard_deadline
 from idhazh.similarity import budget
 
+#: A config-contract rule wearing a judge's arithmetic: every case here turns on
+#: what `config/idhazh.json` says, so a change to either block has to run it.
+pytestmark = pytest.mark.contract
+
 
 def _with(pair_budget: int, **council: int) -> AppConfig:
     """A config that draws `pair_budget` pairs, against whatever clocks are named."""
