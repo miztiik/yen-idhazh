@@ -63,8 +63,14 @@ def effective_same_story(
     `knobs` defaults to the block nested inside `same_story`, so production has
     one place the knobs come from. The parameter exists so a test can drive this
     with a built block without building a whole `SameStoryConfig` around it.
+
+    A config with no judge in it has no block and therefore no fitted line, so
+    the committed floor stands. That is the same answer the flag being off
+    gives, and for the same reason: nothing has moved the line.
     """
     tuning = same_story.adaptive_dedup_threshold if knobs is None else knobs
+    if tuning is None:
+        return same_story
     line = applied_line(state_dir, date=date, knobs=tuning)
     if line is None:
         return same_story

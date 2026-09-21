@@ -326,6 +326,46 @@ were.
 `frontend/src/lib/charts/machine.ts`, so a bar and a delta drawn from the same
 figure on two panels cannot disagree about which direction is good.
 
+## Three clocks address a slow shard
+
+**The shard board says a shard is slow. These three say where the time went.**
+Each row carries the seconds no named step claimed, the seconds an item waited
+before a worker started it, and the seconds the shard paid opening the weights.
+All three come off ledgers the site already commits; none of them reached a
+screen before.
+
+**The unclaimed figure is read, never recomputed.** It is `stage_gap_ms` off
+`state/item-health/`, added over the shard's rows, and the page works out
+nothing. The column is the item's own wall clock minus every step the pipeline
+named, so it is the one thing that can catch a regression in a step nobody
+named - and a figure the page subtracted from the step clocks itself would agree
+with them by construction and could never flag the disagreement it exists to
+flag. Authority: Fowler, 2026-09-21.
+
+**It is drawn with its sign.** Below zero says the named steps claim more time
+than the items took, which is two clocks disagreeing rather than a shard that
+cost nothing, and taking the absolute value would throw away the finding.
+A count of the rows below zero is printed beside the total, because a total can
+cancel: one item at plus two seconds and one at minus two add to nothing and the
+shard would read as healthy. No committed day has ever carried a negative row,
+so the canary writes one on its refused item - the failure path is where a
+disagreement would really come from, and a state no fixture holds is a state no
+test can reach. Authority: Susan, 2026-09-21.
+
+**The queue wait is a typical item and the worst one, and never a sum.** The
+work stage fetches every item and then runs the model over them in a different
+order, so each item's wait covers the queue ahead of it. Adding them counts that
+queue once per item: measured 2026-09-14, a two-item shard read 2,786 seconds
+against a true 2,196. `ItemRecorder.parked` already takes the wait back out of
+the item's own clock for the same reason. The pair is drawn on the board's clock
+scale rather than as a number of its own, so a shard that waited longer than it
+computed draws a longer bar than its own model time - which is the sentence the
+board could not say before, because it drew a job clock and a model clock and
+nothing that explained the gap between them. Authority: Susan, 2026-09-21.
+
+**What it cannot settle:** which step the unclaimed time belongs to. Naming it
+is what the column exists to prompt, not what it can answer.
+
 ## Three cross-boundary carries, one sentence each
 
 Each route ends its introduction with one sentence pointing at a panel another

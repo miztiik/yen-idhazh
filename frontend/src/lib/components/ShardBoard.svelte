@@ -26,7 +26,7 @@
 	 * is a value with no name on a phone.
 	 */
 	import TargetBar from './TargetBar.svelte';
-	import { gib, seconds, type RangeMark, type ShardBoardView } from '$lib/charts/machine';
+	import { gib, seconds, type BoardRow, type RangeMark, type ShardBoardView } from '$lib/charts/machine';
 	import { grouped } from '$lib/charts/series';
 
 	let {
@@ -76,6 +76,25 @@
 		if (unit(mark.median) === unit(mark.max)) return `${unit(mark.median)}${noun} on every item`;
 		return `${unit(mark.median)} to ${unit(mark.max)}${noun}`;
 	}
+
+	/** The time no named stage claimed, said in words, sign and all.
+	 *
+	 * Below zero is a reading and never a zero: it says the named stages claim
+	 * more time than the items took, so two clocks disagree. The count of items
+	 * that did it comes with it, because a shard total can cancel one item's plus
+	 * against another's minus and read as nothing.
+	 */
+	function unclaimed(row: BoardRow): string {
+		if (row.unclaimedSeconds === null) return 'No item clock, so nothing is unclaimed here.';
+		const rows = `${row.clocksDisagreed} of ${row.clockedItems} items`;
+		if (row.unclaimedSeconds < 0) {
+			return `${seconds(row.unclaimedSeconds)}: the named steps claim more time than the items took, so two clocks disagree on ${rows}.`;
+		}
+		if (row.clocksDisagreed > 0) {
+			return `${seconds(row.unclaimedSeconds)} no named step claimed, and two clocks disagree on ${rows}.`;
+		}
+		return `${seconds(row.unclaimedSeconds)} no named step claimed.`;
+	}
 </script>
 
 <div
@@ -120,8 +139,11 @@
 		     chose. The memory ceiling joins the memory figures rather than capping
 		     them, so a shard past 16 GiB would draw past the line. -->
 		<p class="board-note" data-shard-board-domains>
-			Clock bars share one scale: the widest stands for {seconds(board.scaleSeconds)}. Rate bars
-			share one: the widest stands for {rate(board.rateScale)} tokens a second.
+			Clock bars share one scale: the widest stands for {seconds(board.scaleSeconds)}. The queue
+			bars are on that same scale, so a shard that waited longer than it computed draws a longer
+			bar than its own model time. Rate bars share one: the widest stands for {rate(
+				board.rateScale
+			)} tokens a second.
 			{#if board.rateRatio === null}
 				Only one of the two rates was measured, so there is no ratio to compare them on.
 			{:else if board.ratesShareAxis}
@@ -142,7 +164,7 @@
 			<span>Rate</span>
 			<span>Host</span>
 			<span>Memory and CPU</span>
-			<span>Job clock</span>
+			<span>Where the clock went</span>
 		</div>
 
 		{#each board.rows as row (row.shard)}
@@ -168,6 +190,10 @@
 				data-shard-swap-state={row.swapState}
 				data-shard-swap-free={row.swapFreeBytes ?? ''}
 				data-shard-swap-total={row.swapTotalBytes ?? ''}
+				data-shard-unclaimed-seconds={row.unclaimedSeconds ?? ''}
+				data-shard-clocks-disagreed={row.clocksDisagreed}
+				data-shard-queue-median-seconds={row.queueMedianSeconds ?? ''}
+				data-shard-queue-max-seconds={row.queueMaxSeconds ?? ''}
 			>
 				<p class="shard">
 					<span class="cell-label" data-shard-name="shard" aria-hidden="true">Shard</span>
@@ -382,8 +408,9 @@
 					<span class="unit">fill is a typical item, notch is the worst one</span>
 				</div>
 
-				<!-- No cell label here: the bar prints its own, at every width, and so
-				     does the sentence under it. -->
+				<!-- Where the shard's clock went, so a slow shard gets an address
+				     instead of an adjective. The job clock bar prints its own name at
+				     every width; the three clocks under it carry cell labels. -->
 				<div class="clock" data-shard-cell="clock">
 					<TargetBar
 						marks={row.job}
@@ -400,6 +427,42 @@
 							? 'Weights load not recorded'
 							: `${seconds(row.modelLoadMs / 1000)} of it opening the weights, before the first item`}
 					</span>
+
+					<!-- The wait, on the clock scale rather than as a number on its own:
+					     the board already draws a job clock and a model clock, and this
+					     is how much of the gap between them was an item sitting on a
+					     list. A typical item and the worst one, never a total - each
+					     item's wait covers the queue ahead of it, so adding them counts
+					     that queue once per item. -->
+					<p class="range-line" title="Shard {row.shard} queue: {spread(row.queue, seconds)}.">
+						<span class="cell-label" data-shard-name="queue" aria-hidden="true">Queued</span>
+						{#if row.queue.empty}
+							<span class="absent" data-shard-figure="queue">No queue reading on this shard</span>
+						{:else}
+							<span
+								class="range"
+								role="img"
+								aria-label="Shard {row.shard} queued, {spread(row.queue, seconds)}"
+							>
+								<span class="range-fill queue-fill" style="inline-size: {row.queue.medianWidth}"
+								></span>
+								{#if row.queue.max !== null}
+									<span class="range-notch" style="inset-inline-start: {row.queue.notchWidth}"
+									></span>
+								{/if}
+							</span>
+							<span class="range-figure tabular-nums" data-shard-figure="queue">
+								{terse(row.queue, seconds, ' queued')}
+							</span>
+						{/if}
+					</p>
+
+					<p class="unit" data-shard-cell="unclaimed">
+						<span class="cell-label" data-shard-name="unclaimed" aria-hidden="true">
+							Claimed by no step
+						</span>
+						<span data-shard-figure="unclaimed">{unclaimed(row)}</span>
+					</p>
 				</div>
 			</div>
 		{/each}
@@ -423,7 +486,7 @@
 						? `${gib(row.swapFreeBytes)} swap free of ${gib(row.swapTotalBytes)}`
 						: row.swapState === 'none'
 							? 'no swap on this host'
-							: 'swap not recorded'}.
+							: 'swap not recorded'}, queued {spread(row.queue, seconds)}. {unclaimed(row)}
 				</li>
 			{/each}
 		</ul>
@@ -447,9 +510,12 @@
 	.head,
 	.row {
 		display: grid;
+		/* The last column is the widest of the six because it now holds three
+		   clocks rather than one: the job clock, the queue and the time no step
+		   claimed. */
 		grid-template-columns:
 			4.5rem minmax(9rem, 1.8fr) minmax(7rem, 1fr) minmax(10rem, 1.5fr)
-			minmax(9rem, 1.3fr) minmax(8rem, 1fr);
+			minmax(9rem, 1.3fr) minmax(10rem, 1.6fr);
 		gap: var(--space-3);
 		align-items: start;
 	}
@@ -603,6 +669,12 @@
 
 	.range-fill.cpu-fill {
 		background: var(--chart-3);
+	}
+
+	/* Its own hue, because the queue is not the memory or the processor reading
+	   it sits under and a shared colour would read as one series drawn twice. */
+	.range-fill.queue-fill {
+		background: var(--chart-5);
 	}
 
 	/* The worst reading, as a mark across the track rather than a second bar. A

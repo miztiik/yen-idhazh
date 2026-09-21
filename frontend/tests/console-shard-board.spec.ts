@@ -5,6 +5,12 @@
  * reach the page as attributes an operator's browser can render, on the run the
  * canary really built.
  *
+ * That covers the three clocks as well - the time no named step claimed, the
+ * time an item waited, and the time the shard paid opening the weights. The
+ * first is the one to watch: it is the stored column added up and nothing else,
+ * so an implementation that worked it out from the step clocks would draw a
+ * different number here.
+ *
  * Every expectation below is recomputed from the canary ledgers on disk, never
  * read back off the page. An oracle that reads the module it is testing proves
  * only that the module agrees with itself.
@@ -64,6 +70,14 @@ interface Expected {
 	loadMax: number | null;
 	swapFree: number | null;
 	swapTotal: number | null;
+	/** `stage_gap_ms` added over the shard's rows, in seconds, sign kept. */
+	unclaimedSeconds: number | null;
+	/** How many of those rows carried a figure below zero. */
+	disagreed: number;
+	/** How many carried one at all. */
+	clocked: number;
+	queueMedianSeconds: number | null;
+	queueMaxSeconds: number | null;
 }
 
 /** One shard of one run, folded off the item ledger by hand. */
@@ -77,6 +91,14 @@ function foldShard(runId: string, shard: string): Expected {
 	let loadMax: number | null = null;
 	let swapFree: number | null = null;
 	let swapTotal: number | null = null;
+	// The three clocks, folded by hand off the columns themselves. Added for the
+	// unclaimed figure because each item's gap is a slice of that item's own
+	// clock; never added for the queue, because each item's wait covers the queue
+	// ahead of it and a sum would count that queue once per item.
+	let unclaimedMs: number | null = null;
+	let disagreed = 0;
+	let clocked = 0;
+	const waits: number[] = [];
 	for (const row of canaryRows('item-health')) {
 		if (row.run_id !== runId || row.shard !== shard) continue;
 		const input = measured(row.input_tokens);
@@ -98,6 +120,14 @@ function foldShard(runId: string, shard: string): Expected {
 		if (free !== null) swapFree = Math.min(swapFree ?? free, free);
 		const total = measured(row.os_swap_total_bytes);
 		if (total !== null) swapTotal = total;
+		const unclaimed = measured(row.stage_gap_ms);
+		if (unclaimed !== null) {
+			unclaimedMs = (unclaimedMs ?? 0) + unclaimed;
+			clocked += 1;
+			if (unclaimed < 0) disagreed += 1;
+		}
+		const queued = measured(row.queue_wait_ms);
+		if (queued !== null) waits.push(queued);
 	}
 	return {
 		items,
@@ -108,7 +138,12 @@ function foldShard(runId: string, shard: string): Expected {
 		cpuMax: busyMax,
 		loadMax,
 		swapFree,
-		swapTotal
+		swapTotal,
+		unclaimedSeconds: unclaimedMs === null ? null : unclaimedMs / 1000,
+		disagreed,
+		clocked,
+		queueMedianSeconds: waits.length === 0 ? null : (median(waits) as number) / 1000,
+		queueMaxSeconds: waits.length === 0 ? null : Math.max(...waits) / 1000
 	};
 }
 
@@ -209,7 +244,84 @@ test.describe('the shard board carries the work-or-host answer on the row', () =
 				fold.swapTotal === null ? 'unrecorded' : fold.swapTotal > 0 ? 'measured' : 'none';
 			expect(swapState, `${where} swap state`).toBe(expectedState);
 			sameNumber(await row.getAttribute('data-shard-swap-free'), fold.swapFree, `${where} free swap`);
+
+			// The three clocks, against the ledger's own columns. The unclaimed one
+			// is the column added up and nothing else: these rows carry stage clocks
+			// the page never reads, so a figure worked out on the page from them
+			// would not be this number.
+			sameNumber(
+				await row.getAttribute('data-shard-unclaimed-seconds'),
+				fold.unclaimedSeconds,
+				`${where} unclaimed time`
+			);
+			expect(
+				Number(await row.getAttribute('data-shard-clocks-disagreed')),
+				`${where} items whose clocks disagree`
+			).toBe(fold.disagreed);
+			sameNumber(
+				await row.getAttribute('data-shard-queue-median-seconds'),
+				fold.queueMedianSeconds,
+				`${where} typical queue wait`
+			);
+			sameNumber(
+				await row.getAttribute('data-shard-queue-max-seconds'),
+				fold.queueMaxSeconds,
+				`${where} worst queue wait`
+			);
 		}
+	});
+
+	test('THE ORACLE: a shard whose clocks disagree says so, and never draws a zero', async ({
+		page
+	}) => {
+		// The canary writes one row with an unclaimed time below zero, which no
+		// committed day has ever held. It says the named steps claim more time than
+		// the item took - two clocks disagreeing - and clamping it to zero would
+		// hide the only fault the signed column exists to show.
+		await page.goto('/console/machine/');
+		const board = page.locator('[data-shard-board]');
+		await expect(board).toBeVisible();
+
+		const runId = (await board.getAttribute('data-shard-board')) ?? '';
+		const rows = board.locator('[data-shard-row]');
+		const count = await rows.count();
+
+		let below = 0;
+		for (let index = 0; index < count; index += 1) {
+			const row = rows.nth(index);
+			const shard = (await row.getAttribute('data-shard-row')) ?? '';
+			const fold = foldShard(runId, shard);
+			const printed = (await row.locator('[data-shard-figure="unclaimed"]').innerText()).trim();
+
+			if (fold.unclaimedSeconds === null) {
+				expect(printed, `shard ${shard} drew a figure from no clock at all`).toContain(
+					'No item clock'
+				);
+				continue;
+			}
+			// Every shard prints the count beside the sum, because a shard whose
+			// items cancel each other out reads as healthy on the sum alone.
+			if (fold.unclaimedSeconds < 0 || fold.disagreed > 0) {
+				below += 1;
+				expect(printed, `shard ${shard} drew a disagreement without saying so`).toContain(
+					'two clocks disagree'
+				);
+				expect(printed, `shard ${shard} named the wrong number of items`).toContain(
+					`${fold.disagreed} of ${fold.clocked} items`
+				);
+				expect(printed, `shard ${shard} rounded a disagreement away to nothing`).not.toBe(
+					'0.0 s no named step claimed.'
+				);
+			} else {
+				expect(printed, `shard ${shard} did not say what its unclaimed time was`).toContain(
+					'no named step claimed'
+				);
+			}
+		}
+
+		expect(below, 'no canary shard carries an unclaimed time below zero to draw').toBeGreaterThan(
+			0
+		);
 	});
 
 	test('the rate domain is the rates drawn, and the board prints the ratio it measured', async ({

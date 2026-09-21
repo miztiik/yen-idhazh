@@ -95,19 +95,6 @@ class RunConfig(Model):
             "this."
         ),
     )
-    judge_shard_timeout_minutes: int = Field(
-        default=200,
-        ge=1,
-        le=350,
-        description=(
-            "How long one judging leg may run before GitHub kills it. 200 minutes is 2 "
-            "hours 9 minutes of model time at the day's cap of 200 pairs over 4 legs, plus "
-            "71 minutes of headroom against a fixed cost of about 6 minutes for the "
-            "checkout, the weights cache restore and the server start. The model time is "
-            "derived from 9.85 tokens a second measured on a stock runner on 2026-09-09, "
-            "not from a judge call; row 17 measures one and replaces this arithmetic."
-        ),
-    )
     shard_wrap_up_minutes: int = Field(
         default=12,
         ge=0,
@@ -167,14 +154,17 @@ class RunConfig(Model):
         return refuse_a_removed_knob("run", data, SUPERSEDED_RUN_NAMES)
 
 
-#: The `run` knobs this block used to carry. Both sized or switched the visual
+#: The `run` knobs this block used to carry. Three sized or switched the visual
 #: planner stage, deleted with the model it ran, so there is no knob answering
 #: the same question and the value is empty.
 #: `route_budget_minutes` is the older spelling of the budget and is refused
 #: here rather than migrated: it used to be read as `visual_planner_budget_minutes`,
 #: which would now migrate an operator's number onto a key nothing reads.
+#: The judging shard's bound is the fourth and it did not die - it moved out of
+#: this block entirely, so its replacement is spelled as a whole path.
 SUPERSEDED_RUN_NAMES: Final[Mapping[str, str]] = MappingProxyType(
     {
+        "judge_shard_timeout_minutes": "council.shard_timeout_minutes",
         "route_budget_minutes": "",
         "two_calls_per_item": "",
         "visual_planner_budget_minutes": "",
