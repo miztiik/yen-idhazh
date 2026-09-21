@@ -9,7 +9,7 @@ two questions every panel names, the five routes and the strip, the standing ban
 and the one window that governs every page. How any figure here is allowed to
 read is [../../concepts/console-design.md](../../concepts/console-design.md), and
 the machinery every chart shares is [console-charts.md](console-charts.md).
-Thirteen panels under **four headings**. Eleven read `state/item-health/` and
+Eleven panels under **four headings**. Nine read `state/item-health/` and
 `state/host-fingerprint/`, which are the two instruments this route puts beside
 each other; three - the two machine panels and the split - read the machine
 record for the processor and the flags as well. All three are read at
@@ -20,13 +20,11 @@ ledgers add no telemetry column and no reader sees a cell of any of them.
 | Group | Panel | Grain | The sentence it is for |
 | --- | --- | --- | --- |
 | What the machine was doing | Whether the speed numbers can be trusted | one bar a shard | Whether the day's rates can be trusted at all. |
-| What the machine was doing | Which machines this run was given | one card a machine | What machine this is, what it can do against the others this run drew, and whether its record survived the day. |
+| What the machine was doing | Which machines this run was given | one card a machine | What machine this is, what it can do against the others this run drew, what clock and uptime it had when we got it, and whether its record survived the day. |
 | What the machine was doing | Whether some machines do the same work slower | one group a machine | What a written token costs against a read one, on the machine that paid it. |
 | What the machine was doing | What kinds of machine we keep being given | one group a day, one bar a machine kind | What kinds of machine we keep being handed, and whether that is changing. |
-| What the machine was doing | Where the machine's time went besides the model | one track a figure, over the window | How busy the machine was, and how long the weights took to open, each against the window that measured it. |
 | Where the time went | Which parts of the last run took longest | one row a shard | Was the day slow because of the work or because of the machine. |
-| Where the time went | How far the slowest articles ran behind the rest | the newest run | What the whole distribution of one run looks like at once. |
-| Where the time went | Whether the slowest articles are getting slower | one plot a percentile, one mark a run | Whether the slow end of a run is moving. |
+| Where the time went | Whether the slowest articles are getting slower | one plot a percentile, one mark a run | Whether the slow end of a run is moving, and how wide the gap is today. |
 | How close we are to the limits | How close an article came to using up the machine's memory | one mark an item, with a shard grain and a window grain | Which item took the machine nearest its limit, whether it gave the memory back, and how long the queue was. |
 | How close we are to the limits | How close the longest text came to the model's limit | one mark a run | Whether raising the truncation cap is even possible. |
 | What the model spends | How much text the model has to read again each time | one column a day | Whether a bigger cache would save wall clock. |
@@ -223,6 +221,45 @@ three times.
 **Every run's own numbers stay on the page**, in a screen-reader list under the
 chart. The chart is the shape of the question; the list is the table it was made
 from, and nothing on this route is only in a picture.
+
+## Two panels left the page, and what the reader lost is named
+
+**A container holding three unrelated figures has no question to be titled
+with.** `Where the machine's time went besides the model` carried a processor
+share, a weight-opening time and a count of the slots a server was started with.
+A title naming a subsystem was the only title that fitted, which is the defect
+the four decision headings exist to remove. Two of the three figures were
+already spent: the slot count read the same value on 382 of the 383 committed
+rows that carry it, and the processor share was about to stop meaning what its
+own description claimed the moment the sampler separated out the time the host
+gave another tenant. Authority: Susan, 2026-09-20.
+
+**The third figure and the band are a loss, and nobody has replaced them yet.**
+What went with the panel is the reading of how long a shard spent opening the
+weights against the window that measured it, and the same band for the processor
+share. The per-shard opening time is still on the shard board, so what is gone
+is the comparison with the rest of the window rather than the number. The shape
+is kept whole in `frontend/src/lib/charts/span-track.ts` with its rules held in
+`frontend/tests/console-host-spans.spec.ts`, because the honest version of the
+processor share - the one that separates out the stolen time - needs the same
+band rather than a second one. **No panel draws that band today.**
+
+**A run can no longer be read against its own settings.** That panel was the one
+place the page said what the server was started with, so an operator comparing
+two runs now has nothing on the page that names the configuration either of them
+ran under. The gap stands until somebody builds the replacement, and it is
+written here rather than absorbed.
+
+**The single-run distribution panel drew the newest column of the panel below
+it.** `How far the slowest articles ran behind the rest` read the last entry of
+the same array the five stacked plots draw, so the two could never disagree and
+one of them was redundant. The trend panel's readout already prints all five
+values for whichever run the pointer is on. What the curve was being eyeballed
+for is one number - how far the slow end sits from the middle - and the trend
+panel now prints it for the newest run drawn. **What the reader loses:** the
+whole ladder of one run as a single shape. Reading it off the five plots means
+reading straight down one column instead, which the shared scale was already
+built for. Authority: Susan, 2026-09-20.
 
 ## One measurement asked two questions is one panel, not two
 

@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Guardrail #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -91,6 +91,9 @@ The shapes, and where each one lives once written:
 | `StorySimilarityDistribution` | `story-similarity-distribution` | the whole of `state/story-similarity/score-distribution.json`, rewritten - a fixed row of slots and three counts each, so the fit reads one file of a size that never changes (Guardrail #12) |
 | `FittedSimilarityThreshold` | `fitted-similarity-threshold` | one appended row of `state/story-similarity/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` - what the merge line was, what the evidence proposed, and what the run applied |
 | `SimilarityHoldoutPair` | `similarity-holdout-pair` | one row of `state/story-similarity/holdout-pairs.csv`, typed by a person - two addresses, two headlines, and whether they are one story |
+| `CouncilShardOutcome` | `council-shard-outcome` | one appended row of `state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv` - whether one unit of work finished, stopped on its deadline or had nothing to do, and what the work it hosted cost. It carries no name for the unit, so it reads the same whichever tenant ran |
+| `ContentSimilarityJudgeMetrics` | `content-similarity-judge-metrics` | one appended row of `state/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>.csv` - what one shard of that judge's night dealt, read, agreed and lost, plus its two rates and its clocks |
+| `MergeLineHoldoutScore` | `content-similarity-judge-merge-line-holdout-score` | one appended row of `state/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>.csv` - the line in force, the four cells it scored against the hand-marked holdout, and what the line was made of. No model runs in it, so it carries no call stamp |
 | `ValidationRow` | `validation-row` | one row of `state/<run.trial_state_dirname>/validation/<YYYY>/<MM>/<DD>.csv`, folded in from a segment |
 | `RunManifest` | `run-manifest` | `.../<DD>/run.json`, append-only per date |
 | `DigestDay` | `digest-day` | `.../<DD>/digest.json` and each `run-<N>.json` |

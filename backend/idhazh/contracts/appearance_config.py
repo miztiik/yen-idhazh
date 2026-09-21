@@ -504,6 +504,11 @@ class AppearanceConfig(Contract):
             why="The context panel draws two ends a run and names what a cut-off looks like.",
         ),
         ChangelogEntry(
+            version="2026-09-20T15:00",
+            change="console.panel_groups.machine drops two Hardware panels.",
+            why="A container of unrelated figures has no question to be titled with.",
+        ),
+        ChangelogEntry(
             version="2026-09-20T14:00",
             change="console.panel_groups.machine is four decision groups, not three time grains.",
             why="A heading naming a grain answers no question an operator arrives with.",
@@ -512,11 +517,6 @@ class AppearanceConfig(Contract):
             version="2026-09-20T13:00",
             change="Four console thresholds, additive: lost processor time and model disk reads.",
             why="Whether a day is marked or named is a setting, not a literal in a chart.",
-        ),
-        ChangelogEntry(
-            version="2026-09-20T12:00",
-            change="console.panel_groups, additive, default three groups on Hardware.",
-            why="Panel order and grouping were markup order, which no config could move.",
         ),
         ChangelogEntry(
             version="2026-08-29",

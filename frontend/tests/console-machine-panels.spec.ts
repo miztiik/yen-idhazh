@@ -289,24 +289,61 @@ test.describe('the machines this run drew', () => {
 		expect(sawAnAbsence, 'no card drew an absent flag - the fixture is wrong').toBe(true);
 	});
 
-	test('the bandwidth reading and its buffer are one element, and cache is called out', async ({
+	test('a graded copy speed carries its buffer, and an ungraded one is withheld', async ({
 		page
 	}) => {
 		await page.goto('/console/machine/');
 		const panel = page.locator('[data-console-panel-id="machine-cards"]');
-		const readings = panel.locator('[data-machine-bandwidth]');
+		const readings = panel.locator('[data-machine-copy-speed]');
 		const count = await readings.count();
 		expect(count).toBeGreaterThan(0);
-		let sawCacheWarning = false;
+		let sawWithheld = false;
 		for (let index = 0; index < count; index += 1) {
 			const text = (await readings.nth(index).innerText()).trim();
-			if (text.startsWith('Bandwidth was not measured')) continue;
+			if (text.startsWith('Copy speed was not measured')) continue;
+			if (text.startsWith('No copy speed')) {
+				// The refused figure is not on the page at all, in any form.
+				expect(text, 'a withheld reading still printed a rate').not.toContain('GiB/s');
+				expect(text, 'a withheld reading did not say what it fell short of').toMatch(
+					/times it, and a reading has to clear \d+ times/
+				);
+				sawWithheld = true;
+				continue;
+			}
 			expect(text, 'the rate and its buffer are not in one element').toMatch(
 				/GiB\/s.*MiB buffer/
 			);
-			if (text.includes('this measured cache, not memory')) sawCacheWarning = true;
 		}
-		expect(sawCacheWarning, 'no card warned that the probe measured cache').toBe(true);
+		expect(sawWithheld, 'no card withheld a copy speed the probe could not grade').toBe(true);
+	});
+
+	test('each card says what clock it ran at and how long it had been up', async ({ page }) => {
+		await page.goto('/console/machine/');
+		const panel = page.locator('[data-console-panel-id="machine-cards"]');
+		const clocks = panel.locator('[data-machine-clock]');
+		const uptimes = panel.locator('[data-machine-uptime]');
+		const count = await clocks.count();
+		expect(count, 'no card carried a clock reading').toBeGreaterThan(0);
+		expect(await uptimes.count(), 'a card carried a clock and no uptime').toBe(count);
+
+		// The ledger's own cells, so the assertion is the fixture's rather than the
+		// page agreeing with itself.
+		const recorded = canaryRows('host-fingerprint').filter((row) => row.mhz_at_probe !== '');
+		expect(recorded.length, 'the canary recorded no clock at all').toBeGreaterThan(0);
+		const clockValues = new Set(recorded.map((row) => String(Math.round(Number(row.mhz_at_probe)))));
+
+		for (let index = 0; index < count; index += 1) {
+			const said = (await clocks.nth(index).innerText()).trim();
+			// A ceiling nothing writes is a column the page may not divide by.
+			expect(said, 'a clock was drawn as a share of something').not.toContain('%');
+			if (said.startsWith('Clock speed was not recorded')) continue;
+			const mhz = said.split(' ')[0];
+			expect(clockValues.has(mhz), `${mhz} MHz is not a clock the ledger holds`).toBe(true);
+		}
+		for (let index = 0; index < count; index += 1) {
+			const said = (await uptimes.nth(index).innerText()).trim();
+			expect(said).toMatch(/^(Up .+ when we measured it\.|Uptime was not recorded on this job\.)$/);
+		}
 	});
 
 	test('the disclosure is a native details and is closed at rest', async ({ page }) => {
@@ -379,9 +416,10 @@ test.describe('the machines this run drew', () => {
 				);
 			}
 		}
-		// The canary's second machine probed a buffer under its own L3, so its
-		// rate is a cache reading and shares no track with the memory ones.
-		expect([...states].sort()).toEqual(['alone', 'cache', 'drawn']);
+		// The canary's second machine probed a buffer 1.97 times its own L3, under
+		// the margin that proves the copy left the cache, so its rate is withheld
+		// and shares no track with the graded one.
+		expect([...states].sort()).toEqual(['alone', 'drawn', 'ungraded']);
 	});
 });
 

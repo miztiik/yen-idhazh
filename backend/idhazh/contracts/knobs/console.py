@@ -445,7 +445,6 @@ class ConsoleConfig(Model):
                         "machine-cards",
                         "reading-against-writing",
                         "platform-mix",
-                        "outside-the-model-call",
                     ],
                 ),
                 ConsolePanelGroup(
@@ -453,7 +452,6 @@ class ConsoleConfig(Model):
                     title="Where the time went",
                     panels=[
                         "shard-board",
-                        "newest-run-tail",
                         "tail-trend",
                     ],
                 ),
@@ -478,8 +476,8 @@ class ConsoleConfig(Model):
         },
         description=(
             "The order the panels of a console route are drawn in, and the "
-            "headings they group under. Keyed by route id. Thirteen equal "
-            "siblings down one column give the eye nothing to land on first, and "
+            "headings they group under. Keyed by route id. A column of equal "
+            "siblings gives the eye nothing to land on first, and "
             "a heading naming a time grain answers no question anybody arrives "
             "with - so each Hardware heading names a decision instead, in the "
             "order an operator takes them: what the machine was doing, where the "

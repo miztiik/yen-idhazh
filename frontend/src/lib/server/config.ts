@@ -110,6 +110,11 @@ export interface RetentionConfig {
  * switched off" and "nothing happened" are different facts an operator acts on
  * differently. Without them every off state reads as a broken pipeline.
  *
+ * The cache margin is here for a third reason again: the probe sizes its buffer
+ * by it and a machine card decides by it whether a committed copy rate can be
+ * trusted, so a second copy of the number could let the page refuse a row the
+ * probe wrote correctly.
+ *
  * **Nothing bills us.** These are a hosted provider's prices, and the number the
  * page draws from them is a counterfactual - what the run would have cost
  * somewhere else - never an amount owed.
@@ -124,6 +129,11 @@ export interface ObservabilityConfig {
 	/** Whether a job records what machine it drew. False is why three panels have
 	 * nothing, and each says so in words that never name the setting. */
 	host_fingerprint: boolean;
+	/** How many times a machine's cache the bandwidth probe's buffer has to be
+	 * before its copy rate is a memory reading. The probe sizes its buffer by it
+	 * and a machine card grades a committed row by it, so it has to be the same
+	 * number in both languages. */
+	host_fingerprint_bandwidth_cache_multiple: number;
 	/** The share of runs the scorer is drawn for. 1.0 measures every run. */
 	sample_rate: number;
 }
@@ -465,6 +475,7 @@ const OBSERVABILITY_DEFAULTS: ObservabilityConfig = {
 	cost_output_per_million: 0.6,
 	evaluation_enabled: true,
 	host_fingerprint: true,
+	host_fingerprint_bandwidth_cache_multiple: 2,
 	sample_rate: 1
 };
 const COLLECT_DEFAULTS: CollectConfig = { availability_strikes_before_rest: 5 };
@@ -544,18 +555,12 @@ const PANEL_GROUP_DEFAULTS: PanelGroups = {
 		{
 			id: 'what-the-machine-was-doing',
 			title: 'What the machine was doing',
-			panels: [
-				'two-clocks',
-				'machine-cards',
-				'reading-against-writing',
-				'platform-mix',
-				'outside-the-model-call'
-			]
+			panels: ['two-clocks', 'machine-cards', 'reading-against-writing', 'platform-mix']
 		},
 		{
 			id: 'where-the-time-went',
 			title: 'Where the time went',
-			panels: ['shard-board', 'newest-run-tail', 'tail-trend']
+			panels: ['shard-board', 'tail-trend']
 		},
 		{
 			id: 'how-close-to-the-limits',

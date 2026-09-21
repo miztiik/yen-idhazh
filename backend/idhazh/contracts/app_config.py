@@ -91,6 +91,11 @@ class AppConfig(Contract):
             why="The context panel draws two ends a run and names what a cut-off looks like.",
         ),
         ChangelogEntry(
+            version="2026-09-21T01:00",
+            change="observability.host_fingerprint_bandwidth_cache_multiple, additive, default 2.",
+            why="The probe and the console grade a row by it, so it cannot be two numbers.",
+        ),
+        ChangelogEntry(
             version="2026-09-21",
             change="council block added; the judge's own block is now optional.",
             why="The venue's runner numbers cannot sit inside a tenant that need not exist.",
@@ -99,11 +104,6 @@ class AppConfig(Contract):
             version="2026-09-20T01:00",
             change="observability.host_fingerprint_bandwidth_mib renamed to ..._floor_mib.",
             why="The probe now derives its buffer from the cache, so the value is a floor.",
-        ),
-        ChangelogEntry(
-            version="2026-09-19T09:00",
-            change="observability.host_fingerprint_keep_months, additive, default null.",
-            why="state/host-fingerprint/ was the one committed ledger with no age at all.",
         ),
         ChangelogEntry(
             version="2026-08-21",

@@ -848,8 +848,9 @@ function writeHostFingerprintCanary() {
 		memcpy_gib_s: 12.4, memcpy_probe_mib: 512,
 		vm_size: 'Standard_D4ads_v5', vm_location: 'eastus', vm_zone: '1', vm_fault_domain: '0'
 	};
-	// Every watched flag, and a probe buffer under its own L3 - so this card has
-	// to say the bandwidth reading measured cache rather than memory.
+	// Every watched flag, and a probe buffer only 1.97 times its own L3 - the
+	// shape nine of the committed rows carry, and under the margin that proves
+	// the copy left the cache. So this card has to withhold its copy speed.
 	const XEON = {
 		fingerprint: 'c81d9e0a1b2c3d4e',
 		cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C',
@@ -860,7 +861,7 @@ function writeHostFingerprintCanary() {
 			'amx_bf16', 'amx_int8', 'amx_tile', 'avx2', 'avx512_bf16', 'avx512_fp16',
 			'avx512_vnni', 'avx512f', 'avx_vnni', 'f16c', 'fma', 'sse4_2'
 		].join(' '),
-		memcpy_gib_s: 9.8, memcpy_probe_mib: 256,
+		memcpy_gib_s: 9.8, memcpy_probe_mib: 512,
 		vm_size: 'Standard_D4ls_v5', vm_location: 'westus2', vm_zone: '2', vm_fault_domain: '1'
 	};
 

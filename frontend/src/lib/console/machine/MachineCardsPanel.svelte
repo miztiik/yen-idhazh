@@ -4,6 +4,12 @@
 	 * A run is not a machine: over the committed record, 86 of the 90 runs that
 	 * name a processor drew more than one kind, so one card a machine is the only
 	 * honest grain.
+	 *
+	 * **The subtitle stays one sentence ending in its grain.** Uptime is on each
+	 * card because a machine started minutes ago still has an empty page cache,
+	 * which is one of the two reasons a run reads its weights back off disk - but
+	 * that reason is why the reading earns its place, not a second sentence for
+	 * the reader to wade through (`docs/concepts/console-design.md`).
 	 */
 	import MachineCard from '$lib/components/MachineCard.svelte';
 	import Panel from '$lib/components/Panel.svelte';

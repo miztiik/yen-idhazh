@@ -19,11 +19,11 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
 	clockAgreement,
-	curveOf,
 	latencyColumns,
 	peakMemory,
 	percentileHistory,
 	quantile,
+	seconds,
 	PERCENTILES,
 	RUNNER_MEMORY_BYTES
 } from '../src/lib/charts/machine';
@@ -1342,7 +1342,7 @@ test.describe('Row #20 - peak memory is a maximum and never a sum', () => {
 	});
 });
 
-test.describe('Row #21 - one plot a percentile, and one across them', () => {
+test.describe('one plot a percentile, on one shared scale', () => {
 	let health: Record<string, string>[] = [];
 	let history: ReturnType<typeof percentileHistory>;
 	test.beforeAll(() => {
@@ -1383,23 +1383,41 @@ test.describe('Row #21 - one plot a percentile, and one across them', () => {
 		}
 	});
 
-	test('THE ORACLE: the aggregate reads the newest run own values, at every percentile', () => {
+	test('THE ORACLE: the strip under the plots prints the newest run own ladder', () => {
 		const newest = history.runs.at(-1);
-		expect(newest, 'no run to aggregate').toBeTruthy();
-		const curve = curveOf(newest!);
-		expect(curve.points.map((point) => point.percentile)).toEqual([...PERCENTILES]);
-		PERCENTILES.forEach((percentile, at) => {
-			expect(
-				curve.points[at].ms,
-				`the aggregate and the p${percentile} plot disagree about the newest run`
-			).toBe(newest!.ms[at]);
-		});
-		// And the strip under the plots prints the same ladder.
+		expect(newest, 'no run to read').toBeTruthy();
 		const column = latencyColumns([newest!])[0];
 		expect(column.date).toBe(newest!.runId);
 		expect(column.rows.slice(0, PERCENTILES.length).map((row) => row.label)).toEqual(
 			PERCENTILES.map((percentile) => `p${percentile}`)
 		);
+		PERCENTILES.forEach((percentile, at) => {
+			expect(
+				column.rows[at].value,
+				`the strip and the p${percentile} plot disagree about the newest run`
+			).toBe(seconds(newest!.ms[at] / 1000));
+		});
+	});
+
+	test('THE ORACLE: the printed spread is the newest run slowest over its middle', async ({
+		page
+	}) => {
+		// Recomputed from the fixture rows, so the page is never checked against
+		// the module that drew it.
+		const newest = history.runs.at(-1);
+		expect(newest, 'no run to read').toBeTruthy();
+		const wanted = (newest!.ms.at(-1) as number) / (newest!.ms[0] as number);
+
+		await page.goto('/console/machine/');
+		await expect(page.locator(`[data-window-preset="${WIDEST}"] input`)).toBeEnabled();
+		await widen(page, WIDEST);
+
+		const printed = page.locator('[data-latency-spread]');
+		await expect(printed, 'the trend panel printed no spread at all').toHaveCount(1);
+		expect(Number(await printed.getAttribute('data-latency-spread'))).toBeCloseTo(wanted, 2);
+		// And the sentence carries the number rather than leaving it in an
+		// attribute only a test can read.
+		await expect(printed).toContainText(`${wanted.toFixed(1)} times as long`);
 	});
 
 	test('THE ORACLE: the built page draws a plot a percentile on one shared scale', async ({

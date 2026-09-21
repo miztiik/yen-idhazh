@@ -63,6 +63,13 @@ DAY_PATHS: Final[dict[str, Callable[[Path, str], Path]]] = {
     f"{ledger.COUNCIL_DIRNAME}-{ledger.SHARD_OUTCOMES_DIRNAME}": (
         ledger.council_shard_outcomes_path
     ),
+    f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}-{ledger.JUDGE_METRICS_DIRNAME}": (
+        ledger.content_similarity_judge_metrics_path
+    ),
+    (
+        f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}-"
+        f"{ledger.MERGE_LINE_HOLDOUT_SCORES_DIRNAME}"
+    ): ledger.merge_line_holdout_scores_path,
     f"{ledger.STORY_SIMILARITY_DIRNAME}-{ledger.SCORED_PAIRS_DIRNAME}": (
         ledger.scored_pairs_path
     ),
