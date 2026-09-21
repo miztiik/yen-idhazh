@@ -1,6 +1,6 @@
 # What the pipeline costs to run
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-21
 How fast, how heavy and how hot the thing that makes the digest is - the model,
 the runner, prefill and decode, memory, shard cost and the corpus. Every figure
 carries the date it was taken and its spread. Guardrail #10 in one page: **an
@@ -684,26 +684,79 @@ above - that came from the four capture files and from nowhere else.
 carrying a peak, and each row exists because the job lived long enough to write
 it. A job truly holding 96.0 percent of a 16 GB machine - with the kernel, the
 runner agent and the page cache inside the same 16 GB - would be expected to swap
-hard or be killed. The readings and the survival do not sit together, and the
-number doing the arguing is the one nobody took.
+hard or be killed. The readings and the survival did not sit together, and the
+number doing the arguing was the one nobody had taken.
 
-**So the headroom question is open.** How large the marks are is measured, and
-every figure in the table stands. How near the edge they came is not measured,
-because the deciding number - what the machine had free while the marks were held
-- was never captured. This page does not say that 8,192 leaves 0.59 GiB of room,
-and it does not say that 16,384 fits or that it does not.
+### The machine's own reading arrived, and the survival now makes sense
 
-**What the next run captures.** From 2026-09-09 the 15-second sampler in
-`digest.yml` writes four more columns beside the two process marks: `mem_total_kb`
-and `mem_available_kb` and `committed_as_kb` from `/proc/meminfo`, and
-`cgroup_current_bytes` from `/sys/fs/cgroup/memory.current` where the runner has
-one. `MemAvailable` is the kernel's own estimate of what a new allocation could
-get, which is the question this section could not answer. A file that does not
-exist is written as the word `absent` rather than left blank, because a blank cell
-reads as zero and zero available memory is a very different claim from no reading.
-No contract field was minted for them yet: the capture lands first, and a column
-on the ledger row is worth adding once there is a run that proves the reading
-arrives.
+**Measured 2026-09-21** over the committed `state/item-health/` tree: 13,877 item
+rows, of which **378 carry the machine's own reading**, on **two days,
+2026-09-19 and 2026-09-20**. The ledger's first day is 2026-08-24, so this is the
+start of a record rather than a summary of one. Every figure below is an exact
+count over committed files, so it has no spread to report and it will move as
+soon as a third day lands.
+
+**The machine is 15.61 GiB** - four distinct `MemTotal` values inside 1 MiB of
+each other. **What it was holding runs 43.4 percent at the quietest to 82.2
+percent at the tightest, with a median of 52.3 percent**, taking held as
+`MemTotal` minus `MemAvailable`. **The least the kernel ever said it could still
+hand out was 2.76 GiB**, read off the within-item floor; the median floor is 7.44
+GiB. So the 96.0 percent above was never memory the kernel had to find.
+
+**The resident sums were an upper bound, and by how much is now readable.** The
+model server's resident set is **larger than everything the kernel calls held on
+375 of the 378 rows** - a median of 75.5 percent of the machine against 52.3
+percent held. A process cannot hold more than the machine is holding, so the
+difference is exactly the mapped weight pages the kernel counts once in `VmRSS`
+and once as reclaimable cache. That is the second section above, confirmed from
+the other side.
+
+**Adding the four parts up still does not work, and now that is measured too.**
+`llama_rss_bytes` plus `python_rss_bytes` plus `Cached` plus `MemAvailable`
+exceeds `MemTotal` on **378 of 378 rows, by 1.21x at the narrowest and 1.87x at
+the widest**. Two independent double-counts cause it: the weight file is in the
+server and in the page cache at once, and `MemAvailable` is mostly that same
+page cache. The console draws the two parts that do partition the machine and
+draws the process readings as overlapping brackets, so the addition is refused
+on the page rather than in a caption
+([../concepts/console-design.md](../concepts/console-design.md#what-is-holding-the-machines-memory-is-two-parts-a-reader-may-add-and-two-brackets-they-may-not)).
+
+**The swap was the missing half of the survival argument, and it is small.**
+`SwapTotal` is 3.00 GiB on every one of the 378 rows. What had actually been
+pushed out to disk was **non-zero on 346 of them, with a median of 60 KiB, a p90
+of 61.1 MiB and a worst of 657.9 MiB** - 21.4 percent of the swap file at its
+worst, and four ten-thousandths of one percent of the machine at its median. The
+machine did not swap hard. It barely swapped at all.
+
+**What remains open is narrower.** How much of each process is anonymous - memory
+the kernel cannot reclaim by dropping pages - is still unread: `llama_rss_anon_bytes`
+and `python_rss_anon_bytes` are columns on the item row and are **empty on all
+13,877 of them**, because they landed after the last run. Until a run fills them,
+the split of the held part between the two processes and everything else is
+modelled from the weight-file size rather than read. That model puts the
+remainder at **0.26 GiB at its smallest and 0.34 GiB at its median, positive on
+all 378 rows**, which is a consistency check on the model and not a measurement
+of the residue.
+
+**So the headroom question is answered for the two days that carry a reading.**
+The tightest committed moment left the kernel 2.76 GiB it said it could still
+hand out, on a 15.61 GiB machine, with 385.7 MiB pushed to disk. This page still
+does not say that 8,192 leaves 0.59 GiB of room - that subtraction was retracted
+above and stays retracted - and two days is not a distribution. What it no longer
+says is that the deciding number was never captured.
+
+**What the capture became.** The 2026-09-09 plan was four extra columns on the
+15-second sampler in `digest.yml` - `mem_total_kb`, `mem_available_kb`,
+`committed_as_kb` and `cgroup_current_bytes`. What shipped instead is six cells
+on the item row itself: `os_mem_total_bytes`, `os_mem_available_bytes`,
+`os_mem_cached_bytes`, `os_swap_total_bytes`, `os_swap_free_bytes` and
+`os_mem_available_min_bytes`, the last being the lowest `MemAvailable` seen while
+that one article was worked. The item row was the better home because every other
+figure this page argues about is per item, and a sampler row cannot be joined to
+the article that caused it. `Committed_AS` was dropped and no cgroup cell was
+minted: `/sys/fs/cgroup/memory.peak` has measured absent on every run, and a
+GitHub-hosted runner gives the job the whole machine, so the cgroup reading and
+the `/proc/meminfo` reading would have been the same number twice.
 
 ### The ledger's own worst row moved to 13.82 GiB
 

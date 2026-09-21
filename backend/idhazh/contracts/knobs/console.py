@@ -460,6 +460,7 @@ class ConsoleConfig(Model):
                     title="How close we are to the limits",
                     panels=[
                         "memory-board",
+                        "memory-held",
                         "context-headroom",
                     ],
                 ),

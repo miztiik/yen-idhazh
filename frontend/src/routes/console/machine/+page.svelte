@@ -44,6 +44,7 @@
 	import MachineCardsPanel from '$lib/console/machine/MachineCardsPanel.svelte';
 	import MachineSplitPanel from '$lib/console/machine/MachineSplitPanel.svelte';
 	import MemoryBoardPanel from '$lib/console/machine/MemoryBoardPanel.svelte';
+	import MemoryHeldPanel from '$lib/console/machine/MemoryHeldPanel.svelte';
 	import ArticleCostPanel from '$lib/console/machine/ArticleCostPanel.svelte';
 	import PlatformMixPanel from '$lib/console/machine/PlatformMixPanel.svelte';
 	import PromptCachePanel from '$lib/console/machine/PromptCachePanel.svelte';
@@ -213,6 +214,13 @@
 				start={view.start}
 				end={view.end}
 				windowDays={view.days}
+			/>
+		{:else if id === 'memory-held'}
+			<MemoryHeldPanel
+				record={data.memoryHeld}
+				start={view.start}
+				end={view.end}
+				days={view.days}
 			/>
 		{:else if id === 'reading-against-writing'}
 			<MachineSplitPanel split={data.split} />	{:else if id === 'article-cost'}
