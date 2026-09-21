@@ -23,6 +23,7 @@ import {
 	type ContextSpan
 } from '$lib/console/machine/context-cost';
 import { costChart, costOverDays, DEFAULT_COST_SHAPE } from '$lib/charts/cost';
+import { memoryHeld } from '$lib/console/machine/memory-held';
 import { splitByMachine } from '$lib/charts/machine-split';
 import { machineCards, type MachineCards } from '$lib/charts/machine-cards';
 import { machineKeys, machineRamp } from '$lib/charts/machine-colour';
@@ -134,6 +135,7 @@ export interface RunSeries {
 const DRAWN_PANELS = [
 	'shard-board',
 	'memory-board',
+	'memory-held',
 	'reading-against-writing',
 	'prompt-cache',
 	'context-headroom',
@@ -351,6 +353,11 @@ export async function load() {
 	// window grain is the span the loop above already derived for every preset,
 	// which this panel reads rather than deriving a second time.
 	const memory = memoryBoard(newest, health);
+	// One bar a day, over every day the widest preset reaches, so the panel can
+	// take the open span off the control without this deriving a second time.
+	// Split from `memoryBoard` on purpose: that panel asks how near one run came
+	// to the ceiling, and this one asks what the whole machine was holding.
+	const held = memoryHeld(health);
 	// One group a machine, never one figure over all of them. Measured 2026-09-17
 	// over the committed counters ledger, 86 of the 90 runs that name a processor
 	// drew more than one kind, so a pooled rate was a number about neither.
@@ -433,6 +440,7 @@ export async function load() {
 		modelChanges: pipelineChanges(evalRows(days).rows, loadManifests(undefined, widest)),
 		board,
 		memory,
+		memoryHeld: held,
 		newestRunId: newest?.runId ?? null,
 		split,
 		machines,
