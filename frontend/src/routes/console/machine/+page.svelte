@@ -207,7 +207,14 @@
 		{#if id === 'shard-board'}
 			<ShardBoardPanel board={data.board} timeoutMinutes={data.shardTimeoutMinutes} />
 		{:else if id === 'memory-board'}
-			<MemoryBoardPanel board={data.memory} span={view.peakRssSpan} windowDays={view.days} />
+			<MemoryBoardPanel
+				board={data.memory}
+				span={view.peakRssSpan}
+				moved={data.settingsMoved}
+				start={view.start}
+				end={view.end}
+				windowDays={view.days}
+			/>
 		{:else if id === 'reading-against-writing'}
 			<MachineSplitPanel split={data.split} />	{:else if id === 'article-cost'}
 		<ArticleCostPanel
@@ -231,6 +238,7 @@
 				contextWindow={data.contextWindow}
 				cost={view.context}
 				modelChanges={data.modelChanges}
+				moved={data.settingsMoved}
 				chart={data.chart}
 				{windowDays}
 				days={view.days}
@@ -259,6 +267,7 @@
 				start={view.start}
 				end={view.end}
 				modelChanges={data.modelChanges}
+				moved={data.settingsMoved}
 				chart={data.chart}
 				{windowDays}
 				days={view.days}
