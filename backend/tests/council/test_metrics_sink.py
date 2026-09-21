@@ -269,7 +269,7 @@ def test_the_upload_name_matches_what_the_collecting_job_downloads() -> None:
     ]
     patterns = [
         str(step["with"]["pattern"])
-        for step in workflow["jobs"]["fold"]["steps"]
+        for step in workflow["jobs"]["collect"]["steps"]
         if str(step.get("uses", "")).startswith("actions/download-artifact")
         and "pattern" in step["with"]
     ]
