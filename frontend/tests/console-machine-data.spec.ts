@@ -19,15 +19,20 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
 	clockAgreement,
-	contextColumns,
-	contextHeadroom,
 	latencyColumns,
 	peakMemory,
 	percentileHistory,
+	quantile,
 	seconds,
 	PERCENTILES,
 	RUNNER_MEMORY_BYTES
 } from '../src/lib/charts/machine';
+import {
+	contextColumns,
+	contextCost,
+	highLabel,
+	type ContextOptions
+} from '../src/lib/console/machine/context-cost';
 import { readDayShards } from '../src/lib/server/payload';
 import {
 	CLOCKS_AGREE_WITHIN_PCT,
@@ -827,7 +832,12 @@ test.describe('the shard board survives a phone', () => {
 
 const CONSOLE = JSON.parse(
 	readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
-).console as { window_presets: number[]; min_attempts_for_rate: number };
+).console as {
+	window_presets: number[];
+	min_attempts_for_rate: number;
+	context_high_percentile: number;
+	context_cut_off_reason: string;
+};
 const INFERENCE = JSON.parse(
 	readFileSync(
 		resolve(
@@ -846,6 +856,11 @@ const INFERENCE = JSON.parse(
 
 const WIDEST = Math.max(...CONSOLE.window_presets);
 
+/** The limit every canary item ran under. The canary writes the committed
+ * `inference.n_ctx`, so a fixture that disagreed with the config would draw a
+ * share no run ever had. */
+const CANARY_LIMIT = INFERENCE.n_ctx;
+
 /** Drive the shared control to a preset and wait for the page to hold it. */
 async function widen(page: import('@playwright/test').Page, days: number) {
 	await page.locator(`[data-window-preset="${days}"]`).click();
@@ -855,88 +870,214 @@ async function widen(page: import('@playwright/test').Page, days: number) {
 	);
 }
 
-test.describe('Row #19 - context headroom is one chart with a limit rule', () => {
-	const limits: MachineLimits = { contextWindow: INFERENCE.n_ctx, jobTimeoutSeconds: 9000 };
-	let runs: MachineRun[] = [];
-	test.beforeAll(() => {
-		runs = machineCounters(canaryHosts(), canaryHealth(), canaryPlan(), limits).runs;
-	});
+test.describe('Row #21 - the context panel says what the limit already costs', () => {
+	/** The knobs the page reads, off the committed config rather than typed here:
+	 * a percentile pinned in a test is a percentile the config can no longer
+	 * move. */
+	const OPTIONS: ContextOptions = {
+		percentile: CONSOLE.context_high_percentile,
+		cutOffReason: CONSOLE.context_cut_off_reason
+	};
 
-	/** The longest sequence per run, read straight off the item ledger rather
-	 * than off the module - a maximum over the run's rows, blanks skipped. The
-	 * ledger records what each item sent and what came back, so the sequence is
-	 * the two added, exactly as the reader folds them. */
-	function longestByRun(): Map<string, number> {
-		const found = new Map<string, number>();
-		for (const row of canaryHealth()) {
-			if (row.input_tokens === '' || row.cached_tokens === '' || row.output_tokens === '') continue;
-			const value = Number(row.input_tokens) + Number(row.output_tokens);
-			if (!Number.isFinite(value)) continue;
+	/** Every item's own peak, read straight off the canary ledger rather than off
+	 * the module.
+	 *
+	 * The limit bounds ONE call, and a pipeline that carries an earlier call
+	 * forward into a later prompt makes the calls added together a length the
+	 * server never held. So the peak is the LARGEST filled call slot and never
+	 * their sum - and nothing here counts the slots, which is a config value
+	 * rather than a property of the pipeline.
+	 *
+	 * A run the ledger names keys an entry even when nothing on it is measurable,
+	 * because the panel draws an absence rather than dropping the run.
+	 */
+	function peaksByRun(rows: readonly Record<string, string>[]): Map<string, number[]> {
+		const found = new Map<string, number[]>();
+		for (const row of rows) {
 			const runId = row.run_id ?? '';
-			found.set(runId, Math.max(found.get(runId) ?? 0, value));
+			if (runId === '') continue;
+			const here = found.get(runId) ?? [];
+			found.set(runId, here);
+			const limit = Number(row.n_ctx_configured);
+			if (row.n_ctx_configured === '' || !Number.isFinite(limit)) continue;
+			let peak: number | null = null;
+			for (const slot of ['label', 'summary']) {
+				const prompt = row[`${slot}_input_tokens`];
+				const wrote = row[`${slot}_output_tokens`];
+				if (prompt === undefined || prompt === '' || wrote === undefined || wrote === '') continue;
+				peak = Math.max(peak ?? 0, Number(prompt) + Number(wrote));
+			}
+			if (peak !== null) here.push(peak);
 		}
 		return found;
 	}
 
-	test('THE ORACLE: one mark a run, and the spare series is the window less it', () => {
-		const expected = longestByRun();
-		expect(expected.size, 'the canary ledger records no sequence length').toBeGreaterThan(1);
+	test('THE ORACLE: the unused share is the largest article recomputed off the ledger', () => {
+		const rows = canaryHealth();
+		const expected = [...peaksByRun(rows).values()].flat();
+		expect(expected.length, 'the canary ledger measures no article at all').toBeGreaterThan(1);
 
-		const bars = contextHeadroom(runs, limits.contextWindow);
-		const window = INFERENCE.n_ctx;
-		// One column a run the reader handed over, including a run that recorded no
-		// sequence at all - which is every run before token capture. Dropping it
-		// would be a run nobody could ask about.
-		expect(bars.map((bar) => bar.runId).sort()).toEqual(runs.map((run) => run.runId).sort());
-		for (const bar of bars) {
-			const longest = expected.get(bar.runId) ?? null;
-			expect(bar.longest, `${bar.runId} drew a sequence the ledger does not hold`).toBe(longest);
-			if (longest === null) {
-				expect(bar.spare, `${bar.runId} spared room off a sequence nobody recorded`).toBeNull();
-				expect(bar.usedPct).toBeNull();
+		const { span } = contextCost(rows, OPTIONS);
+		expect(span.limits, 'the canary ran under more than one limit').toEqual([CANARY_LIMIT]);
+		expect(span.items, 'the reader measured a different set of articles').toBe(expected.length);
+		expect(span.rowsRead).toBe(rows.length);
+
+		const sorted = [...expected].sort((left, right) => left - right);
+		const largest = sorted[sorted.length - 1];
+		expect(span.largest, 'the largest article is not the ledger\u2019s largest').toBe(largest);
+		expect(span.largestPct).toBe(Math.round((largest / CANARY_LIMIT) * 100));
+		// The headline. Unused is what the WORST article left behind, so it is the
+		// slack that is there even in the case the setting exists for.
+		expect(span.unusedPct, 'the unused share is not the largest article inverted').toBe(
+			100 - Math.round((largest / CANARY_LIMIT) * 100)
+		);
+		const median = Math.round(quantile(sorted, 0.5));
+		expect(span.median).toBe(median);
+		expect(span.timesMedian).toBe(Math.round((CANARY_LIMIT / median) * 10) / 10);
+		expect(span.high).toBe(Math.round(quantile(sorted, OPTIONS.percentile / 100)));
+		expect(span.percentile).toBe(OPTIONS.percentile);
+	});
+
+	test('THE ORACLE: every run mark carries both ends, not one', () => {
+		const expected = peaksByRun(canaryHealth());
+		const { runs } = contextCost(canaryHealth(), OPTIONS);
+		expect(runs.map((run) => run.runId)).toEqual([...expected.keys()].sort());
+		expect(
+			runs.filter((run) => run.items === 0).length,
+			'a run the ledger names but never measured was dropped from the axis'
+		).toBeGreaterThan(0);
+		for (const run of runs) {
+			const peaks = [...(expected.get(run.runId) ?? [])].sort((left, right) => left - right);
+			expect(run.items, `${run.runId} measured a different number of articles`).toBe(peaks.length);
+			if (peaks.length === 0) {
+				// An absence, never a zero: this run recorded nothing to draw.
+				expect(run.largest, `${run.runId} drew a peak off no article at all`).toBeNull();
+				expect(run.high).toBeNull();
 				continue;
 			}
-			// The second series is derived, and this is what it is derived from.
-			expect(bar.spare, `${bar.runId}: spare is not the window less the longest`).toBe(
-				window - longest
+			expect(run.largest, `${run.runId} drew a peak the ledger does not hold`).toBe(
+				peaks[peaks.length - 1]
 			);
-			expect(bar.usedPct).toBe(Math.round((longest / window) * 100));
+			expect(run.high, `${run.runId} drew no second end`).toBe(
+				Math.round(quantile(peaks, OPTIONS.percentile / 100))
+			);
+			// Two ends means two readings. A run whose high equals its largest is
+			// legitimate - it has few enough articles that the percentile lands on
+			// the top one - but both have to be there.
+			expect(run.highPct).not.toBeNull();
+			expect(run.largestPct).not.toBeNull();
+			expect(run.high as number).toBeLessThanOrEqual(run.largest as number);
 		}
 	});
 
-	test('no ceiling means no spare series and no share, and the sequence survives', () => {
-		// The bite for the clause above: a spare computed from a window nobody
-		// configured would be a number invented by the chart.
-		const bars = contextHeadroom(runs, null);
-		for (const bar of bars) {
-			expect(bar.spare).toBeNull();
-			expect(bar.usedPct).toBeNull();
-		}
-		const measured = bars.filter((bar) => bar.longest !== null);
-		expect(measured.length, 'no canary run records a sequence at all').toBeGreaterThan(0);
+	test('a row that recorded no limit is not measured, and a total across calls is not a peak', () => {
+		// Two rows the reader must refuse, each for its own reason. A row with no
+		// limit has no denominator; a row that recorded one total across its calls
+		// recorded a length nothing ever held.
+		const rows: Record<string, string>[] = [
+			{ run_id: '2026-09-02-1', date: '2026-09-02', label_input_tokens: '900', label_output_tokens: '100' },
+			{ run_id: '2026-09-02-1', date: '2026-09-02', n_ctx_configured: '8192', input_tokens: '4000', output_tokens: '500' },
+			{ run_id: '2026-09-02-1', date: '2026-09-02', n_ctx_configured: '8192', summary_input_tokens: '1900', summary_output_tokens: '148' }
+		];
+		const { span, runs } = contextCost(rows, OPTIONS);
+		expect(span.rowsRead).toBe(3);
+		expect(span.items, 'a row with no limit or no call cells was measured').toBe(1);
+		expect(span.largest).toBe(2048);
+		expect(span.largestPct).toBe(25);
+		expect(span.unusedPct).toBe(75);
+		expect(runs[0].items).toBe(1);
 	});
 
-	test('the strip prints the same three numbers the chart drew', () => {
-		const bars = contextHeadroom(runs, limits.contextWindow);
-		const columns = contextColumns(bars, limits.contextWindow);
-		expect(columns).toHaveLength(bars.length);
+	test('the peak is the largest call and never the calls added', () => {
+		// The correction this panel was rebuilt for. The later call replays the
+		// earlier one, so 1,000 + 2,050 is a length the server never held and 2,050
+		// is what the slot actually carried.
+		const row: Record<string, string> = {
+			run_id: '2026-09-02-1',
+			date: '2026-09-02',
+			n_ctx_configured: '8192',
+			label_input_tokens: '900',
+			label_output_tokens: '100',
+			summary_input_tokens: '1950',
+			summary_output_tokens: '100'
+		};
+		const { span } = contextCost([row], OPTIONS);
+		expect(span.largest, 'the reader added the calls together').toBe(2050);
+		expect(span.largest).not.toBe(3050);
+	});
+
+	test('a limit that moved inside the span leaves the token figures unshared', () => {
+		// Two limits means no single token figure is about the span, so the shares
+		// go and the limits are named. Drawing one anyway would be a percentage of
+		// a number half the rows never ran under.
+		const rows: Record<string, string>[] = [
+			{ run_id: '2026-09-02-1', date: '2026-09-02', n_ctx_configured: '8192', summary_input_tokens: '1000', summary_output_tokens: '48' },
+			{ run_id: '2026-09-03-1', date: '2026-09-03', n_ctx_configured: '65536', summary_input_tokens: '2000', summary_output_tokens: '48' }
+		];
+		const { span } = contextCost(rows, OPTIONS);
+		expect(span.limits).toEqual([8192, 65536]);
+		expect(span.largest, 'the token figure survives a limit that moved').toBe(2048);
+		expect(span.largestPct, 'a share was taken against one of two limits').toBeNull();
+		expect(span.unusedPct).toBeNull();
+		expect(span.timesMedian).toBeNull();
+		// Each run still has its own share, because each ran under one limit.
+		expect(span.items).toBe(2);
+	});
+
+	test('a cut-off reply is counted and an unrecorded one is not called a clean stop', () => {
+		const clean = { label_finish_reason: 'stop', summary_finish_reason: 'stop' };
+		const cut = { label_finish_reason: 'stop', summary_finish_reason: CONSOLE.context_cut_off_reason };
+		const { span } = contextCost([clean, cut, {}], OPTIONS);
+		expect(span.calls, 'a row that named no reason was counted as a call').toBe(4);
+		expect(span.cutOff).toBe(1);
+		expect(span.reasons).toEqual([
+			{ reason: 'stop', calls: 3 },
+			{ reason: CONSOLE.context_cut_off_reason, calls: 1 }
+		]);
+	});
+
+	test('no rows at all is an absence the panel can name, never a zero', () => {
+		// The state a fresh clone and a wiped ledger are both in. Every figure is
+		// null rather than 0: a limit nothing ran under has no share, and a zero
+		// share would read as a limit nothing needs.
+		const { runs, span } = contextCost([], OPTIONS);
+		expect(runs).toEqual([]);
+		expect(span.rowsRead).toBe(0);
+		expect(span.items).toBe(0);
+		expect(span.limits).toEqual([]);
+		expect(span.largest).toBeNull();
+		expect(span.unusedPct, 'an unread limit reported a share').toBeNull();
+		expect(span.timesMedian).toBeNull();
+		expect(span.calls).toBe(0);
+		expect(span.cutOff).toBe(0);
+		expect(span.reasons).toEqual([]);
+	});
+
+	test('the strip prints both ends and names the percentile in words', () => {
+		const { runs } = contextCost(canaryHealth(), OPTIONS);
+		const columns = contextColumns(runs, CANARY_LIMIT, OPTIONS.percentile);
+		expect(columns).toHaveLength(runs.length);
 		columns.forEach((column, at) => {
-			const bar = bars[at];
+			const run = runs[at];
 			const said = Object.fromEntries(column.rows.map((row) => [row.label, row.value]));
-			expect(column.date).toBe(bar.runId);
-			// A run that recorded nothing prints a dash, which is the one reading that
-			// is not a number the chart could have drawn.
-			expect(said['Longest sequence'].replace(/,/g, '')).toContain(
-				bar.longest === null ? '-' : String(bar.longest)
+			expect(column.date).toBe(run.runId);
+			// A run that measured nothing prints a dash, which is the one reading
+			// that is not a number the chart could have drawn.
+			expect(said['The longest article'].replace(/,/g, '')).toContain(
+				run.largest === null ? '-' : String(run.largest)
 			);
-			expect(said['Spare'].replace(/,/g, '')).toContain(
-				bar.spare === null ? '-' : String(bar.spare)
+			expect(said[highLabel(OPTIONS.percentile)].replace(/,/g, '')).toContain(
+				run.high === null ? '-' : String(run.high)
 			);
-			expect(said['Of the window']).toContain(bar.usedPct === null ? '-' : `${bar.usedPct}%`);
+			expect(said['Articles measured']).toBe(String(run.items));
 		});
+		// `p99` is a subsystem term. The strip says it in words a reader who has
+		// never met one still understands, and the words follow the knob.
+		expect(highLabel(99)).toBe('All but the longest 1 in 100');
+		expect(highLabel(95)).toBe('All but the longest 5 in 100');
 	});
 
-	test('THE ORACLE: the built page draws one mark a run, in date order, under the rule', async ({
+	test('THE ORACLE: the built page draws both ends a run, in date order, under the rule', async ({
 		page
 	}) => {
 		await page.goto('/console/machine/');
@@ -948,56 +1089,84 @@ test.describe('Row #19 - context headroom is one chart with a limit rule', () =>
 			if (panel === null) return null;
 			const svg = panel.querySelector('svg');
 			const rule = panel.querySelector('[data-context-limit]');
+			const marksOf = (name: string) =>
+				svg === null ? [] : [...svg.querySelectorAll(`[data-context-series="${name}"] circle`)];
 			return {
 				runs: [...panel.querySelectorAll('[data-context-run]')].map((li) => ({
 					runId: li.getAttribute('data-context-run') ?? '',
-					longest: li.getAttribute('data-context-longest') ?? '',
+					largest: li.getAttribute('data-context-largest') ?? '',
+					high: li.getAttribute('data-context-high') ?? '',
 					said: (li.textContent ?? '').replace(/\s+/g, ' ').trim()
 				})),
-				marks: svg === null ? 0 : svg.querySelectorAll('[data-context-series="longest"] circle').length,
-				spare: svg === null ? '' : (svg.querySelector('[data-context-series="spare"] polyline, polyline[data-context-series="spare"]')?.getAttribute('points') ?? ''),
+				largestMarks: marksOf('largest').length,
+				highMarks: marksOf('high').length,
 				limit: rule?.getAttribute('data-context-limit') ?? '',
 				ruleY: rule === null ? null : Number(rule.getAttribute('y1')),
-				markYs: svg === null ? [] : [...svg.querySelectorAll('[data-context-series="longest"] circle')].map((c) => Number(c.getAttribute('cy')))
+				markYs: marksOf('largest').map((mark) => Number(mark.getAttribute('cy'))),
+				unused: panel.querySelector('[data-context-cost]')?.getAttribute('data-context-unused-pct') ?? '',
+				cost: (panel.querySelector('[data-context-cost]')?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+				cutOff: panel.querySelector('[data-context-cutoff]')?.getAttribute('data-context-cutoff-calls') ?? ''
 			};
 		});
 
 		expect(drawn, 'no context panel on the page').not.toBeNull();
-		const expected = longestByRun();
-		// One column a run the reader holds, and one mark for each run that recorded
-		// a sequence. A run that recorded none is named with a dash rather than
-		// dropped, so the two counts are not the same number.
-		expect(drawn!.runs.map((run) => run.runId).sort(), 'the panel names a different set of runs')
-			.toEqual(runs.map((run) => run.runId).sort());
-		expect(drawn!.marks, 'the chart drew a mark for a run that recorded no sequence').toBe(
-			drawn!.runs.filter((run) => run.longest !== '').length
+		const expected = peaksByRun(canaryHealth());
+		expect(drawn!.runs.map((run) => run.runId), 'the panel names a different set of runs').toEqual(
+			[...expected.keys()].sort()
 		);
+		// Both ends, one mark each a run the ledger measured. One series alone is
+		// the state this row replaced: a single mark cannot say both what an
+		// ordinary article takes and what the worst one takes. A run that measured
+		// nothing keeps its column and draws no mark, so the two counts differ.
+		const measured = drawn!.runs.filter((run) => run.largest !== '').length;
+		expect(measured, 'no run on the canary measured an article').toBeGreaterThan(0);
+		expect(drawn!.largestMarks, 'the chart drew no worst-case mark').toBe(measured);
+		expect(drawn!.highMarks, 'the chart drew only one end a run').toBe(measured);
 		for (const run of drawn!.runs) {
-			const longest = expected.get(run.runId);
-			expect(run.longest, `${run.runId} drew a sequence the ledger does not hold`).toBe(
-				longest === undefined ? '' : String(longest)
+			const peaks = [...(expected.get(run.runId) ?? [])].sort((left, right) => left - right);
+			if (peaks.length === 0) {
+				expect(run.largest, `${run.runId} drew a peak off no article at all`).toBe('');
+				expect(run.said, `${run.runId} was dropped instead of drawn as an absence`).toContain(
+					'no article recorded'
+				);
+				continue;
+			}
+			expect(run.largest, `${run.runId} drew a peak the ledger does not hold`).toBe(
+				String(peaks[peaks.length - 1])
 			);
-			expect(run.said, `${run.runId} prints no denominator`).toMatch(
-				/over \d+ of \d+ shards|manifest recorded no shard count/
-			);
+			expect(run.said, `${run.runId} prints no denominator`).toMatch(/over \d+ articles?/);
 		}
 		// Date order, oldest first: a run id is `<date>-<n>`, so a plain sort is
 		// the order the chart must be in.
 		expect(drawn!.runs.map((run) => run.runId)).toEqual(
 			[...drawn!.runs.map((run) => run.runId)].sort()
 		);
-		// The rule is the configured window, and it sits above every mark, which
-		// is the geometry that makes it a limit rather than a series.
-		expect(drawn!.limit).toBe(String(INFERENCE.n_ctx));
+		// The rule is the limit the rows ran under, and it sits above every mark,
+		// which is the geometry that makes it a limit rather than a series.
+		expect(drawn!.limit).toBe(String(CANARY_LIMIT));
 		expect(drawn!.markYs.length).toBeGreaterThan(0);
 		expect(
 			Math.min(...drawn!.markYs),
-			'a mark is drawn above the window it cannot exceed'
+			'a mark is drawn above the limit it cannot exceed'
 		).toBeGreaterThanOrEqual(drawn!.ruleY as number);
-		expect(drawn!.spare, 'the spare series drew nothing').not.toBe('');
+
+		// THE ORACLE: the printed unused share is the ledger's own arithmetic.
+		const all = [...expected.values()].flat().sort((left, right) => left - right);
+		const largest = all[all.length - 1];
+		const unused = 100 - Math.round((largest / CANARY_LIMIT) * 100);
+		expect(drawn!.unused, 'the printed unused share is not the ledger recomputed').toBe(
+			String(unused)
+		);
+		expect(drawn!.cost, 'the page prints a share without saying what it means').toContain(
+			'went spare every time'
+		);
+		// The canary carries one cut-off reply, which no committed day has ever
+		// produced, so the state a shrinking budget reaches is drawn rather than
+		// argued about.
+		expect(Number(drawn!.cutOff), 'the page counted no cut-off reply').toBeGreaterThan(0);
 	});
 
-	test('THE ORACLE: hovering a run prints that run own three numbers', async ({ page }) => {
+	test('THE ORACLE: hovering a run prints that run own numbers', async ({ page }) => {
 		await page.goto('/console/machine/');
 		await expect(page.locator(`[data-window-preset="${WIDEST}"] input`)).toBeEnabled();
 		await widen(page, WIDEST);
@@ -1031,10 +1200,13 @@ test.describe('Row #19 - context headroom is one chart with a limit rule', () =>
 		expect(last.trim()).toBe(runs[runs.length - 1]);
 		expect(first).not.toBe(last);
 		// And the numbers under that heading are the ones the list prints for it.
+		// The last column is the newest run, which the canary measures; a run it
+		// did not measure prints a dash and there would be no number to compare.
 		const said = await panel.locator('[data-readout="context"]').innerText();
 		const listed = await panel
 			.locator(`[data-context-run="${runs[runs.length - 1]}"]`)
-			.getAttribute('data-context-longest');
+			.getAttribute('data-context-largest');
+		expect(listed, 'the newest run measured no article, so the readout has no number').not.toBe('');
 		expect(said.replace(/,/g, '')).toContain(String(listed));
 	});
 });

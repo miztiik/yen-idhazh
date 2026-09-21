@@ -39,7 +39,7 @@
 	import { base } from '$app/paths';
 	import PanelGroup from '$lib/components/PanelGroup.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
-	import ContextHeadroomPanel from '$lib/console/machine/ContextHeadroomPanel.svelte';
+	import ContextCostPanel from '$lib/console/machine/ContextCostPanel.svelte';
 	import CounterfactualCostPanel from '$lib/console/machine/CounterfactualCostPanel.svelte';
 	import MachineCardsPanel from '$lib/console/machine/MachineCardsPanel.svelte';
 	import MachineSplitPanel from '$lib/console/machine/MachineSplitPanel.svelte';
@@ -218,16 +218,16 @@
 				chart={data.chart}
 			/>
 		{:else if id === 'context-headroom'}
-			<ContextHeadroomPanel
+			<ContextCostPanel
 				rows={data.series.context}
 				start={view.start}
 				end={view.end}
 				contextWindow={data.contextWindow}
+				cost={view.context}
 				modelChanges={data.modelChanges}
 				chart={data.chart}
 				{windowDays}
 				days={view.days}
-				runsRead={view.runsRead}
 			/>
 		{:else if id === 'two-clocks'}
 			<TwoClocksPanel

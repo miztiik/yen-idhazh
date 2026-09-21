@@ -86,6 +86,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-21T05:00",
+            change="console.context_high_percentile and console.context_cut_off_reason, additive.",
+            why="The context panel draws two ends a run and names what a cut-off looks like.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T04:30",
             change="assemble.same_story.adaptive_dedup_threshold.flush_every_pairs, default 1.",
             why="A shard that stops early kept nothing, and pairs are the only unit it has.",
@@ -99,11 +104,6 @@ class AppConfig(Contract):
             version="2026-09-21",
             change="council block added; the judge's own block is now optional.",
             why="The venue's runner numbers cannot sit inside a tenant that need not exist.",
-        ),
-        ChangelogEntry(
-            version="2026-09-20T01:00",
-            change="observability.host_fingerprint_bandwidth_mib renamed to ..._floor_mib.",
-            why="The probe now derives its buffer from the cache, so the value is a floor.",
         ),
         ChangelogEntry(
             version="2026-08-21",

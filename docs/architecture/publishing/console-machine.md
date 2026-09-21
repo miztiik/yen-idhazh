@@ -157,31 +157,54 @@ first paint always matches the prerendered document, and every cost figure on
 the page is derived from one shared value rather than from four copies that
 could drift.
 
-## Context headroom is one chart with a limit rule
+## What the context panel says the reading limit costs
 
 **Thirteen near-identical bars, each with two lines of prose, is a table
 pretending to be a chart.** The panel used to draw one target bar a run, so a
-question about a trend - is headroom moving toward the ceiling - had to be
-answered by reading thirteen numbers in a row. Since 2026-09-01 it is one chart:
-runs across the x-axis oldest first, the longest sequence on the y, the context
-window as a rule, and spare capacity as a second series. Authority: Susan,
-2026-08-31.
+question about a trend had to be answered by reading thirteen numbers in a row.
+Since 2026-09-01 it is one chart: runs across the x-axis oldest first, tokens on
+the y, and the reading limit as a rule. Authority: Susan, 2026-08-31.
 
-**The window is a rule, not a bar.** A limit is a line a series approaches. A bar
+**The limit is a rule, not a bar.** A limit is a line a series approaches. A bar
 beside a bar invites a reader to compare two lengths and forget which of them is
 the ceiling, and the browser oracle checks the geometry rather than the
-attribute: every mark must sit at or below the rule, because no run can exceed
-the window it was given. Authority: Jony.
+attribute: every mark must sit at or below the rule, because no call can exceed
+the limit it was given. Authority: Jony.
 
-**Spare capacity is dotted, because it is derived.** It is the window minus the
-measurement and not a second reading of anything, so the stroke says so.
-**What the panel answers is whether the truncation cap can go up**, and the
-answer is the worst run's share of its window: a run holding 88 percent of the
-window it was given is a no, and a run holding a third of it is a yes. The
-caveat is that it reads the path that is retiring. What it measures is the
-single call, which sizes at 25,156 tokens of the configured 65,536 at the
-committed cap; the pair the window is really held open for sizes at 54,887
-([`../summarize/prompt.md`](../summarize/prompt.md)).
+**The panel says what the current setting SPENDS, not only whether it could
+grow.** Until 2026-09-21 it drew the longest sequence and a dotted line for the
+room left over, which answered whether the truncation cap could rise - a
+question nobody was asking - and stayed silent on the size of the slack. It now
+draws two marks a run, because one mark cannot carry both the ordinary article
+and the worst one and the decision to cut the limit turns on the worst. Under
+the chart, one sentence names the share of the limit that has never been used
+and how many times the limit is the article it usually reads. Authority: Susan,
+plan 37 row 21. **What the reader loses: the dotted spare line**, which was the
+solid line reflected in the rule and carried no second reading.
+
+**The grain is one model call, and that correction roughly halves the figure.**
+The limit bounds one call. The pipeline carries an earlier call forward into the
+later prompt - measured 2026-09-21, the later prompt contains the earlier
+exchange on all 1,976 committed rows that record both - so the calls added
+together are a length the server never held. The panel takes the largest filled
+call slot per article instead. Measured 2026-09-21 over the 1,312 committed item
+rows that record both a limit and a call's own tokens, so both figures come off
+one row set: the old arithmetic read 26,706 tokens at its worst and the honest
+peak is 13,569, which is 41 percent of a 65,536-token limit against 21 percent.
+The overstatement is 1.97x at the worst row and 1.92x at the middle one.
+**Nothing here counts calls** - a slot is measured when the ledger filled it -
+because the count is a config value (plan 37, the standing rule).
+
+**Nothing has ever been cut off.** Every finish reason in the archive says the
+model stopped on its own: 2,624 of 2,624 calls, measured 2026-09-21. The word
+for the other outcome is `console.context_cut_off_reason`, a knob rather than a
+literal, because the vocabulary belongs to llama-server. The canary carries one
+cut-off reply so the state a shrinking budget reaches is drawn rather than
+argued about.
+
+**The row states the finding and does not act on it.** The limit is
+`models.summarize.inference.n_ctx` and cutting it is the owner's call. The
+panel's job is to make the slack impossible to miss.
 
 **The panel is about the worst run in the span, not the newest**, which is why
 it stays windowed and why every run in the span keeps a mark. Drawing only the
@@ -195,9 +218,9 @@ model-change rule falls on the FIRST run of a changed day, so one change draws
 one rule; without that, a day with three runs would say the pipeline changed
 three times.
 
-**Every run's own three numbers stay on the page**, in a screen-reader list
-under the chart. The chart is the shape of the question; the list is the table it
-was made from, and nothing on this route is only in a picture.
+**Every run's own numbers stay on the page**, in a screen-reader list under the
+chart. The chart is the shape of the question; the list is the table it was made
+from, and nothing on this route is only in a picture.
 
 ## Two panels left the page, and what the reader lost is named
 
