@@ -260,6 +260,8 @@ A total of zero on a push to `main` means no workflow was created. The recovery 
 
 **A new pipeline CLI flag may not be named after a `llama-server` flag.** The server's argv is built once from `config/` by `llama_server_flags`, and `test_every_job_that_starts_a_server_reaches_the_one_argv_builder` reads every `run:` body in every workflow and fails on any whole-token match - so a stage wanting the scraped `/metrics` body takes `--counters-file`, not `--metrics`. The failure names the step and the flag, which is quick to read only if you know the guard is about the server's namespace and not about your stage.
 
+**The staging test only recognises a writer that goes through `ledger.append_*` or `ledger.write_*`.** `backend/tests/workflows/test_ledger_staging.py` derives "which stores does a job have to stage" by reading those call sites, so a store filled from anywhere else is invisible to it and has to sit on an excuse list to keep the test green. Two stores are in that position today for opposite reasons: `state/content-similarity-judge/metrics` is filled through the council's shipping capability, and `merge-line-holdout-scores` is written by a stage a person runs rather than by any job. **The trap is that the excuse reads as "nothing fills this yet" when the truth is "nothing the test can see fills this".** A store written that way AND needing a job to stage it would slip through with no test saying so. Before adding an entry, say which of the two it is; the structural fix is to teach the derivation about writers outside `ledger`, which is a change of its own.
+
 ## See also
 
 - [../agent-notes.md](../agent-notes.md) - the index and what belongs on these pages.
