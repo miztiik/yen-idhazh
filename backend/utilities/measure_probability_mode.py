@@ -11,9 +11,9 @@ be taken against weights the config no longer declares. The port comes from
 `LLAMA_PORT`, read back through `idhazh.llm.server.DEFAULT_PORT` - this file
 spells no llama-server flag of its own (Guardrail #6).
 
-The reply arm of this question cannot be answered from a fixture: what a build
-does with a request field is a property of that build. The reading it prints
-belongs in `docs/reference/benchmarks/which-probabilities-the-server-returns.md`.
+No fixture can answer this: what a build does with a request field is a property
+of that build, so it takes a server. The reading it prints belongs in
+`docs/reference/benchmarks/which-probabilities-the-server-returns.md`.
 """
 
 from __future__ import annotations
