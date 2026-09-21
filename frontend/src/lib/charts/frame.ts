@@ -483,6 +483,16 @@ export function modelRules(
 	return rules;
 }
 
+/** What the rule says on the plot itself, without being pointed at.
+ *
+ * Two words, at the top of the line, in every chart that draws one. A rule a
+ * reader has to hover to identify is a rule most readers never identify: the
+ * finding is that a comparison across this line is not like-for-like, and a
+ * finding nobody can see has not been reported. The date is not repeated here
+ * because the day axis underneath already carries it.
+ */
+export const MODEL_RULE_LABEL = 'setup changed';
+
 /** What one rule says to anybody who points at it.
  *
  * One sentence in one place, so two charts cannot describe one event

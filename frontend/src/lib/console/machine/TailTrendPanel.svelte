@@ -22,6 +22,7 @@
 		linearAxis,
 		modelRuleRow,
 		modelRuleTitle,
+		MODEL_RULE_LABEL,
 		modelRules,
 		noModelRuleNote,
 		observeWidth,
@@ -32,6 +33,7 @@
 	import { shortDate } from '$lib/format';
 	import {
 		namesMoved,
+		namesMovedShort,
 		settingsByDate,
 		unreadRuleNote,
 		type SettingsMoved
@@ -123,7 +125,7 @@
 			...column,
 			x: tailX[index] ?? 0,
 			rows: tailBoundaries.has(tailRuns[index]?.date ?? '')
-				? [...column.rows, modelRuleRow(namesMoved(movedOn.get(tailRuns[index]?.date ?? '') ?? []))]
+				? [...column.rows, modelRuleRow(namesMovedShort(movedOn.get(tailRuns[index]?.date ?? '') ?? []))]
 				: column.rows
 		}))
 	);
@@ -283,12 +285,22 @@
 								x2={rule.x}
 								y1={tailBox(0).top}
 								y2={tailBox(PERCENTILES.length - 1).bottom}
-								stroke="var(--color-text-tertiary)"
+								stroke="var(--chart-change)"
+								stroke-width="1.5"
 								stroke-dasharray="3 3"
 								data-model-rule-line={rule.date}
 							>
 								<title>{modelRuleTitle(rule.date, namesMoved(movedOn.get(rule.date) ?? []))}</title>
 							</line>
+							<text
+								x={rule.x + 3}
+								y={tailBox(0).top + 9}
+								fill="var(--chart-change)"
+								font-size="10"
+								data-model-rule-label={rule.date}
+							>
+								{MODEL_RULE_LABEL}
+							</text>
 						{/each}
 
 						{#if tailAt !== null && tailX[tailAt] !== undefined}

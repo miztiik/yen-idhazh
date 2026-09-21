@@ -140,6 +140,27 @@ export function namesMoved(settings: readonly string[]): string {
 	return `${settings.slice(0, -1).join(', ')} and ${settings[settings.length - 1]}`;
 }
 
+/** How many settings a readout names before it starts counting instead.
+ *
+ * Three, because a strip row is one line and a fourth name is what pushes it
+ * onto a second. Seventeen inputs can move on one day, and a day that moved
+ * seven of them is the day a reader most needs the row to stay readable.
+ */
+export const NAMES_SHOWN = 3;
+
+/** The same list, cut to what fits on one line.
+ *
+ * "a, b and c" up to the cap, then "a, b, c and 4 more". The count is kept
+ * rather than dropped: a reader who sees three names and no number cannot tell
+ * a day that moved three settings from one that moved seven, and those are
+ * different days.
+ */
+export function namesMovedShort(settings: readonly string[]): string {
+	if (settings.length <= NAMES_SHOWN) return namesMoved(settings);
+	const shown = settings.slice(0, NAMES_SHOWN).join(', ');
+	return `${shown} and ${settings.length - NAMES_SHOWN} more`;
+}
+
 /** What a chart says about a day it covers, that a setting moved on, and that
  * it has no reading for.
  *

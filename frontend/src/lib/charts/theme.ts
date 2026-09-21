@@ -33,6 +33,7 @@ const STRUCTURE = [
 	'--chart-grid',
 	'--chart-axis',
 	'--chart-marker',
+	'--chart-change',
 	'--color-text',
 	'--color-text-secondary',
 	'--color-text-tertiary',

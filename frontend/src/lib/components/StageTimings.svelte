@@ -60,6 +60,7 @@
 		MODEL_RULE_ROW,
 		modelRules,
 		modelRuleTitle,
+		MODEL_RULE_LABEL,
 		noModelRuleNote,
 		notMeasuredRow,
 		observeWidth,
@@ -495,7 +496,7 @@
 				/>
 				<line x1={box.left} x2={box.left} y1={box.top} y2={box.bottom} stroke="var(--color-rule)" />
 
-				<!-- Dashed and in the neutral rule ink, never on the health ramp: a
+				<!-- Dashed and in the rule's own ink, never on the health ramp: a
 				     pipeline change is an event, not a verdict. Drawn under the series,
 				     so a dash never hides a day's own point. -->
 				{#each rules as rule (rule.date)}
@@ -504,12 +505,22 @@
 						x2={rule.x}
 						y1={box.top}
 						y2={box.bottom}
-						stroke="var(--color-text-tertiary)"
+						stroke="var(--chart-change)"
+						stroke-width="1.5"
 						stroke-dasharray="3 3"
 						data-model-rule-line={rule.date}
 					>
 						<title>{modelRuleTitle(rule.date)}</title>
 					</line>
+					<text
+						x={rule.x + 3}
+						y={box.top + 9}
+						fill="var(--chart-change)"
+						font-size="10"
+						data-model-rule-label={rule.date}
+					>
+						{MODEL_RULE_LABEL}
+					</text>
 				{/each}
 
 				{#if guide !== null}
