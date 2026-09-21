@@ -139,9 +139,11 @@ test.describe('the page as a whole', () => {
 		await expect(page.locator('[data-machine-split-basis]')).toContainText(
 			/of the run's \d+ shards/
 		);
-		await expect(page.locator('[data-context-run]').first()).toContainText(
-			/over\s+\d+\s+articles?/
-		);
+		// A run the ledger measured. A run it did not names the absence instead,
+		// which is a different sentence with no denominator to print.
+		await expect(
+			page.locator('[data-context-run]:not([data-context-largest=""])').first()
+		).toContainText(/over\s+\d+\s+articles?/);
 	});
 
 	test('a shard that reported nothing prints absence, never a zero', async ({ page }) => {

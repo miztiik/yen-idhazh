@@ -887,10 +887,17 @@ test.describe('Row #21 - the context panel says what the limit already costs', (
 	 * server never held. So the peak is the LARGEST filled call slot and never
 	 * their sum - and nothing here counts the slots, which is a config value
 	 * rather than a property of the pipeline.
+	 *
+	 * A run the ledger names keys an entry even when nothing on it is measurable,
+	 * because the panel draws an absence rather than dropping the run.
 	 */
 	function peaksByRun(rows: readonly Record<string, string>[]): Map<string, number[]> {
 		const found = new Map<string, number[]>();
 		for (const row of rows) {
+			const runId = row.run_id ?? '';
+			if (runId === '') continue;
+			const here = found.get(runId) ?? [];
+			found.set(runId, here);
 			const limit = Number(row.n_ctx_configured);
 			if (row.n_ctx_configured === '' || !Number.isFinite(limit)) continue;
 			let peak: number | null = null;
@@ -900,9 +907,7 @@ test.describe('Row #21 - the context panel says what the limit already costs', (
 				if (prompt === undefined || prompt === '' || wrote === undefined || wrote === '') continue;
 				peak = Math.max(peak ?? 0, Number(prompt) + Number(wrote));
 			}
-			if (peak === null) continue;
-			const runId = row.run_id ?? '';
-			found.set(runId, [...(found.get(runId) ?? []), peak]);
+			if (peak !== null) here.push(peak);
 		}
 		return found;
 	}
@@ -937,9 +942,19 @@ test.describe('Row #21 - the context panel says what the limit already costs', (
 		const expected = peaksByRun(canaryHealth());
 		const { runs } = contextCost(canaryHealth(), OPTIONS);
 		expect(runs.map((run) => run.runId)).toEqual([...expected.keys()].sort());
+		expect(
+			runs.filter((run) => run.items === 0).length,
+			'a run the ledger names but never measured was dropped from the axis'
+		).toBeGreaterThan(0);
 		for (const run of runs) {
 			const peaks = [...(expected.get(run.runId) ?? [])].sort((left, right) => left - right);
 			expect(run.items, `${run.runId} measured a different number of articles`).toBe(peaks.length);
+			if (peaks.length === 0) {
+				// An absence, never a zero: this run recorded nothing to draw.
+				expect(run.largest, `${run.runId} drew a peak off no article at all`).toBeNull();
+				expect(run.high).toBeNull();
+				continue;
+			}
 			expect(run.largest, `${run.runId} drew a peak the ledger does not hold`).toBe(
 				peaks[peaks.length - 1]
 			);
@@ -1029,8 +1044,14 @@ test.describe('Row #21 - the context panel says what the limit already costs', (
 			const run = runs[at];
 			const said = Object.fromEntries(column.rows.map((row) => [row.label, row.value]));
 			expect(column.date).toBe(run.runId);
-			expect(said['The longest article'].replace(/,/g, '')).toContain(String(run.largest));
-			expect(said[highLabel(OPTIONS.percentile)].replace(/,/g, '')).toContain(String(run.high));
+			// A run that measured nothing prints a dash, which is the one reading
+			// that is not a number the chart could have drawn.
+			expect(said['The longest article'].replace(/,/g, '')).toContain(
+				run.largest === null ? '-' : String(run.largest)
+			);
+			expect(said[highLabel(OPTIONS.percentile)].replace(/,/g, '')).toContain(
+				run.high === null ? '-' : String(run.high)
+			);
 			expect(said['Articles measured']).toBe(String(run.items));
 		});
 		// `p99` is a subsystem term. The strip says it in words a reader who has
@@ -1076,13 +1097,23 @@ test.describe('Row #21 - the context panel says what the limit already costs', (
 		expect(drawn!.runs.map((run) => run.runId), 'the panel names a different set of runs').toEqual(
 			[...expected.keys()].sort()
 		);
-		// Both ends, one mark each a run. One series alone is the state this row
-		// replaced: a single mark cannot say both what an ordinary article takes
-		// and what the worst one takes.
-		expect(drawn!.largestMarks, 'the chart drew no worst-case mark').toBe(drawn!.runs.length);
-		expect(drawn!.highMarks, 'the chart drew only one end a run').toBe(drawn!.runs.length);
+		// Both ends, one mark each a run the ledger measured. One series alone is
+		// the state this row replaced: a single mark cannot say both what an
+		// ordinary article takes and what the worst one takes. A run that measured
+		// nothing keeps its column and draws no mark, so the two counts differ.
+		const measured = drawn!.runs.filter((run) => run.largest !== '').length;
+		expect(measured, 'no run on the canary measured an article').toBeGreaterThan(0);
+		expect(drawn!.largestMarks, 'the chart drew no worst-case mark').toBe(measured);
+		expect(drawn!.highMarks, 'the chart drew only one end a run').toBe(measured);
 		for (const run of drawn!.runs) {
 			const peaks = [...(expected.get(run.runId) ?? [])].sort((left, right) => left - right);
+			if (peaks.length === 0) {
+				expect(run.largest, `${run.runId} drew a peak off no article at all`).toBe('');
+				expect(run.said, `${run.runId} was dropped instead of drawn as an absence`).toContain(
+					'no article recorded'
+				);
+				continue;
+			}
 			expect(run.largest, `${run.runId} drew a peak the ledger does not hold`).toBe(
 				String(peaks[peaks.length - 1])
 			);
@@ -1110,7 +1141,7 @@ test.describe('Row #21 - the context panel says what the limit already costs', (
 			String(unused)
 		);
 		expect(drawn!.cost, 'the page prints a share without saying what it means').toContain(
-			'has never been used'
+			'went spare every time'
 		);
 		// The canary carries one cut-off reply, which no committed day has ever
 		// produced, so the state a shrinking budget reaches is drawn rather than
@@ -1152,10 +1183,13 @@ test.describe('Row #21 - the context panel says what the limit already costs', (
 		expect(last.trim()).toBe(runs[runs.length - 1]);
 		expect(first).not.toBe(last);
 		// And the numbers under that heading are the ones the list prints for it.
+		// The last column is the newest run, which the canary measures; a run it
+		// did not measure prints a dash and there would be no number to compare.
 		const said = await panel.locator('[data-readout="context"]').innerText();
 		const listed = await panel
 			.locator(`[data-context-run="${runs[runs.length - 1]}"]`)
 			.getAttribute('data-context-largest');
+		expect(listed, 'the newest run measured no article, so the readout has no number').not.toBe('');
 		expect(said.replace(/,/g, '')).toContain(String(listed));
 	});
 });

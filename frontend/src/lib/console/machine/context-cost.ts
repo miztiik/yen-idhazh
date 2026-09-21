@@ -164,19 +164,24 @@ export function contextCost(
 			const reason = row[`${slot}_finish_reason`] ?? '';
 			if (reason !== '') reasons.set(reason, (reasons.get(reason) ?? 0) + 1);
 		}
-		const measured = peakOf(row);
-		if (measured === null) continue;
-		peaks.push(measured.peak);
-		limits.add(measured.limit);
+		// A run gets a column as soon as the ledger names it, measured or not. A
+		// run that recorded nothing is a run nobody can ask about once it is
+		// dropped, and the whole panel is about the worst run in the span - so an
+		// absence is drawn as an absence rather than left out of the axis.
 		const runId = row.run_id ?? '';
+		if (runId === '') continue;
 		const bucket = byRun.get(runId) ?? {
 			date: row.date ?? '',
 			peaks: [] as number[],
 			limits: new Set<number>()
 		};
+		byRun.set(runId, bucket);
+		const measured = peakOf(row);
+		if (measured === null) continue;
+		peaks.push(measured.peak);
+		limits.add(measured.limit);
 		bucket.peaks.push(measured.peak);
 		bucket.limits.add(measured.limit);
-		byRun.set(runId, bucket);
 	}
 
 	// A share is unitless, so it pools across a limit that moved; a token figure

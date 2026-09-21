@@ -329,9 +329,11 @@
 				</p>
 			{/if}
 
-			<!-- The finding, in the order a reader needs it: what has never been
-			     used, how far the limit sits above an ordinary article, and whether
-			     anything was ever cut short. -->
+			<!-- The finding, in the order a reader needs it: what went spare, how far
+			     the limit sits above an ordinary article, and whether anything was cut
+			     short. Every sentence is bounded to the span the panel read - a claim
+			     about a past nobody read is a claim this page cannot support
+			     (`frontend/tests/console-window-claims.spec.ts`). -->
 			<p class="reads" data-context-cost data-context-unused-pct={cost.unusedPct ?? ''}>
 				{#if cost.unusedPct === null || cost.largest === null}
 					{cost.items} of the {cost.rowsRead} item rows these {days} days recorded carried both the
@@ -341,8 +343,10 @@
 					The longest article of these {days} days held
 					<strong>{grouped(cost.largest)}</strong>
 					tokens, which is {cost.largestPct}% of the {grouped(limit)} the server allows -
-					<strong>{cost.unusedPct}% of the limit has never been used, not once</strong>. A middle
-					article held {grouped(cost.median ?? 0)}, so the limit is
+					<strong
+						>not one article in these {days} days went past {cost.largestPct}%, so {cost.unusedPct}%
+						of the limit went spare every time</strong
+					>. A middle article held {grouped(cost.median ?? 0)}, so the limit is
 					<strong>{cost.timesMedian}</strong> times the article it usually reads. Measured over
 					{cost.items}
 					{cost.items === 1 ? 'article' : 'articles'}, out of {cost.rowsRead} item rows read: the
@@ -355,8 +359,8 @@
 					No call in these {days} days recorded why its reply stopped, so nothing here can say
 					whether anything ran out of room.
 				{:else if cost.cutOff === 0}
-					Nothing has been cut short: across {grouped(cost.calls)} model calls the server never
-					once said a reply stopped because it ran out of room. It said
+					Nothing was cut short in these {days} days: across {grouped(cost.calls)} model calls the
+					server did not once say a reply stopped because it ran out of room. It said
 					{cost.reasons.map((one) => `${one.reason} ${grouped(one.calls)} times`).join(', ')}.
 				{:else}
 					{grouped(cost.cutOff)} of {grouped(cost.calls)} model calls stopped because the reply
