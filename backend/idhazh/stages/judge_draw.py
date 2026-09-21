@@ -132,7 +132,8 @@ def stage_judge_draw(
     fail.
     """
     same_story = settings.app.assemble.same_story
-    tuning = same_story.adaptive_dedup_threshold
+    tuning = same_story.judging_knobs()
+    shards = settings.app.council.shards
     window_hours = settings.app.assemble.same_story_window_hours
     stamp = scorer_inputs(settings)
     path = out_dir / date / DRAW_FILENAME
@@ -172,7 +173,7 @@ def stage_judge_draw(
     )
     rows = [
         _drawn_row(pair, shard=shard, date=date, run_id=run_id, by_id=by_id, stamp=stamp)
-        for shard, pair in draw.assign_shards(drawn.taken, shards=tuning.shards)
+        for shard, pair in draw.assign_shards(drawn.taken, shards=shards)
     ]
     assemble.write_atomic(path, _as_csv(rows))
     LOG.info(
@@ -182,7 +183,7 @@ def stage_judge_draw(
         drawn.pairs_in_band,
         len(rows),
         tuning.pair_budget,
-        tuning.shards,
+        shards,
         draw_relpath(date),
     )
     return drawn

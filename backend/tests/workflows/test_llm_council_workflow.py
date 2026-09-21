@@ -30,10 +30,15 @@ pytestmark = pytest.mark.workflow
 
 FILENAME: Final = "llm-council.yml"
 
-#: The knob the leg's bound is read from. Spelled once here and asserted in the
-#: file, so a workflow that read a different knob fails rather than bounding the
-#: leg by the work shard's clock.
-TIMEOUT_KEY: Final = "judge_shard_timeout_minutes"
+#: The dotted path the shard's bound is read from. Spelled once here and
+#: asserted in the file, so a workflow that read a different knob fails rather
+#: than bounding the shard by the work shard's clock - or by a judge's block,
+#: which a night with no judge configured does not have.
+TIMEOUT_KEY: Final = "council.shard_timeout_minutes"
+
+#: What that path prints, and therefore the name the workflow reads it back by.
+#: An Actions output name cannot carry a dot, so the reader prints the leaf.
+TIMEOUT_OUTPUT: Final = "shard_timeout_minutes"
 
 #: The commit calls, in the order the fold has to make them. Rows first: the
 #: record is derived from them, so a record pushed ahead of its own evidence is a
@@ -80,8 +85,8 @@ def test_the_timeout_travels_as_a_job_output() -> None:
     outputs = draw.get("outputs")
 
     assert isinstance(outputs, dict)
-    assert outputs[TIMEOUT_KEY] == f"${{{{ steps.bounds.outputs.{TIMEOUT_KEY} }}}}"
-    assert judge["timeout-minutes"] == f"${{{{ fromJSON(needs.draw.outputs.{TIMEOUT_KEY}) }}}}"
+    assert outputs[TIMEOUT_OUTPUT] == f"${{{{ steps.bounds.outputs.{TIMEOUT_OUTPUT} }}}}"
+    assert judge["timeout-minutes"] == f"${{{{ fromJSON(needs.draw.outputs.{TIMEOUT_OUTPUT}) }}}}"
 
 
 @pytest.mark.parametrize("value", [200.0, "200", 0, -1, True])
@@ -95,12 +100,26 @@ def test_an_unreadable_timeout_is_refused_before_the_job_starts(
     number. The refusal is `type(value) is not int`, and this is what holds that
     exact spelling shut.
     """
+    block, leaf = TIMEOUT_KEY.split(".")
     (tmp_path / "idhazh.json").write_text(
-        json.dumps({"run": {TIMEOUT_KEY: value}}), encoding="utf-8", newline="\n"
+        json.dumps({block: {leaf: value}}), encoding="utf-8", newline="\n"
     )
 
     with pytest.raises(SystemExit):
         shard_bound.minutes(tmp_path, key=TIMEOUT_KEY)
+
+
+def test_a_bound_the_config_does_not_carry_is_refused_rather_than_traced() -> None:
+    """A path into a block that is not there is a job that would run unbounded.
+
+    The two bounds sit in different blocks now, so a stale key resolves to
+    nothing rather than to the wrong number. A `KeyError` traceback in a
+    workflow step says which dictionary was missing a name; this says which knob
+    the job was looking for.
+    """
+    stale = "run.judge_shard_timeout_minutes"
+    with pytest.raises(SystemExit, match=re.escape(stale)):
+        shard_bound.minutes(CONFIG_DIR, key=stale)
 
 
 def test_the_bound_reader_still_answers_its_first_caller() -> None:
@@ -140,11 +159,17 @@ def test_the_leg_fetches_the_draw_before_it_reads_it() -> None:
 def test_the_matrix_width_is_the_knob_and_not_a_literal() -> None:
     """The draw deals against the same number the matrix runs.
 
-    A literal would let the draw deal four ways while three legs ran, and a
-    quarter of the day would go unjudged with nothing saying so.
+    A literal would let the draw deal four ways while three shards ran, and a
+    quarter of the night would go unjudged with nothing saying so. The knob is
+    the council's own, so the step still resolves on a night with no judge
+    configured - read out of a judge's block it raised before it planned
+    anything.
     """
     strategy = _job(_judges(), "judge").get("strategy")
+    fanout = _script(_step(_judges(), "draw", "id", "fanout"), "the fanout step")
 
+    assert '["council"]["shards"]' in fanout
+    assert "adaptive_dedup_threshold" not in fanout
     assert isinstance(strategy, dict)
     assert strategy["max-parallel"] == "${{ fromJSON(needs.draw.outputs.shards) }}"
     matrix = strategy["matrix"]

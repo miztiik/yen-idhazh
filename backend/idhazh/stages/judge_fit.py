@@ -92,7 +92,7 @@ def stage_judge_fit(
     happened rather than a run to fail.
     """
     same_story = settings.app.assemble.same_story
-    knobs = same_story.adaptive_dedup_threshold
+    knobs = same_story.judging_knobs()
     state = state_dir if state_dir is not None else config.REPO_ROOT / ledger.STATE_DIRNAME
 
     day = _load_day(assemble.day_dir(digest_root, date) / "digest.json")

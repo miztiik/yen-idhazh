@@ -22,7 +22,6 @@
         "rise_weight": 0.2,
         "settled_delta": 0.002,
         "settled_window_days": 14,
-        "shards": 8,
         "step_change_guard_enforced": true,
         "step_change_multiple": 6.0,
         "step_change_window_rows": 21,
@@ -179,6 +178,11 @@
       180
     ],
     "zoom_factor": 2.0
+  },
+  "council": {
+    "shard_timeout_minutes": 120,
+    "shard_wrap_up_minutes": 9,
+    "shards": 8
   },
   "drift": {
     "extractiveness_rise": 0.2,
@@ -342,7 +346,6 @@
     "trial_state_days": 45
   },
   "run": {
-    "judge_shard_timeout_minutes": 120,
     "max_parallel": 2,
     "qualify_on_the_production_path": false,
     "safety_ceiling_per_day": 640,

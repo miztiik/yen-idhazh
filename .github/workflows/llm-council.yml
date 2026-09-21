@@ -56,7 +56,7 @@ jobs:
       date: ${{ steps.decide.outputs.date }}
       shards: ${{ steps.fanout.outputs.shards }}
       matrix: ${{ steps.fanout.outputs.matrix }}
-      judge_shard_timeout_minutes: ${{ steps.bounds.outputs.judge_shard_timeout_minutes }}
+      shard_timeout_minutes: ${{ steps.bounds.outputs.shard_timeout_minutes }}
       summarize_repo: ${{ steps.models.outputs.summarize_repo }}
       summarize_revision: ${{ steps.models.outputs.summarize_revision }}
       summarize_file: ${{ steps.models.outputs.summarize_file }}
@@ -129,18 +129,21 @@ jobs:
       - id: bounds
         run: |
           set -euo pipefail
-          python3 backend/utilities/shard_bound.py --key judge_shard_timeout_minutes \
+          python3 backend/utilities/shard_bound.py --key council.shard_timeout_minutes \
             >> "$GITHUB_OUTPUT"
 
-      # How many legs split the day, read off the same knob the draw deals
-      # against. A literal here would be a second answer to how wide the fan-out
-      # is, and the two can disagree - the draw would deal four ways while three
-      # legs ran, and a quarter of the day would go unjudged with nothing saying
-      # so.
+      # How many shards split the night, read off the council's own block. A
+      # literal here would be a second answer to how wide the fan-out is, and the
+      # two can disagree - the draw would deal four ways while three shards ran,
+      # and a quarter of the night would go unjudged with nothing saying so.
+      #
+      # The council's block and not a tenant's, because the width sizes this
+      # matrix: read out of a judge's config path, this step raises before the
+      # planning job plans anything on a night with no judge configured.
       - id: fanout
         run: |
           set -euo pipefail
-          SHARDS=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["assemble"]["same_story"]["adaptive_dedup_threshold"]["shards"])')
+          SHARDS=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["council"]["shards"])')
           echo "shards=$SHARDS" >> "$GITHUB_OUTPUT"
           echo "matrix=$(python -c "import json,sys; print(json.dumps(list(range(int(sys.argv[1])))))" "$SHARDS")" >> "$GITHUB_OUTPUT"
 
@@ -160,7 +163,7 @@ jobs:
   judge:
     needs: draw
     runs-on: ubuntu-latest
-    timeout-minutes: ${{ fromJSON(needs.draw.outputs.judge_shard_timeout_minutes) }}
+    timeout-minutes: ${{ fromJSON(needs.draw.outputs.shard_timeout_minutes) }}
     strategy:
       # A leg that runs out of clock costs its pairs for that day and nothing
       # else. The fold still runs, still appends every row the other legs

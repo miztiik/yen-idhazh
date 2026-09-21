@@ -445,7 +445,7 @@ def test_the_decode_is_sent_at_the_judging_knob_and_not_the_entry() -> None:
     this fails rather than passes by coincidence if the wiring is dropped.
     """
     settings = _settings()
-    tuning = settings.app.assemble.same_story.adaptive_dedup_threshold
+    tuning = settings.app.assemble.same_story.judging_knobs()
     day = _a_day()
     with JudgeServer(_reply("two-events")) as server:
         judge.judge_pair(day.items[0], day.items[1], client=_client(server), settings=settings)

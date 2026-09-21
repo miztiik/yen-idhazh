@@ -57,11 +57,17 @@ HOLDOUT_TWO_STORY_MAX: Final = 0.9407
 SECONDS_A_CALL: Final = 77.6
 
 #: The knobs `adaptive_dedup_threshold` used to carry, and where each one went.
-#: Both changed unit as well as name: the fall cap is counted in slots of
+#: Two changed unit as well as name: the fall cap is counted in slots of
 #: `bin_width` now rather than written as a score, and the one damping weight
-#: became two because the line damps both directions.
+#: became two because the line damps both directions. `shards` is the third and
+#: it changed owner instead - a fan-out width is a runner number the workflow
+#: sizes its own matrix by, so its replacement is spelled as a whole path.
 SUPERSEDED_THRESHOLD_NAMES: Final[Mapping[str, str]] = MappingProxyType(
-    {"max_down_step": "max_down_bins", "smoothing_weight": "fall_weight"}
+    {
+        "max_down_step": "max_down_bins",
+        "shards": "council.shards",
+        "smoothing_weight": "fall_weight",
+    }
 )
 
 
@@ -227,24 +233,12 @@ class SimilarityThresholdConfig(Model):
         ge=1,
         description=(
             "How many pairs a day may be judged. 200 pairs judged twice is 400 calls, which "
-            "is 100 calls on each of four legs, which at 77.6 seconds a call is 2 hours 9 "
-            "minutes of model time a leg. That figure is derived from 9.85 tokens a second "
-            "measured on a stock runner, not from a judge call; row 17 measures a real one. "
-            "Raising it is a job-timeout question before it is a quality one, and a "
-            "validator refuses a value that does not fit the leg."
-        ),
-    )
-    shards: int = Field(
-        default=4,
-        ge=1,
-        le=8,
-        description=(
-            "How many judging legs split the day. 4 legs, one llama-server each, because one "
-            "server on the configured weights already peaks at 12.57 to 13.16 GiB and "
-            "reaches 14.31 GiB with the shard's python - 96.0 percent of the 16 GB runner, "
-            "measured 2026-09-08 over four shards of run 2026-08-29-3. A second server on "
-            "one runner does not fit at all. The ceiling of 8 is what a GitHub matrix leg "
-            "costs rather than a measured limit."
+            "at the council's committed four shards is 100 calls on each, which at 77.6 "
+            "seconds a call is 2 hours 9 minutes of model time a shard. That figure is "
+            "derived from 9.85 tokens a second measured on a stock runner, not from a judge "
+            "call; row 17 measures a real one. Raising it is a job-timeout question before "
+            "it is a quality one, and a validator refuses a value that does not fit "
+            "council.shard_timeout_minutes."
         ),
     )
     judge_temperature: float = Field(
@@ -547,9 +541,32 @@ class SameStoryConfig(Model):
             "is what the shipped weights still score."
         ),
     )
-    adaptive_dedup_threshold: SimilarityThresholdConfig = Field(
-        default_factory=SimilarityThresholdConfig
+    adaptive_dedup_threshold: SimilarityThresholdConfig | None = Field(
+        default=None,
+        description=(
+            "The content-similarity judge's own knobs, absent when that judge is not "
+            "configured. Optional rather than built by a default factory, because a "
+            "factory cannot express 'no judge is configured' - absent and "
+            "present-at-defaults read the same afterwards, so nothing could tell the "
+            "council's own night apart from a night this judge runs. The council's "
+            "runner numbers are in `council` and stand whether or not this block does."
+        ),
     )
+
+    def judging_knobs(self) -> SimilarityThresholdConfig:
+        """This judge's block, or a refusal naming what is missing.
+
+        Every stage of the content-similarity judge reads the block through
+        here, so a stage that runs with no block configured says so in one
+        sentence instead of raising on an attribute of `None`.
+        """
+        if self.adaptive_dedup_threshold is None:
+            raise ValueError(
+                "assemble.same_story.adaptive_dedup_threshold is absent, so the "
+                "content-similarity judge is not configured. Add the block to "
+                "config/idhazh.json, or do not run this judge"
+            )
+        return self.adaptive_dedup_threshold
 
     @model_validator(mode="after")
     def _the_weights_sum_to_one(self) -> Self:
@@ -588,7 +605,11 @@ class SameStoryConfig(Model):
         `HOLDOUT_TWO_STORY_MAX` would let the band open above the pair a wrong
         line publishes first, so the record would fill with easy agreements and
         never judge the case that could prove the line wrong.
+
+        A config with no judge in it has no band, so there is nothing to check.
         """
+        if self.adaptive_dedup_threshold is None:
+            return self
         band_low = self.adaptive_dedup_threshold.band_low
         if band_low >= self.floor_min:
             raise ValueError(

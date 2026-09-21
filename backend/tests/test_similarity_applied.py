@@ -179,7 +179,7 @@ def test_the_committed_config_ships_with_the_line_switched_off() -> None:
     """
     settings = config.load(config.REPO_ROOT / "config")
 
-    assert not settings.app.assemble.same_story.adaptive_dedup_threshold.enabled
+    assert not settings.app.assemble.same_story.judging_knobs().enabled
 
 
 def test_a_guard_clamp_still_counts_as_a_line_the_fit_applied(tmp_path: Path) -> None:
