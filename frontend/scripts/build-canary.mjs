@@ -207,7 +207,7 @@ function writeItemHealthCanary() {
 			cached_tokens: model[4],
 			source_words_before_cap: cut?.[2],
 			...extraction(id),
-			...perCall(model, calls),
+			...perCall(model, calls, cut),
 			...clock(rowDate, run, id, [fetchMs, extractMs, summarizeMs], model, calls)
 		});
 
@@ -383,7 +383,7 @@ function writeItemHealthCanary() {
 	 * whose total is not the sum of its calls and a canary that broke that rule
 	 * would fail at publish rather than say anything.
 	 */
-	const perCall = (model, calls) => {
+	const perCall = (model, calls, cut) => {
 		if (!calls) return {};
 		const cells = { model_calls: calls.length };
 		const slots = ['label', 'summary'];
@@ -393,6 +393,7 @@ function writeItemHealthCanary() {
 			names.forEach((name, at) => {
 				cells[`${slots[index]}_${name}`] = numbers[at];
 			});
+			cells[`${slots[index]}_finish_reason`] = stoppedBecause(index, cut);
 		});
 		names.forEach((name, at) => {
 			const summed = calls.reduce((total, call) => total + call[1 + at], 0);
@@ -402,6 +403,21 @@ function writeItemHealthCanary() {
 		});
 		return cells;
 	};
+
+	/** Why one call's decode stopped.
+	 *
+	 * **Fixture, and the one state no committed day has ever produced.** Every
+	 * finish reason in the archive says the model finished on its own - measured
+	 * 2026-09-21, 2,624 of 2,624 calls. So the state the Hardware page's context
+	 * panel exists to catch, a reply that stopped because it ran out of room, is
+	 * unreachable from any real ledger, and a panel drawing a state nothing can
+	 * reach is a panel nobody can tell from a broken one.
+	 *
+	 * It lands on the LAST call of the one article the truncation cap already
+	 * trimmed, which is the only coherent place for it: an article too long to
+	 * send whole is the article whose reply runs out of room first.
+	 */
+	const stoppedBecause = (index, cut) => (index === 1 && cut ? 'length' : 'stop');
 
 	/** What the candidate pass got out of one article, as a published row holds it.
 	 *
