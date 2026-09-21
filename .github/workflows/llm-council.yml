@@ -58,6 +58,7 @@ jobs:
     timeout-minutes: 30
     outputs:
       date: ${{ steps.decide.outputs.date }}
+      run_id: ${{ steps.identity.outputs.run_id }}
       shards: ${{ steps.fanout.outputs.shards }}
       matrix: ${{ steps.fanout.outputs.matrix }}
       shard_timeout_minutes: ${{ steps.bounds.outputs.shard_timeout_minutes }}
@@ -102,6 +103,28 @@ jobs:
             exit 1
           fi
           echo "date=$DATE" >> "$GITHUB_OUTPUT"
+
+      # The name every row this night writes is filed under, minted once here.
+      # A job output for the same reason the bound is: the later jobs read it
+      # through `needs`, and a name minted per job would compute the date prefix
+      # four times - so a run crossing midnight would file one night's rows
+      # under two addresses.
+      #
+      # The council mints its own rather than borrowing the digest run's, which
+      # claims a machine and a clock this night never drew and carries a date
+      # prefix a day stale. The prefix is the day the COUNCIL runs, because a
+      # reader takes a run id's first ten characters as the day its run opened.
+      - id: identity
+        name: Mint the name this night files its rows under
+        env:
+          # Through `env`, not pasted into the command. The platform's run id
+          # and not its run number: the number starts again in the next workflow
+          # and would collide with a digest run's id.
+          PLATFORM_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          python -m idhazh.council.run_identity --platform-run-id "$PLATFORM_RUN_ID" \
+            | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
       # The model refs, read once from config and published to every leg. They
       # travel as job OUTPUTS rather than as `env`, because `needs` resolves
@@ -156,7 +179,9 @@ jobs:
       - name: Draw the borderline pairs
         run: |
           set -euo pipefail
-          python -m idhazh judge-draw --date "${{ steps.decide.outputs.date }}"
+          python -m idhazh judge-draw \
+            --date "${{ steps.decide.outputs.date }}" \
+            --run-id "${{ steps.identity.outputs.run_id }}"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -305,7 +330,9 @@ jobs:
       - name: Fold the day into the record
         run: |
           set -euo pipefail
-          python -m idhazh judge-fold --date "${{ needs.draw.outputs.date }}"
+          python -m idhazh judge-fold \
+            --date "${{ needs.draw.outputs.date }}" \
+            --run-id "${{ needs.draw.outputs.run_id }}"
 
       # After the fold and before the commits. Nothing reads the line it writes
       # until `assemble.same_story.adaptive_dedup_threshold.enabled` is turned
@@ -313,7 +340,9 @@ jobs:
       - name: Fit the merge line
         run: |
           set -euo pipefail
-          python -m idhazh judge-fit --date "${{ needs.draw.outputs.date }}"
+          python -m idhazh judge-fit \
+            --date "${{ needs.draw.outputs.date }}" \
+            --run-id "${{ needs.draw.outputs.run_id }}"
 
       # Two calls, rows first. The rows are what this run saw and are replayed
       # onto a new base when the push loses a race; the record is derived from
@@ -348,6 +377,7 @@ jobs:
             state/story-similarity/score-distribution.json
           REGENERATE_COMMAND: >-
             python -m idhazh judge-fold --date ${{ needs.draw.outputs.date }}
+            --run-id ${{ needs.draw.outputs.run_id }}
         run: >-
           bash .github/scripts/commit-and-push.sh
           state/story-similarity/score-distribution.json

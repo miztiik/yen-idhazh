@@ -59,6 +59,17 @@ COMMIT_ORDER: Final = (
 #: step by what it ships rather than by where it sits in the job.
 VERDICTS_ARTIFACT: Final = "judge-verdicts-"
 
+#: What mints the name this night files its rows under, and the key it prints
+#: that name under. The module is the council's own, so the mint resolves in a
+#: repository with no judge in it.
+MINT_COMMAND: Final = "python -m idhazh.council.run_identity"
+RUN_ID_OUTPUT: Final = "run_id"
+
+#: Every verb this workflow runs that writes a row, and therefore every verb
+#: that has to be handed the name. `judge-shard` is absent because it writes no
+#: row of its own today - it rewrites the draw's and uploads the file.
+VERBS_THAT_WRITE_A_ROW: Final = ("judge-draw", "judge-fold", "judge-fit")
+
 
 def _judges() -> dict[str, object]:
     return _load_workflows()[FILENAME]
@@ -325,3 +336,82 @@ def test_every_path_the_fold_stages_exists_in_a_fresh_checkout() -> None:
     assert staged, "the fold stages something"
     missing = [path for path in staged if not (REPO_ROOT / path).exists()]
     assert not missing, f"the fold stages paths a fresh checkout does not have: {missing}"
+
+
+def test_the_night_mints_one_name_and_publishes_it_to_the_later_jobs() -> None:
+    """The planning job names the run, the way it already names the bound and the refs.
+
+    A job output because `needs` is what the later jobs can read; a step output
+    is not visible across a job boundary. The platform's value arrives through
+    `env` rather than pasted into the command, which is how every other value
+    this workflow reads by name arrives.
+    """
+    identity = _step(_judges(), "draw", "id", "identity")
+    outputs = _job(_judges(), "draw").get("outputs")
+    environment = identity.get("env")
+
+    assert MINT_COMMAND in _script(identity, "the identity step")
+    assert isinstance(environment, dict)
+    assert environment["PLATFORM_RUN_ID"] == "${{ github.run_id }}"
+    assert isinstance(outputs, dict)
+    assert outputs[RUN_ID_OUTPUT] == f"${{{{ steps.identity.outputs.{RUN_ID_OUTPUT} }}}}"
+
+
+def test_the_name_is_minted_once_and_never_per_job() -> None:
+    """Four jobs each reading the platform's value would compute the prefix four times.
+
+    The prefix is a day, so a run crossing midnight would file one night's rows
+    under two addresses - and nothing downstream could tell that the two were one
+    night. So the platform's value is read at exactly one place in the file.
+    """
+    spelled = str(_judges()).count("github.run_id")
+
+    assert spelled == 1, (
+        "the platform's run id is read in more than one step, so the date prefix "
+        "is computed more than once and a run crossing midnight splits in two"
+    )
+
+
+def test_every_verb_that_writes_a_row_is_handed_the_same_name() -> None:
+    """One night, one name, in every verb that files something under it.
+
+    A verb left without it stops at its own command line rather than filing the
+    row under a digest run's id - but that is a failed job two hours in, and this
+    is the check that runs in seconds.
+    """
+    handed: dict[str, str] = {}
+    for job_name in ("draw", "judge", "fold"):
+        for step in _steps(_judges(), job_name):
+            if "run" not in step:
+                continue
+            body = _script(step, f"a {job_name} step")
+            for verb in VERBS_THAT_WRITE_A_ROW:
+                if f"idhazh {verb}" in body:
+                    handed[verb] = body
+
+    assert sorted(handed) == sorted(VERBS_THAT_WRITE_A_ROW), (
+        f"the workflow runs {sorted(handed)}, and every verb that writes a row "
+        "has to be one of them"
+    )
+    for verb, body in sorted(handed.items()):
+        assert "--run-id" in body, f"{verb} files a row under no name of the council's"
+
+    assert f"steps.identity.outputs.{RUN_ID_OUTPUT}" in handed["judge-draw"]
+    for verb in ("judge-fold", "judge-fit"):
+        assert f"needs.draw.outputs.{RUN_ID_OUTPUT}" in handed[verb]
+
+
+def test_the_rebuild_of_the_record_carries_the_name_as_well() -> None:
+    """A lost race rebuilds the record by running the fold again on the new base.
+
+    That second run is the same verb with the same two arguments, so a rebuild
+    command missing the name dies on a command line inside a retry loop - after
+    the push has already failed once.
+    """
+    record = _step(_judges(), "fold", "name", "Commit the record and the line")
+    environment = record.get("env")
+
+    assert isinstance(environment, dict)
+    rebuild = str(environment["REGENERATE_COMMAND"])
+    assert "judge-fold" in rebuild
+    assert f"--run-id ${{{{ needs.draw.outputs.{RUN_ID_OUTPUT} }}}}" in rebuild

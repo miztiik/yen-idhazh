@@ -23,7 +23,7 @@ from conftest import read_text
 from test_same_story import at, block, item, unit
 from test_similarity_draw import MANIFEST_FIXTURE
 
-from idhazh import assemble, config, ledger
+from idhazh import assemble, cli, config, ledger
 from idhazh.contracts.digest_day import DigestDay, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.fitted_similarity_threshold import (
     ClampKind,
@@ -33,6 +33,7 @@ from idhazh.contracts.fitted_similarity_threshold import (
 from idhazh.contracts.knobs.placement import SimilarityThresholdConfig
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.story_similarity_distribution import StorySimilarityDistribution
+from idhazh.council.run_identity import council_run_id
 from idhazh.similarity import fit, fold
 from idhazh.similarity.stamps import JudgeStamp, ScorerStamp
 from idhazh.stages import common
@@ -40,6 +41,18 @@ from idhazh.stages.common import _load_day
 from idhazh.stages.judge_fit import merge_count, stage_judge_fit
 
 DATE: Final = "2026-09-18"
+
+#: The day the council runs, which is the day AFTER the one it judges. Spelled
+#: here so the gap between the two is visible in every assertion below: a run id
+#: prefixed with the judged date would publish a standing lag nothing waited.
+COUNCIL_DAY: Final = "2026-09-19"
+
+#: What the platform called the run. A run id and never a run number: the number
+#: starts again in the next workflow.
+PLATFORM_RUN: Final = "35534060762"
+
+#: What the council calls itself on the night it judges `DATE`.
+COUNCIL_RUN: Final = f"{COUNCIL_DAY}-{PLATFORM_RUN}"
 
 #: The shipped band, 0.88 to 1.00 in 120 slots of 0.001. The real grid rather
 #: than a small one, because the one number every test here is about is where a
@@ -596,9 +609,12 @@ def test_a_row_is_written_on_a_day_nothing_moved(
     state = tmp_path / "state"
     settings = config.load(config.REPO_ROOT / "config")
 
-    row = stage_judge_fit(DATE, settings=settings, state_dir=state, digest_root=digest_root)
+    row = stage_judge_fit(
+        DATE, run_id=COUNCIL_RUN, settings=settings, state_dir=state, digest_root=digest_root
+    )
 
     assert row is not None
+    assert row.run_id == COUNCIL_RUN, "the run that fitted the line is the council night"
     assert row.held_reason is HeldReason.LEGS_MISSING, "the record never counted this date"
     assert row.applied == pytest.approx(settings.app.assemble.same_story.floor_min)
     assert row.applied == pytest.approx(row.previous), "a held day moves the line nowhere"
@@ -612,18 +628,72 @@ def test_a_row_is_written_on_a_day_nothing_moved(
 def test_a_day_that_never_published_is_not_a_run_to_fail(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """No run to file a row under and no merges to count is a day that did not happen."""
+    """No merges to count is a day that did not happen."""
     monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "digest")
 
     assert (
         stage_judge_fit(
             DATE,
+            run_id=COUNCIL_RUN,
             settings=config.load(config.REPO_ROOT / "config"),
             state_dir=tmp_path / "state",
             digest_root=tmp_path / "digest",
         )
         is None
     )
+
+
+def test_the_row_is_written_from_a_date_and_a_run_id_on_the_command_line(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The two things the verb is handed are the day it judges and the name the council minted.
+
+    The published day's run manifest is removed, so there is no digest run on
+    disk to borrow a name from and nothing to read an ordinal out of. The row
+    still lands, and it lands under the council's own name - which the contract
+    validated on the way into the file, so a name `RunId` refuses never reaches
+    the store.
+
+    Before the council minted its own, this verb read the manifest for the one
+    string it wanted and returned `None` without it, so this day fitted nothing.
+    """
+    digest_root = tmp_path / "digest"
+    a_published_day(digest_root)
+    (assemble.day_dir(digest_root, DATE) / "run.json").unlink()
+    monkeypatch.setattr(common, "PUBLIC_ROOT", digest_root)
+    state = tmp_path / "state"
+    minted = council_run_id(opened_on=COUNCIL_DAY, platform_run_id=PLATFORM_RUN)
+
+    exit_code = cli.main(
+        [
+            "judge-fit",
+            "--date",
+            DATE,
+            "--run-id",
+            minted,
+            "--state-root",
+            str(state),
+            "--digest-root",
+            str(digest_root),
+        ]
+    )
+
+    assert exit_code == 0
+    written = ledger.load_fitted_thresholds(state, today=DATE, within_days=1)
+    assert [one.run_id for one in written] == [minted]
+
+
+def test_a_council_verb_refuses_to_invent_a_run_it_was_not_given() -> None:
+    """A verb with no name to file under stops at the command line, not two hours in.
+
+    Every value it could reach for belongs to somebody else, so the refusal is
+    the whole of the design: a digest run's id claims a machine and a clock this
+    night never drew.
+    """
+    with pytest.raises(SystemExit) as refused:
+        cli.main(["judge-fit", "--date", DATE])
+
+    assert refused.value.code == 2, "argparse refuses a bad command line with 2"
 
 
 def test_a_story_naming_itself_is_not_a_group(tmp_path: Path) -> None:

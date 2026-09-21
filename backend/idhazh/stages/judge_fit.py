@@ -28,7 +28,7 @@ from idhazh.contracts.story_similarity_pair import SameStoryVerdict, ScorerModel
 from idhazh.similarity import fit, fold
 from idhazh.similarity.stamps import ScorerStamp, judge_inputs, scorer_inputs
 from idhazh.stages import common
-from idhazh.stages.common import LOG, _load_day, _load_manifest
+from idhazh.stages.common import LOG, _load_day
 
 
 def merge_count(day: DigestDay) -> int:
@@ -71,36 +71,38 @@ def _ruler(
 def stage_judge_fit(
     date: str,
     *,
+    run_id: str,
     settings: config.Settings,
     state_dir: Path | None = None,
     digest_root: Path = common.PUBLIC_ROOT,
 ) -> FittedSimilarityThreshold | None:
     """Walk the record, damp the move, clamp what is left, and write the day's row.
 
-    **Every read is bounded** (Guardrail #12). One published day and the manifest
-    beside it, the fixed-size record, the one day file the date names, and the
-    fitted rows inside a window two knobs set. Nothing walks a collection a run
-    appends to.
+    **Every read is bounded** (Guardrail #12). One published day, the fixed-size
+    record, the one day file the date names, and the fitted rows inside a window
+    two knobs set. Nothing walks a collection a run appends to.
+
+    **`run_id` is the council's own and is handed in.** The run that fitted the
+    line is the council night, not the digest run that published the day it read
+    - and the digest run's id carries a date prefix a day stale, which a reader
+    takes for the day this row's run opened.
 
     **Today's own row is excluded from every look backwards.** A second attempt
     at one date would otherwise read its own first attempt as yesterday's line
     and damp against it, so a re-run would move the line a second time. Excluding
     it makes a re-run write the same row it wrote the first time.
 
-    A date with no published day writes nothing and says so. There is no run to
-    file the row under and no merge count to put on it, which is a day that never
-    happened rather than a run to fail.
+    A date with no published day writes nothing and says so. There are no merges
+    to count on it, which is a day that never happened rather than a run to fail.
     """
     same_story = settings.app.assemble.same_story
     knobs = same_story.judging_knobs()
     state = state_dir if state_dir is not None else config.REPO_ROOT / ledger.STATE_DIRNAME
 
     day = _load_day(assemble.day_dir(digest_root, date) / "digest.json")
-    manifest = _load_manifest(assemble.day_dir(digest_root, date) / "run.json")
-    if day is None or manifest is None:
+    if day is None:
         LOG.warning("judge fit found no published day to fit for date=%s", date)
         return None
-    run_id = manifest.runs[-1].run_id
 
     record_path = ledger.score_distribution_path(state)
     scorer, judge = scorer_inputs(settings), judge_inputs(settings)
