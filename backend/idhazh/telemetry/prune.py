@@ -113,7 +113,11 @@ PruneInterruptedError = one_at_a_time.PruneInterruptedError
 #: **`llm-council-shard-outcomes` is here before anything writes it.** The shape
 #: and the path land ahead of the step that appends to them (Guardrail #3), and a
 #: store an operator cannot name is a store a day cannot be taken out of. A range
-#: over a store with no file selects nothing and says so.
+#: over a store with no file selects nothing and says so. The two
+#: `content-similarity-judge` stores are here for the same reason, and they are
+#: the judge's rather than the council's: one records how that judge's own
+#: instrument behaved, and the other how the line it produces stands against a
+#: hand-marked holdout. What a reading is about decides where it is filed.
 TARGETS: Final[Mapping[str, str]] = MappingProxyType(
     dict(
         sorted(
@@ -127,6 +131,20 @@ TARGETS: Final[Mapping[str, str]] = MappingProxyType(
                 score_writer.LEDGER_DIRNAME: score_writer.LEDGER_DIRNAME,
                 f"{ledger.COUNCIL_DIRNAME}-{ledger.SHARD_OUTCOMES_DIRNAME}": (
                     f"{ledger.COUNCIL_DIRNAME}/{ledger.SHARD_OUTCOMES_DIRNAME}"
+                ),
+                (
+                    f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}-"
+                    f"{ledger.JUDGE_METRICS_DIRNAME}"
+                ): (
+                    f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}/"
+                    f"{ledger.JUDGE_METRICS_DIRNAME}"
+                ),
+                (
+                    f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}-"
+                    f"{ledger.MERGE_LINE_HOLDOUT_SCORES_DIRNAME}"
+                ): (
+                    f"{ledger.CONTENT_SIMILARITY_JUDGE_DIRNAME}/"
+                    f"{ledger.MERGE_LINE_HOLDOUT_SCORES_DIRNAME}"
                 ),
                 f"{ledger.STORY_SIMILARITY_DIRNAME}-{ledger.SCORED_PAIRS_DIRNAME}": (
                     f"{ledger.STORY_SIMILARITY_DIRNAME}/{ledger.SCORED_PAIRS_DIRNAME}"

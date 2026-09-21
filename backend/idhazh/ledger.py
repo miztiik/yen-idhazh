@@ -174,6 +174,19 @@ SCORE_ARCHIVE_DIRNAME: Final = "archive"
 COUNCIL_DIRNAME: Final = "llm-council"
 SHARD_OUTCOMES_DIRNAME: Final = "shard-outcomes"
 
+#: The content-similarity judge's own prefix, and the two stores under it. One
+#: is how its instrument behaved over a unit of work; the other is how the line
+#: it produces stands against a hand-marked holdout. Both are the judge's rather
+#: than the council's, because what a reading is ABOUT decides where it is filed
+#: and never what executed it.
+#:
+#: Two directory levels and no more, for the reason the council's prefix carries:
+#: the day inventory globs one level and two, so a third would be invisible to it
+#: and the miss would be silent.
+CONTENT_SIMILARITY_JUDGE_DIRNAME: Final = "content-similarity-judge"
+JUDGE_METRICS_DIRNAME: Final = "metrics"
+MERGE_LINE_HOLDOUT_SCORES_DIRNAME: Final = "merge-line-holdout-scores"
+
 FEED_RETIREMENTS_FILENAME: Final = "feed-retirements.csv"
 
 #: Where a writer puts its rows before a compaction folds them into a head. Not
@@ -710,6 +723,48 @@ def council_shard_outcomes_path(state_dir: Path, date: str) -> Path:
     "how did the night of the 20th go" means by the question.
     """
     root = state_dir / COUNCIL_DIRNAME / SHARD_OUTCOMES_DIRNAME
+    return root / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+
+
+def content_similarity_judge_metrics_relpath(date: str) -> str:
+    """`state/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>.csv` - POSIX, for a log line."""
+    stem = f"{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+    return f"{STATE_DIRNAME}/{CONTENT_SIMILARITY_JUDGE_DIRNAME}/{JUDGE_METRICS_DIRNAME}/{stem}"
+
+
+def content_similarity_judge_metrics_path(state_dir: Path, date: str) -> Path:
+    """The day file this date's shards record their own instrument in.
+
+    A day rather than a month, for what the grain buys every ledger beside it:
+    two runs collide on a file only when they are the same day, and a night taken
+    back off the record is one `rm`.
+
+    The date is the digest date the shard judged, which is the date the council's
+    own record files by - so a reader holding one night's units against one
+    night's readings opens one day file in each store.
+    """
+    root = state_dir / CONTENT_SIMILARITY_JUDGE_DIRNAME / JUDGE_METRICS_DIRNAME
+    return root / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+
+
+def merge_line_holdout_scores_relpath(date: str) -> str:
+    """`state/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>.csv`."""
+    stem = f"{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+    root = f"{CONTENT_SIMILARITY_JUDGE_DIRNAME}/{MERGE_LINE_HOLDOUT_SCORES_DIRNAME}"
+    return f"{STATE_DIRNAME}/{root}/{stem}"
+
+
+def merge_line_holdout_scores_path(state_dir: Path, date: str) -> Path:
+    """The day file this date's reading of the line against the holdout goes in.
+
+    A day for the reason the fitted line beside it files by day: a row a day, a
+    read that carries a window over the newest of them, and one `rm` to take a
+    day's reading back off the record.
+
+    The date is the day the line was scored, not a day either labelled item was
+    published on - the holdout row names those two dates itself.
+    """
+    root = state_dir / CONTENT_SIMILARITY_JUDGE_DIRNAME / MERGE_LINE_HOLDOUT_SCORES_DIRNAME
     return root / date[:4] / date[5:7] / f"{date[8:10]}.csv"
 
 

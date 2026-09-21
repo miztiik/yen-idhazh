@@ -7,7 +7,7 @@ directory is the collection and the name says the period - `<YYYY-MM>` for a mon
 the rest. A writer appends to the period its own date names and leaves the rest
 alone.
 
-**A month is the usual unit here and it is not the only one.** Eight collections
+**A month is the usual unit here and it is not the only one.** Ten collections
 partition by **day** instead, and the first two below are the same series - the
 state ledger is derived from the published tree:
 
@@ -21,6 +21,8 @@ state ledger is derived from the published tree:
 | `state/story-similarity/scored-pairs/<YYYY>/<MM>/<DD>.csv` | none yet - the shape and the path land ahead of the step that appends to them (Guardrail #3) |
 | `state/story-similarity/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` | none yet, for the same reason |
 | `state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv` | none yet, for the same reason |
+| `state/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>.csv` | none yet, for the same reason |
+| `state/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>.csv` | none yet, for the same reason |
 
 Every rule on this page reads the same with "day" in place of "month": a writer
 appends to the day its own date names, a reader opens the days its window names,
@@ -183,6 +185,8 @@ Authority: owner, 2026-09-06.
 | Scored pairs | `state/story-similarity/scored-pairs/<YYYY>/<MM>/<DD>.csv` | none yet | Partitioned by **day**, and the first collection here that nests one directory deeper than `state/` - the whole adaptive merge line hangs off `state/story-similarity/`, so a commit step stages one prefix. A day is closed once its pairs have been folded into the score record, which happens once. The shape, the path and the header ship ahead of the step that appends to them (Guardrail #3). |
 | Fitted thresholds | `state/story-similarity/fitted-thresholds/<YYYY>/<MM>/<DD>.csv` | none yet | Partitioned by **day** for the reason its sibling is, and unlike that sibling its read does carry a window: the step-change guard takes a median over the newest `step_change_window_rows` written rows, and `assemble` looks back `applied_lookback_days` for a line to apply. Closed once the run's date leaves the day. |
 | Council shard outcomes | `state/llm-council/shard-outcomes/<YYYY>/<MM>/<DD>.csv` | none yet | Partitioned by **day**, and it is the one collection here whose day is **not** the day its writer ran: a row files by the digest date it judged, so one night's run appends to every date its plan covered and a day is closed once no later night still names it. Nested one directory deeper than `state/` for the reason the adaptive merge line is - everything the council records about itself hangs off one prefix, so a commit step stages one path. Two directory levels and no more: the day inventory globs one level and two, so a third would be invisible to it and the miss would be silent. The shape, the path and the header ship ahead of the step that appends to them (Guardrail #3). |
+| Content-similarity judge metrics | `state/content-similarity-judge/metrics/<YYYY>/<MM>/<DD>.csv` | none yet | Partitioned by **day**, and it files by the digest date the shard judged rather than the day the run started - the same grain as the council record beside it, so a reader holding one night's units of work against one night's readings opens one day file in each. Nested one directory deeper than `state/` under a prefix named for the judge rather than the venue it ran in: what a reading is ABOUT decides where it is filed, never what executed it, so this store stays put on the day the council stops hosting this judge. Two directory levels and no more, for the reason the council record gives. The shape, the path and the header ship ahead of the step that appends to them (Guardrail #3). |
+| Merge-line holdout scores | `state/content-similarity-judge/merge-line-holdout-scores/<YYYY>/<MM>/<DD>.csv` | none yet | Partitioned by **day**, filing by the day the line was scored - not by either of the two dates the labelled pair names, which the holdout row carries itself. One row a day, for the reason the fitted line files by day: a read that carries a window over the newest rows, and one `rm` to take a day's reading back off the record. It sits under the judge's prefix and holds no judge's reading at all: the shipped scoring calls no model, so the row carries no call stamp. Closed once the run's date leaves the day. The shape and the path ship ahead of the step that appends to them (Guardrail #3). |
 | Model validation | `state/<run.trial_state_dirname>/validation/<YYYY>/<MM>/<DD>.csv` | `stages.compact.stage_compact`, folding the segment `stages.qualify_decide` or `stages.decide` writes | Partitioned by **day** since 2026-09-18, where it was `state/validation-<date>.csv` at the root of `state/`. The old path was a hardcoded string joined to the repository root, so no config could move it and a trial dispatch wrote production state. Closed once the run's date leaves the day. Two candidates can be dispatched at once, so neither opens the day file: each writes its own segment and the fold settles them against `VALIDATION_KEY`. |
 
 The two collections with nothing committed are not aspirational. Both writers ship and

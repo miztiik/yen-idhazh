@@ -1,0 +1,16 @@
+{
+  "apart_and_one_story": 1,
+  "apart_and_two_stories": 2,
+  "applied_line": 0.931,
+  "cosine_weight": 0.7,
+  "date": "2026-09-20",
+  "key_point_weight": 0.3,
+  "labelled_two_story_pairs": 4,
+  "labeller": "claude-opus-4-1-20250805",
+  "merged_and_one_story": 4,
+  "merged_and_two_stories": 0,
+  "pairs_unresolved": 5,
+  "run_id": "2026-09-20-35550002",
+  "scorer_model": "all-minilm-l6-v2-quantized",
+  "version": "2026-09-21"
+}
