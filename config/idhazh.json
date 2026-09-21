@@ -122,9 +122,11 @@
     "zoom_factor": 1.5
   },
   "council": {
+    "shard_preamble_minutes": 13,
     "shard_timeout_minutes": 200,
     "shard_wrap_up_minutes": 12,
-    "shards": 4
+    "shards": 4,
+    "tenants": []
   },
   "drift": {
     "extractiveness_rise": 0.15,

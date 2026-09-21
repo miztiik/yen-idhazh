@@ -51,6 +51,9 @@ export interface ShardReading {
 	swapFree?: number | '';
 	swapTotal?: number | '';
 	peakRssBytes?: number | '';
+	/** The model server when the item ended. The figure the memory board draws
+	 * as a bracket, and a different reading from the high-water mark above. */
+	serverRssBytes?: number | '';
 	/** The worker process when the item ended. A second process on the box. */
 	workerRssBytes?: number | '';
 	/** The kernel's own account: what the machine has, what was left at the
@@ -138,6 +141,7 @@ export function itemRow(reading: ShardReading): Record<string, string> {
 		os_mem_available_bytes: cell(reading.memAvailable),
 		os_mem_available_min_bytes: cell(reading.memAvailableMin),
 		llama_rss_peak_bytes: cell(reading.peakRssBytes),
+		llama_rss_bytes: cell(reading.serverRssBytes),
 		python_rss_bytes: cell(reading.workerRssBytes),
 		item_started_at: cell(reading.startedAt),
 		shard_item_count: cell(reading.shardItemCount),

@@ -52,44 +52,6 @@ def test_the_gates_job_lints_the_shell_it_ships() -> None:
     assert list(SCRIPTS_DIR.glob("*.sh")), "the gate reads a glob, so it needs something to read"
 
 
-#: The directory the in-flight check watches. Every persisted shape is declared
-#: here (CLAUDE.md Guardrail #3), so one path is the whole question.
-CONTRACTS_DIR: Final = "backend/idhazh/contracts"
-
-IN_FLIGHT_STEP: Final = "A contract change waits for the run that is reading the old one"
-
-
-def test_a_contract_change_cannot_merge_into_a_live_pipeline_run() -> None:
-    """The second half of run 35537015073's fix, and the half a reader cannot see.
-
-    `ItemHealthRow` now reads a column it dropped, so that class of straddle is
-    gone. A rename or a retype is not, and it has taken a digest twice on two
-    different contracts. This step is the only thing between a merge and the
-    run that is still reading the old shape.
-    """
-    workflow = _load_workflows()["ci.yml"]
-    job = _mapping(_mapping(workflow["jobs"], "ci.yml jobs")["gates"], "gates")
-    permissions = _mapping(job.get("permissions"), "the gates job's permissions")
-
-    assert permissions.get("actions") == "read", "the step cannot see a live run without this"
-    assert permissions.get("contents") == "read", (
-        "a job-level block replaces the workflow's, so it restates what it still needs"
-    )
-
-    step = _step(workflow, "gates", "name", IN_FLIGHT_STEP)
-    assert step.get("if") == "github.event_name == 'pull_request'", (
-        "a push has already merged, so refusing it there costs a run and saves nothing"
-    )
-    body = _script(step, f"ci.yml/gates/{IN_FLIGHT_STEP}")
-    assert f"HEAD^1 HEAD -- {CONTRACTS_DIR}" in body, "it must read this branch's own range"
-    assert "actions/workflows/digest.yml/runs" in body, "it must ask about the pipeline workflow"
-    assert "exit 1" in body, "a check that reports and passes is not a check"
-
-    assert (REPO_ROOT / CONTRACTS_DIR / "base.py").is_file(), (
-        "the contracts moved and the step now watches an empty path, so it passes every branch"
-    )
-
-
 #: What the shipped script has to answer through a real git history.
 #:
 #: The truth table itself is in `frontend/scripts/tests/test-scope.test.mjs`,

@@ -58,7 +58,7 @@
         },
         {
           "id": "how-close-to-the-limits",
-          "panels": ["memory-board", "context-headroom"],
+          "panels": ["memory-board", "memory-held", "context-headroom"],
           "title": "How close we are to the limits"
         },
         {
@@ -177,5 +177,5 @@
     "movement_good_light": "#2f6f5e",
     "surface_tint_alpha": 0.07
   },
-  "version": "2026-09-20T14:00"
+  "version": "2026-09-21T14:00"
 }

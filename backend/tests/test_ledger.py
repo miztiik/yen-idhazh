@@ -25,6 +25,7 @@ from conftest import (
 from idhazh import config, day_partition, ledger
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.call_cost import COST_FIELDS, CallKind
+from idhazh.contracts.council_shard_outcome import CouncilShardOutcome
 from idhazh.contracts.counterfactual_score import CounterfactualScoreRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
@@ -212,6 +213,27 @@ def pair_row(*, on: str = DATE, judged_by_run_id: str | None = None) -> StorySim
             "date": on,
             "run_id": f"{on}-1",
             "judged_by_run_id": judged_by_run_id,
+        }
+    )
+
+
+def council_row(*, on: str = DATE) -> CouncilShardOutcome:
+    """One recorded unit of council work, read from the committed fixture and re-dated.
+
+    Read inside the helper for the reason `pair_row` gives: a fixture that stops
+    parsing fails the test that asked for a row rather than the whole file.
+    """
+    raw = json.loads(
+        read_text(
+            CONTRACT_FIXTURES_DIR / "council-shard-outcome" / "a-unit-that-ran-no-model.json"
+        )
+    )
+    return CouncilShardOutcome.model_validate(
+        raw
+        | {
+            "version": CouncilShardOutcome.schema_version(),
+            "date": on,
+            "run_id": f"{on}-1",
         }
     )
 
@@ -1982,11 +2004,11 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     else here says what makes two of its rows one record, and everything that
     says so is settled.
 
-    Both covers name the same ten ledgers on a tree with one day of each in it.
-    What separates them is what a second day would add: to the operator's pass, a
-    file; to a run's pass, nothing. The span fold is the exception that proves
-    the shape - it files by month, so a second day adds nothing to either cover
-    and a second month adds one file to the operator's.
+    Both covers name the same eleven ledgers on a tree with one day of each in
+    it. What separates them is what a second day would add: to the operator's
+    pass, a file; to a run's pass, nothing. The span fold is the exception that
+    proves the shape - it files by month, so a second day adds nothing to either
+    cover and a second month adds one file to the operator's.
 
     `state/story-similarity/fitted-thresholds/` is registered before anything
     writes it, which is why it is built here by hand rather than by an append
@@ -1999,6 +2021,7 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
     a_fingerprint_day(tmp_path, [fingerprint_row()])
     seed_span_rollup(tmp_path, DATE, [span_fold_row()])
     ledger.append_story_similarity_pairs(tmp_path, DATE, [pair_row()])
+    ledger.append_council_shard_outcomes(tmp_path, DATE, [council_row()])
     item_health = ledger.item_health_path(tmp_path, DATE)
     item_health.parent.mkdir(parents=True, exist_ok=True)
     item_health.write_text(",".join(ItemHealthRow.csv_columns()) + "\n", encoding="utf-8")
@@ -2027,6 +2050,10 @@ def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> N
         (
             f"story-similarity/scored-pairs/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
             ledger.STORY_SIMILARITY_PAIR_KEY,
+        ),
+        (
+            f"llm-council/shard-outcomes/{DATE[:4]}/{DATE[5:7]}/{DATE[8:10]}.csv",
+            ledger.COUNCIL_SHARD_OUTCOME_KEY,
         ),
         (f"span-rollup/{DATE[:7]}.csv", ledger.SPAN_ROLLUP_KEY),
     ]

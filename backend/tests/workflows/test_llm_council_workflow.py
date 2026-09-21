@@ -1,9 +1,10 @@
-"""Does the judging workflow bound its legs, reuse the daily run's cache, and commit once?
+"""Does the judging workflow bound its units, name no tenant, and commit once?
 
 Driven by the committed YAML, never by a live run. Every assertion here is about
-a shape a wrong run would only reveal hours later - a leg with no bound dies at
-the 6 h ceiling with nothing written, and a second cache key costs a
-multi-gigabyte download inside a job that has one.
+a shape a wrong run would only reveal hours later - a unit with no bound dies at
+the 6 h ceiling with nothing written, a second cache key costs a multi-gigabyte
+download inside a job that has one, and a venue that spells a tenant's paths
+commits the first tenant's output and silently drops the second's.
 """
 
 from __future__ import annotations
@@ -16,12 +17,15 @@ from typing import Final
 import pytest
 from conftest import CONFIG_DIR, REPO_ROOT
 
-from utilities import shard_bound
+from idhazh import cli
+from idhazh.council import session
+from utilities import council_matrix, shard_bound
 
 from ._harness import (
     MODEL_SERVER_ACTION,
     MODEL_SERVER_CALLERS,
     MODEL_SERVER_STEPS,
+    SUBSTITUTED_DATE,
     _action_call,
     _declared_steps,
     _job,
@@ -29,6 +33,7 @@ from ._harness import (
     _local_action_inputs,
     _normalize_condition,
     _script,
+    _stage_invocations,
     _step,
     _steps,
 )
@@ -37,27 +42,15 @@ pytestmark = pytest.mark.workflow
 
 FILENAME: Final = "llm-council.yml"
 
-#: The dotted path the shard's bound is read from. Spelled once here and
-#: asserted in the file, so a workflow that read a different knob fails rather
-#: than bounding the shard by the work shard's clock - or by a judge's block,
-#: which a night with no judge configured does not have.
+#: The dotted path the unit's bound is read from. Spelled once here and asserted
+#: in the file, so a workflow that read a different knob fails rather than
+#: bounding the unit by the work shard's clock - or by a tenant's block, which a
+#: night with no tenant registered does not have.
 TIMEOUT_KEY: Final = "council.shard_timeout_minutes"
 
 #: What that path prints, and therefore the name the workflow reads it back by.
 #: An Actions output name cannot carry a dot, so the reader prints the leaf.
 TIMEOUT_OUTPUT: Final = "shard_timeout_minutes"
-
-#: The commit calls, in the order the fold has to make them. Rows first: the
-#: record is derived from them, so a record pushed ahead of its own evidence is a
-#: record no later reader can reproduce.
-COMMIT_ORDER: Final = (
-    "state/story-similarity/scored-pairs",
-    "state/story-similarity/score-distribution.json",
-)
-
-#: What a leg's judged rows travel in. Spelled once, so the test below names the
-#: step by what it ships rather than by where it sits in the job.
-VERDICTS_ARTIFACT: Final = "judge-verdicts-"
 
 #: What mints the name this night files its rows under, and the key it prints
 #: that name under. The module is the council's own, so the mint resolves in a
@@ -65,10 +58,22 @@ VERDICTS_ARTIFACT: Final = "judge-verdicts-"
 MINT_COMMAND: Final = "python -m idhazh.council.run_identity"
 RUN_ID_OUTPUT: Final = "run_id"
 
-#: Every verb this workflow runs that writes a row, and therefore every verb
-#: that has to be handed the name. `judge-shard` is absent because it writes no
-#: row of its own today - it rewrites the draw's and uploads the file.
-VERBS_THAT_WRITE_A_ROW: Final = ("judge-draw", "judge-fold", "judge-fit")
+#: The step that says what tonight fans out to, and the utility behind it.
+FANOUT_STEP: Final = "fanout"
+FANOUT_COMMAND: Final = "backend/utilities/council_matrix.py"
+
+#: Every verb this workflow runs. All three are the council's own and every one
+#: of them writes under a name the council minted, so every one is handed it.
+COUNCIL_VERBS: Final = ("council-prepare", "council-settle", "council-shard")
+
+#: The one commit call the night makes, and the guard that keeps it off a night
+#: with nothing to stage.
+COMMIT_STEP: Final = "Commit what the night's tenants wrote"
+COMMIT_SCRIPT: Final = ".github/scripts/commit-and-push.sh"
+
+#: What a unit's output travels in, and what a date's selection travels in.
+METRICS_ARTIFACT: Final = "council-metrics-"
+SELECTION_ARTIFACT: Final = "council-selection-"
 
 
 def _judges() -> dict[str, object]:
@@ -89,10 +94,17 @@ def _uploads(job: str, prefix: str) -> list[dict[str, object]]:
     return found
 
 
-def test_the_leg_reads_its_timeout_from_the_one_file_that_says_so() -> None:
+def _emitted(capsys: pytest.CaptureFixture[str]) -> dict[str, str]:
+    """What the fan-out utility prints for one date, against the committed config."""
+    council_matrix.main(["--config-root", str(CONFIG_DIR), "--date", SUBSTITUTED_DATE])
+    printed = capsys.readouterr().out.splitlines()
+    return dict(line.split("=", 1) for line in printed if line)
+
+
+def test_the_unit_reads_its_timeout_from_the_one_file_that_says_so() -> None:
     """The bound is a knob, and the workflow spells no number.
 
-    A literal here would be a second answer to how long a leg may take, and the
+    A literal here would be a second answer to how long a unit may take, and the
     two can disagree - which is exactly what `digest.yml` did for a while, saying
     330 in the file while config said 150.
     """
@@ -108,7 +120,7 @@ def test_the_leg_reads_its_timeout_from_the_one_file_that_says_so() -> None:
 def test_the_timeout_travels_as_a_job_output() -> None:
     """`timeout-minutes` resolves from `needs` before the job's first step.
 
-    `steps` is not readable there, so a step output would leave the leg with no
+    `steps` is not readable there, so a step output would leave the unit with no
     bound at all - and Actions takes whatever it is handed, so nothing would say
     so until the 6 h ceiling killed the job with nothing written.
     """
@@ -160,7 +172,7 @@ def test_the_bound_reader_still_answers_its_first_caller() -> None:
     assert shard_bound.minutes(CONFIG_DIR, key=TIMEOUT_KEY) >= 1
 
 
-def test_the_leg_reaches_the_model_through_the_one_shared_action() -> None:
+def test_the_unit_reaches_the_model_through_the_one_shared_action() -> None:
     """The five steps live in one file, so there is no second key to compare.
 
     This job and the daily run's work shard spelled the same cache, fetch,
@@ -185,7 +197,7 @@ def test_the_leg_reaches_the_model_through_the_one_shared_action() -> None:
         for step in _declared_steps(_judges(), "judge")
         if step.get("name") in MODEL_SERVER_STEPS
     ]
-    assert not spelled, f"the leg owns a second copy of {spelled}"
+    assert not spelled, f"the unit owns a second copy of {spelled}"
 
     # A `./` action is this repository at the commit the run checked out, so a
     # job that calls one before checking out has nothing to call.
@@ -193,41 +205,128 @@ def test_the_leg_reaches_the_model_through_the_one_shared_action() -> None:
     assert names.index("actions/checkout@v6") < names.index(MODEL_SERVER_ACTION)
 
 
-def test_the_leg_fetches_the_draw_before_it_reads_it() -> None:
-    """Without the draw a leg has nothing to judge and fails on a missing file."""
+def test_the_unit_fetches_the_selection_before_it_reads_it() -> None:
+    """Without the selection a unit has nothing to work on.
+
+    By pattern rather than by name, and into the council's own scratch root: the
+    artifact carries the date and the tenant as directory levels, so two tenants'
+    selections arrive beside each other instead of one overwriting the other.
+    """
     names = _named("judge")
-    download = names.index("actions/download-artifact@v8")
-    judging = names.index("Judge this leg's pairs")
+    download = _step(_judges(), "judge", "uses", "actions/download-artifact@v8")
+    settings = download.get("with")
 
-    assert download < judging
+    assert isinstance(settings, dict)
+    assert str(settings["pattern"]).startswith(SELECTION_ARTIFACT)
+    assert settings["merge-multiple"] == "true"
+    assert str(settings["path"]) == session.COUNCIL_ROOT_RELPATH
+    assert names.index("actions/download-artifact@v8") < names.index(
+        "Run this unit of the tenant's work"
+    )
 
 
-def test_the_matrix_width_is_the_knob_and_not_a_literal() -> None:
-    """The draw deals against the same number the matrix runs.
+def test_the_matrix_is_emitted_by_the_utility_and_not_computed_in_the_file() -> None:
+    """The cells come from the tenants, so the workflow reads no config key at all.
 
-    A literal would let the draw deal four ways while three shards ran, and a
-    quarter of the night would go unjudged with nothing saying so. The knob is
-    the council's own, so the step still resolves on a night with no judge
-    configured - read out of a judge's block it raised before it planned
-    anything.
+    A key read here is a key the venue has to know about, and a judge's key read
+    here raises before the planning job plans anything on a night with no judge
+    configured. The one-liner this replaced read a judge's block for the width.
+    """
+    fanout = _script(_step(_judges(), "draw", "id", FANOUT_STEP), "the fanout step")
+
+    assert FANOUT_COMMAND in fanout
+    assert "--date" in fanout
+    assert "idhazh.json" not in fanout, (
+        "the planning job reads no config key of its own; the utility is what reads config"
+    )
+    assert "adaptive_dedup_threshold" not in fanout
+
+
+def test_every_fanout_output_the_workflow_reads_is_one_the_emitter_prints(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Two sides of one contract, held against each other rather than spelled twice.
+
+    An output the workflow publishes and the utility never prints is an empty
+    string at the far end, which Actions reports as nothing at all - a matrix
+    that silently does not exist, or a commit step that stages nothing and says
+    the night was quiet.
+    """
+    printed = set(_emitted(capsys))
+    outputs = _job(_judges(), "draw").get("outputs")
+
+    assert isinstance(outputs, dict)
+    read = {
+        name
+        for name, value in outputs.items()
+        if f"steps.{FANOUT_STEP}.outputs." in str(value)
+    }
+    assert read == printed, (
+        f"the planning job publishes {sorted(read)} and the utility prints {sorted(printed)}"
+    )
+
+
+def test_a_matrix_with_no_cells_never_reaches_the_strategy_evaluator(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """An empty matrix is a job Actions refuses to build, so the guard has to exist.
+
+    With no tenant registered the emitter prints an empty list, which is the
+    night the venue is designed to run. Without the guard that legal night would
+    red on a strategy evaluation nobody could read, and the failure would look
+    like a broken workflow rather than a room with no case in it.
+    """
+    judge = _job(_judges(), "judge")
+
+    assert _emitted(capsys)["matrix"] == "[]", (
+        "no tenant is registered, so the committed config fans out to no cells"
+    )
+    assert _normalize_condition(judge["if"], "the judging job") == (
+        "needs.draw.outputs.matrix != '[]'"
+    )
+    assert _normalize_condition(_job(_judges(), "fold")["if"], "the collecting job") == "always()"
+
+
+def test_the_parallelism_is_the_cell_count_and_never_the_shard_width() -> None:
+    """Bound to the width, two tenants over two dates take four waves.
+
+    That is about 5.4 h of wall clock for 81 minutes of work, finishing after
+    the digest cron and across the scheduled prune. Bound to the cell count
+    under the platform's own ceiling, the same night is one wave.
     """
     strategy = _job(_judges(), "judge").get("strategy")
-    fanout = _script(_step(_judges(), "draw", "id", "fanout"), "the fanout step")
 
-    assert '["council"]["shards"]' in fanout
-    assert "adaptive_dedup_threshold" not in fanout
     assert isinstance(strategy, dict)
-    assert strategy["max-parallel"] == "${{ fromJSON(needs.draw.outputs.shards) }}"
-    matrix = strategy["matrix"]
-    assert isinstance(matrix, dict)
-    assert matrix["shard"] == "${{ fromJSON(needs.draw.outputs.matrix) }}"
+    assert strategy["max-parallel"] == "${{ fromJSON(needs.draw.outputs.max_parallel) }}"
+    assert strategy["matrix"] == {"include": "${{ fromJSON(needs.draw.outputs.matrix) }}"}
+    assert "shards" not in str(strategy["max-parallel"]), (
+        "the shard width is a per-tenant number and sizes no wave"
+    )
 
 
-def test_one_server_per_leg() -> None:
+def test_a_cell_carries_its_tenant_its_date_and_its_own_width(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The four values a unit needs, on the cell rather than on a job output.
+
+    A width published once for the whole run would hand every tenant the widest
+    tenant's width, and a tenant that runs no model would pay four weights
+    restores for work that uses none of them.
+    """
+    shard = _script(_step(_judges(), "judge", "name", "Run this unit of the tenant's work"), "")
+    emitted = _emitted(capsys)
+
+    for value in ("tenant", "date", "shard", "shards"):
+        assert f"matrix.{value}" in shard, f"the unit is never told which {value} it is"
+    assert json.loads(emitted["matrix"]) == [], "the committed config hosts nobody"
+    assert json.loads(emitted["dates"]) == [SUBSTITUTED_DATE]
+
+
+def test_one_server_per_unit() -> None:
     """Four servers on four logical CPUs does not fit and would not be faster.
 
     One `llama-server` peaks at 12.57 to 13.16 GiB and reaches 14.31 GiB with the
-    leg's python - 96.0 percent of the 16 GB runner, measured 2026-09-08 over
+    unit's python - 96.0 percent of the 16 GB runner, measured 2026-09-08 over
     four captures of run 2026-08-29-3. And this host is slower at 8 threads than
     at 4 at every prompt length.
     """
@@ -236,8 +335,8 @@ def test_one_server_per_leg() -> None:
     assert starters == ["Start the model"]
 
 
-def test_a_dead_leg_does_not_cancel_its_siblings() -> None:
-    """A leg that runs out of clock costs its pairs for that day and nothing else."""
+def test_a_dead_unit_does_not_cancel_its_siblings() -> None:
+    """A unit that runs out of clock costs its own work for that day and nothing else."""
     strategy = _job(_judges(), "judge").get("strategy")
     fold = _job(_judges(), "fold")
 
@@ -245,35 +344,63 @@ def test_a_dead_leg_does_not_cancel_its_siblings() -> None:
     # The harness reads the file as text, so a YAML boolean arrives as the word
     # somebody wrote. Comparing to the word is what this file can actually see.
     assert str(strategy["fail-fast"]).lower() == "false"
-    assert fold["if"] == "always()"
     assert fold["needs"] == ["draw", "judge"]
 
 
-def test_a_leg_that_stops_early_still_ships_what_it_judged() -> None:
-    """The exposure was never the collecting job dying - it is a leg dying.
+def test_a_unit_that_stops_early_still_ships_what_it_did() -> None:
+    """The exposure was never the collecting job dying - it is a unit dying.
 
-    A leg that stops on its own clock, or is killed on the platform's, has
-    already judged every pair it reached. Without `always()` the upload is
-    skipped on the way out and those verdicts are lost after up to 79 minutes of
-    model time, so the night pays for them twice.
+    A unit that stops on its own clock, or is killed on the platform's, has
+    already done every piece of work it reached. Without `always()` the upload is
+    skipped on the way out and all of it is lost after up to three hours of model
+    time, so the night pays for it twice.
     """
-    uploads = _uploads("judge", VERDICTS_ARTIFACT)
+    uploads = _uploads("judge", METRICS_ARTIFACT)
 
-    assert len(uploads) == 1, f"one {VERDICTS_ARTIFACT}* upload a leg, not {len(uploads)}"
+    assert len(uploads) == 1, f"one {METRICS_ARTIFACT}* upload a unit, not {len(uploads)}"
     guard = uploads[0].get("if")
     assert guard is not None, (
-        "the verdicts upload carries no condition, so a leg that stopped early skips it "
-        "and every pair it judged goes in the bin"
+        "the output upload carries no condition, so a unit that stopped early skips it "
+        "and everything it did goes in the bin"
     )
-    assert _normalize_condition(guard, "the verdicts upload") == "always()"
+    assert _normalize_condition(guard, "the output upload") == "always()"
 
 
-def test_no_leg_commits() -> None:
-    """Four legs pushing into one union-merged file buys four races and four rebases.
+def test_every_artifact_this_night_writes_is_named_for_the_cell_that_wrote_it() -> None:
+    """Two tenants at shard zero would otherwise collide on the artifact name.
 
-    One fold is one push, so two processes never write one path: no merge driver
-    to trust, no union stacking to census afterwards, and no key to settle across
-    legs.
+    And on the merged filename after it, which is the collision the name cannot
+    fix on its own - so the date and the tenant are directory levels inside the
+    upload as well as words in its name.
+    """
+    metrics = _uploads("judge", METRICS_ARTIFACT)[0]
+    selection = _uploads("draw", SELECTION_ARTIFACT)[0]
+    metrics_with = metrics.get("with")
+    selection_with = selection.get("with")
+
+    assert isinstance(metrics_with, dict)
+    assert isinstance(selection_with, dict)
+    for value in ("tenant", "date", "shard"):
+        assert f"matrix.{value}" in str(metrics_with["name"]), (
+            f"a unit's artifact does not say which {value} produced it"
+        )
+    assert "steps.decide.outputs.date" in str(selection_with["name"])
+    assert str(selection_with["path"]) == session.COUNCIL_ROOT_RELPATH, (
+        "the selection is uploaded from the scratch root, so the date and the tenant "
+        "survive as directory levels and two tenants do not merge on top of each other"
+    )
+    assert str(metrics_with["path"]).splitlines()[0] == session.COUNCIL_ROOT_RELPATH
+    assert f"!{session.COUNCIL_ROOT_RELPATH}/*/{session.SELECTION_DIRNAME}" in str(
+        metrics_with["path"]
+    ), "a unit re-uploads the selection it downloaded"
+
+
+def test_no_unit_commits() -> None:
+    """Many units pushing into one union-merged file buys many races and many rebases.
+
+    One settle is one push, so two processes never write one path: no merge
+    driver to trust, no union stacking to census afterwards, and no key to
+    settle across units.
     """
     bodies = [
         _script(step, "a judge step") for step in _steps(_judges(), "judge") if "run" in step
@@ -282,60 +409,62 @@ def test_no_leg_commits() -> None:
     assert not [body for body in bodies if "commit-and-push.sh" in body]
 
 
-def test_the_fold_runs_the_two_commit_calls_in_order() -> None:
-    """Rows first, then the record, because the record is derived from the rows.
+def test_the_night_makes_one_commit_call_over_the_paths_its_tenants_named() -> None:
+    """The venue spells no store path, because a spelled list is one tenant's list.
 
-    A record pushed ahead of its own evidence is a record no later reader can
-    reproduce.
+    It stages what `committed_paths` came back with, so a second tenant's output
+    is committed the day that tenant registers and not the day somebody
+    remembers to edit this file.
     """
     calls = [
         _script(step, "a fold step")
         for step in _steps(_judges(), "fold")
-        if "run" in step and "commit-and-push.sh" in _script(step, "a fold step")
+        if "run" in step and COMMIT_SCRIPT in _script(step, "a fold step")
     ]
+    step = _step(_judges(), "fold", "name", COMMIT_STEP)
+    environment = step.get("env")
 
-    assert len(calls) == 2
-    for call, path in zip(calls, COMMIT_ORDER, strict=True):
-        assert path in call
-
-
-def test_only_the_record_carries_refresh_paths() -> None:
-    """The fitted row is what this run SAW; the record is what it derived.
-
-    A lost race replays a row onto the new base and rebuilds a derivation. A
-    fitted row regenerated against a moved tip would answer a different question
-    and overwrite the answer to this one, so it is absent from `REFRESH_PATHS` -
-    and so are the judged pairs, for the same reason.
-    """
-    record = _step(_judges(), "fold", "name", "Commit the record and the line")
-    environment = record.get("env")
-
+    assert len(calls) == 1, "one collecting job, one push"
+    assert "$COMMITTED_PATHS" in calls[0]
     assert isinstance(environment, dict)
-    refresh = str(environment["REFRESH_PATHS"])
-    assert "score-distribution.json" in refresh
-    assert "fitted-thresholds" not in refresh
-    assert "scored-pairs" not in refresh
+    assert environment["COMMITTED_PATHS"] == "${{ needs.draw.outputs.committed_paths }}"
+    assert not re.search(r"\bstate/\S+", calls[0]), (
+        "a store path spelled here is a path a second tenant's output never reaches"
+    )
+    assert _normalize_condition(step["if"], "the commit step") == (
+        "needs.draw.outputs.committed_paths != ''"
+    )
 
 
-def test_every_path_the_fold_stages_exists_in_a_fresh_checkout() -> None:
+def test_every_path_a_registered_tenant_names_exists_in_a_fresh_checkout() -> None:
     """`git add` runs under `set -euo pipefail`, so a missing path aborts the step.
 
-    A path named without a committed file behind it costs every ledger staged
-    beside it, on the runner, hours in. It fails here instead.
+    A path named without a committed file behind it costs every store staged
+    beside it, on the runner, hours in. It fails here instead - and it is asked
+    of the tenants, so a tenant registering a path nothing has created fails on
+    the day it registers rather than on the night it runs.
     """
-    staged: list[str] = []
-    for step in _steps(_judges(), "fold"):
-        if "run" not in step:
-            continue
-        body = _script(step, "a fold step")
-        if "commit-and-push.sh" not in body:
-            continue
-        after = body.split("commit-and-push.sh", 1)[1]
-        staged.extend(word for word in after.split() if word.startswith("state/"))
-
-    assert staged, "the fold stages something"
+    staged = council_matrix.committed_paths(CONFIG_DIR)
     missing = [path for path in staged if not (REPO_ROOT / path).exists()]
-    assert not missing, f"the fold stages paths a fresh checkout does not have: {missing}"
+
+    assert not missing, f"a tenant names paths a fresh checkout does not have: {missing}"
+
+
+def test_the_collecting_job_settles_every_date_inside_one_job() -> None:
+    """One job a date would put two jobs of one run pushing `main`.
+
+    The workflow-level `concurrency` group serialises runs, not the jobs inside
+    one, so the second push would race the first. One job, a loop over the dates
+    the planning job named, one push.
+    """
+    settle = _step(_judges(), "fold", "name", "Settle each date")
+    environment = settle.get("env")
+    script = _script(settle, "the settle step")
+
+    assert isinstance(environment, dict)
+    assert environment["COUNCIL_DATES"] == "${{ needs.draw.outputs.dates }}"
+    assert "while read" in script, "the dates are looped rather than taken one at a time"
+    assert "idhazh council-settle" in script
 
 
 def test_the_night_mints_one_name_and_publishes_it_to_the_later_jobs() -> None:
@@ -372,46 +501,46 @@ def test_the_name_is_minted_once_and_never_per_job() -> None:
     )
 
 
+def test_this_workflow_runs_the_councils_own_verbs_and_names_no_tenant() -> None:
+    """The venue's runtime is its own, not one tenant's four commands.
+
+    A verb this router does not carry is a run that dies mid-pipeline, so both
+    sides are read: the workflow's own `run:` bodies and the router's own tuple.
+    A verb naming a tenant's mechanism would be the seam this row exists to cut,
+    rebuilt as a string that no import check can see.
+    """
+    run = sorted({stage for _, _, stage, _ in _stage_invocations(_judges(), FILENAME)})
+
+    assert run == sorted(COUNCIL_VERBS)
+    assert set(run) <= set(cli.STAGES), f"{sorted(set(run) - set(cli.STAGES))} is not a verb"
+    assert not [stage for stage in run if not stage.startswith("council-")]
+
+
 def test_every_verb_that_writes_a_row_is_handed_the_same_name() -> None:
     """One night, one name, in every verb that files something under it.
 
     A verb left without it stops at its own command line rather than filing the
     row under a digest run's id - but that is a failed job two hours in, and this
-    is the check that runs in seconds.
+    is the check that runs in seconds. The planning job reads the step that
+    minted the name; the later jobs read it back across the job boundary.
     """
     handed: dict[str, str] = {}
-    for job_name in ("draw", "judge", "fold"):
-        for step in _steps(_judges(), job_name):
-            if "run" not in step:
-                continue
-            body = _script(step, f"a {job_name} step")
-            for verb in VERBS_THAT_WRITE_A_ROW:
-                if f"idhazh {verb}" in body:
-                    handed[verb] = body
+    for job_name, _, stage, words in _stage_invocations(_judges(), FILENAME):
+        handed[stage] = f"{job_name} {' '.join(words)}"
 
-    assert sorted(handed) == sorted(VERBS_THAT_WRITE_A_ROW), (
-        f"the workflow runs {sorted(handed)}, and every verb that writes a row "
-        "has to be one of them"
-    )
+    assert sorted(handed) == sorted(COUNCIL_VERBS)
     for verb, body in sorted(handed.items()):
         assert "--run-id" in body, f"{verb} files a row under no name of the council's"
 
-    assert f"steps.identity.outputs.{RUN_ID_OUTPUT}" in handed["judge-draw"]
-    for verb in ("judge-fold", "judge-fit"):
-        assert f"needs.draw.outputs.{RUN_ID_OUTPUT}" in handed[verb]
-
-
-def test_the_rebuild_of_the_record_carries_the_name_as_well() -> None:
-    """A lost race rebuilds the record by running the fold again on the new base.
-
-    That second run is the same verb with the same two arguments, so a rebuild
-    command missing the name dies on a command line inside a retry loop - after
-    the push has already failed once.
-    """
-    record = _step(_judges(), "fold", "name", "Commit the record and the line")
-    environment = record.get("env")
-
-    assert isinstance(environment, dict)
-    rebuild = str(environment["REGENERATE_COMMAND"])
-    assert "judge-fold" in rebuild
-    assert f"--run-id ${{{{ needs.draw.outputs.{RUN_ID_OUTPUT} }}}}" in rebuild
+    carried = {
+        "Pick the work for each date": ("draw", f"steps.identity.outputs.{RUN_ID_OUTPUT}"),
+        "Run this unit of the tenant's work": (
+            "judge",
+            f"needs.draw.outputs.{RUN_ID_OUTPUT}",
+        ),
+        "Settle each date": ("fold", f"needs.draw.outputs.{RUN_ID_OUTPUT}"),
+    }
+    for step_name, (job_name, expression) in sorted(carried.items()):
+        environment = _step(_judges(), job_name, "name", step_name).get("env")
+        assert isinstance(environment, dict)
+        assert environment["COUNCIL_RUN_ID"] == f"${{{{ {expression} }}}}"
