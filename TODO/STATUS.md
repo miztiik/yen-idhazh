@@ -38,7 +38,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260918-35-search-eval-key-points-plan.md](20260918-35-search-eval-key-points-plan.md) | 8 | 0 | 8 | 4 |
 | [20260918-36-summary-quality-autotune-plan.md](20260918-36-summary-quality-autotune-plan.md) | 13 | 0 | 13 | 0 |
 | [20260920-37-honest-machine-telemetry-plan.md](20260920-37-honest-machine-telemetry-plan.md) | 22 | 11 | 11 | 4 |
-| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 17 | 12 | 4 |
+| [20260920-38-judge-verbs-and-telemetry-plan.md](20260920-38-judge-verbs-and-telemetry-plan.md) | 29 | 18 | 11 | 3 |
 | [20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md) | 17 | 0 | 17 | 10 |
 | [20260921-40-bonsai-probe-plan.md](20260921-40-bonsai-probe-plan.md) | 7 | 0 | 7 | 4 |
 
@@ -47,7 +47,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 Nothing is stamped `IN-FLIGHT`. An orchestrator sets that cell when it
 dispatches a row, so an empty table here and a busy worktree disagree.
 
-## Ready now - 50
+## Ready now - 49
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -88,7 +88,6 @@ section 3 is where it is answered.
 | #13 | 37 | C | Two panels leave the page | 9 |
 | #19 | 37 | C | Which prompts get re-read, and how fast | 9 |
 | #12 | 38 | J | The four verbs name their work | 9, 24 |
-| #25 | 38 | P | The config check moves to the tenant that owns the number | 9, 24 |
 | #18 | 38 | Q | The store groups under the judge that fills it | 17 |
 | #21a | 38 | S | The council asks every tenant what it is behind on | 15a, 17, 24 |
 | #13 | 39 | A | The entry path is one action taking a model file | - |
@@ -195,7 +194,7 @@ section 3 is where it is answered.
 | #19 | 38 | R | Where the content-similarity judge's merge line stands against its holdout | 18 is PENDING |
 | #21b | 38 | T | The content-similarity judge answers which nights it is behind on | 12 is PENDING; 21a is PENDING |
 | #22 | 38 | U | The guard that stops a shard committing is renamed and re-reasoned | 21a is PENDING |
-| #23 | 38 | U | The council runs green with no judge in the repository | 21a is PENDING; 25 is PENDING |
+| #23 | 38 | U | The council runs green with no judge in the repository | 21a is PENDING |
 | #20 | 38 | V | The plan pointer | 19 is PENDING; 21b is PENDING; 23 is PENDING |
 | #5 | 39 | B | The installer stops naming a repository | 2 is PENDING |
 | #6 | 39 | B | The startup probe keeps one check | 2 is PENDING |
