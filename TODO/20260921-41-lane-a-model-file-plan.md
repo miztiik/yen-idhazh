@@ -12,24 +12,24 @@ Execute per docs/how-to/execute-a-plan.md: one owner, one worktree per pull requ
 | --- | --- |
 | Why this plan exists | Naming one more llama-server option costs six edits across five files - a typed field, a branch in the argv builder, a regenerated schema, a version stamp, a changelog line and a test - before the file that exists to carry options can carry it. Eight turn markers are a hand-copy of each model's own chat template, a startup check exists largely to catch that copy being wrong, and four more startup checks re-ask facts already settled by a checksum or by a parser. None of it is load-bearing and all of it is in the way of standing a new model up. |
 | The rule | **A validator earns its place where this project's own code is the thing that could be wrong. Everywhere else the producer writes its file, the consumer reads it, and a mistake fails loudly at the moment it is made.** Owner ruling 2026-09-21. |
-| Hard scope - in | Delete the draft-head fields from the model shape. Make the model configuration a plain mapping with no Pydantic model, no generated schema and no compliance test, keeping the flag spellings as declared tables and denying six keys the command line. Put a number on span one's prediction cap. Read the server address from the environment so the pipeline can point at another compatible server. Delete the reader that parses the server's log. Record each model's turn markers from its own template instead of transcribing them by hand. Cut the startup probe from five checks to one. Amend the two clauses of the engineering contract this plan contradicts, in the pull request that contradicts them. |
+| Hard scope - in | Delete the draft-head fields from the model shape. Make the model configuration a plain mapping with no Pydantic model, no generated schema, no compliance test and no bound on any sampler key, keeping the flag spellings as declared tables and denying four keys the command line. Delete both decode caps and the arithmetic that reconciled them. Delete the decode stamp whole. Read the server address from the environment so the pipeline can point at another compatible server. Delete the reader that parses the server's log. Record each model's turn markers from its own template instead of transcribing them by hand. Cut the startup probe from five checks to one. Amend the two clauses of the engineering contract this plan contradicts, in the pull request that contradicts them. |
 | Hard scope - out | See the table below. |
 | Supersedes | Plan 39 rows 2, 6, 11, 16, 18, 21, the model-shape half of row 3, and the Guardrail #3 and section 11 clauses of row 12. Those rows are `COLLAPSED` in plan 39's Reckoner and are not executed from there. |
-| Hands to Lane B | Plan 39 row 5 (the installer stops naming a repository) runs as Lane B's last row, behind row 13 and behind pull request A1 of this plan - it adds `<role>.runtime` to the model file, which the typed shape refuses until row 4 here lands. Plan 39 row 3's workflow half - a companion-file list, the fetch loop and the draft pass-through in `fetch-model-runtime.sh`, `action.yml`, `digest.yml`, `validate.yml` and `measure.yml` - is absorbed by row 13. The two log-format assertions at `backend/tests/workflows/test_model_server_jobs.py:446` and `:487` belong to plan 39 row 10, not to row 1 here. |
-| ESCALATE triggers | (1) The marker check must keep running at configuration load, in every process, over a plain mapping, with no server. If the recorded markers cannot be checked that way, stop - that is Guardrail #11's control point, not a preference. (2) Row 3 deletes `ModelRef.draft`, and 6 of 31 committed `run.json` files carry it; the read-side line ships in the same commit or the row stops. (3) `MODELS_FILE_PATTERN` must survive byte-identical; if the model-file pointer cannot keep its grammar, stop. (4) Row 6 amends `CLAUDE.md`; it lands inside pull request A1, never after. (5) Any row that would raise a runner budget figure (Guardrail #2). (6) Pull request A2's evidence gate failing sends the work back to row 7's recording, not to the gate. |
-| Chosen strategy | Two pull requests, split at the prompt path. A1 carries everything that cannot move a rendered prompt and needs no dispatch. A2 carries the markers, which is the only change here that can move one, so a moved prompt digest has exactly one candidate cause. Fowler rules the contracts, Carmack the runtime and the cap arithmetic, Andre the prompt and the evidence gate. |
+| Hands to Lane B | Plan 39 row 5 (the installer stops naming a repository) runs as Lane B's last row, behind row 13 and behind pull request A1 of this plan - it adds `<role>.runtime` to the model file, which the typed shape refuses until row 5 here lands. Plan 39 row 3's workflow half - a companion-file list, the fetch loop and the draft pass-through in `fetch-model-runtime.sh`, `action.yml`, `digest.yml`, `validate.yml` and `measure.yml` - is absorbed by row 13. The two log-format assertions at `backend/tests/workflows/test_model_server_jobs.py:446` and `:487` belong to plan 39 row 10, not to row 1 here. |
+| ESCALATE triggers | (1) The marker check must keep running at configuration load, in every process, over a plain mapping, with no server. If the recorded markers cannot be checked that way, stop - that is Guardrail #11's control point, not a preference. (2) Row 4 deletes `ModelRef.draft`, and 6 of 31 committed `run.json` files carry it; the read-side line ships in the same commit or the row stops. (3) `MODELS_FILE_PATTERN` must survive byte-identical; if the model-file pointer cannot keep its grammar, stop. (4) Row 2 removes a column from committed similarity ledgers; if no retired-cell mechanism can be established for them, stop rather than rewriting committed data by hand. (5) Row 7 amends `CLAUDE.md`; it lands inside pull request A1, never after. (6) Any row that would raise a runner budget figure (Guardrail #2). (7) Pull request A2's evidence gate failing sends the work back to row 8's recording, not to the gate. |
+| Chosen strategy | Two pull requests, split at the prompt path. A1 carries everything that cannot move a rendered prompt and needs no dispatch. A2 carries the markers, which is the only change here that can move one, so a moved prompt digest has exactly one candidate cause. Fowler rules the contracts, Carmack the runtime, Andre the prompt and the evidence gate. |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 1.` |
 
 ### Hard scope - out
 
 | What is out | What it costs to leave out | What would bring it in |
 | --- | --- | --- |
-| Moving the pipeline off llama.cpp's native completion route onto the message-shaped route (plan 39 row 21's original scope) | The request shape still names one runtime, so pointing at a server that speaks only the widely-supported shape needs a new request builder written. Row 2 here buys the address, not the shape | A plan of its own, priced against the measurement already taken: the message route re-renders the conversation, drops the generation prompt's empty reasoning block when a turn becomes history, and re-reads the whole label reply - a median 928 tokens and 74.9 s an item, p90 156.8 s, worst 318.5 s, and 25.6 to 39.8 minutes on a 20-item shard (measured 2026-09-21 over 518 items in `state/item-health`, days 2026-09-19 to 2026-09-21). It also loses the judge's literal grammar, its first-token alternatives, and the prompt splice both continuation paths depend on |
-| `decode_digest`, `slot_id`, `kv_tokens_at_start` and `prefix_shared_with_previous` | Four cells stay on the item and judge records | They leave only with the transport that made them llama-specific. `decode_digest` is compared inside `inputs_changed` (`backend/idhazh/similarity/counting.py:220`), feeds the archive filename through the record stamp so deleting it renames every future archive file, and is in the header of two committed CSVs under `state/content-similarity-judge/scored-pairs/2026/09/`. Deleting it is a three-surface migration, not a deletion |
+| Moving either request shape onto one portable format (plan 39 row 21's original scope) | The pipeline speaks two shapes to one server - the widely-supported chat shape on the default address, and llama-server's own route for the production two-call path. Pointing at a server that speaks only the first needs a new builder for the second. Row 3 here buys the address, not the shape | A plan of its own. The production path posts a finished prompt so it can splice the first span's prompt and have the second span continue in the same slot; a message body has no prompt to splice. Moving it makes the server rebuild the prompt each call, the template drops the generation prompt's empty reasoning block once a turn becomes history, the cached prefix stops matching and the whole previous reply is decoded again. It also collapses the two-span split, and it loses the judge's literal grammar and its first-token reading |
+| `slot_id`, `kv_tokens_at_start` and `prefix_shared_with_previous` | Three cells stay on the item record | They are llama-specific and they leave with the transport that made them so. `decode_digest` was on this list and is **not** any more - row 2 deletes it whole (C9) |
 | The trust boundary: `refuse_markers_the_boundary_cannot_hold`, `_CHAT_CONTROL_FAMILIES`, `untrusted_block`, `sanitize` | A model family whose turn markers no pattern recognises cannot load until a pattern is added | Nothing here. Guardrail #11 protects a reader from a stranger's web page; an agent surfaces it and never overrules it |
 | The Pydantic models for payloads a run writes and a later run reads | The producer keeps validating its own output at the moment it writes it | This is one program checking its own work in one language. What goes is the shape for a file a person authors, not the shape for a payload a machine wrote |
 | The weights checksum and byte-count check | Two steps and one test stay in every fetch path | They guard bytes this project downloaded. A web error page saved as model weights is the failure they exist for |
-| `server_argv` as the one place a flag is spelled | One function every server start goes through | Row 4 shrinks it to three declared tables and a loop. Deleting it would make each caller spell its own flags, which is more code, not less |
+| `server_argv` as the one place a flag is spelled | One function every server start goes through | Row 5 shrinks it to three declared tables and a loop. Deleting it would make each caller spell its own flags, which is more code, not less |
 | The qualification path sending one chat request where production sends two spans | Qualification scores a decoding production does not perform on a thinking candidate | One row of its own: run one thinking entry through both transports on one dispatch and compare the two summaries. Until that reading exists, a qualification verdict on a thinking candidate is a verdict on the chat transport, and this plan says so rather than implying otherwise |
 
 ### What a change costs today
@@ -37,11 +37,12 @@ Execute per docs/how-to/execute-a-plan.md: one owner, one worktree per pull requ
 | Reading | Value | Where |
 | --- | --- | --- |
 | Edits to name one more llama-server option | six, across five files | a typed field, a branch in the argv builder, a regenerated schema, a version stamp, a changelog line, a test |
-| Edits to name one more option after row 4 | two | the model file, and the key list. A third only when the flag spelling is not the key with hyphens |
+| Edits to name one more option after row 5 | two | the model file, and the key list. A third only when the flag spelling is not the key with hyphens |
 | Inference keys set by all five committed model files | 11 of 29 | `config/models/`, censused 2026-09-21 |
 | Inference keys set by exactly one committed file | 9 of 29 | same census. This is why direct indexing needs two lists, not one |
-| Committed model files that set `max_think_tokens` | none of five | same census |
-| Committed model files whose `turns.thinking_close` is set, so span one can ever run | 3 of 5 - `gemma-4-e4b-qat.json`, `gemma-4-e4b-qat-no-draft.json`, `qwen3.5-9b-q4km-thinking.json`. The live pointer `models/qwen3.5-9b-q4km.json` is not one of them | same census |
+| Moving parts answering "when does the decode stop?" | four | two caps, two route-specific spellings, one addition, one omit-the-key rule. All four go in row 6 |
+| Committed model files that set `max_think_tokens` | none of five | same census. The answer cap is set but is not reached by any committed item on the live pointer |
+| Committed model files whose `turns.thinking_close` is set, so a thinking span can ever run | 3 of 5 - `gemma-4-e4b-qat.json`, `gemma-4-e4b-qat-no-draft.json`, `qwen3.5-9b-q4km-thinking.json`. The live pointer `models/qwen3.5-9b-q4km.json` is not one of them | same census |
 | Committed `run.json` files carrying `models.<role>.draft` | 6 of 31 | `state/`, censused 2026-09-21. This is the one read-side migration this plan owes |
 | Turn markers derivable from the model's own rendering | 6 of 8 | `thinking_kwarg` is an input to the render; `thinking_close` is what the model writes, not what the template writes |
 | Startup probe checks whose failure is silent | 1 of 5 | the render check, `backend/idhazh/llm/server.py:1212` |
@@ -51,13 +52,14 @@ Execute per docs/how-to/execute-a-plan.md: one owner, one worktree per pull requ
 Eight rows, two pull requests. Read this before the tables.
 
 1. Delete the reader that parses the model server's log to learn whether an optimisation engaged.
-2. Read the server's base address from the environment, so the pipeline can point at another compatible server with no code change.
-3. Delete the draft-head fields from the model shape, and add the one read-side line that keeps six committed run records loading.
-4. Make the model file a plain mapping - no Pydantic model, no schema, no compliance test - keeping the flag spellings as three declared tables and denying six keys the command line.
-5. Put a number on span one's prediction cap, on the three entries that can ever run one.
-6. Amend Guardrail #3 and section 11 of the engineering contract, inside the pull request that contradicts them.
-7. Record each model's turn markers from its own template. Two of the eight stay hand-typed, and both are checked.
-8. Cut the startup probe to the one check whose failure is silent, and log the trained window beside the configured one.
+2. Delete the decode stamp, whole. Determinism is not a goal, so a digest that only proves two runs asked for the same thing has no job.
+3. Read the server's base address from the environment, so the pipeline can point at another compatible server with no code change.
+4. Delete the draft-head fields from the model shape, and add the one read-side line that keeps six committed run records loading.
+5. Make the model file a plain mapping - no Pydantic model, no schema, no compliance test, and no bounds on a sampler key - keeping the flag spellings as three declared tables and denying four keys the command line.
+6. Delete both decode caps. The model stops when it is done; the request timeout and the context window are the bounds, and both already exist.
+7. Amend Guardrail #3 and section 11 of the engineering contract, inside the pull request that contradicts them.
+8. Record each model's turn markers from its own template. Two of the eight stay hand-typed, and both are checked.
+9. Cut the startup probe to the one check whose failure is silent, and log the trained window beside the configured one.
 
 ## Section 1 - Status Reckoner
 
@@ -66,47 +68,49 @@ Eight rows, two pull requests. Read this before the tables.
 | # | Row title | PR | Depends-on | Parallel-group | Status | Worktree | PR link | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The server-log reader goes | A1 | - | A | PENDING | - | - | - |
-| 2 | The server address is a value the job sets | A1 | 1 | A | PENDING | - | - | - |
-| 3 | The draft head goes from the model shape | A1 | 2 | A | PENDING | - | - | - |
-| 4 | The model file is a plain mapping | A1 | 3 | A | PENDING | - | - | - |
-| 5 | Span one gets a cap | A1 | 4 | A | PENDING | - | - | - |
-| 6 | The engineering contract catches up | A1 | 4 | A | PENDING | - | - | - |
-| 7 | The model's own template writes the markers | A2 | 6 | B | PENDING | - | - | - |
-| 8 | The startup probe keeps the render check | A2 | 7 | B | PENDING | - | - | - |
+| 2 | The decode stamp goes | A1 | 1 | A | PENDING | - | - | - |
+| 3 | The server address is a value the job sets | A1 | 2 | A | PENDING | - | - | - |
+| 4 | The draft head goes from the model shape | A1 | 3 | A | PENDING | - | - | - |
+| 5 | The model file is a plain mapping | A1 | 4 | A | PENDING | - | - | - |
+| 6 | Both decode caps go | A1 | 5 | A | PENDING | - | - | - |
+| 7 | The engineering contract catches up | A1 | 5 | A | PENDING | - | - | - |
+| 8 | The model's own template writes the markers | A2 | 7 | B | PENDING | - | - | - |
+| 9 | The startup probe keeps the render check | A2 | 8 | B | PENDING | - | - | - |
 
 ### The two pull requests
 
 | PR | Rows | Can it move a rendered prompt | What proves it | Dispatches |
 | --- | --- | --- | --- | --- |
-| **A1 - the model file stops being a type** | 1, 2, 3, 4, 5, 6 | no | the argv and the request body built from each of the five committed model files, against fixtures captured before any edit | none |
-| **A2 - the model's own template writes the markers** | 7, 8 | **yes, and it is the only one here that can** | the turn-marker digest unchanged for all five files, then the evidence gate in section 1b | one to run the recorder, then the gate's pair |
+| **A1 - the model file stops being a type** | 1, 2, 3, 4, 5, 6, 7 | no | the argv and the request body built from each of the five committed model files, against fixtures captured before any edit | none |
+| **A2 - the model's own template writes the markers** | 8, 9 | **yes, and it is the only one here that can** | the turn-marker digest unchanged for all five files, then the evidence gate in section 1b | one to run the recorder, then the gate's pair |
 
 **Why two and not one.** A moved prompt digest in a single branch would have two candidate causes - the untyped file and the recorded markers - and telling them apart costs a dispatch pair at 40 to 50 minutes an attempt (owner estimate 2026-09-21). A1 needs no dispatch at all, and A2's base is A1's merge commit.
 
-**Why two and not four.** Rows 1, 2 and 5 are a few lines each and cannot reach the prompt path. A pull request of their own buys a smaller diff and costs a review cycle.
+**Why two and not more.** Rows 1, 2, 3 and 6 are small and none of them can reach the prompt path. A pull request each buys a smaller diff and costs a review cycle.
 
 ## Section 1a - The contracts, declared before any code
 
 CLAUDE.md section 0d: intent, then contract, then code. **A worker does not invent one of these; it reads this section.**
 
-### C1 - The model file (rows 3, 4, 5, 7)
+### C1 - The model file (rows 4, 5, 6, 8)
 
-`config/models/<name>.json`. No Pydantic model, no generated schema, no test of its contents. Read as a mapping.
+`config/models/<name>.json`. No Pydantic model, no generated schema, no test of its contents, and no bound on any value. Read as a mapping.
 
-**Two key lists, not one.** A required key must be present; its value may be null, and null means the flag is not emitted. An optional key may be absent, and absent means what null means. A missing required key raises at load naming the key. A missing optional key is the ordinary case - 9 of the 29 inference keys are set by one committed file out of five, so one list with direct indexing would break four files of five on the first request.
+**Two key lists, not one.** A required key must be present; its value may be null, and null means the flag is not emitted. An optional key may be absent, and absent means what null means. A missing required key raises at load naming the key. A missing optional key is the ordinary case - 9 of the inference keys are set by one committed file out of five, so one list with direct indexing would break four files of five on the first request.
 
-All eleven required keys are present in all five committed files today, so no committed file is edited to satisfy the list.
+Every required key is present in all five committed files today, so no committed file is edited to satisfy the list.
 
 | Key group | Keys | Presence |
 | --- | --- | --- |
-| Read by this project's own code | `n_ctx`, `n_batch`, `n_ubatch`, `n_threads`, `temperature`, `top_p`, `seed`, `max_answer_tokens`, `request_timeout_minutes` | required |
+| Read by this project's own code | `n_ctx`, `n_batch`, `n_ubatch`, `n_threads`, `temperature`, `top_p`, `seed`, `request_timeout_minutes` | required |
 | Emitted as a bare or inverted flag, so absence is ambiguous | `metrics`, `startup_warmup` | required |
 | Everything else the argv builder spells | `cache_prompt`, `cache_ram`, `cache_type_k`, `cache_type_v`, `checkpoint_min_step`, `cpu_range`, `cpu_strict`, `ctx_checkpoints`, `flash_attention`, `jinja`, `load_mode`, `log_verbosity`, `n_parallel`, `n_threads_batch`, `poll`, `priority`, `reasoning_preserve`, `slot_prompt_similarity` | optional |
-| Span one's prediction cap | `max_think_tokens` | required where `turns.thinking_close` is set, refused where it is not (row 5) |
 
 Entry-level keys keep their current names and meanings: `id`, `repo`, `revision`, `file`, `sha256`, `byte_count`, `arch`, `inference`, `turns`. `<role>.runtime` arrives with Lane B's row 5 and is not declared here.
 
-**Deleted from the file**: `declared_for` on both blocks, and `draft`. Both are removed from all five committed files in the same commit that stops reading them.
+**Deleted from the file**: `declared_for` on both blocks, `draft`, `max_answer_tokens` and `max_think_tokens`. All are removed from all five committed files in the same commit that stops reading them.
+
+**No sampler key gets a bound, and that is a ruling rather than an oversight.** `top_p` is the only key in the file carrying an interval today. Keeping that one interval while `min_p`, `top_k` and `mirostat` are about to arrive means every new sampler key brings an argument about whether it deserves a check too, which is the six-edit toll this plan exists to delete, re-growing one key at a time. A sampler being swept is exactly the case where a bound is in the way. When a sweep goes wrong the run record already carries the sampling values and the console already draws the rule saying they moved - a record a person reads, which is the right instrument for a knob somebody is deliberately turning. Owner ruling 2026-09-21.
 
 **The flag spellings survive as three declared tables. Only the types go.** There is no pass-through by key name for the keys already spelled: 18 of them map to a flag the key does not derive, and five need a branch a flag name cannot express. Deleting the type does not delete that mapping - it only removes the place a typo used to be caught - so the mapping is declared rather than branched.
 
@@ -118,15 +122,13 @@ Entry-level keys keep their current names and meanings: `id`, `repo`, `revision`
 
 **The spellings are read out of the existing `server_argv` branches, one for one. This plan does not restate them, because a restated spelling is a second place for it to be wrong.** A key in none of the three tables and not denied below is emitted as `--<key with underscores turned to hyphens>` with its value; llama-server refuses an option it does not accept and names it, which is the loud failure this plan's rule asks for. `--model`, `--no-context-shift`, `--port` and the alias stay in code, because no key produces them.
 
-**Six keys are denied the command line**: `temperature`, `top_p`, `seed`, `max_answer_tokens`, `request_timeout_minutes` and `max_think_tokens`. The first three are real llama-server flags under different spellings, so letting one reach the process gives this project two answers for one value - the per-request body and the server-wide default - with nothing saying which won, nothing raised and every word changed. The other three are not flags at all, so a pass-through would emit an option the binary refuses and the server would not start. The builder asserts at import that this set is disjoint from all three tables.
-
-**`top_p` keeps an interval check at load**: above 0 and at most 1, raising and naming the key. It is the only key in the file carrying a real interval today (`backend/idhazh/contracts/knobs/inference.py:163-165`); `temperature` has a floor and no ceiling, and `seed` is a bare whole number. At `top_p` 0 the sampler still keeps one token, so the run decodes greedily; above 1 it truncates nothing. Neither is refused by the runtime, both change every word, and no cell reports it.
+**Four keys are denied the command line**: `temperature`, `top_p`, `seed` and `request_timeout_minutes`. The first three are real llama-server flags under different spellings, so letting one reach the process gives this project two answers for one value - the per-request body and the server-wide default - with nothing saying which won, nothing raised and every word changed. The fourth is not a flag at all, so a pass-through would emit an option the binary refuses and the server would not start. The builder asserts at import that this set is disjoint from all three tables, and a new sampler key joins this set rather than the tables.
 
 **What the published site reads out of this file**: `n_ctx`, at build time, through `frontend/src/lib/server/config.ts:939`, which parses JSON and declares its own one-field interface rather than importing a generated type. `frontend/src/lib/console/settings-moved.ts` reads `n_threads` and `n_batch` off the committed item-health row, not off this file. All three keys are on the required list, and that guarantee is the required list's second reason for existing. No site file changes in this plan.
 
 **Read-side migration on the file: none, and none is written.** The file is read key by key - required keys by direct indexing, optional keys by membership - so a key no reader names is never looked at. A committed file still spelling `declared_for`, `draft` or a retired option loads and runs unchanged. There is no release window, no implementer and nothing to define.
 
-### C2 - The turn markers, recorded not typed (row 7)
+### C2 - The turn markers, recorded not typed (row 8)
 
 Eight keys under `<role>.turns`, keeping their current names, meanings and place in the file. What changes is who writes them.
 
@@ -157,15 +159,15 @@ The recorder carries both hand-typed values through byte-identical from the file
 
 **The marker check does not move.** `refuse_markers_the_boundary_cannot_hold` still runs at configuration load, in every process, over a plain mapping, with no server. Guardrail #11 is untouched.
 
-### C3 - The run's recorded inputs (row 4)
+### C3 - The run's recorded inputs (row 5)
 
 **`PipelineInputs` keeps its shape. Nothing is removed from it and nothing is retyped.** It lives at `backend/idhazh/contracts/fingerprint.py:32` - not in `qualification.py`, which plan 39 named - and it is persisted inside `RunRecord.inputs`, `QualificationShard.inputs` and `QualificationReport.inputs`, three committed payload families. Its four named integers - `n_ctx`, `n_batch`, `n_ubatch`, `n_threads` - are all on C1's required list, so they are read out of the mapping by name and direct indexing is safe.
 
 What changes is one line inside each of the two canonical spellings: they enumerate C1's declared key lists in a fixed order and read an absent key as null, instead of enumerating a Pydantic model's fields. Today every field has a value because the type supplies one, so the spelling includes the nine keys four files omit; spelled over each file's own keys instead, those four files would produce a different string and the first run after this change would report that the runtime flags moved when nothing moved. Enumerating the declared lists costs nothing and removes that false alarm.
 
-**Row 4 therefore does not touch `backend/idhazh/contracts/qualification.py`.** That file belongs to Lane C, and the collision plan 39 declared is gone.
+**Row 5 therefore does not touch `backend/idhazh/contracts/qualification.py`.** That file belongs to Lane C, and the collision plan 39 declared is gone.
 
-### C4 - What closes the settings universe (row 4)
+### C4 - What closes the settings universe (row 5)
 
 `NOT_DIGESTED` (`backend/idhazh/fingerprint.py:216-330`) is a closed set, and the closure is the only thing stopping a new option landing in no stamp with nothing saying so. `digested_inference_fields()` computes it from `InferenceConfig.model_fields` and `digested_model_fields()` from `ModelEntry.model_fields` and `TurnsConfig.model_fields`. Delete those shapes and the test passes over an empty set.
 
@@ -180,17 +182,17 @@ Four checks hold the closure, all over this project's own files:
 | every key in the universe is carried by `PipelineInputs` under its own name or a canonical spelling, or named in `NOT_DIGESTED` with a reason | an option that moves the words and reaches no stamp |
 | `NEVER_ON_THE_COMMAND_LINE` is disjoint from the three argv tables | a second sampler default |
 
-The first of these is why row 4 gives up less than plan 39 claimed: a misspelled option is caught in the suite, before a dispatch, rather than only at server start.
+The first of these is why row 5 gives up less than plan 39 claimed: a misspelled option is caught in the suite, before a dispatch, rather than only at server start.
 
-Row 3 removes the `draft` and `declared_for` entries from `NOT_DIGESTED` with their fields. `thinking_kwarg` stays, because it is one of the eight turn markers.
+Row 4 removes the `draft` and `declared_for` entries from `NOT_DIGESTED` with their fields, and row 6 removes the two cap entries with theirs. `thinking_kwarg` stays, because it is one of the eight turn markers.
 
-### C5 - The one read-side migration this plan owes (row 3)
+### C5 - The one read-side migration this plan owes (row 4)
 
 Six of thirty-one committed `run.json` files carry `models.<role>.draft`, and the model that reads them forbids extra keys, so deleting the field refuses them - a release blocker under CLAUDE.md section 11. `ModelRef` gains the one line `without_retired_keys` (`backend/idhazh/contracts/base.py:614`) already serves at `day_metrics.py:519` and `run_manifest.py:297`, with the reason on the line and a test that parses a committed record carrying `draft`.
 
 `declared_for` and `max_think_tokens` need no such line. Both sit inside `inference`, which becomes an untyped mapping, and an untyped mapping refuses no key. Twelve committed run records carry `declared_for` and six carry `max_think_tokens`; all keep reading.
 
-### C6 - What runs before the first article (rows 7, 8)
+### C6 - What runs before the first article (rows 8, 9)
 
 Six checks stand in front of the first article. Four cost nothing and two are already paid.
 
@@ -210,10 +212,10 @@ Six checks stand in front of the first article. Four cost nothing and two are al
 | Failure | Why no cell sees it | What stands in for a check |
 | --- | --- | --- |
 | the shape-to-grammar conversion gets looser, so constrained decoding stops being the control an injection meets | a looser grammar accepts every good reply | the llama.cpp build is pinned to one release, its bytes are checksummed at fetch, and moving the pin is a reviewed commit. That is a review standing in for a measurement, and it is named here so nobody reads the absence of a test as an absence of risk |
-| `n_ctx` larger than the window the weights were trained at | the reply is well shaped, the decode ends itself, the finish reason says `stop` | row 8 keeps the one request that reads the trained length and writes it beside the configured one as a log record, raised to a warning when the configured window is larger. It never refuses (owner ruling 2026-09-21). A committed cell for it waits until plan 39 row 1 lands, because before that a new field costs the six edits this plan exists to delete |
-| a sampling value outside its useful range | nothing computes on it; the run record carries it for a person to read | `top_p` gets its interval back at load (C1). `temperature` and `seed` do not, and that is stated rather than implied |
+| `n_ctx` larger than the window the weights were trained at | the reply is well shaped, the decode ends itself, the finish reason says `stop` | row 9 keeps the one request that reads the trained length and writes it beside the configured one as a log record, raised to a warning when the configured window is larger. It never refuses (owner ruling 2026-09-21). A committed cell for it waits until plan 39 row 1 lands, because before that a new field costs the six edits this plan exists to delete |
+| a sampling value outside its useful range | nothing computes on it | **nothing, by decision.** No sampler key carries a bound (C1). The run record carries the values and the console draws the rule saying they moved, which is a record a person reads rather than a gate |
 
-### C7 - The engineering contract clauses that move (row 6)
+### C7 - The engineering contract clauses that move (row 7)
 
 | Clause | What it says today | What it must say |
 | --- | --- | --- |
@@ -221,6 +223,34 @@ Six checks stand in front of the first article. Four cost nothing and two are al
 | Section 11 | Every configuration file and persisted surface is a model with a stamped version and a changelog | Scoped to persisted payloads a later run reads. A configuration file this project authors is out |
 
 The section 1a, section 9 and section 10 amendments stay with plan 39 row 1, because they are about generation and drift, which this plan does not remove. Guardrail #11 and Guardrail #12 are untouched. Each clause that moves carries a dated line naming who moved it (CLAUDE.md section 1).
+
+### C8 - When the decode stops (row 6)
+
+One question - when does a decode stop? - is answered today by four moving parts: two caps this project sends, two routes that spell them differently (`max_tokens` on the chat route, `n_predict` on the native one), an addition that sums them because the chat route cannot split the spans, and a rule that a null thinking cap means omitting the key entirely because a sum with a null in it has no honest value.
+
+**All four go.** llama-server's own default is `-1` - decode until the model ends its turn, bounded by the window - and the server is started without `--predict`, which `backend/idhazh/llm/server.py:624` already records. Sending a number where the runtime already has the right default is what built the four parts.
+
+| After this row | Which already exists |
+| --- | --- |
+| The model ends its turn, or the thinking span stops at its marker | the stop vocabulary the entry declares |
+| A decode that will not stop hits the per-request timeout and the item lands `model_timed_out` | `request_timeout_minutes`, this project's own HTTP client |
+| A prompt that will not fit is refused, and the item lands `CONTEXT_EXCEEDED` | `n_ctx` with `--no-context-shift` |
+
+Both bounds are per item, both are committed, and both fail loudly. Neither cap binds on the live model today, so this changes nothing that ships now. What it changes for a **new** model that rambles: the first sign is a slow item rather than a truncated one.
+
+### C9 - The decode stamp leaves (row 2)
+
+`decode_digest` was determinism insurance - one digest over the whole request body, proving two runs asked the decoder for the same thing. Determinism is not a goal of this project, and a digest can only ever say that *something* moved. `PipelineInputs.sampling` already carries the values as readable text and `changed_inputs` already names the field that moved, so the stamp is a worse copy of a record that exists. It also moves on every sampler sweep, which is about to become the normal case.
+
+| What goes | Note |
+| --- | --- |
+| `decode_digest()` and `UNSTAMPED_REQUEST_KEYS` | the function and its only reason to exist |
+| `Completion.decode_sha256` and its setter | already dead - two test assertions, no ledger, no site |
+| `JudgeStamp.decode_digest` and its two uses in `similarity/counting.py` | `changed_inputs` loses one of twelve compared fields. `grammar_digest`, `prompt_digest`, `judge_temperature`, `judge_model` and `judge_thinks` stay, so a moved judge still holds the merge line |
+| The field on `JudgeCall`, `StorySimilarityPair`, `StorySimilarityDistribution` | three contracts, each a version stamp and a changelog line |
+| The column on two committed day files, `score-distribution.json` and one archive record | **the similarity ledgers carry no retired-cell list** - only `item_health.py` has one. The row's first step is to establish which mechanism applies, then use it |
+
+**One consequence stated rather than discovered**: the similarity archive filename is built from the record's stamp over those values, so **new archive files land under different names**. Existing archives stay readable and nothing re-reads them by a recomputed name.
 
 ## Section 1b - The evidence gate on pull request A2
 
@@ -240,7 +270,7 @@ Row 7 changes the bytes handed to the model. Nothing else in this plan does. The
 
 The first four cannot be moved by runner noise. The fifth is the half noise reaches, which is why it decides nothing.
 
-**What a person reads**: six pairs - the dispatch plans two articles across three cases - worst difference first. **Pass** when the four machine assertions match and the person names no pair where the tip summary is worse: no entity present at the base and gone at the tip, no opening that describes the article instead of reporting it, no sentence lifted whole from the source's first line. **Fail** sends the work back to row 7's recording.
+**What a person reads**: six pairs - the dispatch plans two articles across three cases - worst difference first. **Pass** when the four machine assertions match and the person names no pair where the tip summary is worse: no entity present at the base and gone at the tip, no opening that describes the article instead of reporting it, no sentence lifted whole from the source's first line. **Fail** sends the work back to row 8's recording.
 
 **Cost**: two dispatches at up to 140 minutes each, run one after the other; about 20 minutes of a person's reading (estimate, 2026-09-21); 40 to 50 minutes to re-dispatch on a fail (owner estimate 2026-09-21).
 
@@ -269,31 +299,61 @@ The first four cannot be moved by runner noise. The fifth is the half noise reac
  | 1 | Keep the reader, drop the tests | A parser with no check on it goes wrong silently | About 20 lines kept | Carmack |
  | 2 | Delete the workflow's log-matching step too | It belongs to the file plan 39 row 10 owns, and splitting it across two branches is the churn this grouping removes | Nothing saved; it is a sequencing error | Carmack |
 
-## Section 3 - Row #2 - The server address is a value the job sets
+## Section 3 - Row #2 - The decode stamp goes
+
+- **Scope:** Delete `decode_digest` whole - the function, the excluded-key set, the completion field, the judge stamp field, the three contract fields, the comparison that reads it, the tests and the committed column. See C9.
+- **Files touched:**
+  - `backend/idhazh/llm/server.py` (`decode_digest`, `UNSTAMPED_REQUEST_KEYS`, `Completion.decode_sha256` and its setter)
+  - `backend/idhazh/similarity/stamps.py`, `backend/idhazh/similarity/counting.py`
+  - `backend/idhazh/contracts/judge_call.py`, `story_similarity_pair.py`, `story_similarity_distribution.py`
+  - `backend/tests/test_summarize.py`, `test_similarity_judge.py`, `test_similarity_counting.py`, `test_similarity_fit.py`, `backend/tests/contracts/test_judge_call.py`, `test_story_similarity.py`
+  - `state/content-similarity-judge/` (the column on two day files, the distribution record, one archive record)
+- **Acceptance gates:** local - `python -m pytest backend/tests -q -k 'summarize or similarity or judge'`, then the contract export with zero drift; CI - full suite.
+- **Oracle:** an append to a committed similarity day file succeeds after the column is gone, run against the two real day files. That is the half that can fail, and it fails today if the row skips the retired-cell step. What it cannot settle: whether anything downstream wanted the stamp - nothing did, and the census in the row's first step is what proves it.
+- **Decisions:**
+
+ | # | Decision | Authority |
+ | --- | --- | --- |
+ | 1 | **Determinism is not a goal of this project, so a stamp whose only job was to prove two runs asked for the same thing has no job.** It is deleted whole rather than kept for one consumer | Owner ruling 2026-09-21 |
+ | 2 | The record it duplicates stays. `PipelineInputs.sampling` carries the values as readable text and `changed_inputs` names the field that moved, which is what a person actually wants; a digest can only say that something moved | Fowler |
+ | 3 | The judge's change detector keeps eleven of its twelve compared fields, including the prompt digest, the grammar digest, the model and the sampler temperature, so a moved judge still holds the merge line | Fowler |
+ | 4 | **The first step is to establish the retired-cell mechanism for the similarity ledgers**, which have none today - only the item-health ledger does. Either the column is declared retired the way that one does it, or the two committed day files are rewritten. The row picks one and says which | Fowler |
+ | 5 | **New archive records land under different filenames**, because the archive name is the record's stamp over the compared values. Existing archives stay readable and nothing re-reads one by a recomputed name. Stated here so it is not found during execution | Carmack |
+ | 6 | The stamp would have moved on every sampler sweep once `min_p`, `top_k` and `mirostat` arrive, so keeping it costs a re-archive per experiment for a reading nobody uses | Andre |
+
+- **Rejected alternatives:**
+
+ | # | Option | Why rejected | What it would cost to take | Authority |
+ | --- | --- | --- | --- | --- |
+ | 1 | Delete only the dead summarize half | Leaves the judge half, which is the part with committed columns, and leaves the function alive to be reused | About 6 lines removed instead of the whole surface, and the same argument again later | Fowler |
+ | 2 | Keep it as a cheap audit trail | It answers no question a person asks. The one thing it could say - something moved - is said better by the field name the run record already carries | About 80 lines across six files, a column on two ledgers, and a re-archive on every sweep | Owner |
+
+## Section 4 - Row #3 - The server address is a value the job sets
 
 - **Scope:** Read the server's base address from the environment beside the port, so the pipeline can point at another compatible server with no code change. About ten lines.
 - **Files touched:**
   - `backend/idhazh/llm/server.py` (the default endpoint and the default health address)
   - `backend/tests/test_summarize.py`
-- **Not touched:** the request shape, the response parser, `decode_digest`, `backend/idhazh/contracts/item_health.py`, `backend/idhazh/similarity/counting.py`, any contract module, any committed payload.
+- **Not touched:** the request shape on either route, the response parser, any contract module, any committed payload.
 - **Acceptance gates:** local - `python -m pytest backend/tests/test_summarize.py -q`; CI - full suite.
-- **Oracle:** with the variable unset the address is byte-identical to today's, and with it set every derived address - the completion route, the health route, the model list, the template route - moves with it, asserted in one test that reads all four. What it cannot settle: whether a different server would accept the request this project sends. It would not, today, and that is what the scope-out table prices.
+- **The two routes, so nobody reads this row as the bigger change.** The pipeline already speaks two request shapes to one server. The default address is `/v1/chat/completions`, the widely-supported chat shape, and the qualification path posts there. The production two-call path derives `/completions`, llama-server's own route, and posts a finished prompt string there - because that path splices the first span's prompt to make the second span continue in the same slot, and a message body has no prompt to splice. **This row moves neither.** It replaces the hardcoded loopback host so both addresses come from the environment beside the port.
+- **Oracle:** with the variable unset the address is byte-identical to today's, and with it set every derived address - the completion route, the health route, the model list, the template route - moves with it, asserted in one test that reads all four. What it cannot settle: whether a different server would accept the requests this project sends. One of the two shapes is llama-server's own, so a different server would need a new builder, which the scope-out table prices.
 - **Decisions:**
 
  | # | Decision | Authority |
  | --- | --- | --- |
  | 1 | The address is a process-boundary value, not a tunable, so it goes beside the port in the environment rather than into a configuration file - no contract field, no version stamp, no changelog entry (Guardrail #6, CLAUDE.md section 11) | Fowler |
  | 2 | One helper already derives every route from the base address, so one change moves all four | Fowler |
- | 3 | **The request shape does not move.** Pointing at another server that speaks the widely-supported shape needs a new request builder, and that is a transport decision with a measured cost, priced in the scope-out table and out of this plan | Fowler, Carmack and Andre, 2026-09-21 |
+ | 3 | **Neither request shape moves.** Making the pipeline speak one portable shape is a redesign of the decode path, not a rename of a constant, and it is priced in the scope-out table | Fowler, Carmack and Andre, 2026-09-21 |
 
 - **Rejected alternatives:**
 
  | # | Option | Why rejected | What it would cost to take | Authority |
  | --- | --- | --- | --- | --- |
  | 1 | Put the address on the model entry | The address is where the server this job started is listening, which is a property of the job, not of the weights. A per-model address would be wrong the first time two jobs ran the same model | One key and a reader who has to work out which of two places wins | Fowler |
- | 2 | Move the request shape in this row | It re-renders the conversation and re-reads the label reply on every item: a median 928 tokens and 74.9 s, p90 156.8 s, worst 318.5 s, and 25.6 to 39.8 minutes on a 20-item shard (measured 2026-09-21, 518 items). It also loses the judge's literal grammar, its first-token alternatives and the prompt splice both continuation paths use | The measured throughput above, three broken readings, and a three-surface migration for `decode_digest` | Carmack and Andre |
+ | 2 | Move the production path onto the chat shape in this row | The server rebuilds the prompt from messages, the template drops the empty reasoning block once a turn becomes history, and the cached prefix stops matching - so the whole previous reply is decoded again on every item. It also leaves no prompt for the two-span splice to extend, which collapses the split and stops a reasoning model reasoning with nothing going red | A measured throughput loss, the judge's grammar and its first-token reading, and the two-span design | Carmack and Andre |
 
-## Section 4 - Row #3 - The draft head goes from the model shape
+## Section 5 - Row #4 - The draft head goes from the model shape
 
 - **Scope:** Delete the draft-head configuration from the model shape and the argv builder, and add the one read-side line that keeps six committed run records loading.
 - **Files touched:**
@@ -311,7 +371,7 @@ The first four cannot be moved by runner noise. The fifth is the half noise reac
  | # | Decision | Authority |
  | --- | --- | --- |
  | 1 | It is deleted rather than kept unused. A measurement on 2026-09-12 found it changes the output on nine articles of nine, so it was never a free speed-up | Owner ruling 2026-09-21 |
- | 2 | **The row splits at the seam its own scope carries.** The model-shape half runs here, because it edits the four files row 4 rewrites. The fetch half - a companion-file list, a download loop and an installer publishing each landed path - touches no contract module and runs in Lane B with row 13, which is already collapsing the fetch scripts | Carmack and Fowler, 2026-09-21 |
+ | 2 | **The row splits at the seam its own scope carries.** The model-shape half runs here, because it edits the four files row 5 rewrites. The fetch half - a companion-file list, a download loop and an installer publishing each landed path - touches no contract module and runs in Lane B with row 13, which is already collapsing the fetch scripts | Carmack and Fowler, 2026-09-21 |
  | 3 | The census closes twice: here for the Python and contract surface, and again at Lane B's close, because the fetch half is what makes speculative decoding reachable again as configuration | Carmack |
  | 4 | The two model files lose the draft block. They are entries for a model, not for a draft head | Fowler |
 
@@ -323,7 +383,7 @@ The first four cannot be moved by runner noise. The fifth is the half noise reac
  | 2 | Delete the field with no read-side line | Six of thirty-one committed run records carry it and the reader forbids extra keys, so the next build cannot read yesterday's record. CLAUDE.md section 11 names that a release blocker | A broken read of six committed payloads | Fowler |
  | 3 | Keep the argument builder and drop only the configuration | Leaves code nothing can reach | About 25 lines kept and a dead branch | Carmack |
 
-## Section 5 - Row #4 - The model file is a plain mapping
+## Section 6 - Row #5 - The model file is a plain mapping
 
 - **Scope:** Delete the typed model configuration - the entry, the inference block and their validators - read the file as a mapping through declared key lists, and replace the argv builder's chain of branches with three declared spelling tables and a loop.
 - **Files touched:**
@@ -333,7 +393,7 @@ The first four cannot be moved by runner noise. The fifth is the half noise reac
   - `backend/idhazh/llm/server.py` (`server_argv` reads the three tables; the request bodies read the mapping)
   - `backend/idhazh/fingerprint.py` (the two canonical spellings and the two digested-field functions read the declared lists)
   - `backend/idhazh/stages/common.py`, `two_calls.py`, `summarize.py`, `similarity/judge.py` (the readers of inference values)
-  - `backend/idhazh/evals/qualify.py` (the one line that adds span one's cap to the context requirement)
+  - `backend/idhazh/evals/qualify.py` (the one line that reserves window for a decode cap)
   - `config/models/` (all five files lose `declared_for`)
   - `backend/tests/contracts/test_model_registry.py`, `backend/tests/test_summarize.py`, `test_classify.py`, `test_fingerprint.py`
   - `schemas/models-config.schema.json`, `frontend/src/contracts/models-config.ts` (deleted; the run-manifest and qualification-shard artefacts regenerate and are committed)
@@ -341,8 +401,8 @@ The first four cannot be moved by runner noise. The fifth is the half noise reac
 - **Oracle, four arms, each able to fail:**
   1. **Golden argv and golden request body.** For each of the five committed model files, the built command line and the built request body equal fixtures **captured from the tree before any edit and committed**, argument for argument and key for key. Any wrong table entry for any key any committed file carries fails this.
   2. **An unknown key reaches the server.** A fixture entry carrying a key no table names emits it as a flag with its value and raises nothing.
-  3. **A denied key never reaches the command line.** A fixture setting all six denied keys produces an argv containing none of them, and a request body from the same mapping carrying the three sampling values.
-  4. **Direct indexing bites.** A fixture missing `n_ctx` raises at load naming `n_ctx`; a fixture with a zero cap produces a span one asking for zero tokens. **The second half fails on the base tree**, where zero reads as uncapped, which is the proof this is an oracle and not a snapshot.
+  3. **A denied key never reaches the command line.** A fixture setting all four denied keys produces an argv containing none of them, and a request body from the same mapping carrying the three sampling values.
+  4. **Direct indexing bites.** A fixture missing `n_ctx` raises at load naming `n_ctx`, and a fixture carrying an unknown sampler key reaches the request body untouched with no bound applied to it.
 
   What it cannot settle: whether a misspelled option is caught. It is - by the universe check in C4, in the suite, before a dispatch - but not by these four arms.
 - **Decisions:**
@@ -353,7 +413,7 @@ The first four cannot be moved by runner noise. The fifth is the half noise reac
  | 2 | **The flag spellings survive as three declared tables.** Eighteen are not a mechanical transform of the key and five need a branch a flag name cannot express, so the mapping is the one thing here this project genuinely cannot derive and must record. Deleting the type does not delete it. With the tables, naming one more option is two lines | Carmack and Fowler, 2026-09-21 |
  | 3 | **Two key lists, not one.** Nine of twenty-nine inference keys are set by one committed file of five, so a single required list with direct indexing breaks four files of five on the first request | Fowler, censused 2026-09-21 |
  | 4 | **Six keys are denied the command line.** Three are real llama-server flags under different spellings, so a pass-through gives this project two answers for one sampling value with nothing saying which won. Three are not flags at all and would stop the server | Carmack |
- | 5 | **`top_p` keeps an interval check at load - above 0, at most 1.** It is the only key in the file carrying a real interval, the runtime accepts a wrong value, every word changes, and no cell reports it. Two comparisons are the cheapest instrument for the one failure class this plan says must fail loudly, written where the loader already raises on a missing key. This is a named exception to decision 1 | Andre, on the owner's authorization of this plan |
+ | 5 | **No sampler key gets a bound.** `top_p`'s interval is the only one in the file today, and keeping it while `min_p`, `top_k` and `mirostat` arrive makes every new sampler key an argument about whether it deserves a check too - the toll this plan deletes, re-growing one key at a time. A key being swept is the worst possible case for a bound. The run record and the console rule already report a sampler that moved | Owner ruling 2026-09-21 |
  | 6 | **`PipelineInputs` keeps its shape.** Removing its four named integers would cost a read-side migration on three committed payload families and would make the change record name a string where it names a knob today. The two canonical spellings enumerate the declared key lists in a fixed order, which reproduces today's strings byte for byte for all five files and removes a false alarm on the first run after | Fowler |
  | 7 | **The declared key lists close the settings universe.** The closed-set test computes its universe from a Pydantic model's fields today; deleting the shapes would leave it passing over an empty set, and that test is the only thing stopping a new option landing in no stamp with nothing saying so | Fowler |
  | 8 | **The model-file pointer keeps its grammar, byte-identical.** The loader joins rather than checks and says so on the line, so the grammar is the only thing ruling out a traversal, an absolute path and a Windows separator. Decision 1 is about the file's contents, never about the path to it (Guardrail #11) | Fowler |
@@ -372,58 +432,46 @@ The first four cannot be moved by runner noise. The fifth is the half noise reac
  | 4 | Fold the four named integers on the run record into one canonical string | Three committed payload families need a read-side migration, and the change record stops naming which knob moved | A migration on three families, and a worse record | Fowler |
  | 5 | Keep the schema and generate it from whatever keys the file holds | A schema derived from the file it validates passes by construction | About 30 lines for a check that cannot fail | Fowler |
 
-## Section 6 - Row #5 - Span one gets a cap
+## Section 7 - Row #6 - Both decode caps go
 
-- **Scope:** Delete the invented framing and the null path around span one's prediction cap, and put a number on it for the three entries that can ever run one.
+- **Scope:** Delete `max_answer_tokens` and `max_think_tokens`, and with them the addition that sums the two, the rule that a null thinking cap means omitting the key, and the two route-specific spellings. The model stops when it is done. See C8.
 - **Files touched:**
-  - `backend/idhazh/llm/server.py` (the two request bodies and the span builder)
+  - `backend/idhazh/llm/server.py` (both request builders, the span builder, the sum branch and the omit-the-key branch)
   - `backend/idhazh/stages/common.py` (the parameter and its default of zero)
-  - `backend/idhazh/evals/qualify.py`, `backend/idhazh/summarize.py` (the two context sums)
-  - `backend/idhazh/fingerprint.py` (the term in the sampling spelling)
-  - `config/models/gemma-4-e4b-qat.json`, `gemma-4-e4b-qat-no-draft.json`, `qwen3.5-9b-q4km-thinking.json`
+  - `backend/idhazh/stages/two_calls.py`, `backend/idhazh/summarize.py`, `backend/idhazh/similarity/judge.py`
+  - `backend/idhazh/evals/qualify.py`, `backend/idhazh/classify/dag.py` (the context arithmetic that reserved for a cap)
+  - `backend/idhazh/fingerprint.py` (both terms in the sampling spelling, and their `NOT_DIGESTED` entries)
+  - `config/models/` (all five files)
   - `backend/tests/test_summarize.py`, `test_classify.py`, `test_fingerprint.py`
-- **Acceptance gates:** local - `python -m pytest backend/tests -q -k 'summarize or classify or judge or fingerprint'`; CI - full suite.
-- **Oracle, three parts:**
-  1. For all five committed model files, the request body posted by each path is byte-identical before and after, except for the cap on the three thinking entries. This fails if any read site was doing something the null path was hiding.
-  2. A thinking entry still makes **two** requests and a non-thinking entry still makes **one**, driven from a recorded server response. This fails if the split is collapsed.
+- **Acceptance gates:** local - `python -m pytest backend/tests -q -k 'summarize or classify or judge or fingerprint or qualif'`; CI - full suite.
+- **Oracle, three parts, each able to fail:**
+  1. For all five committed model files, the request body posted on each route carries **no token-cap key at all**, and is otherwise byte-identical to today's. This fails if any read site was doing something a cap was hiding.
+  2. A thinking entry still makes **two** requests and a non-thinking entry still makes **one**, driven from a recorded server response. This fails if the split is collapsed, which is the silent failure this row must not create.
   3. Span one's request carries a stop marker and no output shape; the answer span carries the shape. This fails if the shape or the alternatives request leaks into span one.
 
-  What it cannot settle: how long a reasoning model runs before it answers under the new cap. Plan 40's dispatch is where that reading is taken, and it is what would overturn the estimate below.
-- **The cap, and the arithmetic in one line:**
-
- `floor(((shard_timeout_minutes - shard_wrap_up_minutes) * 60 / items_a_shard - worst_measured_summary_seconds) * slowest_measured_decode_rate)` = `floor((564 - 376.2) * 3.30)` = 620, **set at 600** for a round figure with slack an item.
-
- | Input | Value | Measurement or estimate |
- | --- | --- | --- |
- | shard timeout | 200 min | measurement - `config/idhazh.json`, read 2026-09-21 |
- | shard wrap-up | 12 min | measurement - same file |
- | items a shard at a full run | 20 | derived from the safety ceiling of 80 over four shards |
- | per-item budget | 564 s | derived |
- | worst summary time on the newest committed day | 376.2 s (median 96.5, p95 263.6) | measurement - `state/item-health/2026/09/21.csv`, 74 timed rows of 80 |
- | slowest summary decode rate, same day | 3.30 tok/s (median 4.33, p95 5.33) | measurement - same file |
- | span one's decode rate | assumed equal to the above | **estimate.** No committed entry has ever run a span one, because the live pointer's thinking close is null. Plan 40's dispatch is the measurement that would overturn it |
-
+  What it cannot settle: how long a model runs before it stops on its own. Nothing here measures that, and nothing before this row did either - both caps are absent or non-binding on the live model today.
 - **Decisions:**
 
  | # | Decision | Authority |
  | --- | --- | --- |
- | 1 | **The key stays; the invented framing and the null path go.** The cap is not a parameter this project invented - it is llama.cpp's own prediction cap applied to the first span, and the file's own comment names it as such. What this project invented is the word "budget". Deleting a cap nobody is using is free; deleting the **ability** to cap costs exactly when plan 40 puts a reasoning model behind it. After row 4 the file is a mapping, so keeping it costs one key and zero types - no field, no schema, no stamp, no changelog | Carmack, Fowler and Andre, 2026-09-21. **This reverses the owner ruling of 2026-09-21, whose stated premise was that the runtime carries no such parameter** |
- | 2 | **The split stays.** Span one exists to leave the decode unconstrained while the model reasons; span two puts the shape back for the answer. A collapsed split applies the shape from the first token, so a reasoning model cannot reason and still returns a well-shaped summary, with nothing red | Fowler and Andre |
- | 3 | **The null path is deleted, which kills the zero defect by construction.** Zero means zero tokens, minus one means uncapped in llama.cpp's own spelling, and absent raises at load naming the key. The parameter default of zero in the shared caller goes with it, and so does the trap where a caller that forgets the argument decodes a zero-token thought and still returns a well-shaped summary | Andre |
- | 4 | **This changes nothing that runs today.** No committed model file carries the key, and the live pointer's thinking close is null, so the three entries that gain a number are three candidates rather than production | Andre, censused 2026-09-21 |
- | 5 | **This is a cost priced, not a budget raised.** The shard timeout is this project's own number in this project's own configuration, so it is a cost to move. The six-hour job kill is GitHub's and cannot move (Guardrail #2). Twenty items each allowed to run to the per-request timeout is 7 h 22 m, which GitHub kills - so an uncapped span one on a 20-item shard is a design that does not fit, and the cap is the design that does. No row here asks for a larger figure of either kind | Carmack |
- | 6 | The span-count cells on the two judge records stay, because there are still two spans | Fowler |
+ | 1 | **Both caps go, because they are the same kind of thing.** Each is a number this project sends where llama-server's own default is already `-1` - decode until the model ends its turn, bounded by the window - and the server is started without `--predict`. Keeping one and deleting the other had no principle behind it | Owner ruling 2026-09-21 |
+ | 2 | **The four moving parts go with them.** Two caps, two spellings (`max_tokens` on the chat route, `n_predict` on the native one), an addition because the chat route cannot split the spans, and a rule that a null in the sum means omitting the key. Four parts answering one question - when does the decode stop? - all of them created by sending a number the runtime did not need | Owner ruling 2026-09-21 |
+ | 3 | **The bounds that remain already exist and already fail loudly, per item.** The per-request timeout lands `model_timed_out`; the window with `--no-context-shift` lands `CONTEXT_EXCEEDED`. No new code, no new cell | Carmack |
+ | 4 | **The split stays.** Span one exists to leave the decode unconstrained while the model reasons; span two puts the shape back for the answer. A collapsed split applies the shape from the first token, so a reasoning model cannot reason and still returns a well-shaped summary, with nothing red | Fowler and Andre |
+ | 5 | **This changes nothing that ships today.** No committed model file sets a thinking cap, and the answer cap on the live pointer is not reached by any committed item. What it changes for a **new** model that rambles: the first sign is a slow item rather than a truncated one, and that is the trade this row takes | Andre, censused 2026-09-21 |
+ | 6 | The parameter default of zero in the shared caller goes with the fields, and with it the trap where a caller that forgets the argument decodes a zero-token thought and still returns a well-shaped summary | Andre |
+ | 7 | The span-count cells on the two judge records stay, because there are still two spans | Fowler |
 
 - **Rejected alternatives:**
 
  | # | Option | Why rejected | What it would cost to take | Authority |
  | --- | --- | --- | --- | --- |
- | 1 | Delete the key outright, as plan 39 row 16 said | Its premise - that the runtime has no such parameter - is wrong, and it removes the only lever that bounds span one without a code change (Guardrail #6). The hazard it leaves is real: 20 items each running to the per-request timeout is 7 h 22 m against a 6 h kill | One dictionary key saved, against a design that does not fit the day plan 40 runs a reasoning model | Carmack |
- | 2 | Set the cap at 1,800 tokens | Wrong by a factor of three. 1,800 tokens at the slowest measured decode rate is 545 s of decoding alone, against a 564 s per-item budget whose worst measured item already spends 376 s. Twenty such items is 307 minutes, past the 200-minute shard timeout | A shard the run cancels | Carmack |
- | 3 | Keep the budget and delete only the typed field | Leaves an unreachable branch in three files and a parameter default of zero that decodes nothing | About 40 lines and one trap | Andre |
- | 4 | Wait for plan 40's dispatch before setting a number | The dispatch measures a model with no cap applied, which is already what runs, so it would return a reading about nothing. A number set now is an estimate that names what would overturn it (Guardrail #10) | One dispatch, and a reading about nothing | Andre |
+ | 1 | Delete the thinking cap and keep the answer cap | That is the split with no principle behind it. Both are the same request-body field under two names, and keeping either keeps the two spellings and the sum | Two of the four moving parts, and the argument again on the next model | Owner |
+ | 2 | Keep one cap as a circuit breaker, set generously | A breaker set where it never fires is a number nobody can justify and nobody will revisit, and it keeps the sum and the omit-the-key rule alive to serve it. The timeout is already the breaker, and it is one a person can reason about in seconds rather than tokens | One key, the sum, the null rule, and a number with no derivation | Owner |
+ | 3 | Set a cap from the committed timings | The only per-item timing is a stopwatch with the queue inside it, so summing it across a shard overcounts, and the repository's own shard benchmark is from a retired model at a different item load. The two disagree by about half, so no number derived from either is defensible today | A benchmark run that isolates decode from queue, before any cap could be justified | Carmack |
+ | 4 | Keep the fields and delete only the types | Leaves an unreachable branch in three files, the sum, the null rule and the default of zero | About 40 lines and one trap | Andre |
 
-## Section 7 - Row #6 - The engineering contract catches up
+## Section 8 - Row #7 - The engineering contract catches up
 
 - **Scope:** Amend the two clauses of the engineering contract that rows 3, 4 and 5 contradict, inside the pull request that contradicts them.
 - **Files touched:**
@@ -437,7 +485,7 @@ The first four cannot be moved by runner noise. The fifth is the half noise reac
 
  | # | Decision | Authority |
  | --- | --- | --- |
- | 1 | The amendment ships with row 4, not after it. CLAUDE.md section 0 requires a conflicting rule to be amended in the same change | Owner, CLAUDE.md section 0 |
+ | 1 | The amendment ships with row 5, not after it. CLAUDE.md section 0 requires a conflicting rule to be amended in the same change | Owner, CLAUDE.md section 0 |
  | 2 | Only Guardrail #3 and section 11 move here. Section 1a, section 9 and section 10 are about generation and drift, which this plan does not remove, so they stay with plan 39 row 1 | Fowler |
  | 3 | Each clause that moves carries a dated line naming who moved it (CLAUDE.md section 1) | Fowler |
  | 4 | Guardrail #11 and Guardrail #12 are untouched. One protects a reader from a stranger's web page, the other protects the repository from itself | Fowler |
@@ -449,7 +497,7 @@ The first four cannot be moved by runner noise. The fifth is the half noise reac
  | 1 | Take a named exception for each row instead of amending the clause | Three exceptions to one rule is the rule being wrong | Three dated notes and a guardrail nobody believes | Fowler |
  | 2 | Amend after the rows land | Leaves the repository in a state where its own contract forbids its own code | Nothing saved; it is a sequencing error | Owner |
 
-## Section 8 - Row #7 - The model's own template writes the markers
+## Section 9 - Row #8 - The model's own template writes the markers
 
 - **Scope:** Stop transcribing each model's chat template into configuration by hand. Ask the server to render a known conversation through the model's own template, derive six of the eight markers from the rendering, and carry the other two through with a check on each.
 - **Files touched:**
@@ -486,7 +534,7 @@ The first four cannot be moved by runner noise. The fifth is the half noise reac
  | 3 | Derive all eight by parsing the template source the server publishes | The source assembles a marker by concatenation rather than listing it, only two are directly recoverable, and no template parser is a dependency here. Parsing a reasoning close out of the replay path would record a defect: a measurement on 2026-09-12 found this template drops a marker on replay | A template-language parser as a dependency, and a recorded marker copied from a defect | Carmack |
  | 4 | Run the recorder as a nightly step | It would edit tracked configuration and push, for a value recorded once per model rather than once per run | A second writer of a file a person owns | Carmack |
 
-## Section 9 - Row #8 - The startup probe keeps the render check
+## Section 10 - Row #9 - The startup probe keeps the render check
 
 - **Scope:** Reduce the startup probe from five checks to the one whose failure is silent, and log the trained window beside the configured one as an observation.
 - **Files touched:**
