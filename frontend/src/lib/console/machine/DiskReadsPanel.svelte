@@ -89,9 +89,9 @@
 	);
 
 	const pinningSays = $derived.by(() => {
-		const { held, loose, silent } = reads.pinning;
+		const { held, loose } = reads.pinning;
 		if (pinning === 'silent') {
-			return `None of the ${silent} runs in these ${days} days recorded whether the model's memory was held down, so whether the machine was even allowed to take it back is unknown.`;
+			return `No run in these ${days} days recorded whether the model's memory was held down, so whether the machine was even allowed to take it back is unknown.`;
 		}
 		if (pinning === 'held') {
 			return `All ${held} runs that recorded it held the model's memory down, so the machine was not allowed to take it back.`;
@@ -181,9 +181,9 @@
 		{#if excluded > 0}
 			<p class="aside" data-disk-read-excluded={excluded}>
 				{grouped(excluded)}
-				{excluded === 1 ? 'article was' : 'articles were'} left out because it was the first on its
-				shard, where a wait is the server reading its own memory in rather than the machine taking
-				it back - so a reclaim inside a first article is invisible here.
+				{excluded === 1 ? 'article is' : 'articles are'} left out for sitting first on a shard, where a
+				wait is the server reading its own memory in rather than the machine taking it back - so a
+				reclaim inside a first article is invisible here.
 			</p>
 		{/if}
 	</Panel>
@@ -211,17 +211,22 @@
 	.track {
 		display: flex;
 		align-items: flex-end;
-		gap: 2px;
+		justify-content: flex-start;
+		gap: 3px;
 		block-size: 56px;
 		margin: 0;
 		padding: 0;
 		list-style: none;
 	}
 
+	/* Capped, so a span holding five days draws five tiles rather than five
+	   slabs. A tile is a day, and a day does not get wider because the ledger
+	   holds fewer of them. */
 	.tile {
 		position: relative;
 		flex: 1 1 0;
 		min-inline-size: 3px;
+		max-inline-size: 26px;
 		block-size: 100%;
 		display: flex;
 		align-items: flex-end;
