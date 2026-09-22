@@ -1,6 +1,6 @@
 # Search Quality
 
-**Last Updated**: 2026-09-15
+**Last Updated**: 2026-09-22
 Whether the archive's on-device search finds the right story: the metric, the
 label set, the bar it has to clear, and what it costs to keep that bar honest as
 the archive grows.
@@ -386,6 +386,31 @@ recognised instead of re-investigated. And the second pass is the last one: it
 cost a pull request and bought a week, and a third would move the alarm further
 from what a reader gets for the same week. Authority: Andre, Guardrail #10.
 
+**The gate's reads took their covers, and the one that could not take one says
+so (2026-09-22).** Three reads in `backend/tests/test_retrieval_eval.py` opened
+every published day or every committed month shard to answer a question that was
+already bounded, so the cost of the eval rose every time a run published
+(Guardrail #12). The gate corpus now reads through `assist.eval_corpus_through`,
+the index comparison reads the shard that pin names, and the knob check reads a
+directory listing rather than every shard. Every gated number is unchanged, to
+the last digit, because the days the pin excludes were being loaded and then
+filtered out. The membership check - does the index name every published item -
+is the one question no cover fits, and it moved to
+`backend/utilities/measure_retrieval.py`. Authority: Fowler, Guardrail #12.
+
+**The live reading cannot take the trailing window, and the measurement is why
+(2026-09-22).** The plan for the row above expected the live line to move onto
+the shards `assist.search_months` names, on the argument that a trailing window
+is bounded and is what a reader's tab fetches. It is bounded, and it holds no
+labelled answer: the labels close on 2026-08-26 and the window reaches the
+newest month, so the reading came out at recall 0.000 with all 60 queries
+unanswerable over 7,044 items. That is a fact about the window, not about
+search. The live line therefore stays on every published day and is declared
+under Guardrail #12's escape hatch in
+[growing-reads.md](growing-reads.md), because the question it answers - how far
+the frozen labels have drifted from the archive - is about the items outside any
+window. Authority: Andre, Guardrail #10.
+
 ## Rejected alternatives
 
 | Option | Why rejected | Authority |
@@ -407,6 +432,8 @@ from what a reader gets for the same week. Authority: Andre, Guardrail #10.
 | Round the derived 0.60731 down to 0.60 rather than to 0.61 | Both are two decimal places. 0.61 is the nearest, and it is the stronger bar, so it is the one that cannot hide a regression the derivation would have caught. The 0.01 costs less than one published day of room. | Andre |
 | Stop the gate reading days published after the labels closed | It would hold the number still, and it would measure a 2,237-item archive nobody has searched since 2026-08-26 - so a ranking change that only hurt recent stories would pass. The gate exists to notice the archive. What has to change is the labels, not the corpus. | Andre |
 | Gate on the gap between case A' and case A instead of on a level | It is the right instrument for "did the ranking regress" and it needs two committed corpora to compare, which the repository does not keep. Building that is a bigger change than this row, and it does not remove the need for the labels. | Andre, Fowler |
+| Score the live line over the trailing window `assist.search_months` names | Measured 2026-09-22: that window holds 7,044 items and not one labelled answer, so the reading is recall 0.000 with every query unanswerable. It would replace a number that says how stale the labels are with a number that says the labels are not in September. | Andre, Guardrail #10 |
+| Move the live line to `backend/utilities/measure_retrieval.py` beside the membership check | It is the only measurement of live search quality in the project, and a utility with no scheduled caller is an instrument deleted on a delay. Keeping it gated costs the whole-archive read, which is declared rather than hidden. | Andre |
 
 ## See also
 
