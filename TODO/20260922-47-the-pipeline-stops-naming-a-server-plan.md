@@ -16,7 +16,7 @@
 | **The rule this plan is built on** | **A program that starts its own server probes loopback. Everything else reads the config.** And **a setting this project does not compute on is passed through, never mapped.** |
 | **What changes for the reader** | Nothing. No published file, no page, no column. |
 | **What changes in production** | Nothing, if the committed config is left alone. The three sampling values this plan writes down are the values llama.cpp is already applying. |
-| **Why config and not an environment value** | An environment value is the only kind of setting that is never committed, so it is the only one that changes where article text goes with no diff and no review. A config field gets exactly the review a source constant gets. Owner ruling, 2026-09-22. |
+| **Why config and not an environment value** | An environment value is the only kind of setting that is never committed, so it is the only one that changes where article text goes with no diff and no review. A config field gets exactly the review a source constant gets. Owner ruling 2026-09-22, now written into `CLAUDE.md` Guardrail #11. |
 | **Hard scope - in** | `config.model_server.base_url`; the address constants derived from it; `LLAMA_PORT` deleted; the `request` block renamed to `sampling` and passed through whole; `request_timeout_minutes` moved up to the model entry; the three identity rows removed from the lookup table; `models.<verb>` renamed to `models.<noun>`; `LLAMA_WEIGHTS` renamed and the dead `LLAMA_ROLE` deleted; every remaining `127.0.0.1` literal reduced to one; one log record naming the server that answered; the fingerprint stamping an unrecorded build when the address is not loopback; four sentences citing a project rule that does not exist. |
 | **Hard scope - out** | Table B. Four rows, each priced. |
 | **Supersedes** | The surviving half of row 21 of [`20260921-39-delete-the-scaffolding-plan.md`](20260921-39-delete-the-scaffolding-plan.md). Table C records what that row asked for and what happened to each part. |
@@ -31,13 +31,15 @@
 | [`20260922-44-the-model-file-is-the-fetch-interface-plan.md`](20260922-44-the-model-file-is-the-fetch-interface-plan.md) | `backend/idhazh/llm/server.py`, the five workflow files, `backend/utilities/llama_argv.py`, `.github/scripts/start-llama-server.sh` | Plan 44 line 34 hands every process-boundary value to this plan by name. **PR A of this plan runs before or after plan 44's workflow pull request, never beside it.** Plan 44 is moving those shell scripts into python; if it lands first, PR A's workflow work shrinks to a config read in python and gets smaller, not larger. |
 | [`20260922-46-one-writer-for-the-corpus-plan.md`](20260922-46-one-writer-for-the-corpus-plan.md) | none | No ordering needed. |
 
-### The owner question this plan carries
+### The rule this plan was missing, now written
 
-Not a blocker. The census test this plan once carried is gone, because there is no environment value left to police.
+**Settled. Nothing here is open.**
 
-Three code comments and one documentation paragraph say hosted inference is forbidden by `CLAUDE.md` section 0a. Section 0a lists one non-goal and it is accessibility audit tooling, so all four cite a rule nobody wrote. Row 1 deletes them and replaces each with a statement of what the code does.
+Three code comments and one documentation paragraph said hosted inference is forbidden by `CLAUDE.md` section 0a. Section 0a lists one non-goal and it is accessibility audit tooling, so all four cited a rule nobody had written. They were also the only text in the repository saying where article text may be sent, so deleting them would have left the project with no written position at all - in the same plan that moves the address into a setting.
 
-That leaves the project with no written position on where article text may be sent. The recommended replacement is one clause on Guardrail #11: *article text fetched from the open web is sent only to a model process the operator of this run controls, and a run that sent it elsewhere is not a run this project publishes.* An amendment to a guardrail is the owner's and no agent's (`CLAUDE.md` section 1). It is recommended rather than required because the review gate never left: after this plan the address is a committed config line, so changing it is a diff a person reads.
+The owner amended Guardrail #11 on 2026-09-22. It now says article text goes only to a model process the operator of this run controls, that the control is the address being a committed config value rather than an environment value, and why: a third party that receives the text holds a copy, and what it logs, retains or trains on is outside this repository's reach.
+
+Row 1 deletes the four false sentences and cites the real rule in their place.
 
 ### ESCALATE triggers
 
@@ -317,11 +319,11 @@ What stays out is reading the server's own `/props` and recording what actually 
 
 ### C11 - the four sentences row 1 deletes
 
-Each cites `CLAUDE.md` section 0a for a rule section 0a does not contain. **Every replacement states a fact about what the code does; none states a scope rule**, because an agent may not write a project rule for itself (`CLAUDE.md` section 1).
+Each cites `CLAUDE.md` section 0a for a rule section 0a does not contain. The rule they were reaching for now exists, so each replacement states what the code does and cites the real one.
 
 | id | File | The sentence, by its opening words | What replaces it |
 | --- | --- | --- | --- |
-| C11a | `backend/idhazh/llm/__init__.py`, second paragraph | "Nothing in this package reaches any origin but loopback. Hosted inference is a project non-goal..." | "The address this package talks to is one committed config value, `model_server.base_url`, read in one place. The OpenAI-shaped transport here exists because it is the format local runtimes already speak." |
+| C11a | `backend/idhazh/llm/__init__.py`, second paragraph | "Nothing in this package reaches any origin but loopback. Hosted inference is a project non-goal..." | "The address this package talks to is one committed config value, `model_server.base_url`, read in one place. Article text goes only to a model process this run's operator controls (`CLAUDE.md` Guardrail #11). The OpenAI-shaped transport here exists because it is the format local runtimes already speak." |
 | C11b | `backend/idhazh/llm/server.py`, module docstring, third line | "Nothing here is hosted - `CLAUDE.md` section 0a forbids that." | "The address is a committed config value and defaults to loopback. Nothing in this module starts a server." The rest of the paragraph, beginning "Two transports," is unchanged |
 | C11c | `backend/idhazh/llm/server.py`, the `post()` docstring at line 962 | "Loopback only, by construction." | "One address for the whole run, and `_note_origin` says once which one." |
 | C11d | `docs/how-to/run-the-pipeline.md`, lines 45 to 48 | "The summarize stage talks to `127.0.0.1:8080` and nothing else... There is no hosted inference anywhere in this project (section 0a)." | The paragraph in C12 |
@@ -370,7 +372,7 @@ One commit per row, in Reckoner order within each pull request. A worker who fol
 | id | Decision | Reason |
 | --- | --- | --- |
 | 1.1 | An agent makes this correction and reports it | A rule not in the contract cannot gate a plan, and deleting a wrong cross-reference changes no behaviour |
-| 1.2 | Every replacement states a fact, never a scope rule | An agent may not write a project rule for itself (`CLAUDE.md` section 1) |
+| 1.2 | Each replacement cites Guardrail #11 | The rule those four sentences were reaching for is now written, so the replacement points at it rather than at nothing |
 
 **Rejected alternatives.**
 

@@ -169,7 +169,7 @@ export function selectPaths(paths: readonly string[]): Selection {
 		if (/^(config\/|schemas\/|frontend\/src\/contracts\/|backend\/idhazh\/contracts\/|pyproject\.toml$)/.test(path)) {
 			contracts = true;
 		}
-		if (/^(frontend\/(scripts\/|playwright(?:\.logic)?\.config\.ts$|package(?:-lock)?\.json$)|\.github\/(scripts\/browser-suite-needed\.sh|workflows\/ci\.yml)$|backend\/utilities\/gate_lock\.py$|pyproject\.toml$|unresolved-change-base$|full-ci-run$)/.test(path)) {
+		if (/^(frontend\/(scripts\/|playwright(?:\.logic)?\.config\.ts$|package(?:-lock)?\.json$)|\.github\/workflows\/ci\.yml$|backend\/utilities\/gate_lock\.py$|pyproject\.toml$|unresolved-change-base$|full-ci-run$)/.test(path)) {
 			tooling = true;
 		}
 		for (const group of selected) groups.add(group);

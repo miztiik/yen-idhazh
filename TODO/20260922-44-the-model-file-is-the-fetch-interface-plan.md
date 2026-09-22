@@ -81,8 +81,8 @@ Measured on `origin/main`, 2026-09-22, by reading the files.
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The model file gets one reader, and the grammar closes | - | A | PENDING | - | - | - |
-| 2 | The two CI-selection scripts go | - | A | PENDING | - | - | - |
+| 1 | The model file gets one reader, and the grammar closes | - | A | DONE | p44r1 | - | R1 |
+| 2 | The two CI-selection scripts go | - | A | DONE | p44r2 | - | R2 |
 | 3 | The model path becomes one Python program, and the verbs are renamed | 1 | B | PENDING | - | - | - |
 | 4 | The pipeline-test case runner becomes Python | 3 | C | PENDING | - | - | - |
 | 5 | The memory sampler joins the one that already exists | 3 | C | PENDING | - | - | - |
@@ -111,7 +111,7 @@ Measured on `origin/main`, 2026-09-22, by reading the files.
 | **PR-E - the sampler** | 5 | 3, beside PR-D | delete `.github/scripts/sample-rss.sh` (108); `.github/workflows/digest.yml` (`:619`, `:627-629`, `:888-917`); `backend/utilities/memory_sampler.py` (new); `backend/utilities/runtime_sweep.py` (`:294` and `:529`); `backend/tests/workflows/_harness.py` (`SAMPLE_SCRIPT:530`, `RSS_SAMPLE_FILE:512`, the stale `:526-529` comment, `SHIPPED_SCRIPTS`); `backend/tests/workflows/test_model_server_jobs.py` (`:382`); **plus the two plan-doc edits of section 6's transfer** |
 | **PR-F - the last three scripts** | 6 | after plan 46 | section 6 |
 
-**PR-D and PR-E both edit `_harness.py`'s `SHIPPED_SCRIPTS` constant**, because each deletes a script. That is one guaranteed conflict, and the resolution rule is mechanical so nobody has to think: **keep both sides' deletions - the list only ever shrinks.** Budget one merge-resolve-push cycle for whichever lands second.
+**PR-D and PR-E both edit `_harness.py`'s `SHIPPED_SCRIPTS` constant**, because each deletes a script. That is one guaranteed conflict, and the resolution rule is mechanical so nobody has to think: **keep both sides' deletions - the list only ever shrinks.** Budget one merge-resolve-push cycle for whichever lands second. The same rule settled the Reckoner conflict between rows 1 and 2 on 2026-09-22: keep each side's own rows.
 
 **`runtime_sweep.py` is not in PR-B.** It has no call to convert. What moves out of it in row 3 is three names - `refuse_a_server_that_died_at_startup`, `START_GRACE_SECONDS`, `LOG_TAIL_LINES` - which go to `backend/idhazh/llm/server.py` beside `server_argv`, where both `runtime_sweep.py` and the new launcher import them. Zero new import edges: both already import that module. The comment at `runtime_sweep.py:322-327` says the duplication exists "because a sweep needs the process handle and so cannot call it"; that reason dies once the function takes a `Popen`, which it already does. **Row 5 still waits on row 3, but because both write `digest.yml`, not because of this file.**
 
@@ -179,7 +179,7 @@ CLAUDE.md section 0d: intent, then contract, then code. **A worker does not inve
 | `landed_path` - `MODELS_DIR` plus the validated `file` | no |
 | `byte_count` - the entry's declared size | **yes** |
 
-**The describe verbs publish ten keys, not six, and row 1 deletes none of them.**
+**The describe verbs publish seven keys today, not six, and row 1 deletes none of them - it adds three, for ten.** (Corrected 2026-09-22 during execution: the first draft of this line said ten were already published. Seven is today's count; ten is the count after row 1. The instruction - delete none, add three - is unchanged.)
 
 | Key group | Names | Who reads them |
 | --- | --- | --- |
@@ -481,7 +481,7 @@ outputs:
 | **the companion-sensitivity oracle** - two fixture entries differing only in one companion digest render different keys | red |
 | **the derived-weights-path clause** - for each of the five launch roots, the derived path equals the pasted one | green (C7) |
 | **the pin-equality clause** - `measure.yml:125-127`'s three literals equal the JSON's three | green |
-| **`SHIPPED_SCRIPTS` surplus falls to two** | red at six |
+| **`SHIPPED_SCRIPTS` loses its four names in the same commit that deletes the four files** | green, and it needs no entry here - see C14 |
 | the `llm-` resolved-value equality guard | **green, and it stays green.** A guard against one spelling moving alone |
 | the three clauses already green at `test_weights_and_model_refs.py:59-88` | green, not rewritten |
 
@@ -505,16 +505,21 @@ outputs:
 
 ### C14 - The constant that keeps the shell from coming back (row 2)
 
-**`SHIPPED_SCRIPTS` is a constant in `_harness.py` naming the scripts no row of this plan claims. It is written once, in row 2.** Rows 3, 4, 5 and 6 do not rewrite it; what each moves is the **surplus** the failure message names - the count of files present that the constant does not list.
+**Corrected 2026-09-22, during row 2, on Fowler's ruling.** The shape below is what shipped; the first draft of this section is described after it, with why it could not be written.
 
-| After | Surplus |
-| --- | --- |
-| row 2 lands the constant | **9** |
-| row 2 | 6 |
-| row 3 | 2 |
-| row 4 | 1 |
-| row 5 | **0**, and the test goes green |
-| row 6 | the constant is empty, and the test asserts **`.github/scripts/` does not exist** |
+**`SHIPPED_SCRIPTS` is a constant in `_harness.py` naming the scripts the directory is expected to hold - the survivors, not the leavers.** The test asserts `present == listed` in **both** directions, so a `.sh` file nobody declared fails, and a name left behind after its file is deleted fails too. **The list only ever shrinks: a row that deletes a script deletes its name in the same commit that deletes the file.** The failure message names the surplus by name: `a new .sh file under .github/scripts/ is a Level 3 design question, not a convenience. Nothing declares: <name>`.
+
+| After | Names in the constant | What that row deletes from it |
+| --- | --- | --- |
+| row 2 | **9** | `browser-suite-needed.sh`, `changed-docs.sh` |
+| row 3 | 5 | `llama-cpp-pin.sh`, `install-llama-runtime.sh`, `fetch-model-runtime.sh`, `start-llama-server.sh` |
+| row 4 | 4 | `run-pipeline-test-case.sh` |
+| row 5 | 3 | `sample-rss.sh` |
+| row 6 | **0**, and the test asserts **`.github/scripts/` does not exist** | `commit-and-push.sh`, `take-state-from-the-tip.sh`, `push-rewritten-history.sh` |
+
+**Why the first draft could not be written.** It had the constant name the scripts *no row claims*, written once in row 2 and never rewritten, with each later row driving a **surplus** count down 9 -> 6 -> 2 -> 1 -> 0. Two things are wrong with it. The counting direction is unwritable as a test: a constant that never changes cannot tell a deleted script from a script that was never there, so "surplus falls to two" is a number a human tracks rather than an assertion a test evaluates - and a test that only fires at zero is a test that is red for four rows and catches nothing in between. And the leading 9 was already 8 when row 2 measured it: `push-rewritten-history.sh` landed in another plan's pull request after this plan was drafted. **A count of a growing directory is a rotting number** (Guardrail #10); naming the survivors is the property, and it does not rot.
+
+**What this costs rows 3, 4, 5 and 6:** one extra edit each, in a file they already touch, in the commit that deletes the file. **What it buys:** the constant is red the moment a file and its name disagree, in either direction, on every row - not only on the last one.
 
 **Row 6 is what makes the terminal state reachable**, because it takes all three remaining scripts and retires the four assertions that require the directory to be non-empty - `test_ci_selection.py:52`, `test_pinned_versions.py:100`, `test_script_invocation.py:99` and `_harness.py:164`'s `SHELLCHECK_COMMAND` glob.
 
@@ -570,7 +575,7 @@ outputs:
 - **Scope:** Delete `browser-suite-needed.sh` by having `ci.yml` call node directly, port `changed-docs.sh` to Python, and land the `SHIPPED_SCRIPTS` constant that refuses a twelfth script.
 - **Files touched:** `.github/scripts/browser-suite-needed.sh` (delete); `.github/scripts/changed-docs.sh` (delete); `.github/workflows/ci.yml` (`:77`, `:118`); `frontend/scripts/test-scope.ts` (`:172`); `backend/utilities/changed_docs.py` (new); `backend/tests/workflows/test_ci_selection.py` (`:52`, `:113`); `backend/tests/workflows/_harness.py` (**the `SHIPPED_SCRIPTS` constant only**).
 - **Acceptance gates:** local - `python -m pytest backend/tests/workflows/test_ci_selection.py -q`, and `npm --prefix frontend run test:changed -- --list` then the selected node checks; CI - full suite.
-- **Oracle:** the `SHIPPED_SCRIPTS` surplus falls from **9 to 6**. Plus: `changed_docs.py` answers `any=false` for each of the three unresolvable-range cases, and the node selection for a change to `.github/workflows/ci.yml` is byte-identical before and after the regex edit. **What it cannot settle:** whether the CI job reading these outputs behaves the same, which the first pull request after merge shows - both outputs are exercised by every one.
+- **Oracle:** the `SHIPPED_SCRIPTS` constant falls from **8 names to 6** and its test reads both directions. (Drafted as 9; 8 was the count when row 2 measured it, because `push-rewritten-history.sh` landed after this plan was written - C14.) Plus: `changed_docs.py` answers `any=false` for each of the three unresolvable-range cases, and the node selection for a change to `.github/workflows/ci.yml` is byte-identical before and after the regex edit. **What it cannot settle:** whether the CI job reading these outputs behaves the same, which the first pull request after merge shows - both outputs are exercised by every one.
 - **Decisions:**
 
  | # | Decision | Authority |
@@ -596,7 +601,7 @@ outputs:
 
  | # | Commit | Contents | State |
  | --- | --- | --- | --- |
- | 1 | tests only | **the widened fetch discovery and its count assertion (C12, ESCALATE trigger 8)**; the paste rule; the digest clauses; the verify-root clause; the companion-sensitivity oracle; the derived-weights-path clause; the pin-equality clause; the `SHIPPED_SCRIPTS` surplus at two; the `llm-` equality guard | **RED** on six clauses, green on four |
+ | 1 | tests only | **the widened fetch discovery and its count assertion (C12, ESCALATE trigger 8)**; the paste rule; the digest clauses; the verify-root clause; the companion-sensitivity oracle; the derived-weights-path clause; the pin-equality clause; the `llm-` equality guard | **RED** on six clauses, green on four |
  | 2 | the change | everything below | **GREEN** |
 
 - **Files touched:**
@@ -619,7 +624,7 @@ outputs:
  | `docs/reference/ci-model-runtime.md`, `docs/architecture/summarize/model-boundary.md` | section 8 |
 
 - **Acceptance gates:** local - `python -m pytest backend/tests/workflows -q`, plus `ruff` and `mypy` over the new module; CI - full suite; **plus the three dispatches in section 7.**
-- **Oracle:** **the paste rule** (C13), red today on 8 sites, all 8 removed by removing their producers. Siblings that also fail today: the `SHIPPED_SCRIPTS` surplus at six; the companion-sensitivity key clause; and **the hub host appearing in exactly one file repository-wide.** **What it cannot settle:** whether a real runner downloads the right bytes, serves them, and survives the step. Only the dispatches settle that, and D1 is the only thing that ever executes the multi-file path. ESCALATE triggers 1, 2, 3, 4, 6, 7 and 8 apply.
+- **Oracle:** **the paste rule** (C13), red today on 8 sites, all 8 removed by removing their producers. Siblings that also fail today: the companion-sensitivity key clause; and **the hub host appearing in exactly one file repository-wide.** **What it cannot settle:** whether a real runner downloads the right bytes, serves them, and survives the step. Only the dispatches settle that, and D1 is the only thing that ever executes the multi-file path. ESCALATE triggers 1, 2, 3, 4, 6, 7 and 8 apply.
 - **Decisions:**
 
  | # | Decision | Authority |
@@ -665,7 +670,7 @@ They dispatch together and **share one file**: `_harness.py`'s `SHIPPED_SCRIPTS`
 - **Scope:** Replace `run-pipeline-test-case.sh` with `backend/utilities/pipeline_test_case.py`.
 - **Files touched:** `.github/scripts/run-pipeline-test-case.sh` (delete, 54); `.github/workflows/idhazh-pipeline-tests.yaml` (`:304`, `:315`, `:374`); `backend/utilities/pipeline_test_case.py` (new); `backend/tests/workflows/test_pipeline_tests_workflow.py` (`:94`, `:655`); `backend/tests/workflows/_harness.py` (`SHIPPED_SCRIPTS`, one name).
 - **Acceptance gates:** local - `python -m pytest backend/tests/workflows/test_pipeline_tests_workflow.py -q`; CI - full suite. No dispatch of its own: the workflow that runs it is the one row 3's D1 and D2 already exercise.
-- **Oracle:** **the exit-code contract, driven from a fixture tree** - exit 2 for a missing case directory, exit 2 for a missing plan, and any other non-zero for a pipeline failure, asserted against the workflow's own conditional. **It fails today in the sense that nothing tests it**, which is the finding. The `SHIPPED_SCRIPTS` surplus falls from two to one. **What it cannot settle:** whether a real case run produces the same output, which the next pipeline-tests dispatch shows.
+- **Oracle:** **the exit-code contract, driven from a fixture tree** - exit 2 for a missing case directory, exit 2 for a missing plan, and any other non-zero for a pipeline failure, asserted against the workflow's own conditional. **It fails today in the sense that nothing tests it**, which is the finding. `SHIPPED_SCRIPTS` falls from 5 names to 4. **What it cannot settle:** whether a real case run produces the same output, which the next pipeline-tests dispatch shows.
 - **Decisions:**
 
  | # | Decision | Authority |
