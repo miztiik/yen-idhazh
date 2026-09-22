@@ -1,8 +1,8 @@
 """Publish what each work shard's machine did, a month at a time.
 
 One row per `(date, run_id, shard)`, folded from the two ledgers that record it:
-`state/item-health/<Y>/<M>/<D>.csv` for what the items cost, and
-`state/host-fingerprint/<Y>/<M>/<D>.csv` for what the machine was and what the
+`state/item-health/<Y>/<M>/<DD>/` for what the items cost, and
+`state/host-fingerprint/<Y>/<M>/<DD>/` for what the machine was and what the
 model server itself counted. The shape is `MachineShardRow`, and it says in its
 own module why both instruments ride on one row.
 
@@ -30,8 +30,11 @@ from typing import Final
 
 from idhazh import day_shards, ledger
 from idhazh.contracts.base import WORK_JOB
+from idhazh.contracts.host_fingerprint import HostFingerprintRow
+from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.machine_shard import MachineShardRow
+from idhazh.ledger import CsvContract
 from idhazh.telemetry.publish import series
 
 PUBLIC_COLUMNS: Final[tuple[str, ...]] = MachineShardRow.csv_columns()
@@ -84,29 +87,37 @@ def _highest(carried: int | None, value: int | None) -> int | None:
     return value if carried is None else max(carried, value)
 
 
-def month_days(root: Path, *, oldest_month: str) -> dict[str, list[Path]]:
-    """Each month at or above the boundary, to the files its days hold.
+def month_days(root: Path, *, oldest_month: str) -> dict[str, list[str]]:
+    """Each month at or above the boundary, to the dates its days recorded.
 
     One directory listing and no file opened, so this costs the day tree's shape
     rather than its contents. A month below the retention boundary is dropped
     here, because reading one would write a file the prune deletes on the same
     pass (Guardrail #12).
 
-    A day is a directory of writer-owned files, so a month holds one file per
-    writer per day and every one of them is read.
+    Dates rather than files, because a day is a directory of writer-owned files
+    and the caller settles it.
     """
     return {
-        month: paths
-        for month, paths in day_shards.shards_by_month(root, days=UNBOUNDED_WINDOW).items()
+        month: dates
+        for month, dates in day_shards.dates_by_month(root, days=UNBOUNDED_WINDOW).items()
         if month >= oldest_month
     }
 
 
-def _read_day(path: Path) -> list[dict[str, str]]:
-    if not path.is_file():
-        return []
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return [dict(row) for row in csv.DictReader(handle)]
+def _settled_month(
+    root: Path,
+    dates: Iterable[str],
+    key: tuple[str, ...],
+    model: type[CsvContract],
+) -> list[dict[str, str]]:
+    """Every row a month recorded, each of its days settled on its own.
+
+    Settled rather than concatenated. A work shard and assemble each leave their
+    own file in a day, and a re-run leaves a second attempt beside the first, so
+    reading them all would add one measurement to the month twice.
+    """
+    return [row for date in dates for row in day_shards.settled_day(root, date, key, model)]
 
 
 class _Fold:
@@ -284,12 +295,10 @@ def publish(
 ) -> list[Path]:
     """Write a published machine shard for each month that changed."""
     oldest = series.oldest_month_kept(today, keep_months)
-    health_days = month_days(
-        state_root / ledger.ITEM_HEALTH_DIRNAME, oldest_month=oldest
-    )
-    host_days = month_days(
-        state_root / ledger.HOST_FINGERPRINT_DIRNAME, oldest_month=oldest
-    )
+    health_root = state_root / ledger.ITEM_HEALTH_DIRNAME
+    host_root = state_root / ledger.HOST_FINGERPRINT_DIRNAME
+    health_days = month_days(health_root, oldest_month=oldest)
+    host_days = month_days(host_root, oldest_month=oldest)
     available = sorted({*health_days, *host_days})
 
     # Only the months this run has to read are opened. A month outside the set
@@ -306,8 +315,15 @@ def publish(
     folded: dict[str, list[MachineShardRow]] = {}
     for month in wanted:
         folded[month] = fold_shards(
-            [row for path in health_days.get(month, []) for row in _read_day(path)],
-            [row for path in host_days.get(month, []) for row in _read_day(path)],
+            _settled_month(
+                health_root, health_days.get(month, []), ledger.ITEM_HEALTH_KEY, ItemHealthRow
+            ),
+            _settled_month(
+                host_root,
+                host_days.get(month, []),
+                ledger.HOST_FINGERPRINT_KEY,
+                HostFingerprintRow,
+            ),
         )
 
     def encode(month: str) -> bytes:

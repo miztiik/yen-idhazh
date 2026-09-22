@@ -19,7 +19,9 @@ is the list in this repository's own words, beside the other two.
 
 Every entry is a relative POSIX path (CLAUDE.md section 2). Two of them sit
 inside the day a run publishes, so they carry the one placeholder this module
-understands, `{day_dir}`; `refresh_paths` is what fills it in.
+understands, `{day_dir}`; `refresh_paths` is what fills it in. One entry is a
+bare filename instead, because the thing it names is derived in every directory
+it appears in, and a derived path is not always a path a job can hand back.
 """
 
 from __future__ import annotations
@@ -27,7 +29,7 @@ from __future__ import annotations
 from pathlib import PurePosixPath
 from typing import Final
 
-from idhazh import ledger
+from idhazh import day_shards, ledger
 
 #: The one span an entry may carry, filled in by `refresh_paths`. A second kind
 #: of placeholder would be a second thing the caller has to know, and the caller
@@ -61,6 +63,10 @@ DERIVED: Final[tuple[str, ...]] = (
     "frontend/public/span-rollup",
     "frontend/public/run-timeline",
     "state/day-metrics",
+    # A closed day's fold, derived from the writer files it read. It is the one
+    # entry `refresh_paths` leaves out: `idhazh assemble` re-emits no fold, so a
+    # job that handed this back would delete it rather than rebuild it.
+    day_shards.SETTLED_NAME,
 )
 
 #: Every committed collection `.gitattributes` gives `merge=union`, in this
@@ -95,8 +101,8 @@ def is_written_once(relpath: str) -> bool:
     already held, `<ordinal>-<shard>.jsonl` for a trace written before traces
     carried identity, and `repair-<stamp>.csv` for an operator's one add.
 
-    `settled.csv` is deliberately absent. A fold is derived, not written once,
-    and the two belong in different classes.
+    `settled.csv` is deliberately absent. A fold is derived - `DERIVED` carries
+    its name - and the two classes answer different questions.
     """
     name = PurePosixPath(relpath).name
     if name == ledger.BEFORE_PARTITION_NAME or ledger.is_repair(name):
@@ -110,15 +116,21 @@ def is_written_once(relpath: str) -> bool:
 
 
 def refresh_paths(*, day_dir: str) -> str:
-    """`DERIVED` as one line, for the commit step that hands these paths back.
+    """The derived paths a job hands back, as one line for the commit step.
 
     The commit script word-splits what it is given, so the separator is a single
     space and a path carrying one would be read as two. That rule used to be a
     comment above a hand-written string; here it is checked before the line is
     emitted, and a path that broke it fails in the job that wrote it rather than
     in the rebase that could not find the file.
+
+    A bare filename is dropped. It names a file derived in many directories, so
+    there is no one path to hand back, and the producer that would rebuild it
+    does not run in the job doing the handing. A conflicted fold refuses the
+    push instead: it carries no writer identity, so the resolver answers "not
+    mine" and stops.
     """
-    rendered = [entry.format(day_dir=day_dir) for entry in DERIVED]
+    rendered = [entry.format(day_dir=day_dir) for entry in DERIVED if "/" in entry]
     carries_a_space = [path for path in rendered if " " in path]
     if carries_a_space:
         raise ValueError(

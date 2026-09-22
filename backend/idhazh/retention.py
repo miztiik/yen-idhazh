@@ -872,9 +872,14 @@ def prune_telemetry(
     """Fold every out-of-window item-health month, then delete its days and its copy.
 
     The ledger files by day and the aggregate that replaces it files by month, so
-    this is where the two grains meet: `day_partition.days_by_month` groups the
-    day files, and a month is folded whole or not at all. A month's input is at
-    most 31 files, so the fold stays a store-bounded read.
+    this is where the two grains meet: `day_shards.shards_by_month` groups the
+    files a month holds, and a month is folded whole or not at all. A month's
+    input is at most 31 days, so the fold stays a store-bounded read.
+
+    Each day is settled before it is folded, and the files it settled are what
+    get deleted. A day is a directory of writer-owned files and a re-run leaves a
+    second attempt beside the first, so folding every file would carry one item
+    into the aggregate twice - and the aggregate is what outlives the days.
 
     Order matters and it is the whole safety argument: the aggregate is written
     and read back before a single day file is unlinked, and the browser's copy of
@@ -907,7 +912,16 @@ def prune_telemetry(
         if month >= keep_from:
             continue
         days = by_month[month]
-        rows = [row for day in days for row in ledger.load_item_health_shard(day)]
+        rows = [
+            ItemHealthRow.from_csv_row(cells)
+            for date in sorted({day_shards.date_of(day) for day in days})
+            for cells in day_shards.settled_day(
+                state_dir / ledger.ITEM_HEALTH_DIRNAME,
+                date,
+                ledger.ITEM_HEALTH_KEY,
+                ItemHealthRow,
+            )
+        ]
         summary = compact_month(rows)
         folded.append(month)
         # Named before anything is written, so the dry run prints the same list

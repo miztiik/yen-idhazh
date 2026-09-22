@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Final
 
 from idhazh import day_shards, ledger
+from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.run_timeline import RunTimelineRow
 from idhazh.telemetry.publish import series
@@ -121,23 +122,19 @@ def _epoch_ms(cell: str | None) -> int | None:
         return None
 
 
-def project(census: Path) -> list[RunTimelineRow]:
+def project(census: Iterable[Mapping[str, str]]) -> list[RunTimelineRow]:
     """One day of census rows placed on their own runs' clocks.
 
-    One file in, one list out, and nothing else read - so a test drives this from
-    a single fixture and an operator can re-derive one day without touching the
-    rest of the month.
+    Rows in, one list out, and nothing opened - so a test drives this from a
+    list, and the caller decides which day it settled and read.
 
     The rows come back grouped by run and ordered by where each bar starts, which
     is the order the chart draws them in. Sorting here means the published file is
     already in reading order and a browser sorts nothing.
     """
-    if not census.is_file():
-        return []
-    with census.open("r", encoding="utf-8", newline="") as handle:
-        rows = list(csv.DictReader(handle))
+    rows = list(census)
 
-    timed: list[tuple[str, dict[str, str], int, int, int]] = []
+    timed: list[tuple[str, Mapping[str, str], int, int, int]] = []
     for row in rows:
         started = _epoch_ms(row.get("item_started_at"))
         total = _whole(row.get("item_total_ms"))
@@ -182,10 +179,18 @@ def read_shard(path: Path) -> list[RunTimelineRow]:
         return [RunTimelineRow.from_csv_row(row) for row in reader]
 
 
-def _month_rows(days: Iterable[Path]) -> Iterable[Mapping[str, str]]:
-    """Every cell of one month, in day order, as the strings a shard holds."""
-    for day_file in days:
-        for row in project(day_file):
+def _month_rows(census_root: Path, dates: Iterable[str]) -> Iterable[Mapping[str, str]]:
+    """Every cell of one month, in day order, as the strings a shard holds.
+
+    Each day is settled before it is projected. A day is a directory of
+    writer-owned files and a re-run leaves a second attempt beside the first, so
+    projecting every file would draw one item's bar twice.
+    """
+    for date in dates:
+        settled = day_shards.settled_day(
+            census_root, date, ledger.ITEM_HEALTH_KEY, ItemHealthRow
+        )
+        for row in project(settled):
             yield row.csv_row()
 
 
@@ -205,12 +210,13 @@ def publish(
     day, and a browser fetches one month. So a named month opens at most 31
     census files whatever the archive grows to (`CLAUDE.md` Guardrail #12).
     """
-    by_month = day_shards.shards_by_month(
-        state_root / ledger.ITEM_HEALTH_DIRNAME, days=UNBOUNDED_WINDOW
-    )
+    census_root = state_root / ledger.ITEM_HEALTH_DIRNAME
+    by_month = day_shards.dates_by_month(census_root, days=UNBOUNDED_WINDOW)
 
     def encode(month: str) -> bytes:
-        return series.encode_csv(PUBLIC_COLUMNS, _month_rows(by_month.get(month, [])))
+        return series.encode_csv(
+            PUBLIC_COLUMNS, _month_rows(census_root, by_month.get(month, []))
+        )
 
     return series.publish_series(
         digest_root=digest_root,

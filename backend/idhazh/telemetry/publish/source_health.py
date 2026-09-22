@@ -492,24 +492,27 @@ def _recent_item_health(state_root: Path, *, today: str, keep: int) -> list[Item
     strictly before `today`, because a run still working on today has
     opportunities nobody has attempted.
 
-    A day is a directory of writer-owned files, so the files are grouped back
-    into days before the newest `keep` are taken - counting files would give a
-    day with four work shards in it four times the weight of a day with one.
+    A day is a directory of writer-owned files, so the days are counted rather
+    than the files - counting files would give a day with four work shards in it
+    four times the weight of a day with one - and each day taken is settled, so a
+    re-run's second attempt corrects its first instead of being counted beside
+    it.
     """
     if keep <= 0:
         return []
     directory = state_root / ledger.ITEM_HEALTH_DIRNAME
-    by_date: dict[str, list[Path]] = {}
-    for shard in day_shards.shard_files(directory, days=UNBOUNDED_WINDOW):
-        recorded = day_shards.date_of(shard)
-        if recorded < today:
-            by_date.setdefault(recorded, []).append(shard)
-    newest = sorted(by_date)[-keep:]
+    recorded = [
+        date
+        for dates in day_shards.dates_by_month(directory, days=UNBOUNDED_WINDOW).values()
+        for date in dates
+        if date < today
+    ]
     return [
-        row
-        for date in newest
-        for shard in by_date[date]
-        for row in ledger.load_item_health_shard(shard)
+        ItemHealthRow.from_csv_row(cells)
+        for date in sorted(recorded)[-keep:]
+        for cells in day_shards.settled_day(
+            directory, date, ledger.ITEM_HEALTH_KEY, ItemHealthRow
+        )
     ]
 
 

@@ -38,7 +38,14 @@ A_DAY_DIR = "frontend/public/digest/2026/08/25"
 
 
 def _under(relpath: str, entry: str) -> bool:
-    """Whether a committed path is the declared entry or sits inside it."""
+    """Whether a committed path is claimed by one declared entry.
+
+    A path entry claims itself and everything inside it. An entry with no
+    separator is a filename instead, and it claims that file in whatever
+    directory it turns up in - which is what the fold is.
+    """
+    if "/" not in entry:
+        return Path(relpath).name == entry
     rendered = entry.format(day_dir=A_DAY_DIR)
     return relpath == rendered or relpath.startswith(f"{rendered}/")
 
@@ -101,12 +108,15 @@ def test_a_writers_file_carries_the_run_the_attempt_the_job_and_the_shard() -> N
 
 
 def test_a_derived_path_is_rebuilt_and_is_neither_written_once_nor_unioned() -> None:
-    """Rule 1 over the list a job hands back before it rebases.
+    """Rule 1 over the list a job rebuilds rather than merges.
 
     A leaf inside each entry, because the commit step hands back the entry and
-    git acts on the files under it.
+    git acts on the files under it. The fold is skipped here - it is a filename
+    rather than a directory, and the test below is the one that places it.
     """
     for entry in paths.DERIVED:
+        if "/" not in entry:
+            continue
         for relpath in (entry.format(day_dir=A_DAY_DIR), f"{entry.format(day_dir=A_DAY_DIR)}/2026/08/20.json"):
             assert _classes(relpath) == {"derived"}, (
                 f"{relpath} is classed {sorted(_classes(relpath))}; a path that is "
@@ -131,25 +141,28 @@ def test_a_union_safe_path_takes_a_union_and_is_neither_derived_nor_written_once
             )
 
 
-def test_the_fold_is_the_one_path_outside_all_three_and_it_is_declared_here() -> None:
-    """`settled.csv` is in no class, and that is the whole of the exception.
+def test_the_fold_is_derived_in_every_day_tree_and_is_never_handed_back() -> None:
+    """A closed day's `settled.csv` is derived, and it is the one entry not rebuilt.
 
-    A fold is a function of the files it read, so two runs that fold one closed
-    day write the same bytes and git needs no rule to merge them. It is not
-    written once - no writer owns the name - and it is not handed back, because
-    the day it settles is closed and a rebuild would produce what is already
-    there.
+    Derived, because the fold is a function of the writer files it read: two
+    runs that fold one closed day compute the same bytes, and a merge of two
+    copies is never the answer.
 
-    Declared as a test rather than left implicit: a second name that fell
-    outside all three would otherwise arrive unnoticed, and that one would be a
-    conflict nobody planned for.
+    Not handed back, because `idhazh assemble` re-emits no fold. A job that gave
+    this path back to the tip would delete it rather than rebuild it. A
+    conflicted fold refuses the push instead - it carries no writer identity, so
+    the resolver answers "not mine" and stops.
     """
-    fold = f"state/{ledger.SCORES_DIRNAME}/2026/08/20/{day_shards.SETTLED_NAME}"
+    for tree in ledger.SegmentLedger:
+        fold = (Path(_a_writer_file(tree)).parent / day_shards.SETTLED_NAME).as_posix()
+        assert _classes(fold) == {"derived"}, (
+            f"{fold} is classed {sorted(_classes(fold))}, and a fold is derived in "
+            "every tree that has one"
+        )
+        assert not paths.is_written_once(fold), "a fold is derived from writers, never one of them"
 
-    assert _classes(fold) == set(), (
-        f"{fold} joined a class; if the fold now needs one, this test says which"
-    )
-    assert not paths.is_written_once(fold), "a fold is derived from writers, never one of them"
+    handed_back = paths.refresh_paths(day_dir=A_DAY_DIR).split(" ")
+    assert day_shards.SETTLED_NAME not in handed_back
 
 
 def test_an_operators_repair_is_written_once_so_it_never_collides_with_a_writer() -> None:

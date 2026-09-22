@@ -201,6 +201,25 @@ def shards_by_month(root: Path, *, days: int) -> dict[str, list[Path]]:
     return months
 
 
+def dates_by_month(root: Path, *, days: int) -> dict[str, list[str]]:
+    """Every recorded date under `root`, grouped by its month, oldest month first.
+
+    `shards_by_month` for a caller that wants rows rather than files. A day is a
+    directory of writer-owned files and a re-run leaves a second attempt beside
+    the first, so a reader asks for dates and settles each one; only a caller
+    that deletes needs the files themselves.
+
+    `days` has no default for the reason `shard_files` gives.
+    """
+    months: dict[str, list[str]] = {}
+    for shard in shard_files(root, days=days):
+        recorded = date_of(shard)
+        held = months.setdefault(recorded[:7], [])
+        if not held or held[-1] != recorded:
+            held.append(recorded)
+    return months
+
+
 def _is_day_file(shard: Path) -> bool:
     """Whether a shard is a `<DD>.csv` day file rather than a writer's file.
 
