@@ -163,20 +163,6 @@ SHELLCHECK_STEP: Final = "Lint the shell"
 
 SHELLCHECK_COMMAND: Final = "shellcheck --severity=style .github/scripts/*.sh"
 
-# The generated summary of every plan-doc's Status Reckoner, and the one file in
-# the repository with a single writer. It used to have one writer per branch: a
-# gate regenerated it in every pull request, so two branches that each stamped a
-# Reckoner row conflicted on every line that moved. Four of the six rows of plan
-# 27 hit that on 2026-09-12, one of them twice, and each was settled by
-# regenerating - a band-aid, not a fix (Guardrail #5).
-STATUS_PAGE: Final = "TODO/STATUS.md"
-
-STATUS_PAGE_JOB: Final = "status-page"
-
-STATUS_PAGE_GUARD: Final = "A pull request never edits the plan queue"
-
-STATUS_PAGE_WRITE: Final = "python backend/utilities/plan_status.py --write"
-
 # The ceiling, not the dispatch rule. Guardrail #2 allows 20 concurrent jobs; a regex
 # held the fan-out at four. The empty-input default below stays at four, because
 # that is what every scheduled run gets and no eight-shard run is measured yet.
@@ -830,7 +816,6 @@ COMMIT_IDENTITY: Final = "miztiik <miztiik@users.noreply.github.com>"
 GIT_IDENTITY_SOURCES: Final = (
     SCRIPTS_DIR / "commit-and-push.sh",
     WORKFLOWS_DIR / "prune.yml",
-    WORKFLOWS_DIR / "ci.yml",
 )
 
 # What a `${{ }}` expression stands in for when a test runs the real call site
