@@ -23,6 +23,8 @@ from ._harness import (
     SCRIPTS_DIR,
     SUBSTITUTED_DATE,
     SUBSTITUTED_DAY_DIR,
+    TAKE_STATE_CALL,
+    TAKE_STATE_STEP,
     _commit_call,
     _load_workflows,
     _mapping,
@@ -198,6 +200,34 @@ def test_the_catch_up_compaction_runs_before_the_plan_job_commits() -> None:
     assert names.index(COMPACT_STEP) < names.index(COMMIT_STEPS["plan"])
     assert names.index(COMPACT_STEP) < names.index(FINGERPRINT_STEP)
     assert COMMIT_STAGED_PATHS["plan"] == ["state"]
+
+
+def test_the_fold_reads_a_store_taken_from_the_tip() -> None:
+    """The fold derives a day head, so the store it reads has to be the current one.
+
+    `actions/checkout` restores the commit the run was triggered at, and the
+    `digest` concurrency group holds a queued run until the run ahead of it has
+    finished - an unbounded gap, and every commit in it writes `state/`. Run
+    35660521768 sat in that gap for 46 minutes, folded segments the run ahead
+    had already folded and deleted, and wrote five day heads that run had
+    already written. The rebase then held two derived versions of one file and
+    no way to choose between them, and the day was lost at the push.
+
+    The order is the whole of the fix. Taken after the fold it changes nothing;
+    taken after anything else in this job, it discards what that step wrote -
+    which is why it runs ahead of the probe, the plan and the commit as well.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    names = [step.get("name") for step in _steps(workflow, "plan")]
+    assert names.index(TAKE_STATE_STEP) < names.index(COMPACT_STEP)
+    assert names.index(TAKE_STATE_STEP) < names.index(FINGERPRINT_STEP)
+    assert names.index(TAKE_STATE_STEP) < names.index(PLAN_STEP)
+    assert names.index(TAKE_STATE_STEP) < names.index(COMMIT_STEPS["plan"])
+
+    step = _step(workflow, "plan", "name", TAKE_STATE_STEP)
+    taken = shlex.split(_script(step, f"digest.yml/plan/{TAKE_STATE_STEP}"))
+    assert tuple(taken) == TAKE_STATE_CALL
+    assert taken[-1] == ledger.STATE_DIRNAME
 
 
 def test_the_segment_store_is_handed_back_to_the_tip_with_the_heads() -> None:

@@ -1,6 +1,6 @@
 # How a run's rows reach the repository
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-22
 
 Ten jobs of one run commit to one branch, and every one of them can lose the
 push race. This page owns what they run to win it: the three-attempt rebase
@@ -79,11 +79,37 @@ give it. Ledger by ledger, so one revert takes one ledger.
 
 **There are two ways to lose the push race, and they need different answers.**
 
-The plan job only records what it saw, and so does a work shard. Every path they
-write has one writer: a head is filled by the compaction inside one job, and a
-shard's rows go to `state/segments/<ledger>/<run>-<attempt>-<job>-<shard>.csv`,
-which names the one writer that can take it. Two sides of a lost race are
-therefore two different paths, and the rebase applies both whole.
+The plan job only records what it saw, and so does a work shard. Every row they
+append has one writer: a shard's rows go to
+`state/segments/<ledger>/<run>-<attempt>-<job>-<shard>.csv`, which names the one
+writer that can take it. Two sides of a lost race are therefore two different
+paths, and the rebase applies both whole.
+
+**One path in the plan job is not an append, and that one is the exception.** A
+day head is DERIVED from the segment store by the catch-up fold, so two jobs
+that fold the same segments write the same head from different bases - and two
+derived versions of one file is the shape no rebase can settle and no merge rule
+should. The gap that makes it possible is not a race at all:
+`actions/checkout` restores the commit the run was TRIGGERED at, the `digest`
+concurrency group then holds a queued run until the run ahead of it has
+finished, and nothing bounds the distance between those two moments. Run
+`35660521768` is the record. It was created at 22:02 and started here at 22:48,
+five commits behind, and one of those five was the run ahead's own fold. It
+re-folded segments that run had already folded and deleted, rewrote the five
+heads it had already written, and the rebase then held two versions of each with
+no way to choose. The whole day went at the push.
+
+The answer is a current base rather than a merge rule. The job runs
+[`.github/scripts/take-state-from-the-tip.sh`](../../../.github/scripts/take-state-from-the-tip.sh)
+ahead of the fold: `state` is emptied and then taken from origin's tip, so a
+segment the run ahead drained is gone before the fold can read it. Restoring the
+tip's `state` on its own would not do it - git writes what the tip HAS and says
+nothing about what it does not carry, and the drained segment is precisely what
+it does not carry. **Only `state` moves.** The code the job runs stays on the
+trigger commit, so a run cannot change its own behaviour halfway through and no
+log line would have said which build did what. And it goes ahead of every other
+step in the job that writes under `state/`, because taken after one of them it
+discards what that step wrote.
 
 **Until 2026-09-19 those files were shared and `.gitattributes` gave every one of
 them a union merge driver**, which resolved the rebase by concatenating both sides. That

@@ -248,6 +248,21 @@ jobs:
             echo "::warning title=Late run::Slot ${SLOT_HOUR}:${SLOT_MINUTE} UTC started ${LATE} minutes late. GitHub queues scheduled runs by load and drops slots it cannot place - see docs/reference/github-actions.md."
           fi
 
+      # The fold below derives a committed file from other committed files, and
+      # `actions/checkout` hands it the commit this run was TRIGGERED at. The
+      # `digest` concurrency group holds a queued run until the run ahead of it
+      # finishes, so those two moments are an unbounded distance apart: run
+      # 35660521768 was created at 22:02 and started here at 22:48, five commits
+      # and one whole digest behind. It folded segments the run ahead had
+      # already folded and deleted, wrote five day heads that run had already
+      # written, and the rebase then held two derived versions of one file with
+      # no way to choose. The day was lost at the push.
+      #
+      # Ahead of the fold, and ahead of everything else in this job that writes
+      # under `state/` - which is everything after it.
+      - name: Take the run state from the tip, not from the trigger commit
+        run: bash .github/scripts/take-state-from-the-tip.sh state
+
       # The catch-up, and it is the only caller besides `assemble`. A run whose
       # assemble never ran leaves its segments in the tree, and nothing else
       # would ever fold them: this job runs five times a day, so a segment waits
@@ -255,8 +270,8 @@ jobs:
       #
       # On the normal path it costs nothing measurable. The assemble of the run
       # before this one drained the store and committed the deletions, and the
-      # `digest` concurrency group above stops this run starting before that one
-      # finished - so this lists an empty directory and writes nothing.
+      # step above has just taken that drained store - so this lists an empty
+      # directory and writes nothing.
       #
       # BEFORE the plan, and before this job's own probe, for two different
       # reasons. The probe writes a segment, and a fold that ran after it would
@@ -390,13 +405,15 @@ jobs:
       # ledger beside it. `state` is in every checkout; a collection inside it
       # need not be.
       #
-      # `append_health` settles the day file it wrote against the checkout, which
-      # is frozen at the commit this run was triggered at - so a SECOND ATTEMPT
-      # at this same plan cannot see the rows the first attempt pushed. Until
-      # 2026-09-19 `.gitattributes` gave the file a union merge driver, the merge
-      # kept both verdicts, and a settling pass ran here afterwards to take one
-      # back out. The driver is gone, so a second attempt now stops at the rebase
-      # instead of landing a feed's verdict twice.
+      # `append_health` settles the day file it wrote against the checkout, and
+      # until the step above existed that checkout was frozen at the commit this
+      # run was triggered at - so a SECOND ATTEMPT at this same plan could not
+      # see the rows the first attempt pushed. Until 2026-09-19 `.gitattributes`
+      # gave the file a union merge driver, the merge kept both verdicts, and a
+      # settling pass ran here afterwards to take one back out; the driver is
+      # gone, so the next shape of that failure was a rebase nobody could
+      # settle. A second attempt now reads the first attempt's rows before it
+      # writes, and settles a feed's verdict against them.
       - name: Commit what the plan saw
         env:
           COMMIT_MESSAGE: "plan: ${{ steps.decide.outputs.date }}"
