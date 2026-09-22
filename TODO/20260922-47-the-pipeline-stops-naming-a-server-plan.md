@@ -1,10 +1,10 @@
-# The model server's address and settings move into config
+# The model server's address becomes a committed config value
 
 **Last Updated**: 2026-09-22
 
-**Level**: 3 (`CLAUDE.md` section 6). It crosses three boundaries - python, committed config and the workflow files - and it renames two config keys that a generated schema is built from. Nothing persisted by an earlier run changes shape. With the config left as committed, every address and every request body is character-for-character what this repository produces today.
+**Level**: 3 (`CLAUDE.md` section 6). It crosses python, committed config and the workflow files, and it adds a field to the top-level config contract, which regenerates a schema and a frontend type. No persisted payload changes shape. With the committed config unchanged, every address this repository builds is character-for-character what it builds today.
 
-> Execute with [`docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md), parallel N = 2, AUTHOR-AND-STOP until the user authorises the run.
+> Execute with [`docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md), parallel N = 1, AUTHOR-AND-STOP until the user authorises the run.
 
 ---
 
@@ -12,76 +12,73 @@
 
 | Field | Value |
 | --- | --- |
-| **Why this plan exists** | Two things the pipeline hands a model server are typed into python and reachable by no config value. The **address** is three constants in [`backend/idhazh/llm/server.py`](../backend/idhazh/llm/server.py). The **sampling settings** are gated by a lookup table, so only `temperature`, `top_p` and `seed` can ever reach the wire - a key llama.cpp adds tomorrow is unreachable without a code edit, and a key added to the model file today validates and is silently dropped. |
-| **The rule this plan is built on** | **A program that starts its own server probes loopback. Everything else reads the config.** And **a setting this project does not compute on is passed through, never mapped.** |
+| **Why this plan exists** | `CLAUDE.md` Guardrail #11 was amended on 2026-09-22 and now says the model server's address **is** a committed config value. It is not one. It is three constants in [`backend/idhazh/llm/server.py`](../backend/idhazh/llm/server.py), one of which reads an environment value. The contract and the code disagree, and `CLAUDE.md` section 0d says the code is what changes. |
+| **The second reason, which is a live defect** | `DEFAULT_ENDPOINT` is a **default argument**, bound when the module loads, at 18 sites. No caller anywhere overrides any of them. So `--base-url` in `backend/idhazh/cli.py` has never reached a server, and `stage_validate` does not take an address at all - it falls through to the module constant twice. The address is not a setting today; it is a global that looks like a parameter. |
+| **The rule this plan is built on** | **A program that starts its own server probes loopback. A stage that only talks to one reads the address from the settings it already holds.** |
 | **What changes for the reader** | Nothing. No published file, no page, no column. |
-| **What changes in production** | Nothing, if the committed config is left alone. The three sampling values this plan writes down are the values llama.cpp is already applying. |
-| **Why config and not an environment value** | An environment value is the only kind of setting that is never committed, so it is the only one that changes where article text goes with no diff and no review. A config field gets exactly the review a source constant gets. Owner ruling 2026-09-22, now written into `CLAUDE.md` Guardrail #11. |
-| **Hard scope - in** | `config.model_server.base_url`; the address constants derived from it; `LLAMA_PORT` deleted; the `request` block renamed to `sampling` and passed through whole; `request_timeout_minutes` moved up to the model entry; the three identity rows removed from the lookup table; `models.<verb>` renamed to `models.<noun>`; `LLAMA_WEIGHTS` renamed and the dead `LLAMA_ROLE` deleted; every remaining `127.0.0.1` literal reduced to one; one log record naming the server that answered; the fingerprint stamping an unrecorded build when the address is not loopback; four sentences citing a project rule that does not exist. |
-| **Hard scope - out** | Table B. Four rows, each priced. |
+| **What changes in production** | Nothing, if `config/idhazh.json` is left as committed. |
+| **Hard scope - in** | `model_server.base_url` as a config field; `resolve_base_url` and `resolve_endpoint`; the 18 default-argument sites resolved by their callers; `LLAMA_PORT` deleted; a refusal when a job starts a server on one address while the stage posts to another; the loopback literals outside `.github/` reduced to one function; `MODEL_FILE`; the dead role value deleted; one log record naming the server that answered; the run record stamping an unrecorded build when the address is not loopback; four sentences citing a rule that does not exist. |
+| **Hard scope - out** | Table B. Four rows, each priced. The sampling block and the model-slot rename are **out**, and Table B row B1 is their brief. |
 | **Supersedes** | The surviving half of row 21 of [`20260921-39-delete-the-scaffolding-plan.md`](20260921-39-delete-the-scaffolding-plan.md). Table C records what that row asked for and what happened to each part. |
-| **Depends on** | Nothing, but two live plans overlap and the order matters. See **Sequencing** below. |
+| **Depends on** | Nothing. [`20260922-44-the-model-file-is-the-fetch-interface-plan.md`](20260922-44-the-model-file-is-the-fetch-interface-plan.md) line 34 hands every process-boundary value to this plan by name, and shares `backend/idhazh/llm/server.py`, the workflow files, `backend/utilities/llama_argv.py` and `.github/scripts/start-llama-server.sh`. Run either side of plan 44's workflow pull request, never beside it. [`20260922-46-one-writer-for-the-corpus-plan.md`](20260922-46-one-writer-for-the-corpus-plan.md) shares nothing. |
 | **ESCALATE triggers** | Five, below Table D. |
-| **Execution** | Four pull requests in two waves. Peak two people. |
+| **Execution** | Two pull requests, serial. **Peak one worker.** The second worker's place is authoring the plan in Table B row B1. |
 
-### Sequencing against the two live plans
+### What a review pass changed, and why the worker should trust this version
 
-| Plan | Shared files | Ruling |
-| --- | --- | --- |
-| [`20260922-44-the-model-file-is-the-fetch-interface-plan.md`](20260922-44-the-model-file-is-the-fetch-interface-plan.md) | `backend/idhazh/llm/server.py`, the five workflow files, `backend/utilities/llama_argv.py`, `.github/scripts/start-llama-server.sh` | Plan 44 line 34 hands every process-boundary value to this plan by name. **PR A of this plan runs before or after plan 44's workflow pull request, never beside it.** Plan 44 is moving those shell scripts into python; if it lands first, PR A's workflow work shrinks to a config read in python and gets smaller, not larger. |
-| [`20260922-46-one-writer-for-the-corpus-plan.md`](20260922-46-one-writer-for-the-corpus-plan.md) | none | No ordering needed. |
+An earlier draft of this plan would have taken production down. Three things it asserted were false and a worker following it would have found out at runtime.
 
-### The rule this plan was missing, now written
+- It said a config field would make the pipeline read the config. It would not have: `DEFAULT_ENDPOINT` is a default argument and nothing overrides it, so the field would have been written, validated, schema-generated and ignored. Row 3 exists because of that.
+- It quoted a memory measurement as its reason for existing. [`docs/reference/pipeline-cost.md`](../docs/reference/pipeline-cost.md) line 708 retracts that number: "So the 96.0 percent above was never memory the kernel had to find." The machine is 15.61 GiB, what it holds runs 43.4 to 82.2 percent with a median of 52.3, and the least the kernel ever said it could still hand out was 2.76 GiB. The plan now rests on the contract, which needs no measurement.
+- It had the workflow probes read the config. That is escalation trigger 1 in a costume: a non-loopback address would make every job health-check the foreign machine while the server it just started went unchecked. The probes stay loopback and row 5 adds the refusal instead.
 
-**Settled. Nothing here is open.**
+### The rule this plan implements
 
-Three code comments and one documentation paragraph said hosted inference is forbidden by `CLAUDE.md` section 0a. Section 0a lists one non-goal and it is accessibility audit tooling, so all four cited a rule nobody had written. They were also the only text in the repository saying where article text may be sent, so deleting them would have left the project with no written position at all - in the same plan that moves the address into a setting.
+`CLAUDE.md` Guardrail #11, amended by the owner on 2026-09-22: article text is sent only to a model process the operator of this run controls; the control is that the address is a committed config value, `model_server.base_url`, so moving it is a diff a person reads; an environment value is not an acceptable control for a destination.
 
-The owner amended Guardrail #11 on 2026-09-22. It now says article text goes only to a model process the operator of this run controls, that the control is the address being a committed config value rather than an environment value, and why: a third party that receives the text holds a copy, and what it logs, retains or trains on is outside this repository's reach.
-
-Row 1 deletes the four false sentences and cites the real rule in their place.
+Row 1 deletes the three code comments and the documentation paragraph that cite `CLAUDE.md` section 0a for a rule section 0a never carried, and cites the real one in their place.
 
 ### ESCALATE triggers
 
-1. **Stop** if any row leaves the client resolving to one server while a job's readiness probe checks another. A probe that clears a server nobody talks to is worse than no probe.
-2. **Stop** if any row would make `config/idhazh.json` or a model file readable by anything but this repository. A config file this project authors needs no declared shape, and that ruling holds only while nothing else reads one (`CLAUDE.md` section 11, owner ruling 2026-09-21).
-3. **Stop** if the sampling pass-through would let a config key replace a decode control. Rows 6 and 7 carry the check that prevents it; a design that needs the check removed is a different plan.
-4. **Stop** if PR A is ready at the same time as plan 44's workflow pull request. Run them in either order, never together.
+1. **Stop** if any row leaves a job starting a server on one address while the stage posts to another. Row 5 is the control; a design that needs it removed is a different plan.
+2. **Stop** if anything would make `backend/idhazh/llm/` read `config/`. It sits below config in the dependency graph - [`backend/idhazh/config.py`](../backend/idhazh/config.py) imports `SETTING_KEYS` from `server.py`, so the arrow only points one way. Every function that needs the address has `settings` in its own signature already.
+3. **Stop** if any row would read `config/idhazh.json` with no config root. Three workflows run production stages against `backend/var/candidate-config`, so a zero-argument load returns the wrong file and the run posts to an address nobody chose.
+4. **Stop** if PR A is ready at the same time as plan 44's workflow pull request. Either order, never together.
 5. **Stop** if any row would raise a runner budget figure. The 6 hour job limit and the 1 GB site limit are GitHub's and cannot be moved (Guardrail #2).
 
 ### Table B - Hard scope - out
 
 | id | What is out | What it costs to leave out | What would bring it in |
 | --- | --- | --- | --- |
-| B1 | Reconciling the server's `/props` against the fingerprint the run records | Partly paid. Row 10 makes the run stamp an unrecorded build rather than a false one, so the record stops lying. What stays out is reading the server's own answer and recording what it actually is. | A run that needs to prove which build answered, rather than only to avoid claiming the wrong one. Gating measurement: `curl -s <base_url>/props \| jq 'keys'` against the pinned build, seconds. |
-| B2 | A translation table between runtimes, so one model file serves llama.cpp, vLLM and Ollama unchanged | A key one runtime accepts and another rejects fails at request time rather than at config load. Accepted deliberately: a per-key table is the wiring this plan deletes, and it would have to be maintained against three projects that each change their parameters on their own schedule. | A second runtime actually in use, and a measured list of where the two disagree. |
-| B3 | Renaming `LLAMA_CPP_BUILD`, `LLAMA_CPP_ASSET`, `LLAMA_CPP_SHA`, `LLAMA_BIN`, `llama-cpp-pin.sh`, `install-llama-runtime.sh` | Nothing. Each names llama.cpp because the thing is llama.cpp. `CLAUDE.md` section 0b bans a vendor name used as this project's vocabulary, not the vendor's name for the vendor's own artefact. | A second runtime, which makes those names wrong. |
-| B4 | Changing what any sampler does | A real question left unanswered: `top_k` at 40 and `min_p` at 0.05 are llama.cpp's choices, not measured ones for this corpus. Row 6 writes them down at their current values so nothing moves. | A quality measurement on the holdout set. It is a config edit afterwards, with no code change - which is the point of row 6. |
+| B1 | **The sampling block and the model-slot rename.** This row is the brief for the plan that carries them, authored next. | A sampling key added to a model file today validates and is dropped in silence: `server.py` reads `temperature`, `top_p` and `seed` by name and nothing else, so ten of the thirteen settings llama.cpp applies are the build's choice rather than this project's. Two stale names stay stale. | Nothing but the writing. It shares `server.py` with this plan, so it follows rather than runs beside. **What the owner already approved, and what the review found - all of it belongs in that plan:** the `request` block becomes `sampling` and is splatted whole; the thirteen keys at the build's own values, which changes no output; `request_timeout_minutes` moves up to the model entry. **And what a worker must not lose:** `request` is declared on `ModelRef`, not `ModelEntry`, and published `run.json` files carry `model_ref.request` - rename on the entry only and leave the recorded mapping, which is what `inference` and `draft` already do. `ModelRole.SUMMARIZE = "summarize"` is a persisted enum value in 127 places across 35 run records - pin the value, move the python name and the config key. Five committed model files carry the block, not one. Ten `tests/fixtures/request-bodies/*.json` goldens move. `continued_completion_payload` is a derivation of `completion_payload` (`{**first, ...}`), so only the three constructing builders may apply the splat or it raises on every summarize-and-plan call. `sampling_spelling` in `fingerprint.py` records three names onto every run record, so the splat must record the whole block - a dict field, so more keys is an expand with no migration, and what is owed is a version stamp and one changelog line. The refused set is the route's own body keys **plus the disablers declared on the line beneath each control** - `grammar_lazy` and `grammar_triggers` beside `grammar`, `response_format` beside `json_schema`, `json_schema` and `n_predict` beside the chat route's pair, and `logit_bias`, `ignore_eos` and `samplers` on all three - because a decode control has more than one name and `grammar_lazy` disables a grammar without appearing in the body at all. `max_tokens` from config fails chat-route items with `OUTPUT_TRUNCATED` on the path that runs the injection canaries, and the repair path never sees a chat reply. `samplers` carries the chain order, so thirteen values pinned with the order free does not mean a build upgrade cannot move them. Finally, the clash check is a pure function of the config and the route, so it runs at config load as well as at build time - otherwise a typo fails on the first item of every shard after each has already restored and loaded the weights. |
+| B2 | The 22 loopback literals in `.github/` | Nothing today. Every one is a probe against a server the same job just started on the same machine. Reading the config there is the failure row 5 exists to prevent, and it is not implementable anyway: the composite action declares no outputs, only two of the five workflows use it, and three of them run against a different config root. | A job that talks to a server it did not start. That is a different design and it brings the readiness probe, the secret handling and the failure mode with it. |
+| B3 | Reconciling the server's `/props` against the fingerprint | Partly paid. Row 9 makes the run stamp an unrecorded build rather than a false one. What stays out is reading the server's own answer and recording what actually replied. | A run that needs to prove which build answered rather than only to avoid claiming the wrong one. Gating measurement: one `/props` read against the pinned build, seconds. |
+| B4 | Renaming `LLAMA_CPP_BUILD`, `LLAMA_CPP_ASSET`, `LLAMA_CPP_SHA`, `LLAMA_BIN`, `llama-cpp-pin.sh`, `install-llama-runtime.sh` | Nothing. Each names llama.cpp because the thing is llama.cpp. `CLAUDE.md` section 0b bans a vendor name used as this project's vocabulary, not the vendor's name for the vendor's own artefact. | A second runtime, which makes those names wrong. |
 
 ### Table C - What plan 39 row 21 asked for, and what happened to each part
 
 | id | Asked for | Outcome |
 | --- | --- | --- |
-| C1 | One request builder instead of four | **Refused.** The four are four shapes carrying four different Guardrail #11 controls: the chat builder sends `response_format` with a `json_schema`, the plain completion builder a top-level `json_schema`, the grammar builder a `grammar`, and the continued builder re-asserts the `json_schema` on a prompt the cache already holds. Collapsing them collapses the controls. |
-| C2 | Move to the widely supported `/v1/completions` route | **Refused by a measurement** recorded at `server.py` lines 58 to 66: **both** completion routes, llama.cpp's native `/completions` and the OpenAI-compatible `/v1/completions`, ignore `response_format` and honour a top-level `json_schema`, on build b10444-5f754ea0e as of 2026-09-12. The chat route is not in that measurement and does honour `response_format`. |
+| C1 | One request builder instead of four | **Refused.** Four shapes carrying four different Guardrail #11 controls: `response_format` with a `json_schema` on the chat route, a top-level `json_schema` on the plain completion route, a `grammar` on the third, and the fourth is a derivation of the second that inherits its body. Collapsing them collapses the controls. |
+| C2 | Move to the widely supported `/v1/completions` route | **Refused by a measurement** at `server.py` lines 58 to 66: both completion routes ignore `response_format` and honour a top-level `json_schema`, on build b10444-5f754ea0e as of 2026-09-12. The chat route is not in that measurement and does honour `response_format`. That comment also says no workflow pins a llama.cpp build, which is now false - [`.github/scripts/llama-cpp-pin.sh`](../.github/scripts/llama-cpp-pin.sh) pins `b10598`. Correcting that sentence belongs to Table B row B1's plan, which edits the block. |
 | C3 | Delete three slot columns | **Refused.** `backend/utilities/slot_probe.py` is their named instrument. |
 | C4 | Stamp the decode mode | **Done** in pull request #1036. |
-| C5 | Stop naming a server in source | **This plan**, widened by owner instruction on 2026-09-22 to cover the sampling settings, the vendor-prefixed names and the loopback literals. |
+| C5 | Stop naming a server in source | **This plan.** |
 
-### Table D - What is measured on `origin/main`, and what each number means
+### Table D - Measured on `origin/main`, and what each number means
 
 | id | Reading | Number | What it means |
 | --- | --- | --- | --- |
-| D1 | Lines to edit to point the pipeline at another machine | 3 | All in `server.py`. No config value, no flag reaches them. |
-| D2 | Places that import `DEFAULT_ENDPOINT` | 26, in 13 files | All become correct when those 3 lines do. This is why the address work is six lines and not a refactor. |
-| D3 | Readers of `DEFAULT_HEALTH` | 0 | Defined, used nowhere. Row 2 deletes it. |
-| D4 | Occurrences of `LLAMA_PORT` | 51, in 19 files | Row 3 deletes the name entirely rather than renaming it: the port lives inside `base_url`, so there is nothing left for a second value to disagree with. |
-| D5 | `127.0.0.1` literals | 30 | 22 in `.github/`, 6 in three self-spawning instruments, 2 in the measuring clients. Rows 2, 3, 4 and 5 take it to **one**. |
-| D6 | Sampling keys the model file may set that reach the wire | 3 of 13 the build accepts | `temperature`, `top_p`, `seed`. A fourth key added to the file today validates and is dropped in silence. |
-| D7 | Samplers llama.cpp applies that this project does not name | 3 | `top_k` at 40, `min_p` at 0.05, `repeat_last_n` at 64, read from the pinned build's own help text. Live in every summary, chosen by the build, and free to move on an upgrade. |
-| D8 | Identity rows in the lookup table | 3 of 10 | `temperature`, `top_p` and `seed` each map to themselves. They gate every other key for no reason. |
-| D9 | Reads of `LLAMA_ROLE` | 0 | Set by `start-llama-server.sh` line 59 and read nowhere; the role arrives as `--role`. Row 8 deletes it. |
-| D10 | One model server's memory peak | 12.57 to 13.16 GiB, and 14.31 GiB with the job's python | 96.0 percent of a 16 GB machine, over four captures of run 2026-08-29-3 on 2026-09-08. This is why a developer runs the model on a second machine, and it is the person this plan is for. |
+| D1 | Sites where an address is a default argument bound at module load | 18 | Eight in `server.py`, seven in stages and utilities, three argparse defaults. Row 3's whole job. `DEFAULT_COMPLETION_ENDPOINT` is a default argument zero times. |
+| D2 | Callers anywhere that override one of those 18 | **0** | Not in `backend/`, not in `.github/`. The address is a global wearing a parameter's clothes. |
+| D3 | Production call sites that rely on a `server.py` default | 2 | `stages/validate.py` line 128 and `utilities/prove_the_entry.py` line 19. The second already loaded settings one line above. |
+| D4 | Readers of `DEFAULT_HEALTH` | 0 | Defined, used nowhere. Row 2 deletes it. |
+| D5 | Occurrences of `LLAMA_PORT` | 69 lines in 19 files, excluding `TODO/` | Row 4 deletes the name rather than renaming it: the port lives inside `base_url`, so nothing is left for a second value to disagree with. |
+| D6 | Cost of one `config.load()` | 18.3 to 111.9 ms, median 67.5, n=30 warm, on a developer Windows box | Once per process is not a cost worth designing around. The reason `server.py` still must not call it is the config root, not the time - see escalation trigger 3. |
+| D7 | Workflows that run a production stage against a config root that is not `config/` | 3 of 5 | `validate.yml`, `measure.yml` and the pipeline-test case script all pass `backend/var/candidate-config` or a case root. |
+| D8 | Workflows that reach `.github/scripts/start-llama-server.sh` | 2 of 5 | Only `digest.yml` and `llm-council.yml`, through the composite action. The other three spawn the binary inline. This is why row 5's refusal lives in `llama_argv.py`, which all five reach. |
+| D9 | Reads of `LLAMA_ROLE` | 0 | Set by `start-llama-server.sh` line 59, read nowhere; the role arrives as `--role`. Row 7 deletes it. |
+| D10 | Loopback literals in the repository, by scope | 22 in `.github/`, 6 in three self-spawning instruments, 2 in the measuring clients | Rows 2 and 6 take the last eight to one function plus one committed default. The `.github/` 22 stay, by Table B row B2. Do not count `backend/tests/`: it holds about 32 more, all about URL sanitisation and nothing to do with the model server. |
 
 ---
 
@@ -93,29 +90,26 @@ Statuses: PENDING, IN PROGRESS, BLOCKED, DONE. A row's status is stamped by the 
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Delete the rule that is not written | none | A | PENDING | - | - | - |
 | 2 | The address becomes one config field | 1 | A | PENDING | - | - | - |
-| 3 | The port name disappears into the address | 2 | A | PENDING | - | - | - |
-| 4 | One loopback literal in the whole repository | 3 | A | PENDING | - | - | - |
-| 5 | The model file, and the value nothing reads | 3 | A | PENDING | - | - | - |
-| 6 | The run says which server answered | 2 | A | PENDING | - | - | - |
-| 7 | Sampling settings pass through, unmapped | 2 | B | PENDING | - | - | - |
-| 8 | Model slots get nouns | 7 | B | PENDING | - | - | - |
-| 9 | The two measuring clients read the address | 2 | C | PENDING | - | - | - |
-| 10 | The run record stops claiming a build it cannot see | 2 | D | PENDING | - | - | - |
+| 3 | Every caller names the address it means | 2 | A | PENDING | - | - | - |
+| 4 | The port name disappears into the address | 3 | A | PENDING | - | - | - |
+| 5 | A job refuses to start a server nobody will talk to | 4 | A | PENDING | - | - | - |
+| 6 | The loopback literals outside the workflows become one function | 4 | A | PENDING | - | - | - |
+| 7 | The model file, and the value nothing reads | 4 | A | PENDING | - | - | - |
+| 8 | The run says which server answered | 3 | A | PENDING | - | - | - |
+| 9 | The run record stops claiming a build it cannot see | 2 | B | PENDING | - | - | - |
 
-### 1a. The four pull requests
+### 1a. The two pull requests
 
-| PR | Rows | Wave | Files it touches |
-| --- | --- | --- | --- |
-| **A - the address** | 1, 2, 3, 4, 5, 6 | 1 | `backend/idhazh/llm/__init__.py`, `backend/idhazh/llm/server.py`, `backend/idhazh/contracts/app_config.py`, `backend/idhazh/contracts/knobs/model_server.py` (new), `config/idhazh.json`, `schemas/app-config.schema.json`, all five files under `.github/`, `.github/scripts/start-llama-server.sh`, `backend/utilities/llama_argv.py`, the three self-spawning instruments, `backend/tests/test_summarize.py`, `backend/tests/workflows/_harness.py`, `backend/tests/workflows/test_model_server_jobs.py`, `docs/how-to/run-the-pipeline.md` |
-| **B - the settings** | 7, 8 | 2 | `backend/idhazh/llm/server.py`, `backend/idhazh/config.py`, `backend/idhazh/contracts/knobs/models.py`, `config/models/qwen3.5-9b-q4km.json`, `schemas/`, `backend/idhazh/stages/work.py`, `backend/idhazh/stages/qualify.py`, `backend/idhazh/contracts/knobs/placement.py`, `backend/utilities/llama_argv.py`, `backend/utilities/pipeline_case_config.py`, `backend/tests/test_summarize.py`, `backend/tests/test_server_argv.py` |
-| **C - the measuring clients** | 9 | 2 | `backend/utilities/measure_budgets.py`, `backend/utilities/measure_judge_call.py` |
-| **D - the run record** | 10 | 2 | `backend/idhazh/fingerprint.py`, `docs/architecture/contracts/determinism.md` |
+| PR | Rows | Wave |
+| --- | --- | --- |
+| **A - the address** | 1 to 8 | 1 |
+| **B - the run record** | 9 | 2 |
 
-Wave 1 is PR A alone, because `backend/idhazh/llm/server.py` is the hub: six of the ten rows edit it. Wave 2 is B, C and D, which share no file with each other. With a pool of two, C and D go together and B follows, or B and C go together and D follows - either order is correct.
+**Peak worker count: one.** `backend/idhazh/llm/server.py` is the hub - six of the nine rows edit it - and PR B imports a name PR A declares. There is no honest parallelism here, and manufacturing some would buy a scheduling bug instead of a gating cycle. The second worker's place is authoring the plan in Table B row B1, which can start immediately and merges after this one.
 
-### 1b. Why rows 1 to 6 are one pull request
+PR A's files: `backend/idhazh/llm/__init__.py`, `backend/idhazh/llm/server.py`, `backend/idhazh/cli.py`, `backend/idhazh/contracts/app_config.py`, `backend/idhazh/contracts/knobs/model_server.py` (new), `config/idhazh.json`, `schemas/app-config.schema.json`, `frontend/src/contracts/app-config.ts`, the six stage files named in C3, `backend/utilities/{llama_argv,slot_probe,prompt_loop,prove_the_entry,runtime_sweep,measure_probability_mode,measure_two_calls,measure_budgets,measure_judge_call}.py`, all five `.github/` workflow files plus `actions/model-server/action.yml` and `scripts/start-llama-server.sh`, `backend/tests/{test_summarize.py,workflows/_harness.py,workflows/test_model_server_jobs.py}`, `docs/how-to/run-the-pipeline.md`.
 
-Rows 1, 2, 3, 4 and 6 all edit `server.py`, so they were never parallel. Row 5 is the one worth writing down: its files are the workflow files and `llama_argv.py`, which **look** disjoint from row 3's until you notice row 3 edits them too. Row 9 is the other: its two files really are disjoint, and it would still fail if started early, because it imports a name row 2 declares. **A readiness check that compares file lists cannot see an import.** Holding them in commit order removes both failures rather than managing them.
+PR B's files: `backend/idhazh/fingerprint.py`, `backend/idhazh/cli.py`, `backend/idhazh/stages/work.py`, `backend/idhazh/stages/qualify.py`, `backend/tests/test_fingerprint.py`, `docs/architecture/contracts/determinism.md`.
 
 ---
 
@@ -127,14 +121,15 @@ Rows 1, 2, 3, 4 and 6 all edit `server.py`, so they were never parallel. Row 5 i
 
 | Property | Value |
 | --- | --- |
-| Where it is declared | A new `ModelServerConfig` in `backend/idhazh/contracts/knobs/model_server.py`, mounted on `AppConfig` in `backend/idhazh/contracts/app_config.py` beside `logging` and `observability` |
-| Where the value lives | `config/idhazh.json`, a new top-level `"model_server"` block |
-| Committed default | `"http://127.0.0.1:8080"` - the address this repository uses today, now written once as data |
-| Shape | Scheme, host and port. Nothing else. A trailing `/` is accepted and dropped |
-| Refused at load | No scheme, no host, or any path, query or fragment. The message names the field and the value |
-| Why a path is refused | `_sibling()` builds every other route by replacing the whole path, so a prefix would survive on one route and vanish from four. A wrong answer is worse than an error. Supporting a prefix means changing `_sibling` and its golden test, which is a separate change with a separate reason |
-| Why not an environment value | It would be the only setting in the project that is never committed and therefore never reviewed. Owner ruling, 2026-09-22 |
-| Why one field and not a host plus a port | Two values can disagree about which server is meant. One cannot |
+| Declared in | A new `ModelServerConfig` in `backend/idhazh/contracts/knobs/model_server.py`, mounted on `AppConfig` in `backend/idhazh/contracts/app_config.py` beside `observability`. Twenty-one knobs modules already exist; this follows them. |
+| Value lives in | `config/idhazh.json`, a new top-level `"model_server"` block |
+| Committed default | `"http://127.0.0.1:8080"` - today's address, written once as data |
+| Shape | Scheme, host **and port**. Nothing else. A trailing `/` is accepted and dropped |
+| Refused at load | No scheme, no host, **no port**, an out-of-range or non-numeric port, or any path, query or fragment |
+| Why the port is required | Row 4 has `server_argv` read the port back out of this value. `http://host` parses cleanly and yields `port is None`, which would bind `--port None`. A validator that does not touch `parts.port` does not catch it |
+| Why a path is refused | `_sibling` builds every other route by replacing the whole path, so a prefix would survive on one route and vanish from four. A wrong answer is worse than an error |
+| Regenerates | `schemas/app-config.schema.json` **and** `frontend/src/contracts/app-config.ts`. The drift gate fails on either if both are not regenerated |
+| Owes a changelog | `AppConfig` carries an enforced `__changelog__`. One line: a new field is an expand, so no migration is owed |
 
 ```json
   "logging": { ... },
@@ -144,9 +139,9 @@ Rows 1, 2, 3, 4 and 6 all edit `server.py`, so they were never parallel. Row 5 i
   "models_file": "models/qwen3.5-9b-q4km.json",
 ```
 
-### C2 - the address constants after row 2
+### C2 - the two resolvers
 
-`urlsplit` and `urlunsplit` are already imported at `server.py` line 35. Nothing new is imported for this.
+Both pure. No config import, no cache, no module-level state. `urlsplit` and `urlunsplit` are already imported at `server.py` line 36; nothing new is imported.
 
 ```python
 def resolve_base_url(declared: str) -> str:
@@ -154,7 +149,8 @@ def resolve_base_url(declared: str) -> str:
 
     A path, query or fragment is refused rather than dropped: `_sibling` builds
     every other route by replacing the path, so a prefix would hold on one route
-    and vanish from four.
+    and vanish from four. A missing port is refused because `server_argv` binds
+    the port it reads back out of this value.
     """
     parts = urlsplit(declared.rstrip("/"))
     if not parts.scheme or not parts.netloc or parts.path or parts.query or parts.fragment:
@@ -162,30 +158,48 @@ def resolve_base_url(declared: str) -> str:
             "model_server.base_url must be a scheme, a host and a port and nothing "
             f"else, not {declared!r}"
         )
+    try:
+        port = parts.port
+    except ValueError as error:
+        raise ValueError(f"model_server.base_url names no usable port: {declared!r}") from error
+    if port is None:
+        raise ValueError(f"model_server.base_url must name a port, not {declared!r}")
     return urlunsplit((parts.scheme, parts.netloc, "", "", ""))
+
+
+def resolve_endpoint(base_url: str) -> str:
+    """Where an item is posted, on the server a base URL names."""
+    return resolve_base_url(base_url) + _CHAT_PATH
 ```
 
-`DEFAULT_ENDPOINT` and `DEFAULT_COMPLETION_ENDPOINT` are composed from the resolved base. `DEFAULT_PORT` is deleted, and so is `DEFAULT_HEALTH`, which is defined at line 50 and read nowhere in the repository. An unread constant is the one most likely to drift out of step with the ones beside it, and no `health_url()` replaces it - a replacement would land with zero callers, which is the same defect with a newer name. It goes in when its first caller does.
+`_CHAT_PATH: Final = "/v1/chat/completions"` joins `_COMPLETION_PATH` at line 66, and `DEFAULT_ENDPOINT` is composed from it so nothing spells the route twice. `DEFAULT_HEALTH` is deleted: it has zero readers, and no `health_url()` replaces it, because a replacement would land with zero readers too. It goes in when its first caller does.
 
-**The import-time question, ruled.** `server.py` computes its constants when the module loads, and loading the whole config there would make every process that imports the LLM module read and validate `config/idhazh.json`. So the module keeps a fallback equal to the committed default, and the config value is applied by the caller that already holds settings. `llama_argv.py` and every stage entry point already load settings; that is where the value is read.
+**There is no `configured_endpoint()` and `server.py` never reads the config.** Every function that needs the address already has `settings` in its own signature. `backend/idhazh/llm/` sits below config in the dependency graph, and a function-local import to dodge the cycle would be the codebase saying the arrow points the wrong way. A zero-argument `config.load()` would also read `config/idhazh.json` while three workflows run the stage under `backend/var/candidate-config` - the control failing quietly rather than loudly. Escalation trigger 2 and 3.
 
-### C3 - how a workflow gets the address
+### C3 - the eighteen sites, and what each becomes
 
-No utility. `jq` is preinstalled on `ubuntu-latest`, and the composite action reads the committed config directly:
+This is the row that makes the config field mean anything. Without it, row 2 ships a field, a schema, a validator and a frontend type, and the pipeline keeps posting to the module constant.
 
-```bash
-MODEL_BASE_URL="$(jq -r '.model_server.base_url' config/idhazh.json)"
-```
+| Group | Sites | Becomes | Caller edits owed |
+| --- | --- | --- | --- |
+| **The eight in `server.py`** - `post`, `props_url`, `completion_url`, `apply_template_url`, `tokenize_url`, `props`, `derive_turn_markers`, `prove_the_entry` | lines 959, 984, 989, 994, 999, 1004, 1436, 1537 | **Required. No default, no sentinel.** The address is always the caller's | **Two**: `stages/validate.py` line 128 and `utilities/prove_the_entry.py` line 19. The second already loads settings one line above |
+| **The seven in stages and one utility** - `stage_judge_item_pairs`, `stage_qualify`, `stage_qualify_canaries`, `two_calls_one_item`, `_summarize_one`, `stage_work`, `judge_calls` | `judge_item_pairs.py:111`, `qualify.py:409`, `qualify_canaries.py:49`, `two_calls.py:431`, `validate.py:40`, `work.py:301`, `measure_judge_call.py:334` | `str \| None = None`, resolved on the function's **first line**: `endpoint = model_endpoint or resolve_endpoint(settings.app.model_server.base_url)` | none |
+| **The three argparse defaults** | `cli.py:518`, `prompt_loop.py:592`, `slot_probe.py:192` | `default=None`, resolved after the parse where settings exist. `slot_probe.py` gains a `--config-root`, following `llama_argv.py` and `prove_the_entry.py` | none |
 
-Set once in `.github/actions/model-server/action.yml` as a step output, and read by all 22 probes in the five workflow files. The action's `port` input is deleted with `LLAMA_PORT`; `server_argv` reads the port back out of the base URL.
+**First-line resolution is mandatory, not stylistic.** Two `functools.partial` sites bind the endpoint eagerly - `judge_item_pairs.py:148` and `measure_judge_call.py:357` both do `partial(post, endpoint=completion_url(base_url), ...)`. A `None` that reaches `completion_url` raises `TypeError` inside `_sibling`.
 
-Once plan 44 moves these scripts into python, this line goes too - `config.load()` already returns it.
+**Two live defects this row fixes, which a reader must not mistake for a no-op.**
 
-### C4 - the one loopback literal
+- `stage_validate` at `validate.py:102` takes no address at all. Line 128 and line 138 both fall through to the module constant. It gains one, threaded from its settings.
+- `--base-url` at `cli.py:518` is dead: the name appears nowhere else in the file, and the only production caller of the judge stage does not pass it. **Delete the flag.** The stage resolves from settings like every other one.
 
-Every address in `.github/` and in the three self-spawning instruments belongs to a program probing a server **it started on its own machine**. None of them reads `model_server.base_url`, and that is deliberate: a job that probes a foreign server while its own server sits unstarted is escalation trigger 1, and an instrument that measures a binary it is not running reports a number about the wrong thing.
+**Two properties the worker can rely on, both checked**: nothing in `backend/` passes `endpoint=None`, `base_url=None` or `model_endpoint=None` today; and no test introspects a signature or `__defaults__` of any of the eighteen. The two tests that assert on the constants read them directly and are untouched.
 
-One function, in `server.py` beside `resolve_base_url`, carries the literal for all of them:
+**If any one of the seven does not have `settings` in scope, stop.** Threading a config object into a function that did not have one is escalation trigger 2, not a row's business.
+
+### C4 - the one loopback literal outside the workflows
+
+Every address in the three self-spawning instruments belongs to a program probing a server it started with `subprocess.Popen`. None of them reads `base_url`, deliberately: an instrument that measured a server it was not running would report a number about the wrong binary.
 
 ```python
 def loopback_url(port: int) -> str:
@@ -197,167 +211,103 @@ def loopback_url(port: int) -> str:
     return f"http://127.0.0.1:{port}"
 ```
 
-After rows 2 to 5, `git grep -c '127\.0\.0\.1' -- backend config .github` returns two: this function, and the committed default in `config/idhazh.json`. Both are named and both carry a comment saying why.
+All three instruments already import from `idhazh.llm.server`, so this adds no dependency. The two measuring clients are different - `measure_budgets.py` and `measure_judge_call.py` start no server, so their `--base` defaults resolve from settings like row 3's other sites.
 
-### C5 - the log record row 6 adds
+After rows 2, 3 and 6, `git grep -n '127\.0\.0\.1' -- backend/idhazh backend/utilities config` returns exactly two lines: the body of `loopback_url`, and the committed default in `config/idhazh.json`. `.github/` keeps its 22 by Table B row B2. `backend/utilities/capture_server_argv.py` line 34 keeps a bare port constant and `backend/utilities/slot_probe.py` line 16 keeps a shell example, and neither is an address.
+
+### C5 - the refusal, and where it must live
+
+The one control that makes escalation trigger 1 enforceable: a job that starts a server on loopback while the stage posts somewhere else fails at start-up rather than after the weights load.
+
+**It goes in `backend/utilities/llama_argv.py`, inside `argv_for`.** Not in `action.yml`, which sees neither fact. Not in `start-llama-server.sh`, which only two of the five workflows reach - the other three spawn the binary inline and would escape it entirely. `argv_for` is reached by all five, and it already calls `config.load(config_root)` on **the root this job will actually run under**, which is the whole point: three workflows run against `backend/var/candidate-config`.
+
+```python
+    settings = config.load(config_root)
+    declared = resolve_base_url(settings.app.model_server.base_url)
+    if declared != loopback_url(port):
+        raise SystemExit(
+            f"this job binds {loopback_url(port)} and the stage posts to {declared}. "
+            "A readiness probe that clears a server nobody talks to is worse than no "
+            f"probe - set model_server.base_url in {config_root} to match, or start "
+            "no server here"
+        )
+```
+
+The three self-spawning instruments bypass `argv_for` and call `server_argv` directly. They are correctly outside this: they take `loopback_url(port)` and no refusal.
+
+### C6 - the log record
 
 | Property | Value |
 | --- | --- |
-| Where | Inside `post()`, the single place an item is sent. Not at module import, which fires in every process including test collection. Not `prove_the_entry`, which looks like a once-per-stage site and is not one - its only caller is `backend/utilities/prove_the_entry.py`, and no stage calls it |
-| How often | Once per process per distinct address, by `functools.lru_cache` |
-| Level and logger | `INFO`, on `LOG: Final = logging.getLogger("idhazh")`, the name eight other modules in `backend/idhazh/` already use. `logging` and `functools.lru_cache` are new imports in this file |
-| What it must never print | **`parts.netloc`**. Netloc carries userinfo, so `http://user:token@box:8080` would write the token into the log verbatim. Use `parts.hostname` and `parts.port`. Never the path, the query, a header or any part of the payload (`CLAUDE.md` section 1b) |
+| Where | Inside `post()`, the one place an item is sent. Not module import, which fires during test collection. Not `prove_the_entry`, whose only caller is a hand-run utility |
+| Cache key | **The origin, not the endpoint.** The qualification process posts to the chat route and to `completion_url(endpoint)`, so an endpoint key writes the identical line twice with nothing to say why |
+| Level and logger | `INFO`, on `LOG: Final = logging.getLogger("idhazh")`, the name eight other modules use. `logging` and `functools.lru_cache` are new imports in this file |
+| Must never print | **`parts.netloc`.** It carries userinfo, so `http://user:token@box:8080` would write the token verbatim. Use `parts.hostname` and `parts.port`. Never the path, the query, a header or any part of the payload |
 
 ```python
 @lru_cache(maxsize=None)
-def _note_origin(endpoint: str) -> None:
-    """Say once which server this run is talking to.
-
-    `hostname` and `port` rather than `netloc`: netloc carries userinfo, and a
-    credential in an address must not reach a log record.
-    """
-    parts = urlsplit(endpoint)
-    LOG.info("model server origin=%s://%s:%s", parts.scheme, parts.hostname, parts.port)
+def _note_origin(origin: str) -> None:
+    """Say once which server this run is talking to."""
+    LOG.info("model server origin=%s", origin)
 ```
 
-### C6 - the sampling block passes through
+`post()` computes the origin with `urlsplit` and passes it. **The test does not open a socket** (Guardrail #7): call `_note_origin` directly with `http://user:token@box:8080` and assert `"token" not in caplog.text`. For the once-per-origin claim, call `_note_origin.cache_clear()` first - `lru_cache` is process-global and would otherwise leak into every later test in the process.
 
-**The block is renamed and splatted whole.** `request` becomes `sampling`. `request_timeout_minutes` moves up to the model entry, because it is how long the client waits and never goes on the wire.
+`post()` is the only path that sends article text. `_ask` is a second send path and carries only this module's own probe constants; `token_pieces` would send whatever it is handed and has zero callers. That last sentence belongs in the docstring so the next person to give it a caller sees the constraint.
 
-One helper, used by all four payload builders:
+### C7 - the four sentences row 1 deletes
 
-```python
-def with_sampling(body: dict[str, Any], sampling: Mapping[str, Any]) -> dict[str, Any]:
-    """This route's own keys, plus every key the model file declares.
-
-    Nothing here names a control. The refused set is whatever the route already
-    put in `body`, so a route that changes its controls changes this check with it.
-    """
-    clash = sorted(sampling.keys() & body.keys())
-    if clash:
-        raise ValueError(f"sampling may not set {', '.join(clash)} - this route sets it")
-    return {**sampling, **body}
-```
-
-**No typed list of refused names anywhere.** A list would go stale the first time a builder changed, and a stale list either blocks a key that is now free or admits one that is now a control. Deriving the set from `body` costs one line and never rots. Owner ruling, 2026-09-22.
-
-**Three identity rows leave `SETTING_KEYS`**: `temperature`, `top_p` and `seed` each map to themselves and gate every other key for no reason. The seven that remain are all local reads and none of them stands between the config and the wire:
-
-| Surviving name | Reads from | Why it is read by name |
-| --- | --- | --- |
-| `n_ctx` | the `server` block | the pipeline does arithmetic on the window to build the truncation budget, and `config.py` refuses an entry that omits it |
-| `n_batch`, `n_ubatch`, `n_threads`, `n_parallel`, `load_mode` | the `server` block | published on the run record under these names and drawn in words on a console panel, so a rename would move a published string |
-| `request_timeout_minutes` | the model entry | sets the socket timeout; no server-side default bounds it |
-
-**Two tests, neither per key.** One: a key no code mentions arrives in the payload verbatim. Two: a key that collides with a route's own control raises. Adding a sampler after this is a JSON edit with no code change and no new test.
-
-**Two consequences to write down where they belong.** The config now speaks whatever the server speaks, so a key one runtime accepts and another rejects fails at request time rather than at config load - that is Table B row B2, taken deliberately. And the chat builder's docstring says "No token cap is sent, on either envelope"; it becomes "unless the model file names one", because `max_tokens` now passes through like everything else.
-
-### C7 - the sampling values, approved 2026-09-22
-
-Written at the values the pinned build already applies, read from its own help text. **Output does not change by a token.** What changes is that a build upgrade can no longer move them without a diff.
-
-```json
-  "quantisation": "Q4_K_M",
-  "repo": "unsloth/Qwen3.5-9B-GGUF",
-  "request_timeout_minutes": 22.1,
-  "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
-  "sampling": {
-    "temperature": 0.2,
-    "top_p": 1.0,
-    "top_k": 40,
-    "min_p": 0.05,
-    "typical_p": 1.0,
-    "repeat_penalty": 1.0,
-    "repeat_last_n": 64,
-    "presence_penalty": 0.0,
-    "frequency_penalty": 0.0,
-    "dry_multiplier": 0.0,
-    "xtc_probability": 0.0,
-    "mirostat": 0,
-    "seed": 0
-  },
-  "server": {
-    "--batch-size": 2048,
-```
-
-`top_k` at 40, `min_p` at 0.05 and `repeat_last_n` at 64 are llama.cpp's defaults, not this project's choices. Whether they are right for this corpus is Table B row B4 and needs a measurement; this row only stops them moving on their own.
-
-**One verification the worker owes before the commit lands**: confirm the thirteen key spellings against the pinned build's `/props`, whose `default_generation_settings` names each one. Seconds, and it is the difference between a key that works and a key that is accepted and ignored.
-
-### C8 - model slots get nouns
-
-`CLAUDE.md` section 1a: a config is a self-descriptive noun, a function is a verb. The slot is a model, so it is named for what it is.
-
-| Now | After |
-| --- | --- |
-| `models.summarize` | `models.summarizer` |
-
-The role string is passed as `--role` and follows. `backend/idhazh/contracts/knobs/placement.py` carries a help string citing `models.summarize.inference` - a name that is already two renames stale - which is corrected in the same commit.
-
-### C9 - the model file, and the value nothing reads
-
-| Now | After | Why |
-| --- | --- | --- |
-| `LLAMA_WEIGHTS` | `MODEL_FILE` | It is a path to a GGUF file, which every tool calls the model: `--model` in llama.cpp and vLLM, `model_path` in Hugging Face. "Weights" means tensors everywhere else |
-| `LLAMA_PORT` | **deleted** | The port lives inside `base_url`. Nothing is left for a second value to disagree with |
-| `LLAMA_ROLE` | **deleted** | `start-llama-server.sh` line 59 sets it and nothing reads it. One occurrence in the repository |
-
-The test harness constants `LLAMA_PORT_ENV`, `LLAMA_PORT_VALUE` and `LLAMA_PORT_READ` in `backend/tests/workflows/_harness.py` follow their variable out.
-
-### C10 - the run record stops claiming a build it cannot see
-
-Every field of `PipelineInputs` is read from this process: `runtime_build()` reads an environment value, `runner_class()` reads the runner's OS and architecture, `host_cpu()` reads this machine's processor. Point the pipeline at a second machine and the model runs there while the record describes here. Every field is well formed, so validation passes and the record is false. That matters because `MACHINE_INPUTS` is what a person reads when two runs disagree, and a record describing the wrong computer sends them to the wrong place.
-
-**The fix needs no new state.** `UNRECORDED_BUILD = "build-not-recorded"` already exists at `backend/idhazh/fingerprint.py` line 46, and `runtime_build()` already degrades to it when nothing pins a build, because a developer machine usually pins nothing. So:
-
-> When the resolved base URL is not loopback, `runtime_build()` returns `UNRECORDED_BUILD` rather than this machine's value.
-
-No schema version stamp, no changelog entry, no migration, no new fixture. A record that says it does not know beats a record that says something false.
-
-What stays out is reading the server's own `/props` and recording what actually answered - Table B row B1.
-
-### C11 - the four sentences row 1 deletes
-
-Each cites `CLAUDE.md` section 0a for a rule section 0a does not contain. The rule they were reaching for now exists, so each replacement states what the code does and cites the real one.
+Each cites `CLAUDE.md` section 0a for a rule section 0a does not contain. The rule they were reaching for now exists, so each replacement cites the real one.
 
 | id | File | The sentence, by its opening words | What replaces it |
 | --- | --- | --- | --- |
-| C11a | `backend/idhazh/llm/__init__.py`, second paragraph | "Nothing in this package reaches any origin but loopback. Hosted inference is a project non-goal..." | "The address this package talks to is one committed config value, `model_server.base_url`, read in one place. Article text goes only to a model process this run's operator controls (`CLAUDE.md` Guardrail #11). The OpenAI-shaped transport here exists because it is the format local runtimes already speak." |
-| C11b | `backend/idhazh/llm/server.py`, module docstring, third line | "Nothing here is hosted - `CLAUDE.md` section 0a forbids that." | "The address is a committed config value and defaults to loopback. Nothing in this module starts a server." The rest of the paragraph, beginning "Two transports," is unchanged |
-| C11c | `backend/idhazh/llm/server.py`, the `post()` docstring at line 962 | "Loopback only, by construction." | "One address for the whole run, and `_note_origin` says once which one." |
-| C11d | `docs/how-to/run-the-pipeline.md`, lines 45 to 48 | "The summarize stage talks to `127.0.0.1:8080` and nothing else... There is no hosted inference anywhere in this project (section 0a)." | The paragraph in C12 |
+| C7a | `backend/idhazh/llm/__init__.py`, second paragraph | "Nothing in this package reaches any origin but loopback. Hosted inference is a project non-goal..." | "The address this package talks to is one committed config value, `model_server.base_url`. Article text goes only to a model process this run's operator controls (`CLAUDE.md` Guardrail #11). The OpenAI-shaped transport here exists because it is the format local runtimes already speak." |
+| C7b | `backend/idhazh/llm/server.py`, module docstring, third line | "Nothing here is hosted - `CLAUDE.md` section 0a forbids that." | "The address is a committed config value and defaults to loopback. Nothing in this module starts a server, and nothing here reads the config - every caller brings the address it means." The rest of the paragraph, beginning "Two transports," is unchanged |
+| C7c | `backend/idhazh/llm/server.py`, the `post()` docstring | "Loopback only, by construction." | "One address for the whole run, and `_note_origin` says once which one." |
+| C7d | `docs/how-to/run-the-pipeline.md`, lines 45 to 48 | "The summarize stage talks to `127.0.0.1:8080` and nothing else... There is no hosted inference anywhere in this project (section 0a)." | The paragraph in C8 |
 
-C11c names a function row 6 creates, so row 1 leaves that one sentence and row 6 deletes it. Everything else in C11 lands in row 1.
+C7c names a function row 8 creates, so row 1 leaves that sentence and row 8 deletes it. Everything else in C7 lands in row 1.
 
-### C12 - the documentation
+### C8 - the documentation
 
-**`docs/how-to/run-the-pipeline.md`**, replacing lines 45 to 48. This page, not `docs/architecture/summarize/model-boundary.md`: it is where the developer this plan is for actually reads, it is the page whose text becomes false, and it is not a page another live plan owns.
+**`docs/how-to/run-the-pipeline.md`**, replacing lines 45 to 48:
 
-> The summarize stage talks to the address in `config/idhazh.json` under `model_server.base_url`, which is `http://127.0.0.1:8080` as committed. To use a server on another machine, change that value to its scheme, host and port. The server command reads the same value, so one edit moves both. Every job in `.github/` reads it from the committed file too.
+> The summarize stage talks to the address in `config/idhazh.json` under `model_server.base_url`, which is `http://127.0.0.1:8080` as committed. To use a server on another machine, change that value to its scheme, host and port. The server command reads the same value from the same config root, and refuses to start a server on one address while the stage posts to another. Every job in `.github/` starts its own server and probes it on loopback.
 
-**`docs/architecture/contracts/determinism.md`**, row 10. One sentence appended to the paragraph that already discusses `/props`, because that page owns the run record:
+**`docs/architecture/contracts/determinism.md`**, row 9. One sentence appended to the paragraph that already discusses `/props`:
 
 > When `model_server.base_url` is not loopback the run cannot see which build answered, so it records `UNRECORDED_BUILD` rather than this machine's; reconciling the record against the server's own `/props` is not done.
 
-`python backend/utilities/doc_load.py` runs before and after each documentation edit. Both edits replace or extend existing text rather than adding a heading, so neither page is expected to move and no split test is owed.
+`python backend/utilities/doc_load.py` runs before and after each documentation edit. Both edits replace existing text rather than adding a heading, so neither page is expected to move and no split test is owed.
 
-### C13 - the commit order
+### C9 - the run record rule
 
-One commit per row, in Reckoner order within each pull request. A worker who follows it never writes an import that points at a name which does not exist yet.
+Every field of `PipelineInputs` is read from this process. Point the pipeline at a second machine and the model runs there while the record describes here: every field is well formed, so validation passes and the record is false.
+
+**No new state is minted.** `UNRECORDED_BUILD = "build-not-recorded"` exists at `backend/idhazh/fingerprint.py` line 46 and `runtime_build()` already degrades to it when nothing pins a build.
+
+> `runtime_build()` gains a second argument, the resolved base URL, and returns `UNRECORDED_BUILD` when that address is not loopback.
+
+Its three callers pass it: `cli.py:212`, `stages/work.py:324`, `stages/qualify.py:434`. All three already hold settings. No version stamp, no changelog entry, no migration, no new fixture - and if the row turns out to need any of the three, that is a finding and the row stops.
+
+**One consequence to write down rather than discover.** `runtime_build` is in `MACHINE_INPUTS`, so two runs against two different foreign builds both stamp the sentinel and the determinism guard sees no move. That is pre-existing for a developer machine that pins nothing; row 9 widens it to the configuration this plan creates. It is named in `determinism.md` by C8 and it is Table B row B3's reason to exist.
+
+### C10 - the commit order
+
+One commit per row, in Reckoner order. A worker who follows it never writes an import pointing at a name that does not exist yet.
 
 | PR | Commits, in order |
 | --- | --- |
-| A | 1 (text only, no behaviour) -> 2 -> 3 -> 4 -> 5 -> 6 |
-| B | 7 -> 8 |
-| C | 9 |
-| D | 10 |
+| A | 1 (text only, no behaviour) -> 2 -> 3 -> 4 -> 5 -> 6 -> 7 -> 8 |
+| B | 9 |
+
+**Two rules that bind every gate in this plan.** A test that reads `config/idhazh.json` goes red the day an operator uses the feature, which is `CLAUDE.md` section 13's "a test goes red because somebody edited the tree" - so **every test here builds its config from a fixture**. And `git grep -c` prints one line per matching file rather than a number, so an oracle that wants a count uses `git grep -n ... | Measure-Object -Line`.
 
 ---
 
 ## 3. Row 1 - Delete the rule that is not written
 
-**Scope.** Remove the four claims that `CLAUDE.md` section 0a forbids hosted inference, per C11.
+**Scope.** Remove the four claims that `CLAUDE.md` section 0a forbids hosted inference, per C7, and cite Guardrail #11 instead.
 
 **Files touched.** `backend/idhazh/llm/__init__.py`, `backend/idhazh/llm/server.py`, `docs/how-to/run-the-pipeline.md`.
 
@@ -365,314 +315,285 @@ One commit per row, in Reckoner order within each pull request. A worker who fol
 
 **Oracle.** `git grep -n "section 0a" -- backend/idhazh/llm docs/how-to/run-the-pipeline.md` returns nothing.
 
-**What the oracle cannot settle.** Whether the project should have the rule those sentences described. That is the owner question in section 0.
+**What the oracle cannot settle.** Nothing outstanding. The rule is written and dated.
 
 **Decisions.**
 
 | id | Decision | Reason |
 | --- | --- | --- |
-| 1.1 | An agent makes this correction and reports it | A rule not in the contract cannot gate a plan, and deleting a wrong cross-reference changes no behaviour |
-| 1.2 | Each replacement cites Guardrail #11 | The rule those four sentences were reaching for is now written, so the replacement points at it rather than at nothing |
+| 1.1 | Each replacement cites Guardrail #11 | The rule those four sentences reached for is now written, so the replacement points at it rather than at nothing |
+| 1.2 | C7c waits for row 8 | Its replacement names `_note_origin`, which row 8 creates |
 
 **Rejected alternatives.**
 
 | id | Alternative | Why not | What it would cost to take |
 | --- | --- | --- | --- |
-| 1.R1 | Repoint the citation at Guardrail #11 | Guardrail #11 is about fetched text becoming instruction, not about where it is sent. Wrong in a new way | One line, and a false statement left in three files |
-| 1.R2 | Write section 0a to make the comments true | Writes a project rule to justify four comments, and the wording would forbid the second machine this plan exists to allow | One line in `CLAUDE.md`, the owner's approval, and the plan's own purpose |
+| 1.R1 | Leave the sentences and add hosted inference to section 0a | It would forbid the second machine the amended Guardrail #11 explicitly allows | One line, and a contradiction inside `CLAUDE.md` |
 
 ---
 
 ## 4. Row 2 - The address becomes one config field
 
-**Scope.** Declare `ModelServerConfig`, mount it on `AppConfig`, add the committed default to `config/idhazh.json`, add `resolve_base_url`, compose the two endpoint constants from it, delete `DEFAULT_HEALTH`, and record the change in `docs/how-to/run-the-pipeline.md` per C1, C2 and C12.
+**Scope.** Declare `ModelServerConfig`, mount it, add the committed default, add `resolve_base_url` and `resolve_endpoint`, compose `DEFAULT_ENDPOINT` from `_CHAT_PATH`, delete `DEFAULT_HEALTH`, and record the change in the how-to page. Contracts C1, C2, C8.
 
-**Files touched.** `backend/idhazh/contracts/knobs/model_server.py` (new), `backend/idhazh/contracts/app_config.py`, `config/idhazh.json`, `schemas/app-config.schema.json`, `backend/idhazh/llm/server.py`, `backend/tests/test_summarize.py`, `docs/how-to/run-the-pipeline.md`.
+**Files touched.** `backend/idhazh/contracts/knobs/model_server.py` (new), `backend/idhazh/contracts/app_config.py`, `config/idhazh.json`, `schemas/app-config.schema.json`, `frontend/src/contracts/app-config.ts`, `backend/idhazh/llm/server.py`, `backend/tests/test_summarize.py`, `docs/how-to/run-the-pipeline.md`.
 
 **Acceptance gates.**
 
-- `ruff check .` clean.
-- The contract drift gate: `schemas/app-config.schema.json` regenerates byte-identical to what is committed.
-- `pytest backend/tests/test_summarize.py backend/tests/workflows/test_model_server_jobs.py` green. Both, not either: the second proves CI is untouched.
-- The existing assertion `completion_url("http://127.0.0.1:8181") == "http://127.0.0.1:8181/completions"` at `backend/tests/test_summarize.py` line 482 passes unchanged. It is the proof that sibling-route derivation did not move.
-- A refusal test for each of the four bad shapes: no scheme, no host, a path, a query.
+- `ruff check .` clean; `mypy backend` clean.
+- **Contract drift gate green**: `schemas/app-config.schema.json` AND `frontend/src/contracts/app-config.ts` both regenerate byte-identical to what is committed. Regenerating only the schema fails the gate.
+- `AppConfig.__changelog__` gains one line. A new field is an expand, so no migration is owed and none is written.
+- Six refusal tests, each built from a fixture string, never from `config/idhazh.json`: no scheme, no host, **no port**, a port out of range, a non-numeric port, a path.
+- `pytest backend/tests/test_summarize.py backend/tests/workflows/test_model_server_jobs.py` green. Both: the second proves CI is untouched.
+- `completion_url("http://127.0.0.1:8181") == "http://127.0.0.1:8181/completions"` at `backend/tests/test_summarize.py` line 482 passes unchanged. It is the proof that sibling-route derivation did not move.
 - `python backend/utilities/doc_load.py` before and after.
 
-**Oracle.** With `config/idhazh.json` as committed, `DEFAULT_ENDPOINT` and `DEFAULT_COMPLETION_ENDPOINT` are byte-identical to `origin/main`. With `base_url` set to `http://192.168.1.20:9090`, both carry that host and port. `git grep -c DEFAULT_HEALTH` returns nothing.
+**Oracle.** `resolve_base_url` on the committed default returns it unchanged; `DEFAULT_ENDPOINT` is byte-identical to `origin/main`; `resolve_base_url("http://host")` raises naming the missing port; `git grep -n DEFAULT_HEALTH` returns nothing.
 
-**What the oracle cannot settle.** Whether a real second machine answers. Nothing in this repository binds a server off loopback, so the first genuine end-to-end proof is a person running a server elsewhere by hand. Escalation trigger 1 guards the half-done version of it.
+**What the oracle cannot settle.** Whether anything actually reads the field. It does not, until row 3. That is why row 3 exists and why this row must not be merged alone.
 
 **Decisions.**
 
 | id | Decision | Reason |
 | --- | --- | --- |
-| 2.1 | A committed config field, not an environment value | An environment value is the only setting that never appears in a diff, so it is the only one that changes where article text goes with no review. Owner ruling, 2026-09-22 |
-| 2.2 | One field holding scheme, host and port | Two fields can disagree about which server is meant |
-| 2.3 | The module keeps a fallback equal to the committed default | Loading the whole config when `server.py` imports would make every process that touches the LLM module read and validate a config file |
-| 2.4 | `DEFAULT_HEALTH` is deleted and nothing replaces it | Zero readers. A replacement would land with zero readers too |
-| 2.5 | A path, query or fragment is refused, not dropped | `_sibling` replaces the whole path, so a prefix would hold on one route and vanish from four. A wrong answer is worse than an error |
+| 2.1 | A committed config field, not an environment value | `CLAUDE.md` Guardrail #11, amended 2026-09-22. An environment value is the only setting that never appears in a diff |
+| 2.2 | One field carrying scheme, host and port | Two values can disagree about which server is meant |
+| 2.3 | The port is required and range-checked | Row 4 reads it back out to bind the server. `http://host` parses cleanly and would bind `--port None` |
+| 2.4 | `server.py` never reads the config | It sits below config in the dependency graph, and a zero-argument load would read the committed file while three workflows run under a candidate root |
+| 2.5 | `DEFAULT_HEALTH` deleted, nothing replaces it | Zero readers. A replacement would land with zero readers too |
 
 **Rejected alternatives.**
 
 | id | Alternative | Why not | What it would cost to take |
 | --- | --- | --- | --- |
-| 2.R1 | An environment value, `MODEL_BASE_URL` | Never committed, never reviewed. It was this plan's first design and the owner reversed it: a config line gets exactly the review a source constant gets, so the environment buys only the loss of the gate | One line, and the only unreviewed path in the project |
-| 2.R2 | A host field plus a port field | Cannot express a scheme, and the two can disagree | Two fields, and a class of mismatch |
-| 2.R3 | A `--endpoint` flag on all six stages that already take the argument | A real improvement and a bigger argument surface than this plan's reason needs. One config value reaches all 26 import sites at once | Six flags, six help strings, six tests. Worth revisiting when a run needs two different servers at once |
+| 2.R1 | An environment value | Never committed, never reviewed. It was this plan's first design and the owner reversed it | One line, and the only unreviewed destination in the project |
+| 2.R2 | A `configured_endpoint()` in `server.py`, cached, with a function-local config import | The local import is a cycle dodge that works and silently half-builds a module if anything ever calls it during import; the cache would be the first cache of a file's contents in the repository and owes three new `cache_clear()` obligations; and a zero-argument load reads the wrong config root in three of five workflows | One function, one import trick, three cache-clear sites, and a control that fails quietly |
+| 2.R3 | A host field plus a port field | Cannot express a scheme, and the two can disagree | Two fields, and a class of mismatch |
 
 ---
 
-## 5. Row 3 - The port name disappears into the address
+## 5. Row 3 - Every caller names the address it means
 
-**Scope.** Delete `LLAMA_PORT` and `DEFAULT_PORT`. `server_argv` reads the port back out of the base URL. Every workflow probe reads the committed config through `jq`, per C3.
+**Scope.** The eighteen default-argument sites of contract C3. Eight become required parameters, seven resolve from the settings they already hold, three argparse defaults resolve after the parse. Thread an address into `stage_validate`, which has none. Delete the dead `--base-url` flag.
 
-**Files touched.** `backend/idhazh/llm/server.py`, `backend/utilities/llama_argv.py`, `.github/scripts/start-llama-server.sh`, `.github/actions/model-server/action.yml`, `.github/workflows/digest.yml`, `.github/workflows/idhazh-pipeline-tests.yaml`, `.github/workflows/llm-council.yml`, `.github/workflows/measure.yml`, `.github/workflows/validate.yml`, `backend/tests/workflows/_harness.py`, `backend/tests/workflows/test_model_server_jobs.py`, `docs/how-to/run-the-pipeline.md`, `docs/how-to/test-models-locally.md`, `docs/reference/ci-model-runtime.md`, `docs/reference/github-actions.md`.
+**Files touched.** `backend/idhazh/llm/server.py`, `backend/idhazh/cli.py`, `backend/idhazh/stages/{judge_item_pairs,qualify,qualify_canaries,two_calls,validate,work}.py`, `backend/utilities/{measure_judge_call,prompt_loop,slot_probe,prove_the_entry}.py`, `backend/tests/test_summarize.py`.
 
 **Acceptance gates.**
 
-- `pytest backend/tests/workflows/` green. The port assertions there move to reading the port out of the base URL; they do not disappear.
-- `shellcheck` clean on `start-llama-server.sh`.
-- Every one of the 22 probes resolves to the same address the server was started on. Prove it by asserting, in the workflow test, that the probe expression and the server's port come from one source.
-- The test that refuses a workflow writing a bare `127.0.0.1:8080` into an address keeps passing.
+- `ruff check .` clean; `mypy backend` clean. mypy is the gate that proves all eighteen were found: a required parameter nobody passes is a type error.
+- **The integration test that would have caught the defect this plan exists to fix**: a fixture config carrying `base_url: "http://192.168.1.20:9090"`, one stage run with **no endpoint argument**, and an assertion that the outbound URL carries that host. Driven by the recorded-response harness; no socket opens.
+- `pytest backend/tests` green.
+- The two `functools.partial` sites still bind a resolved string, never `None`.
 
-**Oracle.** `git grep -c LLAMA_PORT` returns nothing. `git grep -c '127\.0\.0\.1' -- .github` returns nothing.
+**Oracle.** `git grep -n '= DEFAULT_ENDPOINT' -- backend` returns nothing. Changing `base_url` in a fixture config changes where the stage posts.
 
-**What the oracle cannot settle.** Whether a live dispatch still starts. The workflow test reads the files; it does not run the job. The first real dispatch after merge is the proof, and it is why this row carries escalation trigger 1.
-
-**Decisions.**
-
-| id | Decision | Reason |
-| --- | --- | --- |
-| 3.1 | Delete the name rather than rename it | The port lives inside `base_url`. A second value for it is a second thing to disagree |
-| 3.2 | `jq` against the committed file, no helper script | A helper is a file to maintain for a one-line read, and `jq` is preinstalled on the runner. When plan 44 moves these scripts to python, the line disappears rather than being ported |
-| 3.3 | The action's `port` input goes with it | An input that restates a config value is a second spelling |
-
-**Rejected alternatives.**
-
-| id | Alternative | Why not | What it would cost to take |
-| --- | --- | --- | --- |
-| 3.R1 | Rename to `MODEL_SERVER_PORT` | Renames 51 occurrences and leaves two values that can disagree about one server | 51 edits, and the disagreement stays |
-| 3.R2 | A small utility printing the origin | Rejected by the owner: a utility for a one-line read of a committed file | About 20 lines, and a file to maintain |
-| 3.R3 | Wait for plan 44 to move the scripts first | Either order works, and waiting blocks rows 4, 5 and 6 behind another plan's schedule | One plan's wait. Escalation trigger 4 keeps them from running together, which is the only real constraint |
-
----
-
-## 6. Row 4 - One loopback literal in the whole repository
-
-**Scope.** Add `loopback_url(port)` per C4 and route the six addresses in the three self-spawning instruments through it.
-
-**Files touched.** `backend/idhazh/llm/server.py`, `backend/utilities/measure_probability_mode.py`, `backend/utilities/measure_two_calls.py`, `backend/utilities/runtime_sweep.py`.
-
-**Acceptance gates.** `ruff check .` clean. Each of the three instruments still starts its own server and still probes the one it started. A unit test asserting `loopback_url` ignores `model_server.base_url` entirely.
-
-**Oracle.** `git grep -c '127\.0\.0\.1' -- backend config .github` returns exactly two: the body of `loopback_url`, and the committed default in `config/idhazh.json`. `backend/utilities/capture_server_argv.py` line 34 keeps a bare port constant and `backend/utilities/slot_probe.py` line 16 keeps a docstring example; neither is an address.
-
-**What the oracle cannot settle.** Nothing outstanding. It is written as a list of survivors rather than as "zero", because zero is not the correct answer and an earlier draft of this plan claimed it was.
+**What the oracle cannot settle.** Whether a real second machine answers. Nothing in this repository binds a server off loopback, so the first genuine end-to-end proof is a person running one elsewhere by hand.
 
 **Decisions.**
 
 | id | Decision | Reason |
 | --- | --- | --- |
-| 4.1 | The spawners do not read the config | Each starts a server with `subprocess.Popen` and then finds it. Reading the config would let an instrument measure a server it is not running and report a number about the wrong binary |
-| 4.2 | One function carries the literal | A literal with one home and a comment saying why is not a hardcoded value; thirty copies are |
+| 3.1 | The eight in `server.py` become required, with no sentinel | The address is always the caller's. Only two call sites rely on a default today, and one of them already holds settings |
+| 3.2 | The other ten resolve on the function's first line | Two `partial` sites bind the endpoint eagerly, so a `None` travelling further raises inside `_sibling` |
+| 3.3 | `--base-url` is deleted, not wired | The name appears nowhere else in `cli.py` and the judge stage's only production caller never passed it. It has never reached a server |
+| 3.4 | `stage_validate` gains an address | It takes none today and falls through to the module constant twice. This is the one place in the row where behaviour genuinely changes, and it is a fix |
 
 **Rejected alternatives.**
 
 | id | Alternative | Why not | What it would cost to take |
 | --- | --- | --- | --- |
-| 4.R1 | Make all eight utility addresses read the config | Six of them are how a parent finds the child it started | Six lines, and a class of silently wrong measurement |
-| 4.R2 | Use `localhost` instead of `127.0.0.1` | A different literal, not fewer literals, and it adds a name resolution that can fail | Nothing, and nothing gained |
+| 3.R1 | Keep the defaults and have them read the config | Rejected as 2.R2 | see 2.R2 |
+| 3.R2 | A separate structural commit installing sentinels that resolve to the constant | Proven safe - nobody passes `None`, no test introspects a signature - and still pointless: it adds a line the next commit deletes. The real split is row 2 lands the contract, row 3 lands the wiring | One commit touching 18 files that changes nothing |
 
 ---
 
-## 7. Row 5 - The model file, and the value nothing reads
+## 6. Row 4 - The port name disappears into the address
 
-**Scope.** Rename `LLAMA_WEIGHTS` to `MODEL_FILE` and delete `LLAMA_ROLE`, per C9.
+**Scope.** Delete `LLAMA_PORT` and `DEFAULT_PORT`. `server_argv` reads the port back out of the base URL.
+
+**Files touched.** `backend/idhazh/llm/server.py`, `backend/utilities/llama_argv.py`, `backend/utilities/runtime_sweep.py`, `backend/utilities/measure_probability_mode.py`, `.github/scripts/start-llama-server.sh`, `.github/actions/model-server/action.yml`, `.github/workflows/{digest,idhazh-pipeline-tests,llm-council,measure,validate}.yml`, `backend/tests/test_summarize.py`, `backend/tests/workflows/_harness.py`, `backend/tests/workflows/test_model_server_jobs.py`, `backend/utilities/slot_probe.py`, `docs/how-to/run-the-pipeline.md`, `docs/how-to/test-models-locally.md`, `docs/reference/ci-model-runtime.md`, `docs/reference/github-actions.md`.
+
+**Acceptance gates.**
+
+- `pytest backend/tests/workflows/` green. `shellcheck` clean on `start-llama-server.sh`.
+- `test_model_server_jobs.py` asserts the literal `PORT_ENV = "LLAMA_PORT"` exists inside `runtime_sweep.py`. That assertion moves with the name; it does not get deleted.
+- The `_harness.py` constants `LLAMA_PORT_ENV`, `LLAMA_PORT_VALUE` and `LLAMA_PORT_READ` follow their variable.
+- `runtime_sweep.py` does `int(os.environ[PORT_ENV])` twice and `measure_probability_mode.py` passes `port=DEFAULT_PORT`. Both are hard failures after the delete. **The row says where the sweep's port comes from afterwards: its own `--port` argument, defaulted from the resolved base URL.**
+- `slot_probe.py` line 16's shell example moves off `LLAMA_PORT`.
+
+**Oracle.** `git grep -n LLAMA_PORT` returns nothing. `git grep -n DEFAULT_PORT -- backend` returns nothing.
+
+**What the oracle cannot settle.** Whether a live dispatch still starts. The workflow tests read files; they do not run the job. The first real dispatch after merge is the proof, which is why row 5 exists.
+
+**Decisions.**
+
+| id | Decision | Reason |
+| --- | --- | --- |
+| 4.1 | Delete the name rather than rename it | The port lives inside `base_url`. A second value for it is a second thing to disagree |
+| 4.2 | Safe because nothing runs two servers at once | Verified: every workflow starts one server per runner, the pipeline-test job kills the first before starting the second, and the sweep loops cases on one port. The one other port in the tree is a hand-run instrument's own `--server-port`, which never reads a shared constant |
+| 4.3 | The action's `port` input goes too | An input restating a config value is a second spelling |
+
+**Rejected alternatives.**
+
+| id | Alternative | Why not | What it would cost to take |
+| --- | --- | --- | --- |
+| 4.R1 | Rename to `MODEL_SERVER_PORT` | 69 lines edited and two values that can still disagree about one server | 69 edits, and the disagreement stays |
+
+---
+
+## 7. Row 5 - A job refuses to start a server nobody will talk to
+
+**Scope.** The refusal of contract C5, inside `argv_for`.
+
+**Files touched.** `backend/utilities/llama_argv.py`, `backend/tests/workflows/test_model_server_jobs.py`.
+
+**Acceptance gates.**
+
+- A unit test from a fixture config root: matching addresses build an argv, a non-loopback `base_url` raises `SystemExit` whose message names both addresses.
+- The refusal fires before any weights are read. Prove it by the call order in `argv_for`, not by timing.
+- `pytest backend/tests/workflows/` green.
+
+**Oracle.** With a fixture config root whose `base_url` is `http://192.168.1.20:9090`, `argv_for` refuses. With the committed root, it builds today's argv unchanged.
+
+**What the oracle cannot settle.** Nothing outstanding. All five workflows reach `argv_for`; two reach it through the shell script and three call it directly.
+
+**Decisions.**
+
+| id | Decision | Reason |
+| --- | --- | --- |
+| 5.1 | The refusal lives in `argv_for`, not in the action or the shell script | It is the only place where the port about to be bound and the address the stage will post to are both in scope, and the only one all five workflows reach. The shell script reaches two of five |
+| 5.2 | It reads the config root it was given | Three workflows run against `backend/var/candidate-config`. A refusal reading the committed file would check the wrong one |
+| 5.3 | The three self-spawning instruments are exempt | They bypass `argv_for` and probe the server they started, which is C4's rule |
+
+**Rejected alternatives.**
+
+| id | Alternative | Why not | What it would cost to take |
+| --- | --- | --- | --- |
+| 5.R1 | Have the workflow probes read `base_url` | It is escalation trigger 1: a non-loopback address makes every probe clear the foreign machine while the local server goes unchecked. It is also unimplementable - the action declares no outputs and only two of five workflows use it | Five copies of a `jq` line, and a probe that lies |
+| 5.R2 | No refusal | The mismatch is then found after the cache restores and the weights load, on every shard at once | Nothing to write, and a wasted run per mistake |
+
+---
+
+## 8. Row 6 - The loopback literals outside the workflows become one function
+
+**Scope.** Add `loopback_url(port)` per C4 and route the six literals in the three self-spawning instruments through it.
+
+**Files touched.** `backend/idhazh/llm/server.py`, `backend/utilities/{measure_probability_mode,measure_two_calls,runtime_sweep}.py`.
+
+**Acceptance gates.** `ruff check .` clean. Each instrument still starts its own server and probes the one it started. A unit test that `loopback_url` ignores `base_url` entirely.
+
+**Oracle.** `git grep -n '127\.0\.0\.1' -- backend/idhazh backend/utilities config` returns exactly two lines: the body of `loopback_url` and the committed default. Scoped deliberately: `backend/tests/` holds about 32 more that are about URL sanitisation and have nothing to do with the model server.
+
+**What the oracle cannot settle.** Nothing outstanding. It is stated as survivors rather than as zero, because zero is not the correct answer and an earlier draft of this plan claimed it was.
+
+**Decisions.**
+
+| id | Decision | Reason |
+| --- | --- | --- |
+| 6.1 | The spawners do not read the config | Each starts a server and then finds it. Reading the config would let an instrument report a number about a binary it is not running |
+| 6.2 | One function carries the literal | A literal with one home and a comment saying why is not a hardcoded value; thirty copies are |
+
+**Rejected alternatives.**
+
+| id | Alternative | Why not | What it would cost to take |
+| --- | --- | --- | --- |
+| 6.R1 | `localhost` instead | A different literal, not fewer, and it adds a name resolution that can fail | Nothing, and nothing gained |
+
+---
+
+## 9. Row 7 - The model file, and the value nothing reads
+
+**Scope.** Rename `LLAMA_WEIGHTS` to `MODEL_FILE` and delete `LLAMA_ROLE`, per Table D rows D9.
 
 **Files touched.** `.github/scripts/start-llama-server.sh`, `.github/actions/model-server/action.yml`, `backend/utilities/llama_argv.py`, the workflow files that set the weights value, and the workflow tests that read it.
 
 **Acceptance gates.** `pytest backend/tests/workflows/` green. `shellcheck` clean. The weights value still reaches `server_argv` as `--model`.
 
-**Oracle.** `git grep -c LLAMA_WEIGHTS` and `git grep -c LLAMA_ROLE` both return nothing.
+**Oracle.** `git grep -n LLAMA_WEIGHTS` and `git grep -n LLAMA_ROLE` both return nothing.
 
-**What the oracle cannot settle.** Nothing. `LLAMA_ROLE` has one occurrence and no reader, so its deletion cannot change behaviour.
+**What the oracle cannot settle.** Nothing. `LLAMA_ROLE` has one occurrence and no reader, so deleting it cannot change behaviour.
 
 **Decisions.**
 
 | id | Decision | Reason |
 | --- | --- | --- |
-| 5.1 | `MODEL_FILE`, not `MODEL_WEIGHTS` | It is a path to a file. "Weights" means tensors in every other tool |
-| 5.2 | `LLAMA_CPP_BUILD` and the rest keep their names | They name llama.cpp because the thing is llama.cpp. Table B row B3 |
+| 7.1 | `MODEL_FILE`, not `MODEL_WEIGHTS` | It is a path to a file. "Weights" means tensors in every other tool: `--model` in llama.cpp and vLLM, `model_path` in Hugging Face |
+| 7.2 | The llama.cpp build, asset, pin and binary names stay | They name the vendor's own artefacts, which section 0b permits. Table B row B4 |
 
 **Rejected alternatives.**
 
 | id | Alternative | Why not | What it would cost to take |
 | --- | --- | --- | --- |
-| 5.R1 | Rename every `LLAMA_*` name | Six of them correctly name the vendor's own artefacts. A blanket rename makes those six wrong | About 100 edits, and six names that then lie |
-| 5.R2 | Leave `LLAMA_ROLE` alone | It is set on every dispatch and read by nothing. A reader will assume it matters | Nothing, and one permanent piece of misdirection |
+| 7.R1 | Rename every `LLAMA_*` name | Six of them correctly name llama.cpp's own artefacts. A blanket rename makes those six lie | About 100 edits, and six wrong names |
 
 ---
 
-## 8. Row 6 - The run says which server answered
+## 10. Row 8 - The run says which server answered
 
-**Scope.** Add the module logger and the one-shot origin record per C5, and apply C11c.
+**Scope.** Add the module logger and the one-shot origin record per C6, and apply C7c.
 
 **Files touched.** `backend/idhazh/llm/server.py`, `backend/tests/test_summarize.py`.
 
 **Acceptance gates.**
 
 - `ruff check .` clean.
-- A test driving `post()` with `http://user:token@box:8080/v1/chat/completions` and asserting `"token" not in caplog.text`.
-- A test asserting a second `post()` to the same address writes no second record.
+- A test calling `_note_origin` **directly** with `http://user:token@box:8080` asserting `"token" not in caplog.text`. No socket opens.
+- A test calling `_note_origin.cache_clear()` first, then twice with one origin, asserting one record.
+- The new `post()` docstring says `_ask` carries only this module's probe constants and that `token_pieces` has no caller, so the next person to give it one sees the constraint.
 
-**Oracle.** Running the summarize stage prints exactly one `model server origin=` line at `INFO`, carrying scheme, host and port.
+**Oracle.** Running the summarize stage prints exactly one `model server origin=` line at `INFO`, carrying scheme, host and port and no credential.
 
-**What the oracle cannot settle.** Whether anybody reads it. It costs eight lines and it is the only thing in a run that can answer, after the fact, which machine produced the output.
-
-**Decisions.**
-
-| id | Decision | Reason |
-| --- | --- | --- |
-| 6.1 | Emitted from `post()`, memoised | Module import fires in every process including test collection. `post()` is the one place an item is sent |
-| 6.2 | Not from `prove_the_entry` | Its only caller is a hand-run utility. No stage calls it, so the record would never fire in production |
-| 6.3 | `hostname` and `port`, never `netloc` | Netloc carries userinfo. A credential must not reach a log record |
-
-**Rejected alternatives.**
-
-| id | Alternative | Why not | What it would cost to take |
-| --- | --- | --- | --- |
-| 6.R1 | Put the address on the run manifest | A persisted field is a version stamp, a changelog line, a migration and a fixture, for a value identical in every run CI makes | The full `CLAUDE.md` section 11 cost |
-| 6.R2 | Log per item | Answers the same question thousands of times and buries everything else | Nothing, and a log nobody reads |
-
----
-
-## 9. Row 7 - Sampling settings pass through, unmapped
-
-**Scope.** Rename the `request` block to `sampling`, move `request_timeout_minutes` up to the model entry, add `with_sampling`, splat the block in all four payload builders, and remove the three identity rows from `SETTING_KEYS`, per C6 and C7.
-
-**Files touched.** `backend/idhazh/llm/server.py`, `backend/idhazh/config.py`, `backend/idhazh/contracts/knobs/models.py`, `config/models/qwen3.5-9b-q4km.json`, `schemas/`, `backend/tests/test_summarize.py`.
-
-**Acceptance gates.**
-
-- `ruff check .` clean, contract drift gate green.
-- The thirteen key spellings confirmed against the pinned build's `/props` before the commit lands.
-- Test one: a key no code mentions arrives in the payload verbatim.
-- Test two: a key colliding with a route's own control raises, naming the key.
-- `config.py`'s validation loop still refuses an entry with no `--ctx-size` and no timeout. It reads two names, neither of them one of the three being removed, so this is a check rather than a change.
-- The four builders produce byte-identical payloads to `origin/main` for the committed config.
-
-**Oracle.** Adding `"top_k": 7` to the model file changes the request body and needs no code edit. `SETTING_KEYS` has seven rows, all of them a real translation or a required read.
-
-**What the oracle cannot settle.** Whether the three pinned defaults are right for this corpus. They are llama.cpp's choices written down, not measured ones. That is Table B row B4 and it needs a holdout measurement.
+**What the oracle cannot settle.** Whether anybody reads it. It costs eight lines and it is the only thing in a run that can say, after the fact, which machine produced the output.
 
 **Decisions.**
 
 | id | Decision | Reason |
 | --- | --- | --- |
-| 7.1 | The block is splatted, not read key by key | A vendor changes its parameters on its own schedule. Per-key wiring makes every one of those changes a code change |
-| 7.2 | No typed list of refused names | A list goes stale the first time a builder changes, and then it either blocks a key that is now free or admits one that is now a control. Deriving the set from the route's own body costs one line and never rots. Owner ruling, 2026-09-22 |
-| 7.3 | Pin the three at the build's current values, not at disabled | Zero behaviour change today, and the drift hole closes. Moving them is then a config edit with a measurement |
-| 7.4 | `sampling`, not `generation` or `request` | vLLM calls it `SamplingParams` and llama.cpp calls it `common_params_sampling`. "Request" describes the envelope, not the setting |
-| 7.5 | `request_timeout_minutes` moves out of the block | It is how long the client waits. It never goes on the wire, so it is not a sampler |
+| 8.1 | Cached on the origin, not the endpoint | The qualification process posts to two routes on one server; an endpoint key would write the same line twice |
+| 8.2 | Emitted from `post()`, memoised | Module import fires in every process including test collection. `post()` is the one place an item is sent |
+| 8.3 | `hostname` and `port`, never `netloc` | Netloc carries userinfo. A credential must not reach a log record |
 
 **Rejected alternatives.**
 
 | id | Alternative | Why not | What it would cost to take |
 | --- | --- | --- | --- |
-| 7.R1 | Add the ten missing keys to `SETTING_KEYS` | Keeps the per-key gate and pays it ten more times, then again for every key any runtime adds | Ten rows now, and a permanent maintenance tax |
-| 7.R2 | A translation table across llama.cpp, vLLM and Ollama | Table B row B2. It is the wiring this row deletes, maintained against three projects | A table per runtime, and a merge every time any of them changes |
-| 7.R3 | Splat with the controls first and let config win | A config key could turn off constrained decoding, which is a Guardrail #11 control | Nothing to write, and the decode control becomes optional |
-| 7.R4 | Set the three samplers to disabled | Changes the sampler on every summary from the next run | A holdout quality measurement first, which is a different job |
+| 8.R1 | Put the address on the run manifest | A persisted field is a version stamp, a changelog line, a migration and a fixture, for a value identical in every run CI makes | The full `CLAUDE.md` section 11 cost |
+| 8.R2 | Log per item | Answers the same question thousands of times and buries everything else | Nothing, and a log nobody reads |
 
 ---
 
-## 10. Row 8 - Model slots get nouns
+## 11. Row 9 - The run record stops claiming a build it cannot see
 
-**Scope.** Rename the model slot key from a verb to a noun per C8, and correct the stale help string.
+**Scope.** Contract C9. `runtime_build()` gains the resolved base URL and returns `UNRECORDED_BUILD` when it is not loopback. One sentence in `determinism.md` per C8.
 
-**Files touched.** `config/models/qwen3.5-9b-q4km.json`, `backend/idhazh/contracts/knobs/models.py`, `backend/idhazh/contracts/knobs/placement.py`, `backend/idhazh/config.py`, `backend/utilities/llama_argv.py`, `backend/utilities/pipeline_case_config.py`, `backend/idhazh/stages/work.py`, `backend/idhazh/stages/qualify.py`, `schemas/`, `backend/tests/test_server_argv.py`.
-
-**Acceptance gates.** `ruff check .` clean, contract drift gate green, `pytest backend/tests` green. The role string passed as `--role` matches the config key exactly, asserted by a test.
-
-**Oracle.** `git grep -n 'models\.summarize' -- backend config docs` returns nothing.
-
-**What the oracle cannot settle.** Whether the other two slot names in C8 are the right ones. Only one slot exists today; the others are named so the pattern is set when a second arrives.
-
-**Decisions.**
-
-| id | Decision | Reason |
-| --- | --- | --- |
-| 8.1 | A noun per slot | `CLAUDE.md` section 1a: configs are nouns, functions are verbs |
-| 8.2 | Its own row, after row 7 | Both rows edit the model file and the same contract module, so they are serial. Row 7 first because the settings shape is what a worker is likeliest to get wrong |
-
-**Rejected alternatives.**
-
-| id | Alternative | Why not | What it would cost to take |
-| --- | --- | --- | --- |
-| 8.R1 | `models.summarizer_model` | Says "model" twice; it is already under `models` | Nothing, and a longer name |
-| 8.R2 | Leave the verb | One verb where the contract asks for a noun, in the key a second slot will copy | Nothing now, and the same rename later across more callers |
-
----
-
-## 11. Row 9 - The two measuring clients read the address
-
-**Scope.** Change the two `--base` defaults to the resolved base URL.
-
-**Files touched.** `backend/utilities/measure_budgets.py`, `backend/utilities/measure_judge_call.py`.
-
-**Acceptance gates.** `ruff check .` clean. Both scripts still parse their arguments and still accept an explicit `--base`. `.github/workflows/measure.yml` is not edited: it passes `--base` explicitly, so that job's behaviour is identical.
-
-**Oracle.** Neither file contains a literal address.
-
-**What the oracle cannot settle.** Nothing outstanding.
-
-**Decisions.**
-
-| id | Decision | Reason |
-| --- | --- | --- |
-| 9.1 | These two move and the three instruments do not | Neither contains a `subprocess.Popen`. They talk to a server somebody else started |
-| 9.2 | The `--base` flag survives on both | An explicit flag beats a config value, and `measure.yml` relies on it |
-
-**Rejected alternatives.**
-
-| id | Alternative | Why not | What it would cost to take |
-| --- | --- | --- | --- |
-| 9.R1 | Leave both alone | These are the tools a developer on a second machine reaches for first | Nothing, and a flag typed every time |
-
----
-
-## 12. Row 10 - The run record stops claiming a build it cannot see
-
-**Scope.** When the resolved base URL is not loopback, `runtime_build()` returns `UNRECORDED_BUILD`, per C10. Record the remaining gap in `determinism.md` per C12.
-
-**Files touched.** `backend/idhazh/fingerprint.py`, `docs/architecture/contracts/determinism.md`.
+**Files touched.** `backend/idhazh/fingerprint.py`, `backend/idhazh/cli.py`, `backend/idhazh/stages/work.py`, `backend/idhazh/stages/qualify.py`, `backend/tests/test_fingerprint.py`, `docs/architecture/contracts/determinism.md`.
 
 **Acceptance gates.**
 
 - `pytest backend/tests` green.
-- A unit test: with the committed config the stamp is unchanged; with a non-loopback base URL it is `UNRECORDED_BUILD`.
-- No schema version stamp, no changelog entry, no migration. The sentinel already exists and already validates, so if this row needs any of the three, something is wrong and it stops.
+- Two unit tests, both from a fixture: a loopback address leaves the stamp unchanged; a non-loopback address stamps `UNRECORDED_BUILD`. Neither reads `config/idhazh.json`.
+- **No version stamp, no changelog entry, no migration.** The sentinel exists and already validates. If this row needs any of the three, that is a finding and the row stops.
 - `python backend/utilities/doc_load.py` before and after.
 
 **Oracle.** A run configured against a second machine writes a record whose `runtime_build` says it was not recorded, and every other field still validates.
 
-**What the oracle cannot settle.** What the build actually was. Reading the server's `/props` and recording the truth is Table B row B1, with its gating measurement named there.
+**What the oracle cannot settle.** What the build actually was. Reading `/props` and recording the truth is Table B row B3.
 
 **Decisions.**
 
 | id | Decision | Reason |
 | --- | --- | --- |
-| 10.1 | Degrade rather than refuse | A run against a second machine is the feature. Refusing it would undo rows 2 and 3 |
-| 10.2 | Reuse `UNRECORDED_BUILD` | It exists, it validates, and it already means exactly this: nothing pinned the build. No new state is minted |
-| 10.3 | `runner_class` and `host_cpu` are left alone | Both describe the machine that ran the pipeline, which is this one, and that is true either way. Only the build describes the model's machine |
+| 9.1 | Degrade rather than refuse | A run against a second machine is the feature. Refusing it would undo rows 2 and 3 |
+| 9.2 | Reuse `UNRECORDED_BUILD` | It exists, it validates, and it already means exactly this. No new state is minted |
+| 9.3 | `runner_class` and `host_cpu` are left alone | Both describe the machine that ran the pipeline, which is this one, and that stays true. Only the build describes the model's machine |
+| 9.4 | The determinism-guard consequence is written down, not fixed | Two runs against two different foreign builds both stamp the sentinel and the guard sees no move. Pre-existing for a developer machine that pins nothing; this row widens it, so `determinism.md` names it and Table B row B3 carries the fix |
 
 **Rejected alternatives.**
 
 | id | Alternative | Why not | What it would cost to take |
 | --- | --- | --- | --- |
-| 10.R1 | Record the defect in a sentence and fix nothing | It was this plan's first shape, on the belief that a new unrecorded state was needed. The state already exists, so the fix is smaller than the note explaining why it was deferred | Nothing to write, and a record that keeps saying something false |
-| 10.R2 | Read `/props` and record what answered | The honest full fix, and a bigger one: a new field, a version stamp, a changelog line and a migration | The whole of `CLAUDE.md` section 11, plus a ruling on what a run does when the server it reached is not the one the record describes |
-| 10.R3 | Refuse to run against a non-loopback address | Undoes the plan | Nothing, and the feature |
+| 9.R1 | Record the defect and fix nothing | It was this plan's first shape, on the belief that a new unrecorded state was needed. It already exists, so the fix is smaller than the note explaining the deferral | Nothing, and a record that keeps saying something false |
+| 9.R2 | Read `/props` and record what answered | The honest full fix, and a bigger one: a new field, a version stamp, a changelog line and a migration | The whole of `CLAUDE.md` section 11, plus a ruling on what a run does when the server it reached is not the one the record describes |
 
 ---
 
@@ -680,6 +601,7 @@ One commit per row, in Reckoner order within each pull request. A worker who fol
 
 - [`20260921-39-delete-the-scaffolding-plan.md`](20260921-39-delete-the-scaffolding-plan.md) - row 21, whose surviving half is this plan. Table C records the rest.
 - [`20260922-44-the-model-file-is-the-fetch-interface-plan.md`](20260922-44-the-model-file-is-the-fetch-interface-plan.md) - hands every process-boundary value to this plan at its line 34, and shares the workflow files with PR A. Escalation trigger 4 keeps them apart.
-- [`../docs/how-to/run-the-pipeline.md`](../docs/how-to/run-the-pipeline.md) - where the change is recorded and where the developer this plan is for reads.
-- [`../docs/architecture/contracts/determinism.md`](../docs/architecture/contracts/determinism.md) - owns the run record that row 10 corrects.
+- [`../docs/reference/pipeline-cost.md`](../docs/reference/pipeline-cost.md) - retracts the memory figure an earlier draft of this plan used as its reason.
+- [`../docs/how-to/run-the-pipeline.md`](../docs/how-to/run-the-pipeline.md) - where the change is recorded.
+- [`../docs/architecture/contracts/determinism.md`](../docs/architecture/contracts/determinism.md) - owns the run record that row 9 corrects.
 - [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - the pool, readiness, and the execution stamp.
