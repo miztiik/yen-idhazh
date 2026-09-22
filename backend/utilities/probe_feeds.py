@@ -43,10 +43,9 @@ Usage, from the root of a checkout:
     # Re-test a tombstone before un-retiring it.
     python backend/utilities/probe_feeds.py --from-config retired --id openai-news
 
-Spans go to `backend/var/probes/` by default, and to Langfuse as well when the
-environment names a host - the same rule the pipeline follows, so the trace of a
-probe opens in the same viewer as the trace of a run. `--report` writes one JSON
-object per feed for a later diff.
+Spans go to `backend/var/probes/` and nowhere else - the same rule the pipeline
+follows, so the trace of a probe opens the same way as the trace of a run.
+`--report` writes one JSON object per feed for a later diff.
 
 Exit code 0 when every probed feed cleared the bar, 1 when any did not, and 2
 when there was nothing to probe.
@@ -57,7 +56,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import re
 import socket
 import sys
@@ -375,23 +373,15 @@ def targets(args: argparse.Namespace, settings: config.Settings) -> list[FeedDef
 
 
 def _tracer(path: Path | None) -> tuple[telemetry.Tracer, Path | None]:
-    """Spans to a file, and to a host when the environment names one.
+    """Spans to a file, and nowhere else.
 
-    Same rule as the pipeline's `trace_sink` (owner decision, 2026-08-30): the
-    host is added to the file and never used instead of it, so the record a
-    reader opens locally and the record a host received are the same record.
+    Same rule as the pipeline's `trace_sink`: a probe's trace is a local record,
+    so it needs no key and reaches no third party (Guardrail #1).
     """
     if path is None:
         stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
         path = DEFAULT_TRACE_DIR / f"{stamp}.jsonl"
     sink: telemetry.SpanSink = telemetry.FileSink(path)
-    host = os.environ.get("LANGFUSE_HOST", "").strip()
-    public_key = os.environ.get("LANGFUSE_PUBLIC_KEY", "").strip()
-    secret_key = os.environ.get("LANGFUSE_SECRET_KEY", "").strip()
-    if host and public_key and secret_key:
-        remote = telemetry.langfuse_sink(host=host, public_key=public_key, secret_key=secret_key)
-        if remote is not None:
-            sink = telemetry.FanOut((sink, remote))
     return telemetry.Tracer(sink=sink, now=assemble.utc_now), path
 
 

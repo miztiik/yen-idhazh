@@ -309,8 +309,9 @@ before any append, so a rewrite that changes the shape has to move every month a
 A correction therefore ships as a committed one-shot utility under `backend/utilities/`,
 not as an ad-hoc script; `migrate_published_ledger.py` and `migrate_to_day_shards.py` are
 the worked examples. A utility whose input layout no longer exists is deleted with
-the layout: `migrate_item_health.py`, `migrate_feed_health.py` and
-`migrate_score_ledger.py` all went that way in September 2026.
+the layout: `migrate_feed_health.py` and `migrate_score_ledger.py` both went that way
+in September 2026, and the item-health widener followed them once `widen_ledger_header.py`
+could re-file any store from a command line.
 
 ### A deletion
 
