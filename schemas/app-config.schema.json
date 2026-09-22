@@ -153,6 +153,13 @@
           "title": "Corpus Items",
           "type": "integer"
         },
+        "repeats": {
+          "default": 3,
+          "description": "How many times a bench dispatch runs each case. Two is the floor because a spread needs two readings; one reading has nothing to be read against, and a dispatch that cannot produce a spread is refused before it starts.\n\nIt lives here, beside `corpus_items`, because the two numbers multiply and the product is what the job timeout is spent on. A named candidate runs two cases, so three repeats is six passes over `corpus_items` articles - 236 minutes against a 330-minute timeout at three articles, which fits. Held in two files, the next person raises one of the two without seeing the other and finds out at 330 minutes, when GitHub kills the job (Guardrail #2).\n\nA case set costs more at the same number: `draft_depth` runs four cases, so three repeats there is twelve passes rather than six. That is what `measure.yml`'s `runtime_repeats` dispatch input is for - it overrules this knob for one run without a commit, and empty follows it.",
+          "minimum": 2,
+          "title": "Repeats",
+          "type": "integer"
+        },
         "run_model_speed_case": {
           "default": true,
           "description": "Does a bench dispatch measure the model's raw speed before it measures real work? Default true, and it is removed the day the speed case stops costing a dispatch time worth saving - measured 2026-09-16 over four dispatches on stock ubuntu-latest at 9.1, 26.7, 27.2 and 87.6 minutes, so today it is worth between a tenth and a third of the whole dispatch.\n\nFalse runs the rest of the flow and skips that half: the fixed corpus, the real server over it, the machine record and the committed host row all still happen. What is given up is the prefill and decode rates, and with them the dossier - a dossier is both cases, so a dispatch that skipped one emits the server half and a line saying which half is missing rather than a page that reads whole.\n\nIt also moves who pays for the weights. The speed case fills the cache entry the server case restores, so a dispatch that skips it downloads the candidate once in the server case instead - the same bytes, in a different job.\n\n`measure.yml`'s `model_speed_case` dispatch input overrules this for one run without a commit: `config` follows this knob, `run` and `skip` do not. This is operator control rather than a feature behind a flag, so there is no second implementation waiting behind it - the same jobs run either way and one of them is not dispatched.",
@@ -1193,7 +1200,7 @@
         },
         "sequence_length": {
           "default": 16384,
-          "description": "How long a training row is allowed to be. It sizes the SINGLE call, because that is the shape a training row has: a prompt the pipeline could have sent and an answer it could have returned, and the corpus holds single-call rows. At the committed extract.truncation_cap_tokens of 20,000 the worst case is 997 tokens of prompt overhead, 23,259 for the longest and hardest-tokenizing article the cap lets through, and 900 of answer - 25,156 tokens, which config/idhazh.json covers at 32,768 and this default does not. It does not follow models.<teacher>.inference.n_ctx: that window holds the two-call pair, and nothing trains on a two-call row. A row longer than this is dropped and counted by the wrangler and by the notebook, never truncated, because a truncated target teaches the model to stop mid-summary; at the committed pair nothing is over. What it costs is GPU memory on the machine that trains, quadratically in attention - that machine is not the runner (Guardrail #2 does not reach it), and a card that cannot hold the row lowers SEQUENCE_LENGTH_OVERRIDE in notebooks/finetune.ipynb, which drops the long rows for that session only and says how many it dropped.",
+          "description": "How long a training row is allowed to be. It sizes the SINGLE call, because that is the shape a training row has: a prompt the pipeline could have sent and an answer it could have returned, and the corpus holds single-call rows. At the committed extract.truncation_cap_tokens of 20,000 the worst case is 997 tokens of prompt overhead, 23,259 for the longest and hardest-tokenizing article the cap lets through, and 900 of answer - 25,156 tokens, which config/idhazh.json covers at 32,768 and this default does not. It does not follow --ctx-size on the teacher entry: that window holds the two-call pair, and nothing trains on a two-call row. A row longer than this is dropped and counted by the wrangler and by the notebook, never truncated, because a truncated target teaches the model to stop mid-summary; at the committed pair nothing is over. What it costs is GPU memory on the machine that trains, quadratically in attention - that machine is not the runner (Guardrail #2 does not reach it), and a card that cannot hold the row lowers SEQUENCE_LENGTH_OVERRIDE in notebooks/finetune.ipynb, which drops the long rows for that session only and says how many it dropped.",
           "minimum": 1,
           "title": "Sequence Length",
           "type": "integer"
@@ -2597,6 +2604,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "bench.repeats, additive, default 3 and at least 2.",
+      "version": "2026-09-22",
+      "why": "Both numbers the bench job's timeout is spent on now sit in one file."
+    },
+    {
       "change": "council.first_night, repair_window_nights and repair_dates_a_night, additive.",
       "version": "2026-09-21T15:00",
       "why": "A night plans the older dates its tenants are behind on, inside a bounded window."
@@ -2610,11 +2622,6 @@
       "change": "The judging-budget fit check left this contract for the tenant that owns it.",
       "version": "2026-09-21T12:40",
       "why": "Reading config pulled one judge's measured pair cost into every reader."
-    },
-    {
-      "change": "council.tenants and council.shard_preamble_minutes, additive.",
-      "version": "2026-09-21T11:30",
-      "why": "The venue registers a tenant from config and knows what a job spends before it."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -2698,7 +2705,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-09-21T15:00",
+      "default": "2026-09-22",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -2709,5 +2716,5 @@
   },
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-09-21T15:00"
+  "version": "2026-09-22"
 }

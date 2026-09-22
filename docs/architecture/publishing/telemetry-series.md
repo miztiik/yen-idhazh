@@ -250,7 +250,7 @@ in seven groups.
 | Cache and slot internals | `label_cache_pct`, `summary_cache_pct`, `slot_id`, `kv_tokens_at_start`, `prefix_shared_with_previous` | The two percentages are `cached / input` off cells already published, and the other three are llama-server bookkeeping a page never draws. |
 | Shard and run bookkeeping | `shard`, `job`, `item_index`, `shard_item_count`, `item_started_at`, `item_ended_at`, `cpu_busy_max`, `cpu_busy_min`, `llama_rss_bytes`, `llama_rss_peak_bytes`, `python_rss_bytes` | Answered at shard grain on `/console/machine/`, which already publishes them once a shard instead of once an item. |
 | What the machine had | `os_mem_available_bytes`, `os_mem_total_bytes`, `os_mem_cached_bytes`, `os_swap_free_bytes`, `os_swap_total_bytes`, `os_mem_available_min_bytes` | Six memory cells a reader never asks about. The operator console reads them out of `state/` at build time, so publishing them would cost every browser fetch and answer nobody's question. |
-| Configuration provenance | `model_id`, `model_quantisation`, `n_ctx_configured`, `n_parallel`, `n_threads`, `n_batch`, `max_output_tokens`, `label_budget_tokens`, `summary_budget_tokens`, `run_visual_decision`, `temperature`, `truncation_cap_tokens` | Constant within a run. Carrying twelve constants on every row is the largest byte waste on the list, and the run surface already holds them. |
+| Configuration provenance | `model_id`, `model_quantisation`, `n_ctx_configured`, `n_parallel`, `n_threads`, `n_batch`, `label_budget_tokens`, `summary_budget_tokens`, `run_visual_decision`, `temperature`, `truncation_cap_tokens` | Constant within a run. Carrying eleven constants on every row is the largest byte waste on the list, and the run surface already holds them. |
 | Extraction, finish reasons, recovery | `source_chars`, `span_integrity`, `elements_found`, `element_class`, `failed_field`, `failed_rule`, `label_finish_reason`, `summary_finish_reason`, `recovered` | The extraction pass has its own panel, and a finish reason is neither a timing nor a rate. |
 
 A column nobody reads is weight on every browser fetch, so each group above is a
@@ -598,7 +598,7 @@ ledger had been committed for four days with no page reading a cell of it.
 | Read and write speed | `server_prompt_tokens` over `server_prompt_seconds`, and the item ledger's `output_tokens` over its summed `decode_ms` | sum over sum, never a mean of per-shard rates |
 | Read spread | the fastest shard's read rate over the slowest | one run only; a run of one shard reports nothing |
 | How much text the model has to read again each time | the item ledger's `input_tokens` against its `cached_tokens` | share of every token the prompt needed, read or reused |
-| How close the longest text came to the model's limit | the largest `input_tokens + output_tokens` any item recorded, against `models.summarize.inference.n_ctx` | the longest sequence any shard saw. A maximum, not a sum |
+| How close the longest text came to the model's limit | the largest `input_tokens + output_tokens` any item recorded, against `--ctx-size` on the summarize entry | the longest sequence any shard saw. A maximum, not a sum |
 | Job clock | the machine record's `job_seconds` against `run.shard_timeout_minutes` | the slowest shard. A run's wall clock is its slowest shard |
 | The processor | the machine record's `cpu_model` | text, per shard, and never averaged |
 | Busy and load | the item ledger's `cpu_busy_pct`, the machine record's `model_load_ms` | lowest, slowest |

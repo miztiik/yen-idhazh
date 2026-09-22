@@ -4,7 +4,7 @@
 
 **Level**: 5. Row 5 deletes the generated contract layer whole and row 6 amends the engineering contract that requires it. Row 3 mints a persisted contract. Those three PAUSE for the owner before their pull request opens. Rows 1, 2, 4 and 7 are Level 2 or 3 and run AUTO once the user authorizes.
 
-Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 3 rows in flight - three, not four, because section 1c's readiness table shows three disjoint file sets at the widest point and a fourth worker would share a file with one already writing - refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delegates a row where delegation pays; keep parallel N = 4 rows in flight - four, because section 1c's readiness table shows four disjoint file sets at the widest point; refilling a slot as soon as a worker returns and never waiting on a merge; consult a persona only where two answers would lead to different code; AUTO-merge on green gates; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
 
 ## Section 0 - Operating contract
 
@@ -20,7 +20,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | Assumes | **Plan 41 merges before row 6 starts** - plan 41 row 6 rewrites Guardrail #3 and section 11, and row 6 must amend the text plan 41 leaves, not the text on main today. Rows 1, 2 and 4 assume nothing. |
 | ESCALATE triggers | (1) Row 1 must not change what the BUDGET gate measures. If the work a qualification shard does per dispatch changes at all, stop. (2) Row 3 mints a persisted contract and a committed collection. If the nightly prune cannot discover the tree by the marker in C4, stop. (3) Row 5 deletes the artefacts a drift gate protects. If the five inlined names cannot be proved identical to the generated ones before the deletion, stop. (4) Row 5 turns two closed vocabularies from generated into hand-written. Each ships its binding test in the same commit or the row stops. (5) Row 6 amends the engineering contract; it lands in the same pull request as row 5, never after. (6) Any row that would raise a runner budget figure (Guardrail #2). |
 | Chosen strategy | Four pull requests, three of which run at once because their file sets are disjoint. Fowler rules the contracts, the test tiers and the module structure; Andre the evaluation integrity; Carmack the ledger shape and the prune path. |
-| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 3.` |
+| Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 4.` |
 
 ### Hard scope - out
 
@@ -28,7 +28,6 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | --- | --- | --- |
 | **Cutting qualification to one pass per article** (plan 39 row 7's scope) | About 180 lines stay, and a dispatch keeps costing what it costs | **Refused as written; a gate nobody checked is the reason.** `elapsed_seconds` is stamped before the repeat loop (`backend/idhazh/stages/qualify.py:554`), so it spans all three passes, and `BUDGET` divides it by 60 against a fixed `job_budget_minutes` (`backend/idhazh/evals/qualify.py:467-483`). Three passes to one drops the measured side about two thirds while the bound does not move: a candidate roughly 2.9x slower per item passes the only gate reading Guardrail #2, and every past BUDGET verdict stops comparing with every future one. Three more gates - `REASONING_LEAKAGE`, `SCHEMA_VALIDITY`, `PUBLISHABLE_LENGTH` - read properties of the sampled output at `temperature: 0.2`, so 90 draws become 30 and detection of a one-in-fifty schema failure falls from about 84 percent to about 45. **What brings it in:** one commit that moves `job_budget_minutes` to the one-pass equivalent, records in `docs/concepts/evaluation.md` that the margin no longer compares across the change, and accepts losing `wording_spread` and a movable `determinism_violation`. That is a measurement decision and it is the owner's. Andre and Carmack, independently |
 | **Deleting `backend/idhazh/evals/retrieval.py`** (plan 39 row 17 decisions 3 and 6) | 990 lines stay | **The premise is wrong twice.** The growing walk is `backend/tests/test_retrieval_eval.py:250`, a session fixture; every other test in that file already builds a bounded corpus. And the replacement plan 39 promised is already committed at `tests/fixtures/search/retrieval-queries.json`, 42,052 bytes, at least 50 queries with two gold answers each. Deleting the module leaves `frontend/tests/search.spec.ts:122`, a five-query wiring check whose own file computes its standard error at 0.18 against 0.057 at fifty - a ten-point recall drop is invisible to it. Row 2 bounds the fixture instead. Andre |
-| **Deleting the hosted span sink** (plan 39 row 15) | About 120 lines across four files, a knob, an unused optional extra, and a contradiction a reader resolves between CLAUDE.md section 1b and a sink in the tree | **Refused outright - it re-runs a settled argument.** `docs/concepts/telemetry.md:553`: "The span tree was adopted on the owner's reasoning and not on the engineering case. Three personas judged Langfuse against this project alone and refused it... the skill and the code transfer to a future repository, and that is worth paying for. Authority: owner, 2026-08-30." Plan 39 row 15 names Fowler as authority for all three decisions; CLAUDE.md section 0 says user approval supersedes every agent. Carmack, one of the three overruled, tested every candidate new fact since that date: CI cost is still zero, the security surface unchanged, the one maintenance event carried the sink rather than fought it, the pin has not drifted. **What brings it in: the owner saying so.** The one real finding is row 7 |
 | **Reading the console route list from the site's own source** (plan 39 row 19 decision 2) | Adding a console route stays nine test edits | **Refused as written; the defect it found is kept.** `frontend/src/lib/console/band.ts:131-133` records the ruling in the code: "`console-nav.spec.ts` types them out a third time on purpose - that copy is what the owner chose and reading it from here would only prove the page agrees with itself." **What brings it in:** the owner relaxing that ruling for the eight specs that do not test the strip - a smaller question than plan 39 asked |
 | **Deleting the five demoted qualification diagnostics** (plan 39 row 17 decision 4) | Seven diagnostic lines stay on the report | **Refused.** Plan 39 never named the five, so the clause cannot be reviewed against anything. Four candidates each witness a failure no gate catches: `unsupported_numbers` is the only witness to a fabricated figure, the one summary error a reader acts on; `hedge_dropped` the only witness to "reportedly" becoming assertion; `extractiveness_mean_non_brief` the only counterweight to the faithfulness floor on the long path, because `BRIEF_COPYING_CEILING` gates brief items only; `below_lead_coverage_min_share` the only witness to a model summarising paragraph fourteen. `evals/qualify.py:666` states the purpose: "a number with no bar is still the thing a human reads when a gate passes and the output still looks wrong." Andre |
 | **Teaching `day_partition.day_files` to accept a `.jsonl` day** | A trial tree may not commit traces, so row 3 commits the CSV ledgers only | `backend/idhazh/day_partition.py:96` refuses anything that is not a two-digit `.csv` day file, and `retention.prune_trial_state:1478` walks through it. Committing `state/<trial>/traces/YYYY/MM/DD-N-S.jsonl` would raise `ValueError` inside the nightly prune step. A real latent defect that predates this plan, and one row in its own right. Row 3 routes around it rather than arming it. Carmack |
@@ -54,7 +53,7 @@ Measured on `origin/main`, 2026-09-22, except where a line says estimate.
 | Utilities with **no textual reference anywhere** outside `backend/utilities/` | **3 of 66**, 638 lines | section 3 |
 | Utilities referenced **only by a `docs/` page** | **7**, 1,761 lines | section 3 |
 | Utilities plan 39 row 17 claimed had no code reference | **11** - the census says 3 | census 2026-09-21 |
-| `backend/utilities/plan_status.py`, which plan 39 row 17 named for deletion | **1,204 lines, invoked at `.github/workflows/ci.yml:292`** with `--write`, named in `AGENTS.md:65` | it has a caller |
+| `backend/utilities/plan_status.py` | **1,204 lines, and nothing calls it.** The CI job that ran it was deleted on 2026-09-22 (owner ruling) because a page generated from every plan at once conflicted on every open branch | it stays on disk as an operator surface |
 | Console routes the site serves | **5** | five `+page.server.ts` under `frontend/src/routes/console/` |
 | Console specs hand-writing a route list | **9 of 62**, listing 3, 3, 3, 4, 4 and 5 | section 5 |
 | Console routes visited by **none** of those nine | **1** - `/console/judgement/` | `git grep -oh "'/console/[a-z-]*/'"` |
@@ -71,7 +70,7 @@ Measured on `origin/main`, 2026-09-22, except where a line says estimate.
 4. Make all nine multi-route console specs visit all five routes the site serves.
 5. Delete the generated contract layer whole, inlining five names and binding two vocabularies.
 6. Amend the three engineering-contract clauses plan 41 does not own, and the three phrases in the agent pointer.
-7. Correct one dependency's beneficiary line, which names a feature its own code says it does not deliver.
+7. Delete the hosted span sink, its optional dependency and its two callers, keeping the committed local trace file.
 
 ## Section 1 - Status Reckoner
 
@@ -83,11 +82,11 @@ Measured on `origin/main`, 2026-09-22, except where a line says estimate.
 | 4 | Nine console specs visit every route the site serves | - | C | DONE | p43r4 | - | R4 |
 | 5 | The generated contract layer goes | 1, 2, 3, 4 | D | PENDING | - | - | - |
 | 6 | The engineering contract and the pages catch up | 5 | D | PENDING | - | - | - |
-| 7 | The dependency's beneficiary line says what it buys | 5 | D | PENDING | - | - | - |
+| 7 | The hosted span sink goes | - | E | PENDING | - | - | - |
 
 **Row 4 delivered five of the nine lists, and the other four were already whole.** Its oracle - every route visited by every spec that claims all of them - is not reached, and the reason is a defect the widening found. `/console/judgement/` and `/console/voices/` each draw charts, and neither draws one that prints a readout strip, so `console-chrome.spec.ts` and `console-readout.spec.ts` count zero on those routes and fail on the route rather than on a chart. Both files name the two routes they leave out and say what the reader loses: on those pages a value is reachable by hover and by nothing else, which a thumb cannot do. **Giving `MergedStoriesPanel` and the voices panels a readout strip is unclaimed work** - it belongs to whoever takes the next design row, and until it lands the rule those two files exist to enforce does not cover two of the five pages a reader can open.
 
-### Section 1a - The four pull requests and the files each owns
+### Section 1a - The five pull requests and the files each owns
 
 **Two pull requests never own one file.** That is what lets three run at once.
 
@@ -96,7 +95,10 @@ Measured on `origin/main`, 2026-09-22, except where a line says estimate.
 | **P1 - the qualification surface and the new ledger** | 1, 3 | behavioural | `backend/idhazh/contracts/knobs/run.py`, `knobs/retention.py`, `contracts/pipeline_test_summary.py` (new), `contracts/export.py` (one entry), `backend/idhazh/cli.py`, `ledger.py`, `retention.py`, `stages/record.py`, `stages/prune_state.py`, `config/idhazh.json`, `.github/workflows/validate.yml`, `.github/workflows/idhazh-pipeline-tests.yaml`, `schemas/pipeline-test-summary.schema.json` (new), `frontend/src/contracts/pipeline-test-summary.ts` (new), `tests/fixtures/contracts/pipeline-test-summary/`, `backend/tests/test_ledger.py`, `backend/tests/retention/`, `backend/tests/workflows/test_bench_input_drift.py`, `test_staged_paths.py`, `test_validation_state_root.py`, `docs/how-to/evaluate-new-summarizer-model.md`, `docs/reference/repository-layout.md` |
 | **P2 - the deletions and the fixture bound** | 2 | structural | the ten utilities in section 3, `backend/utilities/label_queue.py`, `backend/idhazh/evals/labels.py`, `backend/idhazh/contracts/label_row.py`, `backend/tests/test_retrieval_eval.py`, `backend/tests/test_evidence.py`, `tests/fixtures/search/`, `docs/concepts/evaluation.md`, and the six doc pages in section 3 |
 | **P3 - the console coverage hole** | 4 | behavioural | `frontend/tests/console-axis.spec.ts`, `console-chrome.spec.ts`, `console-model-rule.spec.ts`, `console-nav.spec.ts`, `console-polarity.spec.ts`, `console-readout.spec.ts`, `console-title.spec.ts`, `console-voices.spec.ts`, `console-window-claims.spec.ts` |
-| **P4 - the generated layer and the contract** | 5, 6, 7 | three commits: inline, delete, amend | `schemas/` (all), `frontend/src/contracts/` (all), `backend/idhazh/contracts/export.py`, `typescript.py`, `base.py`, `__init__.py`, the nine backend contract tests in section 6, `backend/tests/conftest.py`, the eight frontend specs in section 6, `frontend/scripts/run-checks.ts`, `test-scope.ts`, `tests/test-scope.test.mjs`, `copy-visuals.mjs`, `frontend/src/lib/server/config.ts`, `host-fingerprint.ts`, `pyproject.toml`, `.github/workflows/ci.yml`, `CLAUDE.md`, `AGENTS.md`, `docs/architecture/contracts/schemas.md`, `docs/reference/ci-model-runtime.md`, `docs/architecture/contracts/determinism.md`, `docs/how-to/run-the-gates.md` |
+| **P4 - the hosted span sink** | 7 | behavioural | `backend/idhazh/telemetry/sinks.py`, `telemetry/__init__.py`, `contracts/knobs/observability.py`, `backend/idhazh/stages/work.py`, `backend/utilities/probe_feeds.py`, `backend/tests/test_spans.py`, `backend/tests/contracts/test_telemetry_surface.py`, `pyproject.toml`, `docs/concepts/telemetry.md`, `docs/how-to/run-the-gates.md` |
+| **P5 - the generated layer and the contract** | 5, 6 | two commits: inline-and-bind, then delete-and-amend | `schemas/` (all), `frontend/src/contracts/` (all), `backend/idhazh/contracts/export.py`, `typescript.py`, `base.py`, `__init__.py`, the nine backend contract tests in section 6, `backend/tests/conftest.py`, the eight frontend specs in section 6, `frontend/scripts/run-checks.ts`, `test-scope.ts`, `tests/test-scope.test.mjs`, `copy-visuals.mjs`, `frontend/src/lib/server/config.ts`, `host-fingerprint.ts`, `pyproject.toml`, `.github/workflows/ci.yml`, `CLAUDE.md`, `AGENTS.md`, `docs/architecture/contracts/schemas.md`, `docs/reference/ci-model-runtime.md`, `docs/architecture/contracts/determinism.md`, `docs/how-to/run-the-gates.md` |
+
+**`pyproject.toml` and `docs/how-to/run-the-gates.md` appear in P4 and P5.** P4 removes the `langfuse` extra at `:164-166` and its mypy override; P5 removes the `idhazh-export-schemas` script at `:170`. Those hunks are four lines apart, inside git's default context, so **P4 merges first and P5 rebases.** P5 runs last regardless, so this costs nothing.
 
 **`backend/idhazh/contracts/export.py` appears in P1 and P4.** P1 adds one entry to `CONTRACTS`; P4 moves the whole list to `contracts/__init__.py` and deletes the rest of the module. P4 depends on P1 for exactly this reason, so they are never in flight together.
 
@@ -107,8 +109,9 @@ Measured on `origin/main`, 2026-09-22, except where a line says estimate.
 | Why rows 1 and 3 share a pull request | Both edit `backend/idhazh/cli.py` and `config/idhazh.json`. Splitting them puts two branches on one file for no gain |
 | Why row 2 is its own pull request | It shares no file with rows 1 or 3 once `docs/concepts/evaluation.md` is assigned to it alone, and it is **pure deletion** where P1 is behavioural. Mixing structural and behavioural change in one review is what hides a behaviour change inside a diff of removals |
 | Why row 4 is its own pull request | Nine frontend specs, disjoint from everything. It can land the day the user authorizes |
-| Why P4 runs last and alone | Row 5 deletes a generated twin of every contract P1 edits, and waits on plans 41 and 42 for the same reason |
-| Why rows 5, 6 and 7 share a pull request | CLAUDE.md section 0 requires a conflicting rule to be amended in the change that conflicts. Row 7 is one comment on a file row 5 already edits |
+| Why row 7 is its own pull request | The telemetry package is disjoint from every other row, so it runs in wave one. It shares only `pyproject.toml` with P5, which runs last anyway |
+| Why P5 runs last and alone | Row 5 deletes a generated twin of every contract P1 edits, and waits on plans 41 and 42 for the same reason |
+| Why rows 5 and 6 share a pull request | CLAUDE.md section 0 requires a conflicting rule to be amended in the change that conflicts |
 
 ### Section 1c - Readiness, computed rather than read off a letter
 
@@ -116,11 +119,11 @@ Measured on `origin/main`, 2026-09-22, except where a line says estimate.
 
 | At this point | Ready together | Held, and why |
 | --- | --- | --- |
-| Start | **1, 2, 4** - three disjoint file sets | 3 waits on 1 (`cli.py`, `config/idhazh.json`). 5 waits on all four |
-| Row 1 returns | **3** refills the slot; 2 and 4 still running | 5 still waits |
-| Rows 2, 3, 4 returned and merged, plans 41 and 42 merged | **5**, alone | 6 and 7 are commits inside P4, not separate dispatches |
+| Start | **1, 2, 4, 7** - four disjoint file sets | 3 waits on 1 (`cli.py`, `config/idhazh.json`). 5 waits on all of them |
+| Row 1 returns | **3** refills the slot | 5 still waits |
+| Rows 2, 3, 4, 7 returned and merged, plans 41 and 42 merged | **5**, alone | 6 is a commit inside P5, not a separate dispatch |
 
-**Peak workers: 3.** A fourth slot has nothing disjoint to put in it.
+**Peak workers: 4.**
 
 **No row here measures anything**, so the run-alone rule that applies to a benchmarking row applies to none of them.
 
@@ -327,7 +330,7 @@ Each test fails when one value is removed from either side. **That is not genera
  | # | Decision | Authority |
  | --- | --- | --- |
  | 1 | A one-shot measurement utility retires once its answer is written down. The doc keeps the finding and loses the script's name in the same commit | Fowler |
- | 2 | **`backend/utilities/plan_status.py` is not deleted.** It is invoked at `.github/workflows/ci.yml:292` and `AGENTS.md:65` names it as the generator of `TODO/STATUS.md`. It has no importer, so an import-only census deletes it and the pull request stays green - `pytest` never runs a workflow | Fowler |
+ | 2 | **`backend/utilities/plan_status.py` is not deleted, and nothing calls it.** The CI job that ran it was removed on 2026-09-22 (owner ruling): a page derived from every plan at once had a writer per open branch and conflicted on every line that moved. The module stays on disk as an operator surface a person runs by hand. **The census must not read "no caller" as "delete"** - this row deletes by owner-approved name, not by census verdict alone | Owner, 2026-09-22 |
  | 3 | **`backend/idhazh/evals/retrieval.py` is not deleted.** It is the only instrument that would see a similarity floor moved by 0.05 turning six search results into two | Andre |
  | 4 | The bound is a committed fixture corpus of the gold days the fifty queries answer, beside the query set already at `tests/fixtures/search/retrieval-queries.json`. `test_every_labelled_answer_is_still_in_the_archive` at L279 is deleted outright - it goes red because somebody published a day, which CLAUDE.md section 13 forbids by name | Andre |
  | 5 | The human-label path goes: zero committed rows, and CLAUDE.md section 1a makes LLM-as-judge primary evaluation. **Its sampling design moves into a `## Design rationale` section in `docs/concepts/evaluation.md` in the same commit** - the shuffle that needs no seed and stays reproducible, from `evals/labels.py:139`, and the procedure. This repository force-pushes its history away on a schedule, so a design living only in a deleted file's history is gone | Andre |
@@ -338,7 +341,7 @@ Each test fails when one value is removed from either side. **That is not genera
 
  | # | Option | Why rejected | What it would cost to take | Authority |
  | --- | --- | --- | --- | --- |
- | 1 | Delete all eleven utilities plan 39 named | One is `plan_status.py`, which CI invokes. The census says three are free and seven more need a doc edit | A red `main` after a green pull request | Fowler |
+ | 1 | Delete all eleven utilities plan 39 named | One is `plan_status.py`, which the owner has ruled stays on disk even with no caller. The census says three others are free and seven more need a doc edit | A module the owner asked to keep, deleted on a census verdict | Owner, 2026-09-22 |
  | 2 | Delete `retrieval.py` and write the replacement fixture later | The replacement is already committed. The row would delete 990 lines and promise to rebuild something that exists | The only search-quality measure, against a five-query wiring check that cannot see a ten-point recall drop | Andre |
  | 3 | Keep the label queue because Bonsai may need human judgement | Defensible - the shape is proven for the other judge at `docs/how-to/label-the-similarity-holdout.md`. It loses because zero rows have ever been committed and the code is cheap to rewrite; what is not cheap is the sampling design, which decision 5 preserves | 1,073 lines and a schema, kept against a need nobody has expressed since it was written | Andre |
  | 4 | Fold this row into P1 | Fewer pull requests | A review that mixes about 3,400 deleted lines with a new persisted contract, where the contract is what needs the attention | Fowler |
@@ -475,7 +478,7 @@ Each test fails when one value is removed from either side. **That is not genera
  | 3 | Each guardrail that moves records who moved it and when, on the line that moved (CLAUDE.md section 1) | Fowler |
  | 4 | Guardrail #11 and Guardrail #12 are untouched | Fowler |
  | 5 | The three phrases in `AGENTS.md` saying the contracts are generated from the models are named and removed. An unnamed amendment is one nobody checks, and agent tools read that file instead of the engineering contract | Fowler |
- | 6 | `TODO/STATUS.md` is not touched by this row. It is derived from every plan at once and written after the merge by the project's own job | Fowler |
+ | 6 | `TODO/STATUS.md` is not regenerated by anything after 2026-09-22. If the file still sits in the tree when this row runs, the row deletes it: a summary nobody regenerates is worse than no summary, because it looks current | Owner, 2026-09-22 |
 
 - **Rejected alternatives:**
 
@@ -485,29 +488,43 @@ Each test fails when one value is removed from either side. **That is not genera
  | 2 | Amend the contract after row 5 lands | Leaves the repository in a state where its own contract forbids its own code | Nothing saved; it is a sequencing error | Owner |
  | 3 | Apply plan 39's clause table verbatim | It reverts plan 41's amendment to Guardrail #3, cleanly and silently | A second amendment nobody knew was needed, found by whoever next reads the guardrail | Fowler |
 
-## Section 8 - Row 7 - The dependency's beneficiary line says what it buys
+## Section 8 - Row 7 - The hosted span sink goes
 
-- **Scope:** Correct the one dependency whose declared beneficiary its own code says it does not deliver.
-- **Files touched:** `pyproject.toml` (the comment above the `langfuse` extra at L162), `docs/concepts/telemetry.md` if it repeats the claim.
-- **Acceptance gates:** the documentation load check. This is a comment.
-- **Oracle:** the beneficiary line and `backend/idhazh/telemetry/sinks.py:152` describe the same capability, read side by side. `pyproject.toml:162` claims the nested span view; the sink's own docstring says "It does not reproduce the nesting on the host." **What it cannot settle:** whether the dependency is worth its cost. That was settled on 2026-08-30 and the scope-out table quotes the ruling.
+- **Scope:** Delete the optional hosted trace sink, its selection code, its optional dependency and the pages describing it, keeping the local trace file the pipeline already writes with the standard library.
+- **Owner approval 2026-09-22.** This reverses the ruling recorded at `docs/concepts/telemetry.md:553`, where the span tree was adopted on the owner's reasoning against three personas. CLAUDE.md section 0: user approval supersedes every agent and every rule.
+- **Files touched:**
+  - `backend/idhazh/telemetry/sinks.py` (`langfuse_sink` at `:110-137`, `_LangfuseSink` at `:140-190`, `_trace_context` at `:193-203`, `_usage` at `:213-221`)
+  - `backend/idhazh/telemetry/__init__.py` (the `langfuse_sink` re-export)
+  - `backend/idhazh/stages/work.py` (`trace_sink` at `:87-101` collapses to the file sink)
+  - **`backend/utilities/probe_feeds.py:392`** - a second caller plan 39 row 15 did not list. `:46` describes it in the module docstring
+  - `backend/tests/test_spans.py` (`:407-424`, `:425-453`), `backend/tests/contracts/test_telemetry_surface.py:77` (the export list)
+  - `pyproject.toml` (the `langfuse` extra at `:164-166`, its comment block, the `langfuse.*` mypy override at `:216-218`)
+  - `docs/concepts/telemetry.md` (`:199-203`, `:553-561`, the decision table), `docs/how-to/run-the-gates.md:231-234`
+  - `backend/idhazh/contracts/knobs/observability.py` - **the `tracing_enabled` description only.** No field is removed; the knob still switches the local file sink
+- **Acceptance gates:** local - `python -m pytest backend/tests -k 'telemetry or trace or span or canaries' -q`; CI - full suite.
+- **Oracle:** a run still writes one trace line per span to the committed local trace file, byte-identical to today, **and no module in the repository can send a span anywhere else** - asserted by a census that finds zero references to the package outside the lockfile. The first half is the behaviour that must not change; the second is what the row removes. **What it cannot settle:** whether the skill the sink was kept for transfers to a future repository. That was the owner's reason for keeping it, and it is not a thing a test can weigh.
 - **Decisions:**
 
  | # | Decision | Authority |
  | --- | --- | --- |
- | 1 | The line is corrected to what the sink delivers - one flat trace an item on a named host - rather than deleted. A dependency with no beneficiary named is one nobody can later argue to remove (Guardrail #8) | Carmack |
- | 2 | **The dependency stays.** The scope-out table says why, and the reason is a person's ruling with a date on it | Owner, `docs/concepts/telemetry.md:553` |
+ | 1 | The local trace file is the whole feature. The hosted viewer is a second path no pipeline runs - continuous integration installs neither the extra nor a key | Owner, 2026-09-22 |
+ | 2 | It reads against the engineering contract's own words: logging is local by construction, with no log sink and no log service (CLAUDE.md section 1b). Deleting the sink removes a contradiction a reader had to resolve | Fowler |
+ | 3 | **`backend/utilities/probe_feeds.py:392` is in the file list.** It is a second caller, nothing imports that module, and the suite stays green while a utility a person runs by hand raises `AttributeError`. Plan 39 row 15 missed it | Carmack |
+ | 4 | `tracing_enabled` stays. It switches the committed file sink, which is the surviving feature | Fowler |
+ | 5 | The beneficiary comment at `pyproject.toml:162` was corrected on 2026-09-22 and dies with the extra. Correcting it first is what kept the tree honest in between | Carmack |
+ | 6 | A developer who wants a span tree drawn reads the committed local file. That is the cost, and it is named | Owner, 2026-09-22 |
 
 - **Rejected alternatives:**
 
  | # | Option | Why rejected | What it would cost to take | Authority |
  | --- | --- | --- | --- | --- |
- | 1 | Delete the extra and the sink, as plan 39 row 15 proposed | Overturns an owner ruling, and no new engineering fact has appeared since it was made | The owner saying so. About 120 lines, a knob and a contradiction would go with it | Carmack |
- | 2 | Delete the beneficiary line rather than correct it | Guardrail #8 requires one | Nothing saved | Carmack |
+ | 1 | Keep it, since the extra is opt-in and costs continuous integration nothing | It was the standing position and the owner has reversed it. An unused second implementation is the thing that rots, and it is a sink pointed at a third party sitting in a repository whose contract says there is no sink | About 120 lines across five files, a comment block, an extra and a mypy override | Owner, 2026-09-22 |
+ | 2 | Keep the sink interface and delete only the hosted implementation | An interface with one implementation is the implementation | About 40 lines kept for a shape with nothing behind it | Fowler |
+ | 3 | Correct the beneficiary comment and stop there | That was this row before the approval. It leaves the dependency, the second code path and the contradiction | Two lines changed and nothing removed | Carmack |
 
 ## See also
 
-- [`20260921-39-delete-the-scaffolding-plan.md`](20260921-39-delete-the-scaffolding-plan.md) - the parent, whose rows 1, 7, 8, 12, 17 and 19 this plan carries and whose row 15 it refuses.
+- [`20260921-39-delete-the-scaffolding-plan.md`](20260921-39-delete-the-scaffolding-plan.md) - the parent, whose rows 1, 7, 8, 12, 15, 17 and 19 this plan carries.
 - [`20260921-41-lane-a-model-file-plan.md`](20260921-41-lane-a-model-file-plan.md) - owns Guardrail #3 and section 11; merges before row 6.
 - [`20260921-42-lane-b-workflows-plan.md`](20260921-42-lane-b-workflows-plan.md) - the workflows.
 - [`../docs/how-to/execute-a-plan.md`](../docs/how-to/execute-a-plan.md) - how a row is run and closed.

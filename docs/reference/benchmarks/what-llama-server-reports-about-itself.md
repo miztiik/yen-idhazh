@@ -129,7 +129,7 @@ The compute buffer says so independently: 112.01 MiB, the same as `-fa on`, and
 460 MiB below `-fa off`. Whether it also resolves that way on a runner's
 processor is untested and is not a question a laptop can answer.
 
-### The check this makes writable
+### The check this made writable, and why it is gone
 
 Against `llama-server.log`, after the server is healthy and with `-lv 4` passed:
 
@@ -150,16 +150,15 @@ at `n_ctx` 8192 it is 112.01 MiB with attention fused and 572.01 MiB without.
 Corroboration is worth the line because the log grammar is llama.cpp's and moves
 between builds, while the buffer difference is arithmetic and does not.
 
-**Written, 2026-09-09.** `idhazh.llm.server.flash_attention_state` is that
-reader and returns those three states by those names. Its four cases are driven
-from committed fixtures and never from a live server (Guardrail #7): the three
-`tests/fixtures/runtime/2026-09-09-lv4-*.readings.txt` excerpts carry the
-readings above, and the `UNREADABLE` case is driven by the four real
-`2026-08-29-3-shard-*.server-head.txt` captures, which are runner logs taken
-before the verbosity knob existed and therefore hold no attention line at all.
-A fifth case removes the `resolve_fused_ops` line from the recorded `auto`
-readings and asserts the verdict falls back to `UNREADABLE`, which is what stops `auto`
-being read as a yes.
+**Written 2026-09-09 as `idhazh.llm.server.flash_attention_state`, deleted
+2026-09-21.** Nothing ever called it: no stage, no workflow step and no operator
+utility asked it anything, so it had four tests and no reader. Whether a kernel
+fused is the runtime's own business, and this project was asking by grepping a
+log line it had to raise the verbosity to see. The three excerpt captures its
+tests ran off went with it; the readings they held are the table above, which is
+what a person actually reads. What stays is the flag: `flash_attention` is still
+a config knob, `server_argv` still emits `-fa` from it, and the recorded input
+manifest still carries its spelling in `runtime_flags`.
 
 ### `/props` settles the build and the window, and cannot settle flash attention
 
@@ -210,11 +209,11 @@ and nothing else reads, and no byte of it reaches the 1 GB published site
 (Guardrail #2) or the repository. The daily workflow already uploads
 `llama-server.log` as a two-day artifact, well inside the 500 MB allowance.
 
-**`log_verbosity` is not fingerprint-digested**, and sits in
-`idhazh.fingerprint.NOT_DIGESTED` with that reason written next to it. A log
+**`-lv` is not fingerprint-digested**, and is absent from
+`idhazh.fingerprint.DIGESTED_FLAGS` for that reason. A log
 level cannot move a logit, so digesting it would have invalidated every earlier
 work identity on the day somebody turned the logging up - which is what
-`n_threads_batch` was refused for on the other side of the same argument.
+`-tb` was refused for on the other side of the same argument.
 
 ## See also
 

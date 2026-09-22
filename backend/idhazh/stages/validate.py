@@ -24,6 +24,9 @@ from idhazh.fingerprint import (
 )
 from idhazh.llm.server import (
     DEFAULT_ENDPOINT,
+    TurnMarkers,
+    derive_turn_markers,
+    request_timeout_seconds,
 )
 from idhazh.stages import common
 from idhazh.stages.common import LOG, Fetcher, _ask_the_model, _fetch_one, _load_plan, silent_tracer
@@ -33,6 +36,7 @@ def _summarize_one(
     article: Article,
     settings: config.Settings,
     *,
+    markers: TurnMarkers,
     endpoint: str = DEFAULT_ENDPOINT,
     run_id: str | None = None,
     tracer: telemetry.Tracer | None = None,
@@ -45,10 +49,15 @@ def _summarize_one(
     in the pipeline. So an item that got slow is either the model, our schema
     work or our own checking, and until these spans existed the three were one
     number.
+
+    `markers` is handed in because they belong to the server rather than to the
+    item: the stage reads them off the model's own template once, before its
+    first article. Deriving them here would make every item's clock carry a
+    start-up question, and a server that died mid-run would report its death as
+    an unread template instead of as the unreachable model it is.
     """
     trace = tracer if tracer is not None else silent_tracer()
-    inference = settings.models.summarize.inference
-    turns = settings.models.summarize.turns
+    request = settings.models.summarize.request
     model_id = settings.models.summarize.id
     with trace.span(telemetry.SpanName.SUMMARIZE) as stage_span:
         stage_span.set(telemetry.AttrKey.MODEL_ID, model_id)
@@ -56,8 +65,8 @@ def _summarize_one(
             payload = summarize.build_request(
                 article,
                 model_id=model_id,
-                inference=inference,
-                turns=turns,
+                request=request,
+                markers=markers,
                 prompt_config=settings.app.summarize,
             )
             rendered = canonical_json(payload)
@@ -69,7 +78,7 @@ def _summarize_one(
             article,
             model_id=model_id,
             endpoint=endpoint,
-            timeout=inference.request_timeout_minutes * 60,
+            timeout=request_timeout_seconds(request),
             prompt_digest=prompt_digest,
             run_id=run_id,
             trace=trace,
@@ -83,7 +92,7 @@ def _summarize_one(
                 prompt_config=settings.app.summarize,
                 evaluation=settings.app.evaluation,
                 no_reply=no_reply,
-                thinking=turns.thinks,
+                thinking=markers.thinks,
             )
             telemetry.summary_attributes(span, summary)
         telemetry.summary_attributes(stage_span, summary)
@@ -114,7 +123,11 @@ def stage_validate(
 
     read_url = fetcher or common.live_fetcher(settings)
     plan = _load_plan(date)
-    model_id = settings.models.summarize.id
+    model = settings.models.summarize
+    model_id = model.id
+    markers = derive_turn_markers(
+        entry=model, timeout=request_timeout_seconds(model.request)
+    )
     scores: list[float] = []
 
     for index, item in enumerate(plan.items, start=1):
@@ -122,7 +135,7 @@ def stage_validate(
         if article.status is not ArticleStatus.OK:
             LOG.warning("validation article unavailable url=%s", item.canonical_url)
             continue
-        summary = _summarize_one(article, settings)
+        summary = _summarize_one(article, settings, markers=markers)
         if summary.status is not SummaryStatus.OK:
             LOG.warning("validation article did not summarize url=%s", item.canonical_url)
             continue

@@ -159,8 +159,10 @@ faithfulness = [
 # argument for an extra rather than a dev dependency (Guardrail #8): a contributor
 # running `pip install -e ".[dev]"` pays none of it.
 #
-# Beneficiary: the nested span view - a robots read inside a fetch, and a prompt
-# render and a reply parse either side of the model call.
+# Beneficiary: one flat trace per item on a named host - a robots read, a prompt
+# render, the model call and a reply parse, each as its own observation. It does
+# NOT reproduce the nesting; `telemetry/sinks.py` says why, and the committed
+# file sink is what keeps the exact tree.
 langfuse = [
     "langfuse>=4.14,<5",
 ]

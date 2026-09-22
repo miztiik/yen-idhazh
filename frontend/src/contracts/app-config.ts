@@ -89,6 +89,15 @@ export interface BenchConfig {
 	corpus_items?: number;
 
 	/**
+	 * How many times a bench dispatch runs each case. Two is the floor because a spread needs two readings; one reading has nothing to be read against, and a dispatch that cannot produce a spread is refused before it starts.
+	 *
+	 * It lives here, beside `corpus_items`, because the two numbers multiply and the product is what the job timeout is spent on. A named candidate runs two cases, so three repeats is six passes over `corpus_items` articles - 236 minutes against a 330-minute timeout at three articles, which fits. Held in two files, the next person raises one of the two without seeing the other and finds out at 330 minutes, when GitHub kills the job (Guardrail #2).
+	 *
+	 * A case set costs more at the same number: `draft_depth` runs four cases, so three repeats there is twelve passes rather than six. That is what `measure.yml`'s `runtime_repeats` dispatch input is for - it overrules this knob for one run without a commit, and empty follows it.
+	 */
+	repeats?: number;
+
+	/**
 	 * Does a bench dispatch measure the model's raw speed before it measures real work? Default true, and it is removed the day the speed case stops costing a dispatch time worth saving - measured 2026-09-16 over four dispatches on stock ubuntu-latest at 9.1, 26.7, 27.2 and 87.6 minutes, so today it is worth between a tenth and a third of the whole dispatch.
 	 *
 	 * False runs the rest of the flow and skips that half: the fixed corpus, the real server over it, the machine record and the committed host row all still happen. What is given up is the prefill and decode rates, and with them the dossier - a dossier is both cases, so a dispatch that skipped one emits the server half and a line saying which half is missing rather than a page that reads whole.
@@ -540,7 +549,7 @@ export interface FinetuneConfig {
 
 	epochs?: number;
 
-	/** How long a training row is allowed to be. It sizes the SINGLE call, because that is the shape a training row has: a prompt the pipeline could have sent and an answer it could have returned, and the corpus holds single-call rows. At the committed extract.truncation_cap_tokens of 20,000 the worst case is 997 tokens of prompt overhead, 23,259 for the longest and hardest-tokenizing article the cap lets through, and 900 of answer - 25,156 tokens, which config/idhazh.json covers at 32,768 and this default does not. It does not follow models.<teacher>.inference.n_ctx: that window holds the two-call pair, and nothing trains on a two-call row. A row longer than this is dropped and counted by the wrangler and by the notebook, never truncated, because a truncated target teaches the model to stop mid-summary; at the committed pair nothing is over. What it costs is GPU memory on the machine that trains, quadratically in attention - that machine is not the runner (Guardrail #2 does not reach it), and a card that cannot hold the row lowers SEQUENCE_LENGTH_OVERRIDE in notebooks/finetune.ipynb, which drops the long rows for that session only and says how many it dropped. */
+	/** How long a training row is allowed to be. It sizes the SINGLE call, because that is the shape a training row has: a prompt the pipeline could have sent and an answer it could have returned, and the corpus holds single-call rows. At the committed extract.truncation_cap_tokens of 20,000 the worst case is 997 tokens of prompt overhead, 23,259 for the longest and hardest-tokenizing article the cap lets through, and 900 of answer - 25,156 tokens, which config/idhazh.json covers at 32,768 and this default does not. It does not follow --ctx-size on the teacher entry: that window holds the two-call pair, and nothing trains on a two-call row. A row longer than this is dropped and counted by the wrangler and by the notebook, never truncated, because a truncated target teaches the model to stop mid-summary; at the committed pair nothing is over. What it costs is GPU memory on the machine that trains, quadratically in attention - that machine is not the runner (Guardrail #2 does not reach it), and a card that cannot hold the row lowers SEQUENCE_LENGTH_OVERRIDE in notebooks/finetune.ipynb, which drops the long rows for that session only and says how many it dropped. */
 	sequence_length?: number;
 
 	/** How many write-critique-revise rounds the offline prompt loop runs before it stops (`backend/utilities/prompt_loop.py`). Nothing here runs on the runner or in the daily pipeline: the loop is manual, reads a frozen committed article set, and a candidate replaces the incumbent prompt only when it beats it on the deterministic, model-free scorers. More rounds cost more local model calls and buy more chances at a candidate that clears the gate; they change no digest a reader sees. */

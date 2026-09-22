@@ -1,6 +1,6 @@
 # The Recorded Input Manifest
 
-**Last Updated**: 2026-09-18
+**Last Updated**: 2026-09-21
 
 What a run records about its own inputs, where each value is read from, and the one alarm built on that record. This page owns the enumeration and what the record cannot see.
 
@@ -46,13 +46,13 @@ The declared inputs are the weights digest, the quantisation, the runtime build,
 
 **The turn envelope is digested twice, and the second one is not redundant.** The prompt digest covers the envelope already, because the two calls render their own bytes through it. It stops short of two facts all the same: which of the two reply openings a call ends on, and the marker the thinking span stops at. An entry that changed only the string that closes its reasoning block would decode differently and move no rendered prompt, so `turn_markers_sha256` carries the envelope whole - every marker, the system placement and its joiner. **An absent key means a run written before 2026-09-14**, when a marker first became able to move at all; it never means a default value.
 
-**One knob is absent on purpose, and it is the one people look for.** There is no reasoning flag in the stamp. Reasoning is declared by `models.<role>.turns.thinking_close`, so it arrives in the envelope digest and in the rendered prompt's choice of reply opening. A flag beside a marker would be two places to disagree.
+**One knob is absent on purpose, and it is the one people look for.** There is no reasoning flag in the stamp. Reasoning is declared by `models.<role>.thinking_close`, so it arrives in the envelope digest and in the rendered prompt's choice of reply opening. A flag beside a marker would be two places to disagree.
 
 **The weights digest answers which bytes decoded, not which bytes config named.** `ModelRef.sha256` is an expectation and the record wants an observation, because the two disagreeing is exactly the event this exists to expose. Production has not closed that gap yet; what stands in for it is below.
 
 **Prompts and templates are digested, never stored.** A prompt in a committed payload would put text into a permanent record that nothing downstream needs, and the digest answers the only question anyone asks of it: did it move?
 
-**`PipelineInputs.fingerprint()` is called by nothing, and it stays.** Rows in `state/scores/` written before the manifest replaced the digest still carry that stamp, and this method is the one way to rebuild it - so a reader comparing a historical row against the inputs beside it does the arithmetic the writer did rather than a second one. What a live run wants is `changed_inputs`, which names the input that moved where a digest can only say that one did.
+**There is one comparison and it is `changed_inputs`.** It names the input that moved, which is what a reader and the console's model-change boundary both need; a digest over the whole record could only say that one did. `PipelineInputs.fingerprint()` was that digest, and it went on 2026-09-21 with the decode stamp beside it - nothing called either, and both existed to answer "did two runs ask for the same thing?", which is a question about determinism and not a property this pipeline claims. Rows in `state/scores/` written before the manifest replaced the digest still carry their own stamp; nothing rebuilds one, and expanding them was never possible in any case (see the rejected alternatives below).
 
 ## The one alarm
 
@@ -115,21 +115,22 @@ rather than a missing field.
 
 ## Which knobs the record carries
 
-"A field that is not declared cannot be forgotten" holds only if somebody writes down what is not declared. `idhazh.fingerprint.NOT_DIGESTED` is that list, and a contract test holds it closed over `InferenceConfig`, `ModelEntry` and `TurnsConfig`: every field is either recorded or named there with a reason. Add a knob and classify nothing, and the test fails. It names the knob.
+The model file spells llama-server's own flags, so the record enumerates flags rather than field names. `idhazh.fingerprint.DIGESTED_FLAGS` is the list, and it is a choice about which switches can move a decode rather than a closed set over a declared shape - there is no declared shape to close over any more (`CLAUDE.md` Guardrail #3, owner ruling 2026-09-21).
 
-The closed set spans all three shapes rather than the inference block alone, because a model-shaped fact can sit outside that block - the turn envelope does - and a field in no record and in no closed list has nothing saying so.
+**A flag the file leaves out records as `runtime-default`.** What the server picks is a real and different choice from pinning a value, and writing our guess at its default into the record would file a guess as a measurement (Guardrail #10). A bare flag - one the file names with no argument - records as `set`.
+
+**What replaced the closed set is llama-server itself.** The list it held closed existed to refuse an option that reached no stamp; a misspelled flag is now refused by the binary at every server start, which names it and does not start. That is louder, it is free, and it costs no written entry per option.
 
 | Knob | Where it lands |
 | --- | --- |
-| `n_ctx`, `n_batch`, `n_ubatch`, `n_threads` | Their own fields. They change how the partial sums accumulate. |
-| `temperature`, `top_p`, `seed`, `max_answer_tokens`, `max_think_tokens` | `sampling`, one canonical spelling of the decoding parameters. Two budgets rather than one: a call decodes a thinking span and then an answer, and one number over two spans could not say which of them overran. A null thinking budget spells `uncapped` rather than the number it resolves to, because it resolves to no number. |
-| `cache_type_k`, `cache_type_v`, `flash_attention`, `n_parallel`, `n_threads_batch` | `runtime_flags`, one canonical spelling of the knobs that move the arithmetic. A quantised KV cache, another attention kernel, a second slot and a different prompt-thread count each change how the partial sums accumulate. |
+| `--ctx-size`, `--batch-size`, `--ubatch-size`, `--threads` | Their own fields, under this project's names for them. They change how the partial sums accumulate. |
+| `temperature`, `top_p`, `seed` | `sampling`, one canonical spelling of the decoding parameters. No span budget is in it, because no span carries one: the two decode caps left the settings on 2026-09-21, and what bounds a span is the window and the per-request timeout, both enumerated elsewhere. |
+| `-ctk`, `-ctv`, `-fa`, `-np`, `-tb` and the cache and template switches | `runtime_flags`, one canonical spelling of the switches that move the arithmetic. A quantised KV cache, another attention kernel, a second slot and a different prompt-thread count each change how the partial sums accumulate. |
 | The turn envelope | `turn_markers_sha256`, and `prompt_sha256` as well, because the prompt is rendered through the envelope. |
-| Everything else | `NOT_DIGESTED`, with the reason it cannot move an output written beside it. |
 
-**Five values fold into one field rather than five, and that is not a shortcut.** They are null on almost every run, so five columns would be five lines nobody reads. The spelling moves when any one of them moves, which is the property the record needs.
+**The switches fold into one field rather than one each, and that is not a shortcut.** They are absent on almost every run, so a column each would be a dozen lines nobody reads. The spelling moves when any one of them moves, which is the property the record needs.
 
-`server_argv` points at `NOT_DIGESTED` rather than listing coverage of its own. A second list is a second thing to keep in step, and the one that drifts is the one no test reads.
+**The recorded string moved once, on 2026-09-21.** It enumerated this project's own field names until the model file started carrying the flags, so the first run after that reports the server switches moved. That is a one-time true statement rather than a defect.
 
 ## `host_cpu` is recorded and never digested
 

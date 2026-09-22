@@ -1,6 +1,6 @@
 # Gemma-4-E4B-it-qat-UD-Q4_K_XL
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-21
 **Status: evaluated.** It has been benched and it has never served a published
 item. `evaluated` is one of three words a dossier's status line may hold -
 `evaluated`, `incumbent`, `superseded` - and this line is the only place this
@@ -44,29 +44,6 @@ all.
 | Bytes | 4,215,695,776 (3.93 GiB) |
 | Architecture | `gemma4` - what llama.cpp reported when it loaded the file |
 | Parameters | 7,463,013,674, as the loader counted them |
-
-### The draft head
-
-This entry declares a second file. The main model is quantisation-aware trained,
-and the head speculates ahead of it so the runtime can accept more than one token
-a step.
-
-| Field | Value |
-| --- | --- |
-| File | `mtp-gemma-4-E4B-it.gguf` |
-| SHA-256 | `423074e537504b4f9ec5eafed5c639fac82c96631626efccacdd3c4039b20605` |
-| Bytes | 59,678,016 (56.9 MiB) |
-| Speculation type | `draft-mtp` |
-| Tokens drafted a step | 2 |
-
-**`draft-mtp` is accepted by the pinned runtime, and that is recorded rather than
-assumed.** Build `b10598` lists eleven values for `--spec-type`, and
-`tests/fixtures/runtime/b10598-llama-server-help.txt` is the recorded help text a
-test holds the contract against.
-
-**It declares both halves or neither.** A draft entry naming a file with no
-digest is refused before the download, by the daily run as well as by the two
-bench workflows.
 
 ## Sampling: what we set, against what the publisher asks for
 
@@ -192,35 +169,41 @@ The timings stand because each repeat is a complete pass over whatever text it
 fetched, and the three totals agree to within 1.4 percent. What the rejection
 correctly forbids is reading them against another run's.
 
-## What the draft head is worth
+## What the draft head was worth, and why it is gone
 
-**It changes what the model writes, at every drafted depth, and whether it is
-faster is unmeasured.** The output finding comes from dispatches where every
-configuration alternated inside one job, so the machine cancels - which it has
-to, because the platform places each job separately and a comparison across two
-dispatches says nothing.
+**This entry declared a multi-token draft head until 2026-09-21. It no longer
+does, and neither does any entry - the field itself is gone from the model
+shape.** Everything below is the reading that retired it, kept because it is the
+reason and not because a knob still answers to it.
 
-**`n_max` is not the control.** The vendor's own documented `--spec-draft-n-max
-4` changes the words exactly as much as a depth of 1 does, so the difference
-between their setting and ours never explained the drift. No depth is
-output-identical to the head being off, on six articles of six across two
-processor models, with every case reproducing itself byte-identically at
+**It changed what the model wrote, at every drafted depth, and whether it was
+faster was never measured.** The output finding comes from dispatches where
+every configuration alternated inside one job, so the machine cancels - which it
+has to, because the platform places each job separately and a comparison across
+two dispatches says nothing.
+
+**`n_max` was not the control.** The vendor's own documented
+`--spec-draft-n-max 4` changed the words exactly as much as a depth of 1 did, so
+the difference between their setting and ours never explained the drift. No
+depth was output-identical to the head being off, on six articles of six across
+two processor models, with every case reproducing itself byte-identically at
 `temperature: 0`.
 
 **There is no speedup figure here, and the 6.3 percent that circulated is
-withdrawn.** The head
-changes how much text gets written - on one article it wrote 3.4 times as much -
-so a wall clock against head-off is timing two different jobs rather than
-measuring a rate. Two runs on one processor model then disagree about the sign:
-one is 17 percent faster, the other 40 percent slower. The acceptance rate the
-server already publishes at `/metrics` is the reading that would settle it, and
-no run has recorded it.
+withdrawn.** The head changed how much text got written - on one article it
+wrote 3.4 times as much - so a wall clock against head-off was timing two
+different jobs rather than measuring a rate. Two runs on one processor model
+then disagreed about the sign: one was 17 percent faster, the other 40 percent
+slower. The acceptance rate the server publishes at `/metrics` is the reading
+that would have settled it, and no run recorded it.
 
-**What follows from it: the head is not a speed setting, it is a different
-model.** Whichever configuration is qualified is the one that has to publish.
+**What followed from it: the head was not a speed setting, it was a different
+model.** A speed-up priced on cost alone has to be output-identical, this one
+was not, and nothing said the rewritten summaries were better - so it went
+rather than staying as a knob nobody could price.
 
 Every dispatch, the timings, the digest tables and the summaries a person can
-now read are in [what the draft head is
+read are in [what the draft head is
 worth](../benchmarks/what-the-draft-head-is-worth.md).
 
 ## What this page still owes
@@ -231,27 +214,16 @@ worth](../benchmarks/what-the-draft-head-is-worth.md).
   identifier, and nobody has read them against this project's use yet.
 - **The tokenizer cost.** Tokens a word decides how much article fits the window,
   and it belongs to this tokenizer rather than to the incumbent's.
-- **Why the draft head changes the output.** Narrowed on 2026-09-19 and still
-  open. It is not the drafted depth, not the prompt and not the sampler - each
-  is excluded by a control in the run. What is left is the acceptance rule or
-  this pinned llama.cpp build, and the same corpus on a second build is the
-  instrument that would tell those two apart. It decides whether a lossless
-  configuration exists at all.
-- **What the head costs or saves.** Withdrawn rather than answered: the two
-  configurations write different amounts of text, so the wall clock is not a
-  rate. A run at fixed output length recording the draft acceptance rate is the
-  instrument.
 
 ## The records behind this page
 
 | What | Where |
 | --- | --- |
 | The publisher's sampling recipe and the MTP claim, read 2026-09-19 | [unsloth/gemma-4-E4B-it-qat-GGUF](https://huggingface.co/unsloth/gemma-4-E4B-it-qat-GGUF#best-practices), the repository this entry pulls |
-| What the draft head is worth, every dispatch behind it | [../benchmarks/what-the-draft-head-is-worth.md](../benchmarks/what-the-draft-head-is-worth.md) |
+| What the draft head was worth, every dispatch behind it | [../benchmarks/what-the-draft-head-is-worth.md](../benchmarks/what-the-draft-head-is-worth.md) |
 | Every prefill and decode draw, with its processor | [../benchmarks/the-processor-lottery.md](../benchmarks/the-processor-lottery.md) |
 | The wall-clock and memory readings above | GitHub Actions run `34972996987`, 2026-09-15 |
 | The paired draft-head case | GitHub Actions runs `35439286272`, `35439298708` and `35439309256`, 2026-09-19 |
-| The recorded `--spec-type` list the pinned build accepts | `tests/fixtures/runtime/b10598-llama-server-help.txt`, from run `34971210901` |
 | The declared identity | `config/models/gemma-4-e4b-qat.json` |
 
 ## See also

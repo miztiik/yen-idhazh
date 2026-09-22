@@ -1,6 +1,6 @@
 # Swap the Summarizer Model
 
-**Last Updated**: 2026-09-19
+**Last Updated**: 2026-09-21
 The swap is one line in `config/idhazh.json`:
 
 ```json
@@ -165,14 +165,6 @@ a fact about them.
 | `arch` | the architecture name inside the GGUF |
 | `inference` | every runtime knob, including the window and the sampler |
 | `turns` | where the system text goes, what opens and closes a turn, and which keyword turns thinking off |
-| `draft` | a second, smaller set of weights that guesses ahead. Null unless the publisher ships one |
-
-Declaring a `draft` block is all a candidate has to do to be measured with one.
-The bench and the qualification case read it from the same entry, download it,
-check its digest and name that digest in the weights cache key. Nothing else in
-this runbook changes, and an entry that declares none is unaffected -
-[`model-boundary.md`](../architecture/summarize/model-boundary.md#a-second-smaller-model-that-guesses-ahead)
-says what the head costs and how to read whether it paid.
 
 #### Where each fact comes from
 
@@ -225,8 +217,8 @@ place that fact turns up is a server that quietly serves a shorter context than
 the entry asked for. Both candidates written on 2026-09-14 cleared it with room
 - 262,144 and 131,072 against a matched 65,536.
 
-**`inference.declared_for` and `turns.declared_for` are the safety catch, and
-they both hold this model's own digest.** Config load refuses an entry whose
+**`declared_for` is the safety catch, and it holds this model's own digest.**
+Config load refuses an entry whose
 block is declared for one set of weights while the entry names another, and it
 says which repair it wants: re-derive the numbers, because every one of them was
 measured against one model on one runner, or re-record the markers, because
@@ -401,27 +393,31 @@ machine.
 gh workflow run measure.yml --ref <branch> \
  -f target=bench \
  -f candidate_models_file='models/<name>.json' \
- -f runtime_candidate=no_draft \
+ -f runtime_candidate=kv_q8 \
  -f runtime_repeats=2
 ```
 
-`runtime_repeats` is 2 here and not 3 on purpose. A named case runs two cases, so
-the repeats multiply the corpus, and the job timeout is what the product is spent
-against (Guardrail #2 - the limit is GitHub's, so the design is what gives).
+`runtime_repeats` is 2 here and not 3 to buy a cheaper dispatch, and it is not a
+correction to the knob. Repeats multiply the corpus and the job timeout is what
+the product is spent against, so the two numbers sit beside each other in config:
+`bench.repeats` is three and `bench.corpus_items` is three, which is six passes
+and 236 minutes against a 330-minute timeout (Guardrail #2 - the limit is
+GitHub's, so the design is what gives). Leave the input empty to take the knob.
 
 **When the question is not what a setting costs but whether it changes the
 words, dispatch a case set.** A named candidate runs the unchanged server and
 one variant, and reads the variant against the baseline. A case set runs every
 value of one setting and reads them against whichever case has the setting off -
 so it runs no baseline at all, because the unchanged server is already one of the
-values. `draft_depth` is the one that exists: the head off, then `n_max` at 1, 2
-and 4.
+values. **No case set is declared today.** The one that was - four drafted
+depths against a server with the head off - went with the draft head on
+2026-09-21, and what follows is what declaring another one costs.
 
 ```bash
 gh workflow run measure.yml --ref <branch> \
  -f target=bench \
  -f candidate_models_file='models/gemma-4-e4b-qat.json' \
- -f runtime_candidate=draft_depth \
+ -f runtime_candidate=<case set> \
  -f runtime_repeats=2 \
  -f runtime_corpus_items=2 \
  -f model_speed_case=skip
@@ -456,7 +452,7 @@ for offset in 0 2 4; do
   gh workflow run measure.yml --ref main \
     -f target=bench \
     -f candidate_models_file='models/gemma-4-e4b-qat.json' \
-    -f runtime_candidate=draft_depth \
+    -f runtime_candidate=<case set> \
     -f runtime_repeats=2 \
     -f runtime_corpus_items=2 \
     -f runtime_corpus_offset="$offset" \

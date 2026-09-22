@@ -4,6 +4,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "decode_digest is gone from the inherited judge-call stamp.",
+      "version": "2026-09-21T14:00",
+      "why": "It proved two runs asked alike, and this project does not claim that."
+    },
+    {
       "change": "Initial shape: the shard's funnel, its two rates, its margin and its clocks.",
       "version": "2026-09-21",
       "why": "Nothing recorded how this judge's own instrument behaved over a shard."
@@ -16,20 +21,6 @@
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
       "title": "Date",
       "type": "string"
-    },
-    "decode_digest": {
-      "anyOf": [
-        {
-          "pattern": "^[0-9a-f]{64}$",
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "sha256 of the canonical JSON of every key the caller posted that is not excluded. Taken from the payload rather than from config, because a digest built off config cannot see a payload-builder defect. Three keys are excluded and each for its own reason: the prompt differs every row and would make this a row id, and the grammar and the model reference both have a column here already.",
-      "title": "Decode Digest"
     },
     "decode_seconds_max": {
       "anyOf": [
@@ -216,7 +207,7 @@
         }
       ],
       "default": null,
-      "description": "How many reasoning spans the call decoded before its answer - 0 for a cold answer, 1 under a thinking envelope. A column of its own because the digest above cannot see the envelope: the only posted key it moves is the prompt, and the prompt is excluded. Without this cell a reading taken after reasoning and one taken cold are one population to every reader.",
+      "description": "How many reasoning spans the call decoded before its answer - 0 for a cold answer, 1 under a thinking envelope. A column of its own because no other cell here moves with it: an envelope moves only the prompt, which nothing stamps. Without this cell a reading taken after reasoning and one taken cold are one population to every reader.",
       "title": "Thinking Spans"
     },
     "unclear_rate": {
@@ -235,7 +226,7 @@
       "title": "Unclear Rate"
     },
     "version": {
-      "default": "2026-09-21",
+      "default": "2026-09-21T14:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -254,5 +245,5 @@
   ],
   "title": "ContentSimilarityJudgeMetrics",
   "type": "object",
-  "version": "2026-09-21"
+  "version": "2026-09-21T14:00"
 }

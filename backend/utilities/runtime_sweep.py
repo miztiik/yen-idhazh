@@ -19,7 +19,7 @@ import time
 import urllib.request
 from collections import Counter
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any, Final, NamedTuple
 
 from pydantic import ValidationError
 
@@ -44,24 +44,31 @@ WEIGHTS_DIR = Path("backend/models")
 #: spelled again so this looks where the stage actually writes (Guardrail #6).
 CAPTURES_ROOT = ROOT / CAPTURES_DIRNAME
 
-#: What each named candidate changes about the server it starts. Every value is
-#: an `inference` knob except `draft`, which is a sibling of `inference` and is
-#: lifted one level up by `write_config`.
+#: What each named candidate changes about the server it starts. Every key is
+#: llama-server's own flag spelling, except the two the entry carries outside the
+#: server block - `companion_files` and the request values - which `write_config`
+#: routes to where they live.
 CANDIDATE_UPDATES: dict[str, tuple[dict[str, Any], int]] = {
     "baseline": ({}, 1),
-    "np1": ({"n_parallel": 1}, 1),
-    "batch2048": ({"n_batch": 2048}, 1),
-    "no_startup_warmup": ({"startup_warmup": False}, 1),
-    "flash_attention_on": ({"flash_attention": "on"}, 1),
-    "load_mode_mmap_mlock": ({"load_mode": "mmap+mlock"}, 1),
-    "kv_q8": ({"cache_type_k": "q8_0", "cache_type_v": "q8_0"}, 1),
-    "prio_poll": ({"priority": 2, "poll": 100}, 1),
-    "np2_inflight": ({"n_parallel": 2, "n_ctx": 16384}, 2),
-    # The one candidate that reaches outside `inference`. A model file declaring
-    # no draft head answers the question it exists for: what the head is worth,
-    # measured on ONE machine instead of across two dispatches.
-    "no_draft": ({"draft": None}, 1),
+    "np1": ({"-np": 1}, 1),
+    "batch2048": ({"--batch-size": 2048}, 1),
+    "no_startup_warmup": ({"--no-warmup": None}, 1),
+    "flash_attention_on": ({"-fa": "on"}, 1),
+    "load_mode_mmap_mlock": ({"--mlock": None}, 1),
+    "kv_q8": ({"--cache-type-k": "q8_0", "--cache-type-v": "q8_0"}, 1),
+    "prio_poll": ({"--prio": 2, "--poll": 100}, 1),
+    "np2_inflight": ({"-np": 2, "--ctx-size": 16384}, 2),
+    # The one candidate that reaches outside the server block. A model file
+    # declaring no companion answers the question it exists for: what the head
+    # is worth, measured on ONE machine instead of across two dispatches.
+    "no_draft": ({"companion_files": []}, 1),
 }
+
+#: Entry keys a case may set that are not llama-server flags.
+ENTRY_KEYS = ("companion_files",)
+
+#: What goes in a request body rather than on the command line (C1).
+REQUEST_KEYS = ("temperature", "top_p", "seed", "request_timeout_minutes")
 
 #: Two knobs whose value an operator types, so each is bounded where it is read.
 SIZED_BY_DISPATCH = ("threads", "threads_batch")
@@ -83,13 +90,13 @@ class CaseSet(NamedTuple):
     between_cases: str
 
 
-#: The case that answers whether the head changes the words, and whether `n_max`
-#: is what controls it. The publisher of these exact weights says it cannot:
-#: "The drafter shares the target's KV cache and does not change the output (the
-#: target verifies every drafted token)." Two paired dispatches refused that on
-#: nine of nine articles. The one difference on record between their setup and
-#: ours is the drafted depth - their command passes 4 and the entry pins 2 - and
-#: nobody had run it.
+#: The case that answers whether the head changes the words, and whether the
+#: drafted depth is what controls it. The publisher of these exact weights says
+#: it cannot: "The drafter shares the target's KV cache and does not change the
+#: output (the target verifies every drafted token)." Two paired dispatches
+#: refused that on nine of nine articles. The one difference on record between
+#: their setup and ours is the drafted depth - their command passes 4 and the
+#: entry pins 2 - and nobody had run it.
 DRAFT_DEPTH = "draft_depth"
 
 #: The reference the other three are read against. Not the baseline: the
@@ -100,10 +107,10 @@ HEAD_OFF = "head_off"
 CASE_SETS: dict[str, CaseSet] = {
     DRAFT_DEPTH: CaseSet(
         cases=(
-            (HEAD_OFF, {"draft": None}),
-            ("n_max_1", {"draft": {"n_max": 1}}),
-            ("n_max_2", {"draft": {"n_max": 2}}),
-            ("n_max_4", {"draft": {"n_max": 4}}),
+            (HEAD_OFF, {"companion_files": []}),
+            ("n_max_1", {"--spec-draft-n-max": 1}),
+            ("n_max_2", {"--spec-draft-n-max": 2}),
+            ("n_max_4", {"--spec-draft-n-max": 4}),
         ),
         reference=HEAD_OFF,
         # **Temperature 0, pinned once and unoverridable.** Every committed entry
@@ -178,6 +185,38 @@ def corpus_items(config_root: Path | None, *, dispatch: str = "") -> int:
     return wanted
 
 
+def repeats(config_root: Path | None, *, dispatch: str = "") -> int:
+    """How many times each case runs, from `bench.repeats`.
+
+    The same shape `corpus_items` has, and for the same reason: the two numbers
+    multiply into the passes the job timeout is spent on, so an operator who
+    changes one sees the other in the file beside it (Guardrail #6).
+
+    It stops short of that one's write. `corpus_items` is written into the
+    scratch config because `freeze-corpus`, `work` and `collect` each read it
+    back; this number has one reader, and a copy nothing reads is a second
+    spelling waiting to disagree. The bound is still the contract's own - a
+    dispatched value is re-read through `AppConfig`, so anything below two is
+    refused here rather than after the first pass.
+    """
+    settings = config.load(config_root) if config_root is not None else config.load()
+    if not dispatch:
+        return settings.app.bench.repeats
+    if config_root is None:
+        raise SystemExit("--repeats needs a config root to validate against")
+    try:
+        wanted = int(dispatch)
+    except ValueError:
+        raise SystemExit(f"runtime_repeats must be a whole number, not {dispatch!r}") from None
+    payload = json.loads((config_root / "idhazh.json").read_text(encoding="utf-8"))
+    payload["bench"]["repeats"] = wanted
+    try:
+        AppConfig.from_json(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    except ValidationError as error:
+        raise SystemExit(f"runtime_repeats {wanted} is refused: {error}") from error
+    return wanted
+
+
 def candidate_update(name: str, *, threads: int, threads_batch: int) -> tuple[dict[str, Any], int]:
     """What this candidate changes, and how many workers it runs."""
     if name == "threads":
@@ -232,22 +271,22 @@ def write_config(label: str, update: dict[str, Any]) -> Path:
     pointer = json.loads((dst / "idhazh.json").read_text(encoding="utf-8"))["models_file"]
     path = dst / pointer
     payload = json.loads(path.read_text(encoding="utf-8"))
-    inference = dict(update)
-    # Written through `update` rather than indexed, because an entry declaring
-    # no draft head has no such key and this is the one line allowed to make one.
-    if "draft" in inference:
-        draft = inference.pop("draft")
-        if draft is None:
-            payload["summarize"]["draft"] = None
+    entry = payload["summarize"]
+    for key, value in update.items():
+        if key in ENTRY_KEYS:
+            entry[key] = value
+        elif key in REQUEST_KEYS:
+            entry.setdefault("request", {})[key] = value
         else:
-            # A mapping PATCHES the declared head rather than replacing it, so a
-            # case can move one field and leave the repository, the revision and
-            # the two digests that identify the weights where they are. A
-            # wholesale replacement would drop them and the entry would not
-            # validate - which is the correct failure, but a case set exists to
-            # move `n_max` and nothing else.
-            payload["summarize"]["draft"] = {**(payload["summarize"].get("draft") or {}), **draft}
-    payload["summarize"]["inference"].update(inference)
+            entry.setdefault("server", {})[key] = value
+    # A speculation flag with no draft model is a server that refuses to start,
+    # so taking the head away takes its settings with it.
+    if not any(companion.get("flag") for companion in entry.get("companion_files") or []):
+        entry["server"] = {
+            flag: value
+            for flag, value in entry.get("server", {}).items()
+            if not flag.startswith("--spec-")
+        }
     path.write_text(ModelsConfig.model_validate(payload).to_json(), encoding="utf-8")
     return dst
 
@@ -279,6 +318,43 @@ def parse_server_facts(log_path: Path) -> dict[str, str]:
         if match:
             facts[key] = match.group(1)
     return facts
+
+
+#: How long a server gets to die before the health wait starts. A build that
+#: refuses one of its own flags is gone in well under a second, so two seconds
+#: separates that from a server still reading weights. It is the wait
+#: `start-llama-server.sh` already does before its own `kill -0`, written out
+#: again here because a sweep needs the process handle and so cannot call it.
+START_GRACE_SECONDS: Final = 2.0
+
+#: How much of the server log a start-up failure carries out with it. The same
+#: fifty lines the shell script tails, because the refused flag is named in the
+#: last few and the log itself dies with the runner.
+LOG_TAIL_LINES: Final = 50
+
+
+def refuse_a_server_that_died_at_startup(
+    server: subprocess.Popen[bytes], log_path: Path
+) -> None:
+    """Say the server is gone now, rather than after ten minutes of health polling.
+
+    `wait_for_health` asks a port for up to 600 seconds. That is the right
+    patience for weights still loading and the wrong answer entirely for a
+    process that has already exited: a dispatch once burned five hours on a
+    flag the build refused, and nothing between the start and the first item
+    said so.
+    """
+    try:
+        server.wait(timeout=START_GRACE_SECONDS)
+    except subprocess.TimeoutExpired:
+        return
+    tail = ""
+    if log_path.exists():
+        lines = log_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        tail = "\n".join(lines[-LOG_TAIL_LINES:])
+    raise RuntimeError(
+        f"llama-server exited {server.returncode} before it could answer\n{tail}"
+    )
 
 
 def wait_for_health(port: int) -> None:
@@ -433,7 +509,7 @@ def run_once(
         binary=SERVER_BINARY,
         weights=WEIGHTS_DIR / candidate_file,
         model=settings.models.summarize,
-        inference=settings.models.summarize.inference,
+        server=settings.models.summarize.server,
         port=port,
     )
     env = os.environ.copy()
@@ -442,6 +518,7 @@ def run_once(
     rss_samples: list[dict[str, str]] = []
     with log_path.open("w", encoding="utf-8") as log:
         server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, env=env)
+        refuse_a_server_that_died_at_startup(server, log_path)
         stop = threading.Event()
 
         def sample_rss() -> None:
@@ -585,11 +662,15 @@ def server_port() -> int:
 
 def sweep(args: argparse.Namespace) -> int:
     candidate = args.candidate
+    repeat_count = repeats(CANDIDATE_CONFIG, dispatch=args.repeats)
     # Two, because a spread needs two readings and this stops a dispatch that
-    # cannot produce one. The ceiling is the job timeout rather than taste: a
-    # named candidate runs two cases, so the repeats multiply the corpus, and
-    # `bench.corpus_items` is the knob sized against that bound (Guardrail #2).
-    if args.repeats < sweep_verdict.MIN_AGREEING_REPEATS:
+    # cannot produce one. It is the sweep's own statement about what it can
+    # read, kept beside the contract's floor rather than deferred to it: the
+    # contract bounds what may be configured, this bounds what may be judged.
+    # The ceiling is the job timeout rather than taste: a named candidate runs
+    # two cases, so the repeats multiply the corpus, and `bench.corpus_items`
+    # is the knob sized against that same bound (Guardrail #2).
+    if repeat_count < sweep_verdict.MIN_AGREEING_REPEATS:
         raise SystemExit("runtime_repeats must be at least 2 - one reading has no spread")
     port = server_port()
     threads = _bounded("threads", args.threads)
@@ -600,7 +681,7 @@ def sweep(args: argparse.Namespace) -> int:
     labels = [label for label, _, _ in plan.cases]
 
     results = []
-    for repeat in range(1, args.repeats + 1):
+    for repeat in range(1, repeat_count + 1):
         for label, current, worker_count in plan.cases:
             result = run_once(
                 label,
@@ -637,7 +718,7 @@ def sweep(args: argparse.Namespace) -> int:
         # platform places each separately, so the processor beside a prefill rate
         # is not the processor beside these wall-clock figures.
         "cpu": silicon.host_cpu_model() or "unrecorded",
-        "repeats": args.repeats,
+        "repeats": repeat_count,
         # What the timing was actually taken over. It is not `repeats` whenever
         # a page moved mid-job, and a reader who assumed it was would be reading
         # a median over a denominator nobody told them about.
@@ -689,7 +770,11 @@ def main(argv: list[str] | None = None) -> int:
     run.add_argument("--candidate", required=True)
     run.add_argument("--candidate-file", required=True)
     run.add_argument("--candidate-id", required=True)
-    run.add_argument("--repeats", type=int, required=True)
+    run.add_argument(
+        "--repeats",
+        default="",
+        help="Overrule bench.repeats for this run. Empty follows the knob.",
+    )
     run.add_argument("--threads", type=int, required=True)
     run.add_argument("--threads-batch", type=int, required=True)
     run.add_argument("--gguf-cache-hit", default="false")

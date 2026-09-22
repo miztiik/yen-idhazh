@@ -13,12 +13,11 @@ import json
 from typing import Any
 
 import pytest
+from conftest import a_request, a_server
 
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
-from idhazh.contracts.knobs.inference import InferenceConfig
 from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
-from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.qualification import (
     CanaryObservation,
     CandidateIdentity,
@@ -32,9 +31,11 @@ from idhazh.contracts.qualification import (
     corpus_digest,
 )
 from idhazh.evals import qualify
+from idhazh.llm.server import window
 
 EVALUATION = EvaluationConfig()
-INFERENCE = InferenceConfig()
+SERVER = a_server()
+REQUEST = a_request()
 RUN = RunConfig()
 SUMMARIZE = SummarizeConfig()
 
@@ -192,18 +193,18 @@ def a_passing_budget() -> qualify.Budget:
 def outcomes_of(
     shard: QualificationShard,
     *,
-    turns: TurnsConfig | None = None,
-    inference: InferenceConfig = INFERENCE,
+    thinking: bool = False,
+    server: dict[str, Any] | None = None,
 ) -> dict[GateName, Any]:
     _, gates = qualify.gates(
         [shard],
         evaluation=EVALUATION,
         summarize=SUMMARIZE,
-        inference=inference,
+        server=SERVER if server is None else server,
         run=RUN,
         budget_=a_passing_budget(),
         required_canaries=len(CANARY_NAMES),
-        turns=turns,
+        thinking=thinking,
     )
     return {outcome.gate: outcome for outcome in gates}
 
@@ -269,21 +270,6 @@ def test_a_reasoning_channel_fails_the_reasoning_gate() -> None:
     assert outcomes_of(broken)[GateName.REASONING_LEAKAGE].status is GateStatus.FAILED
 
 
-def thinks() -> TurnsConfig:
-    """An envelope that declares a closing marker, built rather than committed.
-
-    The incumbent declares none, so an assertion against `config/` would say
-    what is configured today rather than what the gate does.
-    """
-    return TurnsConfig(
-        turn_opening="<|im_start|>$role\n",
-        turn_closing="<|im_end|>\n",
-        reply_opening="<|im_start|>assistant\n",
-        reply_opening_thinking="<|im_start|>assistant\n<think>\n",
-        thinking_close="</think>",
-    )
-
-
 def test_reasoning_that_survived_the_discard_still_fails_the_gate() -> None:
     """The third refusal's other case, and it counts exactly as it did before.
 
@@ -294,7 +280,7 @@ def test_reasoning_that_survived_the_discard_still_fails_the_gate() -> None:
     nobody runs.
     """
     broken = with_one_bad_call(a_passing_shard(), reasoning_channel_used=True)
-    outcome = outcomes_of(broken, turns=thinks())[GateName.REASONING_LEAKAGE]
+    outcome = outcomes_of(broken, thinking=True)[GateName.REASONING_LEAKAGE]
 
     assert outcome.status is GateStatus.FAILED
     assert "discard that did not happen" in outcome.detail
@@ -305,7 +291,7 @@ def test_the_gate_says_which_failure_it_found_on_each_case() -> None:
     broken = with_one_bad_call(a_passing_shard(), think_block_words=12)
 
     assert "the flag did not take" in outcomes_of(broken)[GateName.REASONING_LEAKAGE].detail
-    assert outcomes_of(a_passing_shard(), turns=thinks())[
+    assert outcomes_of(a_passing_shard(), thinking=True)[
         GateName.REASONING_LEAKAGE
     ].status is GateStatus.PASSED
 
@@ -492,7 +478,7 @@ def test_a_second_output_digest_on_one_item_fails_no_gate() -> None:
     """
     drifted = with_one_bad_call(a_passing_shard(), output_digest="9" * 64)
 
-    outcomes = outcomes_of(drifted, inference=InferenceConfig(temperature=0.2))
+    outcomes = outcomes_of(drifted)
 
     assert set(outcomes) == set(GateName)
     assert all(outcome.status is GateStatus.PASSED for outcome in outcomes.values())
@@ -502,8 +488,8 @@ def test_the_temperature_does_not_change_which_gates_are_asked() -> None:
     """There is no conditional gate left, so a report cannot be missing one."""
     drifted = with_one_bad_call(a_passing_shard(), output_digest="9" * 64)
 
-    greedy = outcomes_of(drifted, inference=InferenceConfig())
-    sampled = outcomes_of(drifted, inference=InferenceConfig(temperature=0.2))
+    greedy = outcomes_of(drifted)
+    sampled = outcomes_of(drifted, server=a_server(**{"--ctx-size": 16384}))
 
     assert set(greedy) == set(GateName)
     assert set(sampled) == set(GateName)
@@ -518,7 +504,7 @@ def test_the_spread_diagnostic_counts_wordings_rather_than_violations() -> None:
     """
     drifted = with_one_bad_call(a_passing_shard(), output_digest="9" * 64)
     rows = qualify.wording_spread(
-        drifted.observations, inference=InferenceConfig(temperature=0.2), repeats=drifted.repeats
+        drifted.observations, request=a_request(temperature=0.2), repeats=drifted.repeats
     )
 
     named = {row.name: row for row in rows}
@@ -535,7 +521,7 @@ def test_at_zero_temperature_the_spread_diagnostic_says_nothing() -> None:
     shard = a_passing_shard()
 
     assert qualify.wording_spread(
-        shard.observations, inference=InferenceConfig(), repeats=shard.repeats
+        shard.observations, request=REQUEST, repeats=shard.repeats
     ) == []
 
 
@@ -560,17 +546,17 @@ def test_a_summary_under_the_floor_fails_and_a_long_one_does_not() -> None:
 
 
 def test_a_request_that_does_not_fit_the_context_fails() -> None:
-    over = INFERENCE.n_ctx - INFERENCE.max_answer_tokens + 1
+    over = window(SERVER)
     broken = with_one_bad_call(a_passing_shard(), prompt_tokens=over)
     outcome = outcomes_of(broken)[GateName.CONTEXT_FIT]
     assert outcome.status is GateStatus.FAILED
-    assert str(INFERENCE.n_ctx) in outcome.threshold
+    assert str(over) in outcome.threshold
 
 
 def test_the_cheap_predictor_may_not_under_reserve() -> None:
     """`fits_context` saying yes to a request that overflows is the failure mode
     the gate exists for: it is the check that runs before every production call."""
-    over = INFERENCE.n_ctx - INFERENCE.max_answer_tokens + 1
+    over = window(SERVER)
     broken = with_one_bad_call(
         a_passing_shard(), prompt_tokens=over, fits_context_predicted=True
     )
@@ -591,7 +577,7 @@ def test_a_job_past_its_bound_fails_the_budget_gate() -> None:
         [a_passing_shard()],
         evaluation=EVALUATION,
         summarize=SUMMARIZE,
-        inference=INFERENCE,
+        server=SERVER,
         run=RUN,
         budget_=qualify.Budget(
             job_budget_minutes=330.0, slowest_shard_seconds=331 * 60, slowest_item_seconds=900.0

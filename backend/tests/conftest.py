@@ -24,8 +24,7 @@ from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.knobs.extract import ElementsConfig
-from idhazh.contracts.knobs.inference import InferenceConfig
-from idhazh.contracts.knobs.models import ModelRef
+from idhazh.contracts.knobs.models import ModelsConfig
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.span_rollup import SpanRollupRow
 from idhazh.contracts.summary import Summary
@@ -34,8 +33,9 @@ from idhazh.corpus import Published
 from idhazh.elements import element_table
 from idhazh.extract import to_article_with_source
 from idhazh.fetch import FetchResult
-from idhazh.llm.server import server_argv
+from idhazh.llm.server import TurnMarkers, server_argv
 from idhazh.stages import common
+from utilities.capture_request_bodies import RENDERINGS, markers_for
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 SCHEMAS_DIR: Final = REPO_ROOT / "schemas"
@@ -43,6 +43,10 @@ CONFIG_DIR: Final = REPO_ROOT / "config"
 STATE_DIR: Final = REPO_ROOT / "state"
 FIXTURES_DIR: Final = REPO_ROOT / "tests" / "fixtures"
 CONTRACT_FIXTURES_DIR: Final = FIXTURES_DIR / "contracts"
+#: The model file `config/idhazh.json` points at. A test that stands a recorded
+#: server up serves this model's renderings, because that is the model the
+#: settings it loads name.
+INCUMBENT_MODEL: Final = "qwen3.5-9b-q4km.json"
 
 
 def seed_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]) -> int:
@@ -136,34 +140,60 @@ def read_text(path: Path) -> str:
     """Read without newline translation, so a CRLF drift fails the comparison."""
     return path.read_bytes().decode("utf-8")
 
-def llama_server_flags() -> frozenset[str]:
-    """Every flag `server_argv` can emit, taken from `server_argv`.
 
-    Two tests hold the one-builder Oracle from opposite sides, and a listed set
-    would be a third place a flag has to be remembered. Every optional knob is
-    filled in, so a flag that only appears when a knob is set is still counted.
+def a_server(**flags: Any) -> dict[str, Any]:
+    """A settings block for a case whose subject is not the settings.
+
+    It carries the one flag configuration load requires and the three the run
+    record writes down, so a builder gets a block a person could have written.
+    Every other flag is llama-server's own default, which is what a model file
+    saying nothing about it means.
     """
-    argv = server_argv(
-        binary=Path("bin/llama-server"),
-        weights=Path("models/w.gguf"),
-        model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
-        inference=InferenceConfig(
-            n_parallel=1,
-            flash_attention="on",
-            load_mode="mmap+mlock",
-            cache_type_k="q8_0",
-            cache_type_v="q8_0",
-            priority=2,
-            poll=50,
-            n_threads_batch=4,
-            log_verbosity=4,
-            startup_warmup=False,
-        ),
-    )
+    return {
+        "--ctx-size": 8192,
+        "--batch-size": 512,
+        "--ubatch-size": 512,
+        "--threads": 4,
+        **flags,
+    }
+
+
+def a_request(**values: Any) -> dict[str, Any]:
+    """The request half of the same thing, at the values a greedy decode uses."""
+    return {
+        "temperature": 0.0,
+        "top_p": 1.0,
+        "seed": 0,
+        "request_timeout_minutes": 22.1,
+        **values,
+    }
+
+
+def llama_server_flags() -> frozenset[str]:
+    """Every flag a committed entry starts its server with, plus the four in code.
+
+    Read off the entries rather than listed here, because the entries are where
+    the flags live: `server_argv` emits the `server` block verbatim and spells
+    four of its own. Every committed file is read, so a flag only one model sets
+    is still counted.
+    """
+    emitted: set[str] = set()
+    for path in sorted((CONFIG_DIR / "models").glob("*.json")):
+        entry = ModelsConfig.from_json(read_text(path)).summarize
+        emitted |= set(
+            server_argv(
+                binary=Path("bin/llama-server"),
+                weights=Path("models/w.gguf"),
+                model=entry,
+                server=entry.server,
+            )
+        )
     # llama-bench and the image bench take these two under the same spelling,
     # so they say nothing about which server a caller started.
     return frozenset(
-        token for token in argv if token.startswith("-") and token not in {"--model", "--threads"}
+        token
+        for token in emitted
+        if token.startswith("-") and token not in {"--model", "--threads"}
     )
 
 
@@ -304,6 +334,28 @@ def refill_recorded(
 
 # --- The two calls that read one article, shared by two test modules ------
 
+
+def _rendered_by_the_template(body: dict[str, Any]) -> bytes:
+    """What the template route answers, off the incumbent's recorded renderings.
+
+    Every stage reads its turn markers off this route before its first item, so
+    a recorded server has to answer it or nothing can render a prompt. Which
+    rendering comes back is read off the request exactly as a real template
+    would read it: three turns is a conversation with a reply already in it, and
+    two turns answer differently once a keyword asks for reasoning.
+
+    It draws on no recorded completion. Those bytes are replies a model wrote,
+    and a template render is not one.
+    """
+    recorded = json.loads(RENDERINGS.read_text(encoding="utf-8"))["entries"][INCUMBENT_MODEL]
+    asked_to_think = any((body.get("chat_template_kwargs") or {}).values())
+    if len(body.get("messages") or []) > 2:
+        rendering = "history"
+    else:
+        rendering = "thinking" if asked_to_think else "plain"
+    return json.dumps({"prompt": recorded[rendering]}).encode("utf-8")
+
+
 class RecordedEndpoint:
     """A real local server that replays recorded llama-server replies in order.
 
@@ -353,12 +405,19 @@ class RecordedEndpoint:
 
             def do_POST(self) -> None:
                 raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
-                sent.append(json.loads(raw))
+                payload = json.loads(raw)
+                if self.path.endswith("/apply-template"):
+                    self._answer(200, _rendered_by_the_template(payload))
+                    return
+                sent.append(payload)
                 body = replies[len(served) % len(replies)]
                 served.append(1)
                 if hold_s > 0:
                     time.sleep(hold_s)
-                self.send_response(status)
+                self._answer(status, body)
+
+            def _answer(self, code: int, body: bytes) -> None:
+                self.send_response(code)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
@@ -411,12 +470,23 @@ def a_table(article: Article, text: str | None = None, *, cap: int = 256) -> Ele
     return element_table(article, config=ElementsConfig(max_per_article=cap))
 
 
+def committed_markers(model_file: str = INCUMBENT_MODEL) -> TurnMarkers:
+    """The markers one committed model's own template writes.
+
+    A server derives these at start-up and a test has no server, so the recorded
+    renderings under `tests/fixtures/llm/` stand in for one and the production
+    parser reads them exactly as it reads a live reply.
+    """
+    return markers_for(model_file)
+
+
 def label_payload(article: Article) -> dict[str, Any]:
     entry = config.load(CONFIG_DIR).models.summarize
     return build_label_request(
         article,
         a_table(article),
         model_id="m",
-        inference=entry.inference,
-        turns=entry.turns,
+        server=entry.server,
+        request=entry.request,
+        markers=committed_markers(),
     )

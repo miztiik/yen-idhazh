@@ -32,7 +32,14 @@ from idhazh.contracts.content_similarity_judge_metrics import ContentSimilarityJ
 from idhazh.contracts.council_shard_outcome import ShardOutcome
 from idhazh.contracts.digest_day import DigestItem
 from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimilarityPair
-from idhazh.llm.server import DEFAULT_ENDPOINT, completion_url, post, token_pieces
+from idhazh.llm.server import (
+    DEFAULT_ENDPOINT,
+    completion_url,
+    derive_turn_markers,
+    post,
+    request_timeout_seconds,
+    token_pieces,
+)
 from idhazh.similarity import judge, prompt, stamps
 from idhazh.stages.assemble import _earlier_days
 from idhazh.stages.common import LOG, _load_day
@@ -126,7 +133,7 @@ def stage_judge_item_pairs(
     pointing one somewhere else has to move the other with it.
     """
     entry = judge.entry_of(settings)
-    timeout = entry.inference.request_timeout_minutes * 60.0
+    timeout = request_timeout_seconds(entry.request)
     stamp = stamps.judge_inputs(settings)
     flush_every = settings.app.assemble.same_story.judging_knobs().flush_every_pairs
     drawn = _rows_this_shard_owns(run_dir / DRAW_FILENAME, shard=shard, shards=shards)
@@ -137,6 +144,7 @@ def stage_judge_item_pairs(
     # column wrong for the whole day. It is a precondition rather than a
     # per-call check.
     prompt.first_token_openings(partial(token_pieces, base_url, timeout=timeout))
+    markers = derive_turn_markers(base_url, entry=entry, timeout=timeout)
     client = partial(post, endpoint=completion_url(base_url), timeout=timeout)
     items = _items_by_url_key(
         date,
@@ -166,7 +174,9 @@ def stage_judge_item_pairs(
         if left is None or right is None:
             unreadable += 1
             continue
-        verdicts = judge.judge_pair(left, right, client=client, settings=settings)
+        verdicts = judge.judge_pair(
+            left, right, client=client, settings=settings, markers=markers
+        )
         readings.append(verdicts)
         judged.append(_with_the_verdict(row, verdicts, stamp=stamp, run_id=run_id))
         if len(judged) % flush_every == 0:
@@ -273,7 +283,6 @@ def _instrument_reading(
     payload: dict[str, Any] = {
         "judge_model": stamp.judge_model if readings else None,
         "judge_temperature": stamp.judge_temperature,
-        "decode_digest": stamp.decode_digest,
         "thinking_spans": 1 if stamp.thinks else 0,
         "prompt_digest": stamp.prompt_digest,
         "grammar_digest": stamp.grammar_digest,
@@ -387,7 +396,6 @@ def _with_the_verdict(
             "grammar_digest": stamp.grammar_digest,
             "decode_seconds": verdicts.decode_seconds,
             "judge_temperature": stamp.judge_temperature,
-            "decode_digest": stamp.decode_digest,
             "grammar_applied": verdicts.grammar_applied,
             "first_token_probabilities": verdicts.first_token_window or None,
             "thinking_spans": verdicts.thinking_spans,

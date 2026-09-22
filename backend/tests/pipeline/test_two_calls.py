@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, FIXTURES_DIR, committed_markers, read_text
 from pytest import MonkeyPatch
 
 from idhazh import config, summarize
@@ -272,9 +272,7 @@ class TestTheWorkStageDispatchesBothCalls:
 
         stamped = recorded_inputs(items).prompt_sha256
         assert stamped == text_digest(
-            calls.prompt_inputs(
-                settings.app.summarize, turns=settings.models.summarize.turns
-            )
+            calls.prompt_inputs(settings.app.summarize, markers=committed_markers())
         )
         assert stamped != text_digest(summarize.prompt_inputs(settings.app.summarize))
 
@@ -484,7 +482,7 @@ class TestTheSequenceIsWalkedItemMajor:
     ) -> None:
         """The whole prefix cache rests on this, and nothing else would catch it.
 
-        `models.summarize.inference` pins `n_parallel` to 1, so the server holds
+        the summarize entry pins `n_parallel` to 1, so the server holds
         one cache slot. Every label call first and every summarize-and-plan call afterwards would
         evict the prefix before it was reused - on every item, on an ordinary
         HTTP 200, with nothing in any log to say so. The run would get slower and

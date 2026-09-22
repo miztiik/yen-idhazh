@@ -51,7 +51,16 @@ from idhazh import config
 from idhazh.contracts.base import derive_text_digest, derive_url_key
 from idhazh.contracts.digest_day import DigestDay, DigestItem
 from idhazh.contracts.knobs.placement import SECONDS_A_CALL
-from idhazh.llm.server import DEFAULT_ENDPOINT, Completion, completion_url, post, token_pieces
+from idhazh.llm.server import (
+    DEFAULT_ENDPOINT,
+    Completion,
+    TurnMarkers,
+    completion_url,
+    derive_turn_markers,
+    post,
+    request_timeout_seconds,
+    token_pieces,
+)
 from idhazh.similarity import judge, prompt
 from idhazh.telemetry import silicon
 
@@ -342,8 +351,9 @@ def judge_calls(
     measurement taken through a broken instrument is worse than none.
     """
     entry = judge.entry_of(settings)
-    timeout = entry.inference.request_timeout_minutes * 60.0
+    timeout = request_timeout_seconds(entry.request)
     prompt.first_token_openings(partial(token_pieces, base_url, timeout=timeout))
+    markers = derive_turn_markers(base_url, entry=entry, timeout=timeout)
     client = partial(post, endpoint=completion_url(base_url), timeout=timeout)
 
     started = time.monotonic()
@@ -361,6 +371,7 @@ def judge_calls(
                 block=block,
                 client=client,
                 settings=settings,
+                markers=markers,
             )
             index += 1
 
@@ -373,6 +384,7 @@ def one_call(
     block: str,
     client: judge.Client,
     settings: config.Settings,
+    markers: TurnMarkers,
 ) -> CallReading:
     """The shipped judge call, with its envelope kept.
 
@@ -383,7 +395,7 @@ def one_call(
     """
     left, right = (pair.left, pair.right) if order == ORDER_FILE else (pair.right, pair.left)
     kept = KeepsTheEnvelope(client)
-    read = judge.read_once(left, right, client=kept, settings=settings)
+    read = judge.read_once(left, right, client=kept, settings=settings, markers=markers)
     if kept.last is None:
         raise RuntimeError("the judge returned without a reply, so there is nothing to read")
     return reading_of(
@@ -709,7 +721,7 @@ def conditions_of(
         "Processor": silicon.host_cpu_model() or "not reported by this host",
         "Runner": args.runner,
         "Weights": f"`{entry.file}`, id `{entry.id}`",
-        "Declared for": entry.inference.declared_for or "unset",
+        "Declared for": entry.declared_for or "unset",
         "Judge prompt": f"sha256 `{prompt.prompt_digest()[:16]}`",
         "Grammar": f"`{prompt.grammar()}`, sha256 `{prompt.grammar_digest()[:16]}`",
         "Day the pairs came from": f"`{args.day}`" if args.day else "re-rendered, not recorded",

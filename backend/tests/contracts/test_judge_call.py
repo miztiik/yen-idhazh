@@ -84,7 +84,6 @@ def a_reading(**overrides: Any) -> StampedReading:
         "judge_id": "paper-judge",
         "judge_model": "paper/weights-4B-Q4_K_M.gguf",
         "judge_temperature": 0.2,
-        "decode_digest": "b" * 64,
         "thinking_spans": 1,
         "prompt_digest": "c" * 64,
         "grammar_digest": "d" * 64,
@@ -107,7 +106,7 @@ def test_every_stamped_cell_survives_a_csv_round_trip() -> None:
 def test_the_stamp_columns_sit_between_the_base_and_the_row() -> None:
     """Base fields are collected first, which is why a committed row may not inherit.
 
-    A row with committed rows behind it that inherited this would gain seven
+    A row with committed rows behind it that inherited this would gain six
     columns in the middle of its header, and a store whose header moved in the
     middle cannot be appended to. Asserting the order makes that a checked fact
     rather than a claim in a docstring.
@@ -119,7 +118,6 @@ def test_the_stamp_columns_sit_between_the_base_and_the_row() -> None:
         "judge_id",
         "judge_model",
         "judge_temperature",
-        "decode_digest",
         "thinking_spans",
         "prompt_digest",
         "grammar_digest",

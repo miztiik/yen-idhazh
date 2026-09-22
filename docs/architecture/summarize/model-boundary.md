@@ -187,20 +187,21 @@ It is paid for by `RunRecord.inputs.prompt_sha256`, which digests both turns
 stamp, and `prose_changed_alone` still has something to compare. Ruled by
 Fowler, 2026-09-13.
 
-**The same split is why `turns.declared_for` is optional where
-`inference.declared_for` is not.** A person writing an entry always knows which
-weights the markers were recorded against, so config load refuses a mismatch.
-But a field that were required here would have to be present in every payload
-embedding the recorded shape - and no run written before 2026-09-14 carries an
-envelope at all. Optional is what lets today's build read yesterday's run; the
-refusal that matters lives on the declared shape, where somebody can act on it.
+**The same split is why the recorded shape carries no markers at all.** A run
+written before 2026-09-14 carries no envelope, so a field required there would
+stop today's build reading yesterday's run. Since 2026-09-21 there is nothing to
+require either way: six of the eight markers are read off the model's own
+template at server start and written nowhere, and the two that cannot be -
+`thinking_close` and `thinking_kwarg` - sit on the entry under the one
+`declared_for` pin, where somebody can act on the refusal.
 
 The envelope reached the entry on 2026-09-13. Before that it was one global
 file, `backend/idhazh/prompts/turn_markers.json`, with no model key - so a
 model whose turns differ was a source edit, and one process holding two
 candidates would have rendered both with the first one's markers. The lookup is
-keyed by the entry now, and config load refuses that path if the file comes
-back.
+keyed by the entry now. Config load checked that path for a returning file
+until 2026-09-21; the check went because nothing can recreate the file, and a
+guard against an event with no mechanism is nine lines nobody can trigger.
 
 ## The inward shim
 
@@ -375,114 +376,22 @@ dead.
 Reverting costs one line because adopting never modified the previous model's
 file. Its weights cache key is its own digest, so that cache is still valid.
 
-## A second, smaller model that guesses ahead
-
-`models.summarize.draft` is null and nearly always stays null. Not null names a
-second GGUF - a repository, a commit, a filename and a digest of its own - that
-drafts a few tokens at a time which the real model then verifies.
-
-**The text is supposed not to change, and on the one run that checked, it did.**
-The mechanism says the target verifies every drafted token and rejects any it
-would not itself have produced, so a drafted run and an undrafted run should
-write the same words. Run `35011578538` put both cases in one job and all five
-articles came out different. Sampling is deterministic and each case reproduced
-its own five summaries byte-identically across its repeats, so that is a finding
-rather than noise, and a second run reproduced it on four more articles
-([what the draft head is worth](../../reference/benchmarks/what-the-draft-head-is-worth.md)).
-
-**That unsettles how a draft head is priced.** The argument for judging one on
-cost and reversal alone, rather than on quality, was that a mechanism which
-cannot change the output has no quality to measure
-([`CLAUDE.md`](../../../CLAUDE.md) Guardrail #10). That argument holds only while
-the property does, and today it does not. Nobody has found out whether the cause
-is llama.cpp, the `n_max` value, or an assumption about multi-token heads that
-does not hold the way it does for an ordinary draft model. Until somebody does,
-read a draft head as a change that can move the writing.
-
-**What it can do is waste time.** A draft the target keeps rejecting costs a
-forward pass per rejected token and buys nothing. The acceptance rate is the
-number that says whether it paid, and `llama-server` publishes it -
-`llamacpp:spec_decode_num_accepted_tokens_total` over
-`llamacpp:spec_decode_num_draft_tokens_total`, both already in the `/metrics`
-body each shard reads at job end. Both read zero when no draft head is
-configured, so the columns are legible on every day either way.
-
-**Three things it costs.** A second download and its checksum, both in the same
-steps as the target's so the two cannot drift apart. Memory for a second set of
-weights, which comes out of the headroom
-[`pipeline-cost.md`](../../reference/pipeline-cost.md) records rather than out of
-the KV budget. And the draft's own digest in the run record, so a day that was
-drafted can be told from a day that was not - a run that cannot answer that
-cannot explain its own throughput.
-
-**Every case that starts a server fetches it, and that had to be made true.** The
-daily run always did. The two measurement cases below and the qualification case
-did not: each downloaded exactly one file, so the first entry ever to declare a
-draft head benched by starting `llama-server` against a path that did not exist.
-The server exits during load, which surfaces as a health check that never passes
-rather than as a missing file, and the job that hit it had already paid for its
-download. All four now fetch the head and check its digest - on a restored cache
-as well as on a fresh download, because a restored entry is the one copy nobody
-watched arrive.
-
-**The cache key names the head's digest too, or the fetch never runs.** Both
-bench cases share one cache entry so the second does not download the weights the
-first already has. An entry keyed on the target alone is a complete-looking hit
-with the head missing: the fetch step is skipped because the cache reported a
-hit, and the server fails at load anyway. So the key is the target's digest, and
-the head's where an entry declares one. An entry that declares no head keeps the
-key it already had, which is what stops this costing every other model a
-refetch. The raw case never runs a draft head - `llama-bench` has no speculative
-path - and fetches it regardless, because it is the case that fills the cache the
-server case restores.
-
-**The flag spellings are the trap, and they are not the ones on most pages.**
-`--draft-max` and `--draft-min` were removed from llama.cpp; the pinned build
-exits telling the operator to use `--spec-draft-n-max` and `--spec-draft-n-min`.
-`idhazh.llm.server.server_argv` is the one place in this repository a
-llama-server flag may be spelled, and a test pins all four current spellings and
-refuses the two retired ones by name - so a rename in either direction fails
-here rather than on a runner.
-
-**The spelling of the flag's VALUE is the second trap, and it is quieter.**
-`spec_type` says which kind of speculation the runtime should drive, and naming
-the wrong kind is not a slow server - it is a dead one. The Gemma entry declared
-a multi-token head as `draft-simple`; the server started, loaded the head, and
-then failed every single request on `decode() failed: failed to process
-speculative batch`. Five articles of five, deterministic, one hour of bench time
-on run 34941400155. It reached the pipeline as `model_unreachable`, which is a
-network word for a decode failure and is why that mapping is worth splitting.
-
-The build accepts eleven values and the contract offers three - `draft-simple`,
-`draft-mtp` and `ngram-simple`. The rest need either a draft head nobody has
-published for our weights or a lookup cache nothing here writes, and a closed
-choice is what stops an operator naming one and getting a server that drafts
-nothing. **The agreement between the two lists is now a test rather than a
-memory**: `tests/fixtures/runtime/b10598-llama-server-help.txt` is what the
-pinned build printed for `--help`, and the contract's values must be a subset of
-the list on its `--spec-type` line. The fixture is named for the build, so
-moving the pin without re-recording fails on a missing file rather than passing
-against a binary nobody runs.
-
-**The recording is `llama-server --help` from the pinned asset, taken on
-2026-09-15.** It exists because the alternative way to learn what a build
-accepts is the hour the Gemma run spent.
-
-**Turning the head off is a pointer change, not an edit.** The same Gemma
-weights sit in two files - `config/models/gemma-4-e4b-qat.json` with the head,
-`config/models/gemma-4-e4b-qat-no-draft.json` with `draft` null - and
-`models_file` chooses between them. Both name one `sha256`, so this is one model
-offered two ways rather than two models. The alternative to a second file is
-editing `draft` in place, which is a change somebody has to remember to undo,
-and the run that publishes is not where that gets discovered (`CLAUDE.md`
-Guardrail #6). The bench does not need either file: `runtime_candidate=no_draft`
-patches the head off for one measurement without touching what publishes.
-
 **A file the pointer does not name is still a file it can name**, so every entry
 under `config/models/` is loaded and checked by
 `backend/tests/contracts/test_model_registry.py` rather than only the active
 one. Before that, an alternative sat unvalidated until the day somebody switched
 to it - and that day is a pipeline run.
+
+**A second set of weights that drafts ahead of the first is not offered.** It
+was until 2026-09-21, as `models.summarize.draft`, and the mechanism's whole
+claim is that it cannot change a word: the target verifies every drafted token
+and rejects any it would not itself have produced. Two paired dispatches refused
+that claim on nine articles of nine - each case reproduced its own summaries
+byte-identically across its repeats, so the difference was the head rather than
+the sampler. A speed-up that rewrites the summary is a model change, priced on
+quality, and nobody had a reading that said it was a better model. So the field,
+the five `--spec-*` flags and the second download went together, and a run
+record that names a head still reads through the migration on `ModelRef`.
 
 ## The two measurement cases
 
@@ -592,17 +501,6 @@ for 25 alternatives, and asking for the post-sampling numbers returns no window
 at all - [which probabilities the server
 returns](../../reference/benchmarks/which-probabilities-the-server-returns.md).
 
-**The decode stamp is defined by what it leaves out.** Three keys are excluded
-and everything else posted is in it, so a caller that starts sending a new
-sampler field is stamped under a new digest without anybody remembering to
-maintain a list. The prompt is out because `prompt_sha256` already carries it
-and a stamp that never repeats cannot say two items were decoded alike; the
-grammar is out because respelling one literal would move it without the sampler
-being asked for anything different; the model name is out because the bytes are
-stamped as `model_sha256`. The stamp is taken over the body that went out
-rather than over the config block somebody wrote down, because the two disagree
-exactly when a builder drops a key.
-
 ## What is wrong with the boundary today
 
 Both shims exist and both work, and the schema constrains the decode on both
@@ -631,15 +529,15 @@ rather than a second download, and refuses the run when the two disagree. That
 is the one case where the digest, the alias and the filename all agree and only
 the words get worse - a repackaged GGUF under a familiar name.
 
-**Both declared blocks name the weights they were set for, and load refuses a
-mismatch.** `inference.declared_for` and `turns.declared_for` each hold the
-entry's own `sha256`. The failure this stops is five strings edited in place -
-repo, file, revision, digest and id - with the blocks underneath them untouched,
+**The entry names the weights it was set for, and load refuses a mismatch.**
+`declared_for` holds the entry's own `sha256`. The failure this stops is five
+strings edited in place - repo, file, revision, digest and id - with the settings
+underneath them untouched,
 which used to raise nothing and then stand a server up on numbers derived for
 weights it never opened. It is not hypothetical: the summarizer moved from the
-8B to the 9B on 2026-08-27 and the settings block did not move with it. The two
-blocks fail differently on purpose - re-derive the numbers, or re-record the
-markers off the server that applies them.
+8B to the 9B on 2026-08-27 and the settings block did not move with it. The
+markers need no such pin since 2026-09-21, because the server derives them from
+the template the weights themselves carry.
 
 **This page describes the boundary rather than tracking work**, so it changes
 when the shape changes. [Swap the Summarizer

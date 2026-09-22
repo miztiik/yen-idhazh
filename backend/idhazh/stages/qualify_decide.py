@@ -51,7 +51,7 @@ def stage_qualify_decide(
         shards,
         evaluation=evaluation,
         summarize=settings.app.summarize,
-        inference=settings.models.summarize.inference,
+        server=settings.models.summarize.server,
         run=settings.app.run,
         budget_=qualify.Budget(
             job_budget_minutes=job_budget_minutes,
@@ -61,7 +61,7 @@ def stage_qualify_decide(
             ),
         ),
         required_canaries=len(sorted(common.CANARY_DIR.glob("*.json"))),
-        turns=settings.models.summarize.turns,
+        thinking=settings.models.summarize.thinks,
     )
     shortfalls = qualify.corpus_shortfalls(
         frozen.items, summarize=settings.app.summarize, evaluation=evaluation
@@ -88,7 +88,7 @@ def stage_qualify_decide(
             *qualify.stratification(frozen.items, summarize=settings.app.summarize),
             *qualify.wording_spread(
                 frozen.observations,
-                inference=settings.models.summarize.inference,
+                request=settings.models.summarize.request,
                 repeats=frozen.repeats,
             ),
             *qualify.diagnostics(frozen, evaluation=evaluation),

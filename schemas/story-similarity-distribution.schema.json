@@ -50,6 +50,11 @@
       "why": "A reset archives the counts, and which nights were read is not a count."
     },
     {
+      "change": "decode_digest is gone. A record that still carries the key loads.",
+      "version": "2026-09-21T14:00",
+      "why": "It proved two runs asked alike, and this project does not claim that."
+    },
+    {
       "change": "`folded_dates` is now `counted_dates`. The old key still reads.",
       "version": "2026-09-21T12:00",
       "why": "Borrowed vocabulary for the count this field already holds."
@@ -60,9 +65,9 @@
       "why": "Two samplers and two decode envelopes were counted as one population."
     },
     {
-      "change": "Initial shape: a fixed row of slots, three counts each, and the dates counted.",
+      "change": "Earlier changes are in this file's git history.",
       "version": "2026-09-18",
-      "why": "A fit that sorted every pair ever judged would cost more every day."
+      "why": "A changelog says what moved lately; git is the archive."
     }
   ],
   "description": "The band, slot by slot, and the dates already counted into it.",
@@ -112,20 +117,6 @@
       },
       "title": "Counted Dates",
       "type": "array"
-    },
-    "decode_digest": {
-      "anyOf": [
-        {
-          "pattern": "^[0-9a-f]{64}$",
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "description": "sha256 of what the judging call asked the decoder to do, minus the prompt, the grammar and the model name - each of which is stamped here in a column of its own. It catches a sampler field that moved with no other column moving, which is a change to what a verdict means that the six named values cannot see.",
-      "title": "Decode Digest"
     },
     "grammar_digest": {
       "anyOf": [
@@ -184,7 +175,7 @@
         }
       ],
       "default": null,
-      "description": "Whether a reasoning span ran in front of every verdict counted here. A column of its own because `decode_digest` cannot see it: the only posted key a thinking envelope moves is the prompt, and the prompt is excluded. Without it a record counted cold and a record counted after reasoning are one population.",
+      "description": "Whether a reasoning span ran in front of every verdict counted here. A column of its own because no other column moves with it: an envelope moves only the prompt, which nothing here stamps. Without it a record counted cold and a record counted after reasoning are one population.",
       "title": "Judge Thinks"
     },
     "judged_dates": {

@@ -55,6 +55,7 @@
   },
   "bench": {
     "corpus_items": 7,
+    "repeats": 4,
     "run_model_speed_case": false
   },
   "collect": {

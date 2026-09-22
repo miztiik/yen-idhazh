@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
-import socket
+import json
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Any, Final
 
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, RecordedEndpoint, read_text
+from conftest import (
+    CONFIG_DIR,
+    CONTRACT_FIXTURES_DIR,
+    FIXTURES_DIR,
+    RecordedEndpoint,
+    _rendered_by_the_template,
+    read_text,
+)
 from pytest import MonkeyPatch
 
 from idhazh import assemble, config
@@ -62,62 +72,98 @@ def row(**overrides: object) -> EvalRow:
     return built.model_copy(update=overrides) if overrides else built
 
 
-def closed_loopback_endpoint() -> str:
-    """Return a loopback port that refused a real socket before the test used it."""
-    with socket.socket() as server:
-        server.bind(("127.0.0.1", 0))
-        port = int(server.getsockname()[1])
-    return f"http://127.0.0.1:{port}/v1/chat/completions"
+#: The error a llama-server writes while its weights are still loading. A
+#: recorded body rather than one typed here, because what the stage reads off it
+#: is the server's own error shape (Guardrail #7).
+REFUSED_COMPLETION: Final = FIXTURES_DIR / "completions" / "errors" / "server-unavailable.json"
 
 
-class HangingLoopbackEndpoint:
-    """A real local socket that accepts requests and never writes a response."""
+@contextmanager
+def a_server_that_refuses_every_completion() -> Iterator[RecordedEndpoint]:
+    """A server healthy enough to start a stage, whose every completion is an error.
 
-    def __init__(self) -> None:
-        self._stop = threading.Event()
-        self._server = socket.socket()
-        self._server.bind(("127.0.0.1", 0))
-        self._server.listen()
-        self._server.settimeout(0.05)
-        self._connections: list[socket.socket] = []
-        self._thread = threading.Thread(target=self._serve, daemon=True)
+    A stage reads `/props` and three template renderings before its first item,
+    so a closed port no longer reaches the item loop at all: it refuses at
+    start-up, which is what production's health check already does. A run where
+    the words never arrived is driven from the other end instead - the server
+    answers every start-up proof and refuses every completion, so each item
+    lands `model_refused` and the stage still writes its record.
+    """
+    with RecordedEndpoint(503, REFUSED_COMPLETION.read_bytes()) as server:
+        yield server
+
+
+class SilentCompletionEndpoint:
+    """A server that proves itself at start-up and then answers no completion.
+
+    It answers the two start-up routes exactly as llama-server does, so the
+    stage reaches its first item, and writes nothing at all on the completion
+    route.
+
+    `holds` is the difference between the two ways a server goes quiet, and they
+    are two different mornings for an operator. Held, the request sits on an
+    open line until the caller's own clock ends it, which is `model_timed_out`
+    and sends them to the output budget. Dropped, the line closes with nothing
+    on it, which is `model_unreachable` and sends them to the process.
+    """
+
+    def __init__(self, *, holds: bool) -> None:
+        stop = threading.Event()
+        asked: list[dict[str, Any]] = []
+
+        class Handler(BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def do_GET(self) -> None:
+                self._answer(b'{"chat_template": "fixture-template"}')
+
+            def do_POST(self) -> None:
+                raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                payload = json.loads(raw)
+                if self.path.endswith("/apply-template"):
+                    self._answer(_rendered_by_the_template(payload))
+                    return
+                asked.append(payload)
+                if holds:
+                    stop.wait()
+                # Nothing is written either way. A late write to a caller that
+                # already gave up raises in this thread and prints a traceback
+                # no test asserts on.
+                self.close_connection = True
+
+            def _answer(self, body: bytes) -> None:
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *_args: object) -> None:
+                return None
+
+        self._stop = stop
+        self._asked = asked
+        self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
 
     @property
     def endpoint(self) -> str:
-        port = int(self._server.getsockname()[1])
-        return f"http://127.0.0.1:{port}/v1/chat/completions"
+        return f"http://127.0.0.1:{self._server.server_port}/v1/chat/completions"
 
     @property
-    def accepted(self) -> int:
-        return len(self._connections)
+    def asked(self) -> int:
+        """How many completions were posted. A start-up proof is not one of them."""
+        return len(self._asked)
 
-    def __enter__(self) -> HangingLoopbackEndpoint:
+    def __enter__(self) -> SilentCompletionEndpoint:
         self._thread.start()
         return self
 
     def __exit__(self, *_exc: object) -> None:
         self._stop.set()
-        self._server.close()
-        for connection in self._connections:
-            connection.close()
-        self._thread.join(timeout=1.0)
-
-    def _serve(self) -> None:
-        while not self._stop.is_set():
-            try:
-                connection, _ = self._server.accept()
-            except OSError:
-                continue
-            self._connections.append(connection)
-            threading.Thread(target=self._hold, args=(connection,), daemon=True).start()
-
-    def _hold(self, connection: socket.socket) -> None:
-        try:
-            while not self._stop.wait(0.05):
-                pass
-        finally:
-            connection.close()
-
+        self._server.shutdown()
+        self._server.server_close()
+        self._thread.join(timeout=5.0)
 
 def captured_article_fetch(_url: str) -> FetchResult:
     page = read_text(FIXTURES_DIR / "pages" / "article.html")
@@ -196,19 +242,21 @@ def isolate_ledgers(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
 
 
 def work_then_assemble(run_plan: RunPlan, settings: config.Settings) -> None:
-    """One whole run over captured pages, with no model and no network (Guardrail #7).
+    """One whole run over captured pages, with no usable model and no network.
 
     The summaries fail, which is the point: the record describes the pipeline
-    rather than the words, so it has to reach the run record on a day the model
-    was unreachable too.
+    rather than the words, so it has to reach the run record on a day no words
+    arrived. The server is a real loopback one replaying recorded bytes, so
+    nothing here is mocked (Guardrail #7).
     """
-    stage_work(
-        run_plan,
-        settings=settings,
-        scorer=None,
-        fetcher=captured_article_fetch,
-        model_endpoint=closed_loopback_endpoint(),
-    )
+    with a_server_that_refuses_every_completion() as server:
+        stage_work(
+            run_plan,
+            settings=settings,
+            scorer=None,
+            fetcher=captured_article_fetch,
+            model_endpoint=server.endpoint,
+        )
     stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
 
 
@@ -248,6 +296,9 @@ def _work_stage(
     run_plan = run_plan if run_plan is not None else plan()
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
     monkeypatch.setattr(common, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+    # The state root too, or a traced work stage writes its trace and its span
+    # rollup into the committed `state/` tree and `git status` is what tells you.
+    monkeypatch.setattr(common, "STATE_ROOT", tmp_path / "state")
     with RecordedEndpoint(200, *replies, hold_s=hold_s) as server:
         stage_work(
             run_plan,

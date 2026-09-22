@@ -74,7 +74,6 @@ def empty_record(
             "prompt_digest": judge.prompt_digest,
             "grammar_digest": judge.grammar_digest,
             "judge_temperature": judge.judge_temperature,
-            "decode_digest": judge.decode_digest,
             "judge_thinks": judge.thinks,
             "counted_dates": (),
             "judged_dates": tuple(judged_dates),
@@ -166,7 +165,6 @@ def rows_the_record_admits(
         record.prompt_digest,
         record.grammar_digest,
         record.judge_temperature,
-        record.decode_digest,
         record.judge_thinks,
     )
     return [row for row in rows if _stamp_of(row) == stamp]
@@ -182,7 +180,6 @@ def _stamp_of(row: StorySimilarityPair) -> tuple[object, ...]:
         row.prompt_digest,
         row.grammar_digest,
         row.judge_temperature,
-        row.decode_digest,
         None if row.thinking_spans is None else row.thinking_spans > 0,
     )
 
@@ -285,7 +282,6 @@ def inputs_changed(
         (record.prompt_digest, judge.prompt_digest),
         (record.grammar_digest, judge.grammar_digest),
         (record.judge_temperature, judge.judge_temperature),
-        (record.decode_digest, judge.decode_digest),
         (record.judge_thinks, judge.thinks),
         (record.band_low, knobs.band_low),
         (record.band_high, knobs.band_high),

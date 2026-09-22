@@ -26,7 +26,14 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from conftest import (
+    CONFIG_DIR,
+    CONTRACT_FIXTURES_DIR,
+    FIXTURES_DIR,
+    _rendered_by_the_template,
+    committed_markers,
+    read_text,
+)
 
 from idhazh import assemble, config
 from idhazh.contracts.base import derive_text_digest, derive_url_key
@@ -37,9 +44,8 @@ from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimila
 from idhazh.council.deadline import compute_shard_deadline
 from idhazh.llm.server import (
     TokenChoice,
-    answer_span,
+    TurnMarkers,
     completion_url,
-    decode_digest,
     parse_completion,
     post,
     render_prompt,
@@ -97,6 +103,12 @@ class JudgeServer:
             def do_POST(self) -> None:
                 raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
                 asked = json.loads(raw)
+                if self.path.endswith("/apply-template"):
+                    # The route a judging shard reads its turn markers off before
+                    # its first pair. It draws on no recorded reply: those are
+                    # verdicts, and a template render is not one.
+                    self._answer(_rendered_by_the_template(asked))
+                    return
                 with arrival:
                     sent.append({"path": self.path, **asked})
                 if self.path.endswith("/tokenize"):
@@ -203,6 +215,18 @@ def _settings_judging_behind_a_thinking_span() -> config.Settings:
         | {"judge": thinking.summarize.model_dump(mode="json")}
     )
     return dataclasses.replace(settings, models=models)
+
+
+def _thinking_markers() -> TurnMarkers:
+    """The markers the entry above judges under, off that entry's own renderings.
+
+    Paired with `_settings_judging_behind_a_thinking_span` and never with the
+    incumbent's. A server derives one set of markers off the weights it loaded,
+    so settings from one entry and markers from another describe no server that
+    could exist - and the closing marker a reasoning span stops at is exactly
+    what the incumbent does not have.
+    """
+    return committed_markers(THINKING_ENTRY_FILE)
 
 
 def _a_deadline_no_shard_will_reach() -> float:
@@ -481,10 +505,10 @@ def test_the_rendered_prompt_does_not_end_in_a_space() -> None:
     """
     day = _a_day()
     left, right = day.items[0], day.items[1]
-    turns = _settings().models.summarize.turns
+    markers = committed_markers()
 
     rendered = render_prompt(
-        system=prompt.system_turn(), user=prompt.user_turn(left, right), turns=turns
+        system=prompt.system_turn(), user=prompt.user_turn(left, right), markers=markers
     )
 
     assert not prompt.system_turn().endswith(" ")
@@ -520,7 +544,11 @@ def test_two_disagreeing_readings_are_unusable() -> None:
     day = _a_day()
     with JudgeServer(_reply("one-event"), _reply("two-events")) as server:
         result = judge.judge_pair(
-            day.items[0], day.items[1], client=_client(server), settings=_settings()
+            day.items[0],
+            day.items[1],
+            client=_client(server),
+            settings=_settings(),
+            markers=committed_markers(),
         )
 
     assert result.verdict is SameStoryVerdict.YES
@@ -533,7 +561,11 @@ def test_two_agreeing_unclear_readings_are_usable() -> None:
     day = _a_day()
     with JudgeServer(_reply("too-vague-to-say")) as server:
         result = judge.judge_pair(
-            day.items[0], day.items[1], client=_client(server), settings=_settings()
+            day.items[0],
+            day.items[1],
+            client=_client(server),
+            settings=_settings(),
+            markers=committed_markers(),
         )
 
     assert result.verdict is SameStoryVerdict.UNCLEAR
@@ -552,7 +584,11 @@ def test_two_readings_the_grammar_did_not_hold_are_not_an_agreement() -> None:
     day = _a_day()
     with JudgeServer(_reply("the-grammar-was-not-applied")) as server:
         result = judge.judge_pair(
-            day.items[0], day.items[1], client=_client(server), settings=_settings()
+            day.items[0],
+            day.items[1],
+            client=_client(server),
+            settings=_settings(),
+            markers=committed_markers(),
         )
 
     assert result.verdict is None
@@ -567,17 +603,19 @@ def test_a_pair_is_read_twice_with_the_two_summaries_swapped() -> None:
     left, right = day.items[0], day.items[1]
     settings = _settings()
     with JudgeServer(_reply("two-events")) as server:
-        judge.judge_pair(left, right, client=_client(server), settings=settings)
+        judge.judge_pair(
+            left, right, client=_client(server), settings=settings, markers=committed_markers()
+        )
         decodes = server.decodes
 
-    turns = settings.models.summarize.turns
+    markers = committed_markers()
     assert len(decodes) == 2
     assert decodes[0]["prompt"] != decodes[1]["prompt"]
     assert decodes[0]["prompt"] == render_prompt(
-        system=prompt.system_turn(), user=prompt.user_turn(left, right), turns=turns
+        system=prompt.system_turn(), user=prompt.user_turn(left, right), markers=markers
     )
     assert decodes[1]["prompt"] == render_prompt(
-        system=prompt.system_turn(), user=prompt.user_turn(right, left), turns=turns
+        system=prompt.system_turn(), user=prompt.user_turn(right, left), markers=markers
     )
 
 
@@ -590,7 +628,11 @@ def test_every_decode_carries_the_grammar_and_asks_for_the_first_position() -> N
     day = _a_day()
     with JudgeServer(_reply("two-events")) as server:
         judge.judge_pair(
-            day.items[0], day.items[1], client=_client(server), settings=_settings()
+            day.items[0],
+            day.items[1],
+            client=_client(server),
+            settings=_settings(),
+            markers=committed_markers(),
         )
         decodes = server.decodes
 
@@ -614,18 +656,25 @@ def test_the_decode_is_sent_at_the_judging_knob_and_not_the_entry() -> None:
     tuning = settings.app.assemble.same_story.judging_knobs()
     day = _a_day()
     with JudgeServer(_reply("two-events")) as server:
-        judge.judge_pair(day.items[0], day.items[1], client=_client(server), settings=settings)
+        judge.judge_pair(
+            day.items[0],
+            day.items[1],
+            client=_client(server),
+            settings=settings,
+            markers=committed_markers(),
+        )
         decodes = server.decodes
 
     assert decodes, "no body was posted, so this proves nothing"
     assert tuning.judge_temperature == 0.0, "the committed judging knob is no longer greedy"
-    assert settings.models.summarize.inference.temperature != tuning.judge_temperature, (
+    entry = settings.models.summarize
+    assert entry.request["temperature"] != tuning.judge_temperature, (
         "the entry and the knob hold the same number, so this test cannot tell them apart"
     )
     for body in decodes:
         assert body["temperature"] == tuning.judge_temperature
-        assert body["top_p"] == settings.models.summarize.inference.top_p
-        assert body["seed"] == settings.models.summarize.inference.seed
+        assert body["top_p"] == entry.request["top_p"]
+        assert body["seed"] == entry.request["seed"]
 
 
 def test_a_reply_the_grammar_could_not_have_written_is_written_down(
@@ -646,7 +695,11 @@ def test_a_reply_the_grammar_could_not_have_written_is_written_down(
     with JudgeServer(_reply("the-grammar-was-not-applied")) as server:
         with caplog.at_level(logging.WARNING, logger="idhazh"):
             read = judge.read_once(
-                day.items[0], day.items[1], client=_client(server), settings=_settings()
+                day.items[0],
+            day.items[1],
+            client=_client(server),
+            settings=_settings(),
+            markers=committed_markers(),
             )
 
     assert read.verdict is None
@@ -670,7 +723,11 @@ def test_a_first_token_outside_the_grammar_is_written_down(
     with JudgeServer(_reply("the-word-was-patched-in-afterwards")) as server:
         with caplog.at_level(logging.WARNING, logger="idhazh"):
             read = judge.read_once(
-                day.items[0], day.items[1], client=_client(server), settings=_settings()
+                day.items[0],
+            day.items[1],
+            client=_client(server),
+            settings=_settings(),
+            markers=committed_markers(),
             )
 
     assert read.verdict is None
@@ -782,11 +839,15 @@ def test_a_thinking_entry_reads_its_verdict_off_the_answer_span() -> None:
     thought = _rendered_reply("thinking-span-one")
     with JudgeServer(thought, _rendered_reply("thinking-span-two")) as server:
         reading = judge.read_once(
-            day.items[0], day.items[1], client=_client(server), settings=settings
+            day.items[0],
+            day.items[1],
+            client=_client(server),
+            settings=settings,
+            markers=_thinking_markers(),
         )
         decodes = server.decodes
 
-    close = settings.models.judge.turns.thinking_close if settings.models.judge else None
+    close = settings.models.judge.thinking_close if settings.models.judge else None
     assert reading.verdict is SameStoryVerdict.YES
     assert reading.thinking_spans == 1
     assert reading.thinking == json.loads(thought)["content"]
@@ -816,7 +877,11 @@ def test_a_pairs_calls_are_counted_rather_than_derived_from_its_pairs() -> None:
     spans = (_rendered_reply("thinking-span-one"), _rendered_reply("thinking-span-two"))
     with JudgeServer(cold_reply) as cold_server:
         cold = judge.judge_pair(
-            day.items[0], day.items[1], client=_client(cold_server), settings=_settings()
+            day.items[0],
+            day.items[1],
+            client=_client(cold_server),
+            settings=_settings(),
+            markers=committed_markers(),
         )
     with JudgeServer(*spans) as thinking_server:
         thinking = judge.judge_pair(
@@ -824,6 +889,7 @@ def test_a_pairs_calls_are_counted_rather_than_derived_from_its_pairs() -> None:
             day.items[1],
             client=_client(thinking_server),
             settings=_settings_judging_behind_a_thinking_span(),
+            markers=_thinking_markers(),
         )
 
     recorded = parse_completion(cold_reply.decode("utf-8"))
@@ -850,7 +916,11 @@ def test_a_pair_whose_first_reading_was_refused_still_makes_its_second_call() ->
     day = _a_day()
     with JudgeServer(_reply("the-word-was-patched-in-afterwards"), _reply("one-event")) as server:
         result = judge.judge_pair(
-            day.items[0], day.items[1], client=_client(server), settings=_settings()
+            day.items[0],
+            day.items[1],
+            client=_client(server),
+            settings=_settings(),
+            markers=committed_markers(),
         )
         decodes = server.decodes
 
@@ -862,33 +932,17 @@ def test_a_pair_whose_first_reading_was_refused_still_makes_its_second_call() ->
     assert result.grammar_applied is False, "one call outside the grammar makes the pair false"
 
 
-def test_the_decode_digest_cannot_tell_the_two_envelopes_apart() -> None:
-    """Why the envelope needs a column and a stamp field of its own.
-
-    The only posted key a reasoning span moves is the prompt, and the prompt is
-    the one key the decode stamp excludes - so the answer body and the answer
-    body with a thought spliced in front of it digest to the same value. Without
-    a field saying which envelope ran, a record counted cold and a record counted
-    after reasoning are one population with nothing able to separate them.
-    """
-    settings = _settings_judging_behind_a_thinking_span()
-    entry = judge.entry_of(settings)
-    answer = judge.decode_body(
-        settings, system=prompt.system_turn(), user=prompt.blank_user_turn()
-    )
-    behind_a_thought = answer_span(answer, thought="a reason", turns=entry.turns)
-
-    assert behind_a_thought["prompt"] != answer["prompt"]
-    assert decode_digest(behind_a_thought) == decode_digest(answer)
-
-
 def test_a_settings_with_no_judge_role_decodes_one_span_and_says_so() -> None:
     """The committed default. A fresh clone judges exactly as it judges today."""
     day = _a_day()
     settings = _settings()
     with JudgeServer(_reply("two-events")) as server:
         reading = judge.read_once(
-            day.items[0], day.items[1], client=_client(server), settings=settings
+            day.items[0],
+            day.items[1],
+            client=_client(server),
+            settings=settings,
+            markers=committed_markers(),
         )
         decodes = server.decodes
 
@@ -907,7 +961,7 @@ def test_a_judge_role_decodes_on_the_weights_the_summariser_server_holds() -> No
     assert judging is not None
     assert judge.entry_of(settings) is judging
     assert judging.sha256 == settings.models.summarize.sha256
-    assert judging.turns.thinks and not settings.models.summarize.turns.thinks
+    assert judging.thinks and not settings.models.summarize.thinks
 
 
 def test_a_verdict_is_the_word_and_at_most_one_leading_space() -> None:
@@ -1054,7 +1108,6 @@ def test_a_verdict_file_round_trips_through_the_contract(
     assert row.decode_seconds is not None
     assert row.judge_id == "content-similarity-judge"
     assert row.judge_temperature == stamp.judge_temperature
-    assert row.decode_digest == stamp.decode_digest
     assert row.grammar_applied is True
     assert row.thinking_spans == 0, "the committed entry declares no reasoning span"
     assert row.first_token_probabilities is not None

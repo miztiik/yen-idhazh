@@ -5,7 +5,7 @@ Living, one question one answer. The reading below was taken on one day and
 the date is in the title; a re-run of this measurement REPLACES this page and
 moves **Last Updated**, and git history holds what it said.
 
-Plan 11 row #3f had to raise `models.summarize.inference.n_ctx` so both calls
+Plan 11 row #3f had to raise `--ctx-size` on the summarize entry so both calls
 fit at the truncation cap, and it was dispatched with a table measured on one
 cap-length article. This session re-measured the whole sequence on eight, took
 the memory reading at three windows, and decomposed the label call's prompt into the
@@ -17,12 +17,12 @@ re-read findings stand and are not touched here.
 
 | | |
 | --- | --- |
-| Weights | `backend/models/Qwen3.5-9B-Q4_K_M.gguf`, 5,680,522,464 bytes, hashed against `models.summarize.inference.declared_for` |
+| Weights | `backend/models/Qwen3.5-9B-Q4_K_M.gguf`, 5,680,522,464 bytes, hashed against `models.summarize.declared_for` |
 | Server flags | From `server_argv` and `config/` alone: `--ctx-size <case> --no-context-shift --batch-size 512 --ubatch-size 512 --threads 4 -np 1 -fa on -lv 4 --metrics` |
 | Instrument | The server's own `POST /tokenize`. No decode ran in this session at all |
 | Hardware | A developer laptop: i7-1265U, 12 logical CPUs, 32 GiB, Windows, with four other agents live and 2.0 to 3.1 GB free at each case's start |
 | Prose | The 1,444 rows of `corpus/corpus.jsonl`, which is the only committed source text (`CLAUDE.md` section 0a) |
-| Config read | `extract.truncation_cap_tokens` 10,000, `elements.max_per_article` 256, `models.summarize.inference.n_ctx` 16,384 at the start |
+| Config read | `extract.truncation_cap_tokens` 10,000, `elements.max_per_article` 256, `--ctx-size` on the summarize entry 16,384 at the start |
 
 **Why the hardware bounds nothing here.** A tokenizer reading is not a timing.
 The same weights return the same token counts on any machine, and the llama.cpp
@@ -142,7 +142,7 @@ Three throwaway scripts, gitignored under `.tmp_*` and not committed, built on
 each carrying its own method and what to do when it moves.
 
 **One defect found in `measure_two_calls.py` and not fixed here.** Its printed
-ceiling subtracts `models.summarize.inference.max_output_tokens` as the label call's
+ceiling subtracts the retired `max_output_tokens` as the label call's
 decode budget, which stopped being the label call's budget when row #3g derived it from
 the grammar on 2026-09-12: 900 against 6,491. The ceiling it prints is therefore
 5,591 tokens too generous. It is an operator tool that nothing in CI calls, and

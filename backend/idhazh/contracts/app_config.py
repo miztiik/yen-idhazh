@@ -31,9 +31,9 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from types import MappingProxyType
-from typing import Any, ClassVar, Final, Self
+from typing import Annotated, Any, ClassVar, Final, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StringConstraints, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract
 from idhazh.contracts.knobs.assist import AssistConfig
@@ -44,7 +44,7 @@ from idhazh.contracts.knobs.council import CouncilConfig
 from idhazh.contracts.knobs.evaluation import DriftConfig, EvaluationConfig
 from idhazh.contracts.knobs.extract import ElementsConfig, ExtractConfig
 from idhazh.contracts.knobs.finetune import FinetuneConfig, ReferenceDatasetConfig
-from idhazh.contracts.knobs.models import SUPERSEDED_MODELS_NAMES, ModelsConfig, ModelsFile
+from idhazh.contracts.knobs.models import SUPERSEDED_MODELS_NAMES, ModelsConfig
 from idhazh.contracts.knobs.observability import LoggingConfig, ObservabilityConfig
 from idhazh.contracts.knobs.page_weight import PageWeightConfig
 from idhazh.contracts.knobs.placement import AssembleConfig, LensWeightsConfig, PlacementConfig
@@ -64,6 +64,17 @@ from idhazh.contracts.knobs.windows import months_a_window_can_touch
 #: lift would read one model out of the shared file while `models_file` named
 #: another, and the run would stand a server up on whichever won.
 SUPERSEDED_APP_NAMES: Final[Mapping[str, str]] = MappingProxyType({"models": "models_file"})
+
+
+#: Where the active model's whole entry lives, relative to `config/`. Pinned to
+#: one directory and to `.json` by the schema rather than checked in the loader:
+#: the value is an operator's edit that becomes a path this build opens, so the
+#: grammar is what rules out a traversal, an absolute path and a Windows
+#: separator (CLAUDE.md section 2).
+MODELS_FILE_PATTERN: Final = r"^models/[a-z0-9]+(?:[.-][a-z0-9]+)*\.json$"
+
+
+ModelsFile = Annotated[str, StringConstraints(pattern=MODELS_FILE_PATTERN)]
 
 
 def refuse_an_archive_window_no_preset_offers(ui: UiConfig, console: ConsoleConfig) -> None:
@@ -88,6 +99,11 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-22",
+            change="bench.repeats, additive, default 3 and at least 2.",
+            why="Both numbers the bench job's timeout is spent on now sit in one file.",
+        ),
+        ChangelogEntry(
             version="2026-09-21T15:00",
             change="council.first_night, repair_window_nights and repair_dates_a_night, additive.",
             why="A night plans the older dates its tenants are behind on, inside a bounded window.",
@@ -101,11 +117,6 @@ class AppConfig(Contract):
             version="2026-09-21T12:40",
             change="The judging-budget fit check left this contract for the tenant that owns it.",
             why="Reading config pulled one judge's measured pair cost into every reader.",
-        ),
-        ChangelogEntry(
-            version="2026-09-21T11:30",
-            change="council.tenants and council.shard_preamble_minutes, additive.",
-            why="The venue registers a tenant from config and knows what a job spends before it.",
         ),
         ChangelogEntry(
             version="2026-08-21",

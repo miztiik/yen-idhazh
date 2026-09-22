@@ -73,7 +73,6 @@ def a_judge() -> JudgeStamp:
         prompt_digest="a" * 64,
         grammar_digest="b" * 64,
         judge_temperature=0.0,
-        decode_digest="c" * 64,
         thinks=False,
     )
 

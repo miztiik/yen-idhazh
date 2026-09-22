@@ -6,6 +6,9 @@ import json
 import re
 import shlex
 import shutil
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -68,6 +71,10 @@ from ._harness import (
     _steps,
     _string_list,
 )
+
+#: The step that stands the tokenizer up for the budgets job. Named here rather
+#: than in the shared harness because one module reads it.
+BUDGETS_START_STEP = "Start the tokenizer"
 
 pytestmark = pytest.mark.workflow
 
@@ -644,83 +651,13 @@ def test_the_bench_corpus_size_is_a_knob_and_the_cut_follows_it(
         runtime_sweep.freeze_corpus("2026-09-17", items=2)
 
 
-def test_the_draft_depth_set_runs_four_cases_and_no_baseline() -> None:
-    """The reference is the head being OFF, not the unchanged server.
+def test_a_named_candidate_runs_the_baseline_and_rejects_a_difference() -> None:
+    """A named candidate answers what a setting costs, so it runs two cases."""
+    plan = runtime_sweep.case_plan("np1", threads=4, threads_batch=4)
 
-    The question is what the head does to the words, so the only honest zero is
-    the case that has no head. A baseline case would be a fifth pass over the
-    corpus answering a question two earlier dispatches already answered.
-    """
-    plan = runtime_sweep.case_plan(runtime_sweep.DRAFT_DEPTH, threads=4, threads_batch=4)
-
-    labels = [label for label, _, _ in plan.cases]
-    assert labels == ["head_off", "n_max_1", "n_max_2", "n_max_4"]
-    assert plan.reference == runtime_sweep.HEAD_OFF
-    assert sweep_verdict.BASELINE not in labels, "a case set runs no baseline"
-    assert plan.between_cases == sweep_verdict.BETWEEN_CASES_IS_THE_READING
-
-
-def test_every_draft_depth_case_is_pinned_to_temperature_zero() -> None:
-    """The single control the whole run rests on.
-
-    At the committed 0.2 the sampler alone reworded six of seven articles
-    between two readings of ONE configuration, so the head's effect and the
-    sampler's noise arrive as one number nobody can split. Three cases pinned
-    and one forgotten is a run that looks valid and measures nothing.
-    """
-    plan = runtime_sweep.case_plan(runtime_sweep.DRAFT_DEPTH, threads=4, threads_batch=4)
-
-    assert [update["temperature"] for _, update, _ in plan.cases] == [0.0, 0.0, 0.0, 0.0]
-
-
-def test_a_named_candidate_still_runs_the_baseline_and_rejects_a_difference() -> None:
-    """The existing two-case sweep is unchanged by the case-set path."""
-    plan = runtime_sweep.case_plan("no_draft", threads=4, threads_batch=4)
-
-    assert [label for label, _, _ in plan.cases] == [sweep_verdict.BASELINE, "no_draft"]
+    assert [label for label, _, _ in plan.cases] == [sweep_verdict.BASELINE, "np1"]
     assert plan.reference == sweep_verdict.BASELINE
     assert plan.between_cases == sweep_verdict.BETWEEN_CASES_REJECTS
-
-
-def test_a_depth_case_moves_n_max_and_keeps_the_weights_that_identify_the_head(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A case moves ONE field. The repository, the revision and the two digests
-    that say which bytes the head is stay exactly where they were, or the entry
-    stops naming the weights it measured."""
-    scratch = tmp_path / "candidate-config"
-    shutil.copytree(REPO_ROOT / "config", scratch)
-    candidate_pointer.point_at("models/gemma-4-e4b-qat.json", scratch=scratch)
-    monkeypatch.setattr(runtime_sweep, "CANDIDATE_CONFIG", scratch)
-    monkeypatch.setattr(runtime_sweep, "CONFIG_ROOT", tmp_path / "configs")
-    declared = json.loads(
-        read_text(REPO_ROOT / "config" / "models" / "gemma-4-e4b-qat.json")
-    )["summarize"]["draft"]
-
-    written = runtime_sweep.write_config("n_max_4-1", {"draft": {"n_max": 4}, "temperature": 0.0})
-
-    payload = json.loads((written / "models" / "gemma-4-e4b-qat.json").read_text(encoding="utf-8"))
-    draft = payload["summarize"]["draft"]
-    assert draft["n_max"] == 4, "the case moved the depth"
-    for key in ("repo", "revision", "file", "sha256", "spec_type"):
-        assert draft[key] == declared[key], f"{key} identifies the head and may not move"
-    assert payload["summarize"]["inference"]["temperature"] == 0.0
-
-
-def test_the_head_off_case_removes_the_draft_block_entirely(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Null is one model and no speculation, which is what case A has to be."""
-    scratch = tmp_path / "candidate-config"
-    shutil.copytree(REPO_ROOT / "config", scratch)
-    candidate_pointer.point_at("models/gemma-4-e4b-qat.json", scratch=scratch)
-    monkeypatch.setattr(runtime_sweep, "CANDIDATE_CONFIG", scratch)
-    monkeypatch.setattr(runtime_sweep, "CONFIG_ROOT", tmp_path / "configs")
-
-    written = runtime_sweep.write_config("head_off-1", {"draft": None, "temperature": 0.0})
-
-    payload = json.loads((written / "models" / "gemma-4-e4b-qat.json").read_text(encoding="utf-8"))
-    assert payload["summarize"]["draft"] is None
 
 
 def test_the_dispatch_corpus_size_is_written_into_the_config_every_stage_reads(
@@ -881,3 +818,175 @@ def test_the_fingerprint_job_reaches_the_stage_as_the_enum_it_is_declared_for() 
     assert refused.value.code == 2, "argparse refuses the value before any stage runs"
 
     assert ServerJob("runtime") is ServerJob.RUNTIME, "the bench's own value is in the set"
+
+
+def _a_process_that_exits_at_once(log: Path) -> subprocess.Popen[bytes]:
+    """A stand-in for a build that refuses one of its own flags.
+
+    No llama-server binary is committed and none can be, so the thing under
+    test is driven with the interpreter already running the suite: it writes a
+    refusal the way the real server writes one and exits non-zero. What is
+    being checked is what the sweep does with a process that is already gone,
+    and a process is a process.
+    """
+    with log.open("w", encoding="utf-8") as handle:
+        return subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                "import sys; print('error: invalid argument: --no-such-flag', "
+                "file=sys.stderr, flush=True); raise SystemExit(1)",
+            ],
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+        )
+
+
+def test_a_server_that_died_at_startup_is_refused_in_about_two_seconds(tmp_path: Path) -> None:
+    """A flag the build refuses used to cost ten minutes of polling a closed port.
+
+    `wait_for_health` asks for up to 600 seconds, which is the right patience
+    for weights still loading and the wrong answer entirely for a process that
+    exited at argv parse. One dispatch burned five hours that way, and the
+    probe workflow that would have caught it is gone.
+
+    The refusal has to carry the server's last words with it: the log is a file
+    on a runner that is about to be destroyed, so a message naming only the
+    exit code leaves nobody able to say which flag it was.
+    """
+    log = tmp_path / "llama-server.log"
+    dead = _a_process_that_exits_at_once(log)
+    started = time.perf_counter()
+    with pytest.raises(RuntimeError) as refused:
+        runtime_sweep.refuse_a_server_that_died_at_startup(dead, log)
+    took = time.perf_counter() - started
+
+    assert took < runtime_sweep.START_GRACE_SECONDS, (
+        f"a dead process should be reported as soon as it is reaped, not in {took:.2f}s"
+    )
+    assert "exited 1" in str(refused.value)
+    assert "--no-such-flag" in str(refused.value), "the refused flag has to reach the operator"
+
+
+def test_a_server_that_is_still_running_is_not_refused(tmp_path: Path) -> None:
+    """The other half, and the half a check that always raised would fail.
+
+    Two seconds is the whole judgement: past it the process is treated as a
+    server still reading weights, and the health wait is what decides the rest.
+    """
+    log = tmp_path / "llama-server.log"
+    with log.open("w", encoding="utf-8") as handle:
+        alive = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(30)"],
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+        )
+    try:
+        started = time.perf_counter()
+        runtime_sweep.refuse_a_server_that_died_at_startup(alive, log)
+        took = time.perf_counter() - started
+    finally:
+        alive.kill()
+        alive.wait(timeout=20)
+
+    assert took >= runtime_sweep.START_GRACE_SECONDS, (
+        f"the check returned after {took:.2f}s, so it waited for nothing"
+    )
+
+
+def test_the_sweep_proves_its_server_survived_before_it_waits_on_health() -> None:
+    """The check buys nothing if a later edit moves it behind the wait.
+
+    `run_once` starts the process, proves it is still there, and only then
+    polls. In the other order the 600-second poll happens first and the
+    refusal reports a corpse ten minutes late, which is the exact cost this
+    exists to remove.
+    """
+    body = read_text(REPO_ROOT / "backend" / "utilities" / "runtime_sweep.py").partition(
+        "def run_once("
+    )[2]
+    assert body, "run_once is gone, so this is checking nothing"
+
+    started = body.index("subprocess.Popen(")
+    proved = body.index("refuse_a_server_that_died_at_startup(")
+    polled = body.index("wait_for_health(")
+    assert started < proved < polled, "the liveness proof belongs between the start and the wait"
+
+
+def test_the_budgets_job_proves_its_server_survived_before_it_waits_on_health() -> None:
+    """The same two seconds, in the job that starts a server inside a step.
+
+    This job cannot call the shared start script: it runs its server against a
+    scratch config that script knows nothing about, so it renders the flags and
+    backgrounds the process itself - and its own health wait is 180 attempts
+    five seconds apart, which is 900 seconds of asking a port nothing is
+    listening on.
+
+    Read off the step's own `run:` body rather than the shell the harness
+    follows delegation into, because what is being checked is that this step
+    carries the proof itself.
+    """
+    step = _step(_load_workflows()["measure.yml"], BUDGETS_JOB, "name", BUDGETS_START_STEP)
+    body = step.get("run")
+    assert isinstance(body, str), f"{BUDGETS_START_STEP} has no run body"
+
+    alive = body.index("kill -0")
+    polled = body.index("/health")
+    assert alive < polled, (
+        f"{BUDGETS_START_STEP} waits on health before it checks the process is there"
+    )
+    assert "tail -50 llama-server.log" in body[alive:polled], (
+        "a dead start-up has to print the server's last words - the log dies with the runner"
+    )
+
+
+def test_an_empty_repeat_dispatch_follows_the_knob_and_a_named_one_is_bounded(
+    tmp_path: Path,
+) -> None:
+    """Repeats and articles multiply into the passes a job timeout is spent on.
+
+    The count lived in the workflow's dispatch default and the corpus size in
+    `bench`, so raising one showed nobody the other. Both sit in `bench` now,
+    and the dispatch input overrules the knob for one run the way
+    `runtime_corpus_items` already did.
+
+    It stops short of that one's write into the scratch config. `corpus_items`
+    is written because `freeze-corpus`, `work` and `collect` each read it back;
+    this number has one reader, and a copy nothing reads is a second spelling
+    waiting to disagree.
+    """
+    scratch = tmp_path / "candidate-config"
+    shutil.copytree(REPO_ROOT / "config", scratch)
+    committed = json.loads(read_text(scratch / "idhazh.json"))["bench"]["repeats"]
+
+    assert runtime_sweep.repeats(scratch) == committed, "empty follows the knob"
+    assert runtime_sweep.repeats(scratch, dispatch="2") == 2, "a named value overrules it"
+    assert runtime_sweep.repeats(scratch) == committed, "and overruling it wrote nothing"
+
+    # One reading has no spread, and the contract refuses the value before the
+    # dispatch pays for a single pass.
+    with pytest.raises(SystemExit, match="refused"):
+        runtime_sweep.repeats(scratch, dispatch="1")
+    with pytest.raises(SystemExit, match="whole number"):
+        runtime_sweep.repeats(scratch, dispatch="three")
+
+
+def test_the_repeat_dispatch_input_defaults_to_following_the_knob() -> None:
+    """A default of 3 in the workflow is the knob's value written a second time."""
+    declared = _mapping(
+        _declared_dispatch_inputs(_load_workflows()["measure.yml"])["runtime_repeats"],
+        "measure.yml runtime_repeats",
+    )
+    assert declared["default"] == "", (
+        "an empty default is what leaves bench.repeats the one place the number lives"
+    )
+    assert "bench.repeats" in str(declared["description"]), (
+        "the input has to name the knob it overrules, or an operator cannot find it"
+    )
+
+    sweep = _step(
+        _load_workflows()["measure.yml"], BENCH_SERVER_JOB, "name", "Measure runtime candidate"
+    )
+    assert '--repeats "$RUNTIME_REPEATS"' in str(sweep.get("run")), (
+        "the dispatch value still reaches the sweep, empty or not"
+    )

@@ -67,6 +67,7 @@ from idhazh import config
 from idhazh.classify.calls import (
     build_label_request,
     build_summarize_and_plan_request,
+    label_budget_tokens,
     label_system_prompt,
     summarize_and_plan_budget_tokens,
     summarize_and_plan_user_turn,
@@ -76,17 +77,18 @@ from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.corpus import ChatRole, CorpusRow
 from idhazh.contracts.knobs.models import ModelsConfig
-from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.elements import element_table
 from idhazh.extract import TOKENS_PER_WORD, approx_tokens, truncate_to_tokens
 from idhazh.llm.server import (
     Completion,
+    TurnMarkers,
     completion_url,
+    derive_turn_markers,
     post,
     props,
     server_argv,
-    turn_markers,
     turn_markers_digest,
+    window,
 )
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
 
@@ -124,21 +126,21 @@ def weights_digest(weights: Path) -> str:
 
 
 def refuse_undeclared_weights(weights: Path, models: ModelsConfig, role: str = "summarize") -> str:
-    """Hash the file and compare it with the block that configures it.
+    """Hash the file and compare it with the entry that configures it.
 
-    `inference.declared_for` is the sha256 of the entry its inference block
-    belongs to, and `ModelsConfig` already refuses a config where those two
-    disagree. So this is the one comparison config cannot make for itself: the
-    bytes on this disk against the bytes the run was tuned for.
+    `declared_for` is the sha256 the entry's settings and markers were derived
+    against, and `config.load` already refuses a file where that and the entry's
+    own digest disagree. So this is the one comparison config cannot make for
+    itself: the bytes on this disk against the bytes the run was tuned for.
     """
     entry = getattr(models, role)
-    declared = entry.inference.declared_for
+    declared = entry.declared_for
     if declared is None:
         raise WrongWeightsError(
-            f"models.{role}.inference.declared_for is unset, so there is nothing to "
+            f"models.{role}.declared_for is unset, so there is nothing to "
             "check these weights against - set it before taking a reading"
         )
-    print(f"hashing {weights} against models.{role}.inference.declared_for", flush=True)
+    print(f"hashing {weights} against models.{role}.declared_for", flush=True)
     found = weights_digest(weights)
     if found != declared:
         raise WrongWeightsError(
@@ -336,7 +338,7 @@ def common_prefix(left: Sequence[int], right: Sequence[int]) -> int:
     return index
 
 
-def describe(endpoint: str, *, digest: str, turns: TurnsConfig) -> dict[str, Any]:
+def describe(endpoint: str, *, digest: str, markers: TurnMarkers) -> dict[str, Any]:
     """What the server says about itself, beside the weights it was handed.
 
     The chat template no longer renders these two prompts and is still recorded,
@@ -363,7 +365,7 @@ def describe(endpoint: str, *, digest: str, turns: TurnsConfig) -> dict[str, Any
             derive_text_digest(template) if isinstance(template, str) else None
         ),
         "chat_template_characters": len(template) if isinstance(template, str) else None,
-        "turn_markers_sha256": turn_markers_digest(turns),
+        "turn_markers_sha256": turn_markers_digest(markers),
     }
 
 
@@ -648,6 +650,7 @@ def run_item(
     label_cap: int,
     summarize_and_plan_cap: int,
     question_tokens: int | None,
+    markers: TurnMarkers,
 ) -> Reading:
     article = sample.article
     model = models.summarize
@@ -656,8 +659,9 @@ def run_item(
         article,
         table,
         model_id=model.id,
-        inference=model.inference,
-        turns=model.turns,
+        server=model.server,
+        request=model.request,
+        markers=markers,
         prompt_config=app.summarize,
     )
     if label_cap:
@@ -668,7 +672,7 @@ def run_item(
     second = build_summarize_and_plan_request(
         first,
         one.content,
-        turns=model.turns,
+        markers=markers,
         source_words=article.band_source_words,
         brief=article.brief,
     )
@@ -709,6 +713,7 @@ def pick_samples(
     tokenizer: Tokenizer,
     wanted: int,
     prompt_ceiling: int,
+    markers: TurnMarkers,
 ) -> list[tuple[Sample, int]]:
     """The longest corpus articles whose label-call prompt still fits.
 
@@ -725,8 +730,9 @@ def pick_samples(
             sample.article,
             table,
             model_id=model.id,
-            inference=model.inference,
-            turns=model.turns,
+            server=model.server,
+            request=model.request,
+            markers=markers,
             prompt_config=app.summarize,
         )
         tokens = tokenizer.count(str(request["prompt"]))
@@ -904,7 +910,7 @@ def main(argv: list[str] | None = None) -> int:
         binary=args.binary,
         weights=args.weights,
         model=model,
-        inference=model.inference,
+        server=model.server,
         port=args.server_port,
     )
     print(" ".join(argv_line), flush=True)
@@ -921,7 +927,8 @@ def main(argv: list[str] | None = None) -> int:
         endpoint = completion_url(base)
         timeout = args.request_minutes * 60.0
         tokenizer = Tokenizer(base=base, timeout=60.0)
-        described = describe(endpoint, digest=digest, turns=model.turns)
+        markers = derive_turn_markers(base, entry=model, timeout=timeout)
+        described = describe(endpoint, digest=digest, markers=markers)
 
         # What one item needs after the label call's prompt: the label call's decode, the
         # trailing turn and the summarize-and-plan call's decode. The summarize-and-plan call's
@@ -934,7 +941,6 @@ def main(argv: list[str] | None = None) -> int:
         # question's own text, because the difference between the two IS the
         # marker floor row #3e cannot go below - and measuring the report with
         # the rendered number makes that floor come out negative.
-        markers = turn_markers(model.turns)
         question = summarize_and_plan_user_turn(app.summarize)
         rendered_turn = tokenizer.count(markers.turn("user", question))
         question_tokens = tokenizer.tokenize(question)
@@ -944,15 +950,16 @@ def main(argv: list[str] | None = None) -> int:
         system_tokens = tokenizer.count(
             markers.turn("system", label_system_prompt(app.summarize))
         )
-        label_decode = model.inference.max_answer_tokens
+        label_decode = label_budget_tokens()
         summarize_and_plan_decode = summarize_and_plan_budget_tokens(app.summarize)
-        ceiling = model.inference.n_ctx - (label_decode + summarize_and_plan_decode + rendered_turn)
+        n_ctx = window(model.server)
+        ceiling = n_ctx - (label_decode + summarize_and_plan_decode + rendered_turn)
         print(
             f"the summarize-and-plan call's question is {trailing} tokens of text and "
             f"{rendered_turn} as a rendered turn; with {label_decode} for the label call's decode "
             f"and {summarize_and_plan_decode} for the second call's, the label "
             f"call's prompt may reach {ceiling} of "
-            f"{model.inference.n_ctx} in production",
+            f"{n_ctx} in production",
             flush=True,
         )
 
@@ -964,6 +971,7 @@ def main(argv: list[str] | None = None) -> int:
                 tokenizer=tokenizer,
                 wanted=wanted,
                 prompt_ceiling=ceiling,
+                markers=markers,
             )
             if wanted
             else []
@@ -979,8 +987,9 @@ def main(argv: list[str] | None = None) -> int:
                     built.article,
                     element_table(built.article, config=app.elements),
                     model_id=model.id,
-                    inference=model.inference,
-                    turns=model.turns,
+                    server=model.server,
+                    request=model.request,
+                    markers=markers,
                     prompt_config=app.summarize,
                 )["prompt"]
             )
@@ -1020,6 +1029,7 @@ def main(argv: list[str] | None = None) -> int:
                     label_cap=0 if uncapped else args.decode_cap,
                     summarize_and_plan_cap=args.decode_cap,
                     question_tokens=trailing,
+                    markers=markers,
                 )
             )
     finally:

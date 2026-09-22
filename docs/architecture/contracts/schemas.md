@@ -44,6 +44,16 @@ The union alone cannot be tested against at run time, and a reader that has to n
 
 `frontend/src/lib/payload/types.ts` mirrors `schemas/digest-day.schema.json`, `digest-view`, `search-index` and `visual-data` by hand, and the published reading surface is typed from it. It is not converted yet: several of its types narrow the contract on purpose (`DigestViewItem` is a `Pick`, and `markup` is a build-time field that is deliberately not in the schema), so replacing it is a design change to the reading path rather than a rename. The chart view models under `frontend/src/lib/charts/` that share a name with a `machine-panels` definition are the same kind of case - `console-machine-panels.spec.ts` checks them against the schema at run time instead.
 
+## The model file has no generated schema
+
+`config/models/<name>.json` is validated by `ModelsConfig` and is deliberately absent from `contracts/export.py`, so no `models-config.schema.json` and no `frontend/src/contracts/models-config.ts` exist. **A configuration file this project authors needs no declared shape** (`CLAUDE.md` Guardrail #3, owner ruling 2026-09-21): nothing but this repository writes one and nothing but this repository reads one, so a generated schema restates a model that is already its only reader, and a generated frontend type restates a file the frontend opens by hand.
+
+What the entry still declares is what this project's own code names: the weights, the architecture, the turn envelope, and the digest the settings were derived against. **What it does not declare is the settings themselves.** The `server` block is llama-server's own flags, spelled as the binary spells them and emitted verbatim, and the `request` block is the four values that go in a request body. A typed field for a value this project hands straight to another program is a second spelling somebody has to keep in step - and llama-server refuses a flag it does not accept at every server start, which names it and does not start.
+
+Two keys are required and both are refused by name at configuration load, in `idhazh.config.refuse_a_model_nothing_could_run`: `server["--ctx-size"]`, because this project does real arithmetic on the window and the published site reads it at build time, and `request["request_timeout_minutes"]`, because four call sites multiply it by sixty and llama-server has no default to fall back on. Everything else is optional, and absent means the server's own default.
+
+**The recorded shape keeps the old key.** `ModelRef.inference` is a plain mapping so a `run.json` an earlier run wrote - carrying a weights digest, a decode cap and option names no build declares now - still reads (section 11).
+
 ## Why the models, and not the schemas, are the source
 
 A JSON Schema is a good interchange format and a poor authoring format: it cannot express a cross-field invariant readably, it has no place to put a validator, and nobody catches a typo in it at edit time. A Pydantic model is typed at authoring time, carries its invariants as code, and is directly usable by the producer that writes the payload. Generating downward from it means the validation the backend enforces and the types the frontend trusts cannot disagree.
@@ -65,7 +75,6 @@ The shapes, and where each one lives once written:
 | Model | Schema | Persisted as |
 | --- | --- | --- |
 | `AppConfig` | `app-config` | `config/idhazh.json` |
-| `ModelsConfig` | `models-config` | `config/models/<name>.json`, one file per model. Which one is active is `AppConfig.models_file` ([../../concepts/config.md](../../concepts/config.md)), so this is the one document whose persisted path is a value rather than a literal. |
 | `AppearanceConfig` | `appearance-config` | `config/appearance.json` |
 | `Sources` | `sources` | `config/sources.json` |
 | `Taxonomy` | `taxonomy` | `config/taxonomy.json` |
@@ -278,6 +287,10 @@ The rewrite is a committed one-shot utility rather than an ad-hoc script, so a f
 
 A migrated row keeps the `version` cell it was written with. The base contract accepts an older stamp on purpose, so a later read-side migration has something to branch on; restamping every row would erase the only marker of which rows predate the change.
 
+**A narrowing declares the heading it dropped, or the store is unrepairable as well as unappendable.** `ledger.migrate_header` refuses any heading that is neither a current column nor one the reader carries, rather than dropping cells silently - so a column deleted from a contract with nothing declaring it leaves the committed files refusing the append AND refusing the re-file that would fix them. The declaration is a frozen set on the row itself, named `DROPPED_CELLS`, and the ledger hands it to the engine through the store's entry in `ledger.keyed_paths`. `ItemHealthRow` has held one since 2026-09-17; `StorySimilarityPair` gained one on 2026-09-21 when `decode_digest` left. One set serves both sides of the row: the committed day file reaches it through the ledger, and a JSON payload reaches it through a before-validator that drops the same keys, so a removal declared once is honoured wherever the row is read.
+
+**A record whose own name is a stamp over its values lands under a new name when one of those values goes.** `StorySimilarityDistribution.record_stamp` is the archive filename, so removing a stamped value moves it exactly as changing one would: the next record counted archives under the old name and a fresh one starts. Nothing ever re-derives an archive's name, so every file already written stays readable under the name it has, and the reset happens once.
+
 ### Widening a row ledger writes an empty cell, never a value invented today
 
 Adding a column is the same commit shape as dropping one, and for the same reason: `require_matching_header` compares the header tuple exactly, so the contract change and the file rewrite land together or the next append stops the run.
@@ -302,7 +315,7 @@ The dry run is the default, as it is for the prune verb - writing takes a word n
 
 It checks one thing and leaves the rest to the engine: the row count may not move, because that is the only failure `migrate_header` cannot see from inside a single file. Everything else is already there - it refuses a heading this build cannot place, keeps a row no reader could place and raises, and re-files through the contract's own reader rather than cell by cell.
 
-`StorySimilarityPair` is the first shape it was written for. It gained seven columns on 2026-09-21 - `judge_id`, `judge_temperature`, `decode_digest`, `grammar_applied`, `first_token_probabilities`, `thinking_spans` and `judged_by_run_id` - and the seven are declared in the row's own body rather than inherited from `judge_call.JudgeConfigStamp`. Pydantic collects a base class's fields first, so inheriting would have put them at the HEAD of the header and re-read every committed row one cell out of place. A mixin that cannot be inherited by the row it was written for is the price of a store with rows already in it, and it is the reason `JudgeConfigStamp` is a mixin rather than a base class.
+`StorySimilarityPair` is the first shape it was written for. It gained six columns on 2026-09-21 - `judge_id`, `judge_temperature`, `grammar_applied`, `first_token_probabilities`, `thinking_spans` and `judged_by_run_id` - and the six are declared in the row's own body rather than inherited from `judge_call.JudgeConfigStamp`. Pydantic collects a base class's fields first, so inheriting would have put them at the HEAD of the header and re-read every committed row one cell out of place. A mixin that cannot be inherited by the row it was written for is the price of a store with rows already in it, and it is the reason `JudgeConfigStamp` is a mixin rather than a base class. A seventh column, `decode_digest`, landed and left the same day, and re-filing it away is what made this door narrow as well as widen - the carried set now travels with the reader out of `keyed_paths`, and the reader is looked up for one day rather than for every committed file (Guardrail #12).
 
 `judge_id` is the one appended cell the widening fills rather than leaves empty: its default is not `None`, and the rows it fills were written by the judge that owns the store. That makes it the one column the reader has to name. `StorySimilarityPair.from_csv_row` drops the key when the cell is empty so pydantic supplies the default, and it does that BY NAME - a predicate over "any field whose default is not `None`" would also drop `version`, because a required field has no default at all, and the before-validator would then refill it with this build's own stamp. That is silent coercion on the one cell that says which rows predate the widening.
 

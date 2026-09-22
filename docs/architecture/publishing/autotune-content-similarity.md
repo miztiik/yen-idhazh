@@ -659,14 +659,16 @@ the row records that the decode came loose and not which check caught it.
 
 **It is a change rather than a repair, and the record pays for it once.** The 82
 rows written before 2026-09-21 carry the old quantity in the same column, and
-the only thing that tells a reader which is which is the empty `decode_digest`
-cell on the older rows. The record's own stamp widened at the same time - it now
-carries the sampler temperature, the decode digest and whether a reasoning span
-ran - so every count in it archives and starts again once, by construction rather
-than because a judge changed. That is the price of the two populations the record
-used to merge in silence: a run judging behind a reasoning span and a run judging
-cold produce different numbers in one column, and before the widening nothing
-could separate them afterwards.
+what tells a reader which is which is the empty `first_token_probabilities` cell
+on the older rows - the new rule is computed out of that window, so a row with no
+window is a row the old rule produced. Their `version` cell says `2026-09-18`
+beside it. The record's own stamp widened at the same time - it now carries the
+sampler temperature and whether a reasoning span ran - so every count in it
+archives and starts again once, by construction rather than because a judge
+changed. That is the price of the two populations the record used to merge in
+silence: a run judging behind a reasoning span and a run judging cold produce
+different numbers in one column, and before the widening nothing could separate
+them afterwards.
 
 **The judge may take a model entry of its own, and no committed file gives it
 one.** The one thing this judge wants from a second entry is a reasoning span in
