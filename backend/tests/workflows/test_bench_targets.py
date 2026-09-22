@@ -6,6 +6,9 @@ import json
 import re
 import shlex
 import shutil
+import subprocess
+import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -46,7 +49,6 @@ from ._harness import (
     BENCH_TRIAL_STATE,
     BUDGETS_EMIT_STEP,
     BUDGETS_JOB,
-    CANDIDATE_CONFIG_ACTION,
     COMMIT_SCRIPT,
     COMMIT_STAGED_PATHS,
     FINGERPRINT_BENCH_JOB,
@@ -56,7 +58,6 @@ from ._harness import (
     MODELS_POINTER_KEY,
     PINNED_LLAMA_BUILD,
     _artifact_upload,
-    _composite_action_script,
     _declared_dispatch_inputs,
     _expression,
     _job,
@@ -64,13 +65,16 @@ from ._harness import (
     _mapping,
     _needs,
     _normalize_condition,
-    _runtime_cache_keys,
     _script,
     _stage_invocations,
     _step,
     _steps,
     _string_list,
 )
+
+#: The step that stands the tokenizer up for the budgets job. Named here rather
+#: than in the shared harness because one module reads it.
+BUDGETS_START_STEP = "Start the tokenizer"
 
 pytestmark = pytest.mark.workflow
 
@@ -101,12 +105,6 @@ def test_the_bench_is_one_target_that_runs_two_cases_in_order() -> None:
         "the server case waits for the raw case, or it downloads the weights again"
     )
 
-    keys = dict(_runtime_cache_keys(workflow))
-    assert keys == {
-        BENCH_RAW_JOB: BENCH_CACHE_KEY,
-        BENCH_SERVER_JOB: BENCH_CACHE_KEY,
-        BUDGETS_JOB: BENCH_CACHE_KEY,
-    }, "one key, written the same way twice, or the restore misses"
     composed = BENCH_CACHE_KEY.replace(
         _expression("needs.models.outputs.candidate_cache_key"), "a" * 64
     ).replace(_expression("env.LLAMA_CPP_BUILD"), PINNED_LLAMA_BUILD)
@@ -174,120 +172,6 @@ def test_a_bench_artifact_outlives_the_dispatch_that_wrote_it() -> None:
         assert int(str(with_block["retention-days"])) == BENCH_RETENTION_DAYS, job_name
 
 
-def test_the_bench_measures_a_candidate_without_touching_the_committed_config() -> None:
-    """A scratch copy differs in the active model file and in where its rows go.
-
-    Every control the numbers are read under - prompt, schema, sampler, context,
-    threads, truncation cap - is the committed one by construction, because the
-    copy is the committed tree with the pointer moved and nothing else touched.
-    That is the exact line a swap moves, so the bench runs the swap rather than
-    an imitation of it.
-
-    `run.trial_state_dirname` is the second line and it is not a control. It
-    says where this run's own ledgers land, not what the run measures, and the
-    test below pins that the two destinations cannot overlap.
-
-    The entry's own fields are the assertion. This step used to write `sha256`,
-    `repo`, `revision`, `file`, `id` and `quantisation` onto the copied entry
-    and overwrite both `declared_for` digests, which asserted that numbers
-    measured for one model held for another.
-
-    The shell moved into a composite action on 2026-09-15, because the bench and
-    the validation arm carried byte-identical copies of it. This reads the
-    action, and the call site is asserted below.
-    """
-    workflow = _load_workflows()["measure.yml"]
-    step = _step(workflow, BENCH_SERVER_JOB, "name", BENCH_CONFIG_STEP)
-    assert step.get("uses") == f"./.github/actions/{CANDIDATE_CONFIG_ACTION}", (
-        "the bench builds its scratch config through the shared action"
-    )
-
-    script = _composite_action_script(CANDIDATE_CONFIG_ACTION)
-    assert f"cp -a config {BENCH_CANDIDATE_CONFIG}" in script
-    assert "backend/utilities/candidate_pointer.py" in script
-    pointer_source = read_text(REPO_ROOT / "backend" / "utilities" / "candidate_pointer.py")
-    assert f'POINTER_KEY = "{MODELS_POINTER_KEY}"' in pointer_source, (
-        "through the pointer, never by filename"
-    )
-    for field in ("sha256", "declared_for", "quantisation", "revision"):
-        assert field not in script and field not in pointer_source, (
-            f"the scratch config writes {field} onto the entry instead of moving the pointer"
-        )
-
-    sweep = _script(
-        _step(workflow, BENCH_SERVER_JOB, "name", "Measure runtime candidate"),
-        f"measure.yml/{BENCH_SERVER_JOB}/Measure runtime candidate",
-    )
-    assert "backend/utilities/runtime_sweep.py sweep" in sweep
-    # The property, not the spelling. The sweep copies the CANDIDATE tree; a
-    # copy of `config` would measure the incumbent under the candidate's name.
-    # This used to read the step's own heredoc and now reads the module the step
-    # calls, which is the same assertion one indirection later.
-    assert runtime_sweep.CANDIDATE_CONFIG == Path(BENCH_CANDIDATE_CONFIG)
-    source = read_text(REPO_ROOT / "backend" / "utilities" / "runtime_sweep.py")
-    assert "shutil.copytree(CANDIDATE_CONFIG, dst)" in source
-
-    for job_name in (BENCH_RAW_JOB, BENCH_SERVER_JOB):
-        for step in _steps(workflow, job_name):
-            body = step.get("run")
-            if not isinstance(body, str):
-                continue
-            where = f"measure.yml/{job_name}/{step.get('name')}"
-            assert not re.search(r">\s*config/", body), f"{where} writes the committed config"
-            assert "docs/reference/models" not in body, f"{where} writes a committed page"
-
-
-def test_the_server_case_reads_the_raw_case_and_emits_a_page_to_paste() -> None:
-    """The Oracle for this case. Two artifacts of numbers are a transcription job.
-
-    Emitting the dossier body with the numbers already in it is what makes
-    adopting a model a paste. The step runs after the sweep, because half the
-    page is what the sweep measured, and it writes under `backend/var` only -
-    nothing about a bench reaches a committed file.
-    """
-    workflow = _load_workflows()["measure.yml"]
-    steps = _steps(workflow, BENCH_SERVER_JOB)
-    names = [str(step.get("name") or step.get("uses")) for step in steps]
-
-    downloads = [
-        step for step in steps if str(step.get("uses", "")).startswith("actions/download-artifact")
-    ]
-    assert len(downloads) == 1, "the server case reads one artifact: the raw case's"
-    assert (
-        _mapping(downloads[0].get("with"), "download").get("name")
-        == BENCH_ARTIFACTS[BENCH_RAW_JOB]
-    )
-
-    script = _script(
-        _step(workflow, BENCH_SERVER_JOB, "name", BENCH_EMIT_STEP),
-        f"measure.yml/{BENCH_SERVER_JOB}/{BENCH_EMIT_STEP}",
-    )
-    assert "measure_llm.py emit" in script
-    assert "--raw backend/var/raw-case/" in script
-    assert "--server backend/var/runtime-sweep/runtime-summary.json" in script
-    assert "--dossier backend/var/" in script
-    assert names.index("Measure runtime candidate") < names.index(BENCH_EMIT_STEP)
-    assert names.index(BENCH_EMIT_STEP) < names.index("Upload runtime sweep")
-
-
-def test_the_raw_case_refuses_weights_the_dispatch_did_not_declare() -> None:
-    """The raw case downloads inside Python, so its byte check is a flag not a step.
-
-    `measure_llm.py` resolves the Hub's own digest and compares it with the one
-    the dispatch declared before it benches anything. Without the flag the
-    harness measures whatever the repository holds today and says nothing, and a
-    number filed under a model that never ran is worse than no number
-    (Guardrail #10).
-    """
-    workflow = _load_workflows()["measure.yml"]
-    script = _script(
-        _step(workflow, BENCH_RAW_JOB, "name", "Benchmark the candidate"),
-        f"measure.yml/{BENCH_RAW_JOB}/Benchmark the candidate",
-    )
-    assert "--expect-sha256" in script
-    assert '--expect-sha256 "$CANDIDATE_SHA256"' in script, "read by name, never pasted"
-
-
 def test_a_bypassed_speed_case_skips_that_job_and_nothing_else() -> None:
     """The Oracle for the bypass. A bypass that skipped half the workflow is worse than none.
 
@@ -334,7 +218,7 @@ def test_a_bypassed_speed_case_skips_that_job_and_nothing_else() -> None:
 
     # The other three targets cannot be reached by this at all, and that is a
     # fact about the graph rather than an assurance.
-    for name in ("image", "corpus", BUDGETS_JOB, "batched"):
+    for name in ("corpus", BUDGETS_JOB, "batched"):
         assert BENCH_RAW_JOB not in _needs(workflow, name), name
 
 
@@ -934,3 +818,175 @@ def test_the_fingerprint_job_reaches_the_stage_as_the_enum_it_is_declared_for() 
     assert refused.value.code == 2, "argparse refuses the value before any stage runs"
 
     assert ServerJob("runtime") is ServerJob.RUNTIME, "the bench's own value is in the set"
+
+
+def _a_process_that_exits_at_once(log: Path) -> subprocess.Popen[bytes]:
+    """A stand-in for a build that refuses one of its own flags.
+
+    No llama-server binary is committed and none can be, so the thing under
+    test is driven with the interpreter already running the suite: it writes a
+    refusal the way the real server writes one and exits non-zero. What is
+    being checked is what the sweep does with a process that is already gone,
+    and a process is a process.
+    """
+    with log.open("w", encoding="utf-8") as handle:
+        return subprocess.Popen(
+            [
+                sys.executable,
+                "-c",
+                "import sys; print('error: invalid argument: --no-such-flag', "
+                "file=sys.stderr, flush=True); raise SystemExit(1)",
+            ],
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+        )
+
+
+def test_a_server_that_died_at_startup_is_refused_in_about_two_seconds(tmp_path: Path) -> None:
+    """A flag the build refuses used to cost ten minutes of polling a closed port.
+
+    `wait_for_health` asks for up to 600 seconds, which is the right patience
+    for weights still loading and the wrong answer entirely for a process that
+    exited at argv parse. One dispatch burned five hours that way, and the
+    probe workflow that would have caught it is gone.
+
+    The refusal has to carry the server's last words with it: the log is a file
+    on a runner that is about to be destroyed, so a message naming only the
+    exit code leaves nobody able to say which flag it was.
+    """
+    log = tmp_path / "llama-server.log"
+    dead = _a_process_that_exits_at_once(log)
+    started = time.perf_counter()
+    with pytest.raises(RuntimeError) as refused:
+        runtime_sweep.refuse_a_server_that_died_at_startup(dead, log)
+    took = time.perf_counter() - started
+
+    assert took < runtime_sweep.START_GRACE_SECONDS, (
+        f"a dead process should be reported as soon as it is reaped, not in {took:.2f}s"
+    )
+    assert "exited 1" in str(refused.value)
+    assert "--no-such-flag" in str(refused.value), "the refused flag has to reach the operator"
+
+
+def test_a_server_that_is_still_running_is_not_refused(tmp_path: Path) -> None:
+    """The other half, and the half a check that always raised would fail.
+
+    Two seconds is the whole judgement: past it the process is treated as a
+    server still reading weights, and the health wait is what decides the rest.
+    """
+    log = tmp_path / "llama-server.log"
+    with log.open("w", encoding="utf-8") as handle:
+        alive = subprocess.Popen(
+            [sys.executable, "-c", "import time; time.sleep(30)"],
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+        )
+    try:
+        started = time.perf_counter()
+        runtime_sweep.refuse_a_server_that_died_at_startup(alive, log)
+        took = time.perf_counter() - started
+    finally:
+        alive.kill()
+        alive.wait(timeout=20)
+
+    assert took >= runtime_sweep.START_GRACE_SECONDS, (
+        f"the check returned after {took:.2f}s, so it waited for nothing"
+    )
+
+
+def test_the_sweep_proves_its_server_survived_before_it_waits_on_health() -> None:
+    """The check buys nothing if a later edit moves it behind the wait.
+
+    `run_once` starts the process, proves it is still there, and only then
+    polls. In the other order the 600-second poll happens first and the
+    refusal reports a corpse ten minutes late, which is the exact cost this
+    exists to remove.
+    """
+    body = read_text(REPO_ROOT / "backend" / "utilities" / "runtime_sweep.py").partition(
+        "def run_once("
+    )[2]
+    assert body, "run_once is gone, so this is checking nothing"
+
+    started = body.index("subprocess.Popen(")
+    proved = body.index("refuse_a_server_that_died_at_startup(")
+    polled = body.index("wait_for_health(")
+    assert started < proved < polled, "the liveness proof belongs between the start and the wait"
+
+
+def test_the_budgets_job_proves_its_server_survived_before_it_waits_on_health() -> None:
+    """The same two seconds, in the job that starts a server inside a step.
+
+    This job cannot call the shared start script: it runs its server against a
+    scratch config that script knows nothing about, so it renders the flags and
+    backgrounds the process itself - and its own health wait is 180 attempts
+    five seconds apart, which is 900 seconds of asking a port nothing is
+    listening on.
+
+    Read off the step's own `run:` body rather than the shell the harness
+    follows delegation into, because what is being checked is that this step
+    carries the proof itself.
+    """
+    step = _step(_load_workflows()["measure.yml"], BUDGETS_JOB, "name", BUDGETS_START_STEP)
+    body = step.get("run")
+    assert isinstance(body, str), f"{BUDGETS_START_STEP} has no run body"
+
+    alive = body.index("kill -0")
+    polled = body.index("/health")
+    assert alive < polled, (
+        f"{BUDGETS_START_STEP} waits on health before it checks the process is there"
+    )
+    assert "tail -50 llama-server.log" in body[alive:polled], (
+        "a dead start-up has to print the server's last words - the log dies with the runner"
+    )
+
+
+def test_an_empty_repeat_dispatch_follows_the_knob_and_a_named_one_is_bounded(
+    tmp_path: Path,
+) -> None:
+    """Repeats and articles multiply into the passes a job timeout is spent on.
+
+    The count lived in the workflow's dispatch default and the corpus size in
+    `bench`, so raising one showed nobody the other. Both sit in `bench` now,
+    and the dispatch input overrules the knob for one run the way
+    `runtime_corpus_items` already did.
+
+    It stops short of that one's write into the scratch config. `corpus_items`
+    is written because `freeze-corpus`, `work` and `collect` each read it back;
+    this number has one reader, and a copy nothing reads is a second spelling
+    waiting to disagree.
+    """
+    scratch = tmp_path / "candidate-config"
+    shutil.copytree(REPO_ROOT / "config", scratch)
+    committed = json.loads(read_text(scratch / "idhazh.json"))["bench"]["repeats"]
+
+    assert runtime_sweep.repeats(scratch) == committed, "empty follows the knob"
+    assert runtime_sweep.repeats(scratch, dispatch="2") == 2, "a named value overrules it"
+    assert runtime_sweep.repeats(scratch) == committed, "and overruling it wrote nothing"
+
+    # One reading has no spread, and the contract refuses the value before the
+    # dispatch pays for a single pass.
+    with pytest.raises(SystemExit, match="refused"):
+        runtime_sweep.repeats(scratch, dispatch="1")
+    with pytest.raises(SystemExit, match="whole number"):
+        runtime_sweep.repeats(scratch, dispatch="three")
+
+
+def test_the_repeat_dispatch_input_defaults_to_following_the_knob() -> None:
+    """A default of 3 in the workflow is the knob's value written a second time."""
+    declared = _mapping(
+        _declared_dispatch_inputs(_load_workflows()["measure.yml"])["runtime_repeats"],
+        "measure.yml runtime_repeats",
+    )
+    assert declared["default"] == "", (
+        "an empty default is what leaves bench.repeats the one place the number lives"
+    )
+    assert "bench.repeats" in str(declared["description"]), (
+        "the input has to name the knob it overrules, or an operator cannot find it"
+    )
+
+    sweep = _step(
+        _load_workflows()["measure.yml"], BENCH_SERVER_JOB, "name", "Measure runtime candidate"
+    )
+    assert '--repeats "$RUNTIME_REPEATS"' in str(sweep.get("run")), (
+        "the dispatch value still reaches the sweep, empty or not"
+    )

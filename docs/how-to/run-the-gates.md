@@ -220,20 +220,26 @@ against `files.pythonhosted.org`. `ensurepip` then `pip`
 is the path that works. If `uv` starts working, nothing in the repo depends on
 which installer produced the environment.
 
-Five extras are declared. Install only what you need:
+Three extras are declared. Install only what you need:
 
 | Extra | Pulls | When |
 | --- | --- | --- |
 | `dev` | `ruff`, `mypy`, `pytest`, `PyYAML`, `shellcheck-py` | always - this is the gate set |
-| `measure` | `feedparser`, `trafilatura` | live source sampling; hits the network |
-| `bench-image` | `torch`, `diffusers` | image-model benchmarking; multi-gigabyte |
 | `faithfulness` | `torch`, `transformers` | the HHEM scorer; multi-gigabyte, and it downgrades `tokenizers` |
 | `langfuse` | `langfuse` and six OpenTelemetry distributions | only to send spans to a Langfuse host you named; 32.7 MB and about 4 minutes |
 
-`measure`, `bench-image` and `faithfulness` are heavy, and the first reaches the
-network. No test imports any of them, and `langfuse` is imported inside one
-function that only runs when `LANGFUSE_HOST` and its key pair are all set. The
-local span sink needs none of it.
+`faithfulness` is the heavy one. No test imports it, and `langfuse` is imported
+inside one function that only runs when `LANGFUSE_HOST` and its key pair are all
+set. The local span sink needs none of it.
+
+**The two workflows that install `faithfulness` take `torch` from
+`https://download.pytorch.org/whl/cpu` first, then the extra.** The default PyPI
+wheel for Linux carries the graphics-card runtime, and a runner has no graphics
+card (`CLAUDE.md` Guardrail #2), so the plain install spent gigabytes on a
+runtime it could never execute. The index stays in the workflow rather than in
+the extra, because a local version pinned in `pyproject.toml` would follow a
+developer whose own machine does have a card. Install the extra however you like
+locally - nothing in the gate set imports it.
 
 ## Running the gates when the machine is shared
 

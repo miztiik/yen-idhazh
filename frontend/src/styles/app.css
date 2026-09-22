@@ -46,6 +46,7 @@
 	--color-chart-grid: var(--chart-grid);
 	--color-chart-axis: var(--chart-axis);
 	--color-chart-marker: var(--chart-marker);
+	--color-chart-change: var(--chart-change);
 
 	--color-tint-accent: var(--tint-accent);
 	--color-tint-info: var(--tint-info);

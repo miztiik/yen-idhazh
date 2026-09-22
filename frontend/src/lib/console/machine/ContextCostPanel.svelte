@@ -20,6 +20,7 @@
 		linearAxis,
 		modelRuleRow,
 		modelRuleTitle,
+		MODEL_RULE_LABEL,
 		modelRules,
 		noModelRuleNote,
 		observeWidth,
@@ -28,6 +29,7 @@
 	} from '$lib/charts/frame';
 	import {
 		namesMoved,
+		namesMovedShort,
 		settingsByDate,
 		unreadRuleNote,
 		type SettingsMoved
@@ -119,7 +121,7 @@
 			rows: contextBoundaries.has(contextRuns[index]?.date ?? '')
 				? [
 						...column.rows,
-						modelRuleRow(namesMoved(movedOn.get(contextRuns[index]?.date ?? '') ?? []))
+						modelRuleRow(namesMovedShort(movedOn.get(contextRuns[index]?.date ?? '') ?? []))
 					]
 				: column.rows
 		}))
@@ -259,12 +261,22 @@
 								x2={rule.x}
 								y1={contextBox.top}
 								y2={contextBox.bottom}
-								stroke="var(--color-text-tertiary)"
+								stroke="var(--chart-change)"
+								stroke-width="1.5"
 								stroke-dasharray="3 3"
 								data-model-rule-line={rule.date}
 							>
 								<title>{modelRuleTitle(rule.date, namesMoved(movedOn.get(rule.date) ?? []))}</title>
 							</line>
+							<text
+								x={rule.x + 3}
+								y={contextBox.top + 9}
+								fill="var(--chart-change)"
+								font-size="10"
+								data-model-rule-label={rule.date}
+							>
+								{MODEL_RULE_LABEL}
+							</text>
 						{/each}
 
 						{#if contextAt !== null && contextX[contextAt] !== undefined}

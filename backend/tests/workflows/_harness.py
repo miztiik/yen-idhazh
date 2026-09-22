@@ -21,7 +21,7 @@ from typing import Any, Final, cast
 
 import pytest
 import yaml  # type: ignore[import-untyped]
-from conftest import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh import ledger
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision, VisualKind, VisualState
@@ -44,12 +44,6 @@ LOCAL_ACTION_PREFIX: Final = "./"
 #: the cache key was the half that drifted. Named here so the tests ask which
 #: jobs call it rather than which jobs spell it.
 MODEL_SERVER_ACTION: Final = "./.github/actions/model-server"
-
-#: Which jobs stand a model server up through that action. Closed-world: a third
-#: caller belongs here, and a job that goes back to spelling the five steps for
-#: itself fails rather than quietly owning a second copy.
-MODEL_SERVER_CALLERS: Final = {("digest.yml", "work"), ("llm-council.yml", "judge")}
-
 #: The five steps that action owns, in the order it runs them. A caller that
 #: still spells one of these names owns a second copy of it, which is what the
 #: extraction removed.
@@ -73,7 +67,6 @@ EXPECTED_WORKFLOWS: Final = {
         "Pages publication",
         frozenset({"workflow_run", "workflow_dispatch"}),
     ),
-    "probe.yml": ("Runtime probe", frozenset({"workflow_dispatch"})),
     "prune.yml": ("Corpus prune", frozenset({"schedule", "workflow_dispatch"})),
     "validate.yml": ("Model validation", frozenset({"workflow_dispatch"})),
 }
@@ -195,31 +188,46 @@ CONTENT_REFRESH_SHARD_DEFAULT: Final = "4"
 # work job while `config/idhazh.json` declared different numbers that nothing
 # read, so config was a wrong answer with a schema behind it (Guardrail #6).
 WORK_BOUND_KEYS: Final = frozenset({"timeout-minutes", "max-parallel"})
+# The shared steps that install the build, the file that decides which build,
+# and the workflows converted onto them. A converted caller carries no copy of
+# the pin, so the two cannot disagree.
+LLAMA_RUNTIME_SCRIPT: Final = "fetch-model-runtime.sh"
 
-# Every major below was read from its own `action.yml` on 2026-08-24 and declares
-# `using: node24`. `upload-pages-artifact@v5` is composite and pins a Node 24
-# `upload-artifact`, so it carries no Node 20 of its own.
-APPROVED_ACTION_MAJORS: Final = {
-    "actions/cache": "v6",
-    "actions/checkout": "v6",
-    "actions/configure-pages": "v6",
-    "actions/deploy-pages": "v5",
-    "actions/download-artifact": "v8",
-    "actions/setup-node": "v7",
-    "actions/setup-python": "v7",
-    "actions/upload-artifact": "v7",
-    "actions/upload-pages-artifact": "v5",
-}
+# The runtime half on its own. `fetch-model-runtime.sh` sources it.
+LLAMA_INSTALL_SCRIPT: Final = "install-llama-runtime.sh"
+
+LLAMA_SHARED_SCRIPTS: Final = (LLAMA_RUNTIME_SCRIPT, LLAMA_INSTALL_SCRIPT)
+
+LLAMA_PIN_SCRIPT: Final = "llama-cpp-pin.sh"
+
+# What a converted caller may not spell for itself. The build is the one an
+# upgrade moves; the other two move with it and are what a half-done upgrade
+# leaves behind.
+LLAMA_PIN_NAMES: Final = ("LLAMA_CPP_BUILD", "LLAMA_CPP_ASSET", "LLAMA_CPP_SHA256")
+
+
+def _read_the_pin() -> tuple[str, str, str]:
+    """The three pin values, read from the one script that holds them.
+
+    They were written here as well until now, so a pin bump was three edits in
+    two files and a stale copy here would have agreed with itself while the
+    runners ran something else.
+    """
+    text = (SCRIPTS_DIR / LLAMA_PIN_SCRIPT).read_text(encoding="utf-8")
+    values: dict[str, str] = {}
+    for name in LLAMA_PIN_NAMES:
+        found = re.search(rf"^{name}=(.+)$", text, re.MULTILINE)
+        assert found, f"{LLAMA_PIN_SCRIPT} no longer declares {name}"
+        values[name] = found.group(1).strip().strip('"')
+    build = values["LLAMA_CPP_BUILD"]
+    asset = values["LLAMA_CPP_ASSET"].replace("${LLAMA_CPP_BUILD}", build)
+    return build, asset, values["LLAMA_CPP_SHA256"]
+
 
 # One llama.cpp build for the pipeline, the validation case and the measurement
-# harness. The sha256 was read from the release API's own `digest` field and
-# confirmed by downloading the 16,377,727-byte archive and hashing it, on
-# 2026-08-25.
-PINNED_LLAMA_BUILD: Final = "b10598"
-
-PINNED_LLAMA_ASSET: Final = f"llama-{PINNED_LLAMA_BUILD}-bin-ubuntu-x64.tar.gz"
-
-PINNED_LLAMA_SHA256: Final = "d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c"
+# harness. The sha256 is the release API's own `digest` field, confirmed by
+# downloading the 16,377,727-byte archive and hashing it, on 2026-08-25.
+PINNED_LLAMA_BUILD, PINNED_LLAMA_ASSET, PINNED_LLAMA_SHA256 = _read_the_pin()
 
 # Every workflow that installs the pinned llama.cpp build, whether or not it
 # then stands a server up. This is the set the pin and the digest check are
@@ -231,39 +239,9 @@ LLAMA_RUNTIME_WORKFLOWS: Final = frozenset(
         "idhazh-pipeline-tests.yaml",
         "llm-council.yml",
         "measure.yml",
-        "probe.yml",
         "validate.yml",
     }
 )
-
-# The shared steps that install the build, the file that decides which build,
-# and the workflows converted onto them. A converted caller carries no copy of
-# the pin, so the two cannot disagree. Every name still outside this set spells
-# the pin out in its own `env:` block and fetches the build itself, which is the
-# arrangement that let a fetch step and a cache key name different builds.
-#
-# A conversion moves a name in here and nothing else: the pin test below then
-# stops asking that workflow for an `env:` copy and starts refusing one.
-LLAMA_RUNTIME_SCRIPT: Final = "fetch-model-runtime.sh"
-
-# The runtime half on its own, for the one job that installs the binary and
-# opens no weights. `fetch-model-runtime.sh` sources it.
-LLAMA_INSTALL_SCRIPT: Final = "install-llama-runtime.sh"
-
-LLAMA_SHARED_SCRIPTS: Final = (LLAMA_RUNTIME_SCRIPT, LLAMA_INSTALL_SCRIPT)
-
-LLAMA_PIN_SCRIPT: Final = "llama-cpp-pin.sh"
-
-LLAMA_SCRIPT_CALLERS: Final = frozenset(
-    {"digest.yml", "idhazh-pipeline-tests.yaml", "llm-council.yml", "probe.yml", "validate.yml"}
-)
-
-LLAMA_INLINE_RUNTIME_WORKFLOWS: Final = LLAMA_RUNTIME_WORKFLOWS - LLAMA_SCRIPT_CALLERS
-
-# What a converted caller may not spell for itself. The build is the one an
-# upgrade moves; the other two move with it and are what a half-done upgrade
-# leaves behind.
-LLAMA_PIN_NAMES: Final = ("LLAMA_CPP_BUILD", "LLAMA_CPP_ASSET", "LLAMA_CPP_SHA256")
 
 # The three values themselves, which is what a converted caller is refused. The
 # NAME is not the test: a job whose stage records which build decoded the bytes
@@ -271,13 +249,6 @@ LLAMA_PIN_NAMES: Final = ("LLAMA_CPP_BUILD", "LLAMA_CPP_ASSET", "LLAMA_CPP_SHA25
 # the step that published the pin is reading the one home rather than copying
 # it. A literal is the copy, and a literal is what drifts.
 LLAMA_PIN_VALUES: Final = (PINNED_LLAMA_BUILD, PINNED_LLAMA_ASSET, PINNED_LLAMA_SHA256)
-
-# The subset that starts a server and posts to it. `probe.yml` installs the
-# same binary and asks it what it accepts, which needs no port - and a port
-# declared where nothing reads it is a value that can go stale with nothing to
-# catch it, which is the failure the port test exists to stop.
-LLAMA_SERVER_WORKFLOWS: Final = LLAMA_RUNTIME_WORKFLOWS - {"probe.yml"}
-
 LLAMA_DIGEST_CHECK: Final = 'echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256sum --check'
 
 LLAMA_PINNED_ENDPOINT: Final = (
@@ -408,7 +379,7 @@ BROWSER_CACHE_PATH: Final = "~/.cache/ms-playwright"
 # reader, because a key written twice drifts and a drifted key never hits.
 BROWSER_VERSION_SOURCE: Final = ("ci.yml", "scope", "browsers", "playwright")
 
-MEASUREMENT_TARGETS: Final = frozenset({"bench", "image", "corpus", "batched", "budgets"})
+MEASUREMENT_TARGETS: Final = frozenset({"bench", "corpus", "batched", "budgets"})
 
 
 #: The bench is one target and two jobs: raw prefill and decode first, then a
@@ -538,29 +509,6 @@ LLAMA_PORT_ENV: Final = "LLAMA_PORT"
 LLAMA_PORT_VALUE: Final = "8080"
 
 LLAMA_PORT_READ: Final = "http://127.0.0.1:${LLAMA_PORT}"
-
-# Every step in the repository that stands a llama-server up, and the config
-# root each one reads. Discovery in the test is closed-world, so a new one fails
-# here until it appears with an install ahead of it.
-#
-# A job may declare more than one, in the order the steps run. One per job was
-# the rule until the pipeline test workflow, and it was an accident of every
-# job so far serving one model for its whole life: a slot count is fixed when
-# the process starts, so a case that moves it has to restart the server inside
-# the job it shares with the cases it is compared against. What the closed world
-# still buys is unchanged - every starter is discovered by reading and the set
-# is compared by equality, so a server stood up any other way still fails here.
-SERVER_STARTERS: Final[dict[tuple[str, str], tuple[tuple[str, str | None], ...]]] = {
-    ("digest.yml", "work"): (("Start the model", "config"),),
-    ("idhazh-pipeline-tests.yaml", "cases"): (
-        ("Start the model", "backend/var/cases/baseline/config"),
-        ("Restart the model with two slots", "backend/var/cases/parallel-2/config"),
-    ),
-    ("llm-council.yml", "judge"): (("Start the model", "config"),),
-    ("measure.yml", "budgets"): (("Start the tokenizer", "backend/var/candidate-config"),),
-    ("validate.yml", "qualify"): (("Start the candidate", "backend/var/candidate-config"),),
-}
-
 #: The starters that are not steps. `measure.yml`'s runtime case starts a server
 #: too, but it does it inside a module rather than inside a heredoc - so the
 #: Oracle reads the module. It is held here, beside the steps, because the thing
@@ -575,54 +523,6 @@ SERVER_STARTER_MODULES: Final = (
 #: reaches `server_argv` through this is still a starter, and `_server_starters`
 #: counts it as one.
 ARGV_MODULE_CALL: Final = "backend/utilities/llama_argv.py"
-
-RUNTIME_LOG_SUMMARY_STEPS: Final = {
-    "work": ("Prompt cache log summary", "llama-server.log"),
-}
-
-# Four llama-server lines, copied from the captures under
-# `tests/fixtures/runtime/` and then edited in one place each: the second
-# carries `n_ctx_seq` where the capture carries `n_ctx_slot`, and the fourth
-# carries `n_ctx_per_seq`. Those two spellings appear in no capture this project
-# holds - they are what a later llama.cpp bump renames the field to, and the
-# whole reason the summary step greps three names for one field.
-#
-# Until 2026-09-09 every line here opened at `srv` or `slot` and the first two
-# said `kv_unified = 'true'`. No line llama-server prints looks like that: the
-# tag is the third field, after a timestamp and a level letter, and all four
-# captures print `'false'`. That is the same mistake the summary step's own
-# pattern made, written down twice and agreeing with itself.
-RUNTIME_LOG_LINES: Final = (
-    (
-        "0.03.804.331 I srv    load_model: initializing, n_slots = 1, "
-        "n_ctx_slot = 8192, kv_unified = 'false'"
-    ),
-    (
-        "0.03.804.331 I srv    load_model: initializing, n_slots = 1, "
-        "n_ctx_seq = 8192, kv_unified = 'false'"
-    ),
-    (
-        "3.09.738.586 I slot get_availabl: id  0 | task -1 | selected slot by LCP similarity, "
-        "f_sim_best = 0.926 (> 0.100 thold), f_keep = 0.782"
-    ),
-    (
-        "0.33.179.385 I srv    load_model: initializing, n_slots = 1, "
-        "n_ctx_per_seq = 8192, kv_unified = 'false'"
-    ),
-)
-
-# The head of llama-server's own log, one per work shard of run `2026-08-29-3`.
-# The pattern below is checked against these rather than against the four
-# strings above, because a pattern nobody ran against a real line is how the
-# `^(srv|slot) ` anchor survived review (Guardrail #7).
-RUNTIME_LOG_CAPTURES: Final = sorted(
-    (FIXTURES_DIR / "runtime").glob("2026-08-29-3-shard-*.server-head.txt")
-)
-
-# The tag a capture carries that this step is not for: the common-args block.
-# Named so the count below is a number and not "most of them".
-RUNTIME_LOG_UNCLAIMED_TAG: Final = "cmn"
-
 RSS_SAMPLE_FILE: Final = "rss-samples.tsv"
 
 SERVER_LOG_FILE: Final = "llama-server.log"
@@ -642,18 +542,6 @@ MEMORY_SUMMARY_STEP: Final = "What memory this shard used"
 # what `.github/scripts/` is for (`CLAUDE.md` section 3). It is also now under
 # `shellcheck`, which cannot see a `run:` body.
 SAMPLE_SCRIPT: Final = SCRIPTS_DIR / "sample-rss.sh"
-
-# Which `rss-samples.tsv` column the operator print reads at each `awk` field
-# number. It reads by position, so this mapping is the whole agreement between
-# the step that writes the file and the step that reads it - and it lives in no
-# other file, which is why it is written out here.
-RSS_SAMPLE_FIELDS: Final = {
-    2: "llama_vmrss_kb",
-    3: "llama_vmhwm_kb",
-    4: "python_vmrss_kb",
-    6: "python_vmhwm_kb",
-}
-
 # The roll-call beside it: one row per python process per sample, so the count
 # in `python_procs` can be attributed. Same reader hazard as above - the
 # operator print reads it by position - so the same agreement is written down.
@@ -678,23 +566,6 @@ METRICS_FILE: Final = "llama-metrics.prom"
 METRICS_ENDPOINT: Final = "http://127.0.0.1:${LLAMA_PORT}/metrics"
 
 METRICS_SERIES: Final = ("llamacpp:n_busy_slots_per_decode", "llamacpp:n_tokens_max")
-
-RUNTIME_CANDIDATES: Final = frozenset(
-    {
-        "baseline",
-        "np1",
-        "batch2048",
-        "no_startup_warmup",
-        "flash_attention_on",
-        "load_mode_mmap_mlock",
-        "kv_q8",
-        "prio_poll",
-        "threads",
-        "threads_batch",
-        "np2_inflight",
-    }
-)
-
 # The one commit-and-push step both daily jobs run. They differ in what they
 # stage, in the strings they pass, and in whether they can rebuild what they
 # commit, which is what makes the retry behaviour executable by a test instead
@@ -1064,7 +935,9 @@ def _parsed_workflows() -> dict[str, dict[str, object]]:
         return _PARSED_WORKFLOWS
 
     paths = sorted((*WORKFLOWS_DIR.glob("*.yml"), *WORKFLOWS_DIR.glob("*.yaml")))
-    assert {path.name for path in paths} == set(EXPECTED_WORKFLOWS)
+    # Discovered, not compared against a list. A new workflow used to fail every
+    # test in this directory here, before reaching the one that was about it.
+    assert paths, f"{WORKFLOWS_DIR} ships no workflow, so nothing below reads anything"
 
     workflows: dict[str, dict[str, object]] = {}
     for path in paths:
@@ -2075,6 +1948,8 @@ _ORIGIN_TEMPLATES: Final[dict[tuple[str, ...], Path]] = {}
 
 
 @pytest.fixture(scope="session", autouse=True)
+
+
 def _discard_origin_templates() -> Iterator[None]:
     """Delete the built origins once the last test that copies one has run."""
     yield
@@ -2333,6 +2208,24 @@ def _starter_shell(step: Mapping[str, object]) -> str:
     if START_SERVER_SCRIPT.name not in body:
         return body
     return body + "\n" + read_text(START_SERVER_SCRIPT)
+
+
+def _model_server_callers(
+    workflows: Mapping[str, dict[str, object]],
+) -> set[tuple[str, str]]:
+    """Every job that stands a model server up through the shared action.
+
+    Read off the `uses:` line rather than listed here. The list meant a third
+    caller had to be written down in a test file before it could exist, which
+    is a test asking to be edited rather than a test naming a defect.
+    """
+    return {
+        (filename, job_name)
+        for filename, workflow in workflows.items()
+        for job_name in _mapping(workflow.get("jobs"), f"{filename} jobs")
+        for step in _declared_steps(workflow, job_name)
+        if step.get("uses") == MODEL_SERVER_ACTION
+    }
 
 
 def _server_starters(

@@ -14,7 +14,6 @@ on:
         default: bench
         options:
           - bench
-          - image
           - corpus
           - batched
           - budgets
@@ -63,9 +62,12 @@ on:
           - np2_inflight
           - no_draft
           - draft_depth
+      # What the job timeout is spent on is repeats times articles times cases,
+      # and the first two of those now sit beside each other in `bench` so that
+      # raising one shows the other. Empty follows `bench.repeats`.
       runtime_repeats:
-        description: 'Repeats per case. A named candidate runs two cases, so 3 does not fit the job timeout - use 2'
-        default: '3'
+        description: 'Repeats per case, overruling bench.repeats for this run. Use 2 for draft_depth'
+        default: ''
       # The corpus is what the job timeout is actually spent in, and a case set
       # multiplies it: `draft_depth` runs FOUR cases, so two repeats is eight
       # passes rather than the four a named candidate costs. At the 13.1 minutes
@@ -413,40 +415,6 @@ jobs:
           path: backend/var/
           retention-days: 90
 
-  image:
-    name: Picture model on this runner
-    if: ${{ inputs.target == 'image' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-python@v7
-        with:
-          python-version: '3.12'
-
-      - name: Install CPU-only torch + diffusers
-        run: |
-          set -euo pipefail
-          pip install --index-url https://download.pytorch.org/whl/cpu torch
-          pip install "git+https://github.com/huggingface/diffusers" transformers accelerate
-
-      # One candidate, not two. `alpha-vllm/Anima-2.9B` does not exist on the Hub
-      # - it answered 401 Repository Not Found on 2026-08-23 - so Row #9's
-      # "measure both" gate was always going to run one leg. The harness prints
-      # each denoising step as it lands, because both earlier attempts died
-      # before the image finished and left no number behind them.
-      - name: Time the candidate on CPU
-        run: |
-          set -euo pipefail
-          python3 backend/utilities/bench_image.py \
-            --model Tongyi-MAI/Z-Image-Turbo --steps 9 --sizes 512 --dtype bfloat16 \
-            || echo "Z-Image-Turbo did not complete on this runner"
-
-      - uses: actions/upload-artifact@v7
-        with:
-          name: bench-image
-          path: backend/var/
-
   corpus:
     name: How long real articles are
     if: ${{ inputs.target == 'corpus' }}
@@ -472,8 +440,8 @@ jobs:
           echo "nproc=$(nproc)"
           lscpu | grep -E 'Model name' | head -1
 
-      - name: Install the measurement extra
-        run: pip install -e ".[measure]"
+      - name: Install the package
+        run: pip install -e "."
 
       - name: Measure real article lengths
         env:
@@ -986,6 +954,18 @@ jobs:
           echo "starting: ${LLAMA_ARGV[*]}"
           LD_LIBRARY_PATH=backend/bin nohup "${LLAMA_ARGV[@]}" > llama-server.log 2>&1 &
           echo "$!" > llama-server.pid
+          # A build that refuses one of these flags is gone in under a second,
+          # and the wait below would then spend 900 of them asking a closed
+          # port. Two seconds separates a dead start-up from a slow one. It is
+          # the same check the shared start script does, written out here
+          # because this job cannot call that script - it starts its server
+          # against a scratch config the script does not know about.
+          sleep 2
+          kill -0 "$(cat llama-server.pid)" || {
+            echo "the tokenizer exited before it could answer" >&2
+            tail -50 llama-server.log >&2
+            exit 1
+          }
           for _ in $(seq 1 180); do
             curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null && break
             sleep 5
