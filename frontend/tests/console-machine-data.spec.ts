@@ -522,7 +522,7 @@ test.describe('the ledgers this reads are the committed ones', () => {
 		};
 		const models = JSON.parse(
 			readFileSync(join(HERE, '..', '..', 'config', config.models_file), 'utf8')
-		) as { summarize: { inference: { n_ctx: number } } };
+		) as { summarize: { server: { '--ctx-size': number } } };
 		expect(limits.contextWindow).toBe(models.summarize.server['--ctx-size']);
 		expect(limits.jobTimeoutSeconds).toBe(config.run.shard_timeout_minutes * 60);
 	});
@@ -836,7 +836,7 @@ const CONSOLE = JSON.parse(
 	context_high_percentile: number;
 	context_cut_off_reason: string;
 };
-const INFERENCE = JSON.parse(
+const SERVER_FLAGS = JSON.parse(
 	readFileSync(
 		resolve(
 			process.cwd(),
@@ -850,14 +850,14 @@ const INFERENCE = JSON.parse(
 		),
 		'utf8'
 	)
-).summarize.inference as { n_ctx: number };
+).summarize.server as { '--ctx-size': number };
 
 const WIDEST = Math.max(...CONSOLE.window_presets);
 
 /** The limit every canary item ran under. The canary writes the committed
- * `inference.n_ctx`, so a fixture that disagreed with the config would draw a
+ * `--ctx-size`, so a fixture that disagreed with the config would draw a
  * share no run ever had. */
-const CANARY_LIMIT = INFERENCE.n_ctx;
+const CANARY_LIMIT = SERVER_FLAGS['--ctx-size'];
 
 /** Drive the shared control to a preset and wait for the page to hold it. */
 async function widen(page: import('@playwright/test').Page, days: number) {
