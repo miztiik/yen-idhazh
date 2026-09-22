@@ -14,7 +14,9 @@ from typing import Any
 
 import pytest
 from conftest import a_request, a_server
+from pydantic import ValidationError
 
+from idhazh import cli
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.run import RunConfig
 from idhazh.contracts.knobs.summarize import SummarizeConfig
@@ -255,6 +257,33 @@ def test_every_gate_names_where_its_threshold_came_from() -> None:
 )
 def test_gate_provenance_keeps_its_recorded_citation(gate: GateName, source: str) -> None:
     assert outcomes_of(a_passing_shard())[gate].source == source
+
+
+def test_the_budget_threshold_names_the_replay_count_the_shards_recorded() -> None:
+    """The label reads what ran, never what a dispatch asked for.
+
+    A job bound with no replay count beside it is the same number whether an
+    item was summarized three times or ten, and the difference is most of what
+    the job spent.
+    """
+    assert "at 3 passes per item" in outcomes_of(a_passing_shard())[GateName.BUDGET].threshold
+    replayed = a_passing_shard(repeats=5)
+    assert "at 5 passes per item" in outcomes_of(replayed)[GateName.BUDGET].threshold
+
+
+def test_the_replay_count_falls_back_to_the_knob_and_the_flag_cannot_go_under_its_floor() -> None:
+    """`--repeats` overrides one invocation; the floor that refuses it is the knob's own.
+
+    One pass makes the determinism reading unable to fail, and a dispatch used
+    to be able to ask for it. The flag is resolved back through `RunConfig`, so
+    the refusal is the schema's rather than a second copy in the CLI.
+    """
+    assert cli.qualification_repeats(None, run=RUN) == RUN.qualification_repeats
+    assert cli.qualification_repeats(4, run=RUN) == 4
+    with pytest.raises(ValidationError):
+        cli.qualification_repeats(1, run=RUN)
+    with pytest.raises(ValidationError):
+        cli.qualification_repeats(11, run=RUN)
 
 
 # --- One failure at a time --------------------------------------------------
