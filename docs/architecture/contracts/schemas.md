@@ -307,7 +307,7 @@ The rewrite is small enough to be reviewed as a diff rather than run as a utilit
 
 ### Design rationale: one widener for every store, rather than one per widening
 
-`backend/utilities/widen_ledger_header.py` is the operator's door onto `ledger.migrate_header`. Until 2026-09-21 nothing in the repository could widen a header from a command line: `migrate_header` was reached only from the compaction verb, which folds a segment into a head and takes no store argument. So every widening before it shipped its own utility - `migrate_feed_health.py`, `migrate_item_health.py` - each one a new file doing what the engine already did.
+`backend/utilities/widen_ledger_header.py` is the operator's door onto `ledger.migrate_header`. Until 2026-09-21 nothing in the repository could widen a header from a command line: `migrate_header` was reached only from the compaction verb, which folds a segment into a head and takes no store argument. So every widening before it shipped its own utility - one for the feed-health header, another for the item-health header - each one a new file doing what the engine already did. Both are deleted; this door is what re-files either store now.
 
 One utility is possible because the two things it needs are already registered elsewhere. The store comes from the prune vocabulary, so a word means the same store in every command an operator types. The contract that reads a row comes from `ledger.keyed_paths`, which already pairs a committed file with its reader for the post-merge settlement. Neither list is restated in the utility, so neither can drift from it, and a store that ships before its writer reports nothing rather than failing.
 
