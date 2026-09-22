@@ -38,7 +38,7 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 | 3 | The hosted span sink goes | - | A | PENDING | - | - | - |
 | 4 | The retrieval loaders take the pin | - | A | PENDING | - | - | - |
 | 5 | The human-label path goes | - | A | PENDING | - | - | - |
-| 6 | The pipeline test commits what it produced | 1, 3 | B | PENDING | - | - | - |
+| 6 | The pipeline test commits what it produced | 1, 3, **plan 46** | B | PENDING | - | - | - |
 | 7 | The generated contract layer goes, and the contract catches up | 5, 6 | C | PENDING | - | - | - |
 | 8 | Nine console specs visit every route the site serves | - | - | DONE | p43r4 | #1040 | R4 |
 
@@ -57,7 +57,9 @@ Execute per docs/how-to/execute-a-plan.md: one owner carries the plan and delega
 
 **Wave A is five pull requests, and their file lists share not one path**: P1 owns the qualification surface, P2 the two deletions, P3 the retrieval evaluation, P4 the label path. `Parallel N = 4` bounds the writers, so the fifth starts as the first slot frees.
 
-**Wave B is P5 alone.** Row 6 shares `cli.py` and `config/idhazh.json` with row 1 and `stages/work.py` with row 3, so it waits for P1 and P2 rather than resolving them.
+**Wave B is P5 alone.** Row 6 shares `cli.py` and `config/idhazh.json` with row 1 and `stages/work.py` with row 3, so it waits for P1 and P2 rather than resolving them. It also waits on **plan 46**, which owns the rule its new committed path must follow, and shares `ledger.py`, `stages/work.py`, `cli.py`, `config/idhazh.json` and the push script with it.
+
+**Nothing else here depends on another plan.** Plan 44 and plan 47 collide with this one on `schemas/`, `validate.yml`, `pyproject.toml`, `cli.py`, `CLAUDE.md` and `determinism.md`, and a collision is a rebase, not a dependency. One ordering hazard is worth naming: **P6 deletes `schemas/` and `frontend/src/contracts/` whole**, while plans 44 and 46 both add files to them. Whichever lands second re-reads C9's census rather than assuming the name list is still six.
 
 **Wave C is P6 alone, and it is the long pole**: about 32,800 deleted lines, the only browser smoke in the plan, nine `CLAUDE.md` clauses, four new tests, a 31-field hand copy, and a rebase over every predecessor. It deletes the generated twin of every contract P4 and P5 move, so it runs last whatever else is ready.
 
@@ -137,7 +139,11 @@ A new `Contract` in `backend/idhazh/contracts/pipeline_test_summary.py`. `__sche
 
 **There is no `seen_text` column.** The text the model read is already retained for 90 days by `.github/workflows/idhazh-pipeline-tests.yaml:415-419`, which uploads `backend/var/cases/` and therefore every `*.article.json`; `retention.trial_state_days` is 90 too, so a committed copy would expire on the same day. The digest at column 10 is what ties a committed row to that artifact, and `text_digest` is the helper `backend/idhazh/stages/qualify.py` already uses. The column description says so in one line, naming the workflow path.
 
-**The write site is `stage_work`**, in `backend/idhazh/stages/work.py`, inside the per-item loop that already writes `items_dir / f"{item.item_id}.article.json"`. It is the only place in the pipeline that holds the article, the summary and the reply object at once. `stage_assemble` cannot be the site: it has no reply, so `finish_reason` is unreachable from it. `stage_record` cannot be the site either - five of the fourteen columns are not in scope there, and its own docstring forbids a sharded stage writing a day file, because up to nine shards would race for it.
+**The write site is `stage_work`**, in `backend/idhazh/stages/work.py`, inside the per-item loop that already writes `items_dir / f"{item.item_id}.article.json"`. It is the only place in the pipeline that holds the article, the summary and the reply object at once. `stage_assemble` cannot be the site: it has no reply, so `finish_reason` is unreachable from it. `stage_record` cannot be the site either - five of the fourteen columns are not in scope there.
+
+**`stage_work` is sharded, so the file is partitioned by writer.** It takes a `shard: int` and already writes its spans to a per-shard path. One day file appended by up to nine shards is the defect plan 46 exists to delete - a head written by more than one process, which no merge driver, sort order or refresh timing repairs. **This row writes one file per shard and folds at read**, which is plan 46's chosen strategy: partition by writer identity in the filename, settle at read time, fold a closed day once. Adopt whatever partition spelling plan 46 lands; do not invent a second one.
+
+**This is why row 6 depends on plan 46.** It is not waiting for an artifact - it is waiting for the rule, so that the day this plan mints a new committed path it mints it in the shape the other plan is converging everything else on.
 
 **Guard.** The row is appended only when `settings.app.run.case_id` is set. A production run leaves it unset and writes nothing, so the pipeline's own output is unchanged.
 
@@ -404,7 +410,7 @@ The same pass corrects the four documentation pages that describe the generator 
 
 ## Section 8 - Row 6: the pipeline test commits what it produced
 
-**PAUSE for decision D2 before the pull request opens.** Depends on rows 1 and 3.
+**PAUSE for decision D2 before the pull request opens.** Depends on rows 1 and 3, and on plan 46's one-writer rule (C2).
 
 **Scope.** Implement C2, C3, C4, C5 and C6 together: the fourteen-column contract, the fold codec, the case identity, the marker-free prune, and the two-job commit.
 
@@ -421,6 +427,7 @@ The same pass corrects the four documentation pages that describe the generator 
 - `pytest backend/tests/test_ledger.py backend/tests/retention/ backend/tests/workflows/test_staged_paths.py` green.
 - A prune over a trial root that empties it removes the root. Assert the child count under the state root falls.
 - `.github/workflows/idhazh-pipeline-tests.yaml` keeps `permissions: contents: read` on the case job.
+- **Two shards writing the same date produce two files, and reading the date returns both rows.** Assert it, or the row has rebuilt the defect plan 46 removes.
 
 **Oracle.** Fold a title containing a newline, a literal backslash-n, a double quote and a non-ASCII character, commit it through the real write path, read it back with `json.loads`, and assert the round-trip is exact and the cell is pure ASCII. A codec that cannot survive that input is the wrong codec, and the naive escape does not.
 
@@ -429,7 +436,7 @@ The same pass corrects the four documentation pages that describe the generator 
 | # | Decision |
 | --- | --- |
 | 1 | No `seen_text` column. The artifact already holds the bytes for 90 days and `trial_state_days` is 90, so a committed copy buys zero extra days and contradicts `article.py`'s own "Never republished". |
-| 2 | The write site is `stage_work`. It is the only stage holding article, summary and reply at once. |
+| 2 | The write site is `stage_work`. It is the only stage holding article, summary and reply at once, and it partitions by shard because it is sharded. |
 | 3 | `json.dumps` with `ensure_ascii=True`, never a hand-rolled escape. The hand-rolled one is not injective and silently breaks the digest. |
 | 4 | No `TrialStateMarker`. Enumerate trial roots against the declared store names instead. |
 | 5 | Two jobs for the commit. The job that runs a model over fetched text does not get a token that can push to `main` (Guardrail #11). |
