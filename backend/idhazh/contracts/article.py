@@ -71,6 +71,11 @@ class Article(Contract):
     __schema_stem__: ClassVar[str] = "article"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-22",
+            change="Added corroborated_word_count; FailureCode gained contaminated.",
+            why="The page states its own article's length, so an extraction can be checked.",
+        ),
+        ChangelogEntry(
             version="2026-09-15T22:10",
             change="FailureCode gained model_timed_out and shard_out_of_time.",
             why="Both were being reported under a name that sends an operator to the wrong place.",
@@ -84,11 +89,6 @@ class Article(Contract):
             version="2026-09-15T12:00",
             change="title_source records a trust decision, not provenance alone.",
             why="A page headline and a feed headline are not equally trustworthy.",
-        ),
-        ChangelogEntry(
-            version="2026-09-15T06:19",
-            change="Added title_source: feed or page, the headline's provenance.",
-            why="Extract now falls back to the page's own headline when the feed carried none.",
         ),
         ChangelogEntry(
             version="2026-08-21",
@@ -170,6 +170,21 @@ class Article(Contract):
             "republish. None on a payload written before the field existed."
         ),
     )
+    corroborated_word_count: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Words the page's own markup says its article has, read independently of "
+            "the extractor: the container whose heading matches `og:title`, JSON-LD "
+            "`articleBody`, or microdata `articleBody`, whichever states the most. A "
+            "count, never the text. None means the page stated no length worth "
+            "reading, or the payload was written before the field existed - the two "
+            "are not distinguished, because neither yields a ratio. Divide "
+            "`source_word_count` by it for the ratio `extract.corroboration_ratio_max` "
+            "bounds; the ratio is not stored, because two numbers that must agree "
+            "eventually disagree."
+        ),
+    )
     token_count: int = Field(default=0, ge=0)
     brief: bool = Field(
         default=False,
@@ -218,6 +233,7 @@ class Article(Contract):
                 FailureCode.TOO_SHORT,
                 FailureCode.NOT_PROSE,
                 FailureCode.BOILERPLATE,
+                FailureCode.CONTAMINATED,
             }:
                 raise ValueError("an ok article carries only a recorded extract signal")
         else:

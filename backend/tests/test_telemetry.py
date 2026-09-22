@@ -185,6 +185,26 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                 date=plan().date,
                 run_id="2026-08-21-1",
             )
+        case FailureCode.CONTAMINATED:
+            signalled = extract.to_article(
+                item(),
+                FetchResult(
+                    FetchOutcome.OK,
+                    status=200,
+                    body=(
+                        REPO_ROOT / "tests" / "fixtures" / "pages" / "contaminated-front-page.html"
+                    ).read_bytes(),
+                ),
+                config=settings.app.extract,
+                fetched_at="2026-08-21T06:00:00Z",
+            )
+            return telemetry.classify_item(
+                planned=item(),
+                article=signalled,
+                summary=summary(),
+                date=plan().date,
+                run_id="2026-08-21-1",
+            )
         case FailureCode.BOILERPLATE:
             signalled = extract.to_article(
                 item(),
@@ -425,7 +445,11 @@ def row_for(code: FailureCode) -> ItemHealthRow:
 def test_every_failure_code_has_a_real_fixture_writer(code: FailureCode) -> None:
     row = row_for(code)
 
-    if code in {FailureCode.NOT_PROSE, FailureCode.BOILERPLATE}:
+    if code in {
+        FailureCode.NOT_PROSE,
+        FailureCode.BOILERPLATE,
+        FailureCode.CONTAMINATED,
+    }:
         assert row.outcome is ItemOutcome.OK
     else:
         assert row.outcome is ItemOutcome.FAILED

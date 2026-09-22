@@ -478,8 +478,10 @@ def _canary_article(
     )
     words = len(seen.split())
     source_words = len(body.split())
-    # `extract` reads three shape signals here. The third compares an item
-    # against its siblings from the same host, and a canary has none.
+    # `extract` reads four shape signals here, and two of them cannot apply. One
+    # compares an item against its siblings from the same host, and a canary has
+    # none. The other compares an extraction against the length the page states,
+    # and a canary is raw text with no page behind it to state one.
     signal: FailureCode | None = None
     if extract.is_not_prose(body, extract_config):
         signal = FailureCode.NOT_PROSE
