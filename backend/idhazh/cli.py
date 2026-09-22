@@ -590,7 +590,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "Name --state-root as well, or read the committed tree."
             )
         state_dir = common.STATE_ROOT if args.state_root is None else args.state_root
-        return validate_days.stage_validate_days(args.digest_root, args.day, state_dir=state_dir)
+        return validate_days.stage_validate_days(
+            args.digest_root,
+            args.day,
+            state_dir=state_dir,
+            run_id=plan_stage._run_id(args.date or _today(), args.execution),
+        )
 
     if args.stage == "score-merge-line-holdout":
         # Above the fetcher for the reason validate-days is: it reads the marked
@@ -681,7 +686,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # off a file somebody else holds open.
         compact.stage_compact(
             common.STATE_ROOT if args.state_root is None else args.state_root,
-            date=args.date,
+            date=args.date or _today(),
             after_days=settings.app.run.settled_fold_after_days,
         )
         return 0

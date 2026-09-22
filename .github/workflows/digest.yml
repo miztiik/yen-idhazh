@@ -266,37 +266,10 @@ jobs:
       # written, and the rebase then held two derived versions of one file with
       # no way to choose. The day was lost at the push.
       #
-      # Ahead of the fold, and ahead of everything else in this job that writes
-      # under `state/` - which is everything after it.
+      # Ahead of everything else in this job that writes under `state/` - which
+      # is everything after it.
       - name: Take the run state from the tip, not from the trigger commit
         run: bash .github/scripts/take-state-from-the-tip.sh state
-
-      # The catch-up, and it is the only caller besides `assemble`. A run whose
-      # assemble never ran leaves its segments in the tree, and nothing else
-      # would ever fold them: this job runs five times a day, so a segment waits
-      # at most 4.8 hours.
-      #
-      # On the normal path it costs nothing measurable. The assemble of the run
-      # before this one drained the store and committed the deletions, and the
-      # step above has just taken that drained store - so this lists an empty
-      # directory and writes nothing.
-      #
-      # BEFORE the plan, and before this job's own probe, for two different
-      # reasons. The probe writes a segment, and a fold that ran after it would
-      # write the day file here while `assemble` writes that same file again -
-      # two head writers in one run is the shape this design exists to remove,
-      # and a third arrives by looking like the second. The plan comes after
-      # because a fold that refuses a row ends this job, and a refusal that
-      # lands after the feed reads has spent them for nothing. Nothing in the
-      # fold needs the day the plan writes: a waiting row is filed under the
-      # date in its own cells.
-      #
-      # Never `prune.yml`. That workflow commits nothing on 29 of 30 wakes,
-      # stages only `corpus` on the day it is due, and ends in a force push, so a
-      # compaction there would delete every waiting segment from a runner that
-      # then throws itself away.
-      - name: Fold any segments an earlier run left behind
-        run: python -m idhazh compact
 
       # No weights load here. The plan job is feed reads and arithmetic, and it
       # finishes in seconds - which is what makes fanning out afterwards cheap.
@@ -398,30 +371,21 @@ jobs:
       # A bad day is exactly the day worth measuring, so waiting for a successful
       # publish would lose the records that matter most.
       #
-      # `state` whole, and it used to be five paths named one at a time. The
-      # catch-up step above is why: it folds a segment into whichever head that
-      # segment's own rows name, so what this job writes is no longer knowable
-      # when the list is written. A hand-listed set would commit the segment
-      # deletions and leave the heads behind - a catch-up that loses the rows it
-      # caught, with nothing able to see it, because the loss is in what `git
-      # add` was not given. The two assemble commits stage `state` whole for the
-      # same reason and have since before this step existed.
+      # `state` whole, and it used to be five paths named one at a time. Naming
+      # the directory rather than its contents is what makes the step survive a
+      # fresh clone: `git add` runs under `set -euo pipefail`, so a path missing
+      # from the checkout aborts the whole step and costs every ledger beside
+      # it. `state` is in every checkout; a collection inside it need not be.
+      # The work shards and the two assemble commits stage `state` whole for the
+      # same reason.
       #
-      # Naming the directory rather than its contents is also what makes the step
-      # survive a fresh clone: `git add` runs under `set -euo pipefail`, so a
-      # path missing from the checkout aborts the whole step and costs every
-      # ledger beside it. `state` is in every checkout; a collection inside it
-      # need not be.
-      #
-      # `append_health` settles the day file it wrote against the checkout, and
-      # until the step above existed that checkout was frozen at the commit this
-      # run was triggered at - so a SECOND ATTEMPT at this same plan could not
-      # see the rows the first attempt pushed. Until 2026-09-19 `.gitattributes`
-      # gave the file a union merge driver, the merge kept both verdicts, and a
-      # settling pass ran here afterwards to take one back out; the driver is
-      # gone, so the next shape of that failure was a rebase nobody could
-      # settle. A second attempt now reads the first attempt's rows before it
-      # writes, and settles a feed's verdict against them.
+      # A second attempt at this same plan writes its own files rather than the
+      # files the first attempt wrote: the attempt is in every name, so the two
+      # never open one path and there is nothing for a merge driver to settle.
+      # Until 2026-09-19 `.gitattributes` gave the shared feed-health file a
+      # union driver and the merge kept both verdicts; the driver went, and the
+      # next shape of that failure was a rebase nobody could settle. The name is
+      # what removes it rather than making it quiet.
       #
       # `continue-on-error` because the plan this job exists to produce is the
       # artifact below, not this push. Run `35660521768` died here: the push lost
@@ -761,10 +725,10 @@ jobs:
       #
       # Appending the same row twice is the one thing that would make this worse
       # than the loss it fixes, because `public_telemetry` copies every row into
-      # the file the console reads. No ledger head is staged here any more: the
-      # item census, the eval rows and the span fold each go to their writer's
-      # own segment, and the compaction settles them by key - which is what
-      # `state/segments` below is.
+      # the file the console reads. No file is shared here any more: the item
+      # census, the eval rows, the record of what those rows are and the span
+      # fold each go into their day directory under a name that carries this
+      # writer's run, attempt, job and shard.
       #
       # Nothing here shares a file with another writer any more, which is why no
       # settling pass runs after the rebase. Until 2026-09-19 one did:
@@ -780,31 +744,21 @@ jobs:
       # until that day no list named the path, so each fold died with the runner
       # and assemble published a header row over an absent directory. Every span
       # this project had ever opened was measured, folded and thrown away by one
-      # missing path. The fold goes to a segment now and the head is written by
-      # the compaction, so the path left this list on 2026-09-18.
+      # missing path.
       #
-      # `state/traces` is the same shape and was missed the same way. `stage_work`
-      # opens a file sink at `state/traces/<YYYY>/<MM>/<DD>-<run>-<shard>.jsonl` on
-      # this runner whenever tracing is on, which it has been since 2026-09-06. A
-      # trace file is named for one shard of one run, so two shards never write one
-      # path and no merge driver is needed - which is now true of every path this
-      # job stages.
+      # `state` whole is what this stages now, and naming the directory rather
+      # than its contents is what makes the step survive a fresh clone: `git add`
+      # runs under `set -euo pipefail`, so a path missing from the checkout
+      # aborts the whole step and costs every ledger beside it. `state` is in
+      # every checkout; a collection inside it need not be. It is also what the
+      # plan job and the two assemble commits have always staged.
       #
-      # `state/segments` is where everything this shard measured now goes, and
-      # it is the only ledger path left in the list below. The machine row moved
-      # there on 2026-09-17; the item census, the eval rows, the record of what
-      # those rows are and the span fold followed on 2026-09-18. Each of those
-      # used to be appended to a file that
-      # up to eight work shards and assemble all opened, and each writer now
-      # takes `state/segments/<ledger>/<run>-<attempt>-<job>-<shard>.csv`
-      # instead, so two writers never share a path. `assemble` folds them into
-      # the heads, and the heads are no longer staged here because this job no
-      # longer writes them.
-      #
-      # `.gitattributes` gives that path `-merge`, for the reason `state/traces`
-      # needs no driver at all: a segment is named for one shard of one run, so
-      # there is nothing for a merge driver to settle and a union of two would
-      # silently stack copies of a file that is meant to have one writer.
+      # Every path this shard writes under it carries this writer's run,
+      # attempt, job and shard in the file name - the item census, the eval
+      # rows, the record of what those rows are, the span fold, the machine row
+      # and the committed trace alike. Two shards never write one path and two
+      # attempts at one shard never write one path, so no merge driver is needed
+      # anywhere below and a lost push race costs a rebase rather than the rows.
       # `PUSH_DEADLINE_SECONDS` is this job's own number and not the one the
       # rest of the run uses. A shard keeps back `run.shard_wrap_up_minutes` -
       # 12 minutes - for everything after its last item, so the 300 s the knob
@@ -825,7 +779,7 @@ jobs:
           SHARD: ${{ matrix.shard }}
         run: >-
           bash .github/scripts/commit-and-push.sh
-          state/traces state/segments
+          state
 
       - name: Prompt cache log summary
         if: always()
@@ -1361,6 +1315,27 @@ jobs:
           python -m idhazh prune-state
           --date "${{ needs.plan.outputs.date }}"
           --execution "${{ github.run_id }}" --dry-run
+
+      # The closed-day fold, and this job is its only caller. A day older than
+      # `run.settled_fold_after_days` can gain no more rows, so its writer files
+      # are replaced by the one settled file they agree on.
+      #
+      # AFTER `Commit the day`, and that order is the whole of why it sits here
+      # rather than in the plan job. The day's commit carries `REFRESH_PATHS`,
+      # so a push that loses its race hands those paths back to the tip and runs
+      # the producer again - and `idhazh assemble` does not write a settled file.
+      # A fold that ran before that commit would be half-reverted by the
+      # rebuild, silently, with the writer files already gone.
+      #
+      # `always()` and `continue-on-error` for the reason the prune above them
+      # carries both: the day has already published by here, and no bookkeeping
+      # pass is worth the run.
+      - name: Fold the days that can gain no more rows
+        if: always()
+        continue-on-error: true
+        run: >-
+          python -m idhazh compact
+          --date "${{ needs.plan.outputs.date }}"
 
       # The `id` is here for the same reason the day's commit carries one. This
       # step stages `frontend/public/telemetry`, which the console pages read,

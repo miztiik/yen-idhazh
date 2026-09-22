@@ -12,11 +12,11 @@ wide on average because it carries eleven metrics, two model scores, a band and
 a timestamp - none of which the question needs. The question needs one digest.
 
 So the identity is written down a second time, on its own, at a fixed width.
-`state/score-index/<YYYY>/<MM>/<DD>.csv` holds one row per observation the day
-file beside it holds, and the writer reads that instead of the rows. It files by
-the same day as the ledger because `evals.writer.refresh_index` fills a partition
-with no index from the partition beside it, and two grains in one relationship is
-a mapping somebody maintains (`docs/concepts/partitions.md`).
+`state/score-index/<YYYY>/<MM>/<DD>/` holds one row per observation the day
+beside it holds, and the writer reads that instead of the rows. It files by
+the same day as the ledger because an index row is the record of the row beside
+it, and two grains in one relationship is a mapping somebody maintains
+(`docs/concepts/partitions.md`).
 
 **The declared cover is every observation identity, with nothing forgotten.**
 That is deliberate, and it is why this is an index and not a clock. The identity

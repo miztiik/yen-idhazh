@@ -91,10 +91,21 @@ def trace_sink(
     The file is the committed trace under `state/traces/`, not a gitignored one,
     so a recent run stays openable from the repository; `retention.prune_traces`
     bounds the rolling window (CLAUDE.md section 1b, docs/concepts/telemetry.md).
+
+    The file carries this writer's identity, so two shards and two attempts at
+    one shard never open one path.
     """
     if not settings.app.observability.tracing_enabled:
         return telemetry.NullSink()
-    local = telemetry.FileSink(telemetry.committed_trace_path(common.STATE_ROOT, run_id, shard))
+    local = telemetry.FileSink(
+        telemetry.committed_trace_path(
+            common.STATE_ROOT,
+            run_id=run_id,
+            attempt=run_context.run_attempt(),
+            job=ServerJob.WORK,
+            shard=shard,
+        )
+    )
     host = os.environ.get("LANGFUSE_HOST", "").strip()
     public_key = os.environ.get("LANGFUSE_PUBLIC_KEY", "").strip()
     secret_key = os.environ.get("LANGFUSE_SECRET_KEY", "").strip()

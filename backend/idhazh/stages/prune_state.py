@@ -109,6 +109,7 @@ def stage_prune_state(
     removed += _prune_feed_health_shards(state, observability, today, dry_run=dry_run)
     removed += _prune_host_fingerprint_shards(state, observability, today, dry_run=dry_run)
     removed += _prune_score_shards(state, observability, today, dry_run=dry_run)
+    removed += _prune_day_validation_shards(state, retention_config, today, dry_run=dry_run)
     removed += _prune_trial_shards(state, run, retention_config, today, dry_run=dry_run)
     removed += _prune_digest_fragments(state, retention_config, today, dry_run=dry_run)
     result = retention.prune_telemetry(
@@ -224,6 +225,36 @@ def _prune_feed_health_shards(
         ", ".join(feed.kept) or "no shard",
     )
     return list(feed.days_removed)
+
+
+def _prune_day_validation_shards(
+    state: Path, retention_config: RetentionConfig, today: date_type, *, dry_run: bool
+) -> list[str]:
+    """Delete the validation receipts for months the published archive outlived.
+
+    A receipt's one use is to skip re-reading a published day. A day that is
+    gone cannot be read, so its receipt settles nothing.
+
+    Returns the files it removed, taken from the result rather than spelled from
+    the month stems: a day is a directory of writer-owned files, so a
+    synthesised name would name a file the store never held.
+    """
+    receipts = retention.prune_day_validations(state, retention_config, today, dry_run=dry_run)
+    if not receipts.changed:
+        LOG.info(
+            "day-validation prune: every receipt is inside the %s-month window, so none "
+            "was deleted",
+            retention_config.day_validation_keep_months,
+        )
+        return []
+    LOG.info(
+        "day-validation prune%s: deleted %s, freed %s bytes, kept %s",
+        " (dry run)" if receipts.dry_run else "",
+        ", ".join(receipts.deleted),
+        receipts.bytes_freed,
+        ", ".join(receipts.kept) or "no month",
+    )
+    return list(receipts.days_removed)
 
 
 def _prune_host_fingerprint_shards(

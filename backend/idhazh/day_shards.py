@@ -2,14 +2,14 @@
 
 `state/<ledger>/<YYYY>/<MM>/<DD>/` is where a writer leaves its rows when more
 than one job writes one ledger and there is no head file to fold them into. Two
-writers never share a filename there - `ledger.segment_path` spells the identity
+writers never share a filename there - `ledger.segment_name` spells the identity
 `<run_id>-<attempt>-<job>-<shard>` - so the directory is the ledger, and the
 settlement is something a reader does rather than something a writer leaves
 behind.
 
 **The walk reads both shapes.** A `<DD>.csv` day file and a `<DD>/` day
-directory are each one recorded day, so a caller that moves here reads exactly
-what it read before until something writes a directory. Nothing writes one yet.
+directory are each one recorded day, so a store whose committed history still
+holds the flat file reads back beside one that has moved.
 
 **The fold is the compaction's, moved rather than copied.** `settle` runs the
 identical three cases `stages.compact` ran into a head - join, supersede, repeat
@@ -212,12 +212,14 @@ def _order(shard: Path, root: Path) -> tuple[int, str]:
     which is the place no writer can take and the place its rows belong.
 
     A `<DD>.csv` day file carries no identity either, so it takes the same
-    place: its rows are a fold somebody already settled. `parse_segment_name` is
-    what reads every other name, and it is not touched - it keeps raising on a
-    name that is neither a writer's nor one of these two.
+    place: its rows are a fold somebody already settled. An operator's
+    `repair-<stamp>.csv` takes it too - a repair adds rows the day's own files
+    already produced, so it corrects no writer and must displace none.
+    `parse_segment_name` is what reads every other name, and it is not touched -
+    it keeps raising on a name that is none of these three.
     """
     where = shard.relative_to(root).as_posix()
-    if shard.name == SETTLED_NAME or _is_day_file(shard):
+    if shard.name == SETTLED_NAME or ledger.is_repair(shard.name) or _is_day_file(shard):
         return (SETTLED_ATTEMPT, where)
     return (ledger.parse_segment_name(shard).attempt, where)
 

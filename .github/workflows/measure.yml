@@ -736,7 +736,9 @@ jobs:
       # driver left a lost race conflicts at the rebase rather than stacking both
       # copies.
       - name: Fold the machine record into its day
-        run: python -m idhazh compact --config backend/var/candidate-config
+        run: >-
+          python -m idhazh compact --config backend/var/candidate-config
+          --date "$RUNTIME_DATE"
 
       - name: Measure runtime candidate
         env:

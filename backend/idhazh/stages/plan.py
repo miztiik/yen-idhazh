@@ -385,9 +385,12 @@ def stage_plan(
 
     scored = sum(len(pool) for pool in pools.values())
     LOG.info("desks scored candidates=%s planned=%s", scored, len(items))
-    recorded = ledger.append_counterfactual_scores(
+    # This job's own file, for the reason the feed verdicts above take one: two
+    # plan jobs of one night both score the day's candidates, and a shared path
+    # made them conflict.
+    recorded = ledger.write_segment(
         state,
-        date,
+        ledger.SegmentLedger.COUNTERFACTUAL_SCORES,
         _counterfactual_rows(
             pools,
             items,
@@ -397,6 +400,10 @@ def stage_plan(
             multiplier=lens_multiplier,
             refused_per_desk=settings.app.lens_weights.counterfactual_refused_per_desk,
         ),
+        run_id=run_id,
+        attempt=run_context.run_attempt(),
+        job=ServerJob.PLAN,
+        shard=PLAN_SHARD,
     )
     LOG.info(
         "counterfactual scores recorded rows=%s of %s scored file=%s",

@@ -94,9 +94,9 @@ import os
 import re
 from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 from datetime import date as date_type
-from datetime import timedelta
+from datetime import datetime, timedelta
 from enum import StrEnum
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Final, NamedTuple, Protocol
 
 from idhazh import day_partition
@@ -672,8 +672,8 @@ def visual_prunes_path(state_dir: Path, date: str) -> Path:
 
 
 def counterfactual_scores_relpath(date: str) -> str:
-    """`state/counterfactual-scores/<YYYY>/<MM>/<DD>.csv` - POSIX, for a log line."""
-    stem = f"{date[:4]}/{date[5:7]}/{date[8:10]}.csv"
+    """`state/counterfactual-scores/<YYYY>/<MM>/<DD>` - the day directory, POSIX form."""
+    stem = f"{date[:4]}/{date[5:7]}/{date[8:10]}"
     return f"{STATE_DIRNAME}/{COUNTERFACTUAL_SCORES_DIRNAME}/{stem}"
 
 
@@ -685,7 +685,7 @@ def counterfactual_scores_path(state_dir: Path, date: str) -> Path:
     and the retention pass deletes by day. A month file would make both of those
     read or delete weeks nobody asked for.
     """
-    return state_dir / COUNTERFACTUAL_SCORES_DIRNAME / date[:4] / date[5:7] / f"{date[8:10]}.csv"
+    return state_dir / COUNTERFACTUAL_SCORES_DIRNAME / date[:4] / date[5:7] / date[8:10]
 
 
 def scored_pairs_relpath(date: str) -> str:
@@ -1162,9 +1162,10 @@ def extend_ledger_file(path: Path, columns: tuple[str, ...], rows: Sequence[CsvR
       now carries the identity of the execution that made it (`stages.plan.stage_plan`)
       - but a second attempt at the same execution still can, and this is the
       one caller whose two rows can disagree: the first attempt may have failed
-      where the second succeeded. `append_health` settles the shard against
-      `FEED_HEALTH_KEY` after the append, so the winner is picked by the rule in
-      `contracts.feed_health.supersedes` rather than by which line landed first.
+      where the second succeeded. `day_shards.settled_rows` settles the day
+      against `FEED_HEALTH_KEY` at read time, so the winner is picked by the rule
+      in `contracts.feed_health.supersedes` rather than by which line landed
+      first.
     - **item-health** - two stages write it, so it cannot rely on a caller's own
       guarantee. `append_item_health` filters against `ITEM_HEALTH_KEY` instead.
 
@@ -1420,8 +1421,8 @@ def recorded_item_health(path: Path) -> set[tuple[str, ...]]:
 def append_retirements(state_dir: Path, rows: Iterable[FeedRetirementRow]) -> int:
     """Append the addresses this run decided are permanently gone.
 
-    Settled against `FEED_RETIREMENT_KEY` straight after the write, the way
-    `append_health` is, because the two runs that can write one address are two
+    Settled against `FEED_RETIREMENT_KEY` straight after the write, because the
+    two runs that can write one address are two
     stale checkouts rather than two decisions: each reads the same five `410`
     results and each files the same row. The settle catches the repeat inside one
     checkout; a second attempt that races its own first stops at the rebase
@@ -1490,52 +1491,21 @@ def append_visual_prunes(state_dir: Path, date: str, rows: Iterable[VisualPruneR
     return landed - drop_repeated_rows(path, VISUAL_PRUNE_KEY)
 
 
-def append_counterfactual_scores(
-    state_dir: Path, date: str, rows: Iterable[CounterfactualScoreRow]
-) -> int:
-    """Append a run's two-scores-per-candidate rows into that day's own file.
-
-    Settled against `COUNTERFACTUAL_SCORE_KEY` straight after the write, the way
-    `append_visual_prunes` is and for the same reason: the only writer that can
-    produce one key twice is a second attempt at one execution, and both
-    attempts scored the same candidates against the same committed weights. The
-    first row wins and there is nothing to choose between them.
-
-    **The day file is created even when the run has no rows for it.**
-    `extend_ledger_file`
-    writes nothing for an empty list, which is right everywhere else and wrong
-    here: the plan job's commit step names this directory, `git add` runs under
-    `set -euo pipefail`, and a path missing from the working tree aborts the
-    whole step and costs the three ledgers committed beside it. A header with no
-    rows under it is also the honest record - the run scored nothing worth
-    asking about, which is a different statement from the run not having run.
-
-    Returns how many rows the file gained, so a caller can log the count.
-    """
-    path = counterfactual_scores_path(state_dir, date)
-    columns = CounterfactualScoreRow.csv_columns()
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(",".join(columns) + "\n", encoding="utf-8", newline="")
-    landed = extend_ledger_file(path, columns, list(rows))
-    return landed - drop_repeated_rows(path, COUNTERFACTUAL_SCORE_KEY)
-
-
 def append_story_similarity_pairs(
     state_dir: Path, date: str, rows: Iterable[StorySimilarityPair]
 ) -> int:
     """Append a day's judged pairs into that day's own file.
 
     Settled against `STORY_SIMILARITY_PAIR_KEY` straight after the write, the
-    way `append_counterfactual_scores` is. The key carries `run_id`, so a second
+    way `append_visual_prunes` is. The key carries `run_id`, so a second
     RUN of one date keeps its own rows and only a second attempt at one
     execution is collapsed - both attempts judged the same pair under the same
     prompt against the same day, so the first row wins and there is nothing to
     choose between them. Which of two runs the record counts is decided over the
     whole day when the day is folded, never line by line here.
 
-    **The day file is created even when the day judged nothing**, for the reason
-    `append_counterfactual_scores` gives: the commit step names this directory,
+    **The day file is created even when the day judged nothing.** The commit step
+    names this directory,
     `git add` runs under `set -euo pipefail`, and a path missing from the working
     tree aborts the step and costs the ledgers staged beside it.
 
@@ -1583,7 +1553,7 @@ def append_fitted_thresholds(
     **The day file is created even when the fit was held**, and a held day writes
     a row like any other: a line that moves itself has to leave a record on the
     days it stayed put, or a reader cannot tell a held day from a day nothing
-    ran. The empty-file half is the same reason `append_counterfactual_scores`
+    ran. The empty-file half is the same reason `append_story_similarity_pairs`
     gives - the commit step names this directory and a missing path aborts it
     under `set -euo pipefail`.
 
@@ -1720,7 +1690,10 @@ class SegmentName(NamedTuple):
 #: list to keep in step. `re.ASCII` because a `\\d` in a `str` pattern otherwise
 #: takes another script's numerals, and `int` takes them too - the name would
 #: then carry a digit no later glob matches.
-_SEGMENT_NAME: Final = re.compile(
+#:
+#: Public because `idhazh.paths` answers whether a committed path has exactly
+#: one writer, and it has to ask this pattern rather than carry a copy of it.
+SEGMENT_NAME: Final = re.compile(
     rf"(?P<run_id>{RUN_ID_PATTERN[1:-1]})"
     r"-(?P<attempt>[0-9]+)"
     rf"-(?P<job>{'|'.join(job.value for job in ServerJob)})"
@@ -1749,7 +1722,33 @@ BEFORE_PARTITION_NAME: Final = "before-partition.csv"
 #: out every file written before the migration.** That is self-clearing and
 #: needs no later row - a trace is never folded, and `stages/prune_state.py`
 #: deletes whole files on that window.
-_PRE_IDENTITY_TRACE: Final = re.compile(r"[0-9]+-[0-9]{2}", re.ASCII)
+PRE_IDENTITY_TRACE: Final = re.compile(r"[0-9]+-[0-9]{2}", re.ASCII)
+
+#: What an operator's repair is called: `repair-<YYYYMMDDTHHMMSSZ>.csv`. A
+#: repair is one add by a person at one instant, so it carries no run and no
+#: job to spell, and the instant is what keeps two repairs apart.
+#:
+#: **Removal condition: it goes when no operator command adds rows to a day a
+#: run already wrote.** `evals.writer.rebuild_index` is the only one today.
+REPAIR_NAME: Final = re.compile(r"repair-[0-9]{8}T[0-9]{6}Z", re.ASCII)
+
+#: The stamp format `REPAIR_NAME` spells, for the caller that mints one.
+REPAIR_STAMP: Final = "%Y%m%dT%H%M%SZ"
+
+
+def repair_name(minted_at: datetime) -> str:
+    """What an operator's one add into a committed day directory is called."""
+    return f"repair-{minted_at.strftime(REPAIR_STAMP)}{SEGMENT_SUFFIX}"
+
+
+def is_repair(name: str) -> bool:
+    """Whether this filename is an operator's one add rather than a writer's file.
+
+    Asked by the reader that orders a day's files and by the one that asks
+    whether a committed path has a single writer, so it is spelled here once.
+    """
+    stem, _, suffix = name.rpartition(".")
+    return suffix == SEGMENT_SUFFIX[1:] and REPAIR_NAME.fullmatch(stem) is not None
 
 
 class _TreeShape(NamedTuple):
@@ -1799,7 +1798,7 @@ def segment_carried(ledger: SegmentLedger) -> frozenset[str]:
     return _TREE_SHAPES[ledger].carried
 
 
-def _segment_name(
+def segment_name(
     *, run_id: str, attempt: int, job: ServerJob, shard: int, suffix: str = SEGMENT_SUFFIX
 ) -> str:
     """The identity grammar, spelled once, so two trees cannot spell it two ways.
@@ -1835,7 +1834,7 @@ def day_shard_path(
     The day comes off the row rather than off the clock, so rows a run left
     behind three days ago land under that day rather than under today.
     """
-    name = _segment_name(run_id=run_id, attempt=attempt, job=job, shard=shard)
+    name = segment_name(run_id=run_id, attempt=attempt, job=job, shard=shard)
     return state_dir / ledger.value / date[:4] / date[5:7] / date[8:10] / name
 
 
@@ -1849,7 +1848,7 @@ def day_shard_relpath(
     shard: int,
 ) -> str:
     """The POSIX form of `day_shard_path`, for a log line (CLAUDE.md section 2)."""
-    name = _segment_name(run_id=run_id, attempt=attempt, job=job, shard=shard)
+    name = segment_name(run_id=run_id, attempt=attempt, job=job, shard=shard)
     return f"{STATE_DIRNAME}/{ledger.value}/{date[:4]}/{date[5:7]}/{date[8:10]}/{name}"
 
 
@@ -1972,9 +1971,9 @@ def parse_segment_name(path: Path, *, suffix: str = SEGMENT_SUFFIX) -> SegmentNa
     those rows in the tree unread and unmentioned, which is how a ledger starts
     losing rows with nobody noticing.
 
-    `suffix` is the tree's own, for `_segment_name`'s reason.
+    `suffix` is the tree's own, for `segment_name`'s reason.
     """
-    match = _SEGMENT_NAME.fullmatch(path.stem) if path.suffix == suffix else None
+    match = SEGMENT_NAME.fullmatch(path.stem) if path.suffix == suffix else None
     if match is None:
         raise ValueError(
             f"{path.name} is not a writer's name. A writer's file is "
@@ -1988,29 +1987,6 @@ def parse_segment_name(path: Path, *, suffix: str = SEGMENT_SUFFIX) -> SegmentNa
         job=ServerJob(match["job"]),
         shard=int(match["shard"]),
     )
-
-
-def is_written_once(relpath: str) -> bool:
-    """Whether this committed path is a file exactly one writer can have written.
-
-    Two names pass. One is the identity grammar every producer spells through
-    `_segment_name`, whatever the tree's suffix. The other is a reserved
-    pre-identity name, each declared with its own removal condition beside it:
-    `before-partition.csv` for the bytes a committed head already held, and
-    `<ordinal>-<shard>.jsonl` for a trace written before traces carried identity.
-
-    `settled.csv` is deliberately absent. A fold is derived, not written once,
-    and rule 1 puts those in different classes.
-    """
-    name = PurePosixPath(relpath).name
-    if name == BEFORE_PARTITION_NAME:
-        return True
-    stem, _, suffix = name.rpartition(".")
-    if not stem:
-        return False
-    if _SEGMENT_NAME.fullmatch(stem) is not None:
-        return True
-    return suffix == "jsonl" and _PRE_IDENTITY_TRACE.fullmatch(stem) is not None
 
 
 def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
@@ -2083,11 +2059,6 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
             *flat,
             KeyedLedger(visual_prunes_path(state_dir, date), VISUAL_PRUNE_KEY, VisualPruneRow),
             KeyedLedger(
-                counterfactual_scores_path(state_dir, date),
-                COUNTERFACTUAL_SCORE_KEY,
-                CounterfactualScoreRow,
-            ),
-            KeyedLedger(
                 fitted_thresholds_path(state_dir, date),
                 STORY_SIMILARITY_THRESHOLD_KEY,
                 FittedSimilarityThreshold,
@@ -2109,10 +2080,6 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
         *(
             KeyedLedger(path, VISUAL_PRUNE_KEY, VisualPruneRow)
             for path in day_partition.day_files(state_dir / VISUAL_PRUNES_DIRNAME)
-        ),
-        *(
-            KeyedLedger(path, COUNTERFACTUAL_SCORE_KEY, CounterfactualScoreRow)
-            for path in day_partition.day_files(state_dir / COUNTERFACTUAL_SCORES_DIRNAME)
         ),
         *(
             KeyedLedger(path, STORY_SIMILARITY_THRESHOLD_KEY, FittedSimilarityThreshold)

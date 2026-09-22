@@ -1,15 +1,21 @@
-"""Which committed paths are derived from what other jobs wrote?
+"""Which committed paths are written once, which are derived, which take a union?
 
-A derived path's content is a function of other jobs' output, so two runs that
-start from different bases compute different bytes for it and git has no way to
-choose between them. The answer is never a merge: before it rebases, a job hands
-every path named here back to the tip it is pushing at, and then runs its own
-producer again against that tip.
+Three answers about one committed path, and every one of them decides what git
+is allowed to do with it when two runs arrive together.
 
-The list used to be a space-split string inside a workflow step, whose own header
-warned that no path in it may carry a space - a rule nothing could check - and a
-second copy of it lived in the workflow tests. It is one tuple now, and both the
-workflow and the tests read it.
+A **derived** path's content is a function of other jobs' output, so two runs
+that start from different bases compute different bytes for it and git has no
+way to choose between them. The answer is never a merge: before it rebases, a
+job hands every path in `DERIVED` back to the tip it is pushing at, and then
+runs its own producer again against that tip.
+
+A **written-once** path carries the name of the one writer that can have written
+it, so two runs never arrive at one path and there is nothing to settle.
+`is_written_once` is what reads a name back.
+
+A **union-safe** path is appended to by writers that are not in disagreement, so
+the union of two sides is the answer and `.gitattributes` says so. `UNION_SAFE`
+is the list in this repository's own words, beside the other two.
 
 Every entry is a relative POSIX path (CLAUDE.md section 2). Two of them sit
 inside the day a run publishes, so they carry the one placeholder this module
@@ -18,7 +24,10 @@ understands, `{day_dir}`; `refresh_paths` is what fills it in.
 
 from __future__ import annotations
 
+from pathlib import PurePosixPath
 from typing import Final
+
+from idhazh import ledger
 
 #: The one span an entry may carry, filled in by `refresh_paths`. A second kind
 #: of placeholder would be a second thing the caller has to know, and the caller
@@ -32,19 +41,13 @@ DAY_DIR: Final = "{day_dir}"
 #: rendered charts into that directory and no producer in the assemble job can
 #: make those again, so handing the directory back would delete them.
 #:
-#: `state/day-metrics` is the newest entry. It is one whole-file-per-day JSON
-#: written by `assemble`, which is the same two-writer shape as `digest.json` one
-#: directory over, and it was in no refresh list until now. It needs no fragments
-#: and no fold: it is already a pure function of the day's item-health rows and
-#: the published day, so two runs compute the same file and the rebuild answers
-#: the race in milliseconds.
-#:
-#: Some entries here are not derived in the strict sense - `state/traces` is
-#: named for one shard of one run and `state/published` settles on the earliest
-#: publication date - and they are here because the refresh list has always
-#: carried them. Handing back a path that needs no hand-back costs a rebuild it
-#: would have done anyway. Taking them out is the work of the rows that give
-#: every writer its own filename, not of the row that moved the list.
+#: **Eight `state/` trees left this list on 2026-09-22 and the reason is the
+#: same for all of them.** Each one now names its file for the single writer
+#: that wrote it, so two runs never compute different bytes for one path and
+#: there is nothing to hand back. `state/day-metrics` is the one that stays: it
+#: is one whole-file-per-day JSON that assemble rewrites from the day's rows, so
+#: two runs of one day do land on one path, and the rebuild answers the race in
+#: milliseconds.
 DERIVED: Final[tuple[str, ...]] = (
     f"{DAY_DIR}/digest.json",
     f"{DAY_DIR}/run.json",
@@ -57,16 +60,53 @@ DERIVED: Final[tuple[str, ...]] = (
     "frontend/public/machine",
     "frontend/public/span-rollup",
     "frontend/public/run-timeline",
-    "state/published",
-    "state/scores",
-    "state/score-index",
-    "state/item-health",
-    "state/span-rollup",
-    "state/traces",
-    "state/host-fingerprint",
-    "state/segments",
     "state/day-metrics",
 )
+
+#: Every committed collection `.gitattributes` gives `merge=union`, in this
+#: repository's own words rather than only in a glob git reads.
+#:
+#: A union is right only where two writers appending are not in disagreement -
+#: a row about one address, one day, one shard or one pair, which a reader
+#: settles by key. Where two writers on one path ARE a disagreement, the answer
+#: is the written-once name instead: a union there would make the conflict quiet
+#: rather than remove it. `state/feed-health` is the tree that says so - it
+#: takes no driver.
+UNION_SAFE: Final[tuple[str, ...]] = (
+    "state/published",
+    "state/visual-prunes",
+    "state/seen",
+    "state/feed-retirements.csv",
+    "state/llm-council/shard-outcomes",
+    "state/content-similarity-judge/metrics",
+    "state/content-similarity-judge/merge-line-holdout-scores",
+    "state/content-similarity-judge/scored-pairs",
+    "state/content-similarity-judge/fitted-thresholds",
+)
+
+
+def is_written_once(relpath: str) -> bool:
+    """Whether this committed path is a file exactly one writer can have written.
+
+    Two kinds of name pass. One is the identity grammar every producer spells
+    through `ledger.segment_name`, whatever the tree's suffix. The other is a
+    reserved name, each declared in `idhazh.ledger` with its own removal
+    condition beside it: `before-partition.csv` for the bytes a committed head
+    already held, `<ordinal>-<shard>.jsonl` for a trace written before traces
+    carried identity, and `repair-<stamp>.csv` for an operator's one add.
+
+    `settled.csv` is deliberately absent. A fold is derived, not written once,
+    and the two belong in different classes.
+    """
+    name = PurePosixPath(relpath).name
+    if name == ledger.BEFORE_PARTITION_NAME or ledger.is_repair(name):
+        return True
+    stem, _, suffix = name.rpartition(".")
+    if not stem:
+        return False
+    if ledger.SEGMENT_NAME.fullmatch(stem) is not None:
+        return True
+    return suffix == "jsonl" and ledger.PRE_IDENTITY_TRACE.fullmatch(stem) is not None
 
 
 def refresh_paths(*, day_dir: str) -> str:

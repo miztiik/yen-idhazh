@@ -1323,10 +1323,9 @@ def publish(
     back any panel on any route can draw. Nothing here opens a day payload.
 
     The three compaction figures are handed in by the caller that ran the fold.
-    Nothing here lists `state/segments/`, because the fold runs before this step
-    and a listing taken now is always empty - the fields could then never be
-    anything but zero, and a warning with no reachable state teaches an operator
-    that no warning means nothing is wrong.
+    Nothing here walks a day tree to count what is waiting, because the fold runs
+    in a later step of the same job and a count taken now would be about the tree
+    before it.
     """
     widest = max(console.window_presets)
     months = months_a_window_can_touch(widest)
