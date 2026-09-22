@@ -683,10 +683,10 @@ def test_a_dispatch_that_names_nothing_runs_the_model_config_already_names() -> 
     """
     empty = dict(
         row.split("=", 1)
-        for row in model_refs.candidate_rows(REPO_ROOT, "", prefix="candidate_")
+        for row in model_refs.candidate_rows(CONFIG_DIR, "", prefix="candidate_")
     )
     configured = dict(
-        row.split("=", 1) for row in model_refs.configured_rows(REPO_ROOT, with_draft=False)
+        row.split("=", 1) for row in model_refs.configured_rows(CONFIG_DIR, with_draft=False)
     )
 
     pointer = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models_file"]
