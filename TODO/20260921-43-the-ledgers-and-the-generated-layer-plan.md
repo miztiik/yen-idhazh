@@ -65,7 +65,7 @@ Measured on `origin/main`, 2026-09-22, except where a line says estimate.
 ## Section 0b - What this plan does, in one list
 
 1. Take the replay count off the dispatch surface. It becomes a config value; the loop is untouched.
-2. Delete the ten unreferenced utilities and the human-label path, keeping its sampling design, and bound the search evaluation's one growing read.
+2. Delete the three utilities whose work is finished and the human-label path, bound the search evaluation's one growing read, and record the rule that keeps an instrument a page cites.
 3. Give the pipeline test a committed day ledger: one row per case per article, carrying the summary and the bytes the model read, discoverable by the nightly prune.
 4. Make all nine multi-route console specs visit all five routes the site serves.
 5. Delete the generated contract layer whole, inlining five names and binding two vocabularies.
@@ -77,7 +77,7 @@ Measured on `origin/main`, 2026-09-22, except where a line says estimate.
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | The replay count leaves the dispatch surface | - | A | PENDING | - | - | - |
-| 2 | The unreferenced utilities go, and the search evaluation is bounded | - | B | PENDING | - | - | - |
+| 2 | The spent utilities go, and the search evaluation is bounded | - | B | PENDING | - | - | - |
 | 3 | The pipeline test commits what it produced | 1 | A | PENDING | - | - | - |
 | 4 | Nine console specs visit every route the site serves | - | C | DONE | p43r4 | - | R4 |
 | 5 | The generated contract layer goes | 1, 2, 3, 4 | D | PENDING | - | - | - |
@@ -242,7 +242,8 @@ Each test fails when one value is removed from either side. **That is not genera
 
 | Part | Verdict | Why |
 | --- | --- | --- |
-| `json_schema()` L740-758, `schema_text()` L761, `schema_filename()` L736 | **Goes** | Writes and names a schema document |
+| `json_schema()` L740-758 | **STAYS - correcting an earlier draft of this plan, which said it goes.** It has **four production callers outside the exporter**: `contracts/visual.py:543`, `:559`, `:647`, and `stages/validate_days.py:198-199`. It is the shape in the only notation those callers can walk, not an exporter helper. Deleting it breaks the visual planner and day validation |
+| `schema_filename()` L736, `schema_text()` L761 | **Go.** Their only callers are `export.py:172-173`, `:184` and the drift test |
 | `__changelog__`, `ChangelogEntry` L643, `schema_version()` L732 | **Stays** | `schema_version()` returns `__changelog__[0].version`, and more than thirty production call sites stamp with it - `Article` at `extract.py:96`, `EvalRow` at `evals/score.py:175`, `RunPlan` at `stages/plan.py:396`. Only `ChangelogEntry.why` is deletable |
 | `version` field L710, `_stamp_current_version` L724 | **Stays** | Every persisted payload carries it |
 | `read()` L769-807, `StalePayloadError` L651 | **Stays** | It is what lets a reader say "written under an older build" rather than "malformed" |
@@ -253,19 +254,60 @@ Each test fails when one value is removed from either side. **That is not genera
 | **`CONTRACTS`, `contracts/export.py:24-166`** | **Moves to `contracts/__init__.py`** | `_fixtures.py:17` builds `BY_STEM` from it. Deleting `export.py` whole costs the fixture round-trip test its map, and that test is the one thing proving every contract still loads. Only `export()`, `export_typescript()`, `expected_filenames()` and `main()` are deleted |
 | `backend/idhazh/contracts/derived.py` | **Untouched** | Three plain models, two validators, no schema writing. Plan 39 named it in error |
 
-### C8 - The engineering contract after row 6
+### C8 - The reappearance sweep (row 5)
+
+**Prose gates nothing. This is the one control that fails on the commit that brings the layer back.**
+
+| Property | Value |
+| --- | --- |
+| Where | a contract-tier test in `backend/tests/contracts/`, copying the bounded `git ls-files` shape at `backend/tests/contracts/test_repo_structure.py:517-558` |
+| What it refuses | any tracked path under `schemas/` or `frontend/src/contracts/`, and any new module under `backend/idhazh/contracts/` that writes a `.schema.json` or a `.ts` file |
+| Self-check | it asserts the listing it read is non-empty - the same trap plan 39 row 1 named, where a check over an empty glob passes with zero cases |
+| Cost | about 25 lines |
+
+### C9 - The field-set binding test (row 5)
+
+**The row's asymmetry, corrected.** Two runtime vocabularies get binding tests in C6 and the three inlined types get nothing - but a vocabulary drift announces itself (Python already raises at `contracts/machine_panels.py:84`, and a bad job name visibly drops a row from the panel) while a **type** drift is silent in every gate this project runs.
+
+| Property | Value |
+| --- | --- |
+| The failure it catches | `HostFingerprintRow` gains a 31st field. The CSV column is written, `readDayShards` parses it, the hand-written interface never gained it, so the reader never names it and the machine card never draws it. No compile error, no runtime error, no missing row |
+| Why `Required<HostFingerprintRow>` does not catch it | `frontend/src/lib/server/host-fingerprint.ts:53` demands every field **the interface has**. `Required<T>` of a stale `T` is stale. It catches the reader forgetting a field; it cannot catch the interface forgetting one |
+| The test | a contract-tier test comparing `HostFingerprintRow.model_fields` to the field names parsed from the TypeScript interface. Same idiom as C6, which this repository already uses in fifteen places |
+| Cost | about 25 lines |
+
+### C10 - The instructions that still say "generate" (row 6)
+
+**Row 6 amends the engineering contract; these are the ten places in code and docs that still tell a developer to generate.** A guardrail amended while the base class still instructs is an amendment nobody reads.
+
+| Where | What it says |
+| --- | --- |
+| `backend/idhazh/contracts/base.py:700-703` | the base-class docstring every new contract is written against, naming `schemas/<stem>.schema.json`. **The most direct instruction in the tree** |
+| `__schema_stem__`, on all 66 models | an attribute named for a file that will not exist. Renamed by row 5 decision 12 |
+| `backend/idhazh/contracts/judge_call.py:23`, `backend/tests/contracts/test_judge_call.py:168` | "the exporter calls `schema_filename()` on every..." |
+| `docs/architecture/overview.md:94-103` | a diagram node and the export command |
+| `docs/concepts/principles.md:21` | "generated from those models rather than written twice" |
+| `docs/concepts/config.md:9` | "and to the schema generated from it" |
+| `docs/how-to/ship-a-pr.md:88` | the drift gate as a merge step |
+| `docs/architecture/publishing/layout.md:537` | justifies the `ajv` dependency **because** the drift gate generates the schema it validates against - a live dependency whose stated beneficiary moves |
+| `backend/tests/contracts/test_app_config.py:591` | "is generated and the drift gate..." |
+| `frontend/src/lib/console/machine/processor-lost.ts:32` | points at prose living inside a generated contract |
+
+**Not amended, and named so nobody deletes them:** `backend/idhazh/summarize.py:248` and `backend/idhazh/classify/calls.py:1194` both carry "Generated from the model, never hand-written (Guardrail #3)". Those generate the decode-time output schema the model is constrained by - which `backend/idhazh/llm/server.py:508` calls "the control that survives an injection". **That generation is correct and stays.**
+
+### C11 - The engineering contract after row 6
 
 **Measured against `CLAUDE.md` on 2026-09-22, after plan 41 merged.** Plan 41 added the configuration carve-out to Guardrail #3 and scoped section 11, and **left the generation sentence standing**. That sentence is row 6's.
 
 | Clause | Reads today | After |
 | --- | --- | --- |
-| Guardrail #3, `CLAUDE.md:90`, **one sentence only** | "Every downstream artifact (DB migration, API spec, frontend type, cross-service binding) is generated from that schema, never hand-written." | Deleted. The clause keeps its first sentence, its reason and plan 41's configuration carve-out, all untouched |
-| Section 1a, second bullet, `:105` | "`schemas/*.schema.json` is generated from those models, and the frontend's TypeScript types and validators are generated from those schemas. A CI drift gate regenerates both and fails on any diff. Nobody hand-edits a generated artifact." | Rewritten: the Pydantic models are the validation, each in its own language, and nothing is generated into a second one |
-| Section 9, `:221` | "Contract drift gate green: schemas and frontend types regenerate byte-identical to what is committed." | Deleted from the Definition of Done |
+| Guardrail #3, `CLAUDE.md:90`, **one sentence** | "Every downstream artifact (DB migration, API spec, frontend type, cross-service binding) is generated from that schema, never hand-written." | **Replaced, not deleted.** Deleting it orphans the decode-time output schema, which two docstrings cite by number and which is a Guardrail #11 control. The replacement: **"A copy of a declared shape is generated from it or gated against it - never neither. Generate the copy a machine consumes; gate the copy a person maintains, with a test that reads both sides and fails on a difference. What is forbidden is the same shape written twice with nothing comparing them."** |
+| Section 1a, second bullet, `:105` | "`schemas/*.schema.json` is generated from those models... A CI drift gate regenerates both and fails on any diff." | Rewritten to the surviving arrangement: the Pydantic models are the source, a copy a person maintains is gated by a test. **It must not say "nothing is generated"** - nine scripts under `frontend/scripts/` still generate committed files, and so does the decode-time schema |
+| Section 9, `:221` | "Contract drift gate green: schemas and frontend types regenerate byte-identical to what is committed." | Replaced by the binding tests: every gated copy agrees with its source |
 | Section 9, `:225` | "Schemas version-stamped + changelogged..." | **Kept.** The stamp survives the schemas - `schema_version()` reads `__changelog__[0]` and thirty-plus production call sites use it (C7) |
-| Section 10, `:240` | "Hand-edit a generated artifact (`schemas/*.schema.json`, `frontend/src/contracts/*`). Edit the Pydantic model and regenerate." | Deleted - there are none |
+| Section 10, `:240` | "Hand-edit a generated artifact (`schemas/*.schema.json`, `frontend/src/contracts/*`)..." | Retargeted to the artefacts that still exist - the icon manifest and the offline worker constants - rather than deleted |
 | Section 11 | already scoped by plan 41 | **Not row 6's.** Untouched |
-| `AGENTS.md` | three phrases saying contracts are generated from the models | Named and removed |
+| `AGENTS.md`, and the ten places in C10 | say the contracts are generated from the models | Named and corrected |
 
 **Guardrail #11 and Guardrail #12 are untouched.**
 
@@ -300,52 +342,63 @@ Each test fails when one value is removed from either side. **That is not genera
  | 2 | Default the input to 1 and keep it | The same loosening by a different road, and harder to see in a diff | Nothing saved | Fowler |
  | 3 | Keep the input and change nothing | Leaves a dispatch knob whose safe range is exactly one value | Nothing to take, and the plan's rule says a knob nobody should raise does not belong on a dispatch form | Fowler |
 
-## Section 3 - Row 2 - The unreferenced utilities go, and the search evaluation is bounded
+## Section 3 - Row 2 - The spent utilities go, and the search evaluation is bounded
 
-- **Scope:** Delete the command-line utilities the census finds unreferenced and the human-label path, and bound the one session fixture that reads a growing collection.
-- **The census is the row's first commit, not its last.** Run it over `backend/`, `.github/`, `docs/`, `frontend/` and `notebooks/` before each deletion. A utility named only in a runbook still has a user.
-- **The ten, measured 2026-09-21:**
+- **Scope:** Delete the three utilities whose work is finished, delete the human-label path, bound the one session fixture that reads a growing collection, and write down the rule that keeps a census from proposing the rest again.
+- **The rule, written into `docs/reference/documentation-structure.md` in this row's first commit:** **a utility a `docs/` page names as the instrument behind a recorded reading is kept, whatever a caller census says.** The page records what was measured; the utility is how the measurement is reproduced. Deleting it turns a reading into a number nobody can check. A census that finds no caller has found no caller - it has not found a dead tool.
+- **The three that go, measured 2026-09-22:**
 
- | Utility | Lines | Reference today | What the deletion owes |
+ | Utility | Lines | What it did | Why it is spent |
  | --- | --- | --- | --- |
- | `backfill_day_metrics` | 73 | none | nothing |
- | `measure_definition_placement` | 264 | none | nothing |
- | `scan_reference_articles` | 301 | none | nothing |
- | `index_sizing` | 518 | `docs/archive/measurements-2026-08.md` | the doc keeps the finding and loses the script's name |
- | `measure_day_window` | 283 | `docs/reference/benchmarks/day-window-read.md` | same |
- | `measure_declared_wholes` | 659 | `docs/reference/benchmarks/articles-that-state-a-whole.md` | same |
- | `measure_probability_mode` | 245 | `docs/reference/benchmarks/which-probabilities-the-server-returns.md` | same |
- | `prune_artifacts` | 194 | `docs/architecture/publishing/retention.md` | same |
- | `token_budget` | 215 | `docs/concepts/config.md` | same |
- | `migrate_item_health` | 78 | `docs/architecture/contracts/schemas.md` | that page is deleted by row 5, so the reference clears itself |
+ | `backfill_day_metrics` | 73 | Wrote day-metrics records for days already published | A one-shot migration. Every day it would fill is filled |
+ | `migrate_item_health` | 79 | Rewrote committed item-health files to the current column set | A one-shot migration, and `docs/architecture/contracts/schemas.md` already names it as an example of a pattern the engine replaced |
+ | `measure_definition_placement` | 264 | Measured whether putting thirty taxonomy definitions in the prompt costs more tokens than the accuracy it buys | Repeatable, but **no page records its answer**, so there is no reading to reproduce. It is the only one of the ten with neither a caller nor a finding |
+
+- **The seven that stay, and why:**
+
+ | Utility | Lines | Kept because |
+ | --- | --- | --- |
+ | `index_sizing` | 518 | `docs/archive/measurements-2026-08.md` names it as the method behind its index-size reading |
+ | `measure_day_window` | 283 | `docs/reference/benchmarks/day-window-read.md` names it under **Instrument** |
+ | `measure_declared_wholes` | 659 | `docs/reference/benchmarks/articles-that-state-a-whole.md` names it under **Instrument**, with its arguments |
+ | `measure_probability_mode` | 245 | `docs/reference/benchmarks/which-probabilities-the-server-returns.md` names it under **Instrument**, with its settings |
+ | `token_budget` | 215 | `docs/concepts/config.md` says it reproduces the token sweep |
+ | `prune_artifacts` | 194 | **Not a measurement at all.** It deletes artifacts GitHub holds, resuming where the last pass stopped, and `docs/how-to/prune-a-collection.md` documents it as a procedure a person follows |
+ | `scan_reference_articles` | 302 | Flags extracted text that is not really an article - stub, link dump, duplicate, promotional. Repeatable against any corpus, and the next corpus is Bonsai's |
 
 - **Files touched:**
-  - the ten above and their tests
+  - the three above and their tests
+  - `docs/reference/documentation-structure.md` (the keep-rule)
   - `backend/idhazh/evals/labels.py`, `backend/idhazh/contracts/label_row.py`, `backend/utilities/label_queue.py`, `backend/tests/test_evidence.py`
   - `backend/tests/test_retrieval_eval.py` (the session fixture at L250, the archive-walk test at L279)
   - `tests/fixtures/search/` (the new bounded corpus)
-  - `docs/concepts/evaluation.md`, and each doc page above
+  - `docs/concepts/evaluation.md`, `docs/architecture/contracts/schemas.md`
 - **Acceptance gates:** local - `python -m pytest backend/tests -q`; CI - full suite.
-- **Oracle:** the retrieval evaluation runs to a verdict with no file outside `tests/fixtures/` opened, and every deleted module has no importer and no invocation, established by census **before** its deletion. **What it cannot settle:** whether the fifty committed queries still represent what a reader searches for. Nothing measured that before this row either.
+- **Oracle:** the retrieval evaluation runs to a verdict with no file outside `tests/fixtures/` opened, and each deleted module has no importer, no workflow invocation and **no `docs/` page naming it as an instrument** - established by census before its deletion. **What it cannot settle:** whether the fifty committed queries still represent what a reader searches for. Nothing measured that before this row either.
 - **Decisions:**
 
  | # | Decision | Authority |
  | --- | --- | --- |
- | 1 | A one-shot measurement utility retires once its answer is written down. The doc keeps the finding and loses the script's name in the same commit | Fowler |
- | 2 | **`backend/utilities/plan_status.py` is not deleted, and nothing calls it.** The CI job that ran it was removed on 2026-09-22 (owner ruling): a page derived from every plan at once had a writer per open branch and conflicted on every line that moved. The module stays on disk as an operator surface a person runs by hand. **The census must not read "no caller" as "delete"** - this row deletes by owner-approved name, not by census verdict alone | Owner, 2026-09-22 |
- | 3 | **`backend/idhazh/evals/retrieval.py` is not deleted.** It is the only instrument that would see a similarity floor moved by 0.05 turning six search results into two | Andre |
- | 4 | The bound is a committed fixture corpus of the gold days the fifty queries answer, beside the query set already at `tests/fixtures/search/retrieval-queries.json`. `test_every_labelled_answer_is_still_in_the_archive` at L279 is deleted outright - it goes red because somebody published a day, which CLAUDE.md section 13 forbids by name | Andre |
- | 5 | The human-label path goes: zero committed rows, and CLAUDE.md section 1a makes LLM-as-judge primary evaluation. **Its sampling design moves into a `## Design rationale` section in `docs/concepts/evaluation.md` in the same commit** - the shuffle that needs no seed and stays reproducible, from `evals/labels.py:139`, and the procedure. This repository force-pushes its history away on a schedule, so a design living only in a deleted file's history is gone | Andre |
- | 6 | The five demoted qualification diagnostics stay. The scope-out table says why | Andre |
- | 7 | The whole row is deletion and test-scope change, so it is one pull request with no behaviour in it. Keeping it out of P1 is what makes that reviewable | Fowler |
+ | 1 | **A utility named by a page as the instrument behind a reading is kept.** Seven of the ten plan 39 proposed are ad-hoc instruments a person runs by hand, five of them cited under **Instrument** on a benchmark page. Deleting the tool leaves a number nobody can reproduce, which is a worse outcome than the lines it saves | Owner, 2026-09-22 |
+ | 2 | The rule is written into `docs/reference/documentation-structure.md`, not just applied here. A rule applied once and not recorded is a rule the next census re-litigates | Fowler |
+ | 3 | Only a one-shot migration retires outright, and only two qualify: both have already run over every day they would touch | Fowler |
+ | 4 | `measure_definition_placement` goes even though it is repeatable, because **no page records what it found.** There is no reading to protect. If its answer mattered it would have been written down | Andre |
+ | 5 | **`prune_artifacts` is not a measurement and was never a deletion candidate.** It writes - it removes artifacts GitHub holds - and a how-to page documents it as a procedure | Carmack |
+ | 6 | **`backend/utilities/plan_status.py` is not deleted, and nothing calls it.** Its CI job was removed on 2026-09-22 (owner ruling): a page derived from every plan at once had a writer per open branch and conflicted on every line that moved. It stays as an operator surface | Owner, 2026-09-22 |
+ | 7 | **`backend/idhazh/evals/retrieval.py` is not deleted.** It is the only instrument that would see a similarity floor moved by 0.05 turning six search results into two | Andre |
+ | 8 | The bound is a committed fixture corpus of the gold days the fifty queries answer, beside the query set already at `tests/fixtures/search/retrieval-queries.json`. `test_every_labelled_answer_is_still_in_the_archive` at L279 is deleted outright - it goes red because somebody published a day, which CLAUDE.md section 13 forbids by name | Andre |
+ | 9 | The human-label path goes: zero committed rows, and CLAUDE.md section 1a makes LLM-as-judge primary evaluation. **Its sampling design moves into a `## Design rationale` section in `docs/concepts/evaluation.md` in the same commit** - the shuffle that needs no seed and stays reproducible, from `evals/labels.py:139`, and the procedure. This repository force-pushes its history away on a schedule, so a design living only in a deleted file's history is gone | Andre |
+ | 10 | The five demoted qualification diagnostics stay. The scope-out table says why | Andre |
+ | 11 | The whole row is deletion, a documented rule and a test-scope change, so it is one pull request with no behaviour in it | Fowler |
 
 - **Rejected alternatives:**
 
  | # | Option | Why rejected | What it would cost to take | Authority |
  | --- | --- | --- | --- | --- |
- | 1 | Delete all eleven utilities plan 39 named | One is `plan_status.py`, which the owner has ruled stays on disk even with no caller. The census says three others are free and seven more need a doc edit | A module the owner asked to keep, deleted on a census verdict | Owner, 2026-09-22 |
- | 2 | Delete `retrieval.py` and write the replacement fixture later | The replacement is already committed. The row would delete 990 lines and promise to rebuild something that exists | The only search-quality measure, against a five-query wiring check that cannot see a ten-point recall drop | Andre |
- | 3 | Keep the label queue because Bonsai may need human judgement | Defensible - the shape is proven for the other judge at `docs/how-to/label-the-similarity-holdout.md`. It loses because zero rows have ever been committed and the code is cheap to rewrite; what is not cheap is the sampling design, which decision 5 preserves | 1,073 lines and a schema, kept against a need nobody has expressed since it was written | Andre |
+ | 1 | Delete all ten, as an earlier draft of this row said | Seven are ad-hoc instruments, five cited under **Instrument** on a benchmark page and one documented as an operator procedure. A caller census cannot tell a dead tool from a tool nobody has needed this month | About 2,400 lines, five unreproducible readings and one documented procedure | Owner, 2026-09-22 |
+ | 2 | Keep all ten and write only the rule | Two are finished migrations over days that are all filled, and one has no recorded answer to protect | 416 lines of code that can never run usefully again | Fowler |
+ | 3 | Delete `retrieval.py` and write the replacement fixture later | The replacement is already committed. The row would delete 990 lines and promise to rebuild something that exists | The only search-quality measure, against a five-query wiring check that cannot see a ten-point recall drop | Andre |
+ | 4 | Keep the label queue because Bonsai may need human judgement | Defensible - the shape is proven for the other judge at `docs/how-to/label-the-similarity-holdout.md`. It loses because zero rows have ever been committed and the code is cheap to rewrite; what is not cheap is the sampling design, which decision 9 preserves | 1,073 lines and a schema, kept against a need nobody has expressed since it was written | Andre |
  | 4 | Fold this row into P1 | Fewer pull requests | A review that mixes about 3,400 deleted lines with a new persisted contract, where the contract is what needs the attention | Fowler |
 
 ## Section 4 - Row 3 - The pipeline test commits what it produced
@@ -430,9 +483,11 @@ Each test fails when one value is removed from either side. **That is not genera
   - `frontend/scripts/run-checks.ts:310`, `test-scope.ts:169`, `tests/test-scope.test.mjs` (four lines), `copy-visuals.mjs:52`
   - `frontend/src/lib/server/config.ts`, `host-fingerprint.ts` (C5), and the two new binding tests (C6)
   - `.github/workflows/ci.yml` (the drift job, ~L208-214), `pyproject.toml:170` (`idhazh-export-schemas`)
-  - `docs/architecture/contracts/schemas.md` (deleted)
+  - **the reappearance sweep (C8) and the field-set binding test (C9)**, both new contract-tier tests
+  - `backend/idhazh/contracts/base.py:700-703` and every `__schema_stem__` (C10's rename)
+  - `docs/architecture/contracts/schemas.md` - **stripped to what survives, not deleted**, and it hosts this row's `## Design rationale`
 - **Acceptance gates:** local - `npm --prefix frontend run check`, `npm --prefix frontend run test:changed -- --list` then the selected checks, `python -m pytest backend/tests/contracts -q`; CI - full suite and the browser smoke.
-- **Oracle:** each binding test in C6 fails when one value is removed from either side, proved by removing one and watching it go red before it is restored. **What it cannot settle:** whether the 28 non-vocabulary fields of `HostFingerprintRow` were copied faithfully. Nothing can check that once the source is gone, so it is checked before - field by field, against the generated file, in the same session.
+- **Oracle:** each binding test in C6 and C9 fails when one value or one field is removed from either side, proved by removing one and watching it go red before it is restored; and the reappearance sweep in C8 fails when a file is added back under either deleted directory. **All three can fail, and C8 is the only one that fails on the commit that undoes this row.** **What it cannot settle:** whether the 28 non-vocabulary fields of `HostFingerprintRow` were copied faithfully at the moment of the inline. Nothing can check that once the source is gone, so it is checked before - field by field, against the generated file, in the same session. C10 protects the field set from that point forward.
 - **The green-suite traps, named so a worker looks for them:**
 
  | Trap | What happens |
@@ -449,12 +504,15 @@ Each test fails when one value is removed from either side. **That is not genera
  | 1 | The layer is deleted whole rather than pruned to the used files. 62 of 66 have no importer, and a generator kept for four types is a generator | Owner ruling 2026-09-21 |
  | 2 | The Pydantic models stay. They are the validation; the schemas were a copy of them in another notation | Fowler |
  | 3 | The drift gate goes with the artefacts. It checked that a generated file still matched the thing that generated it, which is a loop | Fowler |
- | 4 | **`docs/architecture/contracts/schemas.md` is deleted, not refreshed.** The agent bootstrap routes to it, so the next agent reading a page titled for schemas builds what it describes. This is the single most likely way the whole layer returns | Fowler |
+ | 4 | **`docs/architecture/contracts/schemas.md` is stripped, not deleted - correcting an earlier draft of this plan.** That draft said the agent bootstrap routes to it; **it does not** - `docs/agents/bootstrap.md` routes a persisted shape to CLAUDE.md section 11 and the model itself. **47 files link to the page**, and three of its rules have nothing to do with generation: the shard rule six pages cite, the changelog-trim ruling, and the version-stamp rules section 11 defers to. The generation sections go; the page keeps the rest and hosts this plan's `## Design rationale` | Fowler |
  | 5 | **`CONTRACTS` is re-homed, not deleted.** `_fixtures.py:17` builds `BY_STEM` from it, so deleting `export.py` whole costs the fixture round-trip test its map - and that test is the one thing proving every contract still loads | Fowler |
  | 6 | **`derived.py` is untouched.** It writes no schema. Plan 39 named it in error | Fowler |
  | 7 | The prose requirement dies with its consumer: it is copied into the generated schema and nowhere else. The version stamp and the changelog stay - `schema_version()` reads `__changelog__[0]` and thirty-plus production call sites stamp with it | Fowler |
  | 8 | Each closed vocabulary keeps one binding test. Two declarations with one gate is not generation, and it is cheaper than the drift the row otherwise buys | Fowler |
  | 9 | The cost framing plan 39 used - forty thousand lines between a person and a change - is dropped. The drift gate is one second and the layer publishes nothing. A row whose stated benefit is one second is a row that gets reverted the first time an inlined type drifts | Carmack |
+ | 10 | **The row ships a reappearance sweep** (C8). Prose gates nothing; this is the only control that fails on the commit that brings the layer back | Fowler |
+ | 11 | **The row ships a field-set binding test for `HostFingerprintRow`** (C9). Without it a 31st Python column is read, dropped and never drawn, with every gate green - which is the failure `host-fingerprint.ts:19-23` says already lasted a month | Fowler |
+ | 12 | **`__schema_stem__` is renamed and `base.py:700-703` rewritten.** That docstring tells every new contract its stem names `schemas/<stem>.schema.json`. It is the most direct instruction in the tree to rebuild what this row deletes | Fowler |
 
 - **Rejected alternatives:**
 
@@ -464,11 +522,13 @@ Each test fails when one value is removed from either side. **That is not genera
  | 2 | Keep the schemas, delete the TypeScript | The schemas' only readers afterwards are the generator that writes them and the test that checks the generator | About 9,600 lines removed, and a gate policing itself | Fowler |
  | 3 | Point the site at the generated types instead of its hand-written copies | The opposite change, and defensible - one declaration per shape. It loses because nobody has wanted it for 66 shapes over the project's life, and the hand-written copies are the ones under test | A rewrite of the payload, search and console layers against a need nobody has expressed | Fowler |
  | 4 | Inline the two vocabularies with no binding test | It is the drift `host-fingerprint.ts:19-23` says once carried a missing flag for a month | Two copies with nothing comparing them, and a machine card that quietly stops drawing a chip | Fowler |
+ | 5 | Delete the layer and rely on the amended guardrail to keep it out | Prose gates nothing. Twelve instructions in code and docs still say generate, including the base-class docstring every new contract is written against | The layer returns the first time a console panel wants a ledger nobody typed by hand. C8 is 25 lines | Fowler |
+ | 6 | Give the three inlined types no protection, as an earlier draft of this row did | Backwards. A vocabulary drift announces itself - Python raises, or a row visibly drops from the panel. A **type** drift is silent in every gate this project runs | A column written, parsed and never drawn, found when somebody asks why the card has no new reading | Fowler |
 
 ## Section 7 - Row 6 - The engineering contract and the pages catch up
 
 - **Scope:** Amend the engineering-contract clauses this plan contradicts that plan 41 does not own, and refresh every page whose description of the contract layer or the qualification surface is now wrong.
-- **Files touched:** `CLAUDE.md` (Guardrail #3's generation sentence at `:90`, section 1a's second bullet at `:105`, section 9's drift-gate line at `:221`, section 10's hand-editing line at `:240`), `AGENTS.md`, `docs/reference/ci-model-runtime.md`, `docs/architecture/contracts/determinism.md`, `docs/reference/repository-layout.md`, `docs/how-to/run-the-gates.md`
+- **Files touched:** `CLAUDE.md` (Guardrail #3's generation sentence at `:90`, section 1a's second bullet at `:105`, section 9's drift-gate line at `:221`, section 10's hand-editing line at `:240`), `AGENTS.md`, **the ten code and doc instructions in C10**, `docs/reference/ci-model-runtime.md`, `docs/architecture/contracts/determinism.md`, `docs/reference/repository-layout.md`, `docs/how-to/run-the-gates.md`
 - **Acceptance gates:** `python backend/utilities/doc_load.py` before and after, and the split test on any page gaining a section. No application suite is required for a documentation-only closure.
 - **Oracle:** no clause of the engineering contract requires a generated artefact, a schema file, or a drift gate - **checked clause by clause against the tree after plan 41 has merged, not against this plan's table.** That is what stops this row reverting plan 41. **What it cannot settle:** whether a later agent reads the amended clause the way it was meant. Decision 5 is the mitigation.
 - **Decisions:**
