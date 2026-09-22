@@ -17,6 +17,9 @@
 # jobs racing this loop are never touching one path, and the rebase applies both
 # sides whole.
 #
+# The loop is bounded by a wall clock rather than by three attempts, and prints
+# what each attempt spent. See the six stamps below.
+#
 # Until 2026-09-19 they did share files, `.gitattributes` gave those files a
 # union merge driver, and this script ran a settling pass after the rebase to
 # take the repeats back out. The union is gone with the shared writes: a second
@@ -35,7 +38,9 @@
 # Environment:
 #   COMMIT_MESSAGE          the commit subject
 #   NOTHING_STAGED_MESSAGE  printed when the staged paths hold no change
-#   PUSH_FAILED_MESSAGE     printed to stderr when every attempt is spent
+#   PUSH_FAILED_MESSAGE     printed to stderr when the deadline is spent
+#   PUSH_DEADLINE_SECONDS   optional: how long to keep trying, default 300
+#   SHARD                   optional: which shard of the job this is, for the log
 #   REFRESH_PATHS           optional: the committed paths this job rebuilds
 #   REGENERATE_COMMAND      optional: the producer that rebuilds them
 #   DROP_RACED_ASSETS_COMMAND optional: deletes this attempt's rendered assets
@@ -49,12 +54,29 @@
 #            checkout, false when what it pushed is what it was handed
 set -euo pipefail
 
+# Bash 5, because every attempt below is timed against `EPOCHREALTIME` and the
+# deadline is read from the same clock. Said here so a host without it names the
+# reason rather than failing on an unset variable.
+: "${EPOCHREALTIME:?commit-and-push.sh needs bash 5 or newer: it times its attempts with EPOCHREALTIME}"
+
 : "${COMMIT_MESSAGE:?commit-and-push.sh needs COMMIT_MESSAGE}"
 : "${NOTHING_STAGED_MESSAGE:?commit-and-push.sh needs NOTHING_STAGED_MESSAGE}"
 : "${PUSH_FAILED_MESSAGE:?commit-and-push.sh needs PUSH_FAILED_MESSAGE}"
 REFRESH_PATHS="${REFRESH_PATHS:-}"
 REGENERATE_COMMAND="${REGENERATE_COMMAND:-}"
 DROP_RACED_ASSETS_COMMAND="${DROP_RACED_ASSETS_COMMAND:-}"
+
+# The value a caller that names none gets. Every caller that has a config reader
+# on its runner passes `run.push_deadline_seconds` instead, so this covers the
+# jobs whose runner has no Python: this script must not need one, because it is
+# what commits when a producer has already finished or already failed.
+PUSH_DEADLINE_SECONDS="${PUSH_DEADLINE_SECONDS:-300}"
+case "$PUSH_DEADLINE_SECONDS" in
+  '' | *[!0-9]* | 0)
+    echo "PUSH_DEADLINE_SECONDS must be a whole number of seconds, 1 or more" >&2
+    exit 2
+    ;;
+esac
 
 if [ "$#" -eq 0 ]; then
   echo "commit-and-push.sh needs at least one path to stage" >&2
@@ -214,6 +236,42 @@ report_rebased() {
   echo "rebased=$REBASED" >> "$GITHUB_OUTPUT"
 }
 
+# What one attempt cost, split six ways, printed once per attempt. A single
+# figure cannot tell a slow rebuild from a slow push, and which of the two the
+# deadline is being spent on is the whole reason to collect this.
+#
+# Attempt 1 has no window in the retry sense. Nothing fetches before the first
+# push, so its exposure is the whole job - checkout to push, two to three hours -
+# which is not a retry parameter, and its zeros are the truth about it. What
+# measures attempt 1 is the share of runs whose first push lands.
+#
+# The step summary is where an operator reads it without opening a log, and it is
+# absent when a test drives this script, so the write is skipped rather than
+# refused (section 1a: degrade, do not fail).
+say_what_this_attempt_spent() {
+  local line
+  line="push attempt=$attempt job=${GITHUB_JOB:-local} shard=${SHARD:-none} outcome=$1"
+  line="$line window_ms=$window_ms fetch_ms=$fetch_ms handback_ms=$handback_ms"
+  line="$line rebase_ms=$rebase_ms rebuild_ms=$rebuild_ms push_ms=$push_ms"
+  echo "$line"
+  [ -n "${GITHUB_STEP_SUMMARY:-}" ] || return 0
+  echo "$line" >> "$GITHUB_STEP_SUMMARY"
+}
+
+# Wait before the next attempt, so that every loser of one race does not refetch
+# in lockstep with the others. `min(2^(k-1), 8)` seconds for k failures so far,
+# drawn against U(0.5, 1.5): the spread widens with the backoff, so collisions
+# fall as more runs contend. The sleeps run 1, 2, 4, 8, 8, 8.
+back_off() {
+  local step jittered seconds millis
+  step=$(( $1 > 4 ? 8 : 1 << ($1 - 1) ))
+  jittered=$(( step * (500 + RANDOM % 1001) ))
+  seconds=$(( jittered / 1000 ))
+  millis=$(( jittered % 1000 ))
+  printf 'waiting %d.%03ds before attempt %d\n' "$seconds" "$millis" "$(( attempt + 1 ))"
+  sleep "$seconds.$(printf '%03d' "$millis")"
+}
+
 git config user.name "miztiik"
 git config user.email "miztiik@users.noreply.github.com"
 git add "$@"
@@ -224,26 +282,75 @@ if git diff --cached --quiet; then
 fi
 git commit -m "$COMMIT_MESSAGE"
 
+# The loop is bounded by a clock rather than by a count. A fixed number of
+# attempts is spent at once however high it is set, once several runs commit
+# together; an optimistic rebase-and-push converges in expectation at any commit
+# rate, and a counter does not. Three attempts were what the loop allowed and
+# what every failure message claimed to have spent.
+#
+# Microseconds, read from bash's own clock rather than from `date`, so timing an
+# attempt costs no process and cannot disagree with the deadline. `10#` because
+# a reading taken in the first tenth of a second carries a leading zero, and
+# bash reads a leading zero as octal.
+#
 # Every command below is guarded. An unguarded one ends the script where it
-# stands under `bash -e`, which is how a loop that looks like it retries three
+# stands under `bash -e`, which is how a loop that looked like it retried three
 # times spent one attempt and left the checkout mid-rebase.
-for attempt in 1 2 3; do
+deadline_us=$(( 10#${EPOCHREALTIME//[.,]/} + PUSH_DEADLINE_SECONDS * 1000000 ))
+attempt=0
+failures=0
+window_opened_us=0
+window_ms=0
+fetch_ms=0
+handback_ms=0
+rebase_ms=0
+rebuild_ms=0
+push_ms=0
+step_started_us=0
+while :; do
+  attempt=$(( attempt + 1 ))
+  step_started_us=$(( 10#${EPOCHREALTIME//[.,]/} ))
   if git push; then
+    push_ms=$(( (10#${EPOCHREALTIME//[.,]/} - step_started_us) / 1000 ))
+    window_ms=$(( window_opened_us == 0 ? 0 : (10#${EPOCHREALTIME//[.,]/} - window_opened_us) / 1000 ))
+    say_what_this_attempt_spent landed || echo "could not record what this attempt spent" >&2
     report_rebased || echo "could not say whether the push rebased" >&2
     exit 0
   fi
+  push_ms=$(( (10#${EPOCHREALTIME//[.,]/} - step_started_us) / 1000 ))
+  window_ms=$(( window_opened_us == 0 ? 0 : (10#${EPOCHREALTIME//[.,]/} - window_opened_us) / 1000 ))
+  say_what_this_attempt_spent rejected || echo "could not record what this attempt spent" >&2
   echo "push rejected, rebasing (attempt $attempt)"
   # Set before the rebase rather than after it. Every path out of here has
   # either rewritten the checkout or is about to, and a later step that skipped
   # its rebuild on a maybe is the failure this output exists to stop.
   REBASED=true
+  failures=$(( failures + 1 ))
+  if [ "$(( 10#${EPOCHREALTIME//[.,]/} ))" -ge "$deadline_us" ]; then
+    break
+  fi
+  back_off "$failures" || echo "could not wait before the next attempt" >&2
   if ! discard_noise; then
     echo "could not clear the working tree before the rebase" >&2
     break
   fi
-  if ! git fetch origin main; then
-    echo "could not read origin/main" >&2
-    break
+  # The next attempt's window opens here, at the fetch. What it measures is the
+  # span another run has to push into before this one pushes again, so the
+  # waiting above is deliberately outside it.
+  window_opened_us=$(( 10#${EPOCHREALTIME//[.,]/} ))
+  fetch_ms=0
+  handback_ms=0
+  rebase_ms=0
+  rebuild_ms=0
+  step_started_us=$(( 10#${EPOCHREALTIME//[.,]/} ))
+  # A fetch that fails is a transient, and riding it out is what the deadline is
+  # for. A broken token spends 300 s of a six-hour budget and says so six times.
+  if git fetch origin main; then
+    fetch_ms=$(( (10#${EPOCHREALTIME//[.,]/} - step_started_us) / 1000 ))
+  else
+    fetch_ms=$(( (10#${EPOCHREALTIME//[.,]/} - step_started_us) / 1000 ))
+    echo "could not read origin/main, so this attempt waits and asks again" >&2
+    continue
   fi
   # After the fetch, because the answer is a question about the tip.
   if ! clear_what_the_tip_will_write_over FETCH_HEAD; then
@@ -256,6 +363,7 @@ for attempt in 1 2 3; do
       break
     fi
   fi
+  step_started_us=$(( 10#${EPOCHREALTIME//[.,]/} ))
   if [ "${#REFRESH[@]}" -gt 0 ]; then
     if ! hand_back FETCH_HEAD; then
       echo "could not hand the rebuilt paths back to origin/main" >&2
@@ -271,11 +379,23 @@ for attempt in 1 2 3; do
       break
     fi
   fi
-  if ! git rebase FETCH_HEAD; then
+  handback_ms=$(( (10#${EPOCHREALTIME//[.,]/} - step_started_us) / 1000 ))
+  step_started_us=$(( 10#${EPOCHREALTIME//[.,]/} ))
+  # `merge.directoryRenames=false` on both spellings below. Git guesses that a
+  # directory whose files all moved away was RENAMED to wherever they went, and
+  # it applies that guess to a file the other side added into the emptied
+  # directory. The fold already drains `state/segments/`, so a sibling adding a
+  # brand-new segment there is read as adding into a directory that no longer
+  # exists, and the rebase stops with `CONFLICT (file location)` over a tree
+  # that was correct. Proved in a scratch repository on 2026-09-22: the same
+  # replay conflicts with the guess on and reports `Successfully rebased` with
+  # it off, losing nothing.
+  if ! git -c merge.directoryRenames=false rebase FETCH_HEAD; then
     echo "the rebase did not apply cleanly" >&2
-    git rebase --abort || echo "the rebase could not be aborted" >&2
+    git -c merge.directoryRenames=false rebase --abort || echo "the rebase could not be aborted" >&2
     break
   fi
+  rebase_ms=$(( (10#${EPOCHREALTIME//[.,]/} - step_started_us) / 1000 ))
   [ "${#REFRESH[@]}" -gt 0 ] || continue
   # Keep the content, drop the commit: the producer is about to rewrite most of
   # it, and one run leaves one commit however many attempts it took.
@@ -284,10 +404,12 @@ for attempt in 1 2 3; do
     break
   fi
   echo "rebuilding the day against origin/main"
+  step_started_us=$(( 10#${EPOCHREALTIME//[.,]/} ))
   if ! "${REGENERATE[@]}"; then
     echo "the rebuild failed against origin/main" >&2
     break
   fi
+  rebuild_ms=$(( (10#${EPOCHREALTIME//[.,]/} - step_started_us) / 1000 ))
   if ! git add "$@"; then
     echo "could not stage the rebuilt paths" >&2
     break
@@ -310,5 +432,5 @@ done
 # them.
 report_rebased || echo "could not say whether the push rebased" >&2
 echo "$PUSH_FAILED_MESSAGE" >&2
-echo "the push was given up on attempt $attempt" >&2
+echo "the push was given up on attempt $attempt after ${PUSH_DEADLINE_SECONDS}s" >&2
 exit 1

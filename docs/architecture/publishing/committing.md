@@ -3,17 +3,17 @@
 **Last Updated**: 2026-09-22
 
 Ten jobs of one run commit to one branch, and every one of them can lose the
-push race. This page owns what they run to win it: the three-attempt rebase
-loop, which job may rebuild what it commits, and how two runs of one day are
-stopped from writing different bytes to one path.
+push race. This page owns what they run to win it: the rebase loop and the clock
+that bounds it, which job may rebuild what it commits, and how two runs of one
+day are stopped from writing different bytes to one path.
 
 The workflows these jobs belong to are in
 [../../reference/github-actions.md](../../reference/github-actions.md).
 
 ## The commit steps push through a rebase, and the one that can rebuild rebuilds
 
-The plan job, each work shard and the assemble job commit, then push in a loop of
-three attempts. The bench's `runtime` job does too. All of them
+The plan job, each work shard and the assemble job commit, then push in a loop
+bounded by a wall clock. The bench's `runtime` job does too. All of them
 run one script,
 [`.github/scripts/commit-and-push.sh`](../../../.github/scripts/commit-and-push.sh).
 Two copies of the loop were a loop no test could execute.
@@ -55,8 +55,8 @@ like it prevents.
 first, and that checkout refuses when a file the incoming commits add is already
 sitting untracked in the working tree: `error: The following untracked working
 tree files would be overwritten by checkout`. The rebase never starts, so there
-is nothing for `git rebase --abort` to abort, and the loop spends all three
-attempts on the first one. A shard that writes a `state/` path its commit step
+is nothing for `git rebase --abort` to abort, and the loop spends its whole
+budget on the first attempt. A shard that writes a `state/` path its commit step
 does not stage leaves exactly that file untracked, and a sibling shard pushing
 the same path is enough to trigger it.
 
@@ -127,7 +127,7 @@ A shard's two steps carry `continue-on-error`, so neither can fail the shard. Th
 shard owes the run its items artifact, and assemble writes the same census again,
 so a ledger that will not push costs this run an early copy of rows it gets
 anyway - while a failed shard costs the day a whole worker. Eight shards racing
-one branch is the contention case the loop's three attempts exist for.
+one branch is the contention case the loop's deadline exists for.
 
 The assemble job rebuilds what it commits, so it rebuilds. `actions/checkout@v6`
 carries no `ref`, so the job takes main's tip at trigger time, and a run takes
@@ -140,8 +140,13 @@ thrown at `git merge-file`. A text merge of two digests produces a payload no
 producer would ever write.
 
 `REFRESH_PATHS` names what the rebuild owns: the day's `digest.json` and
-`run.json`, `frontend/public/telemetry/`, and the four ledgers the workers and
-assemble append to. It never names the day's directory. The `shard-visuals-*`
+`run.json`, `frontend/public/telemetry/`, and the ledgers the workers and
+assemble append to. The list lives in
+[`backend/idhazh/paths.py`](../../../backend/idhazh/paths.py) and the
+`Say which committed paths a rebuild owns` step prints it into `$GITHUB_OUTPUT`;
+it was a space-split string in the workflow, under a header warning that no path
+in it may carry a space, and the workflow tests held a second copy of the same
+list. It never names the day's directory. The `shard-visuals-*`
 artifacts unpack this run's rendered charts into that same directory and no producer in
 the assemble job can make them again, so the two payload files are named one at a
 time. `frontend/public/telemetry/` is a full rewrite of `state/item-health/`,
@@ -181,7 +186,59 @@ in [`../architecture/publishing/visuals.md`](visuals.md).
 **Every command in the loop is guarded.** An unguarded command ends the script
 inside attempt 1 under `bash -e`: no attempt 2, no failure message, no day, and a
 checkout left mid-rebase. A guarded failure says what it was, leaves no rebase in
-progress, and ends on the three-attempt message.
+progress, and ends on the caller's own message plus the attempt it reached.
+
+## The loop stops on a clock, and says what each attempt spent
+
+**A fixed number of attempts is spent at once however high the number is.** Three
+was the number until 2026-09-22, and under several runs committing together each
+loser spent its three while the tip kept moving. An optimistic rebase-and-push
+converges in expectation at any commit rate; a counter does not. So the loop runs
+until `run.push_deadline_seconds` is gone, waiting `min(2^(k-1), 8)` seconds
+between attempts for k failures so far, drawn against U(0.5, 1.5) - the spread
+widens with the backoff, so collisions fall as more runs contend.
+
+**300 s is 25 percent of the assemble job's 20-minute timeout.** Measured on run
+`35701213155`, that job used 1.8 of its 20 minutes, so 18.2 minutes were spare.
+The work shard is the one caller that overrides it, with 120 s in its own `env:`
+block: the whole of what a shard keeps back for everything after its last item is
+`run.shard_wrap_up_minutes`, which is 12 minutes, and 300 s would be 5 of them.
+
+**Each attempt prints six stamps**, to the job log and to the step summary:
+
+```
+push attempt=2 job=assemble shard=none outcome=landed window_ms= fetch_ms= handback_ms= rebase_ms= rebuild_ms= push_ms=
+```
+
+The split is the point. A single figure cannot tell a slow rebuild from a slow
+push, and which of the two the deadline is being spent on is what decides whether
+300 s is the right number. **Attempt 1 has no window in the retry sense**:
+nothing fetches before the first push, so its exposure is the whole job -
+checkout to push, two to three hours - which is not a retry parameter, and its
+zeros are the truth about it. What measures attempt 1 is the share of runs whose
+first push lands. Above 95 percent means the deadline is almost never spent and
+the number can rise; below 80 percent means no deadline is the right answer for
+what is going wrong.
+
+**The number is not committed to a ledger.** Both candidate rows are written by
+Python before the commit step runs, so neither can carry a figure that does not
+exist until after the push.
+
+## A rebase here never guesses that a drained directory was renamed
+
+Git reads a directory whose files all moved away as having been RENAMED to
+wherever they went, and applies that guess to a file the other side added into
+the emptied directory. The fold already drains `state/segments/` on every run, so
+a sibling writing a brand-new segment into it is read as writing into a directory
+that no longer exists, and the rebase stops with `CONFLICT (file location)` over
+a tree that was correct.
+
+So every rebase in the script runs with `-c merge.directoryRenames=false`. Proved
+in a scratch repository on 2026-09-22: the same replay conflicts with the guess
+on and reports `Successfully rebased` with it off, losing nothing. It is a
+per-invocation flag rather than a runner-wide setting, because the runner's
+config is not the repository's and a behaviour a reader cannot see from the
+script is one nobody will find.
 
 A workflow contract test pins this shape, and executes the script against real
 local repositories - including a scripted origin that gains both another run of

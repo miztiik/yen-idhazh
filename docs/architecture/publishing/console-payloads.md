@@ -214,14 +214,16 @@ panel on any route can draw, and it is **anchored on the newest day found rather
 than on today**: a clock anchor answers with nothing at all for a corpus that
 stopped publishing three months ago.
 
-### The allow-list has two copies and they are asserted equal
+### The allow-list has one copy
 
 `REFRESH_PATHS` on the `Commit the day` step names what a rebuild owns after a
-lost push race, and `COMMIT_REFRESH_PATHS['assemble']` in
-`backend/tests/workflows/` mirrors it and is asserted by exact list
-equality. A payload absent from either builds locally and never reaches the
-site. Both moved in the commit that added the producers, and so did the staged
-path list on the same step.
+lost push race, and it is read from
+[`backend/idhazh/paths.py`](../../../backend/idhazh/paths.py) by the step that
+prints it and by the workflow tests. It was a space-split string in the workflow
+with a hand-written mirror in `backend/tests/workflows/`, asserted equal by exact
+list order; two lists that can drift is one list too many, and a payload absent
+from either builds locally and never reaches the site. The staged path list on
+the same step still moves with a new payload root.
 
 **Every new payload root ships with a committed file.**
 `.github/scripts/commit-and-push.sh` runs `git add "$@"` under

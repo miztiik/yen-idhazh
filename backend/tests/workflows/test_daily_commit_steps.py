@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
+import json
 import re
 import shlex
+from typing import Final
 
 import pytest
-from conftest import REPO_ROOT, read_text
+from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
-from idhazh import ledger
+from idhazh import ledger, paths
+from idhazh.contracts.app_config import AppConfig
 
 from ._harness import (
     COMMIT_JOBS,
-    COMMIT_REFRESH_PATHS,
     COMMIT_SCRIPT,
     COMMIT_SCRIPT_ENV,
     COMMIT_STAGED_PATHS,
@@ -39,6 +41,16 @@ from ._harness import (
 )
 
 pytestmark = pytest.mark.workflow
+
+#: A `git rebase` call, however many `-c <setting>` overrides sit between the two
+#: words. Matched rather than compared as text, because the settings are what
+#: this file has to be able to read: `git rebase ` as a literal stopped finding
+#: the call the day one was added.
+GIT_REBASE: Final = re.compile(r"\bgit\b(?:\s+-c\s+\S+)*\s+rebase\b")
+
+#: What every rebase here turns off. Git reads a directory whose files all moved
+#: away as RENAMED, and applies that to a file the other side added into it.
+DIRECTORY_RENAMES_OFF: Final = "-c merge.directoryRenames=false"
 
 
 def test_no_rebase_in_the_daily_run_starts_on_a_dirty_tree() -> None:
@@ -72,7 +84,7 @@ def test_no_rebase_in_the_daily_run_starts_on_a_dirty_tree() -> None:
         (path.relative_to(REPO_ROOT).as_posix(), read_text(path))
         for path in sorted(SCRIPTS_DIR.glob("*.sh"))
     ]
-    scripts = [(where, body) for where, body in bodies if "git rebase" in body]
+    scripts = [(where, body) for where, body in bodies if GIT_REBASE.search(body)]
     assert scripts, "the daily run must still push through a rebase-and-retry loop"
 
     for where, script in scripts:
@@ -86,7 +98,7 @@ def test_no_rebase_in_the_daily_run_starts_on_a_dirty_tree() -> None:
         rebase = next(
             index
             for index, line in enumerate(lines)
-            if "git rebase " in line and "--abort" not in line
+            if not line.startswith("#") and GIT_REBASE.search(line) and "--abort" not in line
         )
         assert discard < rebase, f"{where} must clear the tree before it rebases"
         # A blanket clean is the wrong answer: `llama-server.log` and the memory
@@ -111,7 +123,20 @@ def test_no_rebase_in_the_daily_run_starts_on_a_dirty_tree() -> None:
         assert clear < rebase, f"{where} must clear those files before it rebases"
         # A rebase that cannot finish must not be left half-applied for the next
         # attempt to trip over.
-        assert "git rebase --abort" in script, f"{where} must leave no rebase in progress"
+        assert any(
+            not line.startswith("#") and GIT_REBASE.search(line) and "--abort" in line
+            for line in lines
+        ), f"{where} must leave no rebase in progress"
+        # And no rebase here may guess that a drained directory was renamed. The
+        # fold already empties `state/segments/`, so a sibling adding a new
+        # segment into it is read as adding into a directory that moved, and the
+        # rebase stops with `CONFLICT (file location)` over a correct tree.
+        for line in lines:
+            if line.startswith("#") or not GIT_REBASE.search(line):
+                continue
+            assert DIRECTORY_RENAMES_OFF in line, (
+                f"{where} rebases with git's directory-rename guess left on: {line}"
+            )
 
 
 def test_every_command_in_the_retry_loop_is_guarded() -> None:
@@ -121,34 +146,92 @@ def test_every_command_in_the_retry_loop_is_guarded() -> None:
     so a conflicting rebase ended the script inside attempt 1 and left the
     checkout mid-rebase. This reads the loop body and asserts every command in it
     is either a condition, a guarded call, or an `echo`, which is what makes the
-    three attempts real. The Oracle test below proves the same thing by running
-    it; this one names the line when a new command arrives unguarded.
+    retries real. The Oracle tests prove the same thing by running it; this one
+    names the line when a new command arrives unguarded.
 
-    A plain assignment is allowed because `set -e` has nothing to act on: the
-    exit status is the value's, and a literal always succeeds. One whose value
-    comes from a command substitution is still a command, so it is still
-    flagged - that is where the hazard would come back.
+    Two kinds of assignment are allowed because `set -e` has nothing to act on.
+    A literal one succeeds by definition. So does one whose whole right side is
+    arithmetic expansion: `$(( ))` evaluates in the shell itself and an
+    assignment carrying it reports the assignment's own status, never the
+    expression's. Both are still refused the moment a command substitution
+    appears inside them, because that IS a command and that is where the hazard
+    would come back.
     """
     lines = read_text(COMMIT_SCRIPT).splitlines()
-    start = next(index for index, line in enumerate(lines) if line.startswith("for attempt in "))
+    start = next(index for index, line in enumerate(lines) if line.startswith("while :; do"))
     end = next(index for index, line in enumerate(lines) if line.startswith("done"))
     assert start < end
 
     literal_assignment = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=[^\s`]*$")
+    arithmetic_assignment = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=\$\(\(.*\)\)$")
     unguarded = []
     for line in lines[start + 1 : end]:
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
+        # What is left after the arithmetic openers go. Anything still spelling
+        # `$(` is a real command substitution.
+        substitutes = "$(" in stripped.replace("$((", "")
         guarded = (
             stripped.startswith(("if ", "elif ", "fi", "else", "echo ", "["))
             or stripped in {"exit 0", "break", "continue", "then"}
             or "||" in stripped
-            or (literal_assignment.match(stripped) is not None and "$(" not in stripped)
+            or (literal_assignment.match(stripped) is not None and not substitutes)
+            or (
+                arithmetic_assignment.match(stripped) is not None
+                and not substitutes
+                and "`" not in stripped
+            )
         )
         if not guarded:
             unguarded.append(stripped)
     assert unguarded == [], f"unguarded inside the retry loop: {unguarded}"
+
+
+def test_the_loop_is_bounded_by_a_clock_and_not_by_a_count() -> None:
+    """A fixed number of attempts is spent at once however high the number is.
+
+    Under several runs committing together, the counter buys nothing: each loser
+    spends its three and gives up while the tip keeps moving. A deadline with a
+    jittered backoff converges in expectation at any commit rate.
+
+    Read off the script rather than run, because what this settles is that no
+    count is left anywhere in the loop. The Oracle below runs it.
+    """
+    script = read_text(COMMIT_SCRIPT)
+    lines = script.splitlines()
+    start = next(index for index, line in enumerate(lines) if line.startswith("while :; do"))
+    end = next(index for index, line in enumerate(lines) if line.startswith("done"))
+
+    assert "for attempt in " not in script, "the retry count is what this row removed"
+    body = "\n".join(lines[start:end])
+    assert "deadline_us" in body, "the loop must stop on a clock"
+    assert "back_off " in body, "every loser of one race must not refetch in lockstep"
+    # The deadline is a knob, and the one place its standing value is written
+    # down is the config file. The script's own fallback covers a caller with no
+    # config reader on its runner.
+    assert "PUSH_DEADLINE_SECONDS" in script
+    committed = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    defaults = AppConfig.model_validate({})
+    assert committed["run"]["push_deadline_seconds"] == defaults.run.push_deadline_seconds
+
+
+def test_the_shard_keeps_a_shorter_deadline_than_the_rest_of_the_run() -> None:
+    """One deadline does not fit two jobs, and the reserve is why.
+
+    A work shard keeps `run.shard_wrap_up_minutes` back for everything after its
+    last item - the records, the manifest and the artifact upload. The run's own
+    300 s would be a quarter of that reserve. The assemble job has no such
+    problem: it used 1.8 of its 20 minutes on run 35701213155.
+    """
+    shard = int(_commit_call("work")[1]["PUSH_DEADLINE_SECONDS"])
+    run_wide = int(_commit_call("assemble")[1]["PUSH_DEADLINE_SECONDS"])
+    reserve_seconds = AppConfig.model_validate({}).run.shard_wrap_up_minutes * 60
+
+    assert shard < run_wide, "a shard that spends the run's deadline loses its upload"
+    assert shard * 4 <= reserve_seconds, (
+        f"{shard}s is more than a quarter of the shard's {reserve_seconds}s reserve"
+    )
 
 
 def test_both_daily_commit_steps_run_the_one_shared_script() -> None:
@@ -241,7 +324,7 @@ def test_the_segment_store_is_handed_back_to_the_tip_with_the_heads() -> None:
     the tip's heads and miss every segment a sibling pushed while this run was
     working - the rows would sit in the tree with nothing left to read them.
     """
-    refreshed = COMMIT_REFRESH_PATHS["assemble"]
+    refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
     assert f"{ledger.STATE_DIRNAME}/{ledger.SEGMENTS_DIRNAME}" in refreshed
 
 
@@ -264,7 +347,12 @@ def test_only_assemble_rebuilds_and_it_rebuilds_with_its_own_publish_command() -
     # step's line continuations are folded first.
     published_argv = shlex.split(_substitute(publish).replace("\\\n", " "))
     assert published_argv == settings["REGENERATE_COMMAND"].split()
-    assert settings["REFRESH_PATHS"].split() == COMMIT_REFRESH_PATHS["assemble"]
+    # The list itself lives in `idhazh.paths`, and the step reads it through a
+    # step output. The harness carried a second copy of it until 2026-09-22;
+    # three lists that can drift was the defect, not two.
+    assert settings["REFRESH_PATHS"].split() == paths.refresh_paths(
+        day_dir=SUBSTITUTED_DAY_DIR
+    ).split()
     # Never the day's directory itself. The visuals artifact unpacks this run's
     # rendered charts into it and no producer here can make them again, so the
     # two payload files are named one at a time.

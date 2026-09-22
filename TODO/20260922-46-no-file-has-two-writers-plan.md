@@ -308,8 +308,8 @@ Measured 2026-09-22 from GitHub job step timestamps.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 3 | Every job that commits keeps its record when the push fails | Z | - | 0 | DONE | 1 | p46r3 | - | - |
 | 1 | The last state writer with no group gets one, and the failure stops lying | A | 3 | 1 | DONE | 1 | p46a | - | GitHub Copilot |
-| 2 | The rebase stops guessing that a drained directory was renamed | A | 3 | 1 | PENDING | 1 | - | - | - |
-| 4 | The push loop becomes a deadline and says what each attempt cost | A | 3 | 1 | PENDING | 2 | - | - | - |
+| 2 | The rebase stops guessing that a drained directory was renamed | A | 3 | 1 | DONE | 1 | p46a | - | GitHub Copilot |
+| 4 | The push loop becomes a deadline and says what each attempt cost | A | 3 | 1 | DONE | 2 | p46a | - | GitHub Copilot |
 | 16 | The day's metrics file is declared derived | A | 4 | 1 | PENDING | 2 | - | - | - |
 | 5 | A day directory reads back as settled rows | B | - | 1 | PENDING | 3 | - | - | - |
 | 6 | The one rule that needs a sequence is deleted | F | - | 1 | PENDING | 5 | - | - | - |
