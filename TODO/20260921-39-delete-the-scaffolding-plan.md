@@ -92,15 +92,23 @@ Twenty rows. Read this before the tables.
 | 18 | The model's own template renders the prompt | PR #1039 | **LANDED** | `derive_turn_markers` at `backend/idhazh/llm/server.py:1434`; no `turn_opening` key in any `config/models/*.json` |
 | 19 | One console route list, not nine | PR #1040, then plan 45 | **LANDED IN PART**; the single-list design refused | Five of nine lists were widened to all five routes. The refusal is recorded in the code at `frontend/src/lib/console/band.ts:131-133`. The two specs that still miss a route are plan 45 |
 | 20 | One commit call in the workflow that has four | nowhere | **NOT DONE, by decision** | The premise was wrong: `.github/workflows/idhazh-pipeline-tests.yaml` has **zero** commit-and-push calls today, so there are no four to merge |
-| 21 | One request builder, and the pipeline stops naming a server | PR #1036 for the stamp; **the rest is ORPHANED** | **LANDED IN PART** | Four request builders remain - `server.py:496`, `:554`, `:608`, `:783` - and `_COMPLETION_PATH` at `:66` is llama-server's own route rather than the widely-supported one. `slot_id` is still a committed cell at `backend/idhazh/contracts/item_health.py:952`. `DEFAULT_ENDPOINT` at `server.py:49` is still the only address, so pointing the pipeline at another compatible server needs a code change |
+| 21 | One request builder, and the pipeline stops naming a server | PR #1036 for the stamp; the rest is now plan 47 | **LANDED IN PART; most of the rest refused** | The stamp went in #1036. The four builders at `server.py:496`, `:554`, `:608`, `:783` stay - they are four shapes carrying four different Guardrail #11 controls. The move to the widely-supported route is refused by a measurement at `server.py:58-66` dated after this row was written. The three slot cells stay - `backend/utilities/slot_probe.py` is their named instrument. **What survives is the host**, and it is [`20260922-47-the-pipeline-stops-naming-a-server-plan.md`](20260922-47-the-pipeline-stops-naming-a-server-plan.md) |
 
 **Eight rows landed whole, four landed in part, seven are open and two are not being done.** That accounts for all twenty-one.
 
-### The one thing no plan on disk carries
+### The last row to find a home, and what it turned out to be
 
-**Row 21's remainder is orphaned.** Plan 41 as first drafted had a row "The server address is a value the job sets"; plan 41 as merged replaced it with a different row, and nothing picked the address back up. Nothing under `TODO/` mentions `DEFAULT_ENDPOINT`, the four builders or the llama-specific `slot_id` cell.
+**Row 21 was orphaned until 2026-09-22, and reading it against the tree shrank it to one line.** Three of its four demands no longer hold.
 
-What it costs to leave orphaned: the pipeline cannot be pointed at a second compatible server without editing `backend/idhazh/llm/server.py`, which is the one thing plan 40's fork probe and any future hosted comparison both need. What brings it in: a plan of its own, at Level 5 - it removes a committed column from `item_health.py` and changes the route every summarize call takes, so it is a persisted-contract change and a transport change in one. It is **not** folded into plan 43 or 44: neither touches `server.py`, and adding it would put a fifth file set into a pool that is already serialised.
+| What row 21 asked for | What is true on `main` |
+| --- | --- |
+| Delete the decode-identity stamp | Done, #1036 |
+| Replace two request builders with one | There are **four**, and they are four shapes rather than four spellings - a `messages` array, a `prompt` string, a `grammar` field, and a prior body extended. Each names a different Guardrail #11 control in its own docstring |
+| Move to the widely-supported route | Refused by a measurement at `server.py:58-66` taken 2026-09-12, after this row was written: on the compatibility route the `json_schema` field survives a layer that already drops `response_format`, and no workflow pins a llama.cpp build, so a build that started stripping it would turn constrained decoding off for every item at once |
+| Delete the llama-specific slot cells | There are **three**, not two, and they have a named instrument at `backend/utilities/slot_probe.py`, a reader at `item_health_provenance.py:236-238` and three doc pages. Measured: 1,668 of 14,346 committed rows carry them - the first call of a two-call stage, sparse by design |
+| **The pipeline stops naming a server** | **Still true, and the only part that is.** The port is already `LLAMA_PORT`; the host is spelled `127.0.0.1` in three module constants with no parameter, config field or environment variable reaching it |
+
+That last line is [`20260922-47-the-pipeline-stops-naming-a-server-plan.md`](20260922-47-the-pipeline-stops-naming-a-server-plan.md) - **two rows, one pull request, Level 2**, not the Level 5 this page estimated before the measurement. It shares no file with any other live plan.
 
 ### Where the work is now
 
@@ -110,7 +118,7 @@ What it costs to leave orphaned: the pipeline cannot be pointed at a second comp
 | [`20260921-43-the-ledgers-and-the-generated-layer-plan.md`](20260921-43-the-ledgers-and-the-generated-layer-plan.md) | 1, 7, 8, 12, 15, 17, and 19's residue | row 4 DONE, six PENDING |
 | [`20260922-44-the-model-file-is-the-fetch-interface-plan.md`](20260922-44-the-model-file-is-the-fetch-interface-plan.md) | 13 | row 4 DONE, four PENDING |
 | [`20260922-45-the-readout-covers-every-console-route-plan.md`](20260922-45-the-readout-covers-every-console-route-plan.md) | 19's residue | all 4 rows PENDING |
-| none | 21's remainder | orphaned, priced above |
+| [`20260922-47-the-pipeline-stops-naming-a-server-plan.md`](20260922-47-the-pipeline-stops-naming-a-server-plan.md) | 21's remainder | both rows PENDING |
 
 Lane A ran from `20260921-41-lane-a-model-file-plan.md`, delivered in PRs #1036 and #1039, and was deleted on close. Lane B ran from `20260921-42-lane-b-workflows-plan.md`, delivered in PRs #1034, #1035 and #1037, and was deleted on close. Both were renumbered while they ran, so their row numbers are not quoted here - the pull request is what a reader can still open.
 
