@@ -95,13 +95,15 @@ Eleven rows, six pull requests, four waves.
 | 4 | The image benchmark goes | P2 | 3 | A | DONE | p42p2 | - | P2 |
 | 5 | Five checks move into the thing they check | P3 | 2, 4 | B | DONE | p42p3 | - | P3 |
 | 6 | Fourteen assertions go, and the lists become computed | P3 | 5 | B | DONE | p42p3 | - | P3 |
-| 7 | The printer learns the whole file set, and the traversal closes | P4 | 6, plan 41 | C | PENDING | - | - | - |
-| 8 | The workflows read the model file instead of relaying it | P4 | 7 | C | PENDING | - | - | - |
-| 9 | The cache names the set, and the binary gets its own key | P4 | 8 | C | PENDING | - | - | - |
-| 10 | The benchmark arms learn the server died, and the repeat count is config | P5 | 9 | D | DONE | p42p5 | - | P5 |
-| 11 | The harness keeps only what more than one module reads | P6 | 9 | D | PENDING | - | - | - |
+| 7 | The printer learns the whole file set, and the traversal closes | P4 | 6, plan 41 | C | COLLAPSED - plan 44 row 1; the grammar is imported from `measure_llm.py` rather than written a fourth time | - | - | - |
+| 8 | The workflows read the model file instead of relaying it | P4 | 7 | C | COLLAPSED - plan 44 row 2; its grep oracle is scoped to jobs reaching the action or the script | - | - | - |
+| 9 | The cache names the set, and the binary gets its own key | P4 | 8 | C | COLLAPSED - plan 44 row 3; the set-digest half only, the `backend/bin` split refused and priced | - | - | - |
+| 10 | The benchmark arms learn the server died, and the repeat count is config | P5 | 9 | D | COLLAPSED - plan 44 row 4, which is DONE; a 2 s exit check in FRONT of an unchanged readiness wait | - | - | - |
+| 11 | The harness keeps only what more than one module reads | P6 | 9 | D | COLLAPSED - plan 44 row 5; the ratio gate in C13 is deleted as unreachable and inverted | - | - | - |
 
 ### The six pull requests and the files each owns
+
+**Rows 7 to 11 are executed from [`20260922-44-the-model-file-is-the-fetch-interface-plan.md`](20260922-44-the-model-file-is-the-fetch-interface-plan.md), not from here.** That plan re-measured this one against the tree rows 1 to 6 left behind, and four load-bearing facts here had rotted. **Every `measure.yml` line number below 449 in this plan is off by 35**, because rows 3 and 4 deleted the image job. C11's harness table was wrong within a day: 242 names rather than 255, and the orphan count had risen from 36 to 45, because deleting a consumer orphans what only it imported. C13's ratio gate needs 3,088 more lines out of `backend/tests/workflows/`, row 11 is a move that removes none of them, and rows 8 and 9 shrink the denominator and push the ratio the wrong way. And section 1b's six owed items are all already written on plan 41's branch, leaving a merge order as the only real coupling. Read plan 44 for rows 7 to 11 and treat the sections below as the record of what was decided, not as instructions.
 
 **Two pull requests never own one file. That is what lets the pool run two at a time.**
 

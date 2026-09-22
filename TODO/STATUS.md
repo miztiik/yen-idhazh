@@ -40,8 +40,8 @@ run `--in-flight` instead; neither belongs in a committed file.
 | [20260921-39-delete-the-scaffolding-plan.md](20260921-39-delete-the-scaffolding-plan.md) | 21 | 0 | 1 | 0 |
 | [20260921-40-bonsai-probe-plan.md](20260921-40-bonsai-probe-plan.md) | 7 | 0 | 7 | 4 |
 | [20260921-41-lane-a-model-file-plan.md](20260921-41-lane-a-model-file-plan.md) | 7 | 0 | 7 | 0 |
-| [20260921-42-lane-b-workflows-plan.md](20260921-42-lane-b-workflows-plan.md) | 11 | 4 | 7 | 1 |
 | [20260921-43-the-ledgers-and-the-generated-layer-plan.md](20260921-43-the-ledgers-and-the-generated-layer-plan.md) | 7 | 0 | 7 | 3 |
+| [20260922-44-the-model-file-is-the-fetch-interface-plan.md](20260922-44-the-model-file-is-the-fetch-interface-plan.md) | 5 | 0 | 5 | 0 |
 
 ## In flight - 5
 
@@ -53,7 +53,7 @@ run `--in-flight` instead; neither belongs in a committed file.
 | #6 | 41 | A | The engineering contract catches up | `p41a` |
 | #7 | 41 | B | The markers are derived at server start | `p41b` |
 
-## Ready now - 45
+## Ready now - 44
 
 Nothing these depend on is outstanding. It says nothing about which two can run
 together - that is a question about files, and `20260911-execution-order.md`
@@ -102,12 +102,11 @@ section 3 is where it is answered.
 | #2 | 40 | A | The test workflow takes named addresses | - |
 | #5 | 40 | A | The eight telemetry steps move across | - |
 | #6 | 40 | A | A trial state root, and what the run keeps | - |
-| #5 | 42 | B | Five checks move into the thing they check | 2, 4 |
 | #1 | 43 | A | The replay count leaves the dispatch surface | - |
 | #2 | 43 | B | The unreferenced utilities go, and the search evaluation is bounded | - |
 | #4 | 43 | C | Nine console specs visit every route the site serves | - |
 
-## Waiting on another row - 88
+## Waiting on another row - 87
 
 | Row | Plan | Group | Title | Waiting on |
 | --- | --- | --- | --- | --- |
@@ -189,20 +188,19 @@ section 3 is where it is answered.
 | #7 | 40 | D | One dispatch, and the readings written up | 1 is PENDING; 4 is PENDING; 5 is PENDING; 6 is PENDING |
 | #3 | 41 | A | The draft head becomes a companion file | 2 is IN-FLIGHT |
 | #5 | 41 | A | The model file carries llama-server's own flags | 4 is IN-FLIGHT |
-| #6 | 42 | B | Fourteen assertions go, and the lists become computed | 5 is PENDING |
-| #7 | 42 | C | The printer learns the whole file set, and the traversal closes | 6 is PENDING; plan 41 names no row |
-| #8 | 42 | C | The workflows read the model file instead of relaying it | 7 is PENDING |
-| #9 | 42 | C | The cache names the set, and the binary gets its own key | 8 is PENDING |
-| #10 | 42 | D | The benchmark arms learn the server died, and the repeat count is config | 9 is PENDING |
-| #11 | 42 | D | The harness keeps only what more than one module reads | 9 is PENDING |
 | #3 | 43 | A | The pipeline test commits what it produced | 1 is PENDING |
 | #5 | 43 | D | The generated contract layer goes | 1 is PENDING; 2 is PENDING; 3 is PENDING; 4 is PENDING |
 | #6 | 43 | D | The engineering contract and the pages catch up | 5 is PENDING |
 | #7 | 43 | D | The dependency's beneficiary line says what it buys | 5 is PENDING |
+| #1 | 44 | A | The printer learns the whole file set, and the traversal closes | plan 41 names no row; per section 1e names no row |
+| #2 | 44 | B | The workflows read the model file instead of relaying it | 1 is PENDING |
+| #3 | 44 | B | The cache names the set | 2 is PENDING |
+| #4 | 44 | C | The benchmark arms learn the server died, and the repeat count is config | 3 is PENDING |
+| #5 | 44 | D | The harness keeps only what more than one module reads | 3 is PENDING |
 
-## Finished - 18 plans with no live row
+## Finished - 19 plans with no live row
 
-20260815-digest-pipeline-plan.md, 20260905-01-visible-chart-plan.md, 20260905-02-retire-the-route-name-plan.md, 20260905-03-console-backfill-plan.md, 20260905-04-site-cap-defence-plan.md, 20260905-05-span-tree-plan.md, 20260905-06-fewer-better-articles-plan.md, 20260905-07-better-summaries-plan.md, 20260905-08-element-table-plan.md, 20260905-09-pin-the-runtime-plan.md, 20260905-10-visual-plan-contract-plan.md, 20260905-11-two-call-planner-plan.md, 20260906-constant-cost-reads-plan.md, 20260907-growing-reads-window-plan.md, 20260910-24-day-sharded-ledgers-plan.md, 20260911-26-retire-prerender-plan.md, 20260913-reference-dataset-2-plan.md, 20260914-29-found-once-plan.md
+20260815-digest-pipeline-plan.md, 20260905-01-visible-chart-plan.md, 20260905-02-retire-the-route-name-plan.md, 20260905-03-console-backfill-plan.md, 20260905-04-site-cap-defence-plan.md, 20260905-05-span-tree-plan.md, 20260905-06-fewer-better-articles-plan.md, 20260905-07-better-summaries-plan.md, 20260905-08-element-table-plan.md, 20260905-09-pin-the-runtime-plan.md, 20260905-10-visual-plan-contract-plan.md, 20260905-11-two-call-planner-plan.md, 20260906-constant-cost-reads-plan.md, 20260907-growing-reads-window-plan.md, 20260910-24-day-sharded-ledgers-plan.md, 20260911-26-retire-prerender-plan.md, 20260913-reference-dataset-2-plan.md, 20260914-29-found-once-plan.md, 20260921-42-lane-b-workflows-plan.md
 
 ## See also
 
