@@ -33,6 +33,16 @@
 # producer would ever write. Such a job hands the derived paths back to the tip
 # the push wants, then runs its producer again against that tip.
 #
+# When the rebase does conflict, who wrote a path decides it - never which side
+# of the rebase the version came from. A writer's filename carries
+# `<run_id>-<attempt>-<job>-<shard>`, so a conflicted name carrying this job's
+# four values is this job's own work and what this job wrote is kept.
+# Every other conflicted path stops the push and names itself: no retry makes
+# another writer's file this job's, and taking the tip's copy instead would
+# delete that writer's rows at exit 0. It should never fire, because two writers
+# cannot name one file - so when it does, the run log says which path and which
+# job.
+#
 # Usage: commit-and-push.sh <path>...
 #
 # Environment:
@@ -40,7 +50,11 @@
 #   NOTHING_STAGED_MESSAGE  printed when the staged paths hold no change
 #   PUSH_FAILED_MESSAGE     printed to stderr when the deadline is spent
 #   PUSH_DEADLINE_SECONDS   optional: how long to keep trying, default 300
-#   SHARD                   optional: which shard of the job this is, for the log
+#   SHARD                   optional: which shard of the job this is. It names
+#                           the attempt line, and it is the last element of the
+#                           identity a conflicted filename is matched against.
+#                           A whole number, default 0. The filename spells it
+#                           with two digits, so it is padded here.
 #   REFRESH_PATHS           optional: the committed paths this job rebuilds
 #   REGENERATE_COMMAND      optional: the producer that rebuilds them
 #   DROP_RACED_ASSETS_COMMAND optional: deletes this attempt's rendered assets
@@ -169,6 +183,106 @@ clear_what_the_tip_will_write_over() {
   rm -f -- "${blocked[@]}" || return 1
 }
 
+# The identity this job's own files carry. `ledger.segment_path` names a
+# writer's file `<run_id>-<attempt>-<job>-<shard>`, and this project's run id is
+# itself `<date>-<execution>` - so a committed name reads
+# `2026-09-22-35743751882-1-work-03.csv`. That leading date is why the match
+# below is not anchored to the first character: the runner hands this script the
+# execution number, and the date is the plan job's to choose. The execution
+# number is allocated by GitHub and is eleven digits, so finding it with the
+# attempt, the job and the shard behind it names one writer and no other.
+#
+# The shard is two digits in the filename and written plainly on the runner, so
+# it is padded here rather than compared as it arrives.
+SHARD_NUMBER="${SHARD:-0}"
+case "$SHARD_NUMBER" in
+  '' | *[!0-9]*)
+    echo "SHARD must be a whole number of shards, 0 or more" >&2
+    exit 2
+    ;;
+esac
+printf -v SHARD_PADDED '%02d' "$SHARD_NUMBER"
+IDENTITY="${GITHUB_RUN_ID:-}-${GITHUB_RUN_ATTEMPT:-}-${GITHUB_JOB:-}-${SHARD_PADDED}"
+
+# TRUE for a file this job is entitled to keep. One string comparison, and it
+# reads no state. Off a runner there is no execution number, and a checkout that
+# is not a job owns nothing - so that case answers no before the match runs,
+# which an unanchored pattern would otherwise let through.
+mine() {
+  [ -n "${GITHUB_RUN_ID:-}" ] || return 1
+  case "${1##*/}" in
+    *"$IDENTITY"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Which version of a path survives, said as who wrote it rather than as which
+# side of the graph it came from. Git's own names for the two sides invert
+# between a rebase and a merge - under a rebase `--theirs` is the commit being
+# replayed, which is this job's own work - so a design that reasons in them is a
+# design nobody can check. That word is spelled here and nowhere else.
+keep_what_this_job_wrote() {
+  git checkout --theirs -- "$1" || return 1
+  git add -- "$1" || return 1
+}
+
+# The tip's version, named by the tip rather than by a side: this one runs
+# before the rebase starts, so there is no side to name yet.
+keep_what_origin_has() {
+  git checkout "$1" -- "$2" || return 1
+}
+
+# Settle every conflicted path this job wrote, and stop the push on every other
+# one.
+#
+# A conflicted filename that carries this job's identity is this job's own work,
+# so what this job wrote is kept. Every other conflicted path stops the push and
+# names itself: no retry makes another writer's file this job's, and taking the
+# tip's copy instead would delete that writer's rows at exit 0. A path this job
+# rebuilds cannot reach here - it was handed back to the tip before the rebase -
+# so one that does is a gap in the refresh list, and the same refusal names it.
+#
+# A path the tip has deleted is left unmerged on purpose. Git exits 0 and
+# changes nothing when the side it is asked for is the deleted one, and staging
+# the file instead would settle a deletion this job never made: retention and
+# the closed-day fold are what remove a file named for a job. So the index is
+# read again at the end, and a path still unmerged there stops the push rather
+# than reaching `git rebase --continue`.
+#
+# One identity is printed, never two. A file named for this job that the tip has
+# deleted was deleted by retention or by a person rather than by another run, so
+# a second identity field would always be empty.
+resolve_what_this_job_owns() {
+  local tip="$1" conflicted unsettled path
+  conflicted=$(git diff --name-only --diff-filter=U) || return 1
+  if [ -z "$conflicted" ]; then
+    echo "the rebase stopped with no conflicted path to settle" >&2
+    return 1
+  fi
+  while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    if ! mine "$path"; then
+      echo "a conflicted path this job did not write stops the push:" >&2
+      echo "  path: $path" >&2
+      echo "  this job: $IDENTITY" >&2
+      return 1
+    fi
+    # Absent upstream means the tip deleted it, which the index read below
+    # refuses. Leaving it here is what makes that read find it.
+    git rev-parse --verify --quiet "$tip:$path" > /dev/null || continue
+    keep_what_this_job_wrote "$path" || return 1
+    echo "keeping what this job wrote at $path"
+  done <<< "$conflicted"
+  unsettled=$(git diff --name-only --diff-filter=U) || return 1
+  [ -n "$unsettled" ] || return 0
+  echo "the tip has deleted a file this job wrote, so the push stops:" >&2
+  while IFS= read -r path; do
+    echo "  path: $path" >&2
+  done <<< "$unsettled"
+  echo "  this job: $IDENTITY" >&2
+  return 1
+}
+
 # Hand the rebuilt paths back to the tip the push wants, so the rebase finds no
 # derived state to text-merge. What that tip carries is restored; what only this
 # attempt created is removed, or the producer below reads its own last attempt
@@ -178,17 +292,17 @@ clear_what_the_tip_will_write_over() {
 # never refreshed whole: those assets came from another job's artifact and no
 # producer here can make them again.
 hand_back() {
-  local tip="$1" ours path
-  ours=$(git diff --name-only --diff-filter=A "$tip" HEAD -- "${REFRESH[@]}") || return 1
+  local tip="$1" introduced_here path
+  introduced_here=$(git diff --name-only --diff-filter=A "$tip" HEAD -- "${REFRESH[@]}") || return 1
   while IFS= read -r path; do
     [ -n "$path" ] || continue
     git rm --quiet --force -- "$path" || return 1
-  done <<< "$ours"
+  done <<< "$introduced_here"
   for path in "${REFRESH[@]}"; do
     # Absent upstream means this attempt introduced it, and the loop above has
     # already removed it.
     git rev-parse --verify --quiet "$tip:$path" > /dev/null || continue
-    git checkout "$tip" -- "$path" || return 1
+    keep_what_origin_has "$tip" "$path" || return 1
   done
 }
 
@@ -391,9 +505,15 @@ while :; do
   # replay conflicts with the guess on and reports `Successfully rebased` with
   # it off, losing nothing.
   if ! git -c merge.directoryRenames=false rebase FETCH_HEAD; then
-    echo "the rebase did not apply cleanly" >&2
-    git -c merge.directoryRenames=false rebase --abort || echo "the rebase could not be aborted" >&2
-    break
+    settled=false
+    if resolve_what_this_job_owns FETCH_HEAD && GIT_EDITOR=true git -c merge.directoryRenames=false rebase --continue; then
+      settled=true
+    fi
+    if [ "$settled" = false ]; then
+      echo "the rebase did not apply cleanly" >&2
+      git -c merge.directoryRenames=false rebase --abort || echo "the rebase could not be aborted" >&2
+      break
+    fi
   fi
   rebase_ms=$(( (10#${EPOCHREALTIME//[.,]/} - step_started_us) / 1000 ))
   [ "${#REFRESH[@]}" -gt 0 ] || continue

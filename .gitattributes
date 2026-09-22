@@ -28,6 +28,10 @@ config/*.json text eol=lf
 # its own segment below and `idhazh compact` folds them by key, so there is
 # nothing for a union to settle and nothing to sweep up after one.
 #
+# `state/seen/` is the one that never moved to a segment and took the driver
+# back instead. Its own line below says why the repeat it lets through changes
+# no answer.
+#
 # A segment has one writer, so a union driver it never asked for would silently
 # stack two copies where a conflict should stop the push. `-merge` says more
 # than saying nothing would: a path no rule names still gets git's ordinary text
@@ -35,9 +39,9 @@ config/*.json text eol=lf
 # stop the push rather than leave a file neither of them wrote.
 state/segments/**/*.csv -merge
 
-# The published day tree. It is one of the two collections that still take a
-# union driver, and it says so in its own words rather than inheriting one from
-# a neighbour: a merge rule nobody chose is nobody's decision, and this one
+# The published day tree. It is one of the three collections that take a union
+# driver, and it says so in its own words rather than inheriting one from a
+# neighbour: a merge rule nobody chose is nobody's decision, and this one
 # decides whether two runs of a day can both publish.
 #
 # `merge=union` is right here because a published row is independent of every
@@ -47,8 +51,8 @@ state/segments/**/*.csv -merge
 # the union brings twice costs bytes and never moves a publication date.
 state/published/**/*.csv text eol=lf merge=union
 
-# The cleanup record's day tree, the other collection that takes a union driver,
-# and it names one for its own reason rather than the neighbour's.
+# The cleanup record's day tree, the second collection that takes a union
+# driver, and it names one for its own reason rather than the neighbour's.
 #
 # A row is one cleanup pass by one run - what it found, what it took, what the
 # fuse held back - and no pass says anything about another, so two runs of the
@@ -57,6 +61,20 @@ state/published/**/*.csv text eol=lf merge=union
 # file against `VISUAL_PRUNE_KEY`, which is `(date, run_id)`, so a second row
 # for one run is dropped and the first is kept.
 state/visual-prunes/**/*.csv text eol=lf merge=union
+
+# The first-sight record's day tree, the third and last collection that takes a
+# union driver. It had none until 2026-09-22 and fell through to `*.csv text
+# eol=lf` near the bottom of this file, so two runs of one day that both met a
+# new address conflicted at the push over a file neither of them disagreed
+# about.
+#
+# `merge=union` is right here for the reason written above `state/published/**`.
+# A row says when one address was first met, `plan` appends a row only for an
+# address `ledger.load_seen` did not already hold, and that reader keeps the
+# EARLIEST stamp per address - so a row the union brings twice costs bytes and
+# never moves an age. It is the one `state/` ledger that declares no key at all,
+# and `ledger.keyed_paths` says so in its own words.
+state/seen/**/*.csv text eol=lf merge=union
 
 # The hand-marked holdout pairs. `merge=text` is what an unnamed path would get
 # anyway, and it is written down because the reason is worth reading next to the

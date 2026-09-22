@@ -5,13 +5,15 @@ from __future__ import annotations
 import json
 import re
 import shlex
+from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from conftest import CONFIG_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh import ledger, paths
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.base import ServerJob
 
 from ._harness import (
     COMMIT_JOBS,
@@ -31,16 +33,24 @@ from ._harness import (
     TAKE_STATE_STEP,
     TOLERATED,
     _commit_call,
+    _git,
+    _isolated_env,
     _load_workflows,
     _mapping,
+    _mid_rebase,
     _normalize_condition,
+    _race,
+    _run_commit_script,
     _script,
+    _scripted_origin,
     _step,
     _steps,
     _substitute,
+    _write,
+    requires_bash,
 )
 
-pytestmark = pytest.mark.workflow
+pytestmark = [pytest.mark.workflow, pytest.mark.slow]
 
 #: A `git rebase` call, however many `-c <setting>` overrides sit between the two
 #: words. Matched rather than compared as text, because the settings are what
@@ -51,6 +61,68 @@ GIT_REBASE: Final = re.compile(r"\bgit\b(?:\s+-c\s+\S+)*\s+rebase\b")
 #: What every rebase here turns off. Git reads a directory whose files all moved
 #: away as RENAMED, and applies that to a file the other side added into it.
 DIRECTORY_RENAMES_OFF: Final = "-c merge.directoryRenames=false"
+
+#: The rows each writer in the three tests below puts in its own file, so a test
+#: can say which writer's bytes survived rather than which side of a graph did.
+RESOLVER_ROWS: Final = FIXTURES_DIR / "resolver"
+
+#: The run this job belongs to, and the run a second job belongs to. Both are
+#: spelled here because `_isolated_env` hands the script the environment it
+#: inherited, and on a GitHub runner that already carries a real run's id.
+THIS_EXECUTION: Final = "40000000001"
+ANOTHER_EXECUTION: Final = "40000000002"
+
+#: The day these writers belong to. A run id is `<date>-<execution>`, so the
+#: date is in every committed filename and is not in anything the runner sets.
+#: That gap is the whole reason the script looks for its identity anywhere in a
+#: name rather than only at the front.
+THE_DAY: Final = "2026-09-22"
+
+#: What `ledger.segment_path` is given, as opposed to what GitHub allocates.
+THIS_RUN: Final = f"{THE_DAY}-{THIS_EXECUTION}"
+ANOTHER_RUN: Final = f"{THE_DAY}-{ANOTHER_EXECUTION}"
+
+#: The other two elements of a writer's identity. One attempt and one job is all
+#: these three tests need: what they vary is the run.
+THIS_ATTEMPT: Final = 1
+THIS_JOB: Final = ServerJob.PLAN
+
+#: How the script spells this job when it refuses a path. Every job but a work
+#: shard leaves `SHARD` empty, and the filename writes a shard with two digits,
+#: so the identity ends `00`.
+THIS_IDENTITY: Final = f"{THIS_EXECUTION}-{THIS_ATTEMPT}-{THIS_JOB.value}-00"
+
+
+def _as_this_job(settings: dict[str, str]) -> dict[str, str]:
+    """The commit step's own settings, plus the identity a runner would set.
+
+    `SHARD` is named and left empty rather than left out. The environment a test
+    inherits could carry one, and an identity that changes with the machine is
+    an identity no assertion can name.
+    """
+    return {
+        **settings,
+        "GITHUB_RUN_ID": THIS_EXECUTION,
+        "GITHUB_RUN_ATTEMPT": str(THIS_ATTEMPT),
+        "GITHUB_JOB": THIS_JOB.value,
+        "SHARD": "",
+    }
+
+
+def _segment(run_id: str) -> str:
+    """One writer's own file, from the grammar the writer itself uses.
+
+    Built through `ledger.segment_relpath` rather than spelled here, so a test
+    of the predicate that reads a filename cannot pass against a filename no
+    writer produces.
+    """
+    return ledger.segment_relpath(
+        ledger.SegmentLedger.ITEM_HEALTH,
+        run_id=run_id,
+        attempt=THIS_ATTEMPT,
+        job=THIS_JOB,
+        shard=0,
+    )
 
 
 def test_no_rebase_in_the_daily_run_starts_on_a_dirty_tree() -> None:
@@ -379,18 +451,23 @@ def test_only_assemble_rebuilds_and_it_rebuilds_with_its_own_publish_command() -
     assert "DROP_RACED_ASSETS_COMMAND" not in _commit_call("plan")[1]
 
 
-def test_only_the_two_single_writer_day_trees_union() -> None:
-    """A union merge keeps both sides, which is right for two of these and wrong for the rest.
+def test_only_the_named_single_writer_day_trees_union() -> None:
+    """A union merge keeps both sides, which is right for three of these and wrong for the rest.
 
     Every file under `state/` carried this driver until 2026-09-19. It kept two
     attempts at one row as readily as two independent rows, and a lost push race
     is exactly how a second attempt arrives. Each writer owns its own segment
     now, so there is nothing for a merge to settle.
 
-    Two day trees keep it, each with one writing job and each saying why in its
-    own line. `frontend/public/telemetry/` never had it: that file is a full
-    rewrite of `state/item-health/`, so a union of two rewrites is a file with
-    every row twice, and assemble regenerates it instead.
+    Three day trees keep it, each with one writing job and each saying why in
+    its own line. `state/seen/` is the newest, and it is the one that never
+    moved to a segment: two runs of one day that both met a new address
+    conflicted at the push over a file neither of them disagreed about, and
+    `ledger.load_seen` keeps the earliest stamp per address, so a row the union
+    brings twice moves no age. `frontend/public/telemetry/` never had the driver
+    at all: that file is a full rewrite of `state/item-health/`, so a union of
+    two rewrites is a file with every row twice, and assemble regenerates it
+    instead.
 
     The set is closed rather than a membership check, because what this guards is
     the pattern nobody chose. A collection that picks up a merge rule in silence
@@ -406,6 +483,7 @@ def test_only_the_two_single_writer_day_trees_union() -> None:
 
     assert unioned == {
         "state/published/**/*.csv",
+        "state/seen/**/*.csv",
         "state/visual-prunes/**/*.csv",
     }
 
@@ -470,3 +548,112 @@ def test_a_commit_that_loses_its_push_cannot_throw_away_what_the_job_already_mad
             )
 
     assert checked, "no step after a commit step carries anything, so this test proves nothing"
+
+
+@requires_bash
+def test_two_runs_that_conflict_each_keep_the_file_they_wrote(tmp_path: Path) -> None:
+    """A conflicted path is settled by who wrote it, and the other writer is untouched.
+
+    Two runs are in flight and each writes its own file. The tip also carries a
+    file under THIS run's name, which is what an earlier push of this same job
+    leaves when the push that followed it lost the race - so the rebase has an
+    add of one path from each side, and `state/segments/**/*.csv` refuses to
+    merge content at all.
+
+    The script keeps what this job wrote there, because that filename can only
+    have come from this job. The second run's file is nothing this job may touch
+    and the rebase applies it whole, so both writers land and neither has to
+    know about the other.
+    """
+    staged_paths, settings = _commit_call("plan")
+    settings = _as_this_job(settings)
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    this_run = read_text(RESOLVER_ROWS / "this-run.csv")
+    another_run = read_text(RESOLVER_ROWS / "another-run.csv")
+    ours, theirs = _segment(THIS_RUN), _segment(ANOTHER_RUN)
+    _race(tmp_path, env, theirs, another_run)
+    _race(tmp_path, env, ours, read_text(RESOLVER_ROWS / "an-earlier-push.csv"))
+    _write(runner / ours, this_run)
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 0, result.stderr
+    assert f"keeping what this job wrote at {ours}" in result.stdout
+    assert _git(origin, env, "show", f"main:{ours}").splitlines() == this_run.splitlines()
+    assert _git(origin, env, "show", f"main:{theirs}").splitlines() == another_run.splitlines()
+    assert not _mid_rebase(runner)
+
+
+@requires_bash
+def test_a_conflicted_path_this_job_did_not_write_stops_the_push(tmp_path: Path) -> None:
+    """The other half of the rule, and the half that should never fire.
+
+    A filename carries the run, the attempt, the job and the shard that wrote
+    it, so no second writer can name it. A conflict on a path that names another
+    writer therefore means two jobs claimed one file, and that is a defect to
+    report rather than a race to settle: taking the tip's copy would delete the
+    other writer's rows and exit 0, and retrying cannot make another writer's
+    file this job's.
+
+    So the push stops, and the message names the path and this job. One
+    identity, not two: this job is the only one the script can speak for.
+    """
+    staged_paths, settings = _commit_call("plan")
+    settings = _as_this_job(settings)
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    another_run = read_text(RESOLVER_ROWS / "another-run.csv")
+    unowned = _segment(ANOTHER_RUN)
+    _race(tmp_path, env, unowned, another_run)
+    _write(runner / unowned, read_text(RESOLVER_ROWS / "this-run.csv"))
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 1
+    assert "a conflicted path this job did not write stops the push" in result.stderr
+    assert f"path: {unowned}" in result.stderr
+    assert f"this job: {THIS_IDENTITY}" in result.stderr
+    assert settings["PUSH_FAILED_MESSAGE"] in result.stderr
+    # The other writer's rows are still what the tip carries.
+    assert _git(origin, env, "show", f"main:{unowned}").splitlines() == another_run.splitlines()
+    assert not _mid_rebase(runner)
+
+
+@requires_bash
+def test_a_file_this_job_wrote_that_the_tip_deleted_stops_the_push(tmp_path: Path) -> None:
+    """The third case, and the one that exits 0 unless the index is read again.
+
+    Git's spelling for keeping one side of a conflict exits 0 and changes
+    nothing when the side it is asked for is the deleted one, so a file this job
+    wrote and the tip removed is left unmerged with no error anywhere. Under
+    `set -euo pipefail` the script would walk straight past it.
+
+    Nothing but retention or a person can have taken a file named for this job,
+    so putting it back is not a resolution this script may make. The push stops
+    and the message names the path and this job.
+    """
+    staged_paths, settings = _commit_call("plan")
+    settings = _as_this_job(settings)
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    ours = _segment(THIS_RUN)
+    _race(tmp_path, env, ours, read_text(RESOLVER_ROWS / "an-earlier-push.csv"))
+    # The checkout this job started from carried the file, or the tip taking it
+    # away would be an add rather than a modify against a delete.
+    _git(runner, env, "pull", "--ff-only", "origin", "main")
+    other = tmp_path / "other"
+    _git(other, env, "rm", "--quiet", ours)
+    _git(other, env, "commit", "-m", "retention took it")
+    _git(other, env, "push", "origin", "main")
+    _write(runner / ours, read_text(RESOLVER_ROWS / "this-run.csv"))
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 1
+    assert "the tip has deleted a file this job wrote" in result.stderr
+    assert f"path: {ours}" in result.stderr
+    assert f"this job: {THIS_IDENTITY}" in result.stderr
+    assert settings["PUSH_FAILED_MESSAGE"] in result.stderr
+    assert _git(origin, env, "log", "-1", "--format=%s").strip() == "retention took it"
+    assert not _mid_rebase(runner)

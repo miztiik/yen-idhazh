@@ -314,7 +314,7 @@ Measured 2026-09-22 from GitHub job step timestamps.
 | 5 | A day directory reads back as settled rows | B | - | 1 | DONE | 3 | p46b | - | Explore |
 | 6 | The one rule that needs a sequence is deleted | F | - | 1 | DONE | 5 | p46f | - | default |
 | 7 | The corpus moves to its own ref | H | 1, 2, 4 | 2 | PENDING | 4 | - | - | - |
-| 8 | An unowned path stops the push and names itself | E | 1, 2, 4 | 2 | PENDING | 4 | - | - | - |
+| 8 | An unowned path stops the push and names itself | E | 1, 2, 4 | 2 | DONE | 4 | p46e | - | GitHub Copilot |
 | 9 | The published day is folded from per-run fragments | G | 5, 6, 7 | 3 | PENDING | 5 | - | - | - |
 | 10 | One clock, and a label on every block that landed | G | 9 | 3 | PENDING | 3 | - | - | - |
 | 11 | The day directory is the ledger | C | 5, 8 | 4 | PENDING | 5 | - | - | - |
