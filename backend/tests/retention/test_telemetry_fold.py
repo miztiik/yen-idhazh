@@ -10,7 +10,7 @@ from typing import Final
 import pytest
 from conftest import seed_item_health
 
-from idhazh import day_partition, ledger
+from idhazh import ledger
 from idhazh.contracts.item_health import ItemStage
 from idhazh.contracts.knobs.observability import ObservabilityConfig
 from idhazh.contracts.telemetry_aggregate import percentile
@@ -23,9 +23,11 @@ from ._trees import (
     NOT_MONTHS,
     TODAY,
     a_state_tree,
+    census_of,
     health_row,
     item_health_days,
     item_health_months,
+    month_holding,
     months_back,
     totals_from_aggregate,
     totals_from_shard,
@@ -42,7 +44,7 @@ def test_the_fold_keeps_the_configured_window_at_full_grain(tmp_path: Path) -> N
     state = a_state_tree(tmp_path)
     config = ObservabilityConfig()
     before = {day: day.read_bytes() for day in item_health_days(state)}
-    assert sorted({day_partition.month_of(day) for day in before}) == months_back(
+    assert sorted({month_holding(day) for day in before}) == months_back(
         TODAY, HISTORY_MONTHS
     )
 
@@ -57,17 +59,17 @@ def test_the_fold_keeps_the_configured_window_at_full_grain(tmp_path: Path) -> N
         {month for month in months_back(TODAY, HISTORY_MONTHS) if month < kept}
     )
     assert len(result.folded) == HISTORY_MONTHS - config.item_health_full_grain_months
-    expired = [day for day in before if day_partition.month_of(day) < kept]
+    expired = [day for day in before if month_holding(day) < kept]
     assert expired, "the fixture has to reach past the window or this proves nothing"
     for day, bytes_before in before.items():
-        if day_partition.month_of(day) < kept:
+        if month_holding(day) < kept:
             assert not day.exists(), f"{day.name} is past the window and must be gone"
         else:
             assert day.read_bytes() == bytes_before, f"{day.name} is inside the window"
     assert item_health_months(state) == [
         month for month in months_back(TODAY, HISTORY_MONTHS) if month >= kept
     ]
-    # The emptied month and year directories go with their files. A walk that
+    # The emptied day and month directories go with their files. A walk that
     # kept them would cost more every year while the rows it reads are deleted.
     assert not expired[0].parent.exists()
 
@@ -79,7 +81,7 @@ def test_the_fold_loses_no_total(tmp_path: Path) -> None:
     kept = oldest_month_kept(TODAY, config.item_health_full_grain_months)
     doomed: dict[str, list[str]] = {}
     for day in item_health_days(state):
-        month = day_partition.month_of(day)
+        month = month_holding(day)
         if month < kept:
             doomed.setdefault(month, []).append(day.read_text(encoding="utf-8"))
     assert doomed, "the fixture has to reach past the window or this proves nothing"
@@ -107,7 +109,7 @@ def test_the_fold_keeps_a_repeated_row_rather_than_deciding_for_a_reader(
     rows = [health_row(day=day, run=run, number=7, stage=ItemStage.PUBLISH) for run in (1, 2)]
     seed_item_health(state, day, rows)
 
-    folded = compact_month(ledger.load_item_health_shard(ledger.item_health_path(state, day)))
+    folded = compact_month(census_of(state, day))
 
     assert [row.items for row in folded] == [2]
     assert folded[0].timed == 2
@@ -124,7 +126,7 @@ def test_a_group_that_timed_nothing_says_so_rather_than_saying_zero(tmp_path: Pa
         state, day, [health_row(day=day, run=1, number=1, stage=ItemStage.PLAN)]
     )
 
-    folded = compact_month(ledger.load_item_health_shard(ledger.item_health_path(state, day)))
+    folded = compact_month(census_of(state, day))
 
     assert [row.stage for row in folded] == [ItemStage.PLAN]
     assert folded[0].items == 1
@@ -263,7 +265,9 @@ def test_the_prune_takes_the_expired_day_and_keeps_the_day_beside_it(tmp_path: P
         )
     expired_path = ledger.item_health_path(state, expired_day)
     kept_path = ledger.item_health_path(state, kept_day)
-    expired_text = expired_path.read_text(encoding="utf-8")
+    expired_texts = [
+        shard.read_text(encoding="utf-8") for shard in sorted(expired_path.iterdir())
+    ]
     assert expired_path.exists() and kept_path.exists()
 
     result = prune_telemetry(state, config, TODAY, dry_run=False)
@@ -273,7 +277,7 @@ def test_the_prune_takes_the_expired_day_and_keeps_the_day_beside_it(tmp_path: P
     assert list(result.folded) == [expired_day[:7]]
     assert item_health_months(state) == [kept_day[:7]]
     folded = ledger.load_telemetry_aggregate(ledger.telemetry_aggregate_path(state, expired_day[:7]))
-    assert totals_from_aggregate(folded) == totals_from_shard([expired_text])
+    assert totals_from_aggregate(folded) == totals_from_shard(expired_texts)
 
 
 def test_the_month_readers_all_agree_on_what_a_month_is(tmp_path: Path) -> None:
@@ -442,7 +446,7 @@ def test_a_fold_that_cannot_be_written_leaves_the_shard_and_its_copy(
     doomed = [
         day
         for day in item_health_days(state)
-        if day_partition.month_of(day)
+        if month_holding(day)
         < oldest_month_kept(TODAY, config.item_health_full_grain_months)
     ]
     assert doomed, "the fixture has to reach past the window or this proves nothing"
@@ -452,5 +456,5 @@ def test_a_fold_that_cannot_be_written_leaves_the_shard_and_its_copy(
         prune_telemetry(state, config, TODAY, public_root=public)
 
     assert doomed[0].exists(), "the first day file was unlinked after an unverified write"
-    assert public_telemetry.shard_path(public, day_partition.month_of(doomed[0])).exists()
+    assert public_telemetry.shard_path(public, month_holding(doomed[0])).exists()
     assert len(month_shards(public)) == HISTORY_MONTHS

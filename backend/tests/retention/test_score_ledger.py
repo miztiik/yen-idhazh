@@ -477,7 +477,7 @@ def test_the_index_goes_with_the_rows_it_describes(tmp_path: Path) -> None:
     assert live.index_days_removed == dry.index_days_removed, (
         "the index files a live run removed are not the ones a dry run named"
     )
-    after = {day.parent.parent.name + "-" + day.parent.name for day in score_writer.index_days(state)}
+    after = {day_shards.date_of(shard)[:7] for shard in score_writer.index_days(state)}
     assert after == {month for month in before if month >= boundary}
     # Every measurement the deleted index held is still refused, because the
     # archive beside it carries the same digests.

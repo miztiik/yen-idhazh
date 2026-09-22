@@ -12,7 +12,7 @@ from typing import Final
 
 from conftest import seed_item_health
 
-from idhazh import day_partition, ledger
+from idhazh import day_shards, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
@@ -23,6 +23,7 @@ from idhazh.contracts.item_health import (
     ItemOutcome,
     ItemStage,
 )
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.knobs.console import ConsoleConfig
 from idhazh.contracts.knobs.retention import PAGES_HARD_CAP_MB
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow
@@ -183,8 +184,15 @@ def totals_from_shard(texts: Iterable[str]) -> dict[tuple[str, str], tuple[int, 
 
 
 def item_health_days(state_dir: Path) -> list[Path]:
-    """Every item-health day file, oldest first, through the pipeline's own walk."""
-    return list(day_partition.day_files(state_dir / ledger.ITEM_HEALTH_DIRNAME))
+    """Every item-health file, oldest first, through the pipeline's own walk.
+
+    A day is a directory of writer-owned files, so a day answers with as many
+    paths as writers reached it. The whole store, because a retention test asks
+    what the prune left and a window would hide the months it took.
+    """
+    return list(
+        day_shards.shard_files(state_dir / ledger.ITEM_HEALTH_DIRNAME, days=UNBOUNDED_WINDOW)
+    )
 
 
 def item_health_months(state_dir: Path) -> list[str]:
@@ -193,7 +201,37 @@ def item_health_months(state_dir: Path) -> list[str]:
     The boundary the prune works on is still a month; only the files below it are
     days, so a test about what the prune kept asks in months.
     """
-    return sorted(day_partition.days_by_month(state_dir / ledger.ITEM_HEALTH_DIRNAME))
+    return sorted(
+        day_shards.shards_by_month(state_dir / ledger.ITEM_HEALTH_DIRNAME, days=UNBOUNDED_WINDOW)
+    )
+
+
+def month_holding(shard: Path) -> str:
+    """The `<YYYY-MM>` a writer's file is filed under, read off its own path.
+
+    A day is a directory now, so a writer's file sits one level deeper than the
+    day file `day_partition.month_of` reads. One helper rather than a slice in
+    each test, so a tree that changes shape again moves one line.
+    """
+    return day_shards.date_of(shard)[:7]
+
+
+def census_of(state_dir: Path, date: str) -> list[ItemHealthRow]:
+    """One row per item one named day recorded, settled the way the fold settles it.
+
+    The read `retention.prune_telemetry` itself makes. A test that opened the
+    day's own path would open a directory, and one that opened a single file
+    inside it would answer for one writer rather than for the day.
+    """
+    return [
+        ItemHealthRow.from_csv_row(cells)
+        for cells in day_shards.settled_day(
+            state_dir / ledger.ITEM_HEALTH_DIRNAME,
+            date,
+            ledger.ITEM_HEALTH_KEY,
+            ItemHealthRow,
+        )
+    ]
 
 
 def totals_from_aggregate(
@@ -254,38 +292,45 @@ def feed_health_months(state_dir: Path) -> list[str]:
     The boundary the prune works on is still a month; only the files below it are
     days, so a test about what the prune kept asks in months.
     """
-    return sorted(day_partition.days_by_month(state_dir / ledger.HEALTH_DIRNAME))
+    return sorted(
+        day_shards.shards_by_month(state_dir / ledger.HEALTH_DIRNAME, days=UNBOUNDED_WINDOW)
+    )
 
 
 def host_fingerprint_history(
     state_dir: Path, months: list[str], *, day_of_month: int = 11
 ) -> None:
-    """A real host-fingerprint day file per month, through the contract that writes it.
+    """A real host-fingerprint file per month, written through the real producer.
 
-    Written with the CSV writer rather than an appender, because this ledger has
-    none: ten jobs each write a segment and the compaction folds them into the
-    day file. What the prune needs is a day file with the committed header, and
-    that is what the contract's own columns give it.
+    `write_segment` and not a hand-rolled CSV: a day is a directory of
+    writer-owned files, so a test that opened the day's own path would create a
+    file where the directory belongs and every later read would refuse the tree.
     """
     for index, month in enumerate(months):
         day = f"{month}-{day_of_month:02d}"
-        path = ledger.host_fingerprint_path(state_dir, day)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        row = HostFingerprintRow(
-            version=HostFingerprintRow.schema_version(),
-            date=day,
+        ledger.write_segment(
+            state_dir,
+            ledger.SegmentLedger.HOST_FINGERPRINT,
+            [
+                HostFingerprintRow(
+                    version=HostFingerprintRow.schema_version(),
+                    date=day,
+                    run_id=f"{day}-1",
+                    shard=index,
+                    cpu_model="AMD EPYC 7763 64-Core Processor",
+                )
+            ],
             run_id=f"{day}-1",
-            shard=index,
-            cpu_model="AMD EPYC 7763 64-Core Processor",
+            attempt=1,
+            job=ServerJob.PLAN,
+            shard=0,
         )
-        with path.open("w", encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(
-                handle, fieldnames=list(HostFingerprintRow.csv_columns()), lineterminator="\n"
-            )
-            writer.writeheader()
-            writer.writerow(row.csv_row())
 
 
 def host_fingerprint_months(state_dir: Path) -> list[str]:
     """Which months the host-fingerprint day tree still holds, oldest first."""
-    return sorted(day_partition.days_by_month(state_dir / ledger.HOST_FINGERPRINT_DIRNAME))
+    return sorted(
+        day_shards.shards_by_month(
+            state_dir / ledger.HOST_FINGERPRINT_DIRNAME, days=UNBOUNDED_WINDOW
+        )
+    )
