@@ -24,6 +24,7 @@ from ._harness import (
     FOLD_STEP,
     HARVEST_COMMAND,
     HARVEST_STEP,
+    PRUNE_PUSH_SCRIPT,
     REVIEW_ARTIFACT,
     REVIEW_COMMAND,
     REVIEW_STEP,
@@ -44,6 +45,11 @@ from ._harness import (
 )
 
 pytestmark = pytest.mark.workflow
+
+#: A push that replaces a branch rather than adding to it. `-f` as well as
+#: `--force`, because the short spelling does the same thing and a check that
+#: only read the long one would be a rule about typing.
+FORCE_PUSH = re.compile(r"push\s+(--force|-f)\b")
 
 
 def test_the_harvest_runs_where_the_article_text_still_is() -> None:
@@ -333,20 +339,23 @@ def test_only_the_scheduled_prune_may_force_push() -> None:
 
     Discovery is over every workflow body and every shipped script, so a second
     force-push fails here whoever adds it and wherever they put it.
+
+    One script is named rather than no script. The prune's push moved out of
+    `prune.yml` so a test could drive it against a real repository and watch it
+    refuse a tip that moved, and the `--force` moved with it.
     """
-    forcing: set[tuple[str, object]] = set()
+    forcing: set[str] = set()
     for filename, workflow in _load_workflows().items():
         for job_name in _mapping(workflow.get("jobs"), "jobs"):
             for step in _steps(workflow, job_name):
                 script = step.get("run")
-                if isinstance(script, str) and re.search(r"push\s+(--force|-f)\b", script):
-                    forcing.add((filename, step.get("name")))
+                if isinstance(script, str) and FORCE_PUSH.search(script):
+                    forcing.add(f"{filename} step {step.get('name')}")
     for path in sorted(SCRIPTS_DIR.glob("*.sh")):
-        assert not re.search(r"push\s+(--force|-f)\b", read_text(path)), (
-            f"{path.name} force-pushes, and only .github/workflows/prune.yml may"
-        )
+        if FORCE_PUSH.search(read_text(path)):
+            forcing.add(path.name)
 
-    assert forcing == {("prune.yml", "Push the rewritten history")}
+    assert forcing == {PRUNE_PUSH_SCRIPT.name}
 
 
 def test_the_prune_reads_both_its_numbers_from_config() -> None:

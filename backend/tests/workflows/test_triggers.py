@@ -108,7 +108,7 @@ def _wall_clock(first: int, last: int) -> set[int]:
 
 
 def test_the_prune_force_push_wakes_outside_every_digest_run() -> None:
-    """`prune.yml` ends in `git push --force origin main`, so it may not wake while a digest can run.
+    """`prune.yml` ends in a force push of `main`, so it may not wake while a digest can run.
 
     The span is derived from `digest.yml`'s own cron list rather than named here.
     A scheduled run starts 40 to 70 minutes after its cron minute and then takes
@@ -118,7 +118,9 @@ def test_the_prune_force_push_wakes_outside_every_digest_run() -> None:
 
     This lowers the odds; it does not close them. GitHub queues scheduled runs by
     load, so a digest run later than the recorded normal still reaches the prune
-    hour, and no workflow here can hold a lock against another one.
+    hour, and no workflow here can hold a lock against another one. What stops a
+    clash costing another run its commits is the tip check the push now makes,
+    not this hour.
     """
     workflows = _load_workflows()
     earliest_start, latest_start = SCHEDULED_START_DRIFT_MINUTES

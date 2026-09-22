@@ -613,6 +613,25 @@ TAKE_STATE_SCRIPT: Final = SCRIPTS_DIR / "take-state-from-the-tip.sh"
 
 TAKE_STATE_CALL: Final = ("bash", ".github/scripts/take-state-from-the-tip.sh", "state")
 
+#: The prune's own push, in a script rather than inline so a test can drive it
+#: against a real repository. It is the one file in the repository that may
+#: force-push, and the one that may refuse to.
+PRUNE_PUSH_SCRIPT: Final = SCRIPTS_DIR / "push-rewritten-history.sh"
+
+PRUNE_PUSH_CALL: Final = ("bash", ".github/scripts/push-rewritten-history.sh")
+
+#: The commit the prune checked out, remembered before the squash rewrites it.
+#: The push compares origin's tip against this, so a step that captured it after
+#: the rewrite would be comparing the tip against a commit only this job holds.
+PRUNE_BASE_ENV: Final = "BASE_COMMIT"
+
+#: The step that remembers it, and the step that rewrites history afterwards.
+PRUNE_REMEMBER_STEP: Final = "Remember the tip this job checked out"
+
+PRUNE_SQUASH_STEP: Final = "Squash everything older than the boundary"
+
+PRUNE_PUSH_STEP: Final = "Push the rewritten history"
+
 #: The step the `plan` job exists for. The catch-up above runs ahead of it: a
 #: fold that refuses a row ends the job, and a refusal that lands after the feed
 #: reads has spent them for nothing.
