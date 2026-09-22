@@ -430,6 +430,34 @@ def test_the_oracle_an_archived_month_reconciles_and_is_still_refused_as_a_repea
     )
 
 
+def test_the_index_goes_with_the_rows_it_describes(tmp_path: Path) -> None:
+    """An index that outlives its source is a lookup that misses for ever.
+
+    The archive carries those digests, so nothing here removes the last record
+    of a measurement - which is why the drop is guarded on the archive being on
+    disk rather than on the rows being gone.
+    """
+    state = a_score_tree(tmp_path)
+    config = ObservabilityConfig()
+    boundary = oldest_month_kept(TODAY, config.scores_full_grain_months)
+    before = {day.parent.parent.name + "-" + day.parent.name for day in score_writer.index_days(state)}
+    assert any(month < boundary for month in before), "the fixture never reaches past the window"
+
+    dry = prune_scores(state, config, TODAY, dry_run=True)
+    assert dry.index_days_removed, "a dry run that names no index file is not a deliverable"
+    assert score_writer.index_days(state), "a dry run deleted the index"
+
+    live = prune_scores(state, config, TODAY)
+    assert live.index_days_removed == dry.index_days_removed, (
+        "the index files a live run removed are not the ones a dry run named"
+    )
+    after = {day.parent.parent.name + "-" + day.parent.name for day in score_writer.index_days(state)}
+    assert after == {month for month in before if month >= boundary}
+    # Every measurement the deleted index held is still refused, because the
+    # archive beside it carries the same digests.
+    assert score_writer.recorded_observations(state)
+
+
 def test_the_stage_names_the_score_day_files_a_live_run_would_remove(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -437,17 +465,22 @@ def test_the_stage_names_the_score_day_files_a_live_run_would_remove(
 
     Each one by name, not a synthesised `<month>-01`: a month is a directory now,
     so a caller that spelled one would name a file the ledger may never have held.
+
+    **The index days beside them are named on the same terms.** They are derived
+    from these rows and answer only for them, so the archiving pass takes both -
+    and a dry run that named one half would be a list a live run does not match.
     """
     state = tmp_path / "state"
     config = ObservabilityConfig()
     months = months_back(TODAY, config.scores_full_grain_months + 1)
     score_history(state, months)
     expired = months[0]
+    days = day_partition.days_by_month(state / score_writer.LEDGER_DIRNAME)[expired]
     doomed = sorted(
-        score_writer.ledger_relpath(f"{expired}-{day.stem}")
-        for day in day_partition.days_by_month(state / score_writer.LEDGER_DIRNAME)[expired]
+        [score_writer.ledger_relpath(f"{expired}-{day.stem}") for day in days]
+        + [score_writer.index_relpath(f"{expired}-{day.stem}") for day in days]
     )
-    assert len(doomed) > 1, "one day a month would not separate a path from a synthesis"
+    assert len(days) > 1, "one day a month would not separate a path from a synthesis"
 
     with caplog.at_level(logging.INFO):
         assert (
@@ -471,6 +504,7 @@ def test_the_stage_names_the_score_day_files_a_live_run_would_remove(
     assert named == doomed
     assert "\\" not in caplog.text, "a path leaving the process is POSIX (section 2)"
     assert score_writer.ledger_days(state), "a dry run deleted the ledger"
+    assert score_writer.index_days(state), "a dry run deleted the index"
 
 
 def test_the_stage_says_so_when_every_score_month_is_at_full_grain(

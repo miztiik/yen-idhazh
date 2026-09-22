@@ -514,6 +514,11 @@ class DigestDay(Contract):
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-22",
+            change="Runs may be numbered with gaps, and two runs may not share an ordinal.",
+            why="Runs land in parallel, so no writer can know what the next number is.",
+        ),
+        ChangelogEntry(
             version="2026-09-17",
             change="DigestItem.summary is Prose - paragraphs split by one blank line.",
             why="A long summary is two paragraphs, and read-side folding keeps old days readable.",
@@ -527,11 +532,6 @@ class DigestDay(Contract):
             version="2026-09-13T22:30",
             change="Retired DigestVisual.path, which named the committed drawing.",
             why="The reader's browser draws the chart now, so no SVG is written.",
-        ),
-        ChangelogEntry(
-            version="2026-09-13T20:00",
-            change="Added DigestVisual.data_path - where this visual's data file landed.",
-            why="The reader's browser draws the chart, so it needs the marks rather than an SVG.",
         ),
         ChangelogEntry(
             version="2026-08-21",
@@ -575,14 +575,16 @@ class DigestDay(Contract):
         if introduced != sorted(introduced):
             raise ValueError("a later run appends; it never reorders what a reader already read")
 
-        run_numbers = [run.n for run in self.runs]
-        if run_numbers != list(range(1, len(self.runs) + 1)):
-            raise ValueError("runs are numbered from 1 without gaps")
-        if introduced and max(introduced) > len(self.runs):
+        # Membership, not a bound. A bound is only the same question while the
+        # ordinals run 1..N, and they no longer have to.
+        recorded = {run.n for run in self.runs}
+        if len(recorded) != len(self.runs):
+            raise ValueError("two runs cannot share an ordinal")
+        if not recorded.issuperset(introduced):
             raise ValueError("an item cannot be introduced by a run that is not recorded")
 
         revised = [item.updated_by_run for item in self.items if item.updated_by_run is not None]
-        if revised and max(revised) > len(self.runs):
+        if not recorded.issuperset(revised):
             raise ValueError("an item cannot be revised by a run that is not recorded")
 
         for run in self.runs:

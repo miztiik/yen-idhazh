@@ -292,12 +292,81 @@ def test_a_published_item_carrying_a_retired_event_still_reads() -> None:
     assert tombstone.display_name == "Stock market listing"
 
 
-def test_runs_are_append_only() -> None:
+def test_a_manifest_whose_runs_skip_a_number_reads() -> None:
+    """Two runs finish in parallel, so no writer can know what the next number is.
+
+    A number a writer had to derive from what another writer had already done is
+    the one rule here that needed the runs to be a sequence. The ordinal names a
+    block of the day, the fold hands it out, and the gap a lost or abandoned
+    block leaves is a fact rather than a defect.
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "runs-with-a-gap.json"))
+
+    manifest = RunManifest.model_validate(payload)
+
+    assert [run.n for run in manifest.runs] == [1, 2, 4]
+
+
+def test_two_runs_of_a_day_cannot_share_an_ordinal() -> None:
+    """With the sequence gone, this is what stops one block being counted twice.
+
+    Nothing else refuses it: the two records carry different ids and both are
+    addressed by the date, so the day would report one block's items against
+    two entries and every count over the runs would double.
+    """
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json"))
-    payload["runs"][1]["n"] = 3
-    payload["runs"][1]["run_id"] = "2026-08-21-3"
-    with pytest.raises(ValueError, match="without gaps"):
+    payload["runs"][1]["n"] = payload["runs"][0]["n"]
+    with pytest.raises(ValueError, match="share an ordinal"):
         RunManifest.model_validate(payload)
+
+
+def test_a_day_whose_runs_skip_a_number_reads() -> None:
+    """The same rule on the payload a reader's browser fetches.
+
+    The item introduced by the skipped-to block is what makes this bite: a bound
+    against the number of recorded runs passed it only while the ordinals ran
+    1..N, and the check is membership of the recorded set now.
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    payload["runs"][1]["n"] = 4
+    introduced = 0
+    for item in payload["items"]:
+        if item["introduced_by_run"] == 2:
+            item["introduced_by_run"] = 4
+            introduced += 1
+    assert introduced, "no item was introduced by the second run, so this proves nothing"
+
+    day = DigestDay.model_validate(payload)
+
+    assert [run.n for run in day.runs] == [1, 4]
+    assert max(item.introduced_by_run for item in day.items) == 4
+
+
+def test_two_runs_of_a_published_day_cannot_share_an_ordinal() -> None:
+    """`items_added` is counted per ordinal, so a repeat charges one block twice.
+
+    Both references claim every item, which is what the double count looks like
+    from inside the payload. Every other clause reads it as correct: the items
+    are in order, they all name a recorded ordinal, and each reference's count
+    matches what that ordinal introduced.
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    for item in payload["items"]:
+        item["introduced_by_run"] = payload["runs"][0]["n"]
+    for run in payload["runs"]:
+        run["n"] = payload["runs"][0]["n"]
+        run["items_added"] = len(payload["items"])
+    with pytest.raises(ValueError, match="share an ordinal"):
+        DigestDay.model_validate(payload)
+
+
+def test_an_item_cannot_name_an_introducing_run_the_day_never_recorded() -> None:
+    """The other half of the membership check, on the run that wrote the words."""
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    payload["items"][-1]["introduced_by_run"] = 3
+    payload["runs"][-1]["items_added"] = 0
+    with pytest.raises(ValueError, match="introduced by a run that is not recorded"):
+        DigestDay.model_validate(payload)
 
 
 def test_run_counts_reconcile() -> None:

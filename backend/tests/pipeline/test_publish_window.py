@@ -1287,17 +1287,23 @@ def test_the_manifest_cannot_record_one_run_twice() -> None:
     second = manifest_after(first, "2026-08-21-33274853468")
     assert [run.n for run in second.runs] == [1, 2]
 
-    with pytest.raises(ValidationError, match="numbered from 1 without gaps"):
+    with pytest.raises(ValidationError, match="cannot share a run_id"):
         RunManifest(
             version=RunManifest.schema_version(),
             date=first.date,
             runs=[first.runs[0], first.runs[0]],
         )
-    with pytest.raises(ValidationError, match="numbered from 1 without gaps"):
+    # Two executions, two ids, one ordinal between them. The ordinal names a
+    # block of the day rather than a position in this list, so this is the shape
+    # that has to be refused now that the numbers may skip.
+    with pytest.raises(ValidationError, match="share an ordinal"):
         RunManifest(
             version=RunManifest.schema_version(),
             date=second.date,
-            runs=[second.runs[1], second.runs[0]],
+            runs=[
+                second.runs[0],
+                second.runs[1].model_copy(update={"n": second.runs[0].n}),
+            ],
         )
     # And the shape the collision made: two records, correctly numbered, that
     # name one execution between them.
