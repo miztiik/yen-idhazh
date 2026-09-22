@@ -311,7 +311,7 @@ Measured 2026-09-22 from GitHub job step timestamps.
 | 2 | The rebase stops guessing that a drained directory was renamed | A | 3 | 1 | PENDING | 1 | - | - | - |
 | 4 | The push loop becomes a deadline and says what each attempt cost | A | 3 | 1 | PENDING | 2 | - | - | - |
 | 16 | The day's metrics file is declared derived | A | 4 | 1 | PENDING | 2 | - | - | - |
-| 5 | A day directory reads back as settled rows | B | - | 1 | PENDING | 3 | - | - | - |
+| 5 | A day directory reads back as settled rows | B | - | 1 | DONE | 3 | p46b | - | Explore |
 | 6 | The one rule that needs a sequence is deleted | F | - | 1 | DONE | 5 | p46f | - | default |
 | 7 | The corpus moves to its own ref | H | 1, 2, 4 | 2 | PENDING | 4 | - | - | - |
 | 8 | An unowned path stops the push and names itself | E | 1, 2, 4 | 2 | PENDING | 4 | - | - | - |

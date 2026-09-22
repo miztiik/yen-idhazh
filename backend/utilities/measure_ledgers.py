@@ -91,7 +91,8 @@ from idhazh import config, ledger
 from idhazh.classify import calls
 from idhazh.contracts.base import WORK_JOB
 from idhazh.contracts.item_health import ItemHealthRow
-from idhazh.day_partition import day_files
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
+from idhazh.day_shards import shard_files
 from idhazh.extract import TOKENS_PER_WORD
 from idhazh.llm.server import window
 
@@ -139,7 +140,7 @@ def read_items(state_dir: Path) -> list[Item]:
     """Every committed item-health row, from every day file."""
     directory = state_dir / ledger.ITEM_HEALTH_DIRNAME
     items: list[Item] = []
-    for path in day_files(directory):
+    for path in shard_files(directory, days=UNBOUNDED_WINDOW):
         with path.open("r", encoding="utf-8", newline="") as handle:
             for row in csv.DictReader(handle):
                 items.append(
@@ -280,7 +281,7 @@ def _job_clock_rows(state_dir: Path) -> list[dict[str, str]]:
     """
     directory = state_dir / ledger.HOST_FINGERPRINT_DIRNAME
     rows: list[dict[str, str]] = []
-    for path in day_files(directory):
+    for path in shard_files(directory, days=UNBOUNDED_WINDOW):
         with path.open("r", encoding="utf-8", newline="") as handle:
             rows.extend(row for row in csv.DictReader(handle) if row.get("job") == WORK_JOB.value)
     return rows

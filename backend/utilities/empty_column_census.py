@@ -38,11 +38,12 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Final, NamedTuple
 
-from idhazh import day_partition
+from idhazh import day_shards
 from idhazh.contracts.host_fingerprint import COLUMN_READERS as HOST_READERS
 from idhazh.contracts.host_fingerprint import HostFingerprintRow
 from idhazh.contracts.item_health import COLUMN_READERS as ITEM_READERS
 from idhazh.contracts.item_health import RETIRED_CELLS, UNREAD_CELLS, ItemHealthRow
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 
 
 class Store(NamedTuple):
@@ -111,7 +112,7 @@ def census(root: Path, store: Store) -> Census:
     headed: set[str] = set()
     rows = 0
     files = 0
-    for path in day_partition.day_files(root / store.root):
+    for path in day_shards.shard_files(root / store.root, days=UNBOUNDED_WINDOW):
         files += 1
         with path.open(encoding="utf-8", newline="") as handle:
             reader = csv.DictReader(handle)

@@ -42,7 +42,8 @@ from itertools import pairwise
 from pathlib import Path
 from typing import Final
 
-from idhazh import day_partition
+from idhazh import day_shards
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 
 #: The committed archive. Read whole, which is the growing read this file owns.
 LEDGER_ROOT: Final = "state/item-health"
@@ -129,8 +130,8 @@ def marked_rows(root: Path, day: str | None) -> tuple[list[dict[str, str]], int]
     """
     kept: list[dict[str, str]] = []
     files = 0
-    for path in day_partition.day_files(root / LEDGER_ROOT):
-        if day is not None and day_partition.date_of(path) != day:
+    for path in day_shards.shard_files(root / LEDGER_ROOT, days=UNBOUNDED_WINDOW):
+        if day is not None and day_shards.date_of(path) != day:
             continue
         files += 1
         with path.open(encoding="utf-8", newline="") as handle:

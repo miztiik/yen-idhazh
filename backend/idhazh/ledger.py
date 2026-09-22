@@ -2118,6 +2118,11 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
     run has one run id and a night hosting two tenants would otherwise file two
     tenants' unit 0 under the same three cells.
     """
+    # Imported here and not at the top: `day_shards` reads a segment name and a
+    # key's preference through this module, so it sits above it. This is the one
+    # call that reaches back up.
+    from idhazh import day_shards
+
     flat: list[KeyedLedger] = [
         KeyedLedger(feed_retirements_path(state_dir), FEED_RETIREMENT_KEY, FeedRetirementRow),
     ]
@@ -2178,11 +2183,15 @@ def keyed_paths(state_dir: Path, *, date: str | None) -> list[KeyedLedger]:
         ),
         *(
             KeyedLedger(path, ITEM_HEALTH_KEY, ItemHealthRow, ITEM_HEALTH_CARRIED)
-            for path in day_partition.day_files(state_dir / ITEM_HEALTH_DIRNAME)
+            for path in day_shards.shard_files(
+                state_dir / ITEM_HEALTH_DIRNAME, days=UNBOUNDED_WINDOW
+            )
         ),
         *(
             KeyedLedger(path, HOST_FINGERPRINT_KEY, HostFingerprintRow)
-            for path in day_partition.day_files(state_dir / HOST_FINGERPRINT_DIRNAME)
+            for path in day_shards.shard_files(
+                state_dir / HOST_FINGERPRINT_DIRNAME, days=UNBOUNDED_WINDOW
+            )
         ),
         *(
             KeyedLedger(path, STORY_SIMILARITY_THRESHOLD_KEY, FittedSimilarityThreshold)

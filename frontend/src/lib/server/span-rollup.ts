@@ -35,7 +35,14 @@
 
 import { join } from 'node:path';
 // Relative, not `$lib`, for the reason in the module docstring.
-import { LEDGER_WINDOW_MONTHS, readShards, STATE_ROOT, type CsvTable } from './payload';
+import {
+	LEDGER_WINDOW_DAYS,
+	LEDGER_WINDOW_MONTHS,
+	readDayShards,
+	readShards,
+	STATE_ROOT,
+	type CsvTable
+} from './payload';
 
 /** The day the span record begins.
  *
@@ -218,12 +225,26 @@ export function foldRollup(table: CsvTable): SpanRun[] {
  * the same switch every other `state/` reader is built on. A missing directory
  * is an empty read, never a throw.
  *
- * `months` is the cover, and the caller wants the newest entry: the rollup is
- * sharded by month, so reading the newest few shards answers that and reading
- * every one of them answers it no better (`CLAUDE.md` Guardrail #12).
+ * **It reads both grains and adds them together.** The rollup is sharded by
+ * month today and moves to a day tree when more than one job writes it. Only
+ * one of the two shapes is ever on disk, so the sum is exactly what is there -
+ * and a reader that knew only the older one would draw an empty panel the day
+ * the store moved.
+ *
+ * `months` is the month grain's cover, and the caller wants the newest entry:
+ * reading the newest few shards answers that and reading every one of them
+ * answers it no better (`CLAUDE.md` Guardrail #12). The day grain takes
+ * `LEDGER_WINDOW_DAYS`, the same 91 days every other day-grain ledger here is
+ * read over, so the two covers reach about the same distance back.
  */
 export function loadSpanRollup(months: number = LEDGER_WINDOW_MONTHS): SpanRun[] {
-	return foldRollup(readShards(join(STATE_ROOT, 'span-rollup'), months));
+	const dir = join(STATE_ROOT, 'span-rollup');
+	const byMonth = readShards(dir, months);
+	const byDay = readDayShards(dir, LEDGER_WINDOW_DAYS);
+	return foldRollup({
+		rows: [...byMonth.rows, ...byDay.rows],
+		columns: byMonth.columns.length > 0 ? byMonth.columns : byDay.columns
+	});
 }
 
 // ---------------------------------------------------------------------------

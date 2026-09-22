@@ -35,8 +35,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Final, NamedTuple, get_args, get_origin
 
-from idhazh import day_partition
+from idhazh import day_shards
 from idhazh.contracts.item_health import RETIRED_CELLS, ItemHealthRow
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.telemetry.record import ItemRecorder
 
 #: The tree a column's value can be computed in. `backend/utilities/` is not on
@@ -548,7 +549,7 @@ def archive_columns(root: Path, columns: frozenset[str]) -> tuple[frozenset[str]
     seen: set[str] = set()
     rows = 0
     files = 0
-    for path in day_partition.day_files(root / LEDGER_ROOT):
+    for path in day_shards.shard_files(root / LEDGER_ROOT, days=UNBOUNDED_WINDOW):
         files += 1
         with path.open(encoding="utf-8", newline="") as handle:
             for row in csv.DictReader(handle):

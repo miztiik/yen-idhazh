@@ -56,11 +56,14 @@ YEAR_WIDTH: Final = 4
 SEGMENT_WIDTH: Final = 2
 
 
-def _is_segment(name: str, width: int) -> bool:
+def is_segment(name: str, width: int) -> bool:
     """Exactly `width` ASCII digits.
 
     `str.isdigit` on its own accepts another script's numerals, and so does the
     `\\d` this replaced. The `isascii` clause is the load-bearing half.
+
+    Public because `day_shards` walks the same three segments one grain deeper.
+    Two copies of this clause is the shape this module exists to end.
     """
     return len(name) == width and name.isascii() and name.isdigit()
 
@@ -87,15 +90,15 @@ def day_files(root: Path) -> Iterator[Path]:
     if not root.is_dir():
         return
     for year in sorted(root.iterdir()):
-        if not (year.is_dir() and _is_segment(year.name, YEAR_WIDTH)):
+        if not (year.is_dir() and is_segment(year.name, YEAR_WIDTH)):
             _refuse_stray(year, root)
         for month in sorted(year.iterdir()):
-            if not (month.is_dir() and _is_segment(month.name, SEGMENT_WIDTH)):
+            if not (month.is_dir() and is_segment(month.name, SEGMENT_WIDTH)):
                 _refuse_stray(month, root)
             for day in sorted(month.iterdir()):
                 if not (day.is_file() and day.suffix == ".csv"):
                     _refuse_stray(day, root)
-                if not _is_segment(day.stem, SEGMENT_WIDTH):
+                if not is_segment(day.stem, SEGMENT_WIDTH):
                     _refuse_stray(day, root)
                 try:
                     date_type.fromisoformat(f"{year.name}-{month.name}-{day.stem}")

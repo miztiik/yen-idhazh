@@ -587,43 +587,80 @@ export function readDayShards(dir: string, days: number = LEDGER_WINDOW_DAYS): C
 	return { rows, columns };
 }
 
-/** One day file of a day-grain ledger: the date it is filed under, and its path. */
+/** One shard of a day-grain ledger: the date it is filed under, and its path.
+ *
+ * Several entries can carry one date. A day is one `<DD>.csv` file today and a
+ * `<DD>/` directory of writer-owned files once more than one job writes the
+ * ledger, and both are the same day to every reader here. */
 export interface DayShard {
 	date: string;
 	path: string;
 }
 
-/** The day files of a day-grain ledger the cover reaches, oldest first.
+/** The shards of a day-grain ledger the cover reaches, oldest first.
  *
  * The walk `readDayShards` reads with, exported because a file is a fact its
  * rows cannot carry: a day the ledger wrote a file for and kept no row of is a
  * measurement that did not survive, and a day with no file at all is a day the
  * instrument did not run. Rows alone cannot tell those two apart.
  *
+ * **It reads both shapes.** A `<DD>.csv` day file is one shard; a `<DD>/` day
+ * directory is every `.csv` inside it, in name order. Nothing writes a
+ * directory yet, so until something does this returns exactly what it always
+ * did.
+ *
+ * **The cover counts days, not files.** A day directory holding five writer
+ * files is one day, so `days` keeps meaning the newest `days` recorded days
+ * whatever the store's shape is.
+ *
  * Bounded exactly as `readDayShards` is, and by the same call, so a caller
  * asking which days exist and a caller asking what they hold cannot answer over
  * two different sets. Pass `-1` to list all of them and say beside the call why
  * (`docs/concepts/growing-reads.md`).
+ *
+ * **A day directory with no readable file throws, and a stray file is still
+ * skipped.** The two are different failures. A name at any other level is a
+ * stray the producer already refuses at write time and at every backend read,
+ * and refusing it here would white-screen a page over it. An empty day
+ * directory is not a stray: it is a day the walk would report as recorded and
+ * hand back zero rows for, and four prerendered console routes would draw
+ * nothing on a passing build. A prerender failure is where that belongs.
  */
 export function dayShardFiles(dir: string, days: number = LEDGER_WINDOW_DAYS): DayShard[] {
 	if (!existsSync(dir)) return [];
-	const named = (at: string, pattern: RegExp): string[] =>
+	const named = (at: string, pattern: RegExp) =>
 		readdirSync(at, { withFileTypes: true })
 			.filter((entry) => pattern.test(entry.name))
-			.map((entry) => entry.name)
-			.sort();
-	const found: DayShard[] = [];
+			.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+	const recorded: DayShard[][] = [];
 	for (const year of named(dir, /^\d{4}$/)) {
-		for (const month of named(join(dir, year), /^\d{2}$/)) {
-			for (const day of named(join(dir, year, month), /^\d{2}\.csv$/)) {
-				found.push({
-					date: `${year}-${month}-${day.slice(0, 2)}`,
-					path: join(dir, year, month, day)
-				});
+		for (const month of named(join(dir, year.name), /^\d{2}$/)) {
+			const under = join(dir, year.name, month.name);
+			for (const entry of named(under, /^\d{2}(\.csv)?$/)) {
+				const date = `${year.name}-${month.name}-${entry.name.slice(0, 2)}`;
+				if (entry.isDirectory()) {
+					const day = join(under, entry.name);
+					const shards = readdirSync(day)
+						.filter((name) => name.endsWith('.csv'))
+						.sort()
+						.map((name) => ({ date, path: join(day, name) }));
+					if (shards.length === 0) {
+						throw new Error(
+							`${join(dir, year.name, month.name, entry.name)} is a day directory with no ` +
+								'readable .csv file in it. A day nothing wrote has no directory, so this is a ' +
+								'writer that made the directory and lost its rows - reading it as a day that ' +
+								'recorded nothing would draw an empty panel on a passing build.'
+						);
+					}
+					recorded.push(shards);
+				} else if (entry.isFile() && entry.name.endsWith('.csv')) {
+					recorded.push([{ date, path: join(under, entry.name) }]);
+				}
 			}
 		}
 	}
-	return unbounded(days) ? found : found.slice(Math.max(0, found.length - days));
+	const kept = unbounded(days) ? recorded : recorded.slice(Math.max(0, recorded.length - days));
+	return kept.flat();
 }
 
 /** One row per planned item per run, read from the newest `days` day files. */

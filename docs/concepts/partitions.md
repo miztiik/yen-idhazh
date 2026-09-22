@@ -1,6 +1,6 @@
 # Partitions
 
-**Last Updated**: 2026-09-21
+**Last Updated**: 2026-09-22
 A **partition** is one file holding one period of a collection that grows. The
 directory is the collection and the name says the period - `<YYYY-MM>` for a month,
 `<YYYY>/<MM>/<DD>` for a day. A reader opens the periods its window names and skips
@@ -103,6 +103,47 @@ as `test_the_month_readers_all_agree_on_what_a_month_is` does one grain over.
 
 Authority: Guardrail #5, 2026-09-11. `day_partition` is a **peer** of `month_partition`
 rather than a replacement: both grains are live, so both modules are.
+
+## A day can be a directory, and the settlement moves to the reader
+
+**Where more than one job writes one ledger, the day is a directory and every
+file in it carries its writer's name.** `state/<ledger>/<YYYY>/<MM>/<DD>/` holds
+one `<run_id>-<attempt>-<job>-<shard>.csv` per writer, spelled once in
+`ledger._segment_name`. Two writers cannot name one file, so two runs pushing at
+once cannot collide on it - which is the whole reason the shape exists.
+
+`idhazh.day_shards` is the walk, and it reads **both** shapes: a `<DD>.csv` day
+file and a `<DD>/` day directory are each one recorded day.
+`day_shards.shard_files(root, days=...)` yields every file of the newest `days`
+recorded days, and **the cover counts days rather than files**, so a day of five
+writers is still one day. `day_shards.date_of` reads the date off either shape
+without opening the file.
+
+**The settlement is a read, not a write.** `day_shards.settled_rows` runs the
+three cases a compaction ran into a head - join, supersede, repeat - and
+`stages.compact` calls the same code, so there is one fold rather than one per
+ledger. Ascending attempt is the order, so a correction always arrives after
+what it corrects, and the tie-break is the path relative to the ledger root:
+`settled.csv` has the same basename in every day directory, and a reader
+spanning two days would otherwise have no total order at all.
+
+**`settled.csv` is the one name in a day directory that is not a writer's.** It
+is what a closed-day fold leaves behind, and it reads at attempt 0 - a writer's
+attempt is the run's own `GITHUB_RUN_ATTEMPT`, which starts at 1, so 0 is a
+place no writer can take. It is also the right place: its rows have already won
+a settlement, and a straggler beside it is later.
+
+**A day directory holding no readable file stops the read.** That is the same
+rule as the stray above and not a new one: a day nothing wrote has no directory,
+so an empty one is a writer that made the directory and lost its rows. Reading
+it as a day that recorded nothing would draw an empty panel on a passing build.
+
+**`day_partition.day_files` is not taught the directory shape, on purpose.** It
+keeps its callers over `state/published/` and `state/visual-prunes/`, which stay
+one file a day, and its loud refusal of a directory is the tripwire that catches
+a store arriving in the new shape without a plan.
+
+Authority: Fowler, 2026-09-22.
 
 ## How a collection changes grain
 

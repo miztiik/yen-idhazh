@@ -142,12 +142,18 @@ export function hostFingerprints(
  *
  * Bounded by the same cover and the same call the rows are read with, so the
  * two can never answer over different days.
+ *
+ * One entry a date, however many files the date holds. A day is one file today
+ * and a directory of writer-owned files once more than one job writes the
+ * record, and the question here is which days the record opened at all.
  */
 export function machineRecordDays(
 	days: number = LEDGER_WINDOW_DAYS,
 	root: string = STATE_ROOT
 ): string[] {
-	return dayShardFiles(join(root, 'host-fingerprint'), days).map((shard) => shard.date);
+	return [
+		...new Set(dayShardFiles(join(root, 'host-fingerprint'), days).map((shard) => shard.date))
+	];
 }
 
 /** The flags a card draws a chip for, in the order the probe records them.

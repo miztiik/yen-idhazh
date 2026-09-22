@@ -1,0 +1,2 @@
+date,run_id,job,shard,runner_name,measured_at,model_load_ms,job_seconds
+2026-09-18,2026-09-18-1,work,0,runner-a,2026-09-18T06:20:00Z,4100,900

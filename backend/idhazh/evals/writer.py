@@ -48,9 +48,10 @@ from collections.abc import Iterable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Final, NamedTuple
 
-from idhazh import day_partition, ledger
+from idhazh import day_partition, day_shards, ledger
 from idhazh.contracts.base import ServerJob
 from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.knobs.collect import UNBOUNDED_WINDOW
 from idhazh.contracts.observation_index import ObservationIndexRow
 from idhazh.evals import archive
 from idhazh.ledger import read_header as _read_header
@@ -77,20 +78,25 @@ OBSERVATION_KEY: Final = ledger.OBSERVATION_KEY
 
 
 def ledger_days(state_dir: Path) -> list[Path]:
-    """Every committed day of the ledger, oldest first.
+    """Every committed shard of the ledger, oldest day first.
 
-    Anything that is not a `<YYYY>/<MM>/<DD>.csv` is left alone:
+    Anything that is not a day of this store is left alone:
     `retention.prune_scores` archives and then deletes out of this directory, so
     it names what it recognises rather than acting on what it does not. What
-    counts as a day is `day_partition.day_files` and nothing local - this
-    directory is the one where getting that wrong deletes a file.
+    counts as a day is `day_shards.shard_files` and nothing local - this
+    directory is the one where getting that wrong deletes a file. That walk
+    reads a `<DD>.csv` day file and a `<DD>/` day directory of writer-owned
+    files alike, so nothing here moves when the store changes shape.
 
     The daily settlement was the caller that made this a cost, and it is gone. A
     run appends to the one day file `ledger_path` names, so that file is the only
     place a repeat can be, and walking the rest charged every run for every day on
-    record (Guardrail #12). The operator's full pass still comes here.
+    record (Guardrail #12). The operator's full pass still comes here, and it is
+    unbounded because every one of its callers has to see the whole ledger.
     """
-    return list(day_partition.day_files(state_dir / LEDGER_DIRNAME))
+    return list(
+        day_shards.shard_files(state_dir / LEDGER_DIRNAME, days=UNBOUNDED_WINDOW)
+    )
 
 
 def records(state_dir: Path) -> Iterator[dict[str, str]]:
@@ -100,8 +106,8 @@ def records(state_dir: Path) -> Iterator[dict[str, str]]:
     it the way it always did and a reader that wants a window can skip whole days
     instead.
     """
-    for day in ledger_days(state_dir):
-        with day.open("r", encoding="utf-8", newline="") as handle:
+    for shard in ledger_days(state_dir):
+        with shard.open("r", encoding="utf-8", newline="") as handle:
             yield from csv.DictReader(handle)
 
 
@@ -159,8 +165,12 @@ def recorded_observations(state_dir: Path) -> set[str]:
 
 
 def index_days(state_dir: Path) -> list[Path]:
-    """Every day of the index, oldest first."""
-    return list(day_partition.day_files(state_dir / INDEX_DIRNAME))
+    """Every committed shard of the index, oldest day first.
+
+    `day_shards.shard_files` for the reason `ledger_days` gives, and unbounded
+    for the reason it gives: every caller here needs the whole index.
+    """
+    return list(day_shards.shard_files(state_dir / INDEX_DIRNAME, days=UNBOUNDED_WINDOW))
 
 
 def index_columns() -> tuple[str, ...]:
@@ -231,17 +241,17 @@ def refresh_index(state_dir: Path) -> int:
     `OBSERVATION_KEY` when it folds them. Over-reporting is the one that cannot be
     repaired, and nothing here can produce it.
     """
-    live = {day_partition.date_of(day): day for day in ledger_days(state_dir)}
+    live = _by_day(ledger_days(state_dir))
     written = 0
-    for date, day in sorted(live.items()):
+    for date, shards in sorted(live.items()):
         path = index_path(state_dir, date)
         if path.exists():
             continue
-        written += _fill_index(day, path)
+        written += _fill_index(shards, path)
 
     archived = {path.stem for path in archive.archive_files(state_dir)}
     for path in index_days(state_dir):
-        date = day_partition.date_of(path)
+        date = day_shards.date_of(path)
         if date not in live and date[:7] in archived:
             path.unlink()
             day_partition.drop_empty_day_dirs(path)
@@ -296,7 +306,7 @@ def rebuild_index(state_dir: Path, days: Iterable[str]) -> dict[str, IndexDrift]
     by name rather than skipped: a typo must not read as a clean pass over
     nothing.
     """
-    live = {day_partition.date_of(day): day for day in ledger_days(state_dir)}
+    live = _by_day(ledger_days(state_dir))
     named = sorted({day[:10] for day in days})
     if not named:
         raise ValueError("rebuild_index was given no day, and a pass over none repairs none")
@@ -326,16 +336,37 @@ def _drift(held: frozenset[str], produced: frozenset[str]) -> IndexDrift:
     return IndexDrift(extra=held - produced, missing=produced - held)
 
 
-def _fill_index(day: Path, path: Path) -> int:
+def _by_day(shards: Iterable[Path]) -> dict[str, list[Path]]:
+    """The shards of each recorded day, keyed by the day they are filed under.
+
+    A day is one file today and a directory of writer-owned files after the
+    store changes shape, so a caller that asks about a date gets every file that
+    date holds rather than whichever one the walk named last.
+    """
+    by_day: dict[str, list[Path]] = {}
+    for shard in shards:
+        by_day.setdefault(day_shards.date_of(shard), []).append(shard)
+    return by_day
+
+
+def _fill_index(shards: Sequence[Path], path: Path) -> int:
     """Write one day's index from the rows beside it. The one place that does.
 
     Both callers come here: `refresh_index` for a day that has no index, and
     `rebuild_index` for one it has just dropped. A second implementation is how
     the two would come to disagree about what a digest is.
     """
-    with day.open("r", encoding="utf-8", newline="") as handle:
-        digests = _distinct(observation_digest(row) for row in csv.DictReader(handle))
-    return _append_index(path, digests)
+    return _append_index(path, _distinct(_observations_of(shards)))
+
+
+def _observations_of(shards: Sequence[Path]) -> Iterator[str]:
+    """Every row's observation digest, across one day's shards, in file order."""
+    for shard in shards:
+        if not shard.exists():
+            continue
+        with shard.open("r", encoding="utf-8", newline="") as handle:
+            for row in csv.DictReader(handle):
+                yield observation_digest(row)
 
 
 def _digests_of_index(path: Path) -> frozenset[str]:
@@ -352,16 +383,13 @@ def _digests_of_index(path: Path) -> frozenset[str]:
         return frozenset(record["observation_digest"] for record in csv.DictReader(handle))
 
 
-def _digests_of_day(path: Path) -> frozenset[str]:
+def _digests_of_day(shards: Sequence[Path]) -> frozenset[str]:
     """The distinct observations one day's rows produce, read from the rows.
 
     The one read here that opens a score row on purpose, which is why only
     `rebuild_index` calls it and why that is a command a person types.
     """
-    if not path.exists():
-        return frozenset()
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return frozenset(observation_digest(row) for row in csv.DictReader(handle))
+    return frozenset(_observations_of(shards))
 
 
 def _distinct(digests: Iterable[str]) -> list[str]:
