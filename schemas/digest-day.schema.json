@@ -650,6 +650,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Runs may be numbered with gaps, and two runs may not share an ordinal.",
+      "version": "2026-09-22",
+      "why": "Runs land in parallel, so no writer can know what the next number is."
+    },
+    {
       "change": "DigestItem.summary is Prose - paragraphs split by one blank line.",
       "version": "2026-09-17",
       "why": "A long summary is two paragraphs, and read-side folding keeps old days readable."
@@ -663,11 +668,6 @@
       "change": "Retired DigestVisual.path, which named the committed drawing.",
       "version": "2026-09-13T22:30",
       "why": "The reader's browser draws the chart now, so no SVG is written."
-    },
-    {
-      "change": "Added DigestVisual.data_path - where this visual's data file landed.",
-      "version": "2026-09-13T20:00",
-      "why": "The reader's browser draws the chart, so it needs the marks rather than an SVG."
     },
     {
       "change": "Earlier changes are in this file's git history.",
@@ -744,7 +744,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-17",
+      "default": "2026-09-22",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -769,5 +769,5 @@
   ],
   "title": "DigestDay",
   "type": "object",
-  "version": "2026-09-17"
+  "version": "2026-09-22"
 }

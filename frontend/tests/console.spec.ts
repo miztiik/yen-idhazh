@@ -559,7 +559,7 @@ test('a square says what happened without a mouse', async ({ page }) => {
 	// The colour alone is not the answer. Anyone who cannot see the difference
 	// between amber and red still has to be able to read the run.
 	const first = page.locator(`[data-day="${DAY}"] [data-health]`).first();
-	await expect(first).toHaveAttribute('aria-label', new RegExp(`^${DAY} run 1,`));
+	await expect(first).toHaveAttribute('aria-label', new RegExp(`^${DAY} block 1,`));
 	await expect(first).toHaveAttribute('title', /succeeded/);
 });
 
