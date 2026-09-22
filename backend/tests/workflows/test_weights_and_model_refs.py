@@ -17,7 +17,10 @@ from utilities import measure_llm, model_refs
 from ._harness import (
     ACTIONS_DIR,
     CONFIG_FILE_NAME,
+    DOWNLOAD_MODEL_FILES,
     DRAFT_REF_OUTPUTS,
+    GITHUB_DIR,
+    HUB_HOST,
     LLAMA_RUNTIME_WORKFLOWS,
     MODEL_ENV_NAMES,
     MODEL_REF_FIELDS,
@@ -25,9 +28,12 @@ from ._harness import (
     MODEL_SERVER_ACTION,
     MODELS_POINTER_KEY,
     PINNED_LLAMA_BUILD,
+    SHARED_WEIGHTS_KEY_PREFIX,
+    VERIFY_MODEL_FILES,
     WEIGHTS_CACHE_ROLES,
     WEIGHTS_CACHE_SUFFIX,
     WEIGHTS_CHECKS,
+    WEIGHTS_FETCH_JOBS,
     WORKFLOWS_DIR,
     _action_call,
     _committed_models,
@@ -39,8 +45,10 @@ from ._harness import (
     _mapping,
     _model_server_callers,
     _pin_output_name,
+    _published,
     _runtime_cache_keys,
     _script,
+    _shared_download_jobs,
     _step,
     _steps,
     _weights_fetch_steps,
@@ -53,10 +61,25 @@ pytestmark = pytest.mark.workflow
 #: fourth cannot quietly go back to inlining it.
 MODEL_REFS_CALL = "python3 backend/utilities/model_refs.py"
 
+#: The one file under `.github/` that may still spell the hub host. Its four
+#: inline download steps are plan 46's to convert; delete this exception when
+#: they go.
+HUB_HOST_EXCEPTION = "measure.yml"
 
-def _published(rows: list[str]) -> dict[str, str]:
-    """The `KEY=value` lines a step appends to `$GITHUB_OUTPUT`, as a mapping."""
-    return dict(row.split("=", 1) for row in rows)
+#: Every name the model file's reader publishes, read off the reader rather than
+#: retyped. A key retyped here would go stale the day a field is added, and the
+#: rule below would stop covering the field nobody remembered.
+PUBLISHED_KEYS = frozenset(
+    model_refs.CANDIDATE_FIELDS
+    + model_refs.CONFIGURED_FIELDS
+    + model_refs.COMPANION_FIELDS
+    + model_refs.PUBLISHED_EXTRA
+    + model_refs.CONFIGURED_EXTRA
+)
+
+#: The three contexts a `run:` body may substitute a job's own answers from.
+#: `github`, `matrix`, `env` and `secrets` carry no model value at all.
+PASTEABLE_CONTEXTS = ("steps", "needs", "inputs")
 
 
 def test_every_fetched_weight_is_checked_before_anything_reads_it() -> None:
@@ -697,6 +720,302 @@ def test_a_companion_keeps_the_segment_rule_without_the_suffix_rule(tmp_path: Pa
         model_refs.list_model_files(
             _a_config_tree(tmp_path / "bad", _an_entry(companion_files=[escaping]))
         )
+
+
+def test_the_search_that_finds_a_weights_fetch_still_finds_every_one_of_them() -> None:
+    """The count, beside the set, because the two go blind in different ways.
+
+    The set above catches a job that appeared. It cannot catch discovery itself
+    narrowing: a search that stops matching four of the eight leaves an equality
+    comparing a four-entry table against a four-entry answer, and it passes.
+    That is what happens the moment a download stops spelling a URL in a `run:`
+    body and starts calling a program, so the count is asserted as a number
+    rather than inferred from a table that would shrink with it.
+
+    If this ever has to move, the number moves in the commit that adds or
+    retires the job, and the closed-world table below moves with it.
+    """
+    discovered = _weights_fetch_steps(_load_workflows())
+    assert len(discovered) == WEIGHTS_FETCH_JOBS, (
+        f"{len(discovered)} jobs download weights and this expects "
+        f"{WEIGHTS_FETCH_JOBS}: {sorted(discovered)}"
+    )
+
+    converted = _shared_download_jobs(_load_workflows())
+    assert converted, "no job fetches through the shared download, so the rules below check nothing"
+    assert set(converted) <= set(discovered), sorted(set(converted) - set(discovered))
+
+
+def test_no_file_the_platform_runs_spells_the_hub_host() -> None:
+    """The Oracle. One address, in one program, and a caller cannot take it back.
+
+    A download written into a workflow is a second answer to where the weights
+    come from, and the one that drifts: it carries its own retry rule, its own
+    `-f`, and its own idea of what a revision is. Once the fetch is a program,
+    the host belongs to the program - so a file under `.github/` that spells it
+    again has undone the conversion, whatever else it kept.
+
+    Everything under `.github/` is read, not only the four workflows that fetch
+    today, because a rule scoped to a list stops covering the file somebody adds
+    beside it.
+    """
+    spelling = [
+        path.relative_to(GITHUB_DIR).as_posix()
+        for path in sorted(GITHUB_DIR.rglob("*"))
+        if path.is_file()
+        and path.name != HUB_HOST_EXCEPTION
+        and HUB_HOST in path.read_text(encoding="utf-8")
+    ]
+    assert not spelling, f"the hub host belongs to the download program: {spelling}"
+
+
+def _pasted(body: str) -> list[str]:
+    """Every expression in a `run:` body that resolves to a value the reader published.
+
+    `env:`, `with:`, `key:` and `if:` are out of scope on purpose: `env:` is
+    where these values are allowed to be, and the whole rule is that a value
+    reaches a shell as a variable rather than as text the Actions engine has
+    already substituted.
+    """
+    found: list[str] = []
+    for expression in re.findall(r"\$\{\{(.*?)\}\}", body, re.S):
+        segments = expression.strip().split(".")
+        if segments[0] not in PASTEABLE_CONTEXTS:
+            continue
+        # An expression can carry an operator after the value it reads, so the
+        # last segment is cut at the first character a name cannot hold.
+        name = re.split(r"[^A-Za-z0-9_-]", segments[-1], maxsplit=1)[0]
+        if name in PUBLISHED_KEYS or any(name.endswith(f"_{key}") for key in PUBLISHED_KEYS):
+            found.append(expression.strip())
+    return found
+
+
+def test_no_job_that_reaches_the_shared_download_pastes_a_value_the_reader_published() -> None:
+    """The Oracle. A model value reaches a shell as a variable, never as text.
+
+    The Actions engine substitutes an expression into a `run:` body before bash
+    reads the line, so a value spelling `$(id)` runs and one spelling `../..`
+    escapes. `model_refs.py` refuses both at the point it publishes them - but
+    the refusal only holds while nothing downstream composes a second copy, and
+    a `run:` body that pastes one has composed exactly that.
+
+    The rule does not go green-and-empty once the relay job outputs are gone:
+    the action's own reader step is a producer inside this set, and the steps
+    that start the server and probe its health are its consumers.
+
+    It says nothing about `measure.yml`'s own paste sites. Those four arms reach
+    neither the shared action nor the shared download, so they are not in this
+    set at all, and the file is plan 46's.
+    """
+    workflows = _load_workflows()
+    closed = _shared_download_jobs(workflows)
+    assert closed, "no job reaches the shared download, so this checks nothing"
+
+    pasted: list[str] = []
+    for filename, job_name in sorted(closed):
+        for step in _steps(workflows[filename], job_name):
+            body = step.get("run")
+            if not isinstance(body, str):
+                continue
+            where = f"{filename}/{job_name}/{step.get('name')}"
+            pasted += [f"{where}: {expression}" for expression in _pasted(body)]
+
+    assert not pasted, "a model value is read through env, never pasted:\n  " + "\n  ".join(pasted)
+
+
+def _one_step_running(
+    workflows: Mapping[str, dict[str, object]], where: tuple[str, str], call: str
+) -> dict[str, object]:
+    """The single step of a job whose own body makes that call."""
+    filename, job_name = where
+    matches = [
+        step
+        for step in _steps(workflows[filename], job_name)
+        if isinstance(step.get("run"), str) and call in str(step["run"])
+    ]
+    assert len(matches) == 1, f"{filename}/{job_name} must run `{call}` once, not {len(matches)}"
+    return matches[0]
+
+
+def test_every_file_the_model_declares_reaches_a_check_a_cache_hit_cannot_skip() -> None:
+    """The Oracle. The check reads the declaration, so it cannot cover fewer files than it.
+
+    The check used to be handed two filenames through `env` - the weights and
+    one companion - while the cache key digested every file the entry declared.
+    An entry declaring two companions therefore keyed on three files, fetched
+    three, and checked two, and the unchecked one is the one llama-server exits
+    at load over. Driving the check off the declaration instead makes the two
+    counts the same number by construction.
+
+    The step carries no `if:`, which is the half a restored cache entry needs:
+    it is the one case where nobody watched the bytes arrive. That clause is
+    asserted at the closed-world table above as well, and it is asserted twice
+    on purpose - the most likely way this row goes wrong is somebody reading the
+    second check as redundant and deleting it.
+    """
+    workflows = _load_workflows()
+    closed = _shared_download_jobs(workflows)
+    assert closed, "no job reaches the shared download, so this checks nothing"
+
+    for where in sorted(closed):
+        check = _one_step_running(workflows, where, VERIFY_MODEL_FILES)
+        named = "/".join(where)
+        assert "if" not in check, f"{named}: a restored cache is what most needs checking"
+        body = str(check["run"])
+        assert ".gguf" not in body, f"{named} names a weights file the declaration already holds"
+        assert "sha256sum" not in body, (
+            f"{named} checks a digest of its own beside the one the program checks"
+        )
+
+
+def _config_root_of(step: Mapping[str, object], where: str) -> str:
+    """The config root a step hands the program, as written."""
+    found = re.search(r"--config-root\s+(\S+)", str(step["run"]))
+    assert found, f"{where} names no config root, so it reads whichever one is the default"
+    return found.group(1)
+
+
+def test_the_check_reads_the_config_root_the_download_read() -> None:
+    """Two roots is two models, and the check then passes on bytes nobody asked for.
+
+    One caller reads the committed `config/` and three read a scratch tree built
+    under `backend/var/`. A check pointed at the committed root while the
+    download read the scratch one compares the candidate's bytes against the
+    incumbent's recorded digest - which fails honestly. Pointed the other way it
+    passes, and the run measures a model nobody selected.
+    """
+    workflows = _load_workflows()
+    closed = _shared_download_jobs(workflows)
+    assert closed, "no job reaches the shared download, so this checks nothing"
+
+    for where in sorted(closed):
+        named = "/".join(where)
+        download = _config_root_of(_one_step_running(workflows, where, DOWNLOAD_MODEL_FILES), named)
+        check = _config_root_of(_one_step_running(workflows, where, VERIFY_MODEL_FILES), named)
+        assert download == check, f"{named} downloads from {download} and checks against {check}"
+
+
+def _resolve(
+    template: str, published: Mapping[str, str], given: Mapping[str, str], where: str
+) -> str:
+    """The string Actions composes, with every expression replaced by its value.
+
+    Two hops, because a composite action's key reads `inputs.x` and the caller
+    fills that from a job output. Following the call is what makes this the key
+    a runner really uses rather than the text the file holds.
+    """
+
+    def one(found: re.Match[str]) -> str:
+        body = found.group(1).strip()
+        name = body.split(".")[-1]
+        if body.startswith("inputs.") and name in given:
+            return _resolve(given[name], published, given, where)
+        assert name in published, f"{where}: nothing the reader publishes is called {body}"
+        return published[name]
+
+    return re.sub(r"\$\{\{(.*?)\}\}", one, template, flags=re.S)
+
+
+def _published_values(root: Path) -> dict[str, str]:
+    """Every key a workflow can read, under the names its expressions spell.
+
+    The pin is in it because a weights cache key names the build as well, and
+    the build is the one half of that key the model file does not decide.
+    """
+    values = _published(model_refs.configured_rows(root, with_draft=True))
+    values |= _published(model_refs.candidate_rows(root, "", prefix="candidate_"))
+    values["llama_cpp_build"] = PINNED_LLAMA_BUILD
+    return values
+
+
+def _shared_weights_keys(
+    workflows: Mapping[str, dict[str, object]],
+) -> dict[tuple[str, str], str]:
+    """Every cache step over the weights whose key carries the one shared format."""
+    return {
+        (filename, job_name): key
+        for filename, workflow in workflows.items()
+        for job_name, key in _runtime_cache_keys(workflow)
+        if key.startswith(SHARED_WEIGHTS_KEY_PREFIX)
+    }
+
+
+def test_a_companion_digest_moves_the_key_the_runner_resolves(tmp_path: Path) -> None:
+    """The Oracle. The entry the cache holds is the whole declared set, so the key is too.
+
+    The module's own key has covered every declared file since the reader
+    landed. What a runner uses is the string the cache step composes, and that
+    is a different question: a step naming the weights filename and its revision
+    renders one key for two entries that differ in a companion, so the second
+    restores a complete-looking entry with a file missing and llama-server exits
+    at load rather than at fetch.
+
+    Driven through the action's real key template and the real caller's `with:`
+    block, because the defect this catches is a key that stops naming what the
+    download reads - and only the composed string can say that.
+    """
+    workflows = _load_workflows()
+    callers = sorted(_model_server_callers(workflows))
+    assert callers, "no job calls the model-server action, so there is no key to resolve"
+    filename, job_name = callers[0]
+    template = _shared_weights_keys(workflows)[(filename, job_name)]
+    given = _action_call(workflows[filename], job_name, MODEL_SERVER_ACTION)
+
+    companion = {
+        "repo": "publisher/Model-GGUF",
+        "revision": "0" * 40,
+        "file": "mtp-model.gguf",
+        "sha256": "b" * 64,
+    }
+    keys = {
+        _resolve(
+            template,
+            _published_values(
+                _a_config_tree(
+                    tmp_path / digest, _an_entry(companion_files=[dict(companion, sha256=digest)])
+                )
+            ),
+            given,
+            f"{filename}/{job_name}",
+        )
+        for digest in ("b" * 64, "c" * 64)
+    }
+    assert len(keys) == 2, f"two declared sets render one key, so one of them restores the other: {keys}"
+
+
+def test_every_step_that_names_the_shared_weights_entry_resolves_to_one_string() -> None:
+    """Two spellings of one key, and a move that takes only one of them is a silent refetch.
+
+    The format is written in two places - the shared action and the pipeline-test
+    workflow - because one is reached through a composite action and one is not.
+    They are held equal by what they resolve to rather than by their text, so
+    either may read its half from wherever suits it as long as the runner ends
+    up at the same entry.
+
+    Scoped to this one format. `qualify-` and `bench-` are deliberately
+    different, because production must not share an entry with a bench
+    candidate, so an equality across every cache step over the weights would be
+    false by construction.
+    """
+    workflows = _load_workflows()
+    keys = _shared_weights_keys(workflows)
+    assert len(keys) > 1, f"the shared format is written once, so nothing can drift: {sorted(keys)}"
+
+    published = _published_values(CONFIG_DIR)
+    callers = _model_server_callers(workflows)
+    resolved = {
+        f"{filename}/{job_name}": _resolve(
+            template,
+            published,
+            _action_call(workflows[filename], job_name, MODEL_SERVER_ACTION)
+            if (filename, job_name) in callers
+            else {},
+            f"{filename}/{job_name}",
+        )
+        for (filename, job_name), template in sorted(keys.items())
+    }
+    assert "${{" not in "".join(resolved.values()), f"every half of the key must resolve: {resolved}"
+    assert len(set(resolved.values())) == 1, f"one entry cannot have two names: {resolved}"
 
 
 def test_two_declared_files_landing_on_one_name_are_refused(tmp_path: Path) -> None:

@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Final
 
 import pytest
-from conftest import REPO_ROOT, llama_server_flags, read_text
+from conftest import CONFIG_DIR, REPO_ROOT, llama_server_flags, read_text
 
 from idhazh.llm.server import DEFAULT_ENDPOINT, DEFAULT_PORT
 from idhazh.telemetry import silicon
+from utilities import candidate_pointer, model_refs, pipeline_case_config
 
 from ._harness import (
     ACTIONS_DIR,
@@ -50,6 +52,7 @@ from ._harness import (
     _local_action_inputs,
     _mapping,
     _model_server_callers,
+    _published,
     _script,
     _server_starters,
     _starter_shell,
@@ -64,6 +67,30 @@ pytestmark = pytest.mark.workflow
 #: The step that prints what it found in llama-server's own log, and how much of
 #: the log that was.
 LOG_SUMMARY_STEP: Final = "Prompt cache log summary"
+
+#: Every place a server is started, and the config root that start reads its
+#: flags from. Five roots and three shapes: the committed tree, the scratch copy
+#: the candidate action cuts, and the per-case copies cut from that one.
+LAUNCH_ROOTS: Final = (
+    ("digest.yml", "work", "Start the model", "config"),
+    ("validate.yml", "qualify", "Start the candidate", "backend/var/candidate-config"),
+    (
+        "idhazh-pipeline-tests.yaml",
+        "cases",
+        "Start the model",
+        "backend/var/cases/baseline/config",
+    ),
+    (
+        "idhazh-pipeline-tests.yaml",
+        "cases",
+        "Restart the model with two slots",
+        "backend/var/cases/parallel-2/config",
+    ),
+    ("measure.yml", "budgets", "Start the tokenizer", "backend/var/candidate-config"),
+)
+
+#: The variable every one of those five steps is handed the weights path in.
+WEIGHTS_ENV: Final = "LLAMA_WEIGHTS"
 
 
 def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
@@ -569,3 +596,65 @@ def _uncommented(text: str) -> str:
     return "\n".join(
         line for line in text.splitlines() if not line.lstrip().startswith("#")
     )
+
+
+def _the_five_roots(tmp_path: Path) -> dict[str, Path]:
+    """The five config roots a server is started from, built the way the jobs build them.
+
+    Three of the five do not exist in this repository at all: a job cuts them at
+    run time, one from `config/` and two from that copy. Reading them off disk
+    would check nothing, so the real builders are driven here instead - which is
+    also what makes a builder that starts moving the weights file turn this red.
+    """
+    committed = CONFIG_DIR
+    scratch = tmp_path / "candidate-config"
+    shutil.copytree(committed, scratch)
+    pointer = _published(model_refs.candidate_rows(committed, "", prefix=""))["models_file"]
+    candidate_pointer.point_at(pointer, scratch=scratch)
+
+    cases = tmp_path / "cases"
+    pipeline_case_config.main(["--config-root", str(scratch), "--cases-root", str(cases)])
+
+    return {
+        "config": committed,
+        "backend/var/candidate-config": scratch,
+        "backend/var/cases/baseline/config": cases / "baseline" / "config",
+        "backend/var/cases/parallel-2/config": cases / "parallel-2" / "config",
+    }
+
+
+def test_the_weights_path_a_launcher_would_derive_is_the_one_the_step_pastes(
+    tmp_path: Path,
+) -> None:
+    """A path composed twice can differ; composed once from the root the flags come from, it cannot.
+
+    Every one of these five steps is handed the weights path as text and reads
+    its flags from a config root - and that root's own entry already names the
+    file. So the path is two answers to one question today, and the second
+    answer arrives through five expression hops from a job output.
+
+    This is the clause that says the derivation is safe before the paste is
+    deleted. A root where it is red is a root that has to keep being told, and
+    the plan names it.
+    """
+    workflows = _load_workflows()
+    roots = _the_five_roots(tmp_path)
+    landed = _published(model_refs.configured_rows(CONFIG_DIR, with_draft=False))["summarize_weights_path"]
+
+    for filename, job_name, step_name, root_name in LAUNCH_ROOTS:
+        where = f"{filename}/{job_name}/{step_name}"
+        step = _step(workflows[filename], job_name, "name", step_name)
+        assert f"--config-root {root_name}" in _starter_shell(step), (
+            f"{where} reads its flags from some root other than {root_name}"
+        )
+
+        handed = _mapping(step.get("env"), f"{where} env").get(WEIGHTS_ENV)
+        assert isinstance(handed, str), f"{where} is handed no {WEIGHTS_ENV}"
+        # Every one of those expressions resolves to the committed entry's own
+        # filename when no candidate is dispatched, which is the case the daily
+        # run is and the case a test can settle.
+        pasted = re.sub(r"\$\{\{.*?\}\}", Path(landed).name, handed, flags=re.S)
+
+        derived = model_refs.list_model_files(roots[root_name])[0].landed_path
+        assert derived == pasted, f"{where} is handed {pasted} and {root_name} declares {derived}"
+        assert derived == landed, f"{root_name} names a model the run did not select"

@@ -37,6 +37,12 @@ from ._harness import (
 
 pytestmark = pytest.mark.workflow
 
+#: The one file that still carries a second copy of the pin, and why it may. Its
+#: three values sit in a workflow-level `env:` block, which cannot read a file at
+#: all, and its four consumers are the inline download arms plan 46 converts.
+#: Delete this and the test below when those arms go.
+PIN_SECOND_COPY = "measure.yml"
+
 
 def _fetch_script_callers(workflows: dict[str, dict[str, object]]) -> dict[str, dict[str, object]]:
     """Every workflow whose steps reach the shared runtime fetch, found by reading.
@@ -146,6 +152,25 @@ def test_the_shared_fetch_script_is_the_one_home_of_the_pin_for_every_caller_on_
                     f"{filename}: {scope} writes {name} as {value!r}; a converted "
                     f"caller reads it from the step that published the pin"
                 )
+
+
+def test_the_one_second_copy_of_the_pin_says_what_the_one_home_says() -> None:
+    """A copy that may stay is a copy that has to be held equal.
+
+    Every other caller reads the pin from the file that decides it. This one
+    cannot: its three values are a workflow-level `env:` block, and a block at
+    that scope runs before any step, so there is nothing to read a file with.
+    Two of the jobs that consume it have no Python set up at all.
+
+    So the copy stays and the drift goes. A bump that moves one and not the
+    other leaves this workflow benchmarking a binary nobody ships, and a number
+    about a binary nobody ships is a number about nothing (Guardrail #10).
+    """
+    env = _mapping(_load_workflows()[PIN_SECOND_COPY].get("env"), f"{PIN_SECOND_COPY} env")
+    copied = [str(env.get(name, "")) for name in LLAMA_PIN_NAMES]
+    assert copied == list(LLAMA_PIN_VALUES), (
+        f"{PIN_SECOND_COPY} pins {copied} and the one home pins {list(LLAMA_PIN_VALUES)}"
+    )
 
 
 def test_every_action_a_workflow_calls_is_pinned() -> None:

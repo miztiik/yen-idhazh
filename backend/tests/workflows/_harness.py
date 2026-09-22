@@ -27,11 +27,16 @@ from idhazh import ledger, paths
 from idhazh.contracts.visual_decision import PAYLOAD_SUFFIX, VisualDecision, VisualKind, VisualState
 from idhazh.telemetry.publish import series
 
-WORKFLOWS_DIR: Final = REPO_ROOT / ".github" / "workflows"
+#: Everything the platform runs. A rule about what a runner may execute is
+#: stated over this rather than over the three directories below, so a file
+#: added beside them is inside it from the moment it lands.
+GITHUB_DIR: Final = REPO_ROOT / ".github"
 
-SCRIPTS_DIR: Final = REPO_ROOT / ".github" / "scripts"
+WORKFLOWS_DIR: Final = GITHUB_DIR / "workflows"
 
-ACTIONS_DIR: Final = REPO_ROOT / ".github" / "actions"
+SCRIPTS_DIR: Final = GITHUB_DIR / "scripts"
+
+ACTIONS_DIR: Final = GITHUB_DIR / "actions"
 
 #: How a workflow names an action that lives in this repository. A `./` path
 #: resolves to the tree the run checked out, so what it runs is already under
@@ -267,6 +272,41 @@ WEIGHTS_FETCH_FORM: Final = "curl -fsSL --retry 3 --retry-all-errors"
 
 RELEASE_LOOKUP_FORM: Final = "curl -fsS -H"
 
+#: The one program that installs the runtime, downloads what a model declares,
+#: checks it and starts the server. A step calls a verb of this; it spells no
+#: part of what the verb does.
+MODEL_RUNTIME_MODULE: Final = "backend/utilities/model_runtime.py"
+
+#: The verb that fetches. Discovery below matches it as well as the hub host,
+#: because a download written in Python names no host in the workflow at all.
+DOWNLOAD_MODEL_FILES: Final = f"{MODEL_RUNTIME_MODULE} download-model-files"
+
+#: The verb that checks every declared file against its recorded digest and its
+#: declared size. It runs in a step with no `if:`, so it covers a restored cache
+#: entry - the one case where nobody watched the bytes arrive.
+VERIFY_MODEL_FILES: Final = f"{MODEL_RUNTIME_MODULE} verify-model-files"
+
+#: Where every weights download in this repository goes. A workflow or action
+#: that reaches the shared download may not spell it: the address is the
+#: program's, and a caller that spells one again has taken the fetch back.
+HUB_HOST: Final = "huggingface.co"
+
+#: What a step runs instead of writing a download of its own. A job whose fetch
+#: step is one call to one of these has converted; `measure.yml`'s four inline
+#: arms have not, and every rule scoped to the converted set skips them.
+SHARED_DOWNLOAD_CALLS: Final = (
+    ".github/scripts/fetch-model-runtime.sh",
+    DOWNLOAD_MODEL_FILES,
+)
+
+#: How many jobs download a `.gguf`. The SET is asserted below and the COUNT is
+#: asserted beside it, because the two fail differently: the set catches a job
+#: that appeared, and the count catches discovery itself going blind. When the
+#: download moved into Python the literal host stopped appearing in four of
+#: these jobs, and a search over `run:` bodies alone would have found four -
+#: which every check written over that search would have passed, quietly.
+WEIGHTS_FETCH_JOBS: Final = 8
+
 # Every job in the repository that downloads a `.gguf`: the step that fetches
 # it, the step that checks it, the first step that reads it, and the one place
 # the expected digest is written. Discovery is closed-world - a tenth workflow
@@ -367,6 +407,13 @@ MODEL_ENV_NAMES: Final = frozenset(
 
 # The weights cache jobs, and the config role each one serves.
 WEIGHTS_CACHE_ROLES: Final = {"work": "summarize"}
+
+#: The one cache-key format written in two places, so the two have to resolve to
+#: one string. `qualify-` in `validate.yml` and `bench-` in `measure.yml` are
+#: deliberately different formats - production must not share an entry with a
+#: bench candidate - so an equality across all six cache steps is false by
+#: construction and only this prefix carries one.
+SHARED_WEIGHTS_KEY_PREFIX: Final = "llm-"
 
 # Bumped from v3 when the weights half of the key moved off the workflow `env`
 # copy, so the first run after that lands refetches once instead of restoring an
@@ -1645,13 +1692,19 @@ def _weights_fetch_steps(
     Keyed by workflow and job, valued by the step's name and its shell. The
     search is over every workflow file, so a new one that fetches weights turns
     up here whether or not anybody remembered to pin it.
+
+    Two spellings find a fetch, because there are two. A step that still runs
+    `curl` against the hub names the host in its own body; a step that calls the
+    shared download names a verb, and the host is inside the program. Matching
+    only the host would have dropped four jobs the day the download moved into
+    Python, and every check written over this would have gone on passing.
     """
     found: dict[tuple[str, str], tuple[str, str]] = {}
     for filename, workflow in workflows.items():
         for job_name in _mapping(workflow.get("jobs"), "jobs"):
             for step in _steps(workflow, job_name):
                 script = _effective_shell(step)
-                if "huggingface.co/" not in script:
+                if f"{HUB_HOST}/" not in script and DOWNLOAD_MODEL_FILES not in script:
                     continue
                 name = step.get("name")
                 assert isinstance(name, str), f"{filename}/{job_name}: name the fetch step"
@@ -1659,6 +1712,37 @@ def _weights_fetch_steps(
                 assert where not in found, f"{filename}/{job_name} fetches weights twice"
                 found[where] = (name, script)
     return found
+
+
+def _published(rows: Sequence[str]) -> dict[str, str]:
+    """The `KEY=value` lines a step appends to `$GITHUB_OUTPUT`, as a mapping."""
+    return dict(row.split("=", 1) for row in rows)
+
+
+def _shared_download_jobs(
+    workflows: Mapping[str, dict[str, object]],
+) -> dict[tuple[str, str], str]:
+    """Every job that fetches its weights through the shared download, and that step's name.
+
+    Computed rather than listed, from the two questions that together settle it:
+    does the job download a `.gguf` at all, and is its fetch step one call to a
+    shared thing rather than a download written by hand. `measure.yml`'s four
+    inline arms answer yes then no, so they fall out - which is why every rule
+    scoped to this set says nothing about them.
+
+    A step that calls the shared download through a composite action counts:
+    `_steps` resolves the action in place, so an extraction does not empty this.
+    """
+    jobs: dict[tuple[str, str], str] = {}
+    for where, (step_name, _) in _weights_fetch_steps(workflows).items():
+        filename, job_name = where
+        for step in _steps(workflows[filename], job_name):
+            body = step.get("run")
+            if step.get("name") != step_name or not isinstance(body, str):
+                continue
+            if any(call in body for call in SHARED_DOWNLOAD_CALLS):
+                jobs[where] = step_name
+    return jobs
 
 
 def _runtime_cache_keys(workflow: dict[str, object]) -> list[tuple[str, str]]:
