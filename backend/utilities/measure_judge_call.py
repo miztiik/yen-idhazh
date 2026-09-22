@@ -54,7 +54,9 @@ from idhazh.contracts.knobs.placement import SECONDS_A_CALL
 from idhazh.llm.server import (
     DEFAULT_ENDPOINT,
     Completion,
+    TurnMarkers,
     completion_url,
+    derive_turn_markers,
     post,
     request_timeout_seconds,
     token_pieces,
@@ -351,6 +353,7 @@ def judge_calls(
     entry = judge.entry_of(settings)
     timeout = request_timeout_seconds(entry.request)
     prompt.first_token_openings(partial(token_pieces, base_url, timeout=timeout))
+    markers = derive_turn_markers(base_url, entry=entry, timeout=timeout)
     client = partial(post, endpoint=completion_url(base_url), timeout=timeout)
 
     started = time.monotonic()
@@ -368,6 +371,7 @@ def judge_calls(
                 block=block,
                 client=client,
                 settings=settings,
+                markers=markers,
             )
             index += 1
 
@@ -380,6 +384,7 @@ def one_call(
     block: str,
     client: judge.Client,
     settings: config.Settings,
+    markers: TurnMarkers,
 ) -> CallReading:
     """The shipped judge call, with its envelope kept.
 
@@ -390,7 +395,7 @@ def one_call(
     """
     left, right = (pair.left, pair.right) if order == ORDER_FILE else (pair.right, pair.left)
     kept = KeepsTheEnvelope(client)
-    read = judge.read_once(left, right, client=kept, settings=settings)
+    read = judge.read_once(left, right, client=kept, settings=settings, markers=markers)
     if kept.last is None:
         raise RuntimeError("the judge returned without a reply, so there is nothing to read")
     return reading_of(

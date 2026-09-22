@@ -14,11 +14,11 @@ Three guarantees, and nothing else:
 - `untrusted_block` is the only way source text is ever handed to a model, and
   the text can never close the fence it sits inside, because the fence markers
   do not survive sanitization.
-- `why_a_forged_turn_would_survive` answers, for one declared turn marker,
-  whether the first guarantee reaches it. `idhazh.config` asks it of every
-  marker a model entry declares and refuses the entry that fails, so a model
-  from a family this module does not know is a config error at load rather than
-  an open turn boundary on the first article.
+- `why_a_forged_turn_would_survive` answers, for one rendered turn marker,
+  whether the first guarantee reaches it. `idhazh.llm.server` asks it of every
+  marker it derives from a model's own template at server start and refuses the
+  run that fails, so a model from a family this module does not know stops the
+  run before the first article rather than opening a turn boundary on it.
 
 The bounds here are structural, not tunable. A knob that weakens the trust
 boundary is a knob that gets widened during an incident (CLAUDE.md section 6
@@ -59,7 +59,7 @@ _HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 #: is loaded. So the list covers the families a configured entry can bring
 #: rather than the entry's own markers. It cannot be complete: the answer to a
 #: family nobody anticipated is `why_a_forged_turn_would_survive` below, which
-#: turns an unknown family into a refused config rather than a silent hole.
+#: turns an unknown family into a refused run rather than a silent hole.
 _CHAT_CONTROL_FAMILIES: Final[tuple[str, ...]] = (
     # ChatML and every pipe-delimited descendant - Qwen, Llama 3 and 4, Phi-3,
     # Zephyr, Granite, Command-R, Harmony. The second delimiter is U+FF5C, the
@@ -162,9 +162,10 @@ def why_a_forged_turn_would_survive(marker: str) -> str | None:
     matched only in part leaves the delimiters behind, and a template that reads
     a delimiter is a template a remnant can still reach.
 
-    It answers about one string and knows nothing about config. `idhazh.config`
-    is what asks it, because `backend/idhazh/contracts/` may import no other
-    subpackage (`CLAUDE.md` section 4) and so cannot ask anything at all.
+    It answers about one string and knows nothing about where the string came
+    from. `idhazh.llm.server` is what asks it, over the markers a model's own
+    template really rendered, because `backend/idhazh/contracts/` may import no
+    other subpackage (`CLAUDE.md` section 4) and so cannot ask anything at all.
     """
     if _CHAT_CONTROL.search(marker) is None:
         return "the control-token pattern matches nothing in it, so an article may write it whole"

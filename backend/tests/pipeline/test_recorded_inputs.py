@@ -20,8 +20,8 @@ from idhazh.stages.common import INPUTS_PAYLOAD
 from idhazh.stages.work import stage_work
 
 from ._builders import (
+    a_server_that_refuses_every_completion,
     captured_article_fetch,
-    closed_loopback_endpoint,
     isolate_ledgers,
     plan,
     score_one_item,
@@ -46,13 +46,14 @@ def test_the_work_stage_leaves_its_inputs_where_assemble_can_reach_them(
     isolate_ledgers(tmp_path, monkeypatch)
     items_dir = tmp_path / "run" / run_plan.date / "items"
 
-    stage_work(
-        run_plan,
-        settings=settings,
-        scorer=None,
-        fetcher=captured_article_fetch,
-        model_endpoint=closed_loopback_endpoint(),
-    )
+    with a_server_that_refuses_every_completion() as server:
+        stage_work(
+            run_plan,
+            settings=settings,
+            scorer=None,
+            fetcher=captured_article_fetch,
+            model_endpoint=server.endpoint,
+        )
     score_one_item(items_dir, run_plan)
     stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
 
@@ -130,12 +131,12 @@ def test_a_traced_work_shard_writes_a_reconciling_span_rollup(
     """Tracing on, a work shard folds its own spans into its own segment and the
     item row's residual reconciles against the shard wall clock.
 
-    The model is a closed loopback, so the summaries fail - which is fine, the
-    fold is over the spans the shard opened (the item, the tagger, the prompt
-    render), not over a scored run. `roll_up_spans` raises if the spans claim more
-    time than the shard ran, so a residual on the item row is proof they did not.
-    The raw trace lands under state/traces/, the committed path the sink now
-    writes in place of the gitignored one.
+    The model server refuses every completion, so the summaries fail - which is
+    fine, the fold is over the spans the shard opened (the item, the tagger, the
+    prompt render), not over a scored run. `roll_up_spans` raises if the spans
+    claim more time than the shard ran, so a residual on the item row is proof
+    they did not. The raw trace lands under state/traces/, the committed path
+    the sink now writes in place of the gitignored one.
 
     Read at the segment rather than at the month head, because the shard is no
     longer what writes the head: eight of them fold one month, so each writes
@@ -147,13 +148,14 @@ def test_a_traced_work_shard_writes_a_reconciling_span_rollup(
     settings = config.load(CONFIG_DIR)
     assert settings.app.observability.tracing_enabled, "the committed config traces by default"
 
-    stage_work(
-        run_plan,
-        settings=settings,
-        scorer=None,
-        fetcher=captured_article_fetch,
-        model_endpoint=closed_loopback_endpoint(),
-    )
+    with a_server_that_refuses_every_completion() as server:
+        stage_work(
+            run_plan,
+            settings=settings,
+            scorer=None,
+            fetcher=captured_article_fetch,
+            model_endpoint=server.endpoint,
+        )
 
     shard = ledger.segment_path(
         common.STATE_ROOT,

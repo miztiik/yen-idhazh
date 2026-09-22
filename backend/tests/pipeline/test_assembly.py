@@ -18,9 +18,9 @@ from idhazh.stages import common
 from idhazh.stages.work import stage_work
 
 from ._builders import (
-    HangingLoopbackEndpoint,
+    SilentCompletionEndpoint,
+    a_server_that_refuses_every_completion,
     captured_article_fetch,
-    closed_loopback_endpoint,
     plan,
 )
 
@@ -83,16 +83,26 @@ def test_a_scorer_that_will_not_load_costs_rows_not_the_digest(monkeypatch) -> N
 def test_a_dead_model_server_marks_every_item_without_parsing(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
+    """The server that dies is the one the stage already started against.
+
+    A server that never came up cannot reach this loop any more: the stage reads
+    its turn markers off the model's own template first and refuses when nothing
+    answers, which is the same refusal production's health check makes before
+    the job. So the death is staged where it can still happen - the start-up
+    proofs are answered, and then the line closes on every completion with
+    nothing on it, which is the shape a process that died mid-shard leaves.
+    """
     run_plan = plan()
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
 
-    stage_work(
-        run_plan,
-        settings=config.load(CONFIG_DIR),
-        scorer=None,
-        fetcher=captured_article_fetch,
-        model_endpoint=closed_loopback_endpoint(),
-    )
+    with SilentCompletionEndpoint(holds=False) as server:
+        stage_work(
+            run_plan,
+            settings=config.load(CONFIG_DIR),
+            scorer=None,
+            fetcher=captured_article_fetch,
+            model_endpoint=server.endpoint,
+        )
 
     summaries = [
         Summary.from_json(
@@ -138,7 +148,7 @@ def test_a_hung_model_request_costs_one_item_not_the_shard(
     )
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
 
-    with HangingLoopbackEndpoint() as server:
+    with SilentCompletionEndpoint(holds=True) as server:
         stage_work(
             run_plan,
             settings=fast_settings,
@@ -154,7 +164,7 @@ def test_a_hung_model_request_costs_one_item_not_the_shard(
         for item in run_plan.items
     ]
 
-    assert server.accepted == len(run_plan.items) + 1, "one post per item, plus the props read"
+    assert server.asked == len(run_plan.items), "one completion post per item"
     assert len(summaries) == len(run_plan.items)
     assert {summary.status for summary in summaries} == {SummaryStatus.FAILED}
     # Until 2026-09-15 this line read MODEL_UNREACHABLE and passed, because a
@@ -201,13 +211,14 @@ def test_a_shard_out_of_clock_stops_itself_instead_of_being_killed(
     )
     monkeypatch.setattr(common, "VAR_ROOT", tmp_path / "run")
 
-    stage_work(
-        run_plan,
-        settings=out_of_time,
-        scorer=None,
-        fetcher=captured_article_fetch,
-        model_endpoint=closed_loopback_endpoint(),
-    )
+    with a_server_that_refuses_every_completion() as server:
+        stage_work(
+            run_plan,
+            settings=out_of_time,
+            scorer=None,
+            fetcher=captured_article_fetch,
+            model_endpoint=server.endpoint,
+        )
 
     written = sorted((tmp_path / "run" / run_plan.date / "items").glob("*.article.json"))
     assert written, "the shard has to write what it fetched before it stops"

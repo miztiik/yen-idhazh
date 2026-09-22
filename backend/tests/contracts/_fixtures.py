@@ -156,15 +156,15 @@ def copy_config(root: Path, *, models: dict[str, Any] | None = None) -> str:
     return pointer
 
 
-def entry_with(**turns: Any) -> dict[str, Any]:
-    """The committed entry with its turn envelope edited, as raw JSON.
+def entry_with(**fields: Any) -> dict[str, Any]:
+    """The committed entry with some of its own fields edited, as raw JSON.
 
     Built off the committed file rather than written out here, so a required
     field added to the entry later fails these tests at the edit that added it
     rather than leaving them asserting against a shape nothing declares.
     """
     payload = committed_models_raw()
-    payload["summarize"]["turns"] |= turns
+    payload["summarize"] |= fields
     return payload
 
 

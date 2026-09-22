@@ -76,20 +76,16 @@ def judge_inputs(settings: config.Settings) -> JudgeStamp:
     Both digests are taken over the rendered text rather than over a file, so a
     checkout's newline convention cannot archive a record.
 
-    **The temperature is read off a real request body, built by the function that
-    builds the real one.** A value taken from config instead would agree with
-    config and disagree with what goes out, which is the one case worth seeing.
-    The pair stands in as two empty summaries, because nothing a pair carries
-    reaches the sampler.
+    **The temperature is read off `judge.decode_settings`, which is the function
+    the real request body reads it from.** A value taken from config instead
+    would agree with config and disagree with what goes out, which is the one
+    case worth seeing.
     """
     entry = judge.entry_of(settings)
-    body = judge.decode_body(
-        settings, system=prompt.system_turn(), user=prompt.blank_user_turn()
-    )
     return JudgeStamp(
         judge_model=entry.id,
         prompt_digest=prompt.prompt_digest(),
         grammar_digest=prompt.grammar_digest(),
-        judge_temperature=float(body["temperature"]),
-        thinks=entry.turns.thinks,
+        judge_temperature=float(judge.decode_settings(settings)["temperature"]),
+        thinks=entry.thinks,
     )

@@ -33,6 +33,7 @@ from idhazh import config
 from idhazh.llm.server import (
     DEFAULT_PORT,
     completion_url,
+    derive_turn_markers,
     props_url,
     render_prompt,
     server_argv,
@@ -169,7 +170,6 @@ def measure(
     base = f"http://127.0.0.1:{port}/v1/chat/completions"
     endpoint = completion_url(base)
     health = f"http://127.0.0.1:{port}/health"
-    prompt = render_prompt(system=INSTRUCTION, user=QUESTION, turns=entry.turns)
     record: dict[str, Any] = {
         "weights": weights.name,
         "sha256": entry.sha256,
@@ -181,6 +181,12 @@ def measure(
     try:
         record["load_s"] = round(_wait_for_health(process, url=health, limit_s=900.0), 1)
         record["build_info"] = _ask(props_url(base), None, timeout=30.0).get("build_info")
+        # After the wait, because the markers are this server's own rendering.
+        prompt = render_prompt(
+            system=INSTRUCTION,
+            user=QUESTION,
+            markers=derive_turn_markers(base, entry=entry, timeout=60.0),
+        )
         for post_sampling in (False, True):
             record[f"post_sampling_probs={post_sampling}"] = [
                 _reading(

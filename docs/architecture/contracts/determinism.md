@@ -46,7 +46,7 @@ The declared inputs are the weights digest, the quantisation, the runtime build,
 
 **The turn envelope is digested twice, and the second one is not redundant.** The prompt digest covers the envelope already, because the two calls render their own bytes through it. It stops short of two facts all the same: which of the two reply openings a call ends on, and the marker the thinking span stops at. An entry that changed only the string that closes its reasoning block would decode differently and move no rendered prompt, so `turn_markers_sha256` carries the envelope whole - every marker, the system placement and its joiner. **An absent key means a run written before 2026-09-14**, when a marker first became able to move at all; it never means a default value.
 
-**One knob is absent on purpose, and it is the one people look for.** There is no reasoning flag in the stamp. Reasoning is declared by `models.<role>.turns.thinking_close`, so it arrives in the envelope digest and in the rendered prompt's choice of reply opening. A flag beside a marker would be two places to disagree.
+**One knob is absent on purpose, and it is the one people look for.** There is no reasoning flag in the stamp. Reasoning is declared by `models.<role>.thinking_close`, so it arrives in the envelope digest and in the rendered prompt's choice of reply opening. A flag beside a marker would be two places to disagree.
 
 **The weights digest answers which bytes decoded, not which bytes config named.** `ModelRef.sha256` is an expectation and the record wants an observation, because the two disagreeing is exactly the event this exists to expose. Production has not closed that gap yet; what stands in for it is below.
 

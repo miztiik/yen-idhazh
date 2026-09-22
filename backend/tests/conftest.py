@@ -33,8 +33,9 @@ from idhazh.corpus import Published
 from idhazh.elements import element_table
 from idhazh.extract import to_article_with_source
 from idhazh.fetch import FetchResult
-from idhazh.llm.server import server_argv
+from idhazh.llm.server import TurnMarkers, server_argv
 from idhazh.stages import common
+from utilities.capture_request_bodies import RENDERINGS, markers_for
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 SCHEMAS_DIR: Final = REPO_ROOT / "schemas"
@@ -42,6 +43,10 @@ CONFIG_DIR: Final = REPO_ROOT / "config"
 STATE_DIR: Final = REPO_ROOT / "state"
 FIXTURES_DIR: Final = REPO_ROOT / "tests" / "fixtures"
 CONTRACT_FIXTURES_DIR: Final = FIXTURES_DIR / "contracts"
+#: The model file `config/idhazh.json` points at. A test that stands a recorded
+#: server up serves this model's renderings, because that is the model the
+#: settings it loads name.
+INCUMBENT_MODEL: Final = "qwen3.5-9b-q4km.json"
 
 
 def seed_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]) -> int:
@@ -329,6 +334,28 @@ def refill_recorded(
 
 # --- The two calls that read one article, shared by two test modules ------
 
+
+def _rendered_by_the_template(body: dict[str, Any]) -> bytes:
+    """What the template route answers, off the incumbent's recorded renderings.
+
+    Every stage reads its turn markers off this route before its first item, so
+    a recorded server has to answer it or nothing can render a prompt. Which
+    rendering comes back is read off the request exactly as a real template
+    would read it: three turns is a conversation with a reply already in it, and
+    two turns answer differently once a keyword asks for reasoning.
+
+    It draws on no recorded completion. Those bytes are replies a model wrote,
+    and a template render is not one.
+    """
+    recorded = json.loads(RENDERINGS.read_text(encoding="utf-8"))["entries"][INCUMBENT_MODEL]
+    asked_to_think = any((body.get("chat_template_kwargs") or {}).values())
+    if len(body.get("messages") or []) > 2:
+        rendering = "history"
+    else:
+        rendering = "thinking" if asked_to_think else "plain"
+    return json.dumps({"prompt": recorded[rendering]}).encode("utf-8")
+
+
 class RecordedEndpoint:
     """A real local server that replays recorded llama-server replies in order.
 
@@ -378,12 +405,19 @@ class RecordedEndpoint:
 
             def do_POST(self) -> None:
                 raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
-                sent.append(json.loads(raw))
+                payload = json.loads(raw)
+                if self.path.endswith("/apply-template"):
+                    self._answer(200, _rendered_by_the_template(payload))
+                    return
+                sent.append(payload)
                 body = replies[len(served) % len(replies)]
                 served.append(1)
                 if hold_s > 0:
                     time.sleep(hold_s)
-                self.send_response(status)
+                self._answer(status, body)
+
+            def _answer(self, code: int, body: bytes) -> None:
+                self.send_response(code)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
@@ -436,6 +470,16 @@ def a_table(article: Article, text: str | None = None, *, cap: int = 256) -> Ele
     return element_table(article, config=ElementsConfig(max_per_article=cap))
 
 
+def committed_markers(model_file: str = INCUMBENT_MODEL) -> TurnMarkers:
+    """The markers one committed model's own template writes.
+
+    A server derives these at start-up and a test has no server, so the recorded
+    renderings under `tests/fixtures/llm/` stand in for one and the production
+    parser reads them exactly as it reads a live reply.
+    """
+    return markers_for(model_file)
+
+
 def label_payload(article: Article) -> dict[str, Any]:
     entry = config.load(CONFIG_DIR).models.summarize
     return build_label_request(
@@ -444,5 +488,5 @@ def label_payload(article: Article) -> dict[str, Any]:
         model_id="m",
         server=entry.server,
         request=entry.request,
-        turns=entry.turns,
+        markers=committed_markers(),
     )

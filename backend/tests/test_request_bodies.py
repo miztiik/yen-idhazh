@@ -54,7 +54,9 @@ def test_every_route_posts_the_body_the_golden_file_holds(path: Path) -> None:
     )
 
     config = ModelsConfig.model_validate_json(read_text(path))
-    built = capture_request_bodies.bodies(config)
+    built = capture_request_bodies.bodies(
+        config, markers=capture_request_bodies.markers_for(path.name)
+    )
 
     assert built == json.loads(read_text(golden))
 
@@ -93,18 +95,19 @@ def test_a_thinking_entry_makes_two_requests_and_a_plain_one_makes_one() -> None
     plain = ModelsConfig.model_validate_json(
         read_text(CONFIG_DIR / "models" / "qwen3.5-9b-q4km.json")
     )
-    assert thinking.summarize.turns.thinks, "the fixture entry stopped declaring a marker"
-    assert not plain.summarize.turns.thinks
+    thinking_markers = capture_request_bodies.markers_for("qwen3.5-9b-q4km-thinking.json")
+    assert thinking.summarize.thinks, "the fixture entry stopped declaring a marker"
+    assert not plain.summarize.thinks
 
-    body = capture_request_bodies.bodies(thinking)["completion"]
+    body = capture_request_bodies.bodies(thinking, markers=thinking_markers)["completion"]
     with RecordedEndpoint(200, first, second) as served:
         thought = post(
-            thinking_span(body, turns=thinking.summarize.turns),
+            thinking_span(body, markers=thinking_markers),
             endpoint=served.endpoint,
             timeout=5.0,
         )
         post(
-            answer_span(body, thought=thought.content, turns=thinking.summarize.turns),
+            answer_span(body, thought=thought.content, markers=thinking_markers),
             endpoint=served.endpoint,
             timeout=5.0,
         )
@@ -112,7 +115,9 @@ def test_a_thinking_entry_makes_two_requests_and_a_plain_one_makes_one() -> None
 
     with RecordedEndpoint(200, second) as alone:
         post(
-            capture_request_bodies.bodies(plain)["completion"],
+            capture_request_bodies.bodies(
+                plain, markers=capture_request_bodies.markers_for("qwen3.5-9b-q4km.json")
+            )["completion"],
             endpoint=alone.endpoint,
             timeout=5.0,
         )

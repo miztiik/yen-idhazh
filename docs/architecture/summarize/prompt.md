@@ -470,9 +470,9 @@ renders a prompt with no turn structure that the decoder's grammar still
 accepts - worse summaries and no error. They are JSON rather than raw text
 because the trailing newlines are load-bearing and invisible.
 
-`turns.declared_for` is the sha256 of the entry that carries them, the same pin
-`inference.declared_for` carries, and config load refuses a block whose digest
-is not the entry's. The wording they wrap did not move and cannot: the
+`declared_for` is the sha256 of the entry that carries it, and config load
+refuses an entry whose digest is not its own. The wording they wrap did not move
+and cannot: the
 instructions are one set for every model
 ([model-boundary.md](model-boundary.md)).
 
@@ -1028,7 +1028,7 @@ than the ban.
 decode from the first token on both transports, so a think opener is not a legal
 token: either the grammar suppresses the thinking and nothing changes, or the
 runtime splits a reasoning channel off and every item fails on shape. So a call
-is decoded as two spans instead, and `models.<role>.turns.thinking_close` is the
+is decoded as two spans instead, and `models.<role>.thinking_close` is the
 whole of the declaration.
 
 1. **Span one** is the same request body with the grammar taken off, `n_predict`

@@ -52,6 +52,7 @@ from idhazh.evals.metrics import (
 )
 from idhazh.llm.server import (
     DEFAULT_ENDPOINT,
+    derive_turn_markers,
     post,
     props,
     request_payload,
@@ -361,8 +362,12 @@ class LiveSummarizer:
 
     def summarize(self, prompt: str, items: Sequence[FrozenItem]) -> list[ItemSummary]:
         ask = self._settings.app.summarize
-        request = self._settings.models.summarize.request
-        model_id = self._settings.models.summarize.id
+        entry = self._settings.models.summarize
+        request = entry.request
+        model_id = entry.id
+        markers = derive_turn_markers(
+            self._endpoint, entry=entry, timeout=request_timeout_seconds(request)
+        )
         produced: list[ItemSummary] = []
         for item in items:
             article = self._articles[item.key]
@@ -370,7 +375,7 @@ class LiveSummarizer:
                 article,
                 model_id=model_id,
                 request=request,
-                turns=self._settings.models.summarize.turns,
+                markers=markers,
                 prompt_config=ask,
             )
             payload["messages"][0]["content"] = render_system(
@@ -384,7 +389,7 @@ class LiveSummarizer:
                 prompt_config=ask,
                 source_words=article.band_source_words,
                 brief=article.brief,
-                thinking=self._settings.models.summarize.turns.thinks,
+                thinking=entry.thinks,
             )
             produced.append(
                 ItemSummary(
@@ -455,14 +460,17 @@ class ModelJudge:
         return bool(reply.get("prefers_candidate", False))
 
     def _call(self, user: str, schema: dict[str, object], schema_name: str) -> dict[str, object]:
-        request = self._settings.models.summarize.request
+        entry = self._settings.models.summarize
+        request = entry.request
         payload = request_payload(
-            model_id=self._settings.models.summarize.id,
+            model_id=entry.id,
             system=_JUDGE_SYSTEM,
             user=user,
             output_schema=schema,
             request=request,
-            turns=self._settings.models.summarize.turns,
+            markers=derive_turn_markers(
+                self._endpoint, entry=entry, timeout=request_timeout_seconds(request)
+            ),
             schema_name=schema_name,
         )
         completion = post(

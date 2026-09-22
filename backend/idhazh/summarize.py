@@ -57,10 +57,9 @@ from idhazh.contracts.call_cost import CallCost, CallKind
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.knobs.evaluation import EvaluationConfig
 from idhazh.contracts.knobs.summarize import OverLengthAction, SummarizeConfig, SummaryBand
-from idhazh.contracts.knobs.turns import TurnsConfig
 from idhazh.contracts.summary import LengthAction, Summary, SummaryStatus
 from idhazh.evals.metrics import restates_summary, verbatim_run
-from idhazh.llm.server import Completion, request_payload, window
+from idhazh.llm.server import Completion, TurnMarkers, request_payload, window
 from idhazh.sanitize import LINK_PLACEHOLDER, sanitize, untrusted_block
 
 PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "summarize.txt"
@@ -385,8 +384,6 @@ def fits_context(
     article: Article,
     server: Mapping[str, Any],
     prompt_config: SummarizeConfig | None = None,
-    *,
-    turns: TurnsConfig | None = None,
 ) -> bool:
     """The prompt has to leave the window something to reply in.
 
@@ -403,9 +400,7 @@ def fits_context(
     decode budgets left `inference` on 2026-09-21, so a reply ends on the window
     or on the per-request timeout. What this still refuses is an article that
     leaves no headroom at all; what it can no longer promise is that the
-    headroom is enough. `turns` is kept because a caller with an entry in hand
-    passes one, and an envelope that thinks spends its reasoning in this same
-    sequence.
+    headroom is enough.
     """
     rendered = system_prompt(
         prompt_config, source_words=article.band_source_words, brief=article.brief
@@ -419,12 +414,12 @@ def build_request(
     *,
     model_id: str,
     request: Mapping[str, Any],
-    turns: TurnsConfig,
+    markers: TurnMarkers,
     prompt_config: SummarizeConfig | None = None,
 ) -> dict[str, Any]:
-    """One chat-route body. `turns` is the entry's, never a literal here.
+    """One chat-route body. `markers` are the server's own, never a literal here.
 
-    It carries no default for the reason `request_payload` gives: the keyword
+    They carry no default for the reason `request_payload` gives: the keyword
     that turns reasoning on and the marker that declares it wanted are both
     variables in the model's own chat template, so a default here would send one
     model's envelope to every model.
@@ -441,7 +436,7 @@ def build_request(
             brief=article.brief,
         ),
         request=request,
-        turns=turns,
+        markers=markers,
     )
 
 

@@ -217,8 +217,8 @@ place that fact turns up is a server that quietly serves a shorter context than
 the entry asked for. Both candidates written on 2026-09-14 cleared it with room
 - 262,144 and 131,072 against a matched 65,536.
 
-**`inference.declared_for` and `turns.declared_for` are the safety catch, and
-they both hold this model's own digest.** Config load refuses an entry whose
+**`declared_for` is the safety catch, and it holds this model's own digest.**
+Config load refuses an entry whose
 block is declared for one set of weights while the entry names another, and it
 says which repair it wants: re-derive the numbers, because every one of them was
 measured against one model on one runner, or re-record the markers, because

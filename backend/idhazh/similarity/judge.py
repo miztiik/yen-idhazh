@@ -25,7 +25,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from math import exp
 from typing import Any, Final
@@ -38,6 +38,7 @@ from idhazh.contracts.story_similarity_pair import SameStoryVerdict, StorySimila
 from idhazh.llm.server import (
     Completion,
     TokenChoice,
+    TurnMarkers,
     answer_span,
     grammar_completion_payload,
     one_reply,
@@ -246,14 +247,8 @@ def entry_of(settings: config.Settings) -> ModelEntry:
     return settings.models.judge or settings.models.summarize
 
 
-def decode_body(
-    settings: config.Settings, *, system: str, user: str
-) -> dict[str, Any]:
-    """The request body one judging call posts, built once and read three ways.
-
-    The decode runs it, the stamp digests it, and a test asserts on it. A stamp
-    built off a config block instead would agree with the config and disagree
-    with what went out, which is the one case worth seeing.
+def decode_settings(settings: config.Settings) -> Mapping[str, Any]:
+    """The sampler one judging call decodes under, decided in one place.
 
     **The temperature is the judging knob's, not the entry's.** The entry pins
     what suits writing a summary; this decode is the one whose answer is compared
@@ -262,22 +257,36 @@ def decode_body(
     `seed` still come off the entry, because neither decides anything at
     temperature 0.
 
+    The request body and the stamp both read it here. A stamp that read config
+    instead would agree with config and disagree with what went out, which is the
+    one case worth seeing.
+    """
+    tuning = settings.app.assemble.same_story.judging_knobs()
+    return entry_of(settings).request | {"temperature": tuning.judge_temperature}
+
+
+def decode_body(
+    settings: config.Settings, *, system: str, user: str, markers: TurnMarkers
+) -> dict[str, Any]:
+    """The request body one judging call posts, built once and read two ways.
+
+    The decode runs it and a test asserts on it. What the stamp reads is
+    `decode_settings`, one level up, so neither can drift from what goes out.
+
     The alternatives window is sized to what the grammar admits at the answer's
     opening - every non-empty prefix of a legal reply - rather than to the three
     verdict words. Sized to the words it holds one verdict spelled two ways and
     nothing else, and `margin_of` then has one verdict to rank and answers null.
     Measured on 2026-09-21: at the old width every reply returned exactly that.
     """
-    entry = entry_of(settings)
-    tuning = settings.app.assemble.same_story.judging_knobs()
     return grammar_completion_payload(
-        model_id=entry.id,
+        model_id=entry_of(settings).id,
         system=system,
         user=user,
         grammar=prompt.grammar(),
-        server=entry.server,
-        request=entry.request | {"temperature": tuning.judge_temperature},
-        turns=entry.turns,
+        server=entry_of(settings).server,
+        request=decode_settings(settings),
+        markers=markers,
         max_answer_tokens=prompt.REPLY_TOKENS,
         first_token_alternatives=len(prompt.first_token_prefixes()),
     )
@@ -289,6 +298,7 @@ def read_once(
     *,
     client: Client,
     settings: config.Settings,
+    markers: TurnMarkers,
 ) -> Reading:
     """One constrained decode, and the two checks that say it was constrained.
 
@@ -314,20 +324,21 @@ def read_once(
         settings,
         system=prompt.system_turn(),
         user=prompt.user_turn(left, right),
+        markers=markers,
     )
     started = time.perf_counter()
-    if entry.turns.thinks:
+    if entry.thinks:
         thought = client(
             thinking_span(
                 answer,
-                turns=entry.turns,
+                markers=markers,
                 temperature=setting(entry.request, "temperature"),
             )
         )
         reply = one_reply(
             thought=thought,
             answer=client(
-                answer_span(answer, thought=thought.content, turns=entry.turns)
+                answer_span(answer, thought=thought.content, markers=markers)
             ),
         )
         thinking, spans = thought.content, 1
@@ -394,6 +405,7 @@ def judge_pair(
     *,
     client: Client,
     settings: config.Settings,
+    markers: TurnMarkers,
 ) -> Judged:
     """Both orders, one comparison, no tie-break.
 
@@ -413,8 +425,8 @@ def judge_pair(
     """
     meter = _Meter()
     metered = _metered(client, meter)
-    forward = read_once(left, right, client=metered, settings=settings)
-    swapped = read_once(right, left, client=metered, settings=settings)
+    forward = read_once(left, right, client=metered, settings=settings, markers=markers)
+    swapped = read_once(right, left, client=metered, settings=settings, markers=markers)
     return Judged(
         verdict=forward.verdict,
         verdict_swapped=swapped.verdict,

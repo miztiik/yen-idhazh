@@ -46,6 +46,7 @@ from idhazh.fingerprint import (
 )
 from idhazh.llm.server import (
     DEFAULT_ENDPOINT,
+    derive_turn_markers,
     props,
     request_timeout_seconds,
     setting,
@@ -311,6 +312,9 @@ def stage_work(
     read_url = fetcher or common.live_fetcher(settings, tracer=tracer)
     model = settings.models.summarize
     observed = props(model_endpoint, timeout=request_timeout_seconds(model.request))
+    markers = derive_turn_markers(
+        model_endpoint, entry=model, timeout=request_timeout_seconds(model.request)
+    )
     inputs = build_inputs(
         model=model,
         model_sha256=model.sha256,
@@ -320,15 +324,15 @@ def stage_work(
         runtime_build=runtime_build(),
         chat_template=str(observed.get("chat_template") or UNRECORDED_TEMPLATE),
         # The two calls render their own bytes, so the chat template above no
-        # longer reaches what the model reads and the entry's turn envelope
-        # does. Handing over the rendered pair is what digests the envelope, all
+        # longer reaches what the model reads and the markers the server derived
+        # do. Handing over the rendered pair is what digests the envelope, all
         # four prompt files and the turn order together.
-        prompt=calls.prompt_inputs(settings.app.summarize, turns=model.turns),
+        prompt=calls.prompt_inputs(settings.app.summarize, markers=markers),
         output_schema=summarize.output_schema_text(settings.app.summarize),
         runner_class=runner_class(),
         extractor_version=extract.EXTRACTOR_VERSION,
         sanitizer_version=SANITIZER_VERSION,
-        turns=model.turns,
+        markers=markers,
     )
     scorer_version = metrics.scorer_version(
         scorer_id=HHEM_SCORER_ID,

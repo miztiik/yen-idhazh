@@ -604,9 +604,10 @@ Four strings decide where a turn opens and closes and how a reply begins. They
 lived in `backend/idhazh/prompts/turn_markers.json` until 2026-09-13 - one
 global file with no model key, in a package this project writes, holding a fact
 about somebody else's weights. A model whose turns differ was a source edit, and
-a swap that left them behind raised nothing. They are `models.<role>.turns` now,
-and `turns.declared_for` pins them to the entry's `sha256` exactly as
-`inference.declared_for` pins the numbers.
+a swap that left them behind raised nothing. Six of them are now read off the
+model's own template at server start and typed nowhere, and the two that cannot
+be - `models.<role>.thinking_close` and `models.<role>.thinking_kwarg` - sit on
+the entry, where `declared_for` pins them to its `sha256`.
 
 | Marker | What it is |
 | --- | --- |

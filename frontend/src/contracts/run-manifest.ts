@@ -47,10 +47,10 @@ export interface ConfigDigest {
  * Which weights, from where. Per-item payloads carry only the `id`.
  *
  * **This is the shape a run recorded**, and `run_manifest.ModelUse` embeds it.
- * `ModelEntry` below is the shape a person declares in `config/`. The turn
- * envelope belongs to the second and not to this one: no `model_ref` a run has
- * ever written carries markers, and a field required here would stop today's
- * build reading yesterday's run (`CLAUDE.md` section 11).
+ * `ModelEntry` below is the shape a person declares in `config/`. What a
+ * reasoning span is closed with belongs to the second and not to this one: no
+ * `model_ref` a run has ever written carries it, and a field required here
+ * would stop today's build reading yesterday's run (`CLAUDE.md` section 11).
  */
 export interface ModelRef {
 	id: string;

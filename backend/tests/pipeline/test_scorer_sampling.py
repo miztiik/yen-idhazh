@@ -19,8 +19,8 @@ from idhazh.stages.assemble import stage_assemble
 from idhazh.stages.work import stage_work
 
 from ._builders import (
+    a_server_that_refuses_every_completion,
     captured_article_fetch,
-    closed_loopback_endpoint,
     isolate_ledgers,
     plan,
     row,
@@ -176,13 +176,14 @@ def test_a_scored_run_names_the_instrument_that_wrote_its_rows(
     isolate_ledgers(tmp_path, monkeypatch)
     items_dir = tmp_path / "run" / run_plan.date / "items"
 
-    stage_work(
-        run_plan,
-        settings=settings,
-        scorer=None,
-        fetcher=captured_article_fetch,
-        model_endpoint=closed_loopback_endpoint(),
-    )
+    with a_server_that_refuses_every_completion() as server:
+        stage_work(
+            run_plan,
+            settings=settings,
+            scorer=None,
+            fetcher=captured_article_fetch,
+            model_endpoint=server.endpoint,
+        )
     score_one_item(items_dir, run_plan)
     stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
 

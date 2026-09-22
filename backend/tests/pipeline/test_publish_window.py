@@ -34,9 +34,9 @@ from idhazh.telemetry.silicon import stage_job_clock
 
 from ._builders import (
     FULL_TEXT,
+    a_server_that_refuses_every_completion,
     article,
     captured_article_fetch,
-    closed_loopback_endpoint,
     digest_item,
     isolate_ledgers,
     plan,
@@ -71,13 +71,14 @@ def test_a_crash_before_the_published_ledger_costs_the_replay_nothing(
     items_dir = tmp_path / "run" / run_plan.date / "items"
     state = tmp_path / "state"
 
-    stage_work(
-        run_plan,
-        settings=settings,
-        scorer=None,
-        fetcher=captured_article_fetch,
-        model_endpoint=closed_loopback_endpoint(),
-    )
+    with a_server_that_refuses_every_completion() as server:
+        stage_work(
+            run_plan,
+            settings=settings,
+            scorer=None,
+            fetcher=captured_article_fetch,
+            model_endpoint=server.endpoint,
+        )
     score_one_item(items_dir, run_plan)
     stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
 
@@ -445,13 +446,14 @@ def test_a_run_that_dies_before_assemble_keeps_what_its_workers_measured(
     isolate_ledgers(tmp_path, monkeypatch)
     state = tmp_path / "state"
 
-    stage_work(
-        run_plan,
-        settings=settings,
-        scorer=None,
-        fetcher=captured_article_fetch,
-        model_endpoint=closed_loopback_endpoint(),
-    )
+    with a_server_that_refuses_every_completion() as server:
+        stage_work(
+            run_plan,
+            settings=settings,
+            scorer=None,
+            fetcher=captured_article_fetch,
+            model_endpoint=server.endpoint,
+        )
     recorded, _ = stage_record(run_plan, settings=settings)
 
     assert ledger.segment_files(state, ledger.SegmentLedger.ITEM_HEALTH), (
@@ -482,13 +484,14 @@ def test_the_assemble_that_follows_appends_nothing_the_worker_already_recorded(
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
     state = tmp_path / "state"
-    stage_work(
-        run_plan,
-        settings=settings,
-        scorer=None,
-        fetcher=captured_article_fetch,
-        model_endpoint=closed_loopback_endpoint(),
-    )
+    with a_server_that_refuses_every_completion() as server:
+        stage_work(
+            run_plan,
+            settings=settings,
+            scorer=None,
+            fetcher=captured_article_fetch,
+            model_endpoint=server.endpoint,
+        )
     stage_record(run_plan, settings=settings)
     stage_compact(state)
     after_the_worker = health_rows(state, run_plan.date)
@@ -516,13 +519,14 @@ def test_replaying_a_day_the_worker_already_recorded_appends_no_duplicate(
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
     committed = ledger.item_health_path(tmp_path / "state", run_plan.date)
-    stage_work(
-        run_plan,
-        settings=settings,
-        scorer=None,
-        fetcher=captured_article_fetch,
-        model_endpoint=closed_loopback_endpoint(),
-    )
+    with a_server_that_refuses_every_completion() as server:
+        stage_work(
+            run_plan,
+            settings=settings,
+            scorer=None,
+            fetcher=captured_article_fetch,
+            model_endpoint=server.endpoint,
+        )
     stage_record(run_plan, settings=settings)
     stage_compact(tmp_path / "state")
     after_one_run = committed.read_bytes()
@@ -607,15 +611,16 @@ def test_a_shard_records_its_own_items_and_nobody_else_s(
     run_plan = plan()
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
-    stage_work(
-        run_plan,
-        settings=settings,
-        scorer=None,
-        fetcher=captured_article_fetch,
-        shard=0,
-        shards=2,
-        model_endpoint=closed_loopback_endpoint(),
-    )
+    with a_server_that_refuses_every_completion() as server:
+        stage_work(
+            run_plan,
+            settings=settings,
+            scorer=None,
+            fetcher=captured_article_fetch,
+            shard=0,
+            shards=2,
+            model_endpoint=server.endpoint,
+        )
 
     stage_record(run_plan, settings=settings, shard=0, shards=2)
     stage_compact(tmp_path / "state")
@@ -669,15 +674,16 @@ def test_the_two_ledgers_agree_about_which_shards_ran(
     capture = FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-3.prom"
 
     for shard in (0, 1):
-        stage_work(
-            run_plan,
-            settings=settings,
-            scorer=None,
-            fetcher=captured_article_fetch,
-            shard=shard,
-            shards=2,
-            model_endpoint=closed_loopback_endpoint(),
-        )
+        with a_server_that_refuses_every_completion() as server:
+            stage_work(
+                run_plan,
+                settings=settings,
+                scorer=None,
+                fetcher=captured_article_fetch,
+                shard=shard,
+                shards=2,
+                model_endpoint=server.endpoint,
+            )
         stage_record(run_plan, settings=settings, shard=shard, shards=2)
         stage_job_clock(
             run_plan,
@@ -719,15 +725,16 @@ def test_the_census_assemble_adds_names_no_machine(
     settings = config.load(CONFIG_DIR)
     isolate_ledgers(tmp_path, monkeypatch)
     state = tmp_path / "state"
-    stage_work(
-        run_plan,
-        settings=settings,
-        scorer=None,
-        fetcher=captured_article_fetch,
-        shard=0,
-        shards=2,
-        model_endpoint=closed_loopback_endpoint(),
-    )
+    with a_server_that_refuses_every_completion() as server:
+        stage_work(
+            run_plan,
+            settings=settings,
+            scorer=None,
+            fetcher=captured_article_fetch,
+            shard=0,
+            shards=2,
+            model_endpoint=server.endpoint,
+        )
     stage_record(run_plan, settings=settings, shard=0, shards=2)
 
     stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")

@@ -20,6 +20,7 @@ import ast
 import html
 import json
 from pathlib import Path
+from string import Template
 from typing import Any, Final, Literal
 
 import pytest
@@ -34,7 +35,7 @@ from conftest import (
     RecordedEndpoint,
     read_text,
 )
-from contracts._fixtures import copy_config, entry_with
+from contracts._fixtures import copy_config
 from pydantic import ValidationError
 
 from idhazh import cli, config, extract, telemetry
@@ -50,6 +51,15 @@ from idhazh.contracts.visual_decision import VisualKind
 from idhazh.elements import element_table
 from idhazh.fetch import FetchResult
 from idhazh.fingerprint import text_digest
+from idhazh.llm.server import (
+    PROBE_FOLLOW_UP,
+    PROBE_REPLY,
+    PROBE_SYSTEM,
+    PROBE_USER,
+    TURN_ROLE,
+    ProbeRefusedError,
+    turn_markers_from_renderings,
+)
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN, sanitize, untrusted_block
 from idhazh.stages import two_calls
 from idhazh.stages.common import _canary_article
@@ -304,51 +314,101 @@ def test_the_widened_pattern_leaves_prose_where_it_found_it(prose: str) -> None:
 
 # --- An entry the pattern cannot defend is refused before the first article --
 
+#: The markers of a family the sanitizer already strips. A case below replaces
+#: exactly one of them, so what the refusal names is the marker under test and
+#: never a second bad marker that happened to be checked first.
+HELD_MARKERS: Final = {
+    "turn_opening": "<|im_start|>$role\n",
+    "turn_closing": "<|im_end|>\n",
+    "reply_opening": "<|im_start|>assistant\n",
+}
 
-def test_an_entry_whose_family_the_pattern_never_learned_is_refused_at_load(
-    tmp_path: Path,
-) -> None:
+
+def renderings_of(**replaced: str) -> dict[str, str]:
+    """The three renderings a template writing these markers would produce.
+
+    Built rather than recorded, and that is the point: each case below is a
+    template family no committed model uses, so no recording of one exists and
+    none could. The shapes are the ones `turn_markers_from_renderings` reads -
+    a system turn and a user turn, the same with a reasoning channel open, and a
+    conversation carrying a reply between two user turns.
+    """
+    markers = HELD_MARKERS | replaced
+    opening = Template(markers["turn_opening"])
+    closing = markers["turn_closing"]
+    reply_opening = markers["reply_opening"]
+
+    def turn(role: str, text: str) -> str:
+        return opening.safe_substitute({TURN_ROLE: role}) + text + closing
+
+    plain = turn("system", PROBE_SYSTEM) + turn("user", PROBE_USER) + reply_opening
+    return {
+        "plain": plain,
+        "thinking": plain,
+        "history": (
+            turn("user", PROBE_USER)
+            + reply_opening
+            + PROBE_REPLY
+            + closing
+            + turn("user", PROBE_FOLLOW_UP)
+            + reply_opening
+        ),
+    }
+
+
+def refused_markers(**replaced: str) -> str:
+    """What the boundary said when it was asked about these markers.
+
+    Driven through the real derivation, so this asserts the check RUNS at server
+    start rather than that a helper raises when called directly. It moved there
+    on 2026-09-21 with the markers themselves; what it refuses did not change.
+    """
+    with pytest.raises(ProbeRefusedError) as refused:
+        turn_markers_from_renderings(
+            model_id="a-candidate",
+            thinking_close=None,
+            thinking_kwarg=None,
+            **renderings_of(**replaced),
+        )
+    return str(refused.value)
+
+
+def test_an_entry_whose_family_the_pattern_never_learned_is_refused_at_server_start() -> None:
     """The answer to a family nobody anticipated, and the reason the list may be short.
 
     The pattern knows the families it was written for, and that list cannot be
     complete - somebody ships a new one every few months. What closes the gap is
-    that an entry declaring markers the pattern does not recognise stops the run
-    at config load, naming the marker, rather than opening a turn boundary on
+    that a server rendering markers the pattern does not recognise stops the run
+    at server start, naming the marker, rather than opening a turn boundary on
     the first article. Finding it on the first article is finding it too late.
 
     Built, never a walk (`CLAUDE.md` section 13): the committed tree holds one
-    model and it is a family the pattern knows, so the case that matters is one
-    no archive has produced.
+    family and it is one the pattern knows, so the case that matters is one no
+    archive has produced.
     """
     unknown = "\u300aEND\u300b"
-    copy_config(tmp_path, models=entry_with(turn_closing=unknown))
 
-    with pytest.raises(ValueError) as refused:
-        config.load(tmp_path / "config")
+    said = refused_markers(turn_closing=unknown)
 
-    said = str(refused.value)
-    assert "models.summarize.turns.turn_closing" in said
+    assert "turn_closing renders" in said
     assert repr(unknown) in said, "a refusal that does not name the marker names nothing"
     assert "the control-token pattern matches nothing in it" in said
 
 
-def test_a_turn_marker_made_of_ordinary_words_is_refused_at_load(tmp_path: Path) -> None:
+def test_a_turn_marker_made_of_ordinary_words_is_refused_at_server_start() -> None:
     """A model whose turn boundary is prose is one the boundary cannot defend.
 
     `USER: ` is a real turn opening on a real family, and widening the pattern
     toward it would strip a line of dialogue out of an article. So the answer is
-    not a wider pattern - it is that this model is not a candidate, said at load
-    rather than discovered from a summary that obeyed a page.
+    not a wider pattern - it is that this model is not a candidate, said before
+    the first article rather than discovered from a summary that obeyed a page.
     """
-    copy_config(tmp_path, models=entry_with(turn_opening="$role: ", turn_closing="\n"))
+    said = refused_markers(turn_opening="$role: ", turn_closing="\n")
 
-    with pytest.raises(ValueError) as refused:
-        config.load(tmp_path / "config")
-
-    assert "models.summarize.turns.turn_opening renders 'system: '" in str(refused.value)
+    assert "turn_opening.system renders 'system: '" in said
 
 
-def test_a_marker_the_pattern_only_half_matches_is_refused_at_load(tmp_path: Path) -> None:
+def test_a_marker_the_pattern_only_half_matches_is_refused_at_server_start() -> None:
     """Recognised is not the same as stripped, so both halves are asked.
 
     The pipe-delimited part of this marker goes; the lowercase bracket does not,
@@ -356,12 +416,9 @@ def test_a_marker_the_pattern_only_half_matches_is_refused_at_load(tmp_path: Pat
     survive. What is left is the delimiters, and a template that reads a
     delimiter is one a remnant can still reach.
     """
-    copy_config(tmp_path, models=entry_with(turn_opening="[system]<|im_start|>$role\n"))
+    said = refused_markers(turn_opening="[system]<|im_start|>$role\n")
 
-    with pytest.raises(ValueError) as refused:
-        config.load(tmp_path / "config")
-
-    assert "leaves the token delimiters '[]' standing" in str(refused.value)
+    assert "leaves the token delimiters '[]' standing" in said
 
 
 def test_the_committed_entry_is_one_the_boundary_holds(tmp_path: Path) -> None:

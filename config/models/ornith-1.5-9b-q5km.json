@@ -26,16 +26,8 @@
       "-np": 1
     },
     "sha256": "e4d9634a3b6546a5c00a8680568fe1125f6c98c704ee51ae52ba07650fb4247d",
-    "turns": {
-      "reply_opening": "<|im_start|>assistant\n<think>\n\n</think>\n\n",
-      "reply_opening_thinking": "<|im_start|>assistant\n<think>\n",
-      "system_joiner": null,
-      "system_role": "own_turn",
-      "thinking_close": null,
-      "thinking_kwarg": "enable_thinking",
-      "turn_closing": "<|im_end|>\n",
-      "turn_opening": "<|im_start|>$role\n"
-    }
+    "thinking_close": null,
+    "thinking_kwarg": "enable_thinking"
   },
-  "version": "2026-09-17T02:00"
+  "version": "2026-09-21T06:00"
 }
