@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-09-20
+**Last Updated**: 2026-09-22
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
 lifecycle that calls for them is
@@ -220,17 +220,16 @@ against `files.pythonhosted.org`. `ensurepip` then `pip`
 is the path that works. If `uv` starts working, nothing in the repo depends on
 which installer produced the environment.
 
-Three extras are declared. Install only what you need:
+Two extras are declared. Install only what you need:
 
 | Extra | Pulls | When |
 | --- | --- | --- |
 | `dev` | `ruff`, `mypy`, `pytest`, `PyYAML`, `shellcheck-py` | always - this is the gate set |
 | `faithfulness` | `torch`, `transformers` | the HHEM scorer; multi-gigabyte, and it downgrades `tokenizers` |
-| `langfuse` | `langfuse` and six OpenTelemetry distributions | only to send spans to a Langfuse host you named; 32.7 MB and about 4 minutes |
 
-`faithfulness` is the heavy one. No test imports it, and `langfuse` is imported
-inside one function that only runs when `LANGFUSE_HOST` and its key pair are all
-set. The local span sink needs none of it.
+`faithfulness` is the heavy one, and it is the only one a gate does not need. No
+test imports it. Spans need no extra at all: the sink writes a JSON line with the
+standard library.
 
 **The two workflows that install `faithfulness` take `torch` from
 `https://download.pytorch.org/whl/cpu` first, then the extra.** The default PyPI

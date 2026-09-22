@@ -253,9 +253,8 @@ class ObservabilityConfig(Model):
             "a span, no gate consults one, and the ledgers stay the record. True "
             "writes one JSON line per span to the committed trace under state/traces/, "
             "a short rolling window observability.trace_window_days bounds, and folds "
-            "the shard's spans into the committed span rollup. A host is opt-in on top "
-            "of that, through LANGFUSE_HOST with its key pair, and CI names none - so "
-            "an ordinary run reaches no third party whatever this says."
+            "the shard's spans into the committed span rollup. That file is the only "
+            "destination a span has, so no run reaches a third party whatever this says."
         ),
     )
     trace_window_days: int = Field(

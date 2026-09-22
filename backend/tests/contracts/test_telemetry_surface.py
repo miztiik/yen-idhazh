@@ -6,10 +6,11 @@ names through `from idhazh import telemetry`, so the question worth a test is
 narrow: is every name a caller outside the package still reaches reachable, and
 is it the same object rather than a copy?
 
-Six of the original 37 are gone, and that is the other half of the question.
-Five of them nobody outside the package ever reached, so the split cut them. The
-sixth is `record`, which a submodule of the same name now takes. This file is
-where both are recorded.
+Seven of the original 37 are gone, and that is the other half of the question.
+Four of them nobody outside the package ever reached, so the split cut them. One
+is `record`, which a submodule of the same name now takes. Two went with the
+hosted span sink on 2026-09-22 and are deleted rather than cut. This file is
+where all three kinds are recorded.
 
 **What this cannot settle: whether the seam is in the right place.** It would
 pass just as green with all 31 names left in one file, and it would pass with
@@ -19,6 +20,7 @@ them scattered across thirty. Where each name belongs is a reading of
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import ModuleType
 from typing import Final
 
@@ -95,21 +97,29 @@ MODULES: Final[tuple[ModuleType, ...]] = (census, events, rollup, sinks, spans, 
 #: function is still `telemetry.events.record` where it has always been defined.
 TAKEN_BY_A_MODULE: Final[frozenset[str]] = frozenset({"record"})
 
-#: The five names the split stopped re-exporting. An attribute scan of
+#: The four names the split stopped re-exporting. An attribute scan of
 #: every `.py` under `backend/` found no `telemetry.<name>` and no
 #: `from idhazh.telemetry import <name>` for any of them outside the package, so
 #: each alias named a thing only the package's own modules use (Guardrail #6).
 #: Every one of them still lives in the module that owns it, which is what the
-#: second half of the oracle below holds.
+#: second half of the oracle below holds. A fifth, `refuse_text`, was here until
+#: the hosted sink went and is now in `DELETED_WITH_THE_HOSTED_SINK`.
 CUT_AS_UNREACHED_ALIASES: Final[frozenset[str]] = frozenset(
     {
         "AttrValue",
         "DEGRADED_BUT_DONE",
         "FLAT_RECORDS",
         "INSTRUMENT_CELLS",
-        "refuse_text",
     }
 )
+
+#: The two names the hosted span sink took with it on 2026-09-22. `langfuse_sink`
+#: built it and `refuse_text` was the client's own mask hook wired shut; neither
+#: had any other caller, so both are DELETED rather than un-exported. That is the
+#: difference this set records: a cut alias must still exist in its module, and
+#: one of these must exist nowhere (Guardrail #1 - a build-time producer makes no
+#: runtime call to a third party, `docs/concepts/telemetry.md`).
+DELETED_WITH_THE_HOSTED_SINK: Final[frozenset[str]] = frozenset({"langfuse_sink", "refuse_text"})
 
 #: Names added since the split, each with the row that added it and the caller
 #: that needs it. A public name is a promise, so one arrives here deliberately
@@ -121,10 +131,15 @@ CUT_AS_UNREACHED_ALIASES: Final[frozenset[str]] = frozenset(
 #: which is how they already reached `classify_item`, the function it now wraps.
 ADDED_AFTER_THE_SPLIT: Final[frozenset[str]] = frozenset({"census_row"})
 
-#: What the package re-exports today: the pre-split surface, less the five the
-#: split cut as unreached and the one a submodule took, plus what later rows added.
+#: What the package re-exports today: the pre-split surface, less the four the
+#: split cut as unreached, the one a submodule took and the two the hosted sink
+#: took, plus what later rows added.
 RE_EXPORTED: Final[frozenset[str]] = (
-    BEFORE_THE_SPLIT - CUT_AS_UNREACHED_ALIASES - TAKEN_BY_A_MODULE | ADDED_AFTER_THE_SPLIT
+    BEFORE_THE_SPLIT
+    - CUT_AS_UNREACHED_ALIASES
+    - TAKEN_BY_A_MODULE
+    - DELETED_WITH_THE_HOSTED_SINK
+    | ADDED_AFTER_THE_SPLIT
 )
 
 
@@ -164,7 +179,7 @@ def test_the_name_a_module_took_is_the_module_and_the_function_is_one_import_awa
 def test_a_cut_re_export_is_gone_from_the_package_and_not_from_its_module() -> None:
     """A removal that deleted the thing rather than the alias would be a break.
 
-    Each of the five is still defined, still imported by the modules that use it,
+    Each of the four is still defined, still imported by the modules that use it,
     and simply no longer reachable as `telemetry.<name>`.
     """
     for name in sorted(CUT_AS_UNREACHED_ALIASES):
@@ -174,6 +189,23 @@ def test_a_cut_re_export_is_gone_from_the_package_and_not_from_its_module() -> N
         assert any(hasattr(module, name) for module in MODULES), (
             f"{name} was deleted rather than un-exported"
         )
+
+
+def test_the_hosted_sink_left_nothing_of_itself_behind() -> None:
+    """The counterpart: these two had to be deleted, not merely un-exported.
+
+    An un-exported `langfuse_sink` still sitting in `sinks.py` would still import
+    the client the day somebody called it, which is the runtime call to a third
+    party Guardrail #1 refuses. So the absence is asserted in the module as well
+    as on the package, and the module source is read so a name reintroduced under
+    a different binding is still caught.
+    """
+    for name in sorted(DELETED_WITH_THE_HOSTED_SINK):
+        assert not hasattr(telemetry, name), f"telemetry.{name} is back"
+        for module in MODULES:
+            assert not hasattr(module, name), f"{module.__name__}.{name} is back"
+    source = Path(sinks.__file__).read_text(encoding="utf-8")
+    assert "langfuse" not in source.lower(), "the hosted sink is back in sinks.py"
 
 
 def test_the_flat_module_left_no_shim_behind() -> None:

@@ -15,11 +15,12 @@ is declared in `idhazh.contracts` (Guardrail #3).
 from __future__ import annotations
 
 # Re-exported so that no caller outside this package had to change when
-# `telemetry.py` became `telemetry/`. Five names no caller outside the package
+# `telemetry.py` became `telemetry/`. Four names no caller outside the package
 # ever reached are deliberately absent - `DEGRADED_BUT_DONE`, `FLAT_RECORDS`,
-# `INSTRUMENT_CELLS`, `AttrValue` and `refuse_text` - each of which still lives
-# in the module that owns it. REMOVAL CONDITION: a name here goes the day its
-# last caller outside `idhazh/telemetry/` goes. A re-export that outlives its
+# `INSTRUMENT_CELLS` and `AttrValue` - each of which still lives in the module
+# that owns it. A fifth, `refuse_text`, was the hosted sink's own mask hook and
+# was deleted with it on 2026-09-22. REMOVAL CONDITION: a name here goes the day
+# its last caller outside `idhazh/telemetry/` goes. A re-export that outlives its
 # cut-over is a second name for everything (Guardrail #6).
 #
 # **`record` is the one pre-split name that is not here.** `record.py` owns one
@@ -47,7 +48,6 @@ from idhazh.telemetry.sinks import (
     FanOut,
     FileSink,
     NullSink,
-    langfuse_sink,
 )
 from idhazh.telemetry.spans import (
     MAX_ATTRIBUTE_CHARS,
@@ -99,7 +99,6 @@ __all__ = [
     "event",
     "is_final",
     "item_attributes",
-    "langfuse_sink",
     "roll_up_spans",
     "summary_attributes",
     "trace_date",
