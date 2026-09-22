@@ -52,9 +52,9 @@ Playwright runs `fullyParallel: false` with 4 workers, so it parallelises by fil
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The merged-stories chart prints its column | - | J | Not started | - | - | - |
-| 2 | The two single-population figures say why they have none | - | J | Not started | - | - | - |
-| 3 | The judgement strips stop running a date into a note | - | J | Not started | - | - | - |
+| 1 | The merged-stories chart prints its column | - | J | Landed | p45j | #1045 | - |
+| 2 | The two single-population figures say why they have none | - | J | Landed | p45j | #1045 | - |
+| 3 | The judgement strips stop running a date into a note | - | J | Landed | p45j | #1045 | - |
 | 4 | The two day matrices on voices declare | - | V | Not started | - | - | - |
 | 5 | The rule reaches the judgement route and the voices reasons | 1, 2, 4 | R | Not started | - | - | - |
 

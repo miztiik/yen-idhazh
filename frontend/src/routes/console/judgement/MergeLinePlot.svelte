@@ -388,7 +388,7 @@
 			name="merge-line"
 			maxShare={readoutMaxShare}
 			{resting}
-			restingNote="the newest day"
+			restingNote=", the newest day"
 		/>
 
 		<p class="line-note">
