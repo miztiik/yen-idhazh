@@ -28,6 +28,7 @@ from ._harness import (
     _names_the_input,
     _run_bodies,
     _run_the_decide_step,
+    _stages_a_state_path,
     _steps,
     _string_list,
     _triggers,
@@ -219,6 +220,38 @@ def _render_concurrency_group(group: str, dispatched: dict[str, str]) -> str:
         assert name in dispatched, f"the group names an input the dispatch form has no {name}"
         rendered = rendered.replace(f"${{{{{span}}}}}", dispatched[name] or matched.group("fallback"))
     return rendered
+
+
+def test_every_workflow_that_commits_a_ledger_says_which_of_its_runs_may_overlap() -> None:
+    """A `state/` writer with no concurrency group is a writer nothing holds apart.
+
+    `measure.yml` was the last one. It is dispatched by hand many times a day
+    and its `runtime` job pushes one host row into a day file that every other
+    dispatch of that day also appends to, so two of them racing lose a row at
+    the rebase - and the step is `continue-on-error`, so the run stays green
+    while the record goes.
+
+    What this settles is that none is missing. It cannot settle that a group is
+    the right one: whether two dispatches are one question is a judgement about
+    what the dispatch means, and the test above is where that is argued for the
+    one workflow it matters most in.
+
+    `cancel-in-progress` is checked as well, because the cancelling kind is not
+    a queue - it throws the running job away, and a job that was about to
+    commit a ledger takes the ledger with it.
+    """
+    workflows = _load_workflows()
+    writers = sorted(name for name, body in workflows.items() if _stages_a_state_path(body))
+    assert writers, "no workflow stages a path under state/, so this test proves nothing"
+
+    for name in writers:
+        concurrency = _mapping(workflows[name].get("concurrency"), f"{name} concurrency")
+        assert str(concurrency.get("group", "")).strip(), (
+            f"{name} commits a path under state/ and declares no concurrency group"
+        )
+        assert str(concurrency.get("cancel-in-progress")) != "true", (
+            f"{name} would cancel a run that is already committing a ledger"
+        )
 
 
 def test_two_candidates_dispatched_together_are_two_qualifications_and_not_one() -> None:

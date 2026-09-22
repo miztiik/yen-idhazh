@@ -100,6 +100,27 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  # One group per target, because the four targets are four jobs that share
+  # nothing. Only `bench` commits: its `runtime` job pushes one host row to
+  # `state/pipeline-tests/host-fingerprint/<Y>/<M>/<DD>.csv`, a day file two
+  # dispatches on one day both append to. Until every writer owns its own
+  # filename, two of them racing that path lose a row at the rebase - and the
+  # step is `continue-on-error`, so the run stays green while the record goes.
+  #
+  # Per target rather than one flat group, for validate.yml's reason: GitHub
+  # keeps only ONE pending run per group and a newer pending run cancels the
+  # older one. This workflow is dispatched by hand many times a day, so a flat
+  # group would drop a measurement with no error anywhere. A `corpus` dispatch
+  # has no reason to queue behind a five-hour `bench`, and two `bench`
+  # dispatches are the pair that has to queue.
+  #
+  # `inputs` is legal here: GitHub allows `github, inputs, vars` on the
+  # `concurrency` key, and this workflow is dispatch-only, so the context is
+  # always populated. `target` is a choice with a default, so it is never empty.
+  group: measurements-${{ inputs.target }}
+  cancel-in-progress: false
+
 env:
   LLAMA_CPP_BUILD: b10598
   LLAMA_CPP_ASSET: llama-b10598-bin-ubuntu-x64.tar.gz
@@ -809,7 +830,7 @@ jobs:
         env:
           COMMIT_MESSAGE: "bench: the machine ${{ inputs.runtime_candidate }} drew"
           NOTHING_STAGED_MESSAGE: "no machine recorded"
-          PUSH_FAILED_MESSAGE: "could not push the bench host record after three attempts"
+          PUSH_FAILED_MESSAGE: "could not push the bench host record"
         run: >-
           bash .github/scripts/commit-and-push.sh
           state/pipeline-tests/host-fingerprint

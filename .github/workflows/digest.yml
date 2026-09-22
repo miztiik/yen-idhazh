@@ -91,6 +91,7 @@ jobs:
       shards: ${{ steps.fanout.outputs.shards }}
       matrix: ${{ steps.fanout.outputs.matrix }}
       shard_timeout_minutes: ${{ steps.bounds.outputs.shard_timeout_minutes }}
+      push_deadline_seconds: ${{ steps.bounds.outputs.push_deadline_seconds }}
       faithfulness: ${{ steps.decide.outputs.faithfulness }}
       summarize_repo: ${{ steps.models.outputs.summarize_repo }}
       summarize_revision: ${{ steps.models.outputs.summarize_revision }}
@@ -194,19 +195,26 @@ jobs:
           bash .github/scripts/llama-cpp-pin.sh \
             | tee /dev/stderr >> "$GITHUB_OUTPUT"
 
-      # How long a worker may take, read from the one file that says so. It
-      # travels as a job OUTPUT for the same reason the model refs do: a job's
-      # `timeout-minutes` resolves from `needs` before that job's first step,
-      # and `steps` is not readable there.
+      # How long a worker may take, and how long any job here may keep trying to
+      # push what it committed. Both read from the one file that says so, and
+      # both travel as job OUTPUTS for the same reason the model refs do: a
+      # job's `timeout-minutes` resolves from `needs` before that job's first
+      # step, and `steps` is not readable there.
       #
-      # Asserted to be a bare positive whole number here, at the one point that
-      # writes it. `timeout-minutes` takes whatever it is handed, so a value
-      # Actions cannot read as a number leaves the worker with no bound at all
-      # and the run finds out six hours later.
+      # Each is asserted to be a bare positive whole number here, at the one
+      # point that writes it. `timeout-minutes` takes whatever it is handed, so a
+      # value Actions cannot read as a number leaves the worker with no bound at
+      # all and the run finds out six hours later.
+      #
+      # One reader and one refusal for both, because a second utility would be a
+      # second answer to what a bound is. The key is a dotted path, so a knob in
+      # another block is read without a second program.
       - id: bounds
         run: |
           set -euo pipefail
           python3 backend/utilities/shard_bound.py >> "$GITHUB_OUTPUT"
+          python3 backend/utilities/shard_bound.py \
+            --key run.push_deadline_seconds >> "$GITHUB_OUTPUT"
 
       # GitHub queues a scheduled workflow by load and silently drops the slots
       # it cannot place. Measured 2026-08-27 to 2026-08-29: 13 slots elapsed, 5
@@ -426,7 +434,8 @@ jobs:
         env:
           COMMIT_MESSAGE: "plan: ${{ steps.decide.outputs.date }}"
           NOTHING_STAGED_MESSAGE: "nothing new to record"
-          PUSH_FAILED_MESSAGE: "could not push what the plan saw after three attempts"
+          PUSH_FAILED_MESSAGE: "could not push what the plan saw"
+          PUSH_DEADLINE_SECONDS: ${{ steps.bounds.outputs.push_deadline_seconds }}
         run: >-
           bash .github/scripts/commit-and-push.sh
           state
@@ -796,13 +805,24 @@ jobs:
       # needs no driver at all: a segment is named for one shard of one run, so
       # there is nothing for a merge driver to settle and a union of two would
       # silently stack copies of a file that is meant to have one writer.
+      # `PUSH_DEADLINE_SECONDS` is this job's own number and not the one the
+      # rest of the run uses. A shard keeps back `run.shard_wrap_up_minutes` -
+      # 12 minutes - for everything after its last item, so the 300 s the knob
+      # declares would be 5 of those 12. 120 s is 16.7 percent of the reserve,
+      # which is four attempts at the capped backoff.
+      #
+      # `SHARD` is here so the `push attempt=` line names which of the shards it
+      # came from. Eight of them commit to one branch, and a contention figure
+      # nobody can attribute to a writer answers nothing.
       - name: Commit what this shard measured
         if: always()
         continue-on-error: true
         env:
           COMMIT_MESSAGE: "work: ${{ needs.plan.outputs.date }} shard ${{ matrix.shard }}"
           NOTHING_STAGED_MESSAGE: "nothing measured to record"
-          PUSH_FAILED_MESSAGE: "could not push what this shard measured after three attempts"
+          PUSH_FAILED_MESSAGE: "could not push what this shard measured"
+          PUSH_DEADLINE_SECONDS: "120"
+          SHARD: ${{ matrix.shard }}
         run: >-
           bash .github/scripts/commit-and-push.sh
           state/traces state/segments
@@ -1185,6 +1205,30 @@ jobs:
         working-directory: frontend
         run: python -m idhazh site-weight --site-tree build
 
+      # The paths the rebuild below owns, read from `backend/idhazh/paths.py`
+      # rather than written out here. They were a space-split string in this
+      # file, under a header warning that no path in it may carry a space - a
+      # rule nothing could check - and the workflow tests carried a second copy
+      # of the same list. Three lists that can drift is the defect; there is one
+      # now, and both this step and the tests read it.
+      #
+      # Through `$GITHUB_OUTPUT` and never `$GITHUB_ENV`. An env var set here
+      # reaches every later step of this job, and `Commit the folded telemetry`
+      # is a later step with no `REGENERATE_COMMAND` - the script refuses a
+      # refresh with no rebuild and exits 2, and that step is
+      # `continue-on-error`, so the fold would silently stop happening on every
+      # run.
+      #
+      # `DAY_DIR` through `env`, not pasted into the line below: a value read by
+      # name is a value, whatever it contains.
+      - id: derived
+        name: Say which committed paths a rebuild owns
+        env:
+          DAY_DIR: ${{ needs.plan.outputs.day_dir }}
+        run: |
+          set -euo pipefail
+          python -m idhazh derived-paths --day-dir "$DAY_DIR" >> "$GITHUB_OUTPUT"
+
       # The checkout above carries main's tip at TRIGGER time, and this run has
       # been going for two to three hours by now. So the day was just built on a
       # base that old, and the push below is the first thing to find out.
@@ -1216,27 +1260,9 @@ jobs:
         env:
           COMMIT_MESSAGE: "digest: ${{ needs.plan.outputs.date }}"
           NOTHING_STAGED_MESSAGE: "nothing changed"
-          PUSH_FAILED_MESSAGE: "could not push the day after three attempts"
-          REFRESH_PATHS: >-
-            ${{ needs.plan.outputs.day_dir }}/digest.json
-            ${{ needs.plan.outputs.day_dir }}/run.json
-            frontend/public/telemetry
-            frontend/public/assist/index
-            frontend/public/source-health.json
-            frontend/public/console
-            frontend/public/run-days
-            frontend/public/day-metrics
-            frontend/public/machine
-            frontend/public/span-rollup
-            frontend/public/run-timeline
-            state/published
-            state/scores
-            state/score-index
-            state/item-health
-            state/span-rollup
-            state/traces
-            state/host-fingerprint
-            state/segments
+          PUSH_FAILED_MESSAGE: "could not push the day"
+          PUSH_DEADLINE_SECONDS: ${{ needs.plan.outputs.push_deadline_seconds }}
+          REFRESH_PATHS: ${{ steps.derived.outputs.refresh_paths }}
           REGENERATE_COMMAND: >-
             python -m idhazh assemble --date ${{ needs.plan.outputs.date }}
             --commit ${{ github.sha }} --runner ubuntu-latest
@@ -1348,7 +1374,8 @@ jobs:
         env:
           COMMIT_MESSAGE: "state: retire the shards past their reading window"
           NOTHING_STAGED_MESSAGE: "every month is still at full grain"
-          PUSH_FAILED_MESSAGE: "could not push the folded telemetry after three attempts"
+          PUSH_FAILED_MESSAGE: "could not push the folded telemetry"
+          PUSH_DEADLINE_SECONDS: ${{ needs.plan.outputs.push_deadline_seconds }}
         run: >-
           bash .github/scripts/commit-and-push.sh
           state frontend/public/telemetry

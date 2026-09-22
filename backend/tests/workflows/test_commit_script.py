@@ -28,11 +28,13 @@ from ._harness import (
     _git,
     _isolated_env,
     _mid_rebase,
+    _push_attempts,
     _race,
     _race_the_day,
     _reading_its_output,
     _rebuild,
     _rebuild_command,
+    _reject_the_first_pushes,
     _rows,
     _run_commit_script,
     _scripted_origin,
@@ -362,7 +364,153 @@ def test_a_rebase_it_cannot_finish_still_ends_the_script_cleanly(tmp_path: Path)
     assert result.stdout.count("push rejected, rebasing (attempt ") == 1
     assert "the rebase did not apply cleanly" in result.stderr
     assert settings["PUSH_FAILED_MESSAGE"] in result.stderr
+    # The attempt it really spent. A conflicting rebase leaves the loop on the
+    # first one, so a message naming the count it was allowed sends the reader
+    # to the retry budget, which is not what stopped it.
+    assert "the push was given up on attempt 1" in result.stderr
     assert _git(origin, env, "log", "-1", "--format=%s").strip() == "retire the ledger"
+    assert not _mid_rebase(runner)
+
+
+@requires_bash
+def test_a_push_rejected_more_times_than_the_old_loop_allowed_still_lands(
+    tmp_path: Path,
+) -> None:
+    """Row 4's Oracle: the loop stops on a clock, so a fourth attempt exists.
+
+    Origin refuses the first four pushes and takes the fifth. The old loop had
+    three attempts and would have given up on the third, published nothing, and
+    said it had spent three - so this case could not pass before and its whole
+    value is that it does now.
+
+    Every attempt prints one line, and the windows those lines report sum to
+    less than the deadline. What this cannot settle is the real window on a
+    runner: that is what the printed line exists to collect, over twenty runs.
+    """
+    staged_paths, settings = _commit_call("plan")
+    deadline = 60
+    settings = {**settings, "PUSH_DEADLINE_SECONDS": str(deadline)}
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
+    _reject_the_first_pushes(origin, 4)
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 0, result.stderr
+    assert settings["PUSH_FAILED_MESSAGE"] not in result.stderr
+    assert _git(origin, env, "log", "-1", "--format=%s").strip() == settings["COMMIT_MESSAGE"]
+
+    attempts = _push_attempts(result.stdout)
+    assert [row["attempt"] for row in attempts] == ["1", "2", "3", "4", "5"]
+    assert [row["outcome"] for row in attempts] == [
+        *["rejected"] * 4,
+        "landed",
+    ]
+    # Attempt 1 has no window in the retry sense: nothing fetches before the
+    # first push, so its exposure is the whole job rather than a retry
+    # parameter, and its zero is the truth about it.
+    assert attempts[0]["window_ms"] == "0"
+    assert all(int(row["window_ms"]) > 0 for row in attempts[1:])
+    assert sum(int(row["window_ms"]) for row in attempts) < deadline * 1000
+    # Six stamps, because one figure cannot tell a slow rebuild from a slow push.
+    for row in attempts:
+        assert set(row) == {
+            "attempt",
+            "job",
+            "shard",
+            "outcome",
+            "window_ms",
+            "fetch_ms",
+            "handback_ms",
+            "rebase_ms",
+            "rebuild_ms",
+            "push_ms",
+        }
+    assert not _mid_rebase(runner)
+
+
+@requires_bash
+def test_a_push_nothing_will_take_gives_up_on_the_clock_and_says_what_it_spent(
+    tmp_path: Path,
+) -> None:
+    """The other end of the deadline: it is a bound, not a promise.
+
+    Origin refuses every push. The loop has to give up on its own clock, leave
+    no rebase in progress, print the caller's own sentence, and name the attempt
+    it really reached - which is what a reader needs to tell a run that spent
+    its budget from a run that stopped on the first conflict.
+    """
+    staged_paths, settings = _commit_call("plan")
+    settings = {**settings, "PUSH_DEADLINE_SECONDS": "3"}
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    before = _git(origin, env, "rev-parse", "main").strip()
+    _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
+    _reject_the_first_pushes(origin, 99)
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 1
+    assert settings["PUSH_FAILED_MESSAGE"] in result.stderr
+    spent = _push_attempts(result.stdout)
+    assert len(spent) >= 2, "a deadline that allows one attempt is a counter again"
+    assert f"the push was given up on attempt {len(spent)} after 3s" in result.stderr
+    assert _git(origin, env, "rev-parse", "main").strip() == before
+    assert not _mid_rebase(runner)
+
+
+@requires_bash
+def test_a_new_file_in_a_drained_directory_still_rebases(tmp_path: Path) -> None:
+    """Row 2's Oracle, run rather than read: the B6 shape, at exit 0.
+
+    One job drains a directory - which is what the fold does to
+    `state/segments/` on every run - while another writes a brand-new file into
+    it. Git reads the emptied directory as having been RENAMED to wherever its
+    files went, and applies that guess to the arriving file, so the rebase stops
+    with `CONFLICT (file location)` over a tree that was correct and the job
+    loses what it had already finished.
+
+    `merge.directoryRenames=false` is what turns the guess off. Nothing about
+    the data changes: both sides are applied whole, the tip's deletion still
+    stands, and the new segment lands.
+
+    What this cannot settle is whether the guess is left on somewhere else in
+    the pipeline. It drives the one script the daily run pushes through.
+    """
+    staged_paths, settings = _commit_call("plan")
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    segments = f"{staged_paths[0]}/{ledger.SEGMENTS_DIRNAME}/item-health"
+    drained = f"{segments}/2026-09-22-1-1-plan-0.csv"
+    arriving = f"{segments}/2026-09-22-2-1-work-03.csv"
+
+    # The base both sides start from: one segment waiting to be folded.
+    other = tmp_path / "other"
+    _git(tmp_path, env, "clone", str(tmp_path / "origin.git"), str(other))
+    _write(other / drained, "header\nwaiting\n")
+    _git(other, env, "add", drained)
+    _git(other, env, "commit", "-m", "a segment is waiting")
+    _git(other, env, "push", "origin", "main")
+    _git(runner, env, "pull", "--ff-only", "origin", "main")
+
+    # Origin's tip: a sibling folded that segment and deleted it, which leaves
+    # the directory holding nothing.
+    _git(other, env, "pull", "--ff-only", "origin", "main")
+    _git(other, env, "rm", "--quiet", drained)
+    _git(other, env, "commit", "-m", "the fold drained the segment store")
+    _git(other, env, "push", "origin", "main")
+
+    # This job: a new segment, written into the directory the tip just emptied.
+    _write(runner / arriving, "header\nmine\n")
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 0, result.stderr
+    assert "the rebase did not apply cleanly" not in result.stderr
+    assert settings["PUSH_FAILED_MESSAGE"] not in result.stderr
+    assert _git(origin, env, "show", f"main:{arriving}").splitlines() == ["header", "mine"]
+    assert not _tracked(origin, env, drained), "the tip's own deletion must still stand"
     assert not _mid_rebase(runner)
 
 
