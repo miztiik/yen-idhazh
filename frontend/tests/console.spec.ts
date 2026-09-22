@@ -589,7 +589,7 @@ test('the run that read only the start of an article says so on its own square',
 	expect(carried).toHaveLength(cutByRun.size);
 	for (const [runId, keys] of cutByRun) {
 		const n = Number(runId.split('-').at(-1));
-		expect(carried[0]).toContain(`run ${n},`);
+		expect(carried[0]).toContain(`block ${n},`);
 		expect(carried[0]).toContain(`${keys.size} read only in part`);
 	}
 
