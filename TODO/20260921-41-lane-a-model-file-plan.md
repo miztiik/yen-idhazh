@@ -66,13 +66,13 @@ Seven rows, two pull requests. Read this before the tables.
 
 | # | Row title | PR | Depends-on | Parallel-group | Status | Worktree | PR link | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | The server-log reader goes | A | - | A | DONE | `p41a` | - | worker |
-| 2 | The decode stamp and the dead fingerprint go | A | 1 | A | DONE | `p41a` | - | worker |
-| 3 | The draft head becomes a companion file | A | 2 | A | DONE | `p41a` | - | owner |
-| 4 | Both decode caps go | A | 3 | A | DONE | `p41a` | - | worker |
-| 5 | The model file carries llama-server's own flags | A | 4 | A | DONE | `p41a` | - | worker |
-| 6 | The engineering contract catches up | A | 5 | A | DONE | `p41a` | - | worker |
-| 7 | The markers are derived at server start | B | 6 | B | DONE | `p41b` | - | owner |
+| 1 | The server-log reader goes | A | - | A | DONE | `p41a` | #1036 merged | worker |
+| 2 | The decode stamp and the dead fingerprint go | A | 1 | A | DONE | `p41a` | #1036 merged | worker |
+| 3 | The draft head becomes a companion file | A | 2 | A | DONE | `p41a` | #1036 merged | owner |
+| 4 | Both decode caps go | A | 3 | A | DONE | `p41a` | #1036 merged | worker |
+| 5 | The model file carries llama-server's own flags | A | 4 | A | DONE | `p41a` | #1036 merged | worker |
+| 6 | The engineering contract catches up | A | 5 | A | DONE | `p41a` | #1036 merged | worker |
+| 7 | The markers are derived at server start | B | 6 | B | DONE | `p41b` | #1039 | owner |
 
 ## Section 1c - The adoption, and what it found
 
