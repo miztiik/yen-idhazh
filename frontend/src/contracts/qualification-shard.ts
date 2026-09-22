@@ -227,11 +227,11 @@ export interface PipelineInputs {
 
 	truncation_cap_tokens: number;
 
-	/** One canonical spelling of the decoding parameters. */
-	sampling: string;
+	/** The decoding parameters, one key each, under the name the request body spells them with. A mapping rather than one joined string so the console compares key by key: a rename moves no key's value, and a setting that stopped being sent is a key that is absent rather than a record that differs everywhere. */
+	sampling: Record<string, string>;
 
-	/** One canonical spelling of the runtime knobs that move the arithmetic. */
-	runtime_flags: string;
+	/** The runtime switches that can move the arithmetic, one key each, spelled as llama-server spells them. A bare flag records `set`; a flag the model file leaves out records `runtime-default`, because what the server picks is a real and different choice from pinning a value. */
+	runtime_flags: Record<string, string>;
 
 	n_ctx: number;
 

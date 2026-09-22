@@ -136,13 +136,27 @@ def host_cpu(cpuinfo: Path = CPUINFO) -> str:
     return platform.processor() or platform.machine() or "unknown"
 
 
-def sampling_spelling(request: Mapping[str, Any]) -> str:
-    """One canonical spelling of the decoding parameters.
+def sampling_spelling(request: Mapping[str, Any]) -> dict[str, str]:
+    """The decoding parameters, one key each, sorted.
 
     `seed` is enumerated as an input, and above temperature 0 it is the control
     that decides which sample the sampler draws rather than dead code. It was
     recorded from the start for exactly this move: a change of sampler cannot
-    shift the words without shifting this string.
+    shift the words without shifting this record.
+
+    **A mapping rather than a joined string, and that is what makes it a
+    record.** Joined, the whole thing moved when any one term did, so a rename
+    or a dropped setting read downstream as every decode parameter changing at
+    once. Per key, the console compares `temperature` against `temperature` and
+    a key that stopped being sent is a key that is absent.
+
+    **Four decimal places is a shipped tolerance, and this is where it is
+    written down.** Two temperatures closer together than 1e-4 record as the
+    same value and the console reports no change between them. That is the right
+    tolerance - no sampler this project runs is steered by the fifth decimal,
+    and a full float repr would report a change every time a JSON round trip
+    landed one bit out - but it is a choice rather than a fact, so it is stated
+    rather than left in the format string.
 
     **No span budget is here, because no span carries one.** The two decode caps
     left the settings on 2026-09-21, and what bounds a span now is the window
@@ -155,23 +169,23 @@ def sampling_spelling(request: Mapping[str, Any]) -> str:
     pinning a number, and writing our guess at its default here would record a
     guess as a measurement (Guardrail #10).
     """
-    spelled = []
+    spelled: dict[str, str] = {}
     for name, digits in (("temperature", 4), ("top_p", 4), ("seed", 0)):
         value = setting(request, name)
         if value is None:
-            spelled.append(f"{name}={RUNTIME_DEFAULT}")
+            spelled[name] = RUNTIME_DEFAULT
         elif digits:
-            spelled.append(f"{name}={float(value):.{digits}f}")
+            spelled[name] = f"{float(value):.{digits}f}"
         else:
-            spelled.append(f"{name}={value}")
-    return ";".join(spelled)
+            spelled[name] = str(value)
+    return dict(sorted(spelled.items()))
 
 
 #: The server flags that can change arithmetic, prompt rendering or cache reuse,
-#: spelled as llama-server spells them. It enumerated this project's own field
-#: names until the model file started carrying the flags, so the recorded string
-#: moves once and the console reports the server switches moved on the first run
-#: after. That is a one-time true statement rather than a defect.
+#: spelled as llama-server spells them. They were this project's own field names
+#: until the model file started carrying the flags; a day written under the old
+#: names is read back through `idhazh.contracts.fingerprint.RENAMED_FLAGS`, so
+#: the rename moved no recorded value.
 DIGESTED_FLAGS: Final[tuple[str, ...]] = (
     "-ctk",
     "-ctv",
@@ -191,8 +205,8 @@ DIGESTED_FLAGS: Final[tuple[str, ...]] = (
 )
 
 
-def runtime_flags_spelling(server: Mapping[str, Any]) -> str:
-    """Canonical settings that can change arithmetic, prompt rendering or cache reuse.
+def runtime_flags_spelling(server: Mapping[str, Any]) -> dict[str, str]:
+    """The runtime switches that move the arithmetic, one key each, sorted.
 
     A cached prefix and a newly evaluated prefix need not take the same numeric
     path. Record the controls that choose between them as well as the cache
@@ -201,8 +215,14 @@ def runtime_flags_spelling(server: Mapping[str, Any]) -> str:
     A bare flag records as `SET`. A flag the file leaves out records as
     `RUNTIME_DEFAULT`, because "whatever the runtime picks" is a real and
     different choice from pinning a value.
+
+    **What this records is the request, not the applied configuration.** Every
+    key here is read off the model file, so a llama.cpp build that changes its
+    own default for a flag we leave out moves the decode with this mapping
+    unchanged. `runtime_build` is the only field that catches that, which is why
+    a reading either side of a build change is compared on the build first.
     """
-    return ";".join(f"{flag}={_flag_spelling(server, flag)}" for flag in DIGESTED_FLAGS)
+    return {flag: str(_flag_spelling(server, flag)) for flag in sorted(DIGESTED_FLAGS)}
 
 
 def _flag_spelling(server: Mapping[str, Any], flag: str) -> object:

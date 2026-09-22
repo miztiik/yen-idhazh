@@ -330,7 +330,7 @@ export function modelWork(
  * therefore cannot import this file back. Re-exported here because every caller
  * of `pipelineChanges` already reaches for it through this module.
  */
-import { type RecordedRunDay } from '../console/settings-moved';
+import { comparableInputs, type RecordedRunDay } from '../console/settings-moved';
 
 export { type RecordedRunDay };
 
@@ -382,7 +382,11 @@ function identitiesByDate(
 	for (const day of runs) {
 		for (const record of day.records) {
 			if (record.inputs === null || record.inputs === undefined) continue;
-			add(day.date, 'manifest', JSON.stringify(record.inputs));
+			// Read through the same flattening the readout uses, so the rule that
+			// draws the line and the sentence that explains it cannot disagree about
+			// whether a day moved. It is also what makes a record written under the
+			// joined settings spelling comparable to one written after.
+			add(day.date, 'manifest', JSON.stringify([...comparableInputs(record.inputs)].sort()));
 		}
 	}
 	return found;
